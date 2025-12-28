@@ -1,0 +1,241 @@
+{
+  "nav": {
+    "home": "首页",
+    "product": "产品",
+    "routeIntelligence": "路线智能",
+    "professionals": "专业版",
+    "pricing": "定价",
+    "stories": "故事",
+    "about": "关于",
+    "contact": "联系我们",
+    "login": "登录"
+  },
+  "hero": {
+    "title": "一个负责任的\n路线智能代理",
+    "subtitle": "我们不推荐行程。\n我们决定路线是否应该存在。",
+    "startPlanning": "开始规划",
+    "learnMore": "了解工作原理"
+  },
+  "problem": {
+    "title": "大多数旅行工具推荐更多地点。\n我们首先问路线本身是否有意义。",
+    "regularTrip": "常规行程规划",
+    "regularTripDesc": "分散的热点，没有路线逻辑",
+    "tripnaraRoute": "TripNARA 路线",
+    "tripnaraRouteDesc": "连贯的线性结构，具有路线智能"
+  },
+  "routeDirection": {
+    "title": "路线方向",
+    "description": "一个国家不是地点的列表。\n它是土地想要被行走的方式。"
+  },
+  "dem": {
+    "title": "🏔 地形是真相层",
+    "subtitle": "无 DEM → 无计划",
+    "ascent": "上升",
+    "slope": "坡度",
+    "fatigue": "疲劳",
+    "corridorQuality": "走廊质量",
+    "validation": "没有物理世界验证，您的计划将不存在。"
+  },
+  "personas": {
+    "title": "三人格系统",
+    "abu": {
+      "name": "Abu",
+      "title": "安全守门员",
+      "description": "拒绝不安全的现实"
+    },
+    "dre": {
+      "name": "Dr.Dre",
+      "title": "理性调整者",
+      "description": "稳定结构"
+    },
+    "neptune": {
+      "name": "Neptune",
+      "title": "空间解析者",
+      "description": "保护路线哲学"
+    },
+    "decisionLog": "每个判断都在决策日志中解释",
+    "decisionLogScreenshot": "决策日志截图"
+  },
+  "tiers": {
+    "title": "产品层级",
+    "explorer": {
+      "name": "探索者",
+      "description": "适合个人旅行者"
+    },
+    "navigator": {
+      "name": "导航者",
+      "description": "适合小团队"
+    },
+    "pathfinder": {
+      "name": "探路者",
+      "description": "适合专业人士"
+    }
+  },
+  "whoUses": {
+    "title": "谁在使用 TripNARA",
+    "deepTravelers": "深度旅行者",
+    "expeditionTeams": "探险团队",
+    "insurance": "保险与合规",
+    "travelDesigners": "高端旅行设计师"
+  },
+  "closing": {
+    "title": "我们不优化行程。\n我们帮助您避免不应该做的决定。",
+    "cta": "开始规划"
+  },
+  "product": {
+    "title": "TripNARA 如何做决策",
+    "firstPrinciples": {
+      "title": "第一性原理",
+      "question": "我们从一个问题开始：",
+      "answer": "这条路线是否应该存在——现在，对您来说，在这些条件下？"
+    },
+    "routeDirection": {
+      "title": "路线方向",
+      "description": "路线作为一等公民",
+      "detail": "每个国家有 2-3 个路线方向人格，了解土地想要如何被行走。"
+    },
+    "demEvidence": {
+      "title": "DEM 证据",
+      "description": "没有物理世界验证，您的计划将不存在。"
+    },
+    "threePersonas": {
+      "title": "三个人格",
+      "abu": "拒绝不安全的现实",
+      "dre": "稳定结构",
+      "neptune": "保护路线哲学"
+    },
+    "decisionLog": {
+      "title": "决策日志",
+      "description": "每个判断都有解释。"
+    }
+  },
+  "professionals": {
+    "title": "面向严肃旅行的风险感知路线智能",
+    "suitableFor": "适用于：",
+    "expedition": "探险",
+    "alpine": "高山",
+    "highAltitude": "高海拔",
+    "remoteTerrain": "偏远地形",
+    "whyTitle": "为什么专业人士选择 TripNARA",
+    "evidence": "基于证据的路线验证",
+    "terrain": "地形级真相检查",
+    "transparency": "完整的决策透明度",
+    "safety": "安全优先的判断系统"
+  },
+  "pricing": {
+    "title": "定价",
+    "free": "免费",
+    "custom": "定制",
+    "perMonth": "/月",
+    "explorer": {
+      "name": "探索者",
+      "price": "免费",
+      "description": "适合个人旅行者",
+      "features": {
+        "basic": "基础路线验证",
+        "dem": "DEM 地形检查",
+        "log": "决策日志访问"
+      }
+    },
+    "navigator": {
+      "name": "导航者",
+      "price": "$29/月",
+      "description": "适合小团队",
+      "features": {
+        "advanced": "高级路线智能",
+        "personas": "多人格系统",
+        "routeDirection": "路线方向访问",
+        "support": "优先支持"
+      }
+    },
+    "pathfinder": {
+      "name": "探路者",
+      "price": "定制",
+      "description": "适合专业人士",
+      "features": {
+        "full": "完整路线判断系统",
+        "compliance": "B2B 安全与合规",
+        "integrations": "定制集成",
+        "dedicated": "专属支持"
+      }
+    }
+  },
+  "stories": {
+    "title": "故事",
+    "expedition": {
+      "title": "探险成功故事",
+      "excerpt": "TripNARA 如何阻止了危险的路线决定..."
+    },
+    "alpine": {
+      "title": "高山路线验证",
+      "excerpt": "真实世界的地形检查拯救了一个团队..."
+    },
+    "designer": {
+      "title": "专业旅行设计师",
+      "excerpt": "使用 TripNARA 进行高端旅行规划..."
+    }
+  },
+  "about": {
+    "title": "关于 TripNARA",
+    "mission": {
+      "title": "我们的使命",
+      "p1": "AI 正在用更多内容、更多路线、更多噪音淹没世界。但现实世界没有改变——天气、地形、风险、疲劳仍然重要。",
+      "p2": "没有人正在构建理解和尊重物理现实的系统。TripNARA 就是那个系统。"
+    },
+    "philosophy": {
+      "title": "我们的理念"
+    },
+    "vision": {
+      "title": "愿景",
+      "text": "帮助人类以智慧、尊重和责任在世界中移动。"
+    },
+    "taglines": [
+      "不是更多行程。更好的决策。",
+      "我们像生命依赖它们一样判断路线。",
+      "旅行，带着良知。",
+      "判断与地形相遇的地方。",
+      "知道何时说不的 AI。",
+      "路线不是内容。它们是责任。"
+    ]
+  },
+  "contact": {
+    "title": "联系我们",
+    "name": "姓名",
+    "email": "邮箱",
+    "message": "消息",
+    "send": "发送消息"
+  },
+  "routeIntelligence": {
+    "title": "路线智能",
+    "whatIs": {
+      "title": "什么是路线智能？",
+      "p1": "路线智能是我们正在创建的新类别。它不是关于推荐更多地点或优化参与度。它是关于理解路线是否应该存在。",
+      "p2": "我们不与 OTA 平台或 LLM 助手竞争。我们为路线如何被判断和验证创建新标准。"
+    },
+    "components": {
+      "title": "核心组件",
+      "routeDirection": {
+        "title": "路线方向",
+        "description": "理解土地想要如何被行走，而不仅仅是列出地点。"
+      },
+      "dem": {
+        "title": "DEM 证据",
+        "description": "地形级验证，证明路线在物理上可能且安全。"
+      },
+      "personas": {
+        "title": "三人格系统",
+        "description": "安全、理性和空间智能共同工作，做出负责任的决策。"
+      }
+    }
+  },
+  "login": {
+    "title": "登录 TripNARA",
+    "email": "邮箱",
+    "password": "密码",
+    "submit": "登录",
+    "googleDescription": "使用 Google 登录，自动保存路线决策记录\n无需密码，跨设备同步你的路线",
+    "or": "或",
+    "fallbackNote": "未来将支持 Email OTP / Magic Link 作为备选登录方式"
+  }
+}
+

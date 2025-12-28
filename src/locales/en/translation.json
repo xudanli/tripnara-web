@@ -1,0 +1,241 @@
+{
+  "nav": {
+    "home": "Home",
+    "product": "Product",
+    "routeIntelligence": "Route Intelligence",
+    "professionals": "Professionals",
+    "pricing": "Pricing",
+    "stories": "Stories",
+    "about": "About",
+    "contact": "Contact",
+    "login": "Login"
+  },
+  "hero": {
+    "title": "A Route Intelligence Agent\nThat Takes Responsibility",
+    "subtitle": "We don't recommend trips.\nWe decide whether a route should exist.",
+    "startPlanning": "Start Planning",
+    "learnMore": "Learn How It Works"
+  },
+  "problem": {
+    "title": "Most travel tools recommend more places.\nWe first ask whether the route itself makes sense.",
+    "regularTrip": "Regular Trip Planning",
+    "regularTripDesc": "Scattered hotspots without route logic",
+    "tripnaraRoute": "TripNARA Route",
+    "tripnaraRouteDesc": "Coherent linear structure with route intelligence"
+  },
+  "routeDirection": {
+    "title": "RouteDirection",
+    "description": "A country is not a list of places.\nIt is a way the land wants to be walked."
+  },
+  "dem": {
+    "title": "🏔 Terrain is the truth layer",
+    "subtitle": "No DEM → No Plan",
+    "ascent": "Ascent",
+    "slope": "Slope",
+    "fatigue": "Fatigue",
+    "corridorQuality": "Corridor Quality",
+    "validation": "Your plan won't exist without physical world validation."
+  },
+  "personas": {
+    "title": "Three-Persona System",
+    "abu": {
+      "name": "Abu",
+      "title": "Safety Gatekeeper",
+      "description": "Rejects unsafe reality"
+    },
+    "dre": {
+      "name": "Dr.Dre",
+      "title": "Rational Adjuster",
+      "description": "Stabilizes structure"
+    },
+    "neptune": {
+      "name": "Neptune",
+      "title": "Spatial Resolver",
+      "description": "Protects route philosophy"
+    },
+    "decisionLog": "Every judgment is explained in the Decision Log",
+    "decisionLogScreenshot": "Decision Log Screenshot"
+  },
+  "tiers": {
+    "title": "Product Tiers",
+    "explorer": {
+      "name": "Explorer",
+      "description": "For individual travelers"
+    },
+    "navigator": {
+      "name": "Navigator",
+      "description": "For small teams"
+    },
+    "pathfinder": {
+      "name": "Pathfinder",
+      "description": "For professionals"
+    }
+  },
+  "whoUses": {
+    "title": "Who Uses TripNARA",
+    "deepTravelers": "Deep Travelers",
+    "expeditionTeams": "Expedition Teams",
+    "insurance": "Insurance & Compliance",
+    "travelDesigners": "High-End Travel Designers"
+  },
+  "closing": {
+    "title": "We don't optimize trips.\nWe help you avoid a decision you shouldn't make.",
+    "cta": "Start Planning"
+  },
+  "product": {
+    "title": "How TripNARA Makes Decisions",
+    "firstPrinciples": {
+      "title": "First Principles",
+      "question": "We begin with one question:",
+      "answer": "Should this route exist — now, for you, under these conditions?"
+    },
+    "routeDirection": {
+      "title": "RouteDirection",
+      "description": "Route as first-class citizen",
+      "detail": "Each country has 2–3 RouteDirection personalities that understand how the land wants to be walked."
+    },
+    "demEvidence": {
+      "title": "DEM Evidence",
+      "description": "Your plan won't exist without physical world validation."
+    },
+    "threePersonas": {
+      "title": "Three Personas",
+      "abu": "Rejects unsafe reality",
+      "dre": "Stabilizes structure",
+      "neptune": "Protects route philosophy"
+    },
+    "decisionLog": {
+      "title": "Decision Log",
+      "description": "Every judgment is explained."
+    }
+  },
+  "professionals": {
+    "title": "Risk-aware route intelligence for serious travel",
+    "suitableFor": "Suitable for:",
+    "expedition": "Expedition",
+    "alpine": "Alpine",
+    "highAltitude": "High Altitude",
+    "remoteTerrain": "Remote Terrain",
+    "whyTitle": "Why TripNARA for Professionals",
+    "evidence": "Evidence-based route validation",
+    "terrain": "Terrain-level truth checking",
+    "transparency": "Complete decision transparency",
+    "safety": "Safety-first judgment system"
+  },
+  "pricing": {
+    "title": "Pricing",
+    "free": "Free",
+    "custom": "Custom",
+    "perMonth": "/month",
+    "explorer": {
+      "name": "Explorer",
+      "price": "Free",
+      "description": "For individual travelers",
+      "features": {
+        "basic": "Basic route validation",
+        "dem": "DEM terrain checking",
+        "log": "Decision log access"
+      }
+    },
+    "navigator": {
+      "name": "Navigator",
+      "price": "$29/month",
+      "description": "For small teams",
+      "features": {
+        "advanced": "Advanced route intelligence",
+        "personas": "Multi-persona system",
+        "routeDirection": "RouteDirection access",
+        "support": "Priority support"
+      }
+    },
+    "pathfinder": {
+      "name": "Pathfinder",
+      "price": "Custom",
+      "description": "For professionals",
+      "features": {
+        "full": "Full route judgment system",
+        "compliance": "B2B safety & compliance",
+        "integrations": "Custom integrations",
+        "dedicated": "Dedicated support"
+      }
+    }
+  },
+  "stories": {
+    "title": "Stories",
+    "expedition": {
+      "title": "Expedition Success Story",
+      "excerpt": "How TripNARA prevented a dangerous route decision..."
+    },
+    "alpine": {
+      "title": "Alpine Route Validation",
+      "excerpt": "Real-world terrain checking saved a team from..."
+    },
+    "designer": {
+      "title": "Professional Travel Designer",
+      "excerpt": "Using TripNARA for high-end travel planning..."
+    }
+  },
+  "about": {
+    "title": "About TripNARA",
+    "mission": {
+      "title": "Our Mission",
+      "p1": "AI is flooding the world with more content, more routes, more noise. But the real world hasn't changed — weather, terrain, risk, fatigue still matter.",
+      "p2": "No one is building systems that understand and respect physical reality. TripNARA is that system."
+    },
+    "philosophy": {
+      "title": "Our Philosophy"
+    },
+    "vision": {
+      "title": "Vision",
+      "text": "Help humans move through the world with intelligence, respect, and responsibility."
+    },
+    "taglines": [
+      "Not more trips. Better decisions.",
+      "We judge routes like lives depend on them.",
+      "Travel, with a conscience.",
+      "Where judgment meets terrain.",
+      "AI that knows when to say no.",
+      "Routes are not content. They are responsibility."
+    ]
+  },
+  "contact": {
+    "title": "Contact Us",
+    "name": "Name",
+    "email": "Email",
+    "message": "Message",
+    "send": "Send Message"
+  },
+  "routeIntelligence": {
+    "title": "Route Intelligence",
+    "whatIs": {
+      "title": "What is Route Intelligence?",
+      "p1": "Route Intelligence is a new category we're creating. It's not about recommending more places or optimizing for engagement. It's about understanding whether a route should exist at all.",
+      "p2": "We don't compete with OTA platforms or LLM assistants. We create a new standard for how routes are judged and validated."
+    },
+    "components": {
+      "title": "Core Components",
+      "routeDirection": {
+        "title": "RouteDirection",
+        "description": "Understanding how the land wants to be walked, not just listing places."
+      },
+      "dem": {
+        "title": "DEM Evidence",
+        "description": "Terrain-level validation that proves routes are physically possible and safe."
+      },
+      "personas": {
+        "title": "Three-Persona System",
+        "description": "Safety, rationality, and spatial intelligence working together to make responsible decisions."
+      }
+    }
+  },
+  "login": {
+    "title": "Login to TripNARA",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Login",
+    "googleDescription": "Sign in with Google to automatically save your route decision records\nNo password required, sync your routes across devices",
+    "or": "or",
+    "fallbackNote": "Email OTP / Magic Link will be available as an alternative login method in the future"
+  }
+}
+

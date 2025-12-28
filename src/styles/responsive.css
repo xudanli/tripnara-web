@@ -1,0 +1,33 @@
+/* Responsive styles for website */
+
+@media (max-width: 768px) {
+  .desktop-nav {
+    display: none !important;
+  }
+
+  button[aria-label="Toggle menu"] {
+    display: block !important;
+  }
+
+  /* Grid adjustments */
+  section > div[style*="grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hero section adjustments */
+  section[style*="min-height: 90vh"] {
+    padding: 2rem 1rem !important;
+  }
+
+  /* Navigation adjustments */
+  nav[style*="padding: '1rem 2rem'"] {
+    padding: 1rem !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-menu {
+    display: none !important;
+  }
+}
+
