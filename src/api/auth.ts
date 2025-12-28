@@ -29,8 +29,15 @@ export const authApi = {
       return response.data;
     } catch (error: any) {
       // 处理网络错误
-      if (error.code === 'ERR_NETWORK') {
-        throw new Error('无法连接到服务器。请确保后端服务正在运行。');
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务器。请确保后端服务正在运行在 localhost:43000。');
+      }
+      // 处理 500 服务器错误
+      if (error.response?.status === 500) {
+        const errorMsg = error.response?.data?.message || 
+                        error.response?.data?.error || 
+                        '服务器内部错误。请检查后端服务日志。';
+        throw new Error(errorMsg);
       }
       // 处理后端错误响应
       if (error.response?.data?.message) {
@@ -49,8 +56,15 @@ export const authApi = {
       return response.data;
     } catch (error: any) {
       // 处理网络错误
-      if (error.code === 'ERR_NETWORK') {
-        throw new Error('无法连接到服务器。请确保后端服务正在运行。');
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务器。请确保后端服务正在运行在 localhost:43000。');
+      }
+      // 处理 500 服务器错误
+      if (error.response?.status === 500) {
+        const errorMsg = error.response?.data?.message || 
+                        error.response?.data?.error || 
+                        '服务器内部错误。请检查后端服务日志。';
+        throw new Error(errorMsg);
       }
       // 处理后端错误响应
       if (error.response?.data?.message) {

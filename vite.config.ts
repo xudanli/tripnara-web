@@ -1,6 +1,8 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+
+console.log('[vite] proxy target -> http://127.0.0.1:43000')
 
 export default defineConfig({
   plugins: [react()],
@@ -10,31 +12,13 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://127.0.0.1:43000',
         changeOrigin: true,
+        secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
-  optimizeDeps: {
-    // 避免跨设备链接问题
-    force: false,
-    // 使用更稳定的缓存策略
-    holdUntilCrawlEnd: false,
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-        },
-      },
-    },
-  },
-});
-
+})

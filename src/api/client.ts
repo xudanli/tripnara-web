@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://47.253.148.159',
+  // 使用相对路径，通过 Vite Proxy 转发，避免 CORS 预检
+  baseURL: '/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
