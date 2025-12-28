@@ -1,8 +1,19 @@
 import axios from 'axios';
 
+// 根据环境决定 baseURL
+// 开发环境：使用相对路径，通过 Vite Proxy 转发
+// 生产环境：使用绝对 URL，直接请求 API 服务器
+const getBaseURL = (): string => {
+  // 如果设置了 VITE_API_BASE_URL 且是生产环境，使用绝对 URL
+  if (import.meta.env.VITE_API_BASE_URL && import.meta.env.PROD) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // 开发环境使用相对路径，通过 Vite Proxy 转发
+  return '/api';
+};
+
 const apiClient = axios.create({
-  // 使用相对路径，通过 Vite Proxy 转发，避免 CORS 预检
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
