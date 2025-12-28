@@ -37,7 +37,7 @@ export default function Header() {
             {user.avatarUrl && (
               <img
                 src={user.avatarUrl}
-                alt={user.displayName || user.email}
+                alt={user.displayName || user.email || 'User avatar'}
                 style={{
                   width: '32px',
                   height: '32px',

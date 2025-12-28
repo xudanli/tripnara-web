@@ -116,12 +116,14 @@ export default function GoogleSignInButton({
         }
       } else {
         // 方案 2: 使用 ID Token (通过 GIS 按钮)
-        try {
-          await googleAuthService.renderButton(buttonRef.current, handleGoogleLogin, {
-            locale: i18n.language,
-          });
-        } catch (error) {
-          console.error('Failed to render Google button:', error);
+        if (buttonRef.current) {
+          try {
+            await googleAuthService.renderButton(buttonRef.current, handleGoogleLogin, {
+              locale: i18n.language,
+            });
+          } catch (error) {
+            console.error('Failed to render Google button:', error);
+          }
         }
       }
     };

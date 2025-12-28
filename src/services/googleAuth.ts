@@ -168,7 +168,7 @@ class GoogleAuthService {
   // 渲染 Google 登录按钮
   async renderButton(
     element: HTMLElement,
-    callback: (credential: string) => void,
+    _callback: (credential: string) => void,
     options?: Partial<ButtonConfig>
   ): Promise<void> {
     if (!this.clientId) {
