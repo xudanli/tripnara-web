@@ -7,14 +7,40 @@
     "pricing": "Pricing",
     "stories": "Stories",
     "about": "About",
-    "contact": "Contact",
-    "login": "Login"
+    "login": "Login",
+    "startPlanning": "Start Planning",
+    "dropdown": {
+      "routeDirection": "RouteDirection™ Route Direction Engine",
+      "executableSchedule": "Executable Schedule Generation",
+      "planB": "Plan B Alternative System",
+      "riskDem": "Risk & DEM Risk Assessment",
+      "travelReadiness": "Travel Readiness Pre-Trip Preparation"
+    }
   },
   "hero": {
-    "title": "A Route Intelligence Agent\nThat Takes Responsibility",
-    "subtitle": "We don't recommend trips.\nWe decide whether a route should exist.",
-    "startPlanning": "Start Planning",
-    "learnMore": "Learn How It Works"
+    "title": "Your dreams are not just wishful thinking.",
+    "subtitle1": "TripNARA helps you turn \"I want to go\" into a travel route you can truly complete.",
+    "subtitle2": "From route direction and risk assessment to executable schedules, we ensure plans are not only beautiful, but realistic and reliable.",
+    "cta1": "Start Planning My Route",
+    "cta2": "See How TripNARA Makes Decisions",
+    "microCopy1": "Inspiration ✓ → Route → Schedule → Executable Checklist",
+    "microCopy2": "Dreams can be calculated into executable plans."
+  },
+  "heroFeatures": {
+    "card1": {
+      "title": "First judge: Should this route exist?",
+      "description": "Instead of stuffing more attractions into the schedule, we first confirm whether the direction is reasonable, reachable, and executable.",
+      "tag": "Route Direction Engine · RouteDirection"
+    },
+    "card2": {
+      "title": "Completable each day, not just a list of points",
+      "description": "TripNARA generates executable schedule structures based on travel duration, stops, rhythm, and buffer."
+    },
+    "card3": {
+      "title": "If circumstances change, it won't fall apart",
+      "description": "Closed? Weather? Insufficient energy? The system automatically generates optimal replacement solutions."
+    },
+    "bottomCTA": "Turn dreams into routes →"
   },
   "problem": {
     "title": "Most travel tools recommend more places.\nWe first ask whether the route itself makes sense.",
@@ -36,25 +62,81 @@
     "corridorQuality": "Corridor Quality",
     "validation": "Your plan won't exist without physical world validation."
   },
+  "decisionComparison": {
+    "title": "How TripNARA Differs from Regular Travel Apps",
+    "traditional": "Traditional",
+    "tripnara": "TripNARA",
+    "step1": "Should it exist?",
+    "step2": "Structured route",
+    "step3": "Risk validation",
+    "step4": "Executable",
+    "description1": "We don't start with \"recommending more places.\" We start with a more fundamental question:",
+    "question": "Should this route exist at all?",
+    "traditionalStep1": "Attraction list",
+    "traditionalStep2": "Sort",
+    "traditionalStep3": "Piece together \"itinerary\""
+  },
   "personas": {
-    "title": "Three-Persona System",
+    "title": "Three Partners Helping You Make Better Travel Decisions",
     "abu": {
       "name": "Abu",
       "title": "Safety Gatekeeper",
-      "description": "Rejects unsafe reality"
+      "description": "Risk fails → Direct rejection",
+      "details": "Weather · Altitude · Vehicle condition · Capability matching"
     },
     "dre": {
       "name": "Dr.Dre",
-      "title": "Rational Adjuster",
-      "description": "Stabilizes structure"
+      "title": "Schedule Architect",
+      "description": "Helps you arrange your journey perfectly"
     },
     "neptune": {
       "name": "Neptune",
-      "title": "Spatial Resolver",
-      "description": "Protects route philosophy"
+      "title": "Replacement Fixer",
+      "description": "Circumstances changed? I'll handle it"
     },
     "decisionLog": "Every judgment is explained in the Decision Log",
     "decisionLogScreenshot": "Decision Log Screenshot"
+  },
+  "demTopography": {
+    "title": "Terrain is the truth layer of travel planning",
+    "description": "TripNARA uses terrain as the truth layer. Slope, cumulative ascent, walking difficulty — no longer based on feeling.",
+    "slope": "Slope",
+    "ascent": "Cumulative Ascent",
+    "difficulty": "Difficulty Intensity",
+    "fatigue": "Fatigue Trend"
+  },
+  "userStories": {
+    "title": "See How People Use TripNARA",
+    "story1": {
+      "title": "Iceland Ring Road",
+      "subtitle": "First judge feasibility"
+    },
+    "story2": {
+      "title": "New Zealand Hiking",
+      "subtitle": "Risk management"
+    },
+    "story3": {
+      "title": "European Train",
+      "subtitle": "Structured route"
+    }
+  },
+  "professionalUsers": {
+    "title": "TripNARA is Also Used by These People",
+    "user1": "Travel Consultant",
+    "user2": "Hiking Leader",
+    "user3": "Exploration Photographer",
+    "user4": "Outdoor Guide",
+    "description": "Trustworthy · Professional · Decision-making ability"
+  },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "question1": "Will TripNARA decide everything for me?",
+    "answer1": "No. We'll give you \"suggestions + evidence + alternatives.\""
+  },
+  "finalCTA": {
+    "title": "Turn dreams into routes you can truly complete",
+    "button1": "Start Planning →",
+    "button2": "See How TripNARA Makes Decisions →"
   },
   "tiers": {
     "title": "Product Tiers",
@@ -83,7 +165,58 @@
     "cta": "Start Planning"
   },
   "product": {
-    "title": "How TripNARA Makes Decisions",
+    "title": "TripNARA is a Route & Decision System",
+    "hero": {
+      "subtitle": "We don't recommend more places. Instead, we help you judge whether a route should exist and transform it into a truly executable travel plan.",
+      "cta1": "Start Planning →",
+      "cta2": "View System Principles →"
+    },
+    "module1": {
+      "title": "RouteDirection™",
+      "description": "Route Direction Engine",
+      "scene": "Use Cases",
+      "value": "Value"
+    },
+    "module2": {
+      "title": "Executable Schedule Generation",
+      "description": "Transform routes into daily executable structures",
+      "scene": "Use Cases",
+      "value": "Value"
+    },
+    "module3": {
+      "title": "Plan B Alternatives",
+      "description": "Automatically generate replacement solutions",
+      "scene": "Use Cases",
+      "value": "Value"
+    },
+    "module4": {
+      "title": "Risk & DEM",
+      "description": "Terrain-based risk assessment",
+      "scene": "Use Cases",
+      "value": "Value"
+    },
+    "module5": {
+      "title": "Travel Readiness",
+      "description": "Complete pre-trip preparation checklist",
+      "scene": "Use Cases",
+      "value": "Value"
+    },
+    "workflow": {
+      "title": "Workflow",
+      "step1": "First judge whether the route should exist",
+      "step2": "Automatically generate executable schedules",
+      "step3": "Risk assessment and buffer control",
+      "step4": "Plan B replacement and repair"
+    },
+    "reliable": {
+      "title": "Why Reliable",
+      "firstPrinciples": "First Principles",
+      "dataRigorous": "Data/Logic Rigor",
+      "aiStructure": "AI + Structured Algorithms"
+    },
+    "cta": {
+      "text": "Start Experience →"
+    },
     "firstPrinciples": {
       "title": "First Principles",
       "question": "We begin with one question:",
@@ -110,25 +243,42 @@
     }
   },
   "professionals": {
-    "title": "Risk-aware route intelligence for serious travel",
-    "suitableFor": "Suitable for:",
-    "expedition": "Expedition",
-    "alpine": "Alpine",
-    "highAltitude": "High Altitude",
-    "remoteTerrain": "Remote Terrain",
-    "whyTitle": "Why TripNARA for Professionals",
-    "evidence": "Evidence-based route validation",
-    "terrain": "Terrain-level truth checking",
-    "transparency": "Complete decision transparency",
-    "safety": "Safety-first judgment system"
+    "title": "Built for Professional Travel Practitioners",
+    "subtitle": "Risk, Structure, Evaluation, Replacement — Your Trusted Route Partner",
+    "suitableFor": "Target Users",
+    "leader": "Leader",
+    "travelConsultant": "Custom Travel Consultant",
+    "outdoorOrg": "Outdoor Organization",
+    "transportPlanner": "Transportation Planner",
+    "explorationPhotographer": "Exploration Photographer",
+    "capabilities": {
+      "title": "Capability List",
+      "riskManagement": "Risk Management",
+      "routeEvaluation": "Route Evaluation",
+      "structureControl": "Structure Control",
+      "teamRhythm": "Team Rhythm Design"
+    },
+    "trustworthy": "Trustworthy",
+    "rational": "Rational",
+    "traceable": "Traceable",
+    "evidenceBased": "Evidence-based",
+    "cooperation": {
+      "title": "Cooperation Methods",
+      "beta": "Beta",
+      "api": "API",
+      "jointExperiment": "Joint Experiment"
+    }
   },
   "pricing": {
-    "title": "Pricing",
+    "title": "Clear, Simple, No Hidden Fees",
+    "heroSubtitle": "Clear, Simple, No Hidden Fees",
     "free": "Free",
+    "pro": "Pro",
+    "professional": "Professional / Team",
     "custom": "Custom",
     "perMonth": "/month",
     "explorer": {
-      "name": "Explorer",
+      "name": "Free",
       "price": "Free",
       "description": "For individual travelers",
       "features": {
@@ -138,7 +288,7 @@
       }
     },
     "navigator": {
-      "name": "Navigator",
+      "name": "Pro",
       "price": "$29/month",
       "description": "For small teams",
       "features": {
@@ -149,7 +299,7 @@
       }
     },
     "pathfinder": {
-      "name": "Pathfinder",
+      "name": "Professional / Team",
       "price": "Custom",
       "description": "For professionals",
       "features": {
@@ -158,45 +308,77 @@
         "integrations": "Custom integrations",
         "dedicated": "Dedicated support"
       }
+    },
+    "faq": {
+      "title": "FAQ",
+      "cancelable": "Is it cancelable?",
+      "teamSupport": "Is there team support?",
+      "dataPrivacy": "Data Privacy",
+      "countrySupport": "Country Support"
+    },
+    "cta": {
+      "try": "Start Trial →",
+      "contact": "Contact Us →"
     }
   },
   "stories": {
-    "title": "Stories",
-    "expedition": {
-      "title": "Expedition Success Story",
-      "excerpt": "How TripNARA prevented a dangerous route decision..."
+    "title": "Real Travel, Real Decisions",
+    "subtitle": "See how TripNARA accompanies different travelers, turning dreams into executable routes.",
+    "categories": {
+      "hiking": "Hiking",
+      "photography": "Photography",
+      "roadTrip": "Road Trip",
+      "family": "Family",
+      "polar": "Polar/Exploration",
+      "europeanRail": "European Rail"
     },
-    "alpine": {
-      "title": "Alpine Route Validation",
-      "excerpt": "Real-world terrain checking saved a team from..."
+    "card": {
+      "travelerType": "Traveler Type",
+      "destination": "Destination",
+      "keyDecision": "Key Decision Points",
+      "risk": "Risk",
+      "replacement": "Replacement",
+      "rhythm": "Rhythm",
+      "elevation": "Elevation"
     },
-    "designer": {
-      "title": "Professional Travel Designer",
-      "excerpt": "Using TripNARA for high-end travel planning..."
+    "detail": {
+      "background": "Travel Background",
+      "originalPlan": "Original Plan",
+      "tripnaraJudgment": "TripNARA's Judgment",
+      "decisionProcess": "Key Decision Process",
+      "result": "Result",
+      "review": "Review",
+      "summary": "Experience Summary"
     }
   },
   "about": {
-    "title": "About TripNARA",
+    "title": "We care not about 'going to more places', but whether you truly complete a journey.",
     "mission": {
-      "title": "Our Mission",
-      "p1": "AI is flooding the world with more content, more routes, more noise. But the real world hasn't changed — weather, terrain, risk, fatigue still matter.",
-      "p2": "No one is building systems that understand and respect physical reality. TripNARA is that system."
+      "title": "Mission",
+      "text": "Make travel a better decision-making process"
     },
-    "philosophy": {
-      "title": "Our Philosophy"
+    "believe": {
+      "title": "We Believe",
+      "point1": "...",
+      "point2": "...",
+      "point3": "..."
     },
-    "vision": {
-      "title": "Vision",
-      "text": "Help humans move through the world with intelligence, respect, and responsibility."
+    "team": {
+      "title": "Team Introduction",
+      "product": "Product",
+      "data": "Data",
+      "geography": "Geography",
+      "ai": "AI",
+      "outdoor": "Outdoor",
+      "design": "Design"
     },
-    "taglines": [
-      "Not more trips. Better decisions.",
-      "We judge routes like lives depend on them.",
-      "Travel, with a conscience.",
-      "Where judgment meets terrain.",
-      "AI that knows when to say no.",
-      "Routes are not content. They are responsibility."
-    ]
+    "contact": {
+      "title": "Contact"
+    },
+    "recruiting": {
+      "title": "Recruiting",
+      "text": "If you also believe that travel is more than checking in, welcome to join us."
+    }
   },
   "contact": {
     "title": "Contact Us",
@@ -206,36 +388,100 @@
     "send": "Send Message"
   },
   "routeIntelligence": {
-    "title": "Route Intelligence",
-    "whatIs": {
-      "title": "What is Route Intelligence?",
-      "p1": "Route Intelligence is a new category we're creating. It's not about recommending more places or optimizing for engagement. It's about understanding whether a route should exist at all.",
-      "p2": "We don't compete with OTA platforms or LLM assistants. We create a new standard for how routes are judged and validated."
+    "title": "How Should a Route Be Understood?",
+    "subtitle": "TripNARA's Route Philosophy",
+    "corePoints": {
+      "title": "Four Core Principles",
+      "point1": "A route is not a list of attractions",
+      "point2": "Direction before details",
+      "point3": "Executable before romantic",
+      "point4": "Change is the norm"
     },
-    "components": {
-      "title": "Core Components",
-      "routeDirection": {
-        "title": "RouteDirection",
-        "description": "Understanding how the land wants to be walked, not just listing places."
-      },
-      "dem": {
-        "title": "DEM Evidence",
-        "description": "Terrain-level validation that proves routes are physically possible and safe."
-      },
-      "personas": {
-        "title": "Three-Persona System",
-        "description": "Safety, rationality, and spatial intelligence working together to make responsible decisions."
-      }
+    "methodology": {
+      "title": "Methodology Breakdown",
+      "routeDirection": "RouteDirection Concept",
+      "system1System2": "System 1 / System 2",
+      "riskGatekeeper": "Risk Gatekeeper",
+      "executableRhythm": "Executable Rhythm"
+    },
+    "ai": {
+      "title": "What AI Means to Us",
+      "subtitle": "Not an AI toy, but a decision assistant"
+    },
+    "manifesto": {
+      "en": "We decide whether a route should exist.",
+      "zh": "When we decide on a route, we also decide on a way of life."
     }
   },
   "login": {
     "title": "Login to TripNARA",
+    "joinTitle": "Login to TripNARA",
+    "startPlanning": "Start Your Smart Planning",
     "email": "Email",
+    "emailPlaceholder": "Enter your email",
     "password": "Password",
     "submit": "Login",
+    "continue": "Continue",
+    "invitationCode": "Invitation Code",
+    "invitationCodePlaceholder": "Enter invitation code (optional)",
+    "continueWithGoogle": "Continue with Google",
+    "continueWithApple": "Continue with Apple",
     "googleDescription": "Sign in with Google to automatically save your route decision records\nNo password required, sync your routes across devices",
     "or": "or",
-    "fallbackNote": "Email OTP / Magic Link will be available as an alternative login method in the future"
+    "terms": "By continuing, you have read and agree to the <0>{{terms}}</0> and <1>{{privacy}}</1>",
+    "termsOfService": "Terms of Service",
+    "privacyPolicy": "Privacy Policy",
+    "fallbackNote": "Email OTP / Magic Link will be available as an alternative login method in the future",
+    "heroTitle": "Plan smarter. Travel bolder.",
+    "heroSubtitle": "TripNARA — Where decisions meet the real world.",
+    "loginWithAccount": "Continue as {{account}}",
+    "noAccount": "Don't have an account?",
+    "registerLink": "Register"
+  },
+  "footer": {
+    "navigation": "Navigation",
+    "legal": "Legal",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy"
+  },
+  "register": {
+    "title": "Register with Email",
+    "email": "Email",
+    "emailPlaceholder": "Enter your email",
+    "emailRequired": "Please enter your email address",
+    "invalidEmail": "Please enter a valid email address",
+    "sendCode": "Send Verification Code",
+    "sending": "Sending...",
+    "codeSent": "Verification code sent. Please check your email.",
+    "sendCodeFailed": "Failed to send verification code. Please try again.",
+    "verificationCode": "Verification Code",
+    "codePlaceholder": "Enter 6-digit code",
+    "codeHint": "Please check your email inbox (and spam folder) for the verification code",
+    "invalidCode": "Verification code must be 6 digits",
+    "emailAndCodeRequired": "Please enter email and verification code",
+    "resendCode": "Resend Code",
+    "resendCountdown": "Resend code in {{seconds}} seconds",
+    "resendCodeHint": "Please request a new verification code",
+    "displayName": "Display Name",
+    "displayNamePlaceholder": "Enter your display name (optional)",
+    "optional": "Optional",
+    "submit": "Register",
+    "registering": "Registering...",
+    "registerFailed": "Registration failed. Please try again.",
+    "success": "Registration successful! Redirecting...",
+    "loginHint": "Please log in directly",
+    "haveAccount": "Already have an account?",
+    "loginLink": "Log in",
+    "termsHint": "By registering, you agree to our Terms of Service and Privacy Policy"
+  },
+  "contentSave": {
+    "title": "Save Any Content, Anytime, Anywhere",
+    "description1": "Inspiration is everywhere. Besides uploading files, TripNARA also lets you capture ideas and save materials through browser plugins or mobile apps.",
+    "description2": "Supports PDFs, web pages, maps, routes, places, photos, and more.",
+    "browserExtension": "Browser Extension",
+    "browserExtensionDesc": "Save any content while browsing",
+    "mobileApp": "Mobile App",
+    "mobileAppDesc": "Route planning assistant in your pocket"
   }
 }
 

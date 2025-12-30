@@ -19,6 +19,33 @@ export interface LogoutResponse {
   message: string;
 }
 
+// 发送邮箱验证码
+export interface SendVerificationCodeRequest {
+  email: string;
+}
+
+export interface SendVerificationCodeResponse {
+  message: string;
+}
+
+// 邮箱验证码注册
+export interface RegisterWithEmailRequest {
+  email: string;
+  code: string;
+  displayName?: string;
+}
+
+export interface RegisterWithEmailResponse {
+  user: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    emailVerified: boolean;
+  };
+  accessToken: string;
+}
+
 export const authApi = {
   // 方案 1: Code Model - 使用授权码登录（推荐）
   loginWithCode: async (code: string): Promise<AuthResponse> => {
@@ -30,7 +57,7 @@ export const authApi = {
     } catch (error: any) {
       // 处理网络错误
       if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
-        throw new Error('无法连接到后端服务器。请确保后端服务正在运行在 localhost:43000。');
+        throw new Error('无法连接到后端服务器。请确保后端服务正在运行在 localhost:4000。');
       }
       // 处理 500 服务器错误
       if (error.response?.status === 500) {
@@ -57,7 +84,7 @@ export const authApi = {
     } catch (error: any) {
       // 处理网络错误
       if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
-        throw new Error('无法连接到后端服务器。请确保后端服务正在运行在 localhost:43000。');
+        throw new Error('无法连接到后端服务器。请确保后端服务正在运行在 localhost:4000。');
       }
       // 处理 500 服务器错误
       if (error.response?.status === 500) {
@@ -97,6 +124,52 @@ export const authApi = {
       // 即使登出请求失败，也继续清除本地状态
       console.warn('登出请求失败，但已清除本地会话:', error);
       throw error;
+    }
+  },
+
+  // 发送邮箱验证码
+  sendVerificationCode: async (email: string): Promise<SendVerificationCodeResponse> => {
+    try {
+      const response = await apiClient.post<SendVerificationCodeResponse>(
+        '/auth/email/send-code',
+        { email }
+      );
+      return response.data;
+    } catch (error: any) {
+      // 处理网络错误
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('网络异常，请检查网络连接');
+      }
+      // 处理后端错误响应
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('发送验证码失败，请稍后重试');
+    }
+  },
+
+  // 邮箱验证码注册
+  registerWithEmail: async (
+    email: string,
+    code: string,
+    displayName?: string
+  ): Promise<RegisterWithEmailResponse> => {
+    try {
+      const response = await apiClient.post<RegisterWithEmailResponse>(
+        '/auth/email/register',
+        { email, code, displayName }
+      );
+      return response.data;
+    } catch (error: any) {
+      // 处理网络错误
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('网络异常，请检查网络连接');
+      }
+      // 处理后端错误响应
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error('注册失败，请稍后重试');
     }
   },
 };

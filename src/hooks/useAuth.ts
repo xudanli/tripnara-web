@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { authApi, type AuthResponse } from '@/api/auth';
+import { authApi, type AuthResponse, type RegisterWithEmailResponse } from '@/api/auth';
 import { googleAuthService } from '@/services/googleAuth';
 
 export interface User {
@@ -48,6 +48,7 @@ export const useAuth = () => {
       setAccessToken(null);
       sessionStorage.removeItem('accessToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('googleAccountInfo'); // 清除保存的Google账号信息
       
       // 禁用 Google 自动选择
       try {
@@ -90,11 +91,33 @@ export const useAuth = () => {
     setAccessToken(token);
   }, []);
 
+  // 登录（邮箱注册）- 处理邮箱注册响应
+  const loginWithEmail = useCallback(async (authResponse: AuthResponse | RegisterWithEmailResponse) => {
+    const { user: userData, accessToken: token } = authResponse;
+    
+    // 存储 accessToken 到 sessionStorage
+    sessionStorage.setItem('accessToken', token);
+    // 存储用户信息到 localStorage（转换为 User 格式以确保兼容性）
+    const userForStorage: User = {
+      id: userData.id,
+      email: userData.email || null,
+      displayName: userData.displayName,
+      avatarUrl: userData.avatarUrl,
+      emailVerified: userData.emailVerified ?? null,
+    };
+    localStorage.setItem('user', JSON.stringify(userForStorage));
+    
+    // 更新状态
+    setUser(userForStorage);
+    setAccessToken(token);
+  }, []);
+
   return {
     user,
     loading,
     accessToken,
     loginWithGoogle,
+    loginWithEmail,
     logout,
     refreshToken,
     isAuthenticated: !!user && !!accessToken,

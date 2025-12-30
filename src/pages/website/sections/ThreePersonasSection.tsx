@@ -4,22 +4,28 @@ export default function ThreePersonasSection() {
   const { t } = useTranslation();
   const personas = [
     {
-      name: t('personas.abu.name'),
-      title: t('personas.abu.title'),
-      description: t('personas.abu.description'),
-      color: '#dc3545',
+      name: t('personas.abu.name', { defaultValue: 'Abu' }),
+      title: t('personas.abu.title', { defaultValue: '安全守门人' }),
+      description: t('personas.abu.description', {
+        defaultValue: '风险不过关 → 直接否决',
+      }),
+      details: t('personas.abu.details', {
+        defaultValue: '天气 · 海拔 · 车况 · 能力匹配',
+      }),
     },
     {
-      name: t('personas.dre.name'),
-      title: t('personas.dre.title'),
-      description: t('personas.dre.description'),
-      color: '#007bff',
+      name: t('personas.dre.name', { defaultValue: 'Dr.Dre' }),
+      title: t('personas.dre.title', { defaultValue: '日程结构师' }),
+      description: t('personas.dre.description', {
+        defaultValue: '帮你把旅程安排得刚刚好',
+      }),
     },
     {
-      name: t('personas.neptune.name'),
-      title: t('personas.neptune.title'),
-      description: t('personas.neptune.description'),
-      color: '#28a745',
+      name: t('personas.neptune.name', { defaultValue: 'Neptune' }),
+      title: t('personas.neptune.title', { defaultValue: '修复替换者' }),
+      description: t('personas.neptune.description', {
+        defaultValue: '情况变化？我来兜底',
+      }),
     },
   ];
 
@@ -27,7 +33,7 @@ export default function ThreePersonasSection() {
     <section
       style={{
         padding: '6rem 2rem',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#fff',
       }}
     >
       <div
@@ -38,31 +44,45 @@ export default function ThreePersonasSection() {
       >
         <h2
           style={{
-            fontSize: 'clamp(2rem, 4vw, 3rem)',
+            fontSize: 'clamp(2rem, 4vw, 2.5rem)',
             fontWeight: '700',
             textAlign: 'center',
             marginBottom: '4rem',
+            color: '#000',
           }}
         >
-          {t('personas.title')}
+          {t('personas.title', {
+            defaultValue: '帮助你做出更好旅行决定的三位合伙人',
+          })}
         </h2>
 
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '2rem',
-            marginBottom: '3rem',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '2.5rem',
           }}
         >
-          {personas.map((persona) => (
+          {personas.map((persona, idx) => (
             <div
-              key={persona.name}
+              key={idx}
               style={{
-                padding: '2rem',
-                border: `2px solid ${persona.color}`,
-                borderRadius: '8px',
+                padding: '2.5rem',
                 backgroundColor: '#fff',
+                border: '1px solid #e0e0e0',
+                borderRadius: '12px',
+                textAlign: 'center',
+                transition: 'all 0.3s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
+                e.currentTarget.style.borderColor = '#DC2626';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.borderColor = '#e0e0e0';
               }}
             >
               <h3
@@ -70,7 +90,7 @@ export default function ThreePersonasSection() {
                   fontSize: '1.8rem',
                   fontWeight: '700',
                   marginBottom: '0.5rem',
-                  color: persona.color,
+                  color: '#000',
                 }}
               >
                 {persona.name}
@@ -79,45 +99,36 @@ export default function ThreePersonasSection() {
                 style={{
                   fontSize: '1.1rem',
                   fontWeight: '600',
-                  marginBottom: '1rem',
-                  color: '#333',
+                  color: '#666',
+                  marginBottom: '1.5rem',
                 }}
               >
                 {persona.title}
               </p>
-              <p style={{ color: '#666', lineHeight: '1.6' }}>
+              <p
+                style={{
+                  fontSize: '1rem',
+                  color: '#333',
+                  lineHeight: '1.7',
+                  marginBottom: persona.details ? '1rem' : '0',
+                }}
+              >
                 {persona.description}
               </p>
+              {persona.details && (
+                <p
+                  style={{
+                    fontSize: '0.9rem',
+                    color: '#666',
+                    lineHeight: '1.6',
+                    marginTop: '1rem',
+                  }}
+                >
+                  {persona.details}
+                </p>
+              )}
             </div>
           ))}
-        </div>
-
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '2rem',
-            backgroundColor: '#fff',
-            border: '1px solid #e0e0e0',
-            borderRadius: '8px',
-          }}
-        >
-          <p style={{ fontSize: '1.1rem', color: '#666', marginBottom: '1rem' }}>
-            {t('personas.decisionLog')}
-          </p>
-          <div
-            style={{
-              width: '100%',
-              height: '200px',
-              backgroundColor: '#f0f0f0',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#999',
-            }}
-          >
-            {t('personas.decisionLogScreenshot')}
-          </div>
         </div>
       </div>
     </section>

@@ -1,19 +1,32 @@
 import { useTranslation } from 'react-i18next';
+import { PersonThinking, Compass, Mountains, Route } from '@/components/illustrations/SimpleIllustrations';
 
 export default function WhoUsesSection() {
   const { t } = useTranslation();
   const users = [
-    t('whoUses.deepTravelers'),
-    t('whoUses.expeditionTeams'),
-    t('whoUses.insurance'),
-    t('whoUses.travelDesigners'),
+    {
+      name: t('whoUses.deepTravelers'),
+      icon: PersonThinking,
+    },
+    {
+      name: t('whoUses.expeditionTeams'),
+      icon: Compass,
+    },
+    {
+      name: t('whoUses.insurance'),
+      icon: Mountains,
+    },
+    {
+      name: t('whoUses.travelDesigners'),
+      icon: Route,
+    },
   ];
 
   return (
     <section
       style={{
         padding: '6rem 2rem',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#fff',
       }}
     >
       <div
@@ -28,6 +41,7 @@ export default function WhoUsesSection() {
             fontWeight: '700',
             textAlign: 'center',
             marginBottom: '4rem',
+            color: '#000',
           }}
         >
           {t('whoUses.title')}
@@ -40,28 +54,51 @@ export default function WhoUsesSection() {
             gap: '2rem',
           }}
         >
-          {users.map((user) => (
-            <div
-              key={user}
-              style={{
-                padding: '2rem',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                borderRadius: '8px',
-                textAlign: 'center',
-              }}
-            >
-              <h3
+          {users.map((user) => {
+            const IconComponent = user.icon;
+            return (
+              <div
+                key={user.name}
                 style={{
-                  fontSize: '1.3rem',
-                  fontWeight: '600',
-                  color: '#333',
+                  padding: '2.5rem',
+                  backgroundColor: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '12px',
+                  textAlign: 'center',
+                  transition: 'all 0.3s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.borderColor = '#000';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = '#e0e0e0';
                 }}
               >
-                {user}
-              </h3>
-            </div>
-          ))}
+                <div
+                  style={{
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <IconComponent size={user.icon === PersonThinking ? 120 : 80} color="#000" />
+                </div>
+                <h3
+                  style={{
+                    fontSize: '1.3rem',
+                    fontWeight: '600',
+                    color: '#000',
+                  }}
+                >
+                  {user.name}
+                </h3>
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

@@ -2,19 +2,45 @@
   "nav": {
     "home": "首页",
     "product": "产品",
-    "routeIntelligence": "路线智能",
-    "professionals": "专业版",
+    "routeIntelligence": "路线哲学",
+    "professionals": "专业用户",
     "pricing": "定价",
     "stories": "故事",
-    "about": "关于",
-    "contact": "联系我们",
-    "login": "登录"
+    "about": "关于我们",
+    "login": "登录",
+    "startPlanning": "开始规划",
+    "dropdown": {
+      "routeDirection": "RouteDirection™ 路线方向引擎",
+      "executableSchedule": "可执行日程生成",
+      "planB": "Plan B 备选系统",
+      "riskDem": "Risk & DEM 风险评估",
+      "travelReadiness": "Travel Readiness 行前准备"
+    }
   },
   "hero": {
-    "title": "一个负责任的\n路线智能代理",
-    "subtitle": "我们不推荐行程。\n我们决定路线是否应该存在。",
-    "startPlanning": "开始规划",
-    "learnMore": "了解工作原理"
+    "title": "你的梦想，不只是 空想 的。",
+    "subtitle1": "TripNARA 帮你把「我想去」变成真正能走完的旅行路线。",
+    "subtitle2": "从路线方向、风险评估到可执行日程，我们确保计划不仅美好，而且现实、可靠。",
+    "cta1": "开始规划我的路线",
+    "cta2": "看 TripNARA 如何做决定",
+    "microCopy1": "灵感 ✓ → 路线 → 日程 → 可执行清单",
+    "microCopy2": "梦想，可以被计算为可执行方案。"
+  },
+  "heroFeatures": {
+    "card1": {
+      "title": "先判断：这条路线是否应该存在",
+      "description": "不是把更多景点塞进日程，而是先确认方向是否合理、可达、可执行。",
+      "tag": "路线方向引擎 · RouteDirection"
+    },
+    "card2": {
+      "title": "每天都能走完，而不是一堆点",
+      "description": "TripNARA 会根据车程、停留、节奏与余量生成可执行日程结构。"
+    },
+    "card3": {
+      "title": "如果情况变化，也不会崩盘",
+      "description": "关闭？天气？体力不支？系统会自动生成最优替换方案。"
+    },
+    "bottomCTA": "把梦想变成路线 →"
   },
   "problem": {
     "title": "大多数旅行工具推荐更多地点。\n我们首先问路线本身是否有意义。",
@@ -36,25 +62,79 @@
     "corridorQuality": "走廊质量",
     "validation": "没有物理世界验证，您的计划将不存在。"
   },
+  "decisionComparison": {
+    "title": "TripNARA 与普通旅行 App 的不同",
+    "traditional": "传统",
+    "tripnara": "TripNARA",
+    "step1": "是否成立？",
+    "step2": "结构化路线",
+    "step3": "风险验证",
+    "step4": "可执行",
+    "description1": "我们不是从\"推荐更多地方\"开始，而是从一个更基础的问题开始：",
+    "question": "这条路线，本身是否应该存在？",
+    "traditionalStep1": "景点清单",
+    "traditionalStep2": "排序",
+    "traditionalStep3": "拼成\"行程\""
+  },
   "personas": {
-    "title": "三人格系统",
+    "title": "帮助你做出更好旅行决定的三位合伙人",
     "abu": {
       "name": "Abu",
-      "title": "安全守门员",
-      "description": "拒绝不安全的现实"
+      "title": "安全守门人",
+      "description": "风险不过关 → 直接否决",
+      "details": "天气 · 海拔 · 车况 · 能力匹配"
     },
     "dre": {
       "name": "Dr.Dre",
-      "title": "理性调整者",
-      "description": "稳定结构"
+      "title": "日程结构师",
+      "description": "帮你把旅程安排得刚刚好"
     },
     "neptune": {
       "name": "Neptune",
-      "title": "空间解析者",
-      "description": "保护路线哲学"
+      "title": "修复替换者",
+      "description": "情况变化？我来兜底"
+    }
+  },
+  "demTopography": {
+    "title": "地形，是旅行计划的真相层",
+    "description": "TripNARA 以地形为真相层。坡度、累计爬升、走行难度，不再凭感觉。",
+    "slope": "坡度",
+    "ascent": "累积爬升",
+    "difficulty": "难度强度",
+    "fatigue": "疲劳趋势"
+  },
+  "userStories": {
+    "title": "看看大家如何使用 TripNARA",
+    "story1": {
+      "title": "冰岛环岛",
+      "subtitle": "先判断可行域"
     },
-    "decisionLog": "每个判断都在决策日志中解释",
-    "decisionLogScreenshot": "决策日志截图"
+    "story2": {
+      "title": "新西兰徒步",
+      "subtitle": "风险管理"
+    },
+    "story3": {
+      "title": "欧洲火车",
+      "subtitle": "结构化路线"
+    }
+  },
+  "professionalUsers": {
+    "title": "TripNARA 也被这些人使用",
+    "user1": "旅行顾问",
+    "user2": "徒步领队",
+    "user3": "探索摄影师",
+    "user4": "户外向导",
+    "description": "可信 · 专业 · 决策能力"
+  },
+  "faq": {
+    "title": "常见问题",
+    "question1": "TripNARA 会替我决定一切吗？",
+    "answer1": "不会。我们会给你\"建议 + 证据 + 备选\"。"
+  },
+  "finalCTA": {
+    "title": "让梦想变成真正能走完的路线",
+    "button1": "开始规划 →",
+    "button2": "看看 TripNARA 如何做决定 →"
   },
   "tiers": {
     "title": "产品层级",
@@ -83,7 +163,58 @@
     "cta": "开始规划"
   },
   "product": {
-    "title": "TripNARA 如何做决策",
+    "title": "TripNARA 是一套「路线与决策系统」",
+    "hero": {
+      "subtitle": "我们并不是推荐更多地点，而是帮助你判断一条路线是否应该存在，并把它转化为真正能执行的旅行方案。",
+      "cta1": "开始规划 →",
+      "cta2": "查看系统原理 →"
+    },
+    "module1": {
+      "title": "RouteDirection™",
+      "description": "路线方向引擎",
+      "scene": "适用场景",
+      "value": "价值"
+    },
+    "module2": {
+      "title": "可执行日程生成",
+      "description": "把路线转化为每天可执行的结构",
+      "scene": "适用场景",
+      "value": "价值"
+    },
+    "module3": {
+      "title": "Plan B 备选",
+      "description": "自动生成替换方案",
+      "scene": "适用场景",
+      "value": "价值"
+    },
+    "module4": {
+      "title": "风险 & DEM",
+      "description": "基于地形的风险评估",
+      "scene": "适用场景",
+      "value": "价值"
+    },
+    "module5": {
+      "title": "行前准备",
+      "description": "完整的旅行准备清单",
+      "scene": "适用场景",
+      "value": "价值"
+    },
+    "workflow": {
+      "title": "工作流程",
+      "step1": "先判断路线是否成立",
+      "step2": "自动生成可执行日程",
+      "step3": "风险评估与余量控制",
+      "step4": "Plan B 替换与修复"
+    },
+    "reliable": {
+      "title": "为什么可靠",
+      "firstPrinciples": "第一性原理",
+      "dataRigorous": "数据/逻辑严谨性",
+      "aiStructure": "AI + 结构化算法"
+    },
+    "cta": {
+      "text": "开始体验 →"
+    },
     "firstPrinciples": {
       "title": "第一性原理",
       "question": "我们从一个问题开始：",
@@ -110,25 +241,42 @@
     }
   },
   "professionals": {
-    "title": "面向严肃旅行的风险感知路线智能",
-    "suitableFor": "适用于：",
-    "expedition": "探险",
-    "alpine": "高山",
-    "highAltitude": "高海拔",
-    "remoteTerrain": "偏远地形",
-    "whyTitle": "为什么专业人士选择 TripNARA",
-    "evidence": "基于证据的路线验证",
-    "terrain": "地形级真相检查",
-    "transparency": "完整的决策透明度",
-    "safety": "安全优先的判断系统"
+    "title": "为专业旅行从业者打造",
+    "subtitle": "风险、结构、评估、替换 —— 你可信赖的路线合伙人",
+    "suitableFor": "适用对象",
+    "leader": "领队",
+    "travelConsultant": "定制旅行顾问",
+    "outdoorOrg": "户外组织",
+    "transportPlanner": "交通规划师",
+    "explorationPhotographer": "探索摄影师",
+    "capabilities": {
+      "title": "能力清单",
+      "riskManagement": "风险管理",
+      "routeEvaluation": "路线评估",
+      "structureControl": "结构控制",
+      "teamRhythm": "团队节奏设计"
+    },
+    "trustworthy": "可信赖",
+    "rational": "理性",
+    "traceable": "可溯源",
+    "evidenceBased": "有证据",
+    "cooperation": {
+      "title": "合作方式",
+      "beta": "Beta",
+      "api": "API",
+      "jointExperiment": "联合实验"
+    }
   },
   "pricing": {
-    "title": "定价",
-    "free": "免费",
+    "title": "清晰、简单、无隐藏收费",
+    "heroSubtitle": "清晰、简单、无隐藏收费",
+    "free": "免费版",
+    "pro": "Pro",
+    "professional": "Professional / Team",
     "custom": "定制",
     "perMonth": "/月",
     "explorer": {
-      "name": "探索者",
+      "name": "免费版",
       "price": "免费",
       "description": "适合个人旅行者",
       "features": {
@@ -138,7 +286,7 @@
       }
     },
     "navigator": {
-      "name": "导航者",
+      "name": "Pro",
       "price": "$29/月",
       "description": "适合小团队",
       "features": {
@@ -149,7 +297,7 @@
       }
     },
     "pathfinder": {
-      "name": "探路者",
+      "name": "Professional / Team",
       "price": "定制",
       "description": "适合专业人士",
       "features": {
@@ -158,45 +306,77 @@
         "integrations": "定制集成",
         "dedicated": "专属支持"
       }
+    },
+    "faq": {
+      "title": "常见问题",
+      "cancelable": "是否可取消",
+      "teamSupport": "是否有团队支持",
+      "dataPrivacy": "数据隐私",
+      "countrySupport": "国家支持"
+    },
+    "cta": {
+      "try": "开始试用 →",
+      "contact": "联系我们 →"
     }
   },
   "stories": {
-    "title": "故事",
-    "expedition": {
-      "title": "探险成功故事",
-      "excerpt": "TripNARA 如何阻止了危险的路线决定..."
+    "title": "真实旅行，真实决定",
+    "subtitle": "看看 TripNARA 如何陪伴不同旅人，把梦想变成可执行路线。",
+    "categories": {
+      "hiking": "徒步",
+      "photography": "摄影",
+      "roadTrip": "自驾",
+      "family": "亲子",
+      "polar": "极地/探索",
+      "europeanRail": "欧洲铁路"
     },
-    "alpine": {
-      "title": "高山路线验证",
-      "excerpt": "真实世界的地形检查拯救了一个团队..."
+    "card": {
+      "travelerType": "旅人类型",
+      "destination": "目的地",
+      "keyDecision": "关键决策点",
+      "risk": "风险",
+      "replacement": "替换",
+      "rhythm": "节奏",
+      "elevation": "海拔"
     },
-    "designer": {
-      "title": "专业旅行设计师",
-      "excerpt": "使用 TripNARA 进行高端旅行规划..."
+    "detail": {
+      "background": "旅行背景",
+      "originalPlan": "原本打算",
+      "tripnaraJudgment": "TripNARA 的判断",
+      "decisionProcess": "关键决策过程",
+      "result": "结果",
+      "review": "复盘",
+      "summary": "经验总结"
     }
   },
   "about": {
-    "title": "关于 TripNARA",
+    "title": "我们关心的不是\"去更多地方\"，而是「你是否真正走完一段路」。",
     "mission": {
-      "title": "我们的使命",
-      "p1": "AI 正在用更多内容、更多路线、更多噪音淹没世界。但现实世界没有改变——天气、地形、风险、疲劳仍然重要。",
-      "p2": "没有人正在构建理解和尊重物理现实的系统。TripNARA 就是那个系统。"
+      "title": "使命",
+      "text": "让旅行成为更好的决定过程"
     },
-    "philosophy": {
-      "title": "我们的理念"
+    "believe": {
+      "title": "我们相信",
+      "point1": "...",
+      "point2": "...",
+      "point3": "..."
     },
-    "vision": {
-      "title": "愿景",
-      "text": "帮助人类以智慧、尊重和责任在世界中移动。"
+    "team": {
+      "title": "团队介绍",
+      "product": "产品",
+      "data": "数据",
+      "geography": "地理",
+      "ai": "AI",
+      "outdoor": "户外",
+      "design": "设计"
     },
-    "taglines": [
-      "不是更多行程。更好的决策。",
-      "我们像生命依赖它们一样判断路线。",
-      "旅行，带着良知。",
-      "判断与地形相遇的地方。",
-      "知道何时说不的 AI。",
-      "路线不是内容。它们是责任。"
-    ]
+    "contact": {
+      "title": "联系方式"
+    },
+    "recruiting": {
+      "title": "招募",
+      "text": "如果你也相信旅行不止于打卡，欢迎加入。"
+    }
   },
   "contact": {
     "title": "联系我们",
@@ -206,36 +386,100 @@
     "send": "发送消息"
   },
   "routeIntelligence": {
-    "title": "路线智能",
-    "whatIs": {
-      "title": "什么是路线智能？",
-      "p1": "路线智能是我们正在创建的新类别。它不是关于推荐更多地点或优化参与度。它是关于理解路线是否应该存在。",
-      "p2": "我们不与 OTA 平台或 LLM 助手竞争。我们为路线如何被判断和验证创建新标准。"
+    "title": "一条路线，应该如何被理解？",
+    "subtitle": "TripNARA 的路线哲学",
+    "corePoints": {
+      "title": "四个核心观点",
+      "point1": "一条路线不是景点清单",
+      "point2": "方向先于细节",
+      "point3": "可执行先于浪漫",
+      "point4": "变化是常态"
     },
-    "components": {
-      "title": "核心组件",
-      "routeDirection": {
-        "title": "路线方向",
-        "description": "理解土地想要如何被行走，而不仅仅是列出地点。"
-      },
-      "dem": {
-        "title": "DEM 证据",
-        "description": "地形级验证，证明路线在物理上可能且安全。"
-      },
-      "personas": {
-        "title": "三人格系统",
-        "description": "安全、理性和空间智能共同工作，做出负责任的决策。"
-      }
+    "methodology": {
+      "title": "方法论拆解",
+      "routeDirection": "RouteDirection 概念",
+      "system1System2": "System 1 / System 2",
+      "riskGatekeeper": "风险守门人",
+      "executableRhythm": "可执行节奏"
+    },
+    "ai": {
+      "title": "AI 于我们意味着什么",
+      "subtitle": "不是 AI 玩具，而是决策助手"
+    },
+    "manifesto": {
+      "en": "We decide whether a route should exist.",
+      "zh": "当我们决定一条路线，我们也在决定一种生活方式。"
     }
   },
   "login": {
     "title": "登录 TripNARA",
+    "joinTitle": "登录 TripNARA",
+    "startPlanning": "开始你的智能规划",
     "email": "邮箱",
+    "emailPlaceholder": "输入您的邮箱",
     "password": "密码",
     "submit": "登录",
+    "continue": "继续",
+    "invitationCode": "邀请码",
+    "invitationCodePlaceholder": "输入邀请码 (可选)",
+    "continueWithGoogle": "使用 Google 继续",
+    "continueWithApple": "使用 Apple 继续",
     "googleDescription": "使用 Google 登录，自动保存路线决策记录\n无需密码，跨设备同步你的路线",
     "or": "或",
-    "fallbackNote": "未来将支持 Email OTP / Magic Link 作为备选登录方式"
+    "terms": "继续操作即表示您已阅读并同意 <0>{{terms}}</0> 与 <1>{{privacy}}</1>",
+    "termsOfService": "服务条款",
+    "privacyPolicy": "隐私政策",
+    "fallbackNote": "未来将支持 Email OTP / Magic Link 作为备选登录方式",
+    "heroTitle": "更聪明地规划，更勇敢地出发。",
+    "heroSubtitle": "让旅行决策回到真实世界。",
+    "loginWithAccount": "用{{account}}的身份登录",
+    "noAccount": "还没有账号？",
+    "registerLink": "注册"
+  },
+  "register": {
+    "title": "邮箱注册",
+    "email": "邮箱",
+    "emailPlaceholder": "输入您的邮箱地址",
+    "emailRequired": "请输入邮箱地址",
+    "invalidEmail": "请输入有效的邮箱地址",
+    "sendCode": "发送验证码",
+    "sending": "发送中...",
+    "codeSent": "验证码已发送，请查收邮件",
+    "sendCodeFailed": "发送验证码失败，请稍后重试",
+    "verificationCode": "验证码",
+    "codePlaceholder": "输入6位验证码",
+    "codeHint": "请查看您的邮箱收件箱（包括垃圾邮件文件夹）获取验证码",
+    "invalidCode": "验证码必须是6位数字",
+    "emailAndCodeRequired": "请填写邮箱和验证码",
+    "resendCode": "重新发送验证码",
+    "resendCountdown": "{{seconds}}秒后可重新发送",
+    "resendCodeHint": "请重新获取验证码",
+    "displayName": "显示名称",
+    "displayNamePlaceholder": "输入您的显示名称（可选）",
+    "optional": "可选",
+    "submit": "注册",
+    "registering": "注册中...",
+    "registerFailed": "注册失败，请稍后重试",
+    "success": "注册成功！正在跳转...",
+    "loginHint": "请直接登录",
+    "haveAccount": "已有账号？",
+    "loginLink": "登录",
+    "termsHint": "注册即表示您同意我们的服务条款和隐私政策"
+  },
+  "contentSave": {
+    "title": "随时随地保存任何内容",
+    "description1": "灵感无处不在。除了上传文件，TripNARA 还让你通过浏览器插件或移动应用捕捉想法、保存素材。",
+    "description2": "支持 PDF、网页、地图、路线、地点、照片等等。",
+    "browserExtension": "浏览器插件",
+    "browserExtensionDesc": "浏览时随手保存任何内容",
+    "mobileApp": "移动应用",
+    "mobileAppDesc": "口袋里的路线规划助手"
+  },
+  "footer": {
+    "navigation": "导航",
+    "legal": "法律",
+    "terms": "服务条款",
+    "privacy": "隐私政策"
   }
 }
 

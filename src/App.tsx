@@ -11,6 +11,8 @@ import StoriesPage from './pages/website/Stories';
 import AboutPage from './pages/website/About';
 import ContactPage from './pages/website/Contact';
 import LoginPage from './pages/Login';
+import RegisterPage from './pages/Register';
+import UiTestPage from './pages/UiTest';
 import TripsPage from './pages/trips';
 import PlacesPage from './pages/places';
 import HotelsPage from './pages/hotels';
@@ -51,6 +53,12 @@ function App() {
 
         {/* Login Page */}
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Register Page */}
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* UI Test Page */}
+        <Route path="/ui-test" element={<UiTestPage />} />
 
         {/* Dashboard Routes (Protected) */}
         <Route path="/dashboard" element={<DashboardLayout />}>

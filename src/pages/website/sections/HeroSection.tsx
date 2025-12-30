@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { HeroIllustration } from '@/components/illustrations/HeroIllustration';
 
 export default function HeroSection() {
   const { t } = useTranslation();
@@ -8,110 +9,158 @@ export default function HeroSection() {
       style={{
         minHeight: '90vh',
         display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
         alignItems: 'center',
-        textAlign: 'center',
         padding: '4rem 2rem',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        color: '#fff',
+        backgroundColor: '#fff',
+        color: '#000',
         position: 'relative',
-        overflow: 'hidden',
       }}
     >
-      {/* Background: Terrain Contour / Satellite View */}
       <div
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          opacity: 0.1,
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M0,50 Q25,30 50,50 T100,50\' stroke=\'%23fff\' fill=\'none\'/%3E%3C/svg%3E")',
-          backgroundSize: '200px 200px',
+          maxWidth: '1200px',
+          width: '100%',
+          margin: '0 auto',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '4rem',
+          alignItems: 'center',
         }}
-      />
-
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: '900px' }}>
-        <h1
-          style={{
-            fontSize: 'clamp(2.5rem, 5vw, 4rem)',
-            fontWeight: '700',
-            marginBottom: '1.5rem',
-            lineHeight: '1.2',
-            whiteSpace: 'pre-line',
-          }}
-        >
-          {t('hero.title')}
-        </h1>
-
-        <p
-          style={{
-            fontSize: 'clamp(1.1rem, 2vw, 1.5rem)',
-            marginBottom: '3rem',
-            opacity: 0.95,
-            lineHeight: '1.6',
-            whiteSpace: 'pre-line',
-          }}
-        >
-          {t('hero.subtitle')}
-        </p>
-
-        <div
-          style={{
-            display: 'flex',
-            gap: '1rem',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          <Link
-            to="/login"
+      >
+        {/* Left side - Text content */}
+        <div>
+          <h1
             style={{
-              padding: '1rem 2.5rem',
-              backgroundColor: '#fff',
-              color: '#667eea',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              fontWeight: '600',
-              fontSize: '1.1rem',
-              transition: 'transform 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
+              fontSize: 'clamp(2.5rem, 5vw, 3.5rem)',
+              fontWeight: '700',
+              marginBottom: '2rem',
+              lineHeight: '1.2',
+              color: '#000',
             }}
           >
-            {t('hero.startPlanning')}
-          </Link>
-          <Link
-            to="/product"
+            {(() => {
+              const title = t('hero.title', {
+                defaultValue: '你的梦想，不只是 空想 的。',
+              });
+              const parts = title.split(/(空想)/);
+              return parts.map((part, idx) => 
+                part === '空想' ? (
+                  <span key={idx} style={{ color: '#DC2626' }}>空想</span>
+                ) : (
+                  <span key={idx}>{part}</span>
+                )
+              );
+            })()}
+          </h1>
+
+          <p
             style={{
-              padding: '1rem 2.5rem',
-              backgroundColor: 'transparent',
-              color: '#fff',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              fontWeight: '600',
-              fontSize: '1.1rem',
-              border: '2px solid #fff',
-              transition: 'background-color 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
+              fontSize: 'clamp(1.1rem, 2vw, 1.3rem)',
+              lineHeight: '1.8',
+              color: '#333',
+              marginBottom: '1rem',
             }}
           >
-            {t('hero.learnMore')}
-          </Link>
+            {t('hero.subtitle1', {
+              defaultValue: 'TripNARA 帮你把「我想去」变成真正能走完的旅行路线。',
+            })}
+          </p>
+
+          <p
+            style={{
+              fontSize: 'clamp(1rem, 1.8vw, 1.2rem)',
+              lineHeight: '1.8',
+              color: '#666',
+              marginBottom: '1.5rem',
+            }}
+          >
+            {t('hero.subtitle2', {
+              defaultValue: '从路线方向、风险评估到可执行日程，我们确保计划不仅美好，而且现实、可靠。',
+            })}
+          </p>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '1rem',
+              flexWrap: 'wrap',
+              marginTop: '2.5rem',
+            }}
+          >
+            <Link
+              to="/login"
+              style={{
+                padding: '1rem 2.5rem',
+                backgroundColor: '#DC2626',
+                color: '#fff',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '1.1rem',
+                transition: 'all 0.2s',
+                boxShadow: '0 4px 6px rgba(220, 38, 38, 0.3)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 12px rgba(220, 38, 38, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(220, 38, 38, 0.3)';
+              }}
+            >
+              {t('hero.cta1', { defaultValue: '开始规划我的路线' })}
+            </Link>
+            <Link
+              to="/product"
+              style={{
+                padding: '1rem 2.5rem',
+                backgroundColor: 'transparent',
+                color: '#000',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '1.1rem',
+                border: '2px solid #e0e0e0',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#f5f5f5';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              {t('hero.cta2', { defaultValue: '看 TripNARA 如何做决定' })}
+            </Link>
+          </div>
+        </div>
+
+        {/* Right side - Illustration with micro-copy */}
+        <div style={{ position: 'relative' }}>
+          <HeroIllustration size={500} color="#000" highlightColor="#DC2626" />
+          
+          {/* Micro-copy annotations */}
+          <div
+            style={{
+              position: 'absolute',
+              right: '-20px',
+              top: '200px',
+              fontSize: '0.85rem',
+              color: '#666',
+              lineHeight: '1.6',
+              maxWidth: '180px',
+            }}
+          >
+            <div style={{ marginBottom: '0.5rem' }}>
+              {t('hero.microCopy1', { defaultValue: '灵感 ✓ → 路线 → 日程 → 可执行清单' })}
+            </div>
+            <div>
+              {t('hero.microCopy2', { defaultValue: '梦想，可以被计算为可执行方案。' })}
+            </div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
-
