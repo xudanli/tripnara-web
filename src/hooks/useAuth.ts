@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { authApi, type AuthResponse, type RegisterWithEmailResponse } from '@/api/auth';
+import { authApi, type AuthResponse, type RegisterWithEmailResponse, type LoginWithEmailResponse } from '@/api/auth';
 import { googleAuthService } from '@/services/googleAuth';
 
 export interface User {
@@ -91,12 +91,31 @@ export const useAuth = () => {
     setAccessToken(token);
   }, []);
 
-  // 登录（邮箱注册）- 处理邮箱注册响应
-  const loginWithEmail = useCallback(async (authResponse: AuthResponse | RegisterWithEmailResponse) => {
+  // 登录（邮箱注册/登录）- 处理邮箱注册或登录响应
+  const loginWithEmail = useCallback(async (authResponse: AuthResponse | RegisterWithEmailResponse | LoginWithEmailResponse) => {
+    // 验证响应格式
+    if (!authResponse) {
+      console.error('登录响应为空');
+      throw new Error('登录响应为空');
+    }
+    
     const { user: userData, accessToken: token } = authResponse;
+    
+    // 验证必要字段
+    if (!token) {
+      console.error('登录响应缺少 accessToken:', authResponse);
+      throw new Error('登录响应缺少 accessToken');
+    }
+    
+    if (!userData || !userData.id) {
+      console.error('登录响应缺少 user 信息:', authResponse);
+      throw new Error('登录响应缺少 user 信息');
+    }
     
     // 存储 accessToken 到 sessionStorage
     sessionStorage.setItem('accessToken', token);
+    console.log('✅ accessToken 已保存到 sessionStorage');
+    
     // 存储用户信息到 localStorage（转换为 User 格式以确保兼容性）
     const userForStorage: User = {
       id: userData.id,
@@ -106,10 +125,12 @@ export const useAuth = () => {
       emailVerified: userData.emailVerified ?? null,
     };
     localStorage.setItem('user', JSON.stringify(userForStorage));
+    console.log('✅ 用户信息已保存到 localStorage:', userForStorage);
     
     // 更新状态
     setUser(userForStorage);
     setAccessToken(token);
+    console.log('✅ 认证状态已更新');
   }, []);
 
   return {

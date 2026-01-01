@@ -1,68 +1,140 @@
-import { Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Settings, LogOut, User, MapPin, Compass, Wrench, Share2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function Header() {
   const { user, logout, isAuthenticated } = useAuth();
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
     await logout();
     window.location.href = '/';
   };
 
-  return (
-    <header style={{ padding: '1rem', borderBottom: '1px solid #e0e0e0' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <Link
-          to="/dashboard"
-          style={{
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            textDecoration: 'none',
-            color: '#000',
-          }}
-        >
-          TripNARA
-        </Link>
+  const getInitials = (name?: string | null, email?: string | null): string => {
+    if (name) {
+      return name.charAt(0).toUpperCase();
+    }
+    if (email) {
+      return email.charAt(0).toUpperCase();
+    }
+    return 'U';
+  };
 
-        {isAuthenticated && user && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {user.avatarUrl && (
-              <img
-                src={user.avatarUrl}
-                alt={user.displayName || user.email || 'User avatar'}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                }}
-              />
-            )}
-            <span style={{ fontSize: '0.9rem' }}>
-              {user.displayName || user.email}
-            </span>
-            <button
-              onClick={handleLogout}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: 'transparent',
-                border: '1px solid #e0e0e0',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-              }}
-            >
-              {t('nav.logout', { defaultValue: 'Logout' })}
-            </button>
-          </div>
-        )}
+  const navItems = [
+    { path: '/dashboard/trips', label: '我的行程', icon: MapPin },
+    { path: '/route-philosophy', label: '路线哲学', icon: Compass },
+    { path: '/dashboard/professional', label: '专业工具', icon: Wrench },
+    { path: '/dashboard/share', label: '分享&社区', icon: Share2 },
+  ];
+
+  const isActive = (path: string) => {
+    if (path === '/dashboard/trips') {
+      return location.pathname.startsWith('/dashboard/trips') && !location.pathname.includes('/trips/new');
+    }
+    return location.pathname.startsWith(path);
+  };
+
+  return (
+    <header className="border-b bg-white sticky top-0 z-50">
+      <div className="container mx-auto px-4 py-3">
+        <div className="flex items-center justify-between">
+          {/* Logo */}
+          <a
+            href="/dashboard"
+            className="text-2xl font-bold text-gray-900 no-underline hover:text-gray-700 transition-colors"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('/dashboard/trips');
+            }}
+          >
+            TripNARA
+          </a>
+
+          {/* Navigation Items */}
+          {isAuthenticated && (
+            <nav className="hidden md:flex items-center gap-6">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className={cn(
+                      'flex items-center gap-2 text-sm font-medium transition-colors',
+                      isActive(item.path)
+                        ? 'text-primary'
+                        : 'text-gray-600 hover:text-gray-900'
+                    )}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
+
+          {/* User Menu */}
+          {isAuthenticated && user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-3 outline-none hover:opacity-80 transition-opacity">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={user.avatarUrl || undefined} alt={user.displayName || user.email || 'User'} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                    {getInitials(user.displayName, user.email)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline">
+                  {user.displayName || user.email}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {user.displayName || 'User'}
+                    </p>
+                    {user.email && (
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => navigate('/dashboard/settings?tab=preferences')}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>{t('nav.preferences', { defaultValue: 'Preferences' })}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="cursor-pointer text-red-600 focus:text-red-600"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>{t('nav.logout', { defaultValue: 'Logout' })}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
     </header>
   );

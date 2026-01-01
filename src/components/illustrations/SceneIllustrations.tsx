@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface IllustrationProps {
   className?: string;
   size?: number;
@@ -14,7 +12,6 @@ export function ContentCollection({
   color = 'currentColor',
   highlightColor = '#FFEB3B'
 }: IllustrationProps) {
-  const scale = size / 400;
   return (
     <svg
       width={size}
@@ -117,7 +114,6 @@ export function LearningInsights({
   color = 'currentColor',
   highlightColor = '#FFEB3B'
 }: IllustrationProps) {
-  const scale = size / 400;
   return (
     <svg
       width={size}

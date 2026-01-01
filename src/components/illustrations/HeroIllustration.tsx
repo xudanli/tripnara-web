@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface IllustrationProps {
   className?: string;
   size?: number;

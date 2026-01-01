@@ -10,7 +10,19 @@ export {
   Star,
   Moon,
   Plant,
+  TripPlanning,
 } from './SimpleIllustrations';
+
+export {
+  WelcomeRouteIllustration,
+  EmptyTripsIllustration,
+  EmptyPlacesIllustration,
+  EmptyScheduleIllustration,
+  EmptyExecuteIllustration,
+  ChecklistProgressIllustration,
+  HealthBarIllustration,
+  EmptyTemplatesIllustration,
+} from './OnboardingIllustrations';
 
 export {
   ContentCollection,

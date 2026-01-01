@@ -62,17 +62,17 @@ export default function RouteIntelligencePage() {
         }}
       >
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <h2
-            style={{
+        <h2
+          style={{
               fontSize: 'clamp(2rem, 4vw, 2.5rem)',
-              fontWeight: '700',
+            fontWeight: '700',
               marginBottom: '3rem',
               textAlign: 'center',
               color: '#000',
-            }}
-          >
+          }}
+        >
             {t('routeIntelligence.corePoints.title')}
-          </h2>
+        </h2>
 
           <div
             style={{
@@ -84,7 +84,7 @@ export default function RouteIntelligencePage() {
             {corePoints.map((point, idx) => (
               <div
                 key={idx}
-                style={{
+              style={{
                   padding: '2rem',
                   backgroundColor: '#fff',
                   border: '1px solid #e0e0e0',
@@ -134,7 +134,7 @@ export default function RouteIntelligencePage() {
               return (
                 <div
                   key={idx}
-                  style={{
+              style={{
                     padding: '2rem',
                     backgroundColor: '#f8f9fa',
                     border: '1px solid #e0e0e0',
@@ -175,15 +175,15 @@ export default function RouteIntelligencePage() {
             {t('routeIntelligence.ai.title')}
           </h2>
           <p
-            style={{
+              style={{
               fontSize: 'clamp(1.1rem, 2vw, 1.3rem)',
               lineHeight: '1.8',
               color: '#666',
-            }}
-          >
+              }}
+            >
             {t('routeIntelligence.ai.subtitle')}
-          </p>
-        </div>
+            </p>
+          </div>
       </section>
 
       {/* SECTION 5 · 品牌宣言 */}

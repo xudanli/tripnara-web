@@ -1,7 +1,8 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../common/LanguageSwitcher';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NavItem {
   key: string;
@@ -49,10 +50,14 @@ const navItems: NavItem[] = [
 
 export default function WebsiteNavbar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const { t } = useTranslation();
+  const { user, isAuthenticated, logout } = useAuth();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -63,13 +68,22 @@ export default function WebsiteNavbar() {
           setOpenDropdown(null);
         }
       }
+      if (userMenuOpen && userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [openDropdown]);
+  }, [openDropdown, userMenuOpen]);
+
+  const handleLogout = async () => {
+    await logout();
+    setUserMenuOpen(false);
+    navigate('/');
+  };
 
   const handleDropdownToggle = (key: string) => {
     setOpenDropdown(openDropdown === key ? null : key);
@@ -280,59 +294,211 @@ export default function WebsiteNavbar() {
           {/* Right side buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '2rem' }}>
             <LanguageSwitcher />
-            <Link
-              to="/login"
-              style={{
-                padding: '0.5rem 1.25rem',
-                backgroundColor: 'transparent',
-                color: '#333',
-                textDecoration: 'none',
-                borderRadius: '6px',
-                fontSize: '0.95rem',
-                fontWeight: '500',
-                border: '1px solid #e0e0e0',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f5f5f5';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              {t('nav.login')}
-            </Link>
-            <Link
-              to="/login"
-              style={{
-                padding: '0.6rem 1.5rem',
-                backgroundColor: '#DC2626',
-                color: '#fff',
-                textDecoration: 'none',
-                borderRadius: '8px',
-                fontSize: '0.95rem',
-                fontWeight: '600',
-                boxShadow: '0 2px 4px rgba(220, 38, 38, 0.2)',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#b91c1c';
-                e.currentTarget.style.boxShadow = '0 4px 8px rgba(220, 38, 38, 0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#DC2626';
-                e.currentTarget.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.2)';
-              }}
-              onClick={(e) => {
-                // Active state: add inset shadow
-                e.currentTarget.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.1)';
-                setTimeout(() => {
-                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.2)';
-                }, 150);
-              }}
-            >
-              {t('nav.startPlanning')}
-            </Link>
+            {isAuthenticated ? (
+              <div
+                style={{ position: 'relative' }}
+                ref={(el) => {
+                  userMenuRef.current = el;
+                }}
+                onMouseEnter={() => setUserMenuOpen(true)}
+                onMouseLeave={() => setUserMenuOpen(false)}
+              >
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem 1rem',
+                    backgroundColor: 'transparent',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.95rem',
+                    fontWeight: '500',
+                    color: '#333',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f5f5f5';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!userMenuOpen) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                >
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user?.displayName || user?.email || 'User'}
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        backgroundColor: '#DC2626',
+                        color: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.75rem',
+                        fontWeight: '600',
+                      }}
+                    >
+                      {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span>{user?.displayName || user?.email || t('nav.user')}</span>
+                  <span style={{ fontSize: '0.7rem' }}>▼</span>
+                </button>
+                {userMenuOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '0.5rem',
+                      backgroundColor: '#fff',
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      minWidth: '200px',
+                      padding: '0.5rem 0',
+                      zIndex: 1001,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '0.75rem 1rem',
+                        borderBottom: '1px solid #e0e0e0',
+                        marginBottom: '0.25rem',
+                      }}
+                    >
+                      <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#000' }}>
+                        {user?.displayName || user?.email}
+                      </div>
+                      {user?.email && user?.displayName && (
+                        <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+                          {user.email}
+                        </div>
+                      )}
+                    </div>
+                    <Link
+                      to="/dashboard/settings?tab=preferences"
+                      onClick={() => setUserMenuOpen(false)}
+                      style={{
+                        display: 'block',
+                        padding: '0.75rem 1rem',
+                        textDecoration: 'none',
+                        color: '#333',
+                        fontSize: '0.95rem',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f5f5f5';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      {t('nav.preferences')}
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '0.75rem 1rem',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: '#DC2626',
+                        fontSize: '0.95rem',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#fef2f2';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      {t('nav.logout')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  style={{
+                    padding: '0.5rem 1.25rem',
+                    backgroundColor: 'transparent',
+                    color: '#333',
+                    textDecoration: 'none',
+                    borderRadius: '6px',
+                    fontSize: '0.95rem',
+                    fontWeight: '500',
+                    border: '1px solid #e0e0e0',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f5f5f5';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  {t('nav.login')}
+                </Link>
+                <Link
+                  to="/login"
+                  style={{
+                    padding: '0.6rem 1.5rem',
+                    backgroundColor: '#DC2626',
+                    color: '#fff',
+                    textDecoration: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.95rem',
+                    fontWeight: '600',
+                    boxShadow: '0 2px 4px rgba(220, 38, 38, 0.2)',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#b91c1c';
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(220, 38, 38, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#DC2626';
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.2)';
+                  }}
+                  onClick={(e) => {
+                    // Active state: add inset shadow
+                    const target = e.currentTarget;
+                    if (target) {
+                      target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.1)';
+                      setTimeout(() => {
+                        if (target) {
+                          target.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.2)';
+                        }
+                      }, 150);
+                    }
+                  }}
+                >
+                  {t('nav.startPlanning')}
+                </Link>
+              </>
+            )}
           </div>
         </div>
 
@@ -367,7 +533,7 @@ export default function WebsiteNavbar() {
         >
           {/* CTA first on mobile */}
           <Link
-            to="/login"
+            to={isAuthenticated ? "/dashboard" : "/login"}
             onClick={() => setMobileMenuOpen(false)}
             style={{
               padding: '0.75rem 1rem',
@@ -423,21 +589,112 @@ export default function WebsiteNavbar() {
           <div style={{ padding: '0.5rem 0', borderTop: '1px solid #e0e0e0', marginTop: '0.5rem' }}>
             <LanguageSwitcher />
           </div>
-          <Link
-            to="/login"
-            onClick={() => setMobileMenuOpen(false)}
-            style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: 'transparent',
-              color: '#333',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              textAlign: 'center',
-              border: '1px solid #e0e0e0',
-            }}
-          >
-            {t('nav.login')}
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <div
+                style={{
+                  padding: '0.75rem 1rem',
+                  borderTop: '1px solid #e0e0e0',
+                  marginTop: '0.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                }}
+              >
+                {user?.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt={user?.displayName || user?.email || 'User'}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      backgroundColor: '#DC2626',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1rem',
+                      fontWeight: '600',
+                    }}
+                  >
+                    {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#000' }}>
+                    {user?.displayName || user?.email}
+                  </div>
+                  {user?.email && user.displayName && (
+                    <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+                      {user.email}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Link
+                to="/dashboard/settings?tab=preferences"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  padding: '0.75rem 1rem',
+                  backgroundColor: 'transparent',
+                  color: '#333',
+                  textDecoration: 'none',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  border: '1px solid #e0e0e0',
+                }}
+              >
+                {t('nav.preferences')}
+              </Link>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 1rem',
+                  backgroundColor: 'transparent',
+                  color: '#DC2626',
+                  textDecoration: 'none',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  border: '1px solid #DC2626',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  fontWeight: '500',
+                }}
+              >
+                {t('nav.logout')}
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: 'transparent',
+                color: '#333',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                textAlign: 'center',
+                border: '1px solid #e0e0e0',
+              }}
+            >
+              {t('nav.login')}
+            </Link>
+          )}
         </div>
       )}
 

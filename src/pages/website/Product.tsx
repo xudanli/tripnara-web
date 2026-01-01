@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RoutePlanning } from '@/components/illustrations/SceneIllustrations';
-import { Mountains, PersonThinking, Compass, Route, PersonSitting } from '@/components/illustrations/SimpleIllustrations';
+import { Mountains, PersonThinking, Compass, Route } from '@/components/illustrations/SimpleIllustrations';
 
 export default function ProductPage() {
   const { t } = useTranslation();

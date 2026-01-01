@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface IllustrationProps {
   className?: string;
   size?: number;
@@ -277,6 +275,81 @@ export function Plant({ className = '', size = 100, color = 'currentColor' }: Il
       <path d="M 50 30 Q 65 35 65 45" strokeLinecap="round" />
       <path d="M 50 50 Q 35 55 35 65" strokeLinecap="round" />
       <path d="M 50 60 Q 65 65 65 75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// 行程规划插画 - 人物拿着地图和行李箱
+export function TripPlanning({ className = '', size = 300, color = 'currentColor' }: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 300 300"
+      fill="none"
+      stroke={color}
+      strokeWidth="2"
+      className={className}
+    >
+      {/* Person */}
+      {/* Head */}
+      <circle cx="150" cy="80" r="25" />
+      {/* Hair - wavy */}
+      <path d="M 125 70 Q 130 55 135 60 Q 140 55 145 60 Q 150 55 155 60 Q 160 55 165 60 Q 170 55 175 70" strokeLinecap="round" />
+      {/* Face features */}
+      <circle cx="140" cy="75" r="3" fill={color} />
+      <circle cx="160" cy="75" r="3" fill={color} />
+      <path d="M 140 88 Q 150 92 160 88" strokeLinecap="round" />
+      
+      {/* Body */}
+      <line x1="150" y1="105" x2="150" y2="180" strokeLinecap="round" />
+      
+      {/* Arms - holding map */}
+      <line x1="150" y1="130" x2="100" y2="140" strokeLinecap="round" />
+      <line x1="100" y1="140" x2="100" y2="160" strokeLinecap="round" />
+      {/* Map in hand */}
+      <rect x="70" y="160" width="60" height="45" rx="2" />
+      <line x1="75" y1="170" x2="120" y2="170" />
+      <line x1="75" y1="180" x2="110" y2="180" />
+      <line x1="75" y1="190" x2="105" y2="190" />
+      {/* Route on map */}
+      <path d="M 80 175 Q 90 170 100 175" strokeWidth="1.5" />
+      <circle cx="80" cy="175" r="2" fill={color} />
+      <circle cx="100" cy="175" r="2" fill={color} />
+      
+      {/* Other arm */}
+      <line x1="150" y1="130" x2="200" y2="125" strokeLinecap="round" />
+      
+      {/* Legs */}
+      <line x1="150" y1="180" x2="130" y2="220" strokeLinecap="round" />
+      <line x1="150" y1="180" x2="170" y2="220" strokeLinecap="round" />
+      
+      {/* Suitcase */}
+      <rect x="180" y="200" width="50" height="35" rx="3" />
+      <line x1="195" y1="200" x2="195" y2="235" />
+      <rect x="185" y="210" width="12" height="8" rx="1" />
+      <rect x="203" y="210" width="12" height="8" rx="1" />
+      <circle cx="190" cy="225" r="2" />
+      <circle cx="210" cy="225" r="2" />
+      
+      {/* Route/Path elements */}
+      <path
+        d="M 50 250 Q 100 230 150 240 Q 200 250 250 240"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeDasharray="4,4"
+        opacity="0.5"
+      />
+      <circle cx="50" cy="250" r="4" fill={color} opacity="0.6" />
+      <circle cx="150" cy="240" r="3" fill={color} opacity="0.6" />
+      <circle cx="250" cy="240" r="4" fill={color} opacity="0.6" />
+      
+      {/* Compass icon */}
+      <circle cx="250" cy="80" r="20" />
+      <text x="250" y="72" textAnchor="middle" fontSize="10" fill={color} fontWeight="bold">N</text>
+      <line x1="250" y1="80" x2="250" y2="60" strokeLinecap="round" />
+      <circle cx="250" cy="80" r="2" fill={color} />
     </svg>
   );
 }

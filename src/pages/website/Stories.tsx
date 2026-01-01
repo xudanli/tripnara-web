@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { PersonSitting, Route, Mountains } from '@/components/illustrations/SimpleIllustrations';
+import { PersonSitting, Route } from '@/components/illustrations/SimpleIllustrations';
 
 export default function StoriesPage() {
   const { t } = useTranslation();

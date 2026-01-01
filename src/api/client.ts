@@ -1,20 +1,14 @@
 import axios from 'axios';
+import { CONFIG } from '@/constants/config';
 
-// 根据环境决定 baseURL
-// 开发环境：使用相对路径，通过 Vite Proxy 转发
-// 生产环境：使用绝对 URL，直接请求 API 服务器
-const getBaseURL = (): string => {
-  // 如果设置了 VITE_API_BASE_URL 且是生产环境，使用绝对 URL
-  if (import.meta.env.VITE_API_BASE_URL && import.meta.env.PROD) {
-    return import.meta.env.VITE_API_BASE_URL;
-  }
-  // 开发环境使用相对路径，通过 Vite Proxy 转发
-  return '/api';
-};
+// API baseURL 配置
+// 默认使用同域 /api（推荐，需要 Nginx 反代）
+// 可通过 VITE_API_BASE_URL 环境变量覆盖（例如独立 API 域名）
+const baseURL = CONFIG.API_BASE_URL;
 
 const apiClient = axios.create({
-  baseURL: getBaseURL(),
-  timeout: 10000,
+  baseURL,
+  timeout: CONFIG.API.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -27,9 +21,31 @@ apiClient.interceptors.request.use(
   (config) => {
     // Add auth token if available (从 sessionStorage 读取)
     const accessToken = sessionStorage.getItem('accessToken');
+    
+    // 调试日志（使用 console.log 确保在控制台可见）
+    console.log('[API Client] 请求:', {
+      url: config.url,
+      method: config.method?.toUpperCase(),
+      hasToken: !!accessToken,
+      tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...` : 'none',
+      fullHeaders: {
+        ...config.headers,
+        Authorization: accessToken ? `Bearer ${accessToken.substring(0, 20)}...` : 'none',
+      },
+    });
+    
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
+      console.log('[API Client] ✅ 已添加 Authorization header');
+    } else {
+      // 警告：需要认证的接口但没有 token（登录/注册接口除外）
+      const publicEndpoints = ['/auth/email/send-code', '/auth/email/login', '/auth/email/register', '/auth/google', '/auth/refresh'];
+      const isPublicEndpoint = publicEndpoints.some(endpoint => config.url?.includes(endpoint));
+      if (!isPublicEndpoint) {
+        console.warn('[API Client] ⚠️ 请求需要认证但未找到 accessToken:', config.url);
+      }
     }
+    
     return config;
   },
   (error) => {
@@ -39,27 +55,62 @@ apiClient.interceptors.request.use(
 
 // Response interceptor
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // 成功响应日志
+    console.log('[API Client] ✅ 响应成功:', {
+      url: response.config.url,
+      method: response.config.method?.toUpperCase(),
+      status: response.status,
+      statusText: response.statusText,
+    });
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
 
-    // Handle 401 Unauthorized - token 过期
+    // Handle 401 Unauthorized - token 过期或缺失
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      // 调试日志
+      console.error('[API Client] ❌ 401 未授权错误:', {
+        url: originalRequest.url,
+        method: originalRequest.method,
+        hasToken: !!originalRequest.headers.Authorization,
+        tokenInHeader: originalRequest.headers.Authorization ? '存在' : '不存在',
+        responseStatus: error.response?.status,
+        responseData: error.response?.data,
+        sessionStorageToken: sessionStorage.getItem('accessToken') ? '存在' : '不存在',
+      });
+
+      // 检查是否有 token，如果没有，直接跳转登录
+      const currentToken = sessionStorage.getItem('accessToken');
+      if (!currentToken) {
+        console.error('[API Client] ❌ 未找到 accessToken，跳转登录页');
+        sessionStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(new Error('未授权：请先登录'));
+      }
+
       try {
         // 尝试刷新 token（refresh_token 在 cookie 中，会自动发送）
+        console.log('[API Client] 🔄 尝试刷新 token...');
         const { authApi } = await import('./auth');
         const response = await authApi.refreshToken();
         
         // 保存新的 accessToken
         sessionStorage.setItem('accessToken', response.accessToken);
+        console.log('[API Client] ✅ Token 刷新成功，重试请求');
         
         // 使用新 token 重试原请求
         originalRequest.headers.Authorization = `Bearer ${response.accessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
         // 刷新失败，清除会话并跳转登录
+        console.error('[API Client] ❌ Token 刷新失败:', refreshError);
         sessionStorage.removeItem('accessToken');
         localStorage.removeItem('user');
         
@@ -78,7 +129,35 @@ apiClient.interceptors.response.use(
       const errorMessage = errorData?.message || errorData?.error || '请求失败';
       error.message = errorMessage;
     } else if (error.request) {
-      error.message = '网络错误，请检查网络连接';
+      // 请求已发送但没有收到响应
+      if (error.code === 'ECONNABORTED') {
+        // 超时错误
+        console.error('[API Client] ❌ 请求超时:', {
+          url: error.config?.url,
+          timeout: error.config?.timeout,
+          message: '请求超时，可能是后端服务响应太慢或未运行',
+        });
+        error.message = '请求超时，请检查后端服务是否正常运行';
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        // 网络连接错误
+        console.error('[API Client] ❌ 网络连接错误:', {
+          url: error.config?.url,
+          code: error.code,
+          message: '无法连接到后端服务，请确认后端服务是否运行',
+        });
+        error.message = '无法连接到后端服务，请确认后端服务是否在运行（端口 3000）';
+      } else {
+        console.error('[API Client] ❌ 网络错误:', {
+          url: error.config?.url,
+          code: error.code,
+          error,
+        });
+        error.message = '网络错误，请检查网络连接';
+      }
+    } else {
+      // 请求配置错误
+      console.error('[API Client] ❌ 请求配置错误:', error);
+      error.message = error.message || '请求失败';
     }
 
     return Promise.reject(error);

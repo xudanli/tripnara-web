@@ -9,6 +9,9 @@
     "about": "关于我们",
     "login": "登录",
     "startPlanning": "开始规划",
+    "user": "用户",
+    "logout": "退出登录",
+    "preferences": "偏好设置",
     "dropdown": {
       "routeDirection": "RouteDirection™ 路线方向引擎",
       "executableSchedule": "可执行日程生成",
@@ -93,7 +96,38 @@
       "name": "Neptune",
       "title": "修复替换者",
       "description": "情况变化？我来兜底"
+    },
+    "decisionLog": "每个判断都在决策日志中解释",
+    "decisionLogScreenshot": "决策日志截图"
+  },
+  "personaModeToggle": {
+    "viewMode": "视图模式",
+    "abu": {
+      "label": "Abu 视图",
+      "desc": "安全：红线/拒绝原因/证据"
+    },
+    "dre": {
+      "label": "Dr.Dre 视图",
+      "desc": "理性：指标化（时间、缓冲、体力、成本）"
+    },
+    "neptune": {
+      "label": "Neptune 视图",
+      "desc": "修复：执行中动作优先、替代建议"
     }
+  },
+  "planStudio": {
+    "title": "规划工作台",
+    "subtitle": "让路线\"可执行\"：从意图到时间表",
+    "tabs": {
+      "intent": "意图与约束",
+      "places": "找点",
+      "schedule": "时间轴",
+      "optimize": "优化",
+      "whatIf": "What-If",
+      "bookings": "预订"
+    },
+    "noTrip": "请先选择一个行程",
+    "goToTrips": "前往行程库"
   },
   "demTopography": {
     "title": "地形，是旅行计划的真相层",
@@ -241,30 +275,128 @@
     }
   },
   "professionals": {
-    "title": "为专业旅行从业者打造",
-    "subtitle": "风险、结构、评估、替换 —— 你可信赖的路线合伙人",
-    "suitableFor": "适用对象",
-    "leader": "领队",
-    "travelConsultant": "定制旅行顾问",
-    "outdoorOrg": "户外组织",
-    "transportPlanner": "交通规划师",
-    "explorationPhotographer": "探索摄影师",
-    "capabilities": {
-      "title": "能力清单",
-      "riskManagement": "风险管理",
-      "routeEvaluation": "路线评估",
-      "structureControl": "结构控制",
-      "teamRhythm": "团队节奏设计"
+    "hero": {
+      "title": "TripNARA PRO",
+      "subtitle": "为专业创作者提供「路线责任工具」"
     },
-    "trustworthy": "可信赖",
-    "rational": "理性",
-    "traceable": "可溯源",
-    "evidenceBased": "有证据",
-    "cooperation": {
-      "title": "合作方式",
-      "beta": "Beta",
-      "api": "API",
-      "jointExperiment": "联合实验"
+    "users": {
+      "title": "用户是谁？",
+      "travelConsultant": "旅行咨询师",
+      "outdoorLeader": "户外领队",
+      "photographyTeacher": "摄影旅拍老师",
+      "explorationPlanner": "探险/极地计划者",
+      "b2bProductManager": "B 端旅行产品经理"
+    },
+    "coreValues": {
+      "feasibility": {
+        "title": "计划成立性评估",
+        "subtitle": "输入路线 → 输出成立报告",
+        "riskRating": "风险评级",
+        "fatigueModel": "疲劳模型",
+        "alternativePoints": "替代点",
+        "tradeoffAdvice": "权衡建议"
+      },
+      "compliance": {
+        "title": "合规助手",
+        "visa": "签证",
+        "permit": "许可",
+        "environmental": "环保区域",
+        "drone": "无人机限制",
+        "mountain": "登山管理"
+      },
+      "riskCalculation": {
+        "title": "风险演算",
+        "subtitle": "假设变化：",
+        "assumptions": "假设变化",
+        "weather": "天气",
+        "physical": "体力",
+        "vehicle": "车况",
+        "pace": "节奏",
+        "output": "重新计算成立性"
+      },
+      "teamCommunication": {
+        "title": "团队沟通模式",
+        "collaboration": "多人协作",
+        "transparency": "决策透明",
+        "attribution": "责任归因明确"
+      }
+    },
+    "infrastructure": "你在构建 行业基础设施",
+    "voice": {
+      "title": "品牌语气指南（Voice & Tone）",
+      "subtitle": "TripNARA 的语气 = 冷静、尊重现实、但始终站在人这一边",
+      "not": {
+        "title": "不是什么",
+        "mystical": "神棍式 AI",
+        "sales": "销售腔",
+        "viral": "网红煽情",
+        "overpromise": "过度承诺"
+      },
+      "is": {
+        "title": "而是",
+        "integrity": "正直",
+        "transparency": "透明",
+        "understanding": "帮助用户理解世界",
+        "human": "懂人",
+        "boundary": "有底线"
+      },
+      "examples": {
+        "risk": {
+          "title": "当风险出现",
+          "text": "这段路线在当前条件下风险明显高于平均水平，我们建议选择更稳妥方案"
+        },
+        "rejection": {
+          "title": "当需要拒绝",
+          "text": "出于安全原因，我们不会推荐这条路线，这是我们对旅行负责的方式"
+        },
+        "success": {
+          "title": "当旅程成功",
+          "text": "真正让旅程成立的，是你的选择与投入，我们只是你的合作伙伴"
+        }
+      }
+    },
+    "journey": {
+      "title": "真实用户旅程图（Journey Map）",
+      "subtitle": "你现在的产品旅程已经很清晰",
+      "discovery": {
+        "title": "触达阶段",
+        "description": "用户想旅行但感到不确定、不想走流水线、想「认真一点」→ 进入 TripNARA"
+      },
+      "understanding": {
+        "title": "理解阶段",
+        "description": "他发现：哦，这不是旅游App，这是——路线责任系统。信任 + 松一口气"
+      },
+      "profile": {
+        "title": "建立画像",
+        "description": "完成 3 问题，生成 HumanCapabilityModel"
+      },
+      "routeDirection": {
+        "title": "RouteDirection 选型",
+        "description": "系统给出：最优方向、解释、风险提示 → 理性 + 人性"
+      },
+      "planning": {
+        "title": "行程建设",
+        "description": "用户参与，不是消费。TripNARA 像伙伴，不像「导游」"
+      },
+      "preparation": {
+        "title": "执行准备",
+        "description": "风险兜底、预算监控、节奏平衡、替补方案 → 心理安全感↑↑↑"
+      },
+      "execution": {
+        "title": "旅行执行",
+        "description": "Abu/Dr.Dre/Neptune 持续守护"
+      },
+      "review": {
+        "title": "回顾",
+        "description": "旅程被理解，价值留存"
+      }
+    },
+    "manifesto": {
+      "title": "品牌宣言",
+      "line1": "TripNARA 不是卖旅行，是认真对待「路应该怎么走」",
+      "line2": "我们相信，旅行不是逃离现实，而是以更体面、更成熟的方式面对世界",
+      "line3": "路线成立，我们才推荐",
+      "commitment": "这是我们给世界的承诺"
     }
   },
   "pricing": {
@@ -417,9 +549,28 @@
     "startPlanning": "开始你的智能规划",
     "email": "邮箱",
     "emailPlaceholder": "输入您的邮箱",
+    "emailRequired": "请输入邮箱地址",
+    "invalidEmail": "请输入有效的邮箱地址",
     "password": "密码",
     "submit": "登录",
     "continue": "继续",
+    "sendCode": "发送验证码",
+    "sending": "发送中...",
+    "codeSent": "验证码已发送，请查收邮件",
+    "sendCodeFailed": "发送验证码失败，请稍后重试",
+    "verificationCode": "验证码",
+    "codePlaceholder": "输入6位验证码",
+    "codeHint": "请查看您的邮箱收件箱（包括垃圾邮件文件夹）获取验证码",
+    "invalidCode": "验证码必须是6位数字",
+    "emailAndCodeRequired": "请填写邮箱和验证码",
+    "resendCode": "重新发送验证码",
+    "resendCountdown": "{{seconds}}秒后可重新发送",
+    "resendCodeHint": "请重新获取验证码",
+    "loggingIn": "登录中...",
+    "loginFailed": "登录失败，请稍后重试",
+    "success": "登录成功！正在跳转...",
+    "registerHint": "请先注册",
+    "changeEmail": "修改邮箱",
     "invitationCode": "邀请码",
     "invitationCodePlaceholder": "输入邀请码 (可选)",
     "continueWithGoogle": "使用 Google 继续",
@@ -479,7 +630,44 @@
     "navigation": "导航",
     "legal": "法律",
     "terms": "服务条款",
-    "privacy": "隐私政策"
+    "privacy": "隐私政策",
+    "contact": "联系我们"
+  },
+  "contactUs": {
+    "title": "联系我们",
+    "description": "期待您的反馈。您可以向我们报告错误、提出问题或分享想法。",
+    "messagePlaceholder": "发现了错误或有好的想法要分享......",
+    "uploadImages": "上传图片或从剪贴板粘贴图片。",
+    "clickToUpload": "点击上传或拖拽图片",
+    "invalidImageFormat": "请选择图片文件",
+    "messageOrImageRequired": "请输入消息或上传图片",
+    "sendMessage": "发送消息",
+    "sending": "发送中...",
+    "sendSuccess": "消息发送成功！我们会尽快回复您。",
+    "sendFailed": "发送失败，请稍后重试",
+    "contactByEmail": "通过邮件联系我们:",
+    "email": "邮件",
+    "cancel": "取消"
+  },
+  "preferences": {
+    "title": "用户偏好设置",
+    "description": "设置您的旅行偏好，帮助我们为您推荐更合适的行程",
+    "loading": "加载中...",
+    "save": "保存",
+    "saving": "保存中...",
+    "reset": "重置",
+    "saveSuccess": "偏好设置已保存",
+    "attractionTypes": "喜欢的景点类型",
+    "attractionTypesHint": "选择您喜欢的景点类型（可多选）",
+    "dietaryRestrictions": "饮食禁忌",
+    "dietaryRestrictionsHint": "选择您的饮食限制（可多选）",
+    "preferOffbeat": "偏好小众景点",
+    "preferOffbeatHint": "是否喜欢探索小众、非热门的景点",
+    "travelPreferences": "出行偏好",
+    "travelPreferencesHint": "设置您的出行节奏、预算和住宿偏好",
+    "pace": "节奏偏好",
+    "budget": "预算偏好",
+    "accommodation": "住宿偏好"
   }
 }
 

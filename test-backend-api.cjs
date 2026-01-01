@@ -3,7 +3,7 @@ const http = require('http');
 const https = require('https');
 
 const BACKEND_HOST = process.env.BACKEND_HOST || '127.0.0.1';
-const BACKEND_PORT = process.env.BACKEND_PORT || 4000;
+const BACKEND_PORT = process.env.BACKEND_PORT || 3000;
 const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 
 console.log('=== 后端API连通性测试 ===\n');

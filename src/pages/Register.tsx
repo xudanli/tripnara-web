@@ -106,8 +106,17 @@ export default function RegisterPage() {
         displayName || undefined
       );
       
+      // 调试日志
+      console.log('注册API响应:', result);
+      console.log('accessToken:', result?.accessToken);
+      console.log('user:', result?.user);
+      
       // 保存用户信息和token
       await loginWithEmail(result);
+      
+      // 验证 token 是否已保存
+      const savedToken = sessionStorage.getItem('accessToken');
+      console.log('验证：sessionStorage 中的 accessToken:', savedToken ? '已保存' : '未保存');
       
       // 显示成功提示
       setSuccess(t('register.success'));

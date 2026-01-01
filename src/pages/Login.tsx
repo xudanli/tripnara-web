@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
+import { authApi } from '@/api/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import SocialSignInButton from '@/components/auth/SocialSignInButton';
 import GoogleAccountButton from '@/components/auth/GoogleAccountButton';
 import LoginIllustration from '@/components/auth/LoginIllustration';
+
+type LoginStep = 'email' | 'code';
 
 // 包装组件：根据是否有已登录账号来决定显示哪个按钮
 function GoogleLoginSection({
@@ -42,11 +45,29 @@ function GoogleLoginSection({
 export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, loginWithEmail } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [step, setStep] = useState<LoginStep>('email');
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [countdown, setCountdown] = useState(0);
   const [invitationCode, setInvitationCode] = useState('');
+
+  // 倒计时逻辑
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  // 邮箱格式验证
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleGoogleSuccess = async (authResponse: any) => {
     try {
@@ -70,10 +91,109 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  // 步骤1: 发送验证码
+  const handleSendCode = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    // 前端邮箱格式验证
+    if (!email) {
+      setError(t('login.emailRequired'));
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError(t('login.invalidEmail'));
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await authApi.sendVerificationCode(email);
+      setSuccess(t('login.codeSent'));
+      setStep('code');
+      setCountdown(60); // 开始60秒倒计时
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : t('login.sendCodeFailed');
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 步骤2: 使用验证码登录
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement email login
-    setError('邮箱登录功能尚未实现');
+
+    // 前端验证
+    if (!email || !code) {
+      setError(t('login.emailAndCodeRequired'));
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError(t('login.invalidEmail'));
+      return;
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      setError(t('login.invalidCode'));
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await authApi.loginWithEmailCode(email, code);
+      
+      // 调试日志
+      console.log('登录API响应:', result);
+      console.log('accessToken:', result?.accessToken);
+      console.log('user:', result?.user);
+
+      // 保存用户信息和token
+      await loginWithEmail(result);
+      
+      // 验证 token 是否已保存
+      const savedToken = sessionStorage.getItem('accessToken');
+      console.log('验证：sessionStorage 中的 accessToken:', savedToken ? '已保存' : '未保存');
+
+      // 显示成功提示
+      setSuccess(t('login.success'));
+
+      // 跳转到首页
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : t('login.loginFailed');
+
+      // 根据错误类型提供不同提示
+      if (errorMessage.includes('验证码') || errorMessage.includes('code')) {
+        // 验证码相关错误，提供重新发送的选项
+        setError(errorMessage + ' ' + t('login.resendCodeHint'));
+      } else if (errorMessage.includes('未注册') || errorMessage.includes('not registered')) {
+        // 邮箱未注册，提示注册
+        setError(errorMessage + ' ' + t('login.registerHint'));
+        setTimeout(() => navigate('/register'), 2000);
+      } else {
+        setError(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 重新发送验证码
+  const handleResendCode = async () => {
+    if (countdown > 0) return;
+    await handleSendCode();
   };
 
   return (
@@ -97,6 +217,13 @@ export default function LoginPage() {
               {t('login.startPlanning')}
             </h2> */}
           </div>
+
+          {/* Success Message */}
+          {success && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm">
+              {success}
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -140,26 +267,92 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-gray-300"></div>
           </div>
 
-          {/* Email Form */}
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
-            <div>
-              <Input
-                type="email"
-                placeholder={t('login.emailPlaceholder')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full"
-                required
-              />
-            </div>
-            <Button
-              type="submit"
-              className="w-full bg-gray-700 hover:bg-gray-800 text-white h-12 text-base font-medium"
-              disabled={loading}
-            >
-              {t('login.continue')}
-            </Button>
-          </form>
+          {/* Step 1: Email Input and Send Code */}
+          {step === 'email' && (
+            <form onSubmit={handleSendCode} className="space-y-4">
+              <div>
+                <Label htmlFor="email" className="text-sm text-gray-700 mb-2 block">
+                  {t('login.email')}
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder={t('login.emailPlaceholder')}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full"
+                  required
+                  autoFocus
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-gray-700 hover:bg-gray-800 text-white h-12 text-base font-medium"
+                disabled={loading}
+              >
+                {loading ? t('login.sending') : t('login.sendCode')}
+              </Button>
+            </form>
+          )}
+
+          {/* Step 2: Code Input and Login */}
+          {step === 'code' && (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <Label htmlFor="code" className="text-sm text-gray-700 mb-2 block">
+                  {t('login.verificationCode')}
+                </Label>
+                <Input
+                  id="code"
+                  type="text"
+                  placeholder={t('login.codePlaceholder')}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full"
+                  required
+                  autoFocus
+                  maxLength={6}
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  {t('login.codeHint')}
+                </p>
+                {countdown > 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {t('login.resendCountdown', { seconds: countdown })}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={countdown > 0 || loading}
+                  className="mt-2 text-sm text-blue-600 hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  {t('login.resendCode')}
+                </button>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full bg-gray-700 hover:bg-gray-800 text-white h-12 text-base font-medium"
+                disabled={loading}
+              >
+                {loading ? t('login.loggingIn') : t('login.submit')}
+              </Button>
+
+              {/* Back to email step */}
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('email');
+                  setCode('');
+                  setError(null);
+                }}
+                className="w-full text-sm text-gray-600 hover:text-gray-800 mt-2"
+              >
+                {t('login.changeEmail')}
+              </button>
+            </form>
+          )}
 
           {/* Terms */}
           <p className="mt-6 text-xs text-gray-500 text-center">

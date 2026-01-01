@@ -9,6 +9,9 @@
     "about": "About",
     "login": "Login",
     "startPlanning": "Start Planning",
+    "user": "User",
+    "logout": "Logout",
+    "preferences": "Preferences",
     "dropdown": {
       "routeDirection": "RouteDirection™ Route Direction Engine",
       "executableSchedule": "Executable Schedule Generation",
@@ -96,6 +99,35 @@
     },
     "decisionLog": "Every judgment is explained in the Decision Log",
     "decisionLogScreenshot": "Decision Log Screenshot"
+  },
+  "personaModeToggle": {
+    "viewMode": "View Mode",
+    "abu": {
+      "label": "Abu View",
+      "desc": "Safety: Red lines / Rejection reasons / Evidence"
+    },
+    "dre": {
+      "label": "Dr.Dre View",
+      "desc": "Rational: Metrics (time, buffer, stamina, cost)"
+    },
+    "neptune": {
+      "label": "Neptune View",
+      "desc": "Repair: Action priority in execution / Alternative suggestions"
+    }
+  },
+  "planStudio": {
+    "title": "Plan Studio",
+    "subtitle": "Make routes \"executable\": From intent to schedule",
+    "tabs": {
+      "intent": "Intent & Constraints",
+      "places": "Places",
+      "schedule": "Schedule",
+      "optimize": "Optimize",
+      "whatIf": "What-If",
+      "bookings": "Bookings"
+    },
+    "noTrip": "Please select a trip first",
+    "goToTrips": "Go to Trips"
   },
   "demTopography": {
     "title": "Terrain is the truth layer of travel planning",
@@ -243,30 +275,128 @@
     }
   },
   "professionals": {
-    "title": "Built for Professional Travel Practitioners",
-    "subtitle": "Risk, Structure, Evaluation, Replacement — Your Trusted Route Partner",
-    "suitableFor": "Target Users",
-    "leader": "Leader",
-    "travelConsultant": "Custom Travel Consultant",
-    "outdoorOrg": "Outdoor Organization",
-    "transportPlanner": "Transportation Planner",
-    "explorationPhotographer": "Exploration Photographer",
-    "capabilities": {
-      "title": "Capability List",
-      "riskManagement": "Risk Management",
-      "routeEvaluation": "Route Evaluation",
-      "structureControl": "Structure Control",
-      "teamRhythm": "Team Rhythm Design"
+    "hero": {
+      "title": "TripNARA PRO",
+      "subtitle": "Route Responsibility Tools for Professional Creators"
     },
-    "trustworthy": "Trustworthy",
-    "rational": "Rational",
-    "traceable": "Traceable",
-    "evidenceBased": "Evidence-based",
-    "cooperation": {
-      "title": "Cooperation Methods",
-      "beta": "Beta",
-      "api": "API",
-      "jointExperiment": "Joint Experiment"
+    "users": {
+      "title": "Who Are Our Users?",
+      "travelConsultant": "Travel Consultant",
+      "outdoorLeader": "Outdoor Leader",
+      "photographyTeacher": "Photography & Travel Teacher",
+      "explorationPlanner": "Exploration / Polar Planner",
+      "b2bProductManager": "B2B Travel Product Manager"
+    },
+    "coreValues": {
+      "feasibility": {
+        "title": "Feasibility Assessment",
+        "subtitle": "Input Route → Output Feasibility Report",
+        "riskRating": "Risk Rating",
+        "fatigueModel": "Fatigue Model",
+        "alternativePoints": "Alternative Points",
+        "tradeoffAdvice": "Trade-off Recommendations"
+      },
+      "compliance": {
+        "title": "Compliance Assistant",
+        "visa": "Visa",
+        "permit": "Permits",
+        "environmental": "Environmental Zones",
+        "drone": "Drone Restrictions",
+        "mountain": "Mountain Climbing Regulations"
+      },
+      "riskCalculation": {
+        "title": "Risk Calculation",
+        "subtitle": "Scenario Changes:",
+        "assumptions": "Scenario Changes",
+        "weather": "Weather",
+        "physical": "Physical Condition",
+        "vehicle": "Vehicle Status",
+        "pace": "Pace",
+        "output": "Recalculate Feasibility"
+      },
+      "teamCommunication": {
+        "title": "Team Communication Mode",
+        "collaboration": "Multi-person Collaboration",
+        "transparency": "Transparent Decision-making",
+        "attribution": "Clear Responsibility Attribution"
+      }
+    },
+    "infrastructure": "You Are Building Industry Infrastructure",
+    "voice": {
+      "title": "Brand Voice & Tone Guide",
+      "subtitle": "TripNARA's Voice = Calm, Respectful of Reality, But Always on Humanity's Side",
+      "not": {
+        "title": "Not",
+        "mystical": "Mystical AI",
+        "sales": "Sales Pitch",
+        "viral": "Viral Hype",
+        "overpromise": "Over-promising"
+      },
+      "is": {
+        "title": "But",
+        "integrity": "Integrity",
+        "transparency": "Transparency",
+        "understanding": "Help Users Understand the World",
+        "human": "Human-centered",
+        "boundary": "With Boundaries"
+      },
+      "examples": {
+        "risk": {
+          "title": "When Risks Appear",
+          "text": "This route has significantly higher risk than average under current conditions. We recommend choosing a safer alternative."
+        },
+        "rejection": {
+          "title": "When We Need to Refuse",
+          "text": "For safety reasons, we cannot recommend this route. This is how we take responsibility for travel."
+        },
+        "success": {
+          "title": "When Journey Succeeds",
+          "text": "What truly makes the journey successful is your choices and commitment. We are just your partner."
+        }
+      }
+    },
+    "journey": {
+      "title": "Real User Journey Map",
+      "subtitle": "Your product journey is already very clear",
+      "discovery": {
+        "title": "Discovery Stage",
+        "description": "User wants to travel but feels uncertain, doesn't want cookie-cutter trips, wants to \"take it seriously\" → Enters TripNARA"
+      },
+      "understanding": {
+        "title": "Understanding Stage",
+        "description": "They discover: Oh, this isn't a travel app, this is—a Route Responsibility System. Trust + Relief"
+      },
+      "profile": {
+        "title": "Build Profile",
+        "description": "Complete 3 questions, generate HumanCapabilityModel"
+      },
+      "routeDirection": {
+        "title": "RouteDirection Selection",
+        "description": "System provides: Optimal direction, explanation, risk warnings → Rational + Human"
+      },
+      "planning": {
+        "title": "Route Building",
+        "description": "User participates, not just consumes. TripNARA is like a partner, not a \"tour guide\""
+      },
+      "preparation": {
+        "title": "Execution Preparation",
+        "description": "Risk coverage, budget monitoring, pace balance, backup plans → Psychological security ↑↑↑"
+      },
+      "execution": {
+        "title": "Travel Execution",
+        "description": "Abu/Dr.Dre/Neptune continuously guard"
+      },
+      "review": {
+        "title": "Review",
+        "description": "Journey is understood, value is preserved"
+      }
+    },
+    "manifesto": {
+      "title": "Brand Manifesto",
+      "line1": "TripNARA doesn't sell travel; we take seriously \"how routes should be walked\"",
+      "line2": "We believe travel is not escaping reality, but facing the world in a more dignified and mature way",
+      "line3": "We only recommend routes that are feasible",
+      "commitment": "This is our promise to the world"
     }
   },
   "pricing": {
@@ -419,9 +549,28 @@
     "startPlanning": "Start Your Smart Planning",
     "email": "Email",
     "emailPlaceholder": "Enter your email",
+    "emailRequired": "Please enter your email address",
+    "invalidEmail": "Please enter a valid email address",
     "password": "Password",
     "submit": "Login",
     "continue": "Continue",
+    "sendCode": "Send Verification Code",
+    "sending": "Sending...",
+    "codeSent": "Verification code sent. Please check your email.",
+    "sendCodeFailed": "Failed to send verification code. Please try again.",
+    "verificationCode": "Verification Code",
+    "codePlaceholder": "Enter 6-digit code",
+    "codeHint": "Please check your email inbox (and spam folder) for the verification code",
+    "invalidCode": "Verification code must be 6 digits",
+    "emailAndCodeRequired": "Please enter email and verification code",
+    "resendCode": "Resend Code",
+    "resendCountdown": "Resend code in {{seconds}} seconds",
+    "resendCodeHint": "Please request a new verification code",
+    "loggingIn": "Logging in...",
+    "loginFailed": "Login failed. Please try again.",
+    "success": "Login successful! Redirecting...",
+    "registerHint": "Please register first",
+    "changeEmail": "Change Email",
     "invitationCode": "Invitation Code",
     "invitationCodePlaceholder": "Enter invitation code (optional)",
     "continueWithGoogle": "Continue with Google",
@@ -437,12 +586,6 @@
     "loginWithAccount": "Continue as {{account}}",
     "noAccount": "Don't have an account?",
     "registerLink": "Register"
-  },
-  "footer": {
-    "navigation": "Navigation",
-    "legal": "Legal",
-    "terms": "Terms of Service",
-    "privacy": "Privacy Policy"
   },
   "register": {
     "title": "Register with Email",
@@ -482,6 +625,49 @@
     "browserExtensionDesc": "Save any content while browsing",
     "mobileApp": "Mobile App",
     "mobileAppDesc": "Route planning assistant in your pocket"
+  },
+  "preferences": {
+    "title": "User Preferences",
+    "description": "Set your travel preferences to help us recommend better trips for you",
+    "loading": "Loading...",
+    "save": "Save",
+    "saving": "Saving...",
+    "reset": "Reset",
+    "saveSuccess": "Preferences saved successfully",
+    "attractionTypes": "Preferred Attraction Types",
+    "attractionTypesHint": "Select your preferred attraction types (multiple selections allowed)",
+    "dietaryRestrictions": "Dietary Restrictions",
+    "dietaryRestrictionsHint": "Select your dietary restrictions (multiple selections allowed)",
+    "preferOffbeat": "Prefer Offbeat Attractions",
+    "preferOffbeatHint": "Whether you prefer to explore offbeat, non-mainstream attractions",
+    "travelPreferences": "Travel Preferences",
+    "travelPreferencesHint": "Set your travel pace, budget, and accommodation preferences",
+    "pace": "Pace Preference",
+    "budget": "Budget Preference",
+    "accommodation": "Accommodation Preference"
+  },
+  "footer": {
+    "navigation": "Navigation",
+    "legal": "Legal",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "contact": "Contact Us"
+  },
+  "contactUs": {
+    "title": "Contact Us",
+    "description": "We look forward to your feedback. You can report errors, ask questions, or share ideas with us.",
+    "messagePlaceholder": "Found an error or have a good idea to share......",
+    "uploadImages": "Upload images or paste images from the clipboard.",
+    "clickToUpload": "Click to upload or drag images",
+    "invalidImageFormat": "Please select image files",
+    "messageOrImageRequired": "Please enter a message or upload images",
+    "sendMessage": "Send Message",
+    "sending": "Sending...",
+    "sendSuccess": "Message sent successfully! We will reply to you as soon as possible.",
+    "sendFailed": "Failed to send, please try again later",
+    "contactByEmail": "Contact us by email:",
+    "email": "Email",
+    "cancel": "Cancel"
   }
 }
 

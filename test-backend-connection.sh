@@ -8,7 +8,7 @@ echo ""
 # 从环境变量或配置文件读取后端地址
 # 默认使用 vite.config.ts 中的 proxy target
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
-BACKEND_PORT="${BACKEND_PORT:-4000}"
+BACKEND_PORT="${BACKEND_PORT:-3000}"
 BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}"
 
 echo "后端服务地址: ${BACKEND_URL}"

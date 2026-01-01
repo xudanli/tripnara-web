@@ -16,7 +16,7 @@ from urllib.parse import urljoin
 
 # 从环境变量读取配置，默认为 vite.config.ts 中的配置
 BACKEND_HOST = os.getenv('BACKEND_HOST', '127.0.0.1')
-BACKEND_PORT = os.getenv('BACKEND_PORT', '4000')
+BACKEND_PORT = os.getenv('BACKEND_PORT', '3000')
 BACKEND_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
 
 def test_tcp_connection(host, port):

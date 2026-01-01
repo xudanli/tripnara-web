@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 
 export default function Footer() {
   const { t } = useTranslation();
+  const [contactUsOpen, setContactUsOpen] = useState(false);
 
   return (
     <footer
@@ -102,6 +105,12 @@ export default function Footer() {
               >
                 {t('nav.about')}
               </Link>
+              <button
+                onClick={() => setContactUsOpen(true)}
+                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
+              >
+                {t('footer.contact')}
+              </button>
             </nav>
           </div>
 
@@ -151,6 +160,7 @@ export default function Footer() {
           © {new Date().getFullYear()} TripNARA. All rights reserved.
         </div>
       </div>
+      <ContactUsDialog open={contactUsOpen} onOpenChange={setContactUsOpen} />
     </footer>
   );
 }
