@@ -117,7 +117,7 @@ export default function PricingPage() {
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-4px)';
                     e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-                    e.currentTarget.style.borderColor = '#DC2626';
+                    e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)';
@@ -269,7 +269,7 @@ export default function PricingPage() {
               to="/login"
               style={{
                 padding: '1rem 2.5rem',
-                backgroundColor: '#DC2626',
+                backgroundColor: 'oklch(0.205 0 0)',
                 color: '#fff',
                 textDecoration: 'none',
                 borderRadius: '8px',
@@ -279,7 +279,7 @@ export default function PricingPage() {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';

@@ -208,7 +208,7 @@ export default function AboutPage() {
             style={{
               display: 'inline-block',
               padding: '1rem 2rem',
-              backgroundColor: '#DC2626',
+              backgroundColor: 'oklch(0.205 0 0)',
               color: '#fff',
               textDecoration: 'none',
               borderRadius: '8px',
@@ -218,7 +218,7 @@ export default function AboutPage() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';

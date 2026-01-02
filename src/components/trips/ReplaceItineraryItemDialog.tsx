@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -19,24 +20,6 @@ interface ReplaceItineraryItemDialogProps {
   onSuccess: (result: ReplaceItineraryItemResponse) => void;
 }
 
-const REPLACE_REASONS = [
-  { value: 'too_tired', label: '太累' },
-  { value: 'weather_change', label: '天气变化' },
-  { value: 'change_style', label: '想换风格' },
-  { value: 'too_far', label: '距离太远' },
-  { value: 'closed', label: '已关闭' },
-  { value: 'other', label: '其他' },
-];
-
-const TRAVEL_STYLE_LABELS: Record<TravelStyle, string> = {
-  nature: '自然风光',
-  culture: '文化历史',
-  food: '美食探索',
-  citywalk: '城市漫步',
-  photography: '摄影打卡',
-  adventure: '冒险体验',
-};
-
 export function ReplaceItineraryItemDialog({
   tripId,
   itemId,
@@ -45,7 +28,26 @@ export function ReplaceItineraryItemDialog({
   onOpenChange,
   onSuccess,
 }: ReplaceItineraryItemDialogProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
+  
+  const REPLACE_REASONS = [
+    { value: 'too_tired', label: t('dialogs.replaceItineraryItem.reasons.tooTired') },
+    { value: 'weather_change', label: t('dialogs.replaceItineraryItem.reasons.weatherChange') },
+    { value: 'change_style', label: t('dialogs.replaceItineraryItem.reasons.changeStyle') },
+    { value: 'too_far', label: t('dialogs.replaceItineraryItem.reasons.tooFar') },
+    { value: 'closed', label: t('dialogs.replaceItineraryItem.reasons.closed') },
+    { value: 'other', label: t('dialogs.replaceItineraryItem.reasons.other') },
+  ];
+
+  const TRAVEL_STYLE_LABELS: Record<TravelStyle, string> = {
+    nature: t('dialogs.replaceItineraryItem.travelStyles.nature'),
+    culture: t('dialogs.replaceItineraryItem.travelStyles.culture'),
+    food: t('dialogs.replaceItineraryItem.travelStyles.food'),
+    citywalk: t('dialogs.replaceItineraryItem.travelStyles.citywalk'),
+    photography: t('dialogs.replaceItineraryItem.travelStyles.photography'),
+    adventure: t('dialogs.replaceItineraryItem.travelStyles.adventure'),
+  };
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<ReplaceItineraryItemRequest>({
     reason: 'too_tired',
@@ -73,7 +75,7 @@ export function ReplaceItineraryItemDialog({
       const response = await tripsApi.replaceItem(tripId, itemId, formData);
       setResult(response);
     } catch (err: any) {
-      setError(err.message || '替换行程项失败');
+      setError(err.message || t('dialogs.replaceItineraryItem.replaceFailed'));
       console.error('Failed to replace item:', err);
     } finally {
       setLoading(false);
@@ -91,9 +93,9 @@ export function ReplaceItineraryItemDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>替换行程项</DialogTitle>
+          <DialogTitle>{t('dialogs.replaceItineraryItem.title')}</DialogTitle>
           <DialogDescription>
-            {placeName && `替换 "${placeName}" 为更合适的地点`}
+            {placeName && t('dialogs.replaceItineraryItem.replacePlace', { placeName })}
           </DialogDescription>
         </DialogHeader>
 
@@ -109,7 +111,7 @@ export function ReplaceItineraryItemDialog({
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="reason">替换原因</Label>
+              <Label htmlFor="reason">{t('dialogs.replaceItineraryItem.reason')}</Label>
               <Select
                 value={formData.reason}
                 onValueChange={(value) => setFormData({ ...formData, reason: value as any })}
@@ -129,7 +131,7 @@ export function ReplaceItineraryItemDialog({
 
             {formData.reason === 'change_style' && (
               <div className="space-y-2">
-                <Label htmlFor="preferredStyle">偏好风格</Label>
+                <Label htmlFor="preferredStyle">{t('dialogs.replaceItineraryItem.preferredStyle')}</Label>
                 <Select
                   value={formData.preferredStyle}
                   onValueChange={(value) =>
@@ -137,7 +139,7 @@ export function ReplaceItineraryItemDialog({
                   }
                 >
                   <SelectTrigger id="preferredStyle">
-                    <SelectValue placeholder="选择风格" />
+                    <SelectValue placeholder={t('dialogs.replaceItineraryItem.selectStyle')} />
                   </SelectTrigger>
                   <SelectContent>
                     {Object.entries(TRAVEL_STYLE_LABELS).map(([value, label]) => (
@@ -152,10 +154,10 @@ export function ReplaceItineraryItemDialog({
 
             {(formData.reason === 'too_far' || formData.reason === 'other') && (
               <div className="space-y-2">
-                <Label htmlFor="customReason">详细说明</Label>
+                <Label htmlFor="customReason">{t('dialogs.replaceItineraryItem.customReason')}</Label>
                 <Textarea
                   id="customReason"
-                  placeholder="请说明替换原因..."
+                  placeholder={t('dialogs.replaceItineraryItem.customReasonPlaceholder')}
                   value={formData.reason === 'other' ? (formData as any).customReason || '' : ''}
                   onChange={(e) =>
                     setFormData({
@@ -175,10 +177,10 @@ export function ReplaceItineraryItemDialog({
                 {loading ? (
                   <>
                     <Spinner className="w-4 h-4 mr-2" />
-                    替换中...
+                    {t('dialogs.replaceItineraryItem.replacing')}
                   </>
                 ) : (
-                  '查找替换方案'
+                  t('dialogs.replaceItineraryItem.findReplacement')
                 )}
               </Button>
             </DialogFooter>
@@ -186,13 +188,13 @@ export function ReplaceItineraryItemDialog({
         ) : (
           <div className="space-y-4 py-4">
             <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-              <div className="font-medium text-green-800 mb-2">找到替换方案</div>
+              <div className="font-medium text-green-800 mb-2">{t('dialogs.replaceItineraryItem.foundReplacement')}</div>
               <div className="text-sm text-green-700">
                 <div className="mb-1">
-                  <strong>新地点:</strong> Place ID {result.newItem.placeId}
+                  <strong>{t('dialogs.replaceItineraryItem.newPlace')}</strong> Place ID {result.newItem.placeId}
                 </div>
                 <div className="mb-1">
-                  <strong>原因:</strong> {result.newItem.reason}
+                  <strong>{t('dialogs.replaceItineraryItem.reasonLabel')}</strong> {result.newItem.reason}
                 </div>
                 {result.newItem.evidence && (
                   <div className="text-xs mt-2 space-y-1">
@@ -209,7 +211,7 @@ export function ReplaceItineraryItemDialog({
 
             {result.alternatives && result.alternatives.length > 0 && (
               <div className="space-y-2">
-                <Label>其他备选方案</Label>
+                <Label>{t('dialogs.replaceItineraryItem.otherAlternatives')}</Label>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {result.alternatives.map((alt, idx) => (
                     <div
@@ -245,7 +247,7 @@ export function ReplaceItineraryItemDialog({
                 取消
               </Button>
               <Button onClick={handleConfirm}>
-                <span>确认替换</span>
+                <span>{t('dialogs.replaceItineraryItem.confirmReplace')}</span>
               </Button>
             </DialogFooter>
           </div>

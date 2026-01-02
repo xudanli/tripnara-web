@@ -126,20 +126,29 @@ export interface RoutePlanDraft {
 // ==================== 决策引擎响应 ====================
 
 export interface SafetyViolation {
-  persona: Persona;
-  action: Action;
-  reason: string;
-  evidence: {
-    type: string;
-    segmentId?: string;
-    [key: string]: any;
+  persona: 'ABU';                       // 策略人格（DEM 文档中固定为 'ABU'）
+  action: 'REJECT' | 'WARN' | 'ALLOW';  // 动作类型
+  explanation: string;                  // 解释（DEM 文档使用 explanation）
+  evidence?: {
+    // DEM 证据数据
+    elevationProfile?: number[];        // 高程剖面
+    cumulativeAscent?: number;          // 累计爬升（米）
+    maxSlopePct?: number;               // 最大坡度（百分比）
+    violation?: 'HARD' | 'SOFT' | 'NONE'; // 违规类型
+    type?: string;                      // 兼容旧字段
+    segmentId?: string;                 // 兼容旧字段
+    [key: string]: any;                 // 其他字段
   };
+  // 兼容旧字段
+  reason?: string;
 }
 
 export interface AlternativeRoute {
+  routeId?: string;                     // 路线 ID（DEM 文档）
   description: string;
-  plan: RoutePlanDraft;
-  reason: string;
+  plan?: RoutePlanDraft;                // 可选（DEM 文档中可能没有）
+  changes?: string[];                    // 变更说明列表（DEM 文档）
+  reason?: string;                      // 兼容旧字段
 }
 
 // ==================== 接口 1: 安全规则校验 ====================
@@ -163,29 +172,35 @@ export interface ValidateSafetyResponse {
 // ==================== 接口 2: 行程节奏调整 ====================
 
 export interface AdjustPacingRequest {
-  tripId?: string;
+  tripId: string;                       // DEM 文档中为必填（与 validate-safety 相同）
   plan: RoutePlanDraft;
   worldContext: WorldModelContext;
 }
 
+// DEM 文档格式的 PacingChange
 export interface PacingChange {
-  type: 'SPLIT' | 'INSERT_REST' | 'REDUCE_DURATION';
-  segmentId: string;
+  persona: 'DR_DRE';
+  action: 'ADJUST' | 'NO_CHANGE';
+  explanation: string;                  // DEM 文档使用 explanation
+  changes?: {
+    dayIndex: number;
+    originalDuration: number;          // 原始活动时长（分钟）
+    adjustedDuration: number;          // 调整后活动时长（分钟）
+    insertedBreaks?: number;           // 插入的休息次数
+  }[];
+  // 兼容旧字段
+  type?: 'SPLIT' | 'INSERT_REST' | 'REDUCE_DURATION';
+  segmentId?: string;
   newSegments?: string[];
-  reason: string;
+  reason?: string;
 }
 
 export interface AdjustPacingResponse {
   success: true;
   data: {
     success: boolean;
-    adjustedPlan: RoutePlanDraft;
-    changes: Array<{
-      persona: Persona;
-      action: Action;
-      reason: string;
-      changes: PacingChange[];
-    }>;
+    adjustedPlan?: RoutePlanDraft;      // DEM 文档中为可选
+    changes: PacingChange[];            // DEM 文档格式：直接是数组
     message: string;
   };
 }
@@ -193,34 +208,44 @@ export interface AdjustPacingResponse {
 // ==================== 接口 3: 路线节点替换 ====================
 
 export interface UnavailableNode {
-  nodeId: string; // 注意：这里是 segmentId，不是 placeId
-  reason: string;
+  nodeId: string;                       // 节点 ID
+  reason: string;                       // 不可用原因（如 'closed', 'weather', 'hazard'）
 }
 
 export interface ReplaceNodesRequest {
-  tripId?: string;
+  tripId: string;                       // DEM 文档中为必填
   plan: RoutePlanDraft;
   worldContext: WorldModelContext;
-  unavailableNodes: UnavailableNode[];
+  unavailableNodes: Array<{
+    nodeId: string;
+    reason: string;
+  }>;
 }
 
+// DEM 文档格式的 NodeReplacement
 export interface NodeReplacement {
-  original: string;
-  replacement: string;
+  persona: 'NEPTUNE';
+  originalNodeId: string;
+  replacementNodeId: string;
   reason: string;
+  explanation: string;
+  validation: {
+    elevationChange?: number;          // 海拔变化（米）
+    distanceChange?: number;           // 距离变化（米）
+    slopeChange?: number;              // 坡度变化（百分比）
+    safetyCheck: 'PASS' | 'WARN' | 'FAIL';
+  };
+  // 兼容旧字段
+  original?: string;
+  replacement?: string;
 }
 
 export interface ReplaceNodesResponse {
   success: true;
   data: {
     success: boolean;
-    replacedPlan: RoutePlanDraft;
-    replacements: Array<{
-      persona: Persona;
-      action: Action;
-      reason: string;
-      replacements: NodeReplacement[];
-    }>;
+    replacedPlan?: RoutePlanDraft;      // DEM 文档中为可选
+    replacements: NodeReplacement[];    // DEM 文档格式：直接是数组
     message: string;
   };
 }

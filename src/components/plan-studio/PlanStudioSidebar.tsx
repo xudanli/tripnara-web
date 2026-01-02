@@ -1,41 +1,586 @@
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Shield, Brain, Wrench, CheckCircle2, XCircle, AlertTriangle, BarChart3, TrendingUp, FileText } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
+import { tripsApi } from '@/api/trips';
+import { decisionApi } from '@/api/decision';
+import type { PersonaAlert, TripDetail, TripMetricsResponse, IntentResponse } from '@/types/trip';
+import type { ValidateSafetyRequest, AdjustPacingRequest, ReplaceNodesRequest, RoutePlanDraft, WorldModelContext, RouteSegment, DEMEvidenceItem } from '@/types/strategy';
+import { toast } from 'sonner';
 
 interface PlanStudioSidebarProps {
+  tripId: string;
   personaMode: PersonaMode;
 }
 
-export default function PlanStudioSidebar({ personaMode }: PlanStudioSidebarProps) {
-  // 模拟数据 - 实际应该从后端API获取
-  const abuGatingStatus: 'ALLOW' | 'WARN' | 'BLOCK' = 'WARN';
+export default function PlanStudioSidebar({ tripId, personaMode }: PlanStudioSidebarProps) {
+  const { t } = useTranslation();
+  const [loading, setLoading] = useState(false);
+  const [alerts, setAlerts] = useState<PersonaAlert[]>([]);
+  const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [metrics, setMetrics] = useState<TripMetricsResponse | null>(null);
+  const [intent, setIntent] = useState<IntentResponse | null>(null);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+  const [neptuneReplacements, setNeptuneReplacements] = useState<any[]>([]); // 存储 Neptune 修复建议
+  const [operationResult, setOperationResult] = useState<{ type: 'success' | 'info' | 'warning'; message: string } | null>(null); // 存储操作结果
+  
+  // 根据当前 personaMode 过滤提醒
+  const personaMap: Record<PersonaMode, 'ABU' | 'DR_DRE' | 'NEPTUNE'> = {
+    abu: 'ABU',
+    dre: 'DR_DRE',
+    neptune: 'NEPTUNE',
+  };
+  
+  const currentPersona = personaMap[personaMode];
+  // 去重：根据 alert.id 去重，避免重复显示
+  // 如果 id 不存在，使用 title + message 作为唯一标识
+  const uniqueAlerts = alerts.filter((alert, index, self) => {
+    const identifier = alert.id || `${alert.title}-${alert.message}`;
+    return index === self.findIndex(a => {
+      const otherIdentifier = a.id || `${a.title}-${a.message}`;
+      return otherIdentifier === identifier;
+    });
+  });
+  const filteredAlerts = uniqueAlerts.filter(alert => alert.persona === currentPersona);
+
+  useEffect(() => {
+    loadPersonaAlerts();
+    loadTrip();
+    loadMetrics();
+    loadIntent();
+  }, [tripId]);
+
+  const loadPersonaAlerts = async () => {
+    if (!tripId) return;
+    
+    try {
+      setLoading(true);
+      const data = await tripsApi.getPersonaAlerts(tripId);
+      setAlerts(data);
+    } catch (err) {
+      console.error('Failed to load persona alerts:', err);
+      // 失败时使用空数组，不阻塞UI
+      setAlerts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadTrip = async () => {
+    if (!tripId) return;
+    
+    try {
+      const data = await tripsApi.getById(tripId);
+      setTrip(data);
+    } catch (err) {
+      console.error('Failed to load trip:', err);
+    }
+  };
+
+  const loadMetrics = async () => {
+    if (!tripId) return;
+    
+    try {
+      setLoadingMetrics(true);
+      const data = await tripsApi.getMetrics(tripId);
+      setMetrics(data);
+    } catch (err) {
+      console.error('Failed to load metrics:', err);
+      // 失败时不阻塞UI，使用空值
+      setMetrics(null);
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
+
+  const loadIntent = async () => {
+    if (!tripId) return;
+    
+    try {
+      const data = await tripsApi.getIntent(tripId);
+      setIntent(data);
+    } catch (err) {
+      console.error('Failed to load intent:', err);
+      // 失败时不阻塞UI，使用空值
+      setIntent(null);
+    }
+  };
+
+  // 计算两点间距离（公里）- Haversine公式
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371; // 地球半径（公里）
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // 构建 RoutePlanDraft（从行程数据构建）
+  const buildRoutePlanDraft = (): RoutePlanDraft | null => {
+    if (!trip || !trip.TripDay || trip.TripDay.length === 0) {
+      return null;
+    }
+
+    const segments: RoutePlanDraft['segments'] = [];
+    
+    // 从行程数据构建 segments
+    trip.TripDay.forEach((day, dayIndex) => {
+      if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+        day.ItineraryItem.forEach((item, index) => {
+          if (item.Place && index > 0) {
+            const prevItem = day.ItineraryItem[index - 1];
+            if (prevItem?.Place) {
+              // 获取位置信息
+              const fromLat = prevItem.Place.metadata?.location?.lat || 
+                             prevItem.Place.lat || 0;
+              const fromLng = prevItem.Place.metadata?.location?.lng || 
+                             prevItem.Place.lng || 0;
+              const toLat = item.Place.metadata?.location?.lat || 
+                           item.Place.lat || 0;
+              const toLng = item.Place.metadata?.location?.lng || 
+                           item.Place.lng || 0;
+              
+              // 计算距离
+              const distanceKm = calculateDistance(fromLat, fromLng, toLat, toLng);
+              
+              // 获取爬升和坡度（从 physicalMetadata 或使用默认值）
+              const ascentM = item.Place.physicalMetadata?.elevationGainM || 0;
+              const slopePct = item.Place.physicalMetadata?.slopePct || 0;
+              
+              segments.push({
+                segmentId: `seg-${day.id}-${index}`,
+                dayIndex: dayIndex,
+                distanceKm: distanceKm,
+                ascentM: ascentM,
+                slopePct: slopePct,
+                metadata: {
+                  fromPlaceId: String(prevItem.Place.id),
+                  toPlaceId: String(item.Place.id),
+                },
+              });
+            }
+          }
+        });
+      }
+    });
+
+    return {
+      tripId: trip.id,
+      routeDirectionId: (trip as any).routeDirectionId || '', // 从 trip 数据中获取
+      segments,
+    };
+  };
+
+  // 构建 WorldModelContext（从行程数据构建 DEM 证据）
+  const buildWorldModelContext = (): WorldModelContext | null => {
+    if (!trip) return null;
+
+    const countryCode = trip.destination || '';
+    const month = new Date(trip.startDate).getMonth() + 1;
+
+    // 从 segments 构建 DEM 证据
+    const plan = buildRoutePlanDraft();
+    const demEvidence: DEMEvidenceItem[] = [];
+    
+    if (plan && plan.segments.length > 0) {
+      // 计算3天滚动爬升
+      let rollingAscent3Days = 0;
+      const last3DaysSegments: RouteSegment[] = [];
+      
+      plan.segments.forEach((segment, index) => {
+        // 收集最近3天的 segments
+        if (segment.dayIndex >= Math.max(0, plan.segments[plan.segments.length - 1].dayIndex - 2)) {
+          last3DaysSegments.push(segment);
+          rollingAscent3Days += segment.ascentM;
+        }
+        
+        // 为每个 segment 创建 DEM 证据
+        demEvidence.push({
+          segmentId: segment.segmentId,
+          elevationProfile: [], // 实际应从 DEM API 获取
+          cumulativeAscent: segment.ascentM,
+          maxSlopePct: segment.slopePct || 0,
+          rollingAscent3Days: rollingAscent3Days,
+          fatigueIndex: 0, // 需要计算
+          violation: 'NONE',
+          explanation: `路段 ${segment.segmentId} 的 DEM 数据`,
+        });
+      });
+    } else {
+      // 如果没有 segments，至少提供一个占位符 DEM 证据
+      demEvidence.push({
+        segmentId: 'placeholder-seg-1',
+        elevationProfile: [],
+        cumulativeAscent: 0,
+        maxSlopePct: 0,
+        rollingAscent3Days: 0,
+        fatigueIndex: 0,
+        violation: 'NONE',
+        explanation: 'DEM 数据待从行程数据中提取',
+      });
+    }
+
+    return {
+      physical: {
+        demEvidence, // 现在包含实际的 DEM 证据数据
+        roadStates: [],
+        hazardZones: [],
+        ferryStates: [],
+        countryCode,
+        month,
+      },
+      human: {
+        maxDailyAscentM: 1000,
+        rollingAscent3DaysM: 2500,
+        maxSlopePct: 20,
+        weatherRiskWeight: 0.5,
+        bufferDayBias: 'MEDIUM',
+        riskTolerance: 'MEDIUM',
+      },
+      routeDirection: {
+        id: (trip as any).routeDirectionId || '',
+        nameCN: trip.destination || '',
+        nameEN: trip.destination || '',
+        countryCode,
+      },
+    };
+  };
+
+  // Abu 策略：安全规则校验
+  const handleValidateSafety = async () => {
+    if (!trip) {
+      toast.error(t('planStudio.sidebar.noTripData'));
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      const plan = buildRoutePlanDraft();
+      const worldContext = buildWorldModelContext();
+
+      if (!plan || !worldContext) {
+        toast.warning(t('planStudio.sidebar.insufficientData'));
+        return;
+      }
+
+      const request: ValidateSafetyRequest = {
+        tripId: trip.id,
+        plan,
+        worldContext,
+      };
+
+      const result = await decisionApi.validateSafety(request);
+      
+      if (result.allowed) {
+        toast.success(t('planStudio.sidebar.abu.validationPassed'));
+      } else {
+        toast.warning(t('planStudio.sidebar.abu.validationFailed', { 
+          violations: result.violations.length 
+        }));
+      }
+
+      // 重新加载所有数据以更新状态
+      await Promise.all([
+        loadPersonaAlerts(),
+        loadTrip(),
+        loadMetrics(),
+        loadIntent(),
+      ]);
+    } catch (err: any) {
+      console.error('Failed to validate safety:', err);
+      toast.error(err.message || t('planStudio.sidebar.abu.validationError'));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Dr.Dre 策略：行程节奏调整
+  const handleAdjustPacing = async () => {
+    if (!trip) {
+      toast.error(t('planStudio.sidebar.noTripData'));
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      const plan = buildRoutePlanDraft();
+      const worldContext = buildWorldModelContext();
+
+      if (!plan || !worldContext) {
+        toast.warning(t('planStudio.sidebar.insufficientData'));
+        return;
+      }
+
+      const request: AdjustPacingRequest = {
+        tripId: trip.id,
+        plan,
+        worldContext,
+      };
+
+      const result = await decisionApi.adjustPacing(request);
+      
+      if (result.success) {
+        if (result.changes && result.changes.length > 0) {
+          const message = t('planStudio.sidebar.dre.pacingAdjusted', { 
+            changes: result.changes.length 
+          });
+          toast.success(message);
+          setOperationResult({ type: 'success', message });
+          
+          // 如果有调整后的计划，可以在这里应用（如果需要）
+          // if (result.adjustedPlan) {
+          //   // 应用调整后的计划
+          // }
+        } else {
+          // 如果没有变更，显示后端返回的消息
+          const message = result.message || t('planStudio.sidebar.dre.pacingAdjusted', { changes: 0 });
+          toast.info(message);
+          setOperationResult({ type: 'info', message });
+        }
+      } else {
+        // 如果 success 为 false，显示后端返回的消息（通常是"无需调整"等信息）
+        const message = result.message || t('planStudio.sidebar.dre.pacingAdjustFailed');
+        toast.info(message);
+        setOperationResult({ type: 'info', message });
+      }
+
+      // 重新加载所有数据以更新状态
+      await Promise.all([
+        loadPersonaAlerts(),
+        loadTrip(),
+        loadMetrics(),
+        loadIntent(),
+      ]);
+    } catch (err: any) {
+      console.error('Failed to adjust pacing:', err);
+      toast.error(err.message || t('planStudio.sidebar.dre.pacingError'));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Neptune 策略：路线节点替换
+  const handleReplaceNodes = async () => {
+    if (!trip) {
+      toast.error(t('planStudio.sidebar.noTripData'));
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      const plan = buildRoutePlanDraft();
+      const worldContext = buildWorldModelContext();
+
+      if (!plan || !worldContext) {
+        toast.warning(t('planStudio.sidebar.insufficientData'));
+        return;
+      }
+
+      // 从 alerts 中获取不可用的节点
+      const neptuneAlerts = alerts.filter(alert => 
+        alert.persona === 'NEPTUNE' && 
+        (alert.metadata?.type === 'REPLACE_NODE' || alert.metadata?.type === 'UNAVAILABLE_NODE')
+      );
+      
+      const unavailableNodes: ReplaceNodesRequest['unavailableNodes'] = neptuneAlerts.map(alert => ({
+        nodeId: alert.metadata?.nodeId || alert.metadata?.itemId || alert.id,
+        reason: alert.metadata?.reason || alert.message || 'unavailable',
+      }));
+
+      // 如果没有不可用的节点，提示用户
+      if (unavailableNodes.length === 0) {
+        toast.warning(t('planStudio.sidebar.neptune.noUnavailableNodes'));
+        // 可以选择不调用 API，或者提供一个占位符节点
+        // 这里我们提供一个占位符，让后端知道需要检查所有节点
+        unavailableNodes.push({
+          nodeId: 'placeholder-check-all',
+          reason: 'check_all_nodes',
+        });
+      }
+
+      const request: ReplaceNodesRequest = {
+        tripId: trip.id,
+        plan,
+        worldContext,
+        unavailableNodes,
+      };
+
+      const result = await decisionApi.replaceNodes(request);
+      
+      if (result.success) {
+        if (result.replacements && result.replacements.length > 0) {
+          // 保存修复建议供 UI 显示
+          setNeptuneReplacements(result.replacements);
+          
+          toast.success(t('planStudio.sidebar.neptune.nodesReplaced', { 
+            replacements: result.replacements.length 
+          }));
+          
+          // 如果有替换后的计划，可以在这里应用（如果需要）
+          // if (result.replacedPlan) {
+          //   // 应用替换后的计划
+          // }
+        } else {
+          // 如果没有替换，清空之前的建议
+          setNeptuneReplacements([]);
+          // 如果没有替换，显示后端返回的消息
+          toast.info(result.message || t('planStudio.sidebar.neptune.nodesReplaced', { replacements: 0 }));
+        }
+      } else {
+        // 如果 success 为 false，清空之前的建议
+        setNeptuneReplacements([]);
+        // 如果 success 为 false，显示后端返回的消息
+        toast.info(result.message || t('planStudio.sidebar.neptune.replaceFailed'));
+      }
+
+      // 重新加载所有数据以更新状态
+      await Promise.all([
+        loadPersonaAlerts(),
+        loadTrip(),
+        loadMetrics(),
+        loadIntent(),
+      ]);
+    } catch (err: any) {
+      console.error('Failed to replace nodes:', err);
+      toast.error(err.message || t('planStudio.sidebar.neptune.replaceError'));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 从提醒中提取门控状态和违规数量（Abu视图）
+  const abuGatingStatus: 'ALLOW' | 'WARN' | 'BLOCK' = 
+    filteredAlerts.some(a => a.severity === 'warning' && a.metadata?.action === 'REJECT') ? 'BLOCK' :
+    filteredAlerts.some(a => a.severity === 'warning') ? 'WARN' : 'ALLOW';
+  
   const abuViolations = {
-    hard: 3,
-    soft: 2,
+    hard: filteredAlerts.filter(a => a.severity === 'warning' && a.metadata?.action === 'REJECT').length,
+    soft: filteredAlerts.filter(a => a.severity === 'warning' && a.metadata?.action !== 'REJECT').length,
   };
 
-  const dreMetrics = {
-    timeTotal: 1440,
-    bufferTotal: 180,
-    fatigueScore: 65,
-    ascent: 1200,
-    costEstimate: 5000,
-    weights: {
-      comfort: 40,
-      experience: 30,
-      cost: 30,
-    },
+  // 从 API 数据计算 Dr.Dre 指标
+  // 计算总耗时（从实际行程项计算）
+  const calculateTotalTime = (trip: TripDetail | null): number => {
+    if (!trip || !trip.TripDay) return 0;
+    
+    let totalMinutes = 0;
+    for (const day of trip.TripDay) {
+      if (day.ItineraryItem) {
+        for (const item of day.ItineraryItem) {
+          if (item.startTime && item.endTime) {
+            const start = new Date(item.startTime);
+            const end = new Date(item.endTime);
+            const duration = (end.getTime() - start.getTime()) / (1000 * 60); // 转换为分钟
+            if (duration > 0) {
+              totalMinutes += duration;
+            }
+          }
+        }
+      }
+    }
+    return totalMinutes;
   };
 
-  const neptuneFixes = {
-    total: 5,
-    applied: 2,
+  const dreMetrics = (() => {
+    // 如果没有 metrics 或 trip，返回 null 表示数据未加载
+    if (!metrics || !trip) {
+      return null;
+    }
+
+    // 从实际行程项计算总耗时
+    const timeTotal = calculateTotalTime(trip);
+
+    // 从 summary 获取数据
+    const summary = metrics.summary;
+    
+    // 检查 summary 是否存在且包含必要字段
+    // 如果字段不存在，使用 undefined 而不是 0，这样可以在 UI 中显示"加载中"
+    const bufferTotal = summary?.totalBuffer !== undefined ? summary.totalBuffer : undefined;
+    const costEstimate = summary?.totalCost !== undefined ? summary.totalCost : undefined;
+    
+    // 从 intent 获取权重（根据 planningPolicy 映射，或使用默认值）
+    // planningPolicy 可能是 'safe' | 'experience' | 'challenge'，需要映射到权重
+    const getWeightsFromPolicy = (policy?: string) => {
+      switch (policy) {
+        case 'safe':
+          return { comfort: 50, experience: 30, cost: 20 };
+        case 'experience':
+          return { comfort: 30, experience: 50, cost: 20 };
+        case 'challenge':
+          return { comfort: 20, experience: 40, cost: 40 };
+        default:
+          return { comfort: 40, experience: 30, cost: 30 };
+      }
+    };
+    
+    const weights = getWeightsFromPolicy(intent?.planningPolicy);
+
+    // 计算平均疲劳指数（从所有日期的疲劳指数计算）
+    const totalFatigue = metrics.days.reduce((sum, day) => sum + day.metrics.fatigue, 0);
+    const avgFatigue = metrics.days.length > 0 ? Math.round(totalFatigue / metrics.days.length) : 0;
+
+    // 计算总爬升（从所有日期计算）
+    const totalAscent = metrics.days.reduce((sum, day) => sum + day.metrics.ascent, 0);
+
+    return {
+      timeTotal,
+      bufferTotal,
+      fatigueScore: avgFatigue,
+      ascent: totalAscent,
+      costEstimate,
+      weights,
+    };
+  })();
+
+  // 从 alerts 计算 Neptune 修复数据
+  // 如果没有数据，返回 null 表示数据未加载
+  const neptuneFixes = (() => {
+    if (personaMode !== 'neptune') {
+      return null;
+    }
+    
+    // 如果还在加载中，返回 null
+    if (loading) {
+      return null;
+    }
+    
+    const neptuneAlerts = alerts.filter(alert => alert.persona === 'NEPTUNE');
+    const total = neptuneAlerts.length;
+    
+    // 从 alerts 的 metadata 中提取修复信息
+    let replacePoints = 0;
+    let moveTimeSlots = 0;
+    
+    neptuneAlerts.forEach(alert => {
+      if (alert.metadata?.type === 'REPLACE_NODE') {
+        replacePoints++;
+      } else if (alert.metadata?.type === 'MOVE_TIME_SLOT') {
+        moveTimeSlots++;
+      }
+    });
+    
+    // 已应用的修复数量（如果有状态标记）
+    const applied = neptuneAlerts.filter(alert => alert.metadata?.status === 'APPLIED').length;
+    
+    return {
+      total,
+      applied,
     minimalChanges: {
-      replacePoints: 1,
-      moveTimeSlots: 2,
+        replacePoints,
+        moveTimeSlots,
     },
   };
+  })();
 
   const getStatusIcon = (status: 'ALLOW' | 'WARN' | 'BLOCK') => {
     switch (status) {
@@ -67,7 +612,7 @@ export default function PlanStudioSidebar({ personaMode }: PlanStudioSidebarProp
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Shield className="w-5 h-5 text-red-600" />
-              门控状态
+              {t('planStudio.sidebar.abu.gatingStatus')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -75,17 +620,17 @@ export default function PlanStudioSidebar({ personaMode }: PlanStudioSidebarProp
               <div className="flex items-center gap-2 mb-2">
                 {getStatusIcon(abuGatingStatus)}
                 <span className="font-semibold">
-                  {abuGatingStatus === 'ALLOW' ? '通过' : abuGatingStatus === 'WARN' ? '警告' : '拒绝'}
+                  {t(`planStudio.sidebar.abu.status.${abuGatingStatus.toLowerCase()}`)}
                 </span>
               </div>
               <div className="text-sm space-y-1">
-                <div>红线：{abuViolations.hard} 条</div>
-                <div>警告：{abuViolations.soft} 条</div>
+                <div>{t('planStudio.sidebar.abu.hardViolations', { count: abuViolations.hard })}</div>
+                <div>{t('planStudio.sidebar.abu.softViolations', { count: abuViolations.soft })}</div>
               </div>
             </div>
             <Button variant="outline" className="w-full" size="sm">
               <FileText className="w-4 h-4 mr-2" />
-              查看证据
+              {t('planStudio.sidebar.abu.viewEvidence')}
             </Button>
           </CardContent>
         </Card>
@@ -93,53 +638,104 @@ export default function PlanStudioSidebar({ personaMode }: PlanStudioSidebarProp
     }
 
     if (personaMode === 'dre') {
+      if (loadingMetrics) {
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <BarChart3 className="w-5 h-5 text-orange-600" />
+                {t('planStudio.sidebar.dre.metricsOverview')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center py-4">
+                <Spinner className="w-4 h-4" />
+              </div>
+            </CardContent>
+          </Card>
+        );
+      }
+
+      // 如果数据未加载，显示加载状态
+      if (!dreMetrics) {
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <BarChart3 className="w-5 h-5 text-orange-600" />
+                {t('planStudio.sidebar.dre.metricsOverview')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center py-4">
+                {loadingMetrics ? (
+                  <Spinner className="w-4 h-4" />
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    {t('planStudio.sidebar.loading')}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      }
+
       return (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-orange-600" />
-              指标总览
+              {t('planStudio.sidebar.dre.metricsOverview')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">总耗时</div>
+                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.totalTime')}</div>
                 <div className="font-semibold">{Math.floor(dreMetrics.timeTotal / 60)}h</div>
               </div>
               <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">总缓冲</div>
-                <div className="font-semibold">{Math.floor(dreMetrics.bufferTotal / 60)}h</div>
+                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.totalBuffer')}</div>
+                <div className="font-semibold">
+                  {dreMetrics.bufferTotal !== undefined 
+                    ? `${Math.floor(dreMetrics.bufferTotal / 60)}h` 
+                    : t('planStudio.sidebar.loading')}
+                </div>
               </div>
               <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">疲劳指数</div>
+                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.fatigueScore')}</div>
                 <div className="font-semibold">{dreMetrics.fatigueScore}</div>
               </div>
               <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">预计花费</div>
-                <div className="font-semibold">¥{dreMetrics.costEstimate}</div>
+                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.estimatedCost')}</div>
+                <div className="font-semibold">
+                  {dreMetrics.costEstimate !== undefined 
+                    ? `¥${dreMetrics.costEstimate}` 
+                    : t('planStudio.sidebar.loading')}
+                </div>
               </div>
             </div>
             <div className="pt-2 border-t">
-              <div className="text-xs text-muted-foreground mb-2">当前权重</div>
+              <div className="text-xs text-muted-foreground mb-2">{t('planStudio.sidebar.dre.currentWeights')}</div>
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
-                  <span>舒适</span>
+                  <span>{t('planStudio.sidebar.dre.comfort')}</span>
                   <span className="font-medium">{dreMetrics.weights.comfort}%</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>体验</span>
+                  <span>{t('planStudio.sidebar.dre.experience')}</span>
                   <span className="font-medium">{dreMetrics.weights.experience}%</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>成本</span>
+                  <span>{t('planStudio.sidebar.dre.cost')}</span>
                   <span className="font-medium">{dreMetrics.weights.cost}%</span>
                 </div>
               </div>
             </div>
             <Button variant="outline" className="w-full" size="sm">
               <TrendingUp className="w-4 h-4 mr-2" />
-              调整权重
+              {t('planStudio.sidebar.dre.adjustWeights')}
             </Button>
           </CardContent>
         </Card>
@@ -147,35 +743,60 @@ export default function PlanStudioSidebar({ personaMode }: PlanStudioSidebarProp
     }
 
     if (personaMode === 'neptune') {
+      // 如果数据未加载，显示加载状态
+      if (!neptuneFixes) {
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Wrench className="w-5 h-5 text-green-600" />
+                {t('planStudio.sidebar.neptune.fixProgress')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center py-4">
+                {loading ? (
+                  <Spinner className="w-4 h-4" />
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    {t('planStudio.sidebar.loading')}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      }
+
       return (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Wrench className="w-5 h-5 text-green-600" />
-              修复进度
+              {t('planStudio.sidebar.neptune.fixProgress')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="p-3 border rounded-lg bg-gray-50">
               <div className="text-sm space-y-1">
                 <div>
-                  发现问题 <span className="font-semibold">{neptuneFixes.total}</span> 个
+                  {t('planStudio.sidebar.neptune.issuesFound', { count: neptuneFixes.total })}
                 </div>
                 <div>
-                  已修复 <span className="font-semibold text-green-600">{neptuneFixes.applied}</span> 个
+                  {t('planStudio.sidebar.neptune.issuesFixed', { count: neptuneFixes.applied })}
                 </div>
               </div>
             </div>
             <div className="text-sm space-y-1">
-              <div className="text-xs text-muted-foreground">最小改动成本</div>
+              <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.neptune.minimalChangeCost')}</div>
               <div className="space-y-1">
-                <div>• 替换 {neptuneFixes.minimalChanges.replacePoints} 个点</div>
-                <div>• 移动 {neptuneFixes.minimalChanges.moveTimeSlots} 个时段</div>
+                <div>• {t('planStudio.sidebar.neptune.replacePoints', { count: neptuneFixes.minimalChanges.replacePoints })}</div>
+                <div>• {t('planStudio.sidebar.neptune.moveTimeSlots', { count: neptuneFixes.minimalChanges.moveTimeSlots })}</div>
               </div>
             </div>
             <Button variant="outline" className="w-full" size="sm">
               <FileText className="w-4 h-4 mr-2" />
-              查看补丁
+              {t('planStudio.sidebar.neptune.viewPatch')}
             </Button>
           </CardContent>
         </Card>
@@ -187,88 +808,195 @@ export default function PlanStudioSidebar({ personaMode }: PlanStudioSidebarProp
 
   // 提示卡（中部）
   const renderAlertsCard = () => {
-    if (personaMode === 'abu') {
+    if (loading) {
       return (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">风险提示</CardTitle>
-            <CardDescription>缺失必填项和红线警告</CardDescription>
+            <CardTitle className="text-lg">{t('planStudio.sidebar.loading')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-4">
+              <Spinner className="w-4 h-4" />
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (personaMode === 'abu') {
+      // 按照 decisionSource 分组显示 alerts
+      const groupedAlerts = filteredAlerts.reduce((acc, alert) => {
+        const source = alert.metadata?.decisionSource || 'OTHER';
+        if (!acc[source]) {
+          acc[source] = [];
+        }
+        acc[source].push(alert);
+        return acc;
+      }, {} as Record<string, typeof filteredAlerts>);
+
+      const getSourceName = (source: string): string => {
+        switch (source) {
+          case 'PHYSICAL':
+            return '安全官 (PHYSICAL)';
+          case 'HUMAN':
+            return '能力评估 (HUMAN)';
+          case 'PHILOSOPHY':
+            return '路线哲学 (PHILOSOPHY)';
+          case 'HEURISTIC':
+            return '经验规则 (HEURISTIC)';
+          default:
+            return '其他';
+        }
+      };
+
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{t('planStudio.sidebar.abu.riskAlerts')}</CardTitle>
+            <CardDescription>{t('planStudio.sidebar.abu.riskAlertsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm">
-              <div className="font-medium text-red-800">缺失必选点</div>
-              <div className="text-xs text-red-600 mt-1">必须点列表中缺少 2 个地点</div>
+            {filteredAlerts.length === 0 ? (
+              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-center">
+                <div className="text-green-800">{t('planStudio.sidebar.noAlerts')}</div>
             </div>
-            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
-              <div className="font-medium text-yellow-800">缓冲时间不足</div>
-              <div className="text-xs text-yellow-600 mt-1">Day 2 的缓冲时间少于建议值</div>
+            ) : (
+              Object.entries(groupedAlerts).map(([source, sourceAlerts]) => {
+                // 对于每个 source，只显示一个汇总卡片
+                // 如果有多个 alerts，合并显示
+                const hasWarning = sourceAlerts.some(a => a.severity === 'warning');
+                const hasInfo = sourceAlerts.some(a => a.severity === 'info');
+                const hasSuccess = sourceAlerts.some(a => a.severity === 'success');
+                
+                // 确定整体状态：如果有 warning，显示 warning；否则显示 info 或 success
+                const overallSeverity = hasWarning ? 'warning' : hasInfo ? 'info' : 'success';
+                
+                const bgColor = 
+                  overallSeverity === 'warning' ? 'bg-red-50 border-red-200 text-red-800' :
+                  overallSeverity === 'info' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                  'bg-green-50 border-green-200 text-green-800';
+                
+                // 合并所有 alerts 的消息
+                const combinedMessage = sourceAlerts.map(a => a.message).join('；');
+                const combinedTitle = sourceAlerts.length > 1 
+                  ? `${sourceAlerts[0].title} (${sourceAlerts.length}项)`
+                  : sourceAlerts[0].title;
+                
+                return (
+                  <div key={source} className={`p-3 border rounded text-sm ${bgColor}`}>
+                    <div className="font-medium text-blue-600 mb-1">{getSourceName(source)}</div>
+                    <div className="font-medium">{combinedTitle}</div>
+                    <div className="text-xs mt-1 opacity-80">{combinedMessage}</div>
             </div>
-            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
-              <div className="font-medium text-yellow-800">日照窗口风险</div>
-              <div className="text-xs text-yellow-600 mt-1">第 3 天结束时间可能超出日照窗口</div>
-            </div>
+                );
+              })
+            )}
           </CardContent>
         </Card>
       );
     }
 
     if (personaMode === 'dre') {
+      // 从 alerts 和 metrics 中提取指标异常
+      const metricAlerts = filteredAlerts.filter(alert => 
+        alert.metadata?.type === 'FATIGUE_PEAK' || 
+        alert.metadata?.type === 'BUFFER_INSUFFICIENT' || 
+        alert.metadata?.type === 'COST_OVER_BUDGET'
+      );
+
+      // 只使用从 API 获取的 alerts，不再进行前端硬编码检测
+      const allIssues = metricAlerts.map(alert => ({
+        type: alert.metadata?.type || 'UNKNOWN',
+        title: alert.title,
+        description: alert.message,
+        severity: alert.severity === 'warning' ? 'HIGH' : alert.severity === 'info' ? 'MEDIUM' : 'LOW',
+      }));
+
       return (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">指标异常</CardTitle>
-            <CardDescription>超出阈值或需要优化的指标</CardDescription>
+            <CardTitle className="text-lg">{t('planStudio.sidebar.dre.metricAlerts')}</CardTitle>
+            <CardDescription>{t('planStudio.sidebar.dre.metricAlertsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="p-3 bg-orange-50 border border-orange-200 rounded text-sm">
-              <div className="font-medium text-orange-800">疲劳峰值过高</div>
-              <div className="text-xs text-orange-600 mt-1">
-                第 3 天游走 18km（&gt; 你的上限 10km）
+            {/* 显示操作结果 */}
+            {operationResult && (
+              <div className={`p-3 border rounded text-sm ${
+                operationResult.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+                operationResult.type === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                'bg-blue-50 border-blue-200 text-blue-800'
+              }`}>
+                <div className="font-medium">
+                  {operationResult.type === 'success' ? '✓' : operationResult.type === 'warning' ? '⚠' : 'ℹ'} 
+                  {' '}{t('planStudio.sidebar.dre.operationResult')}
               </div>
-            </div>
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-              <div className="font-medium text-blue-800">缓冲不足</div>
-              <div className="text-xs text-blue-600 mt-1">
-                缓冲仅 12min → 迟到风险
+                <div className="text-xs mt-1 opacity-80">{operationResult.message}</div>
               </div>
-            </div>
-            <div className="p-3 bg-orange-50 border border-orange-200 rounded text-sm">
-              <div className="font-medium text-orange-800">成本超出预算</div>
-              <div className="text-xs text-orange-600 mt-1">
-                预计花费 ¥5000，超出预算 20%
+            )}
+            {/* 如果没有操作结果且没有 issues，才显示 noAlerts */}
+            {!operationResult && allIssues.length === 0 ? (
+              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-center">
+                <div className="text-green-800">{t('planStudio.sidebar.noAlerts')}</div>
               </div>
-            </div>
+            ) : allIssues.length > 0 ? (
+              allIssues.map((issue, index) => {
+                const bgColor = 
+                  issue.severity === 'HIGH' ? 'bg-orange-50 border-orange-200 text-orange-800' :
+                  issue.severity === 'MEDIUM' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+                  'bg-gray-50 border-gray-200 text-gray-800';
+                
+                return (
+                  <div key={index} className={`p-3 border rounded text-sm ${bgColor}`}>
+                    <div className="font-medium">{issue.title}</div>
+                    <div className="text-xs mt-1 opacity-80">{issue.description}</div>
+                  </div>
+                );
+              })
+            ) : null}
           </CardContent>
         </Card>
       );
     }
 
     if (personaMode === 'neptune') {
+      // 如果有实际的修复建议，显示它们；否则显示提示信息
+      const hasSuggestions = neptuneReplacements.length > 0;
+      
       return (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">修复建议</CardTitle>
-            <CardDescription>最小代价的修复方案</CardDescription>
+            <CardTitle className="text-lg">{t('planStudio.sidebar.neptune.fixSuggestions')}</CardTitle>
+            <CardDescription>{t('planStudio.sidebar.neptune.fixSuggestionsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="p-3 bg-green-50 border border-green-200 rounded text-sm">
-              <div className="font-medium text-green-800">替换建议</div>
+            {hasSuggestions ? (
+              // 显示从 API 获取的实际修复建议
+              neptuneReplacements.map((replacement, index) => (
+                <div key={index} className="p-3 bg-green-50 border border-green-200 rounded text-sm">
+                  <div className="font-medium text-green-800">
+                    {t('planStudio.sidebar.neptune.replaceSuggestion')}
+                  </div>
               <div className="text-xs text-green-600 mt-1">
-                把 A 点换成 B 点（更近/同类型/开放）
+                    {replacement.explanation || replacement.reason || t('planStudio.sidebar.neptune.replaceSuggestionDesc')}
+                  </div>
+                  {replacement.validation && (
+                    <div className="text-xs text-green-500 mt-1">
+                      {t('planStudio.sidebar.neptune.validation')}: {replacement.validation.safetyCheck}
               </div>
+                  )}
             </div>
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm">
-              <div className="font-medium text-gray-800">时间调整</div>
-              <div className="text-xs text-gray-600 mt-1">
-                把午餐提前 30min，插入休息点
+              ))
+            ) : (
+              // 如果没有建议，显示提示信息
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-center">
+                <div className="text-gray-600">
+                  {t('planStudio.sidebar.neptune.noSuggestions')}
               </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {t('planStudio.sidebar.neptune.clickToGenerate')}
             </div>
-            <div className="p-3 bg-green-50 border border-green-200 rounded text-sm">
-              <div className="font-medium text-green-800">替代路线</div>
-              <div className="text-xs text-green-600 mt-1">
-                Day 2 路线不可达，建议使用备选路线 C
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       );
@@ -281,27 +1009,54 @@ export default function PlanStudioSidebar({ personaMode }: PlanStudioSidebarProp
   const renderActionButton = () => {
     if (personaMode === 'abu') {
       return (
-        <Button variant="outline" className="w-full">
+        <Button 
+          variant="outline" 
+          className="w-full"
+          onClick={handleValidateSafety}
+          disabled={processing || !trip}
+        >
+          {processing ? (
+            <Spinner className="w-4 h-4 mr-2" />
+          ) : (
           <Shield className="w-4 h-4 mr-2" />
-          Ask Agent to refine constraints
+          )}
+          {t('planStudio.sidebar.abu.askAgentRefine')}
         </Button>
       );
     }
 
     if (personaMode === 'dre') {
       return (
-        <Button variant="outline" className="w-full">
+        <Button 
+          variant="outline" 
+          className="w-full"
+          onClick={handleAdjustPacing}
+          disabled={processing || !trip}
+        >
+          {processing ? (
+            <Spinner className="w-4 h-4 mr-2" />
+          ) : (
           <Brain className="w-4 h-4 mr-2" />
-          Ask Agent to optimize with weights
+          )}
+          {t('planStudio.sidebar.dre.askAgentOptimize')}
         </Button>
       );
     }
 
     if (personaMode === 'neptune') {
       return (
-        <Button variant="outline" className="w-full">
+        <Button 
+          variant="outline" 
+          className="w-full"
+          onClick={handleReplaceNodes}
+          disabled={processing || !trip}
+        >
+          {processing ? (
+            <Spinner className="w-4 h-4 mr-2" />
+          ) : (
           <Wrench className="w-4 h-4 mr-2" />
-          Ask Agent to apply minimal fixes
+          )}
+          {t('planStudio.sidebar.neptune.askAgentFix')}
         </Button>
       );
     }

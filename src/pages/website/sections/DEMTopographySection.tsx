@@ -78,7 +78,7 @@ export default function DEMTopographySection() {
                     backgroundColor: '#fff',
                     color: '#333',
                     fontSize: '0.95rem',
-                    borderRadius: '6px',
+                    borderRadius: '8px',
                     border: '1px solid #e0e0e0',
                   }}
                 >

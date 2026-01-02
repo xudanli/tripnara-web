@@ -154,7 +154,7 @@ export default function ProfessionalsPage() {
                   }}
                 >
                   <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                    <Icon size={60} color="#DC2626" />
+                    <Icon size={60} color="oklch(0.205 0 0)" />
                   </div>
                   <p
                     style={{
@@ -202,7 +202,7 @@ export default function ProfessionalsPage() {
                     transition: 'border-color 0.2s, transform 0.2s',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#DC2626';
+                    e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
                     e.currentTarget.style.transform = 'translateY(-4px)';
                   }}
                   onMouseLeave={(e) => {
@@ -216,7 +216,7 @@ export default function ProfessionalsPage() {
                         width: '48px',
                         height: '48px',
                         borderRadius: '12px',
-                        backgroundColor: '#DC2626',
+                        backgroundColor: 'oklch(0.205 0 0)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -272,7 +272,7 @@ export default function ProfessionalsPage() {
                             gap: '0.75rem',
                           }}
                         >
-                          <span style={{ color: '#DC2626', fontSize: '1.2rem' }}>•</span>
+                          <span style={{ color: 'oklch(0.205 0 0)', fontSize: '1.2rem' }}>•</span>
                           {item}
                         </li>
                       ))}
@@ -317,7 +317,7 @@ export default function ProfessionalsPage() {
                       <p
                         style={{
                           fontSize: '1rem',
-                          color: '#DC2626',
+                          color: 'oklch(0.205 0 0)',
                           fontWeight: '600',
                           margin: 0,
                         }}
@@ -405,7 +405,7 @@ export default function ProfessionalsPage() {
                 style={{
                   fontSize: '1.2rem',
                   fontWeight: '700',
-                  color: '#DC2626',
+                  color: 'oklch(0.205 0 0)',
                   marginBottom: '1.5rem',
                 }}
               >
@@ -424,7 +424,7 @@ export default function ProfessionalsPage() {
                       gap: '0.5rem',
                     }}
                   >
-                    <span style={{ color: '#DC2626' }}>❌</span>
+                    <span style={{ color: 'oklch(0.205 0 0)' }}>❌</span>
                     {t(`professionals.voice.not.${key}`)}
                   </li>
                 ))}
@@ -566,7 +566,7 @@ export default function ProfessionalsPage() {
                     width: '48px',
                     height: '48px',
                     borderRadius: '12px',
-                    backgroundColor: '#DC2626',
+                    backgroundColor: 'oklch(0.205 0 0)',
                     color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
@@ -640,7 +640,7 @@ export default function ProfessionalsPage() {
             style={{
               padding: '2rem',
               backgroundColor: '#f8f9fa',
-              border: '2px solid #DC2626',
+              border: '2px solid oklch(0.205 0 0)',
               borderRadius: '12px',
               marginTop: '2rem',
             }}
@@ -649,7 +649,7 @@ export default function ProfessionalsPage() {
               style={{
                 fontSize: 'clamp(1.2rem, 2.5vw, 1.5rem)',
             fontWeight: '600',
-                color: '#DC2626',
+                color: 'oklch(0.205 0 0)',
                 margin: 0,
                 lineHeight: '1.8',
               }}

@@ -44,22 +44,22 @@ export default function FinalCTASection() {
             to="/login"
             style={{
               padding: '1rem 2.5rem',
-              backgroundColor: '#DC2626',
+              backgroundColor: 'oklch(0.205 0 0)',
               color: '#fff',
               textDecoration: 'none',
               borderRadius: '8px',
               fontWeight: '600',
               fontSize: '1.1rem',
               transition: 'all 0.2s',
-              boxShadow: '0 4px 6px rgba(220, 38, 38, 0.3)',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.2)',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 6px 12px rgba(220, 38, 38, 0.4)';
+              e.currentTarget.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.3)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(220, 38, 38, 0.3)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.2)';
             }}
           >
             {t('finalCTA.button1', { defaultValue: '开始规划 →' })}

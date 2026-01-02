@@ -87,7 +87,7 @@ export default function DecisionComparisonSection() {
             <div
               style={{
                 padding: '2rem',
-                border: '2px solid #DC2626',
+                border: '2px solid oklch(0.205 0 0)',
                 borderRadius: '12px',
                 backgroundColor: '#fff',
               }}
@@ -97,7 +97,7 @@ export default function DecisionComparisonSection() {
                   fontSize: '1.2rem',
                   fontWeight: '600',
                   marginBottom: '1.5rem',
-                  color: '#DC2626',
+                  color: 'oklch(0.205 0 0)',
                 }}
               >
                 ✔ {t('decisionComparison.tripnara', { defaultValue: 'TripNARA' })}
@@ -111,25 +111,25 @@ export default function DecisionComparisonSection() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid #DC2626' }}>
+                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid oklch(0.205 0 0)' }}>
                     {t('decisionComparison.step1', { defaultValue: '是否成立？' })}
                   </span>
                   <span>→</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid #DC2626' }}>
+                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid oklch(0.205 0 0)' }}>
                     {t('decisionComparison.step2', { defaultValue: '结构化路线' })}
                   </span>
                   <span>→</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid #DC2626' }}>
+                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid oklch(0.205 0 0)' }}>
                     {t('decisionComparison.step3', { defaultValue: '风险验证' })}
                   </span>
                   <span>→</span>
                 </div>
                 <div>
-                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid #DC2626' }}>
+                  <span style={{ padding: '0.5rem 1rem', backgroundColor: '#fff5f5', borderRadius: '4px', border: '1px solid oklch(0.205 0 0)' }}>
                     {t('decisionComparison.step4', { defaultValue: '可执行' })}
                   </span>
                 </div>

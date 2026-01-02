@@ -125,10 +125,10 @@ export default function StoriesPage() {
               onClick={() => setSelectedCategory(null)}
               style={{
                 padding: '0.75rem 1.5rem',
-                backgroundColor: selectedCategory === null ? '#DC2626' : '#fff',
+                backgroundColor: selectedCategory === null ? 'oklch(0.205 0 0)' : '#fff',
                 color: selectedCategory === null ? '#fff' : '#333',
                 border: '1px solid #e0e0e0',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 cursor: 'pointer',
                 fontSize: '0.95rem',
                 fontWeight: selectedCategory === null ? '600' : '400',
@@ -143,7 +143,7 @@ export default function StoriesPage() {
                 onClick={() => setSelectedCategory(category.key)}
                 style={{
                   padding: '0.75rem 1.5rem',
-                  backgroundColor: selectedCategory === category.key ? '#DC2626' : '#fff',
+                  backgroundColor: selectedCategory === category.key ? 'oklch(0.205 0 0)' : '#fff',
                   color: selectedCategory === category.key ? '#fff' : '#333',
                   border: '1px solid #e0e0e0',
                   borderRadius: '6px',
@@ -197,7 +197,7 @@ export default function StoriesPage() {
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-4px)';
                     e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-                    e.currentTarget.style.borderColor = '#DC2626';
+                    e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)';
@@ -255,10 +255,10 @@ export default function StoriesPage() {
                         style={{
                           padding: '0.25rem 0.75rem',
                           backgroundColor: '#fff5f5',
-                          color: '#DC2626',
+                          color: 'oklch(0.205 0 0)',
                           fontSize: '0.85rem',
                           borderRadius: '4px',
-                          border: '1px solid #DC2626',
+                          border: '1px solid oklch(0.205 0 0)',
                         }}
                       >
                         {t('stories.card.risk')}: {story.tags.risk}

@@ -198,7 +198,7 @@ export default function WebsiteNavbar() {
                         left: 0,
                         marginTop: '0.25rem',
                         backgroundColor: '#fff',
-                        border: '2px solid #DC2626',
+                        border: '2px solid oklch(0.205 0 0)',
                         borderRadius: '8px',
                         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
                         minWidth: '280px',
@@ -312,7 +312,7 @@ export default function WebsiteNavbar() {
                     padding: '0.5rem 1rem',
                     backgroundColor: 'transparent',
                     border: '1px solid #e0e0e0',
-                    borderRadius: '6px',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     fontSize: '0.95rem',
                     fontWeight: '500',
@@ -345,7 +345,7 @@ export default function WebsiteNavbar() {
                         width: '24px',
                         height: '24px',
                         borderRadius: '50%',
-                        backgroundColor: '#DC2626',
+                        backgroundColor: 'oklch(0.205 0 0)',
                         color: '#fff',
                         display: 'flex',
                         alignItems: 'center',
@@ -420,7 +420,7 @@ export default function WebsiteNavbar() {
                         padding: '0.75rem 1rem',
                         backgroundColor: 'transparent',
                         border: 'none',
-                        color: '#DC2626',
+                        color: 'oklch(0.205 0 0)',
                         fontSize: '0.95rem',
                         cursor: 'pointer',
                         transition: 'background-color 0.2s',
@@ -438,66 +438,42 @@ export default function WebsiteNavbar() {
                 )}
               </div>
             ) : (
-              <>
-                <Link
-                  to="/login"
-                  style={{
-                    padding: '0.5rem 1.25rem',
-                    backgroundColor: 'transparent',
-                    color: '#333',
-                    textDecoration: 'none',
-                    borderRadius: '6px',
-                    fontSize: '0.95rem',
-                    fontWeight: '500',
-                    border: '1px solid #e0e0e0',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f5f5f5';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {t('nav.login')}
-                </Link>
-                <Link
-                  to="/login"
-                  style={{
-                    padding: '0.6rem 1.5rem',
-                    backgroundColor: '#DC2626',
-                    color: '#fff',
-                    textDecoration: 'none',
-                    borderRadius: '8px',
-                    fontSize: '0.95rem',
-                    fontWeight: '600',
-                    boxShadow: '0 2px 4px rgba(220, 38, 38, 0.2)',
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#b91c1c';
-                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(220, 38, 38, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#DC2626';
-                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.2)';
-                  }}
-                  onClick={(e) => {
-                    // Active state: add inset shadow
-                    const target = e.currentTarget;
-                    if (target) {
-                      target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.1)';
-                      setTimeout(() => {
-                        if (target) {
-                          target.style.boxShadow = '0 2px 4px rgba(220, 38, 38, 0.2)';
-                        }
-                      }, 150);
-                    }
-                  }}
-                >
-                  {t('nav.startPlanning')}
-                </Link>
-              </>
+              <Link
+                to="/login"
+                style={{
+                  padding: '0.6rem 1.5rem',
+                  backgroundColor: '#1a1a1a',
+                  color: '#fff',
+                  textDecoration: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.95rem',
+                  fontWeight: '600',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#2a2a2a';
+                  e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#1a1a1a';
+                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                }}
+                onClick={(e) => {
+                  // Active state: add inset shadow
+                  const target = e.currentTarget;
+                  if (target) {
+                    target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.2)';
+                    setTimeout(() => {
+                      if (target) {
+                        target.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                      }
+                    }, 150);
+                  }
+                }}
+              >
+                {t('nav.startPlanning')}
+              </Link>
             )}
           </div>
         </div>
@@ -537,7 +513,7 @@ export default function WebsiteNavbar() {
             onClick={() => setMobileMenuOpen(false)}
             style={{
               padding: '0.75rem 1rem',
-              backgroundColor: '#DC2626',
+              backgroundColor: '#1a1a1a',
               color: '#fff',
               textDecoration: 'none',
               borderRadius: '8px',
@@ -618,7 +594,7 @@ export default function WebsiteNavbar() {
                       width: '40px',
                       height: '40px',
                       borderRadius: '50%',
-                      backgroundColor: '#DC2626',
+                      backgroundColor: 'oklch(0.205 0 0)',
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',
@@ -665,11 +641,11 @@ export default function WebsiteNavbar() {
                   width: '100%',
                   padding: '0.75rem 1rem',
                   backgroundColor: 'transparent',
-                  color: '#DC2626',
+                  color: 'oklch(0.205 0 0)',
                   textDecoration: 'none',
                   borderRadius: '8px',
                   textAlign: 'center',
-                  border: '1px solid #DC2626',
+                  border: '1px solid oklch(0.205 0 0)',
                   cursor: 'pointer',
                   fontSize: '0.95rem',
                   fontWeight: '500',
@@ -678,23 +654,7 @@ export default function WebsiteNavbar() {
                 {t('nav.logout')}
               </button>
             </>
-          ) : (
-            <Link
-              to="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              style={{
-                padding: '0.75rem 1rem',
-                backgroundColor: 'transparent',
-                color: '#333',
-                textDecoration: 'none',
-                borderRadius: '8px',
-                textAlign: 'center',
-                border: '1px solid #e0e0e0',
-              }}
-            >
-              {t('nav.login')}
-            </Link>
-          )}
+          ) : null}
         </div>
       )}
 

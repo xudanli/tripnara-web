@@ -12,6 +12,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Settings, LogOut, User, MapPin, Compass, Wrench, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import LanguageSwitcher from '@/components/common/LanguageSwitcher';
 
 export default function Header() {
   const { user, logout, isAuthenticated } = useAuth();
@@ -35,10 +36,10 @@ export default function Header() {
   };
 
   const navItems = [
-    { path: '/dashboard/trips', label: '我的行程', icon: MapPin },
-    { path: '/route-philosophy', label: '路线哲学', icon: Compass },
-    { path: '/dashboard/professional', label: '专业工具', icon: Wrench },
-    { path: '/dashboard/share', label: '分享&社区', icon: Share2 },
+    { path: '/dashboard/trips', key: 'trips', icon: MapPin },
+    { path: '/route-philosophy', key: 'routePhilosophy', icon: Compass },
+    { path: '/dashboard/professional', key: 'professional', icon: Wrench },
+    { path: '/dashboard/share', key: 'share', icon: Share2 },
   ];
 
   const isActive = (path: string) => {
@@ -81,11 +82,18 @@ export default function Header() {
                     )}
                   >
                     <Icon className="w-4 h-4" />
-                    <span>{item.label}</span>
+                    <span>{t(`header.nav.${item.key}`)}</span>
                   </button>
                 );
               })}
             </nav>
+          )}
+          
+          {/* Language Switcher */}
+          {isAuthenticated && (
+            <div className="hidden md:flex items-center">
+              <LanguageSwitcher />
+            </div>
           )}
 
           {/* User Menu */}
@@ -121,7 +129,7 @@ export default function Header() {
                   className="cursor-pointer"
                 >
                   <Settings className="mr-2 h-4 w-4" />
-                  <span>{t('nav.preferences', { defaultValue: 'Preferences' })}</span>
+                  <span>{t('header.preferences')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -129,7 +137,7 @@ export default function Header() {
                   className="cursor-pointer text-red-600 focus:text-red-600"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>{t('nav.logout', { defaultValue: 'Logout' })}</span>
+                  <span>{t('header.logout')}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

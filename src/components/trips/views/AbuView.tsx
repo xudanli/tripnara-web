@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { TripDetail, ItineraryItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ interface RiskMap {
 }
 
 export default function AbuView({ trip, onItemClick }: AbuViewProps) {
+  const { t } = useTranslation();
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null);
   const [evidenceSheetOpen, setEvidenceSheetOpen] = useState(false);
 
@@ -46,32 +48,32 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
     {
       level: 'HARD',
       code: 'NIGHT_HIKE',
-      title: '夜间徒步风险',
-      reason: 'Day 2 包含夜间徒步路段，无备用撤退点',
+      title: t('tripViews.abu.violations.nightHikeRisk'),
+      reason: t('tripViews.abu.violations.reason.nightHike'),
       evidence: [
-        { field: '日落时间', value: '18:30', timestamp: '2024-01-15' },
-        { field: '预计结束时间', value: '19:45' },
-        { field: '路段难度', value: 'CHALLENGE' },
+        { field: t('tripViews.abu.violations.evidence.sunsetTime'), value: '18:30', timestamp: '2024-01-15' },
+        { field: t('tripViews.abu.violations.evidence.estimatedEndTime'), value: '19:45' },
+        { field: t('tripViews.abu.violations.evidence.routeDifficulty'), value: 'CHALLENGE' },
       ],
       affectedItemIds: ['item-2'],
     },
     {
       level: 'SOFT',
       code: 'BUFFER_INSUFFICIENT',
-      title: '缓冲时间不足',
-      reason: '缺少缓冲可能导致延误连锁反应',
+      title: t('tripViews.abu.violations.bufferInsufficient'),
+      reason: t('tripViews.abu.violations.reason.bufferInsufficient'),
       evidence: [
-        { field: '当前缓冲', value: '15分钟' },
-        { field: '建议缓冲', value: '30分钟' },
+        { field: t('tripViews.abu.violations.evidence.currentBuffer'), value: '15分钟' },
+        { field: t('tripViews.abu.violations.evidence.recommendedBuffer'), value: '30分钟' },
       ],
       affectedItemIds: ['item-1', 'item-3'],
     },
   ];
 
   const riskMap: RiskMap = {
-    'item-1': { level: 'LOW', tags: ['缓冲不足'], confidence: 0.8 },
-    'item-2': { level: 'HIGH', tags: ['夜间徒步', '无撤退点'], confidence: 0.95 },
-    'item-3': { level: 'MEDIUM', tags: ['时间窗冲突'], confidence: 0.7 },
+    'item-1': { level: 'LOW', tags: [t('tripViews.abu.violations.tags.bufferInsufficient')], confidence: 0.8 },
+    'item-2': { level: 'HIGH', tags: [t('tripViews.abu.violations.tags.nightHike'), t('tripViews.abu.violations.tags.noRetreatPoint')], confidence: 0.95 },
+    'item-3': { level: 'MEDIUM', tags: [t('tripViews.abu.violations.tags.timeWindowConflict')], confidence: 0.7 },
   };
 
   const getStatusIcon = () => {
@@ -88,11 +90,11 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
   const getStatusText = () => {
     switch (gatingStatus) {
       case 'ALLOW':
-        return '可执行';
+        return t('tripViews.abu.status.executable');
       case 'WARN':
-        return '需确认';
+        return t('tripViews.abu.status.needConfirm');
       case 'BLOCK':
-        return '禁止';
+        return t('tripViews.abu.status.blocked');
     }
   };
 
@@ -144,10 +146,10 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
                 <div className="font-semibold text-lg">安全状态：{getStatusText()}</div>
                 <div className="text-sm opacity-80">
                   {gatingStatus === 'ALLOW'
-                    ? '路线已通过安全检查，可以执行'
+                    ? t('tripViews.abu.violations.messages.safeToExecute')
                     : gatingStatus === 'WARN'
-                    ? '存在需要确认的风险，请查看详情'
-                    : '存在硬红线，必须修复后才能继续'}
+                    ? t('tripViews.abu.violations.messages.needConfirm')
+                    : t('tripViews.abu.violations.messages.mustFix')}
                 </div>
               </div>
             </div>
@@ -156,10 +158,10 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
                 variant="outline"
                 onClick={() => {
                   // 跳转到 Neptune 修复
-                  console.log('跳转到 Neptune 修复');
+                  console.log(t('tripViews.abu.violations.gotoNeptune'));
                 }}
               >
-                跳转到 Neptune 修复
+                {t('tripViews.abu.violations.gotoNeptune')}
                 <ExternalLink className="w-4 h-4 ml-2" />
               </Button>
             )}
@@ -196,7 +198,7 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant={violation.level === 'HARD' ? 'destructive' : 'secondary'}>
-                        {violation.level === 'HARD' ? '硬红线' : '软红线'}
+                        {violation.level === 'HARD' ? t('tripViews.abu.violations.hardViolation') : t('tripViews.abu.violations.softViolation')}
                       </Badge>
                       <span className="font-medium">{violation.title}</span>
                     </div>
@@ -354,7 +356,7 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
                               <Badge
                                 variant={violation.level === 'HARD' ? 'destructive' : 'secondary'}
                               >
-                                {violation.level === 'HARD' ? '硬红线' : '软红线'}
+                                {violation.level === 'HARD' ? t('tripViews.abu.violations.hardViolation') : t('tripViews.abu.violations.softViolation')}
                               </Badge>
                               {violation.title}
                             </CardTitle>
@@ -404,7 +406,7 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
                                       console.log('跳转到 Neptune 修复');
                                     }}
                                   >
-                                    必须修复（跳转到 Neptune）
+                                    {t('tripViews.abu.violations.messages.mustFix')} ({t('tripViews.abu.violations.gotoNeptune')})
                                     <ExternalLink className="w-4 h-4 ml-2" />
                                   </Button>
                                 ) : (
@@ -413,10 +415,10 @@ export default function AbuView({ trip, onItemClick }: AbuViewProps) {
                                     variant="outline"
                                     onClick={() => {
                                       // 确认已知悉风险
-                                      console.log('确认已知悉风险');
+                                      console.log(t('tripViews.abu.violations.acknowledgeRisk'));
                                     }}
                                   >
-                                    我已知悉风险
+                                    {t('tripViews.abu.violations.acknowledgeRisk')}
                                   </Button>
                                 )}
                               </div>

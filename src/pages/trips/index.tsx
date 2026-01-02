@@ -14,6 +14,9 @@ import { Plus, Calendar, MapPin, DollarSign, Shield, Activity, RefreshCw, Heart,
 import { format } from 'date-fns';
 import { TripPlanning } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
+import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
+import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
+import { toast } from 'sonner';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -55,10 +58,19 @@ export default function TripsPage() {
   const [error, setError] = useState<string | null>(null);
   const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  
+  // 收藏、分享、协作相关状态
+  const [collectedTripIds, setCollectedTripIds] = useState<Set<string>>(new Set());
+  const [collectingTripId, setCollectingTripId] = useState<string | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareTripId, setShareTripId] = useState<string | null>(null);
+  const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
+  const [collaboratorsTripId, setCollaboratorsTripId] = useState<string | null>(null);
 
   useEffect(() => {
     loadCountries();
     loadTrips();
+    loadCollectedStatus();
   }, []);
 
   // 当从创建页面返回时，刷新行程列表
@@ -110,6 +122,61 @@ export default function TripsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 加载收藏状态
+  const loadCollectedStatus = async () => {
+    try {
+      const collectedTrips = await tripsApi.getCollected();
+      const collectedIds = new Set(collectedTrips.map((ct) => ct.trip.id));
+      setCollectedTripIds(collectedIds);
+    } catch (err: any) {
+      // 静默处理错误，不影响主流程
+      console.error('Failed to load collected status:', err);
+    }
+  };
+
+  // 处理收藏/取消收藏
+  const handleCollect = async (tripId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (collectingTripId) return;
+
+    const isCollected = collectedTripIds.has(tripId);
+    try {
+      setCollectingTripId(tripId);
+      if (isCollected) {
+        await tripsApi.uncollect(tripId);
+        setCollectedTripIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(tripId);
+          return newSet;
+        });
+        toast.success('已取消收藏');
+      } else {
+        await tripsApi.collect(tripId);
+        setCollectedTripIds((prev) => new Set(prev).add(tripId));
+        toast.success('已收藏');
+      }
+    } catch (err: any) {
+      console.error('Failed to toggle collection:', err);
+      toast.error(err.message || '操作失败');
+    } finally {
+      setCollectingTripId(null);
+    }
+  };
+
+  // 处理分享
+  const handleShare = (tripId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShareTripId(tripId);
+    setShareDialogOpen(true);
+  };
+
+  // 处理协作
+  const handleCollaborate = (tripId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCollaboratorsTripId(tripId);
+    setCollaboratorsDialogOpen(true);
   };
 
   const handleCreateTrip = () => {
@@ -306,23 +373,26 @@ export default function TripsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="flex-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // TODO: 实现收藏功能
-                        }}
+                        className={cn(
+                          "flex-1",
+                          collectedTripIds.has(trip.id) && "text-red-600 hover:text-red-700"
+                        )}
+                        onClick={(e) => handleCollect(trip.id, e)}
+                        disabled={collectingTripId === trip.id}
                       >
-                        <Heart className="w-4 h-4 mr-1" />
+                        <Heart 
+                          className={cn(
+                            "w-4 h-4 mr-1",
+                            collectedTripIds.has(trip.id) && "fill-current"
+                          )} 
+                        />
                         收藏
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="flex-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // TODO: 实现分享功能
-                        }}
+                        onClick={(e) => handleShare(trip.id, e)}
                       >
                         <Share2 className="w-4 h-4 mr-1" />
                         分享
@@ -331,10 +401,7 @@ export default function TripsPage() {
                         variant="ghost"
                         size="sm"
                         className="flex-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // TODO: 实现协作功能
-                        }}
+                        onClick={(e) => handleCollaborate(trip.id, e)}
                       >
                         <Users className="w-4 h-4 mr-1" />
                         协作
@@ -358,6 +425,34 @@ export default function TripsPage() {
             })}
           </div>
         </>
+      )}
+
+      {/* 分享对话框 */}
+      {shareTripId && (
+        <ShareTripDialog
+          tripId={shareTripId}
+          open={shareDialogOpen}
+          onOpenChange={(open) => {
+            setShareDialogOpen(open);
+            if (!open) {
+              setShareTripId(null);
+            }
+          }}
+        />
+      )}
+
+      {/* 协作者对话框 */}
+      {collaboratorsTripId && (
+        <CollaboratorsDialog
+          tripId={collaboratorsTripId}
+          open={collaboratorsDialogOpen}
+          onOpenChange={(open) => {
+            setCollaboratorsDialogOpen(open);
+            if (!open) {
+              setCollaboratorsTripId(null);
+            }
+          }}
+        />
       )}
     </div>
   );

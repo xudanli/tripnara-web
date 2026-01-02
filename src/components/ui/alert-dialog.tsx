@@ -83,6 +83,8 @@ const AlertDialogTitle = React.forwardRef<
 ))
 AlertDialogTitle.displayName = AlertDialogPrimitive.Title.displayName
 
+// 注意：AlertDialogDescription 默认渲染为 <p> 标签
+// 如果需要包含块级元素（如 <div>），应该将内容放在 AlertDialogDescription 外面
 const AlertDialogDescription = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description>

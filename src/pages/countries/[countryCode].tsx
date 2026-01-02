@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { countriesApi } from '@/api/countries';
+import { routeDirectionsApi } from '@/api/route-directions';
 import type {
   CurrencyStrategy,
   CountryPack,
   PaymentInfo,
   TerrainAdvice,
 } from '@/types/country';
+import type { RouteDirection } from '@/types/places-routes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,8 +17,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowLeft,
   CreditCard,
-  DollarSign,
-  MapPin,
   TrendingUp,
   AlertTriangle,
   Info,
@@ -27,6 +27,12 @@ import {
   Activity,
   Shield,
   Gauge,
+  FileText,
+  Route,
+  BarChart3,
+  Clock,
+  Navigation,
+  Sparkles,
 } from 'lucide-react';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -43,10 +49,12 @@ export default function CountryDetailPage() {
   const [countryPack, setCountryPack] = useState<CountryPack | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [terrainAdvice, setTerrainAdvice] = useState<TerrainAdvice | null>(null);
+  const [routeDirections, setRouteDirections] = useState<RouteDirection[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('currency');
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     if (countryCode) {
@@ -62,11 +70,12 @@ export default function CountryDetailPage() {
       setError(null);
 
       // 并行加载所有数据
-      const [currency, payment, pack, terrain] = await Promise.allSettled([
+      const [currency, payment, pack, terrain, routes] = await Promise.allSettled([
         countriesApi.getCurrencyStrategy(countryCode),
         countriesApi.getPaymentInfo(countryCode),
         countriesApi.getPack(countryCode).catch(() => null), // Pack配置可能不存在
         countriesApi.getTerrainAdvice(countryCode).catch(() => null), // 地形建议可能不存在
+        routeDirectionsApi.getByCountry(countryCode).catch(() => []), // 路线方向
       ]);
 
       if (currency.status === 'fulfilled') {
@@ -82,7 +91,104 @@ export default function CountryDetailPage() {
       }
 
       if (terrain.status === 'fulfilled' && terrain.value) {
-        setTerrainAdvice(terrain.value);
+        // 转换旧格式数据到新格式（如果需要）
+        const terrainData = terrain.value as any;
+        
+        // 如果后端返回的是旧格式，进行转换
+        if (terrainData.terrainConfig?.riskThresholds) {
+          const riskThresholds = terrainData.terrainConfig.riskThresholds;
+          // 如果缺少新格式字段，尝试从旧格式字段转换
+          if (!riskThresholds.maxDailyAscentM && riskThresholds.rapidAscentM) {
+            riskThresholds.maxDailyAscentM = riskThresholds.rapidAscentM;
+          }
+        }
+        
+        // 转换 effortLevelMapping（如果需要）
+        if (terrainData.terrainConfig?.effortLevelMapping) {
+          const mapping = terrainData.terrainConfig.effortLevelMapping;
+          // 如果缺少新格式字段，尝试从旧格式字段转换
+          if (!mapping.easy && (mapping.relaxMax !== undefined || mapping.relaxMax === 0)) {
+            // 旧格式只有数值，需要转换为新格式对象
+            // 根据 DEM 文档，easy 等级默认值
+            mapping.easy = { maxAscentM: mapping.relaxMax || 300, maxSlopePct: 8 };
+          }
+          if (!mapping.moderate && (mapping.moderateMax !== undefined || mapping.moderateMax === 0)) {
+            mapping.moderate = { maxAscentM: mapping.moderateMax || 600, maxSlopePct: 12 };
+          }
+          if (!mapping.hard && (mapping.challengeMax !== undefined || mapping.challengeMax === 0)) {
+            mapping.hard = { maxAscentM: mapping.challengeMax || 1000, maxSlopePct: 18 };
+          }
+          if (!mapping.extreme && (mapping.extremeMin !== undefined || mapping.extremeMin === 0)) {
+            mapping.extreme = { maxAscentM: mapping.extremeMin || 1500, maxSlopePct: 25 };
+          }
+        }
+        
+        setTerrainAdvice(terrainData as TerrainAdvice);
+      }
+
+      if (routes.status === 'fulfilled') {
+        // getByCountry 返回的数据结构可能是 { active: RouteDirection[], deprecated?: RouteDirection[] }
+        const routesData = routes.value as any;
+        let routeDirectionsList: RouteDirection[] = [];
+        if (routesData.active && Array.isArray(routesData.active)) {
+          routeDirectionsList = routesData.active;
+        } else if (Array.isArray(routesData)) {
+          routeDirectionsList = routesData;
+        }
+        setRouteDirections(routeDirectionsList);
+
+        // 通过 routeDirectionId 获取模版
+        if (routeDirectionsList.length > 0) {
+          try {
+            const routeDirectionIds = routeDirectionsList.map((rd) => rd.id);
+            
+            // 先尝试获取所有模版，然后在前端筛选
+            let allTemplates: any[] = [];
+            try {
+              const templatesData = await routeDirectionsApi.queryTemplates();
+              allTemplates = Array.isArray(templatesData) ? templatesData : [];
+            } catch (err: any) {
+              console.warn('⚠️ Failed to load all templates, trying by routeDirectionId:', err);
+              // 如果失败，尝试通过 routeDirectionId 逐个获取
+              const templatePromises = routeDirectionIds.map((id) =>
+                routeDirectionsApi.queryTemplates({ routeDirectionId: id }).catch(() => [])
+              );
+              const templatesResults = await Promise.all(templatePromises);
+              allTemplates = templatesResults.flat();
+            }
+            
+            // 前端筛选：只显示 isActive 为 true 且 routeDirectionId 匹配的模版
+            const activeTemplates = allTemplates.filter((t: any) => {
+              const isActive = t.isActive !== false;
+              const matchesRouteDirection = routeDirectionIds.includes(t.routeDirectionId);
+              return isActive && matchesRouteDirection;
+            });
+            
+            // 补充 routeDirection 信息
+            activeTemplates.forEach((template: any) => {
+              if (!template.routeDirection && template.routeDirectionId) {
+                const routeDir = routeDirectionsList.find((rd) => rd.id === template.routeDirectionId);
+                if (routeDir) {
+                  template.routeDirection = {
+                    id: routeDir.id,
+                    nameCN: routeDir.nameCN,
+                    nameEN: routeDir.nameEN,
+                    countryCode: routeDir.countryCode,
+                    tags: routeDir.tags,
+                  };
+                }
+              }
+            });
+            
+            console.log('📦 Country templates for', countryCode, ':', activeTemplates.length);
+            setTemplates(activeTemplates);
+          } catch (err) {
+            console.warn('⚠️ Failed to load templates by routeDirection:', err);
+            setTemplates([]);
+          }
+        } else {
+          setTemplates([]);
+        }
       }
     } catch (err: any) {
       setError(err.message || '加载国家数据失败');
@@ -137,24 +243,460 @@ export default function CountryDetailPage() {
 
       {/* 主要内容 - 使用Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="currency">
-            <DollarSign className="w-4 h-4 mr-2" />
-            货币策略
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="overview">
+            <FileText className="w-4 h-4 mr-2" />
+            概览
           </TabsTrigger>
-          <TabsTrigger value="payment">
-            <CreditCard className="w-4 h-4 mr-2" />
-            支付信息
+          <TabsTrigger value="rules">
+            <Shield className="w-4 h-4 mr-2" />
+            通行与规则
           </TabsTrigger>
-          <TabsTrigger value="pack">
-            <MapPin className="w-4 h-4 mr-2" />
-            地形配置
+          <TabsTrigger value="transport">
+            <Navigation className="w-4 h-4 mr-2" />
+            交通与通达
+          </TabsTrigger>
+          <TabsTrigger value="pacing">
+            <Clock className="w-4 h-4 mr-2" />
+            行程节奏
           </TabsTrigger>
           <TabsTrigger value="terrain">
-            <Mountain className="w-4 h-4 mr-2" />
-            地形建议
+            <Activity className="w-4 h-4 mr-2" />
+            地形适配
+          </TabsTrigger>
+          <TabsTrigger value="coverage">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            数据覆盖
+          </TabsTrigger>
+          <TabsTrigger value="templates">
+            <Route className="w-4 h-4 mr-2" />
+            模版
           </TabsTrigger>
         </TabsList>
+
+        {/* 概览 */}
+        <TabsContent value="overview" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>关键结论</CardTitle>
+              <CardDescription>快速判断该国家是否适合您的旅行</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* 从现有数据提取关键结论 */}
+              <div className="space-y-2">
+                {/* 适合季节 - 从 RouteDirection 获取 */}
+                {routeDirections.length > 0 && routeDirections[0].seasonality?.bestMonths && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">适合季节</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {routeDirections[0].seasonality.bestMonths
+                        .map((m) => {
+                          const months = ['', '1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+                          return months[m] || `${m}月`;
+                        })
+                        .join('、')}
+                    </span>
+                  </div>
+                )}
+
+                {/* 典型路线形态 - 从 RouteDirection 获取 */}
+                {routeDirections.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">典型路线形态</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {routeDirections.map((rd) => rd.nameCN).join('、') || '环线、多城市跳跃'}
+                    </span>
+                  </div>
+                )}
+
+                {/* 风险提示 - 从 RouteDirection 或 TerrainAdvice 获取 */}
+                {(routeDirections.some((rd) => rd.riskProfile) || terrainAdvice) && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="destructive">风险提示</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {routeDirections
+                        .filter((rd) => rd.riskProfile?.roadClosure)
+                        .length > 0
+                        ? '冬季封路风险'
+                        : terrainAdvice?.seasonalConstraints?.roadAccess || '请查看详细风险信息'}
+                    </span>
+                  </div>
+                )}
+
+                {/* 城市密度 - 从 RouteDirection 的 entryHubs 推断 */}
+                {routeDirections.length > 0 && routeDirections[0].entryHubs && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">交通枢纽</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {routeDirections[0].entryHubs.length > 3 ? '城市密集' : '中等'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    // TODO: 跳转到规划工作台，带入默认约束
+                    navigate(`/dashboard/plan-studio?countryCode=${countryCode}`);
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  用这套规则开始规划
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 货币策略（保留原有内容） */}
+          {currencyStrategy && (
+            <Card>
+              <CardHeader>
+                <CardTitle>货币策略</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Badge variant="outline">{PAYMENT_TYPE_LABELS[currencyStrategy.paymentType]}</Badge>
+                </div>
+                {currencyStrategy.exchangeRateToCNY && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">汇率 (CNY): </span>
+                    <span className="font-medium">
+                      1 {currencyStrategy.currencyCode} = {currencyStrategy.exchangeRateToCNY.toFixed(4)} CNY
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* 通行与规则 */}
+        <TabsContent value="rules" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>通行与规则</CardTitle>
+              <CardDescription>签证、安全风险、预约要求</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">签证/入境</h4>
+                  <p className="text-sm text-muted-foreground">数据待对接（需要新增接口）</p>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">安全风险（Abu）</h4>
+                  <div className="space-y-2">
+                    {/* 从 RouteDirection 的 riskProfile 获取 */}
+                    {routeDirections
+                      .filter((rd) => rd.riskProfile)
+                      .map((rd, idx) => (
+                        <div key={idx} className="space-y-2">
+                          {rd.riskProfile?.level === 'high' && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="destructive">红线</Badge>
+                              <span className="text-sm">
+                                {rd.riskProfile.factors?.join('、') || '高风险'}
+                              </span>
+                            </div>
+                          )}
+                          {rd.riskProfile?.level === 'medium' && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">黄线</Badge>
+                              <span className="text-sm">
+                                {rd.riskProfile.factors?.join('、') || '中等风险'}
+                              </span>
+                            </div>
+                          )}
+                          {rd.riskProfile?.altitudeSickness && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="destructive">红线</Badge>
+                              <span className="text-sm">高海拔+新手不可行</span>
+                            </div>
+                          )}
+                          {rd.riskProfile?.roadClosure && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">黄线</Badge>
+                              <span className="text-sm">冬季封路风险</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    {/* 从 TerrainAdvice 获取 */}
+                    {terrainAdvice?.adaptationStrategies?.highAltitude && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive">红线</Badge>
+                        <span className="text-sm">高海拔风险：{terrainAdvice.adaptationStrategies.highAltitude}</span>
+                      </div>
+                    )}
+                    {terrainAdvice?.seasonalConstraints?.weatherImpact && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">黄线</Badge>
+                        <span className="text-sm">天气影响：{terrainAdvice.seasonalConstraints.weatherImpact}</span>
+                      </div>
+                    )}
+                    {routeDirections.length === 0 && !terrainAdvice && (
+                      <p className="text-sm text-muted-foreground">暂无风险数据</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">预约/门票类型</h4>
+                  <p className="text-sm text-muted-foreground">数据待对接（需要新增接口）</p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    navigate(`/dashboard/plan-studio?countryCode=${countryCode}`);
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  用这套规则开始规划
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 交通与通达 */}
+        <TabsContent value="transport" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>交通与通达</CardTitle>
+              <CardDescription>交通枢纽覆盖、交通方式建议</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* 从 RouteDirection 获取交通信息 */}
+              {routeDirections.length > 0 ? (
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">交通枢纽</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {routeDirections[0].entryHubs?.map((hub, idx) => (
+                        <Badge key={idx} variant="outline">{hub}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">推荐交通方式</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {routeDirections[0].constraints?.transportMode?.map((mode, idx) => (
+                        <Badge key={idx} variant="secondary">{mode}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">暂无交通数据</p>
+              )}
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    navigate(`/dashboard/plan-studio?countryCode=${countryCode}`);
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  用这套规则开始规划
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 行程节奏建议 */}
+        <TabsContent value="pacing" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>行程节奏建议</CardTitle>
+              <CardDescription>每日步行上限、推荐停留时长、交通方式偏好</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* 从 CountryPack 和 RouteDirection 获取节奏建议 */}
+              <div className="space-y-2">
+                {countryPack?.terrainConstraints?.maxDailyAscentM && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">每日最大爬升</span>
+                    <Badge>{countryPack.terrainConstraints.maxDailyAscentM} 米</Badge>
+                  </div>
+                )}
+                {routeDirections[0]?.constraints?.minDays && routeDirections[0]?.constraints?.maxDays && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">推荐行程天数</span>
+                    <Badge>
+                      {routeDirections[0].constraints.minDays}-
+                      {routeDirections[0].constraints.maxDays} 天
+                    </Badge>
+                  </div>
+                )}
+                {routeDirections[0]?.constraints?.transportMode && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">交通方式偏好</span>
+                    <Badge>{routeDirections[0].constraints.transportMode.join('/')}</Badge>
+                  </div>
+                )}
+                {countryPack?.effortLevelMapping && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium mb-2">体力等级映射</div>
+                    {countryPack.effortLevelMapping.relaxMax && (
+                      <div className="text-xs text-muted-foreground">
+                        轻松: ≤ {countryPack.effortLevelMapping.relaxMax}
+                      </div>
+                    )}
+                    {countryPack.effortLevelMapping.moderateMax && (
+                      <div className="text-xs text-muted-foreground">
+                        中等: ≤ {countryPack.effortLevelMapping.moderateMax}
+                      </div>
+                    )}
+                    {countryPack.effortLevelMapping.challengeMax && (
+                      <div className="text-xs text-muted-foreground">
+                        挑战: ≤ {countryPack.effortLevelMapping.challengeMax}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    navigate(`/dashboard/plan-studio?countryCode=${countryCode}`);
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  用这套规则开始规划
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 数据覆盖与可信度 */}
+        <TabsContent value="coverage" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>数据覆盖与可信度</CardTitle>
+              <CardDescription>POI 数量、openingHours 覆盖率、数据来源构成</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">POI 数量</span>
+                    <span className="text-sm text-muted-foreground">数据待对接（需要新增接口）</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">openingHours 覆盖率</span>
+                    <span className="text-sm text-muted-foreground">数据待对接（需要新增接口）</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">数据来源构成</span>
+                    <span className="text-sm text-muted-foreground">OSM/Google/Manual（需要新增接口）</span>
+                  </div>
+                </div>
+                {/* 显示 RouteDirection 数量作为数据覆盖度的参考 */}
+                {routeDirections.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">路线方向覆盖</span>
+                      <Badge>{routeDirections.length} 条路线方向</Badge>
+                    </div>
+                  </div>
+                )}
+                {templates.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">路线模版覆盖</span>
+                      <Badge>{templates.length} 个模版</Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    navigate(`/dashboard/plan-studio?countryCode=${countryCode}`);
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  用这套规则开始规划
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 模版 */}
+        <TabsContent value="templates" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>国家路线模版</CardTitle>
+              <CardDescription>选择模版快速生成可执行行程</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {templates.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {templates.slice(0, 6).map((template) => (
+                      <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                        <CardHeader>
+                          <CardTitle className="text-lg">{template.nameCN}</CardTitle>
+                          {template.nameEN && (
+                            <CardDescription>{template.nameEN}</CardDescription>
+                          )}
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">
+                              {template.durationDays} 天
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                navigate(`/dashboard/route-directions/templates/${template.id}`);
+                              }}
+                            >
+                              查看详情
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  {templates.length > 6 && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        navigate(`/dashboard/countries/templates?countryCode=${countryCode}`);
+                      }}
+                    >
+                      查看全部 {templates.length} 个模版
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-sm text-muted-foreground mb-4">暂无路线模版</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      navigate(`/dashboard/countries/templates?countryCode=${countryCode}`);
+                    }}
+                  >
+                    <Route className="w-4 h-4 mr-2" />
+                    查看所有模版
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* 货币策略 */}
         <TabsContent value="currency" className="space-y-6">
@@ -654,11 +1196,11 @@ export default function CountryDetailPage() {
                               </div>
                             </div>
                           )}
-                          {terrainAdvice.terrainConfig.riskThresholds.rapidAscentM && (
+                          {terrainAdvice.terrainConfig.riskThresholds.maxDailyAscentM && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">快速上升阈值</div>
+                              <div className="text-sm text-muted-foreground">最大日爬升阈值</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.riskThresholds.rapidAscentM}m/天
+                                {terrainAdvice.terrainConfig.riskThresholds.maxDailyAscentM}m/天
                               </div>
                             </div>
                           )}
@@ -670,11 +1212,11 @@ export default function CountryDetailPage() {
                               </div>
                             </div>
                           )}
-                          {terrainAdvice.terrainConfig.riskThresholds.bigAscentDayM && (
+                          {terrainAdvice.terrainConfig.riskThresholds.maxConsecutiveHighAltitudeDays && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">大爬升日阈值</div>
+                              <div className="text-sm text-muted-foreground">最大连续高海拔天数</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.riskThresholds.bigAscentDayM}m/天
+                                {terrainAdvice.terrainConfig.riskThresholds.maxConsecutiveHighAltitudeDays} 天
                               </div>
                             </div>
                           )}
@@ -689,35 +1231,35 @@ export default function CountryDetailPage() {
                           <h3 className="text-lg font-semibold">体力等级映射</h3>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                          {terrainAdvice.terrainConfig.effortLevelMapping.relaxMax !== undefined && (
+                          {terrainAdvice.terrainConfig.effortLevelMapping.easy && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">轻松等级最大值</div>
+                              <div className="text-sm text-muted-foreground">轻松等级</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.effortLevelMapping.relaxMax}
+                                爬升 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.easy.maxAscentM}m, 坡度 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.easy.maxSlopePct}%
                               </div>
                             </div>
                           )}
-                          {terrainAdvice.terrainConfig.effortLevelMapping.moderateMax !== undefined && (
+                          {terrainAdvice.terrainConfig.effortLevelMapping.moderate && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">中等等级最大值</div>
+                              <div className="text-sm text-muted-foreground">中等等级</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.effortLevelMapping.moderateMax}
+                                爬升 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.moderate.maxAscentM}m, 坡度 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.moderate.maxSlopePct}%
                               </div>
                             </div>
                           )}
-                          {terrainAdvice.terrainConfig.effortLevelMapping.challengeMax !== undefined && (
+                          {terrainAdvice.terrainConfig.effortLevelMapping.hard && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">挑战等级最大值</div>
+                              <div className="text-sm text-muted-foreground">困难等级</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.effortLevelMapping.challengeMax}
+                                爬升 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.hard.maxAscentM}m, 坡度 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.hard.maxSlopePct}%
                               </div>
                             </div>
                           )}
-                          {terrainAdvice.terrainConfig.effortLevelMapping.extremeMin !== undefined && (
+                          {terrainAdvice.terrainConfig.effortLevelMapping.extreme && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">极限等级最小值</div>
+                              <div className="text-sm text-muted-foreground">极限等级</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.effortLevelMapping.extremeMin}
+                                爬升 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.extreme.maxAscentM}m, 坡度 ≤ {terrainAdvice.terrainConfig.effortLevelMapping.extreme.maxSlopePct}%
                               </div>
                             </div>
                           )}
@@ -732,40 +1274,27 @@ export default function CountryDetailPage() {
                           <h3 className="text-lg font-semibold">地形约束</h3>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                          {terrainAdvice.terrainConfig.terrainConstraints.firstDayMaxElevationM !==
-                            undefined && (
+                          {terrainAdvice.terrainConfig.terrainConstraints.maxElevationM !== undefined && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">第一天高海拔限制</div>
+                              <div className="text-sm text-muted-foreground">最大海拔</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.terrainConstraints.firstDayMaxElevationM}m
+                                {terrainAdvice.terrainConfig.terrainConstraints.maxElevationM}m
                               </div>
                             </div>
                           )}
-                          {terrainAdvice.terrainConfig.terrainConstraints.maxDailyAscentM !== undefined && (
+                          {terrainAdvice.terrainConfig.terrainConstraints.minElevationM !== undefined && (
                             <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">最大日爬升限制</div>
+                              <div className="text-sm text-muted-foreground">最小海拔</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.terrainConstraints.maxDailyAscentM}m
+                                {terrainAdvice.terrainConfig.terrainConstraints.minElevationM}m
                               </div>
                             </div>
                           )}
-                          {terrainAdvice.terrainConfig.terrainConstraints.maxConsecutiveHighAscentDays !==
-                            undefined && (
-                            <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">连续高爬升天数限制</div>
+                          {terrainAdvice.terrainConfig.terrainConstraints.allowedSlopeRange && (
+                            <div className="space-y-1 col-span-2">
+                              <div className="text-sm text-muted-foreground">允许坡度范围</div>
                               <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.terrainConstraints
-                                  .maxConsecutiveHighAscentDays}{' '}
-                                天
-                              </div>
-                            </div>
-                          )}
-                          {terrainAdvice.terrainConfig.terrainConstraints.highAltitudeBufferHours !==
-                            undefined && (
-                            <div className="space-y-1">
-                              <div className="text-sm text-muted-foreground">高海拔日缓冲时间</div>
-                              <div className="text-lg font-semibold">
-                                {terrainAdvice.terrainConfig.terrainConstraints.highAltitudeBufferHours} 小时
+                                {terrainAdvice.terrainConfig.terrainConstraints.allowedSlopeRange.min}% - {terrainAdvice.terrainConfig.terrainConstraints.allowedSlopeRange.max}%
                               </div>
                             </div>
                           )}

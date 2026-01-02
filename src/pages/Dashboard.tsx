@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
@@ -24,6 +25,7 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import { CreateTripFromTemplateDialog } from '@/components/trips/CreateTripFromTemplateDialog';
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { setDrawerOpen, setDrawerTab, setHighlightItemId } = useDrawer();
@@ -55,12 +57,17 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData();
     loadAttentionQueue();
+  }, []);
+
+  // 检查是否需要显示 Welcome Modal（首次登录或没有行程数据时）
+  useEffect(() => {
+    if (loading) return; // 等待数据加载完成
     
-    // 首次登录显示 Welcome Modal
-    if (isFirstTime) {
+    // 首次登录或没有任何行程数据时，显示 Welcome Modal
+    if (isFirstTime || trips.length === 0) {
       setShowWelcomeModal(true);
     }
-  }, [isFirstTime]);
+  }, [isFirstTime, trips.length, loading]);
 
   // 检测用户卡住（30秒无操作）
   useEffect(() => {
@@ -150,7 +157,12 @@ export default function DashboardPage() {
           setRecentTrip(tripDetail);
         } catch (err) {
           console.error('Failed to load recent trip detail:', err);
+          // 如果最近行程加载失败（可能已被删除），清空 recentTrip
+          setRecentTrip(null);
         }
+      } else {
+        // 如果没有行程数据，清空 recentTrip
+        setRecentTrip(null);
       }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -283,22 +295,22 @@ export default function DashboardPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold">欢迎回来，{userName}</h1>
+              <h1 className="text-3xl font-bold">{t('dashboard.welcome', { userName })}</h1>
               <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                <span>Today: {needsAttention} trip needs attention</span>
+                <span>{t('dashboard.stats.needsAttention', { count: needsAttention })}</span>
                 <span>·</span>
-                <span>{ready} trips ready</span>
+                <span>{t('dashboard.stats.tripsReady', { count: ready })}</span>
                 <span>·</span>
-                <span>{blockers} blocker</span>
+                <span>{t('dashboard.stats.blockers', { count: blockers })}</span>
               </div>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => navigate('/dashboard/trips')}>
-                Continue Last
+                {t('dashboard.continueLast')}
               </Button>
               <Button onClick={() => navigate('/dashboard/trips/new')}>
                 <Plus className="w-4 h-4 mr-2" />
-                Create Trip
+                {t('dashboard.createTrip')}
               </Button>
             </div>
           </div>
@@ -311,8 +323,8 @@ export default function DashboardPage() {
             {recentTrip && (
               <Card data-tour="continue-card">
                 <CardHeader>
-                  <CardTitle>继续上次</CardTitle>
-                  <CardDescription>最近一次编辑的行程</CardDescription>
+                  <CardTitle>{t('dashboard.continueCard.title')}</CardTitle>
+                  <CardDescription>{t('dashboard.continueCard.description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -339,7 +351,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex gap-2">
                       <Button onClick={() => navigate(`/dashboard/plan-studio?tripId=${recentTrip.id}`)}>
-                        Continue Planning
+                        {t('dashboard.continueCard.continuePlanning')}
                       </Button>
                       {recentTrip.status === 'IN_PROGRESS' && (
                         <Button variant="outline" onClick={() => navigate(`/dashboard/execute?tripId=${recentTrip.id}`)}>
@@ -348,7 +360,7 @@ export default function DashboardPage() {
                       )}
                       <Button variant="ghost" onClick={() => navigate(`/dashboard/trips/${recentTrip.id}`)}>
                         <Eye className="w-4 h-4 mr-2" />
-                        Open Overview
+                        {t('dashboard.continueCard.openOverview')}
                       </Button>
                     </div>
                   </div>
@@ -359,8 +371,8 @@ export default function DashboardPage() {
             {/* Attention Queue */}
             <Card>
               <CardHeader>
-                <CardTitle>需要处理</CardTitle>
-                <CardDescription>需要您关注的问题</CardDescription>
+                <CardTitle>{t('dashboard.attentionQueue.title')}</CardTitle>
+                <CardDescription>{t('dashboard.attentionQueue.description')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {loadingAttentionQueue ? (
@@ -372,8 +384,8 @@ export default function DashboardPage() {
                     <div className="mb-4 opacity-50">
                       <CheckCircle2 className="w-20 h-20 text-green-500" strokeWidth={1.5} />
                     </div>
-                    <p className="text-sm text-muted-foreground font-medium mb-1">暂无需要关注的事项</p>
-                    <p className="text-xs text-muted-foreground">一切都很顺利！</p>
+                    <p className="text-sm text-muted-foreground font-medium mb-1">{t('dashboard.attentionQueue.empty')}</p>
+                    <p className="text-xs text-muted-foreground">{t('dashboard.attentionQueue.emptyDescription')}</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -432,17 +444,11 @@ export default function DashboardPage() {
                                   }
                                   className="text-xs"
                                 >
-                                  {item.severity === 'critical'
-                                    ? '严重'
-                                    : item.severity === 'high'
-                                    ? '高'
-                                    : item.severity === 'medium'
-                                    ? '中'
-                                    : '低'}
+                                  {t(`dashboard.attentionQueue.severity.${item.severity}`)}
                                 </Badge>
                                 {item.status === 'new' && (
                                   <Badge variant="outline" className="text-xs bg-blue-50">
-                                    新
+                                    {t('dashboard.attentionQueue.status.new')}
                                   </Badge>
                                 )}
                               </div>
@@ -474,7 +480,7 @@ export default function DashboardPage() {
                               }
                             }}
                           >
-                            Fix
+                            {t('dashboard.attentionQueue.fix')}
                           </Button>
                         </div>
                       );
@@ -487,8 +493,8 @@ export default function DashboardPage() {
             {/* Templates / Patterns */}
             <Card>
               <CardHeader>
-                <CardTitle>路线模板</CardTitle>
-                <CardDescription>快速开始您的旅程</CardDescription>
+                <CardTitle>{t('dashboard.templates.title')}</CardTitle>
+                <CardDescription>{t('dashboard.templates.description')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {templates.length === 0 ? (
@@ -496,8 +502,8 @@ export default function DashboardPage() {
                     <div className="mb-4 opacity-50">
                       <EmptyTemplatesIllustration size={160} />
                     </div>
-                    <p className="text-sm text-muted-foreground font-medium mb-1">暂无模板</p>
-                    <p className="text-xs text-muted-foreground">路线模板正在准备中</p>
+                    <p className="text-sm text-muted-foreground font-medium mb-1">{t('dashboard.templates.empty')}</p>
+                    <p className="text-xs text-muted-foreground">{t('dashboard.templates.emptyDescription')}</p>
                   </div>
                 ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -519,7 +525,7 @@ export default function DashboardPage() {
                                   {countryName}
                                 </Badge>
                               )}
-                              <Badge variant="outline">{template.durationDays} 天</Badge>
+                              <Badge variant="outline">{template.durationDays} {t('dashboard.templates.days')}</Badge>
                               {template.defaultPacePreference && (
                                 <Badge variant="secondary">{template.defaultPacePreference}</Badge>
                               )}
@@ -531,14 +537,14 @@ export default function DashboardPage() {
                                 onClick={() => navigate(`/dashboard/route-directions/templates/${template.id}`)}
                               >
                                 <Eye className="w-3 h-3 mr-1" />
-                                Preview
+                                {t('dashboard.templates.preview')}
                               </Button>
                               <Button
                                 size="sm"
                                 onClick={() => handleUseTemplate(template)}
                               >
                                 <Sparkles className="w-3 h-3 mr-1" />
-                                使用模板
+                                {t('dashboard.templates.useTemplate')}
                               </Button>
                             </div>
                           </div>
@@ -572,18 +578,18 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
-                  风险概览
+                  {t('dashboard.riskOverview.title')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2">
                   <div className="p-2 bg-red-50 border border-red-200 rounded text-sm">
-                    <div className="font-medium text-red-800">时间窗冲突</div>
+                    <div className="font-medium text-red-800">{t('dashboard.riskOverview.timeWindowConflict')}</div>
                     <div className="text-xs text-red-600 mt-1">
                       {onboardingState.experienceType === 'steady' ? 'Abu: ' : 
                        onboardingState.experienceType === 'balanced' ? 'Dr.Dre: ' : 
                        'Neptune: '}
-                      缺少缓冲可能导致延误连锁反应
+                      {t('dashboard.riskOverview.bufferInsufficient')}
                     </div>
                   </div>
                 </div>
@@ -595,7 +601,7 @@ export default function DashboardPage() {
                     setDrawerOpen(true);
                   }}
                 >
-                  Open Risk Drawer
+                  {t('dashboard.riskOverview.openDrawer')}
                 </Button>
               </CardContent>
             </Card>
@@ -605,13 +611,13 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5" />
-                  准备度
+                  {t('dashboard.readiness.title')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   <div className="text-sm">
-                    <span className="font-medium">{blockers}</span> blockers
+                    <span className="font-medium">{blockers}</span> {t('dashboard.readiness.blockers')}
                   </div>
                   <div className="text-xs text-muted-foreground">截止日: 2024-02-01</div>
                   <Button
@@ -619,7 +625,7 @@ export default function DashboardPage() {
                     className="w-full mt-4"
                     onClick={() => navigate('/dashboard/readiness')}
                   >
-                    Complete Readiness
+                    {t('dashboard.readiness.completeReadiness')}
                   </Button>
                 </div>
               </CardContent>

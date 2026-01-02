@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -20,28 +21,29 @@ interface WelcomeModalProps {
 }
 
 export default function WelcomeModal({ open, onClose, onComplete }: WelcomeModalProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [selectedExperience, setSelectedExperience] = useState<'steady' | 'balanced' | 'exploratory' | null>(null);
 
   const experiences = [
     {
       id: 'steady' as const,
-      title: 'Steady & Safe',
-      description: '默认 Abu 权重大，安全第一',
+      title: t('welcomeModal.experiences.steady.title'),
+      description: t('welcomeModal.experiences.steady.description'),
       icon: Shield,
       color: 'red',
     },
     {
       id: 'balanced' as const,
-      title: 'Balanced',
-      description: '默认 Dr.Dre 权重大，时间最优',
+      title: t('welcomeModal.experiences.balanced.title'),
+      description: t('welcomeModal.experiences.balanced.description'),
       icon: Brain,
       color: 'orange',
     },
     {
       id: 'exploratory' as const,
-      title: 'Exploratory',
-      description: '默认 Neptune 容错更强，灵活探索',
+      title: t('welcomeModal.experiences.exploratory.title'),
+      description: t('welcomeModal.experiences.exploratory.description'),
       icon: Wrench,
       color: 'green',
     },
@@ -69,9 +71,9 @@ export default function WelcomeModal({ open, onClose, onComplete }: WelcomeModal
           <div className="flex justify-center mb-4">
             <WelcomeRouteIllustration size={180} />
           </div>
-          <DialogTitle className="text-2xl text-center">Let's make your first executable route.</DialogTitle>
+          <DialogTitle className="text-2xl text-center">{t('welcomeModal.title')}</DialogTitle>
           <DialogDescription className="text-base mt-2 text-center">
-            选择一个目标体验，我们将为您推荐最适合的规划策略
+            {t('welcomeModal.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -121,7 +123,7 @@ export default function WelcomeModal({ open, onClose, onComplete }: WelcomeModal
               size="lg"
               className="flex-1"
             >
-              Start with a 1-day demo trip
+              {t('welcomeModal.startDemo')}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <Button
@@ -131,12 +133,12 @@ export default function WelcomeModal({ open, onClose, onComplete }: WelcomeModal
               size="lg"
               className="flex-1"
             >
-              Create my own trip
+              {t('welcomeModal.createOwn')}
             </Button>
           </div>
 
           <p className="text-xs text-center text-muted-foreground mt-2">
-            Demo 是为了让您在 3 分钟内看到"证据+可执行"，而不是填表
+            {t('welcomeModal.demoHint')}
           </p>
         </div>
       </DialogContent>

@@ -87,12 +87,13 @@ export interface ReadinessFinding {
 }
 
 export interface Risk {
-  type: string;
-  severity: 'high' | 'medium' | 'low';
-  summary?: string;
-  message?: string;
-  mitigation?: string[];
-  emergencyContacts?: string[];
+  type: string;                        // 风险类型（如 'altitude', 'terrain', 'weather'）
+  severity: 'low' | 'medium' | 'high';
+  summary: string;
+  mitigations?: string[];              // 应对措施列表（注意：文档中使用 mitigations，不是 mitigation）
+  emergencyContacts?: string[];         // 紧急联系方式（如果有）
+  message?: string;                    // 兼容旧字段
+  mitigation?: string[];              // 兼容旧字段
 }
 
 export interface Constraint {

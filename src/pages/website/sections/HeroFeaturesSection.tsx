@@ -66,7 +66,7 @@ export default function HeroFeaturesSection() {
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-4px)';
                   e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-                  e.currentTarget.style.borderColor = '#DC2626';
+                  e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
@@ -129,11 +129,11 @@ export default function HeroFeaturesSection() {
             to="/login"
             style={{
               display: 'inline-block',
-              color: '#DC2626',
+              color: 'oklch(0.205 0 0)',
               textDecoration: 'none',
               fontWeight: '600',
               fontSize: '1rem',
-              borderBottom: '2px solid #DC2626',
+              borderBottom: '2px solid oklch(0.205 0 0)',
               paddingBottom: '0.25rem',
               transition: 'all 0.2s',
             }}

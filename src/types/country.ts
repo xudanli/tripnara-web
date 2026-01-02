@@ -106,25 +106,48 @@ export interface PaymentInfo {
 
 export interface TerrainAdvice {
   countryCode: string;
-  terrainConfig?: {
-    riskThresholds?: RiskThresholds;
-    effortLevelMapping?: EffortLevelMapping;
-    terrainConstraints?: TerrainConstraints;
+  terrainConfig: {
+    riskThresholds: {
+      highAltitudeM: number;          // 高海拔阈值（米）
+      steepSlopePct: number;          // 陡坡阈值（百分比）
+      maxDailyAscentM?: number;        // 最大日爬升（米）
+      maxConsecutiveHighAltitudeDays?: number;  // 最大连续高海拔天数
+      // 向后兼容：旧格式字段
+      rapidAscentM?: number;          // 快速上升阈值（旧格式）
+      bigAscentDayM?: number;         // 大爬升日阈值（旧格式）
+    };
+    effortLevelMapping: {
+      easy: { maxAscentM: number; maxSlopePct: number };
+      moderate: { maxAscentM: number; maxSlopePct: number };
+      hard: { maxAscentM: number; maxSlopePct: number };
+      extreme: { maxAscentM: number; maxSlopePct: number };
+      // 向后兼容：旧格式字段
+      relaxMax?: number;             // 轻松等级最大值（旧格式）
+      moderateMax?: number;           // 中等等级最大值（旧格式）
+      challengeMax?: number;          // 挑战等级最大值（旧格式）
+      extremeMin?: number;            // 极限等级最小值（旧格式）
+    };
+    terrainConstraints: {
+      maxElevationM?: number;
+      minElevationM?: number;
+      allowedSlopeRange?: { min: number; max: number };
+      // 向后兼容：旧格式字段
+      firstDayMaxElevationM?: number;  // 第一天高海拔限制（旧格式）
+      maxConsecutiveHighAscentDays?: number;  // 连续高爬升天数限制（旧格式）
+      highAltitudeBufferHours?: number;  // 高海拔日缓冲时间（旧格式）
+    };
   };
-  adaptationStrategies?: {
-    highAltitude?: string;
-    routeRisk?: string;
-    [key: string]: any;
+  adaptationStrategies: {
+    highAltitude: string;              // 高海拔适应策略说明
+    routeRisk: string;                 // 路线风险说明
   };
-  equipmentRecommendations?: {
-    basedOnTerrain?: string;
-    trainingAdvice?: string;
-    [key: string]: any;
+  equipmentRecommendations: {
+    basedOnTerrain: string;
+    trainingAdvice: string;
   };
-  seasonalConstraints?: {
-    roadAccess?: string;
-    weatherImpact?: string;
-    [key: string]: any;
+  seasonalConstraints: {
+    roadAccess: string;
+    weatherImpact: string;
   };
 }
 

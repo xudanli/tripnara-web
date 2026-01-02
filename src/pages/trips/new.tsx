@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
-import type { CreateTripRequest, Traveler } from '@/types/trip';
+import type { CreateTripRequest, Traveler, TripDetail } from '@/types/trip';
 import type { Country, CurrencyStrategy } from '@/types/country';
+import TripPlanningWaitDialog from '@/components/trips/TripPlanningWaitDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,6 +101,10 @@ export default function NewTripPage() {
     nextSteps?: any[];
     message?: string;
   } | null>(null);
+  
+  // 等待规划完成弹窗
+  const [showPlanningWaitDialog, setShowPlanningWaitDialog] = useState(false);
+  const [waitingTripId, setWaitingTripId] = useState<string | null>(null);
 
   const handleAddTraveler = () => {
     setFormData({
@@ -171,13 +176,35 @@ export default function NewTripPage() {
         });
         setClarificationAnswers(initialAnswers);
       } else if (result.trip) {
-        // 保存创建结果，显示成功信息
-        setCreationResult({
-          trip: result.trip,
-          parsedParams: result.parsedParams,
-          nextSteps: result.nextSteps,
-          message: result.message,
-        });
+        const trip = result.trip;
+        
+        // 检查是否正在生成规划点
+        if (result.generatingItems) {
+          // 如果正在生成，显示等待弹窗，等待后端完成规划
+          setWaitingTripId(trip.id);
+          setShowPlanningWaitDialog(true);
+        } else {
+          // 检查行程是否已经规划完成
+          // 判断标准：有 TripDay 且至少有一个 ItineraryItem，或者 stats.progress 不是 'PLANNING'
+          const hasItems = trip.TripDay && trip.TripDay.length > 0 && trip.TripDay.some((day: any) => 
+            day.ItineraryItem && day.ItineraryItem.length > 0
+          );
+          const isProgressComplete = trip.stats && trip.stats.progress !== 'PLANNING';
+          const hasStatsItems = trip.stats && trip.stats.totalItems > 0;
+          const isProgressStatusComplete = trip.metadata?.generationProgress?.status === 'completed';
+          
+          const isPlanningComplete = hasItems || isProgressComplete || hasStatsItems || isProgressStatusComplete;
+          
+          if (isPlanningComplete) {
+            // 如果已经规划完成，直接跳转到行程详情页
+            navigate(`/dashboard/trips/${trip.id}`);
+          } else {
+            // 如果未规划完成，也显示等待弹窗
+            setWaitingTripId(trip.id);
+            setShowPlanningWaitDialog(true);
+          }
+        }
+        
         setNeedsClarification(false);
         setClarificationQuestions([]);
         setClarificationAnswers({});
@@ -234,13 +261,35 @@ export default function NewTripPage() {
         setClarificationAnswers(initialAnswers);
         setOriginalNLText(enhancedText);
       } else if (result.trip) {
-        // 创建成功
-        setCreationResult({
-          trip: result.trip,
-          parsedParams: result.parsedParams,
-          nextSteps: result.nextSteps,
-          message: result.message,
-        });
+        const trip = result.trip;
+        
+        // 检查是否正在生成规划点
+        if (result.generatingItems) {
+          // 如果正在生成，显示等待弹窗，等待后端完成规划
+          setWaitingTripId(trip.id);
+          setShowPlanningWaitDialog(true);
+        } else {
+          // 检查行程是否已经规划完成
+          // 判断标准：有 TripDay 且至少有一个 ItineraryItem，或者 stats.progress 不是 'PLANNING'
+          const hasItems = trip.TripDay && trip.TripDay.length > 0 && trip.TripDay.some((day: any) => 
+            day.ItineraryItem && day.ItineraryItem.length > 0
+          );
+          const isProgressComplete = trip.stats && trip.stats.progress !== 'PLANNING';
+          const hasStatsItems = trip.stats && trip.stats.totalItems > 0;
+          const isProgressStatusComplete = trip.metadata?.generationProgress?.status === 'completed';
+          
+          const isPlanningComplete = hasItems || isProgressComplete || hasStatsItems || isProgressStatusComplete;
+          
+          if (isPlanningComplete) {
+            // 如果已经规划完成，直接跳转到行程详情页
+            navigate(`/dashboard/trips/${trip.id}`);
+          } else {
+            // 如果未规划完成，也显示等待弹窗
+            setWaitingTripId(trip.id);
+            setShowPlanningWaitDialog(true);
+          }
+        }
+        
         setNeedsClarification(false);
         setClarificationQuestions([]);
         setClarificationAnswers({});
@@ -254,8 +303,28 @@ export default function NewTripPage() {
     }
   };
 
+  // 处理规划完成
+  const handlePlanningComplete = (trip: TripDetail) => {
+    setShowPlanningWaitDialog(false);
+    setWaitingTripId(null);
+    // 跳转到行程详情页
+    navigate(`/dashboard/trips/${trip.id}`);
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* 等待规划完成弹窗 */}
+      {waitingTripId && (
+        <TripPlanningWaitDialog
+          tripId={waitingTripId}
+          open={showPlanningWaitDialog}
+          onPlanningComplete={handlePlanningComplete}
+          onClose={() => {
+            setShowPlanningWaitDialog(false);
+            setWaitingTripId(null);
+          }}
+        />
+      )}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/trips')}>
           <ArrowLeft className="w-4 h-4" />

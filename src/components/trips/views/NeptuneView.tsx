@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { TripDetail, ItineraryItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,6 +57,7 @@ interface Alternative {
 }
 
 export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
+  const { t } = useTranslation();
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null);
   const [alternativesSheetOpen, setAlternativesSheetOpen] = useState(false);
   const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null);
@@ -87,7 +89,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
         risk: '中',
       },
       confidence: 0.9,
-      description: 'Day 2 的徒步路段因天气原因不可行，建议替换为备选路线',
+      description: t('tripViews.neptune.descriptions.replaceRoute'),
     },
     {
       id: 'repair-2',
@@ -110,7 +112,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
         risk: '低',
       },
       confidence: 0.85,
-      description: '建议增加缓冲时间，避免延误连锁反应',
+      description: t('tripViews.neptune.descriptions.addBuffer'),
     },
   ];
 
@@ -118,17 +120,17 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
     'item-2': [
       {
         placeId: 123,
-        placeName: '备选路线 A',
-        reasonFit: '距离相近，难度较低，天气适应性好',
+        placeName: t('tripViews.neptune.alternatives.alternativeRouteA'),
+        reasonFit: t('tripViews.neptune.alternatives.reasonFit1'),
         delta: { time: -30, distance: -2, cost: -30 },
-        bookingInfo: '无需预订',
+        bookingInfo: t('tripViews.neptune.alternatives.noBooking'),
       },
       {
         placeId: 124,
-        placeName: '备选路线 B',
-        reasonFit: '体验相似，但更安全',
+        placeName: t('tripViews.neptune.alternatives.alternativeRouteB'),
+        reasonFit: t('tripViews.neptune.alternatives.reasonFit2'),
         delta: { time: 0, distance: 0, cost: 0 },
-        bookingInfo: '需提前1天预订',
+        bookingInfo: t('tripViews.neptune.alternatives.needBooking'),
       },
     ],
   };
@@ -186,7 +188,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
 
   const handleApplyRepair = (repair: Repair, scope: 'all' | 'today' | 'save') => {
     // 应用修复
-    console.log('应用修复', repair.id, scope);
+    console.log(t('tripViews.neptune.applyFix'), repair.id, scope);
     setPatchSheetOpen(false);
     setSelectedRepair(null);
   };
@@ -199,20 +201,20 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Wrench className="w-5 h-5 text-green-600" />
-              修复队列
+              {t('tripViews.neptune.fixQueue')}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={handleQuickFix}>
               <RefreshCw className="w-4 h-4 mr-2" />
-              一键止血
+              {t('tripViews.neptune.applyAllFixes')}
             </Button>
           </div>
-          <CardDescription>按紧急度排序的修复建议</CardDescription>
+          <CardDescription>{t('tripViews.neptune.sortedByUrgency')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {repairs.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               <CheckCircle2 className="w-12 h-12 mx-auto mb-2 text-green-600" />
-              <div>暂无需要修复的问题</div>
+              <div>{t('tripViews.neptune.noFixesNeeded')}</div>
             </div>
           ) : (
             repairs.map((repair) => (
@@ -241,28 +243,28 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                           }
                         >
                           {repair.severity === 'CRITICAL'
-                            ? '必须修'
+                            ? t('tripViews.neptune.severity.mustFix')
                             : repair.severity === 'WARNING'
-                            ? '建议修'
-                            : '可优化'}
+                            ? t('tripViews.neptune.severity.recommendFix')
+                            : t('tripViews.neptune.severity.canOptimize')}
                         </Badge>
                         <span className="font-medium">{repair.description}</span>
                       </div>
                       <div className="text-sm mt-2">
-                        <span className="font-medium">改哪里：</span>
+                        <span className="font-medium">{t('tripViews.neptune.whatToChange')}</span>
                         {repair.type === 'REPLACE'
-                          ? '替换行程项'
+                          ? t('tripViews.neptune.actions.replaceItem')
                           : repair.type === 'SKIP'
-                          ? '跳过行程项'
+                          ? t('tripViews.neptune.actions.skipItem')
                           : repair.type === 'RESCHEDULE'
-                          ? '调整时间'
-                          : '增加缓冲'}
+                          ? t('tripViews.neptune.actions.adjustTime')
+                          : t('tripViews.neptune.actions.addBuffer')}
                       </div>
                       <div className="text-sm">
-                        <span className="font-medium">代价：</span>
+                        <span className="font-medium">{t('tripViews.neptune.cost')}</span>
                         {repair.afterMetrics.time - repair.beforeMetrics.time > 0
-                          ? `+${repair.afterMetrics.time - repair.beforeMetrics.time}分钟`
-                          : `${repair.afterMetrics.time - repair.beforeMetrics.time}分钟`}
+                          ? `+${repair.afterMetrics.time - repair.beforeMetrics.time}${t('tripViews.neptune.minutes')}`
+                          : `${repair.afterMetrics.time - repair.beforeMetrics.time}${t('tripViews.neptune.minutes')}`}
                         {repair.afterMetrics.cost - repair.beforeMetrics.cost !== 0 && (
                           <span className="ml-2">
                             {repair.afterMetrics.cost - repair.beforeMetrics.cost > 0 ? '+' : ''}
@@ -291,7 +293,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
             </CardHeader>
             <CardContent>
               {day.ItineraryItem.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">该日暂无安排</div>
+                <div className="py-8 text-center text-muted-foreground">{t('tripViews.neptune.noScheduleForDay')}</div>
               ) : (
                 <div className="space-y-2">
                   {day.ItineraryItem.map((item) => {
@@ -309,18 +311,18 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                         <div className="flex-shrink-0">
                           {isLocked ? (
                             <Badge variant="outline" className="bg-gray-100">
-                              锁定
+                              {t('tripViews.neptune.lock')}
                             </Badge>
                           ) : isReplaceable ? (
                             <Badge variant="outline" className="bg-green-50 text-green-700">
-                              可替换
+                              {t('tripViews.neptune.replaceable')}
                             </Badge>
                           ) : isSkippable ? (
                             <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
-                              可跳过
+                              {t('tripViews.neptune.skippable')}
                             </Badge>
                           ) : (
-                            <Badge variant="outline">必须保留</Badge>
+                            <Badge variant="outline">{t('tripViews.neptune.mustKeep')}</Badge>
                           )}
                         </div>
                         <div className="flex-1">
@@ -340,7 +342,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                                   }
                                   className="text-xs"
                                 >
-                                  {repair.severity === 'CRITICAL' ? '需修复' : '建议修复'}
+                                  {repair.severity === 'CRITICAL' ? t('tripViews.neptune.status.needFix') : t('tripViews.neptune.status.recommendFix')}
                                 </Badge>
                               ))}
                             </div>
@@ -356,7 +358,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                             size="sm"
                             onClick={() => handleItemClick(item)}
                           >
-                            查看替代
+                            {t('tripViews.neptune.viewAlternatives')}
                           </Button>
                         )}
                       </div>
@@ -375,10 +377,10 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Wrench className="w-5 h-5 text-green-600" />
-              替代候选
+              {t('tripViews.neptune.alternativeCandidates')}
             </SheetTitle>
             <SheetDescription>
-              {selectedItem?.Place?.nameCN || selectedItem?.type} 的替代方案
+              {t('tripViews.neptune.alternativesFor', { itemName: selectedItem?.Place?.nameCN || selectedItem?.type || '' })}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-4">
@@ -388,7 +390,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                   <Card>
                     <CardContent className="pt-6">
                       <div className="text-center text-muted-foreground py-8">
-                        暂无替代方案
+                        {t('tripViews.neptune.noAlternatives')}
                       </div>
                     </CardContent>
                   </Card>
@@ -400,12 +402,12 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                       </CardHeader>
                       <CardContent className="space-y-3">
                         <div>
-                          <div className="font-medium mb-1">为什么适合：</div>
+                          <div className="font-medium mb-1">{t('tripViews.neptune.whyFit')}</div>
                           <div className="text-sm text-muted-foreground">{alt.reasonFit}</div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 text-sm">
                           <div>
-                            <div className="text-muted-foreground">时间变化</div>
+                            <div className="text-muted-foreground">{t('tripViews.neptune.timeChange')}</div>
                             <div
                               className={
                                 alt.delta.time > 0
@@ -416,11 +418,11 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                               }
                             >
                               {alt.delta.time > 0 ? '+' : ''}
-                              {alt.delta.time}分钟
+                              {alt.delta.time}{t('tripViews.neptune.minutes')}
                             </div>
                           </div>
                           <div>
-                            <div className="text-muted-foreground">距离变化</div>
+                            <div className="text-muted-foreground">{t('tripViews.neptune.distanceChange')}</div>
                             <div
                               className={
                                 alt.delta.distance > 0
@@ -435,7 +437,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                             </div>
                           </div>
                           <div>
-                            <div className="text-muted-foreground">成本变化</div>
+                            <div className="text-muted-foreground">{t('tripViews.neptune.costChange')}</div>
                             <div
                               className={
                                 alt.delta.cost > 0
@@ -459,11 +461,11 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                           className="w-full"
                           onClick={() => {
                             // 应用替代
-                            console.log('应用替代', alt.placeId);
+                            console.log(t('tripViews.neptune.applyAlternative'), alt.placeId);
                             setAlternativesSheetOpen(false);
                           }}
                         >
-                          应用此替代
+                          {t('tripViews.neptune.applyAlternative')}
                         </Button>
                       </CardContent>
                     </Card>
@@ -498,7 +500,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                       <div>
                         <div className="font-medium mb-2 text-red-600">Before</div>
                         <div className="space-y-2 text-sm">
-                          <div>时间: {selectedRepair.beforeMetrics.time}分钟</div>
+                          <div>{t('tripViews.neptune.time')}: {selectedRepair.beforeMetrics.time}{t('tripViews.neptune.minutes')}</div>
                           <div>距离: {selectedRepair.beforeMetrics.distance}km</div>
                           <div>体力: {selectedRepair.beforeMetrics.effort}</div>
                           <div>花费: ¥{selectedRepair.beforeMetrics.cost}</div>
@@ -519,7 +521,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                                   : 'text-green-600'
                               }
                             >
-                              {selectedRepair.afterMetrics.time}分钟
+                              {selectedRepair.afterMetrics.time}{t('tripViews.neptune.minutes')}
                               {selectedRepair.afterMetrics.time -
                                 selectedRepair.beforeMetrics.time !==
                               0 && (
@@ -532,7 +534,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                                     : ''}
                                   {selectedRepair.afterMetrics.time -
                                     selectedRepair.beforeMetrics.time}
-                                  分钟)
+                                  {t('tripViews.neptune.minutes')})
                                 </span>
                               )}
                             </span>
@@ -586,7 +588,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                     className="flex-1"
                     onClick={() => handleApplyRepair(selectedRepair, 'all')}
                   >
-                    应用修复
+                    {t('tripViews.neptune.applyFix')}
                   </Button>
                 </div>
               </>

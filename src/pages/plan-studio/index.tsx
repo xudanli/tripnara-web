@@ -16,6 +16,9 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import PlanStudioSidebar from '@/components/plan-studio/PlanStudioSidebar';
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
 import { Button } from '@/components/ui/button';
+import WelcomeModal from '@/components/onboarding/WelcomeModal';
+import { tripsApi } from '@/api/trips';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function PlanStudioPage() {
   const { t } = useTranslation();
@@ -26,8 +29,13 @@ export default function PlanStudioPage() {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [personaMode, setPersonaMode] = useState<PersonaMode>('abu');
   
-  const { state: onboardingState, completeTour, completeStep } = useOnboarding();
+  const { state: onboardingState, completeTour, completeStep, completeWelcome } = useOnboarding();
   const [showTour, setShowTour] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [hasTrips, setHasTrips] = useState(false);
+  const [tripExists, setTripExists] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -47,16 +55,63 @@ export default function PlanStudioPage() {
     }
   };
 
+  // 检查行程数据和验证tripId是否有效
+  useEffect(() => {
+    const checkTripsAndTripId = async () => {
+      try {
+        setLoading(true);
+        
+        // 1. 检查是否有任何行程
+        const allTrips = await tripsApi.getAll();
+        const tripsList = Array.isArray(allTrips) ? allTrips : [];
+        setHasTrips(tripsList.length > 0);
+        
+        // 2. 如果有tripId，验证行程是否存在
+        if (tripId) {
+          try {
+            await tripsApi.getById(tripId);
+            setTripExists(true);
+          } catch (err: any) {
+            // 行程不存在（可能已被删除）
+            console.warn('Trip not found or deleted:', tripId);
+            setTripExists(false);
+            // 清除无效的tripId参数
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('tripId');
+            setSearchParams(newParams);
+          }
+        } else {
+          setTripExists(false);
+        }
+        
+        // 3. 如果没有行程数据，显示引导状态
+        if (tripsList.length === 0) {
+          setShowWelcomeModal(true);
+        }
+      } catch (err) {
+        console.error('Failed to check trips:', err);
+        setHasTrips(false);
+        setTripExists(false);
+        // 出错时也显示引导状态
+        setShowWelcomeModal(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkTripsAndTripId();
+  }, [tripId, searchParams, setSearchParams]);
+  
   // 根据当前 Tab 显示对应的 Tour
   useEffect(() => {
-    if (!onboardingState.toursCompleted.planStudio && tripId) {
+    if (!onboardingState.toursCompleted.planStudio && tripId && tripExists) {
       // 首次进入 Plan Studio，延迟显示 Tour
       const timer = setTimeout(() => {
         setShowTour(true);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [tripId, onboardingState.toursCompleted.planStudio]);
+  }, [tripId, tripExists, onboardingState.toursCompleted.planStudio]);
 
   // Intent Tab Tour
   const intentTourSteps: TourStep[] = [
@@ -159,24 +214,60 @@ export default function PlanStudioPage() {
     }
   };
 
-  if (!tripId) {
+  const handleWelcomeComplete = (experienceType: 'steady' | 'balanced' | 'exploratory') => {
+    completeWelcome(experienceType);
+    setShowWelcomeModal(false);
+    navigate('/dashboard/trips/new?experience=' + experienceType);
+  };
+
+  // 加载中状态
+  if (loading) {
     return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-12">
-            <div className="flex flex-col items-center justify-center">
-              <div className="mb-4 opacity-50">
-                <Compass size={120} color="#9CA3AF" />
-              </div>
-              <p className="text-sm text-muted-foreground font-medium mb-1">{t('planStudio.noTrip')}</p>
-              <p className="text-xs text-muted-foreground mb-4">选择一个行程开始规划</p>
-              <Button onClick={() => navigate('/dashboard/trips')}>
-                {t('planStudio.goToTrips')}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center h-full">
+        <Spinner className="w-8 h-8" />
       </div>
+    );
+  }
+
+  // 没有行程数据或tripId无效时，显示引导状态
+  if (!hasTrips || (tripId && !tripExists) || !tripId) {
+    return (
+      <>
+        <WelcomeModal
+          open={showWelcomeModal}
+          onClose={() => {
+            // 如果用户关闭模态框但还没有行程，引导到行程列表
+            if (!hasTrips) {
+              navigate('/dashboard/trips');
+            } else {
+              setShowWelcomeModal(false);
+            }
+          }}
+          onComplete={handleWelcomeComplete}
+        />
+        
+        {/* 如果用户已经完成了欢迎流程但还没有行程，显示空状态 */}
+        {!showWelcomeModal && (
+          <div className="p-6">
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center">
+                  <div className="mb-4 opacity-50">
+                    <Compass size={120} color="#9CA3AF" />
+                  </div>
+                  <p className="text-sm text-muted-foreground font-medium mb-1">{t('planStudio.noTrip')}</p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    {hasTrips ? t('planStudio.selectTripToStart') : t('planStudio.createFirstTrip')}
+                  </p>
+                  <Button onClick={() => navigate('/dashboard/trips')}>
+                    {hasTrips ? t('planStudio.goToTrips') : t('planStudio.createTrip')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -229,10 +320,18 @@ export default function PlanStudioPage() {
                   <IntentTab tripId={tripId} personaMode={personaMode} />
                 </TabsContent>
                 <TabsContent value="places" className="mt-0">
-                  <PlacesTab tripId={tripId} personaMode={personaMode} />
+                  <PlacesTab 
+                    tripId={tripId} 
+                    personaMode={personaMode}
+                    onPlaceAdded={() => setRefreshKey(prev => prev + 1)}
+                  />
                 </TabsContent>
                 <TabsContent value="schedule" className="mt-0">
-                  <ScheduleTab tripId={tripId} personaMode={personaMode} />
+                  <ScheduleTab 
+                    tripId={tripId} 
+                    personaMode={personaMode}
+                    refreshKey={refreshKey}
+                  />
                 </TabsContent>
                 <TabsContent value="optimize" className="mt-0">
                   <OptimizeTab tripId={tripId} personaMode={personaMode} />
@@ -247,7 +346,7 @@ export default function PlanStudioPage() {
 
               {/* 右侧栏（4/12） */}
               <div className="col-span-12 lg:col-span-4">
-                <PlanStudioSidebar personaMode={personaMode} />
+                <PlanStudioSidebar tripId={tripId} personaMode={personaMode} />
               </div>
             </div>
           </div>

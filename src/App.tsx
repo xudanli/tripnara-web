@@ -39,6 +39,7 @@ import HikeReviewPage from './pages/trails/review/[hikePlanId]';
 // PreferencesPage has been moved to Settings page, old route redirects to /dashboard/settings?tab=preferences
 import CountriesPage from './pages/countries';
 import CountryDetailPage from './pages/countries/[countryCode]';
+import CountryTemplatesPage from './pages/countries/templates';
 import RouteDirectionsByCountryPage from './pages/route-directions/by-country';
 import RouteTemplatesPage from './pages/route-directions/templates';
 import RouteTemplateDetailPage from './pages/route-directions/templates/[id]';
@@ -124,6 +125,7 @@ function App() {
           <Route path="trails/review/:hikePlanId" element={<HikeReviewPage />} />
           <Route path="preferences" element={<Navigate to="/dashboard/settings?tab=preferences" replace />} />
           <Route path="countries" element={<CountriesPage />} />
+          <Route path="countries/templates" element={<CountryTemplatesPage />} />
           <Route path="countries/:countryCode" element={<CountryDetailPage />} />
           <Route path="route-directions/by-country" element={<RouteDirectionsByCountryPage />} />
           <Route path="route-directions/templates" element={<RouteTemplatesPage />} />

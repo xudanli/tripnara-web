@@ -7,7 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
-import { Search, Globe, CreditCard, TrendingUp } from 'lucide-react';
+import { Search, Globe, CreditCard, TrendingUp, Filter, FileText, Route } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   CASH_HEAVY: '现金为主',
@@ -28,26 +31,39 @@ export default function CountriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSeason, setSelectedSeason] = useState<string>('all');
+  const [selectedAudience, setSelectedAudience] = useState<string>('all');
+  const [selectedRiskLevel, setSelectedRiskLevel] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadCountries();
   }, []);
 
   useEffect(() => {
+    filterCountries();
+  }, [searchQuery, selectedSeason, selectedAudience, selectedRiskLevel, countries]);
+
+  const filterCountries = () => {
+    let filtered = [...countries];
+
+    // 搜索筛选
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      const filtered = countries.filter(
+      filtered = filtered.filter(
         (country) =>
           country.nameCN.toLowerCase().includes(query) ||
           country.nameEN.toLowerCase().includes(query) ||
           country.isoCode.toLowerCase().includes(query) ||
           country.currencyCode.toLowerCase().includes(query)
       );
-      setFilteredCountries(filtered);
-    } else {
-      setFilteredCountries(countries);
     }
-  }, [searchQuery, countries]);
+
+    // TODO: 季节、适合人群、风险等级筛选需要后端接口支持
+    // 目前只做前端占位
+
+    setFilteredCountries(filtered);
+  };
 
   const loadCountries = async () => {
     try {
@@ -97,17 +113,82 @@ export default function CountriesPage() {
         </p>
       </div>
 
-      {/* 搜索栏 */}
+      {/* 搜索和筛选栏 */}
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="搜索国家名称（中文/英文）或货币代码..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          <div className="space-y-4">
+            {/* 搜索 */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="搜索国家名/别名/regionKey..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* 筛选器 */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Filter className="w-4 h-4 mr-1" />
+                筛选
+              </Button>
+            </div>
+
+            {showFilters && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
+                <div>
+                  <Label>季节</Label>
+                  <Select value={selectedSeason} onValueChange={setSelectedSeason}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="全部季节" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部季节</SelectItem>
+                      <SelectItem value="spring">春季</SelectItem>
+                      <SelectItem value="summer">夏季</SelectItem>
+                      <SelectItem value="autumn">秋季</SelectItem>
+                      <SelectItem value="winter">冬季</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>适合人群</Label>
+                  <Select value={selectedAudience} onValueChange={setSelectedAudience}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="全部人群" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部人群</SelectItem>
+                      <SelectItem value="family">亲子</SelectItem>
+                      <SelectItem value="hiking">徒步</SelectItem>
+                      <SelectItem value="photography">摄影</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>风险等级</Label>
+                  <Select value={selectedRiskLevel} onValueChange={setSelectedRiskLevel}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="全部风险等级" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部风险等级</SelectItem>
+                      <SelectItem value="low">低风险</SelectItem>
+                      <SelectItem value="medium">中风险</SelectItem>
+                      <SelectItem value="high">高风险</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -151,6 +232,34 @@ export default function CountriesPage() {
                     <Globe className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground">代码:</span>
                     <span className="font-mono">{country.isoCode}</span>
+                  </div>
+
+                  {/* CTA 按钮 */}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCountryClick(country.isoCode);
+                      }}
+                    >
+                      <FileText className="w-4 h-4 mr-1" />
+                      查看档案
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/dashboard/countries/templates?countryCode=${country.isoCode}`);
+                      }}
+                    >
+                      <Route className="w-4 h-4 mr-1" />
+                      查看模版
+                    </Button>
                   </div>
 
                   <div className="flex items-center gap-2 text-sm">

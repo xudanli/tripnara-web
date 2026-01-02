@@ -25,10 +25,23 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
   
   // 检查是否是错误响应
   if (!response.data.success) {
-    throw new Error(response.data.error?.message || '请求失败');
+    const errorMessage = response.data.error?.message || '请求失败';
+    console.error('[API Client] 请求失败:', {
+      error: response.data.error,
+      message: errorMessage,
+    });
+    throw new Error(errorMessage);
   }
   
-  // 返回数据，如果数据为 undefined 或 null，返回默认值
+  // 返回数据，如果数据为 undefined 或 null，抛出更明确的错误
+  if (response.data.data === undefined || response.data.data === null) {
+    console.error('[API Client] 响应数据为空:', {
+      url: (response as any).config?.url,
+      response: response.data,
+    });
+    throw new Error('API响应数据为空');
+  }
+  
   return response.data.data;
 }
 
@@ -48,6 +61,16 @@ import type {
   RedoActionRequest,
   UndoRedoResponse,
   CreateTripShareRequest,
+  ConflictsResponse,
+  UpdateIntentRequest,
+  IntentResponse,
+  DayMetricsResponse,
+  TripMetricsResponse,
+  ApplyOptimizationRequest,
+  ApplyOptimizationResponse,
+  ItineraryItemDetailResponse,
+  BatchUpdateItemsRequest,
+  BatchUpdateItemsResponse,
   TripShare,
   AddCollaboratorRequest,
   Collaborator,
@@ -91,6 +114,9 @@ import type {
   AttentionQueueResponse,
   AttentionSeverity,
   AttentionItemType,
+  ItineraryItemDetailResponse,
+  BatchUpdateItemsRequest,
+  BatchUpdateItemsResponse,
 } from '@/types/trip';
 
 // ==================== 基础接口 ====================
@@ -683,6 +709,93 @@ export const tripsApi = {
     );
     return handleResponse(response);
   },
+
+  // ==================== 冲突检测 ====================
+
+  /**
+   * 获取行程冲突列表
+   * GET /trips/:id/conflicts
+   */
+  getConflicts: async (
+    id: string,
+    params?: { date?: string; severity?: 'HIGH' | 'MEDIUM' | 'LOW' }
+  ): Promise<ConflictsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<ConflictsResponse>>(
+      `/trips/${id}/conflicts`,
+      { params }
+    );
+    return handleResponse(response);
+  },
+
+  // ==================== 意图与约束 ====================
+
+  /**
+   * 更新行程意图与约束
+   * PUT /trips/:id/intent
+   */
+  updateIntent: async (id: string, data: UpdateIntentRequest): Promise<IntentResponse> => {
+    const response = await apiClient.put<ApiResponseWrapper<IntentResponse>>(
+      `/trips/${id}/intent`,
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取行程意图与约束
+   * GET /trips/:id/intent
+   */
+  getIntent: async (id: string): Promise<IntentResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<IntentResponse>>(
+      `/trips/${id}/intent`
+    );
+    return handleResponse(response);
+  },
+
+  // ==================== 每日指标 ====================
+
+  /**
+   * 获取指定日期的行程指标
+   * GET /trips/:id/days/:dayId/metrics
+   */
+  getDayMetrics: async (id: string, dayId: string): Promise<DayMetricsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<DayMetricsResponse>>(
+      `/trips/${id}/days/${dayId}/metrics`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 批量获取多日指标
+   * GET /trips/:id/metrics
+   */
+  getMetrics: async (
+    id: string,
+    params?: { dates?: string[] }
+  ): Promise<TripMetricsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<TripMetricsResponse>>(
+      `/trips/${id}/metrics`,
+      { params: params?.dates ? { dates: params.dates } : undefined }
+    );
+    return handleResponse(response);
+  },
+
+  // ==================== 优化结果应用 ====================
+
+  /**
+   * 应用优化结果到行程
+   * POST /trips/:id/apply-optimization
+   */
+  applyOptimization: async (
+    id: string,
+    data: ApplyOptimizationRequest
+  ): Promise<ApplyOptimizationResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<ApplyOptimizationResponse>>(
+      `/trips/${id}/apply-optimization`,
+      data
+    );
+    return handleResponse(response);
+  },
 };
 
 // ==================== 行程项接口 ====================
@@ -743,6 +856,32 @@ export const itineraryItemsApi = {
    */
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/itinerary-items/${id}`);
+  },
+
+  /**
+   * 获取行程项详细信息（包含完整 metadata）
+   * GET /trips/:id/items/:itemId/detail
+   */
+  getDetail: async (tripId: string, itemId: string): Promise<ItineraryItemDetailResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<ItineraryItemDetailResponse>>(
+      `/trips/${tripId}/items/${itemId}/detail`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 批量更新行程项
+   * POST /trips/:id/items/batch-update
+   */
+  batchUpdate: async (
+    tripId: string,
+    data: BatchUpdateItemsRequest
+  ): Promise<BatchUpdateItemsResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<BatchUpdateItemsResponse>>(
+      `/trips/${tripId}/items/batch-update`,
+      data
+    );
+    return handleResponse(response);
   },
 };
 

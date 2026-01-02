@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
-import type { TripDetail, ItineraryItem, TripRecapReport } from '@/types/trip';
+import type { 
+  TripDetail, 
+  ItineraryItem, 
+  TripRecapReport,
+  EvidenceListResponse,
+  PersonaAlert,
+  DayMetricsResponse,
+  TripMetricsResponse,
+  ConflictsResponse
+} from '@/types/trip';
 import type { Country } from '@/types/country';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -238,6 +247,18 @@ export default function TripDetailPage() {
   const [confirmText, setConfirmText] = useState('');
   const [country, setCountry] = useState<Country | null>(null);
   const [viewMode, setViewMode] = useState<PersonaMode>('abu');
+  
+  // 新增：证据、风险、指标相关状态
+  const [evidence, setEvidence] = useState<EvidenceListResponse | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
+  const [personaAlertsLoading, setPersonaAlertsLoading] = useState(false);
+  const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
+  const [dayMetricsLoading, setDayMetricsLoading] = useState(false);
+  const [tripMetrics, setTripMetrics] = useState<TripMetricsResponse | null>(null);
+  const [tripMetricsLoading, setTripMetricsLoading] = useState(false);
+  const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null);
+  const [conflictsLoading, setConflictsLoading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -284,11 +305,24 @@ export default function TripDetailPage() {
           loadCountryInfo(data.destination);
         }
         
-        // TODO: 如果后端返回收藏和点赞状态，在这里设置
-        // 目前需要单独检查收藏状态
+        // 在 trip 设置后加载依赖 trip 的数据
+        // 使用 setTimeout 确保 state 已更新
+        setTimeout(() => {
+          loadTripMetrics();
+        }, 0);
+        
+        // 检查收藏和点赞状态
+        // 注意：如果后端在 GET /trips/:id 响应中包含 isCollected、isLiked、likeCount 字段，
+        // 可以直接从 data 中获取，无需单独调用接口
         await checkCollectionStatus();
         // 加载行程状态
         await loadTripState();
+        // 加载相关数据（先加载不依赖 trip 的数据）
+        await Promise.all([
+          loadEvidence(),
+          loadPersonaAlerts(),
+          loadConflicts(),
+        ]);
       } else {
         setError('行程数据为空');
       }
@@ -347,9 +381,15 @@ export default function TripDetailPage() {
     if (!id) return;
     try {
       // 检查是否已收藏
+      // 优化建议：如果后端在 GET /trips/:id 响应中包含 isCollected、isLiked、likeCount 字段，
+      // 可以直接从 trip 数据中获取，避免额外的 API 调用
       const collectedTrips = await tripsApi.getCollected();
       const collected = collectedTrips.find((ct) => ct.trip.id === id);
       setIsCollected(!!collected);
+      
+      // TODO: 如果后端返回点赞状态和点赞数，在这里设置
+      // 目前点赞功能已实现，但需要后端提供获取点赞状态的接口
+      // 或者从 GET /trips/:id 响应中获取
     } catch (err: any) {
       // 如果检查失败，不影响主流程
       // 静默处理错误，不显示在控制台（可能是后端路由问题导致的误报）
@@ -411,6 +451,91 @@ export default function TripDetailPage() {
     } catch (err) {
       // 状态加载失败不影响主流程
       console.error('Failed to load trip state:', err);
+    }
+  };
+
+  // 加载关键证据（前3条）
+  const loadEvidence = async () => {
+    if (!id) return;
+    try {
+      setEvidenceLoading(true);
+      const data = await tripsApi.getEvidence(id, { limit: 3, offset: 0 });
+      setEvidence(data);
+    } catch (err: any) {
+      console.error('Failed to load evidence:', err);
+      // 静默处理错误，不影响主流程
+    } finally {
+      setEvidenceLoading(false);
+    }
+  };
+
+  // 加载人格警报（风险列表）
+  const loadPersonaAlerts = async () => {
+    if (!id) return;
+    try {
+      setPersonaAlertsLoading(true);
+      const data = await tripsApi.getPersonaAlerts(id);
+      setPersonaAlerts(data);
+    } catch (err: any) {
+      console.error('Failed to load persona alerts:', err);
+      // 静默处理错误，不影响主流程
+    } finally {
+      setPersonaAlertsLoading(false);
+    }
+  };
+
+  // 加载行程指标（用于健康度计算）
+  const loadTripMetrics = async () => {
+    if (!id || !trip) return;
+    try {
+      setTripMetricsLoading(true);
+      const data = await tripsApi.getMetrics(id);
+      setTripMetrics(data);
+      
+      // 建立每日指标映射
+      if (data.days) {
+        const metricsMap = new Map<string, DayMetricsResponse>();
+        for (const day of data.days) {
+          metricsMap.set(day.date, day);
+        }
+        setDayMetricsMap(metricsMap);
+      }
+    } catch (err: any) {
+      console.error('Failed to load trip metrics:', err);
+      // 静默处理错误，不影响主流程
+    } finally {
+      setTripMetricsLoading(false);
+    }
+  };
+
+  // 加载每日指标（用于路线骨架图）
+  const loadDayMetrics = async (dayId: string, date: string) => {
+    if (!id) return;
+    try {
+      const data = await tripsApi.getDayMetrics(id, dayId);
+      setDayMetricsMap((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(date, data);
+        return newMap;
+      });
+    } catch (err: any) {
+      console.error('Failed to load day metrics:', err);
+      // 静默处理错误，不影响主流程
+    }
+  };
+
+  // 加载冲突列表
+  const loadConflicts = async () => {
+    if (!id) return;
+    try {
+      setConflictsLoading(true);
+      const data = await tripsApi.getConflicts(id);
+      setConflicts(data);
+    } catch (err: any) {
+      console.error('Failed to load conflicts:', err);
+      // 静默处理错误，不影响主流程
+    } finally {
+      setConflictsLoading(false);
     }
   };
 
@@ -556,13 +681,55 @@ export default function TripDetailPage() {
     );
   }
 
-  // 计算健康度指标（TODO: 从 API 获取真实数据）
-  const healthMetrics = {
-    executable: 85, // 可执行度
-    buffer: 70, // 缓冲
-    risk: 25, // 风险（越低越好）
-    cost: 80, // 成本控制
-  };
+  // 计算健康度指标（从 API 获取真实数据）
+  const healthMetrics = (() => {
+    // 默认值
+    const defaultMetrics = {
+      executable: 85,
+      buffer: 70,
+      risk: 25,
+      cost: 80,
+    };
+
+    if (!tripMetrics) return defaultMetrics;
+
+    // 基于行程指标计算健康度
+    const summary = tripMetrics.summary;
+    const totalDays = trip?.statistics?.totalDays || trip?.TripDay?.length || 1;
+    
+    // 可执行度：基于缓冲时间和疲劳指数
+    // 缓冲时间充足且疲劳指数低 = 高可执行度
+    const avgBufferPerDay = summary.totalBuffer / totalDays;
+    const avgFatigue = summary.totalFatigue / totalDays;
+    const executable = Math.min(100, Math.max(0, 
+      (avgBufferPerDay / 60) * 20 + // 缓冲时间（小时）* 20，最多20分
+      (100 - avgFatigue) * 0.65 // 疲劳指数越低越好，最多65分
+    ));
+
+    // 缓冲：基于总缓冲时间
+    const buffer = Math.min(100, Math.max(0, (summary.totalBuffer / (totalDays * 120)) * 100)); // 假设每天理想缓冲2小时
+
+    // 风险：基于冲突数量和高风险冲突
+    const highRiskConflicts = conflicts?.conflicts?.filter(c => c.severity === 'HIGH').length || 0;
+    const totalConflicts = conflicts?.total || 0;
+    const risk = Math.min(100, Math.max(0, 
+      (highRiskConflicts * 30) + // 高风险冲突每个30分
+      (totalConflicts * 5) // 总冲突每个5分
+    ));
+
+    // 成本控制：基于预算使用情况
+    const budgetUsed = trip?.statistics?.budgetUsed || 0;
+    const totalBudget = trip?.totalBudget || 1;
+    const budgetRatio = budgetUsed / totalBudget;
+    const cost = Math.min(100, Math.max(0, (1 - budgetRatio) * 100)); // 预算使用越少越好
+
+    return {
+      executable: Math.round(executable),
+      buffer: Math.round(buffer),
+      risk: Math.round(risk),
+      cost: Math.round(cost),
+    };
+  })();
 
   // 根据状态确定主 CTA
   const getMainCTA = () => {
@@ -688,47 +855,47 @@ export default function TripDetailPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除行程</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-4">
-              <div>
-                您确定要删除行程 <strong>"{trip.destination}"</strong> 吗？
-              </div>
-              <div className="text-sm text-muted-foreground">
-                此操作将永久删除以下内容：
-              </div>
-              <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2">
-                <li>{trip.statistics?.totalDays || trip.TripDay?.length || 0} 天的行程安排</li>
-                <li>{trip.statistics?.totalItems || 0} 个行程项</li>
-                <li>所有协作者、收藏、点赞、分享记录</li>
-              </ul>
-              <div className="text-sm font-medium text-destructive">
-                ⚠️ 此操作不可恢复，请谨慎操作！
-              </div>
-              <div className="space-y-2 pt-2">
-                <Label htmlFor="confirm-text" className="text-sm font-medium">
-                  请输入目的地国家代码 <strong>"{trip.destination}"</strong> 来确认删除：
-                </Label>
-                <Input
-                  id="confirm-text"
-                  type="text"
-                  value={confirmText}
-                  onChange={(e) => setConfirmText(e.target.value)}
-                  placeholder={trip.destination}
-                  className="uppercase"
-                  disabled={deleting}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && confirmText.trim().toUpperCase() === trip.destination.toUpperCase() && !deleting) {
-                      handleDelete();
-                    }
-                  }}
-                />
-                {confirmText && confirmText.trim().toUpperCase() !== trip.destination.toUpperCase() && (
-                  <p className="text-sm text-destructive">
-                    确认文字不匹配，请输入 "{trip.destination}"
-                  </p>
-                )}
-              </div>
+            <AlertDialogDescription>
+              您确定要删除行程 <strong>"{trip.destination}"</strong> 吗？
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              此操作将永久删除以下内容：
+            </div>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2">
+              <li>{trip.statistics?.totalDays || trip.TripDay?.length || 0} 天的行程安排</li>
+              <li>{trip.statistics?.totalItems || 0} 个行程项</li>
+              <li>所有协作者、收藏、点赞、分享记录</li>
+            </ul>
+            <div className="text-sm font-medium text-destructive">
+              ⚠️ 此操作不可恢复，请谨慎操作！
+            </div>
+            <div className="space-y-2 pt-2">
+              <Label htmlFor="confirm-text" className="text-sm font-medium">
+                请输入目的地国家代码 <strong>"{trip.destination}"</strong> 来确认删除：
+              </Label>
+              <Input
+                id="confirm-text"
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={trip.destination}
+                className="uppercase"
+                disabled={deleting}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && confirmText.trim().toUpperCase() === trip.destination.toUpperCase() && !deleting) {
+                    handleDelete();
+                  }
+                }}
+              />
+              {confirmText && confirmText.trim().toUpperCase() !== trip.destination.toUpperCase() && (
+                <p className="text-sm text-destructive">
+                  确认文字不匹配，请输入 "{trip.destination}"
+                </p>
+              )}
+            </div>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
             <AlertDialogAction
@@ -786,30 +953,60 @@ export default function TripDetailPage() {
             </CardHeader>
             <CardContent>
                     <div className="space-y-4">
-                      {trip.TripDay.map((day, idx) => (
-                        <Card key={day.id} className="border-l-4 border-l-primary">
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between">
-                      <div>
-                                <div className="font-semibold">
-                                  Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
-                        </div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  {day.ItineraryItem.length} 个行程项
-                      </div>
-                    </div>
-                              <div className="flex gap-2 text-xs">
-                                <Badge variant="outline">步行: 8.5 km</Badge>
-                                <Badge variant="outline">车程: 30 min</Badge>
-                                <Badge variant="outline">缓冲: 45 min</Badge>
-                                <Badge variant="outline" className="bg-green-50 text-green-700">
-                                  风险: 低
-                                </Badge>
-                  </div>
-              </div>
-            </CardContent>
-          </Card>
-                      ))}
+                      {trip.TripDay.map((day, idx) => {
+                        const dayMetrics = dayMetricsMap.get(day.date);
+                        const dayConflicts = dayMetrics?.conflicts || [];
+                        const hasHighRisk = dayConflicts.some(c => c.severity === 'HIGH');
+                        const hasMediumRisk = dayConflicts.some(c => c.severity === 'MEDIUM');
+                        
+                        // 风险等级
+                        const riskLevel = hasHighRisk ? '高' : hasMediumRisk ? '中' : '低';
+                        const riskColor = hasHighRisk ? 'bg-red-50 text-red-700' : hasMediumRisk ? 'bg-yellow-50 text-yellow-700' : 'bg-green-50 text-green-700';
+                        
+                        return (
+                          <Card key={day.id} className="border-l-4 border-l-primary">
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="font-semibold">
+                                    Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    {day.ItineraryItem.length} 个行程项
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 text-xs flex-wrap">
+                                  {dayMetrics ? (
+                                    <>
+                                      <Badge variant="outline">
+                                        步行: {dayMetrics.metrics.walk.toFixed(1)} km
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        车程: {Math.round(dayMetrics.metrics.drive)} min
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        缓冲: {Math.round(dayMetrics.metrics.buffer)} min
+                                      </Badge>
+                                      <Badge variant="outline" className={riskColor}>
+                                        风险: {riskLevel}
+                                      </Badge>
+                                    </>
+                                  ) : dayMetricsLoading ? (
+                                    <Spinner className="w-4 h-4" />
+                                  ) : (
+                                    <>
+                                      <Badge variant="outline">步行: --</Badge>
+                                      <Badge variant="outline">车程: --</Badge>
+                                      <Badge variant="outline">缓冲: --</Badge>
+                                      <Badge variant="outline">风险: --</Badge>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
@@ -826,20 +1023,67 @@ export default function TripDetailPage() {
                     </CardTitle>
             </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="p-3 bg-red-50 border border-red-200 rounded text-sm">
-                      <div className="font-medium text-red-800">时间窗冲突</div>
-                      <div className="text-xs text-red-600 mt-1">
-                        Abu: 缺少缓冲可能导致延误连锁反应
-                    </div>
+                    {personaAlertsLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Spinner className="w-4 h-4" />
                       </div>
-                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
-                      <div className="font-medium text-yellow-800">道路封闭风险</div>
-                      <div className="text-xs text-yellow-600 mt-1">
-                        Day 2 计划路线经过封闭路段
-                    </div>
-                  </div>
-                <Button
-                  variant="outline"
+                    ) : personaAlerts.length > 0 ? (
+                      <>
+                        {personaAlerts.slice(0, 3).map((alert) => {
+                          const bgColor = alert.severity === 'warning' 
+                            ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                            : alert.severity === 'info'
+                            ? 'bg-blue-50 border-blue-200 text-blue-800'
+                            : 'bg-red-50 border-red-200 text-red-800';
+                          
+                          const personaName = alert.persona === 'ABU' ? 'Abu' 
+                            : alert.persona === 'DR_DRE' ? 'Dr.Dre' 
+                            : 'Neptune';
+                          
+                          return (
+                            <div key={alert.id} className={`p-3 border rounded text-sm ${bgColor}`}>
+                              <div className="font-medium">{alert.title}</div>
+                              <div className="text-xs mt-1">
+                                {personaName}: {alert.message}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {personaAlerts.length > 3 && (
+                          <div className="text-xs text-muted-foreground text-center">
+                            还有 {personaAlerts.length - 3} 条风险提示
+                          </div>
+                        )}
+                      </>
+                    ) : conflicts?.conflicts && conflicts.conflicts.length > 0 ? (
+                      <>
+                        {conflicts.conflicts.slice(0, 3).map((conflict) => {
+                          const bgColor = conflict.severity === 'HIGH'
+                            ? 'bg-red-50 border-red-200 text-red-800'
+                            : conflict.severity === 'MEDIUM'
+                            ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                            : 'bg-blue-50 border-blue-200 text-blue-800';
+                          
+                          return (
+                            <div key={conflict.id} className={`p-3 border rounded text-sm ${bgColor}`}>
+                              <div className="font-medium">{conflict.title}</div>
+                              <div className="text-xs mt-1">{conflict.description}</div>
+                            </div>
+                          );
+                        })}
+                        {conflicts.conflicts.length > 3 && (
+                          <div className="text-xs text-muted-foreground text-center">
+                            还有 {conflicts.conflicts.length - 3} 个冲突
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-4 text-sm text-muted-foreground">
+                        暂无风险提示
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
                       className="w-full"
                       onClick={() => {
                         setDrawerTab('risk');
@@ -857,20 +1101,48 @@ export default function TripDetailPage() {
                     <CardTitle>关键证据</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="text-sm">
-                      <div className="font-medium">营业时间</div>
-                      <div className="text-xs text-muted-foreground">09:00-18:00</div>
-                    </div>
-                    <div className="text-sm">
-                      <div className="font-medium">封路信息</div>
-                      <div className="text-xs text-muted-foreground">Route X 在 2024-01-20 封闭</div>
+                    {evidenceLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Spinner className="w-4 h-4" />
                       </div>
-                    <div className="text-sm">
-                      <div className="font-medium">天气窗口</div>
-                      <div className="text-xs text-muted-foreground">Day 2 预计有雨</div>
-                    </div>
-                <Button
-                  variant="outline"
+                    ) : evidence && evidence.items.length > 0 ? (
+                      <>
+                        {evidence.items.map((item) => {
+                          const typeLabels: Record<string, string> = {
+                            opening_hours: '营业时间',
+                            road_closure: '封路信息',
+                            weather: '天气窗口',
+                            booking: '预订信息',
+                            other: '其他',
+                          };
+                          
+                          return (
+                            <div key={item.id} className="text-sm">
+                              <div className="font-medium">{typeLabels[item.type] || item.type}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {item.description || item.title}
+                              </div>
+                              {item.day && (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  Day {item.day}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {evidence.total > evidence.items.length && (
+                          <div className="text-xs text-muted-foreground text-center pt-2">
+                            还有 {evidence.total - evidence.items.length} 条证据
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-4 text-sm text-muted-foreground">
+                        暂无关键证据
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
                       className="w-full mt-4"
                       onClick={() => {
                         setDrawerTab('evidence');
@@ -878,7 +1150,7 @@ export default function TripDetailPage() {
                       }}
                     >
                       View All Evidence
-                </Button>
+                    </Button>
                   </CardContent>
                 </Card>
 

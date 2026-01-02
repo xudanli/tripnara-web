@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -9,12 +10,14 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { AlertTriangle, Shield, Brain, Wrench, X, MapPin, Plus } from 'lucide-react';
+import { X, MapPin, Plus } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { PlaceWithDistance } from '@/types/places-routes';
+import type { TripDetail, UpdateTripRequest } from '@/types/trip';
 import { useDebounce } from '@/hooks/useDebounce';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
+import { toast } from 'sonner';
 
 interface IntentTabProps {
   tripId: string;
@@ -22,8 +25,15 @@ interface IntentTabProps {
 }
 
 export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [trip, setTrip] = useState<TripDetail | null>(null);
+  
+  // Preference options with translation keys
+  const preferenceOptions = [
+    'nature', 'city', 'photography', 'food', 'history', 'art', 'shopping', 'nightlife'
+  ];
 
   // 意图与约束状态
   const [rhythm, setRhythm] = useState<'relaxed' | 'standard' | 'tight'>('standard');
@@ -77,11 +87,86 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
   const loadTrip = async () => {
     try {
       setLoading(true);
-      await tripsApi.getById(tripId);
-      // 从trip数据中加载已有设置（如果有）
-      // TODO: 从trip.preferences或planningPolicy中读取
+      const data = await tripsApi.getById(tripId);
+      setTrip(data);
+      
+      // 优先从 intent 接口加载配置
+      try {
+        const intentData = await tripsApi.getIntent(tripId);
+        
+        // 从 pacingConfig 设置节奏
+        if (intentData.pacingConfig) {
+          const maxDailyActivities = intentData.pacingConfig.maxDailyActivities;
+          if (maxDailyActivities) {
+            if (maxDailyActivities <= 3) setRhythm('relaxed');
+            else if (maxDailyActivities <= 5) setRhythm('standard');
+            else setRhythm('tight');
+          }
+          if (intentData.pacingConfig.level && ['relaxed', 'standard', 'tight'].includes(intentData.pacingConfig.level)) {
+            setRhythm(intentData.pacingConfig.level as 'relaxed' | 'standard' | 'tight');
+          }
+        }
+        
+        // 从 budgetConfig 或 totalBudget 加载预算
+        if (intentData.budgetConfig) {
+          setBudget(intentData.budgetConfig.totalBudget);
+        } else if (data.totalBudget) {
+          setBudget(data.totalBudget);
+        }
+        
+        // 从 metadata 加载其他配置
+        if (intentData.metadata) {
+          if (intentData.metadata.preferences) {
+            setPreferences(intentData.metadata.preferences);
+          }
+          
+          if (intentData.metadata.constraints) {
+            const constraints = intentData.metadata.constraints;
+            if (constraints.dailyWalkLimit) {
+              setDailyWalkLimit(constraints.dailyWalkLimit);
+            }
+            if (constraints.earlyRiser !== undefined) {
+              setEarlyRiser(constraints.earlyRiser);
+            }
+            if (constraints.nightOwl !== undefined) {
+              setNightOwl(constraints.nightOwl);
+            }
+            if (constraints.mustPlaces) {
+              setMustPlaces(constraints.mustPlaces.map(id => id.toString()));
+              // TODO: 需要根据 placeId 加载 Place 对象到 mustPlaceMap
+            }
+            if (constraints.avoidPlaces) {
+              setAvoidPlaces(constraints.avoidPlaces.map(id => id.toString()));
+              // TODO: 需要根据 placeId 加载 Place 对象到 avoidPlaceMap
+            }
+          }
+          
+          if (intentData.metadata.planningPolicy) {
+            setPlanningPolicy(intentData.metadata.planningPolicy as 'safe' | 'experience' | 'challenge');
+          }
+        }
+      } catch (intentErr) {
+        // 如果 intent 接口未实现，回退到从 trip 数据加载
+        console.warn('Failed to load intent, falling back to trip data:', intentErr);
+        
+        if (data.pacingConfig) {
+          const maxDailyActivities = data.pacingConfig.maxDailyActivities;
+          if (maxDailyActivities) {
+            if (maxDailyActivities <= 3) setRhythm('relaxed');
+            else if (maxDailyActivities <= 5) setRhythm('standard');
+            else setRhythm('tight');
+          }
+        }
+        
+        if (data.budgetConfig) {
+          setBudget(data.budgetConfig.totalBudget);
+        } else if (data.totalBudget) {
+          setBudget(data.totalBudget);
+        }
+      }
     } catch (err) {
       console.error('Failed to load trip:', err);
+      toast.error(t('planStudio.intentTab.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -93,6 +178,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
       const results = await placesApi.autocompletePlaces({
         q: query,
         limit: 10,
+        countryCode: trip?.destination, // 根据行程的国家进行过滤
       });
       setMustPlaceSearchResults(results);
     } catch (err) {
@@ -109,6 +195,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
       const results = await placesApi.autocompletePlaces({
         q: query,
         limit: 10,
+        countryCode: trip?.destination, // 根据行程的国家进行过滤
       });
       setAvoidPlaceSearchResults(results);
     } catch (err) {
@@ -156,23 +243,64 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
   };
 
   const handleSave = async () => {
+    if (!trip) {
+      toast.error(t('planStudio.intentTab.noTripData'));
+      return;
+    }
+
     try {
       setSaving(true);
-      // TODO: 调用API保存意图与约束
-      // await tripsApi.updateIntent(tripId, { ... });
-      console.log('Saving intent:', {
-        rhythm,
+
+      // 根据节奏设置 maxDailyActivities
+      const maxDailyActivities = 
+        rhythm === 'relaxed' ? 3 :
+        rhythm === 'standard' ? 5 : 7;
+
+      // 构建更新请求
+      // 根据 UpdateTripRequest 的实际定义，只更新支持的字段
+      const updateData: UpdateTripRequest = {
+        totalBudget: budget || trip.totalBudget,
+      };
+
+      // 更新基础字段（totalBudget）
+      if (budget !== undefined) {
+        await tripsApi.update(tripId, updateData);
+      }
+      
+      // 更新意图与约束配置
+      try {
+        await tripsApi.updateIntent(tripId, {
+          pacingConfig: {
+            level: rhythm,
+            maxDailyActivities: 
+              rhythm === 'relaxed' ? 3 :
+              rhythm === 'standard' ? 5 : 7,
+          },
         preferences,
+          constraints: {
         dailyWalkLimit,
         earlyRiser,
         nightOwl,
-        mustPlaces,
-        avoidPlaces,
-        budget,
+            mustPlaces: mustPlaces.map(id => parseInt(id)).filter(id => !isNaN(id)),
+            avoidPlaces: avoidPlaces.map(id => parseInt(id)).filter(id => !isNaN(id)),
+          },
         planningPolicy,
+          totalBudget: budget,
       });
-    } catch (err) {
+      } catch (intentErr: any) {
+        // 如果 intent 接口未实现，只更新 totalBudget
+        console.warn('Failed to update intent, only budget updated:', intentErr);
+        if (budget === undefined) {
+          throw intentErr; // 如果没有预算更新，抛出错误
+        }
+      }
+      toast.success(t('planStudio.intentTab.saveSuccess'));
+      
+      // 重新加载数据
+      await loadTrip();
+    } catch (err: any) {
       console.error('Failed to save intent:', err);
+      toast.error(err.message || t('planStudio.intentTab.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -190,12 +318,12 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
     <div className="space-y-6">
       <Card data-tour="trip-dna">
         <CardHeader>
-          <CardTitle>我想要的</CardTitle>
-          <CardDescription>定义你的旅行风格和节奏</CardDescription>
+          <CardTitle>{t('planStudio.intentTab.whatIWantTitle')}</CardTitle>
+          <CardDescription>{t('planStudio.intentTab.whatIWantDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>节奏</Label>
+            <Label>{t('planStudio.intentTab.rhythm')}</Label>
             <Select value={rhythm} onValueChange={(v) => setRhythm(v as any)}>
               <SelectTrigger>
                 <SelectValue />
@@ -209,22 +337,25 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
           </div>
 
           <div className="space-y-2">
-            <Label>偏好</Label>
+            <Label>{t('planStudio.intentTab.preferences')}</Label>
             <div className="flex flex-wrap gap-2">
-              {['自然', '城市', '摄影', '美食', '历史', '艺术', '购物', '夜生活'].map((pref) => (
-                <Button
-                  key={pref}
-                  variant={preferences.includes(pref) ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setPreferences((prev) =>
-                      prev.includes(pref) ? prev.filter((p) => p !== pref) : [...prev, pref]
-                    );
-                  }}
-                >
-                  {pref}
-                </Button>
-              ))}
+              {preferenceOptions.map((prefKey) => {
+                const prefLabel = t(`planStudio.intentTab.preferenceOptions.${prefKey}`);
+                return (
+                  <Button
+                    key={prefKey}
+                    variant={preferences.includes(prefKey) ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setPreferences((prev) =>
+                        prev.includes(prefKey) ? prev.filter((p) => p !== prefKey) : [...prev, prefKey]
+                      );
+                    }}
+                  >
+                    {prefLabel}
+                  </Button>
+                );
+              })}
             </div>
           </div>
         </CardContent>
@@ -232,13 +363,13 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
 
       <Card data-tour="hard-constraints">
         <CardHeader>
-          <CardTitle>约束</CardTitle>
-          <CardDescription>设置你的限制条件</CardDescription>
+          <CardTitle>{t('planStudio.intentTab.constraintsTitle')}</CardTitle>
+          <CardDescription>{t('planStudio.intentTab.constraintsDescription')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>每日步行上限（公里）</Label>
+              <Label>{t('planStudio.intentTab.dailyWalkLimit')}</Label>
               <Input
                 type="number"
                 value={dailyWalkLimit}
@@ -247,13 +378,13 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
               />
             </div>
             <div className="space-y-2">
-              <Label>预算（元，可选）</Label>
+              <Label>{t('planStudio.intentTab.budget')}</Label>
               <Input
                 type="number"
                 value={budget || ''}
                 onChange={(e) => setBudget(e.target.value ? Number(e.target.value) : undefined)}
                 min={0}
-                placeholder="不限制"
+                placeholder={t('planStudio.intentTab.noLimit')}
               />
             </div>
           </div>
@@ -265,7 +396,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                 checked={earlyRiser}
                 onCheckedChange={(checked) => setEarlyRiser(checked === true)}
               />
-              <Label htmlFor="earlyRiser">早起型</Label>
+              <Label htmlFor="earlyRiser">{t('planStudio.intentTab.earlyRiser')}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -273,12 +404,12 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                 checked={nightOwl}
                 onCheckedChange={(checked) => setNightOwl(checked === true)}
               />
-              <Label htmlFor="nightOwl">夜猫子</Label>
+              <Label htmlFor="nightOwl">{t('planStudio.intentTab.nightOwl')}</Label>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>必须点</Label>
+            <Label>{t('planStudio.intentTab.mustPlaces')}</Label>
             <div className="space-y-2">
               {/* 已选择的地点列表 */}
               {mustPlaces.length > 0 && (
@@ -316,7 +447,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                 <PopoverContent className="p-0 w-[400px]" align="start">
                   <Command>
                     <CommandInput
-                      placeholder="搜索地点名称..."
+                      placeholder={t('planStudio.intentTab.searchPlaceName')}
                       value={mustPlaceSearchQuery}
                       onValueChange={setMustPlaceSearchQuery}
                     />
@@ -327,7 +458,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                         </div>
                       ) : (
                         <>
-                          <CommandEmpty>未找到地点</CommandEmpty>
+                          <CommandEmpty>{t('planStudio.intentTab.noPlaceFound')}</CommandEmpty>
                           <CommandGroup>
                             {mustPlaceSearchResults.map((place) => (
                               <CommandItem
@@ -344,7 +475,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                                   )}
                                 </div>
                                 {mustPlaces.includes(place.id.toString()) && (
-                                  <Badge variant="outline" className="text-xs">已添加</Badge>
+                                  <Badge variant="outline" className="text-xs">{t('planStudio.intentTab.alreadyAdded')}</Badge>
                                 )}
                               </CommandItem>
                             ))}
@@ -359,7 +490,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
           </div>
 
           <div className="space-y-2">
-            <Label>不可点</Label>
+            <Label>{t('planStudio.intentTab.avoidPlaces')}</Label>
             <div className="space-y-2">
               {/* 已选择的地点列表 */}
               {avoidPlaces.length > 0 && (
@@ -391,13 +522,13 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                     className="w-full justify-start text-left font-normal"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    搜索并添加地点...
+                    {t('planStudio.intentTab.searchAndAddPlace')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="p-0 w-[400px]" align="start">
                   <Command>
                     <CommandInput
-                      placeholder="搜索地点名称..."
+                      placeholder={t('planStudio.intentTab.searchPlaceName')}
                       value={avoidPlaceSearchQuery}
                       onValueChange={setAvoidPlaceSearchQuery}
                     />
@@ -408,7 +539,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                         </div>
                       ) : (
                         <>
-                          <CommandEmpty>未找到地点</CommandEmpty>
+                          <CommandEmpty>{t('planStudio.intentTab.noPlaceFound')}</CommandEmpty>
                           <CommandGroup>
                             {avoidPlaceSearchResults.map((place) => (
                               <CommandItem
@@ -425,7 +556,7 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
                                   )}
                                 </div>
                                 {avoidPlaces.includes(place.id.toString()) && (
-                                  <Badge variant="outline" className="text-xs">已添加</Badge>
+                                  <Badge variant="outline" className="text-xs">{t('planStudio.intentTab.alreadyAdded')}</Badge>
                                 )}
                               </CommandItem>
                             ))}
@@ -443,8 +574,8 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
 
       <Card>
         <CardHeader>
-          <CardTitle>规划策略</CardTitle>
-          <CardDescription>选择系统推荐的规划策略预设</CardDescription>
+          <CardTitle>{t('planStudio.intentTab.planningStrategyTitle')}</CardTitle>
+          <CardDescription>{t('planStudio.intentTab.planningStrategyDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Select value={planningPolicy} onValueChange={(v) => setPlanningPolicy(v as any)}>
@@ -452,9 +583,9 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="safe">稳健优先（安全第一，时间充足）</SelectItem>
-              <SelectItem value="experience">体验优先（最大化体验密度）</SelectItem>
-              <SelectItem value="challenge">极限挑战（时间紧，体验多）</SelectItem>
+              <SelectItem value="safe">{t('planStudio.intentTab.strategy.safe')}</SelectItem>
+              <SelectItem value="experience">{t('planStudio.intentTab.strategy.experience')}</SelectItem>
+              <SelectItem value="challenge">{t('planStudio.intentTab.strategy.challenge')}</SelectItem>
             </SelectContent>
           </Select>
         </CardContent>
@@ -462,11 +593,11 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
 
       <div className="flex justify-end gap-4">
         <Button variant="outline" onClick={() => window.history.back()}>
-          取消
+          {t('planStudio.intentTab.cancel')}
         </Button>
         <Button onClick={handleSave} disabled={saving}>
           {saving ? <Spinner className="w-4 h-4 mr-2" /> : null}
-          Save & Continue to Places
+          {t('planStudio.intentTab.saveAndContinue')}
         </Button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { TripDetail, ItineraryItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,7 @@ interface Candidate {
 }
 
 export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
+  const { t } = useTranslation();
   const [priorities, setPriorities] = useState({
     time: 50,
     comfort: 50,
@@ -109,19 +111,19 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
     setCandidates([
       {
         id: 'candidate-1',
-        deltaSummary: '优化时间分配，减少等待时间',
+        deltaSummary: t('tripViews.dre.candidates.deltaSummary.timeOptimization'),
         metrics: { ...metrics, timeTotal: 1320, bufferTotal: 150 },
         patchPreview: {},
       },
       {
         id: 'candidate-2',
-        deltaSummary: '平衡舒适度与效率',
+        deltaSummary: t('tripViews.dre.candidates.deltaSummary.comfortBalance'),
         metrics: { ...metrics, fatigueScore: 55, bufferTotal: 210 },
         patchPreview: {},
       },
       {
         id: 'candidate-3',
-        deltaSummary: '成本优化方案',
+        deltaSummary: t('tripViews.dre.candidates.deltaSummary.costOptimization'),
         metrics: { ...metrics, costEstimate: 4200, reliability: 80 },
         patchPreview: {},
       },
@@ -426,7 +428,7 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
                 关闭
               </Button>
             </div>
-            <CardDescription>选择最适合的方案，点击"应用"写入行程</CardDescription>
+            <CardDescription>{t('tripViews.dre.candidates.selectBest')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -447,7 +449,7 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
                       className="w-full"
                       onClick={() => {
                         // 预览方案
-                        console.log('预览方案', candidate.id);
+                        console.log(t('tripViews.dre.candidates.preview'), candidate.id);
                       }}
                     >
                       预览
@@ -463,11 +465,11 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
               <Button
                 onClick={() => {
                   // 应用选中的方案
-                  console.log('应用方案');
+                  console.log(t('tripViews.dre.candidates.apply'));
                   setShowCandidates(false);
                 }}
               >
-                应用方案
+                {t('tripViews.dre.candidates.apply')}
               </Button>
             </div>
           </CardContent>

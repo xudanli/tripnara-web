@@ -9,7 +9,7 @@ export type ItineraryItemType = 'ACTIVITY' | 'MEAL_ANCHOR' | 'MEAL_FLOATING' | '
 export type SharePermission = 'VIEW' | 'EDIT';
 export type CollaboratorRole = 'VIEWER' | 'EDITOR' | 'OWNER';
 export type LLMProvider = 'DEEPSEEK' | 'OPENAI' | 'ANTHROPIC';
-export type ModificationType = 'CHANGE_DATE' | 'MOVE_ACTIVITY' | 'ADD_ACTIVITY' | 'REMOVE_ACTIVITY';
+export type ModificationType = 'CHANGE_DATE' | 'MOVE_ACTIVITY' | 'ADD_ACTIVITY' | 'REMOVE_ACTIVITY' | 'ADD_BUFFERS';
 export type BudgetAlertType = 'OVERSPEND' | 'APPROACHING_LIMIT' | 'DAILY_EXCEEDED';
 export type SOSStatus = 'SENT' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'RESOLVED';
 export type OptimizationType = 'REPLACE' | 'REMOVE' | 'RESCHEDULE';
@@ -125,6 +125,10 @@ export interface TripDetail extends BaseEntity {
   pipelineStatus?: PipelineStatus;
   activeAlertsCount?: number;
   pendingTasksCount?: number;
+  metadata?: {
+    generationProgress?: GenerationProgress;
+    [key: string]: any;
+  };
 }
 
 // ==================== 行程列表项 ====================
@@ -250,6 +254,15 @@ export interface TripCreationStats {
   budgetStats?: BudgetStats;
 }
 
+// 生成进度信息
+export interface GenerationProgress {
+  status: 'generating' | 'completed' | 'failed';
+  stage: string; // 'retrieving_candidates' | 'llm_completed' | 'saving_items' | 'completed' | 'error' | 'llm_error'
+  message: string;
+  itemsCount?: number;
+  updatedAt: string; // ISO 8601 时间戳
+}
+
 export interface CreateTripFromNLResponse {
   trip?: {
     // 基本信息
@@ -272,6 +285,12 @@ export interface CreateTripFromNLResponse {
     // 提醒和任务（新增）
     activeAlertsCount?: number;
     pendingTasksCount?: number;
+    
+    // 生成进度（新增）
+    metadata?: {
+      generationProgress?: GenerationProgress;
+      [key: string]: any;
+    };
   };
   
   parsedParams?: {
@@ -288,6 +307,9 @@ export interface CreateTripFromNLResponse {
   
   // 成功消息（新增）
   message?: string;
+  
+  // 是否正在生成规划点（新增）
+  generatingItems?: boolean;
   
   needsClarification?: boolean;
   clarificationQuestions?: string[];
@@ -513,6 +535,40 @@ export interface Conflict {
   resolution: 'SERVER_WINS' | 'LOCAL_WINS' | 'MERGED';
 }
 
+// ==================== 冲突检测（规划工作台） ====================
+
+export type ConflictType = 
+  | 'TIME_CONFLICT'           // 时间冲突
+  | 'LUNCH_WINDOW'            // 午餐时间窗过短
+  | 'FATIGUE_EXCEEDED'        // 体力超标
+  | 'BUFFER_INSUFFICIENT'     // 缓冲不足
+  | 'CLOSURE_RISK'            // 闭园风险
+  | 'ACCESSIBILITY_MISMATCH'  // 无障碍不匹配
+  | 'TRANSPORT_TOO_LONG';     // 交通过长
+
+export interface ConflictSuggestion {
+  action: string;
+  description: string;
+  impact: string;
+}
+
+export interface PlanStudioConflict {
+  id: string;
+  type: ConflictType;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  title: string;
+  description: string;
+  affectedDays: string[];
+  affectedItemIds: string[];
+  suggestions?: ConflictSuggestion[];
+}
+
+export interface ConflictsResponse {
+  tripId: string;
+  conflicts: PlanStudioConflict[];
+  total: number;
+}
+
 export interface SyncOfflineChangesResponse {
   success: boolean;
   message: string;
@@ -722,6 +778,11 @@ export interface TripModification {
     endTime: string;
     type: string;
     [key: string]: any;
+  };
+  options?: {
+    bufferDuration?: number; // 缓冲时长（分钟），默认 30
+    applyToAllDays?: boolean; // 是否应用到所有日期，默认 false
+    dayId?: string; // 如果 applyToAllDays 为 false，指定日期 ID
   };
 }
 
@@ -1132,4 +1193,159 @@ export interface AttentionQueueResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+// ==================== 意图与约束 ====================
+
+export interface UpdateIntentRequest {
+  pacingConfig?: {
+    maxDailyActivities?: number;
+    restIntervalHours?: number;
+    level?: 'relaxed' | 'standard' | 'tight';
+  };
+  preferences?: string[];
+  constraints?: {
+    dailyWalkLimit?: number;
+    earlyRiser?: boolean;
+    nightOwl?: boolean;
+    mustPlaces?: number[];
+    avoidPlaces?: number[];
+  };
+  planningPolicy?: 'safe' | 'experience' | 'challenge';
+  totalBudget?: number;
+}
+
+export interface IntentResponse {
+  id: string;
+  pacingConfig?: PacingConfig;
+  budgetConfig?: BudgetConfig;
+  metadata?: {
+    preferences?: string[];
+    constraints?: {
+      dailyWalkLimit?: number;
+      earlyRiser?: boolean;
+      nightOwl?: boolean;
+      mustPlaces?: number[];
+      avoidPlaces?: number[];
+    };
+    planningPolicy?: string;
+  };
+}
+
+// ==================== 每日指标 ====================
+
+export interface DayMetrics {
+  walk: number;        // 总步行距离（公里）
+  drive: number;       // 总车程（分钟）
+  buffer: number;      // 总缓冲时间（分钟）
+  fatigue: number;     // 总疲劳指数（0-100）
+  ascent: number;      // 总爬升（米）
+  cost: number;        // 预计花费
+}
+
+export interface DayMetricsResponse {
+  date: string;
+  metrics: DayMetrics;
+  conflicts: Array<{
+    type: ConflictType;
+    severity: 'HIGH' | 'MEDIUM' | 'LOW';
+    title: string;
+    description: string;
+    affectedItemIds: string[];
+  }>;
+}
+
+export interface TripMetricsResponse {
+  tripId: string;
+  days: DayMetricsResponse[];
+  summary: {
+    totalWalk: number;
+    totalDrive: number;
+    totalBuffer: number;
+    totalFatigue: number;
+    totalCost: number;
+    averageWalkPerDay: number;
+    averageDrivePerDay: number;
+  };
+}
+
+// ==================== 优化结果应用 ====================
+
+export interface ApplyOptimizationRequest {
+  optimizationId?: string;
+  result: any; // OptimizeRouteResponse
+  options?: {
+    replaceExisting?: boolean;
+    preserveManualEdits?: boolean;
+    dryRun?: boolean;
+  };
+}
+
+export interface ApplyOptimizationResponse {
+  success: boolean;
+  appliedItems: number;
+  modifiedDays: string[];
+  preview?: {
+    changes: Array<{
+      dayId: string;
+      date: string;
+      added: number;
+      removed: number;
+      modified: number;
+    }>;
+  };
+}
+
+// ==================== 行程项详细信息 ====================
+
+export interface ItineraryItemDetailResponse extends ItineraryItemDetail {
+  Place?: {
+    id: number;
+    nameCN: string;
+    nameEN?: string;
+    category: string;
+    lat?: number;
+    lng?: number;
+    rating?: number;
+    metadata?: {
+      openingHours?: string | Record<string, any>;
+      externalSource?: string;
+      lastCrawledAt?: string;
+      cost?: number;
+      price?: number;
+      [key: string]: any;
+    };
+    physicalMetadata?: {
+      walkingDistanceKm?: number;
+      elevationGainM?: number;
+      fatigueScore?: number;
+      accessibility?: {
+        wheelchairAccessible?: boolean;
+        strollerAccessible?: boolean;
+      };
+      [key: string]: any;
+    };
+  };
+}
+
+// ==================== 批量更新行程项 ====================
+
+export interface BatchUpdateItemsRequest {
+  updates: Array<{
+    itemId: string;
+    startTime?: string;
+    endTime?: string;
+    placeId?: number;
+    note?: string;
+  }>;
+}
+
+export interface BatchUpdateItemsResponse {
+  success: boolean;
+  updatedCount: number;
+  failedCount: number;
+  errors?: Array<{
+    itemId: string;
+    error: string;
+  }>;
 }

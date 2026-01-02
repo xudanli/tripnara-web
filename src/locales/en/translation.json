@@ -127,7 +127,362 @@
       "bookings": "Bookings"
     },
     "noTrip": "Please select a trip first",
-    "goToTrips": "Go to Trips"
+    "goToTrips": "Go to Trips",
+    "selectTripToStart": "Select a trip to start planning",
+    "createFirstTrip": "Create your first trip to start planning",
+    "createTrip": "Create Trip",
+    "sidebar": {
+      "abu": {
+        "gatingStatus": "Gating Status",
+        "status": {
+          "allow": "Allow",
+          "warn": "Warning",
+          "block": "Block"
+        },
+        "hardViolations": "Hard violations: {{count}}",
+        "softViolations": "Warnings: {{count}}",
+        "viewEvidence": "View Evidence",
+        "riskAlerts": "Risk Alerts",
+        "riskAlertsDesc": "Missing required items and red line warnings",
+        "missingRequiredPoints": "Missing Required Points",
+        "missingRequiredPointsDesc": "2 locations missing from required points list",
+        "bufferInsufficient": "Insufficient Buffer",
+        "bufferInsufficientDesc": "Day 2 buffer time is less than recommended",
+        "sunlightWindowRisk": "Sunlight Window Risk",
+        "sunlightWindowRiskDesc": "Day 3 end time may exceed sunlight window",
+        "askAgentRefine": "Ask Agent to refine constraints"
+      },
+      "dre": {
+        "metricsOverview": "Metrics Overview",
+        "totalTime": "Total Time",
+        "totalBuffer": "Total Buffer",
+        "fatigueScore": "Fatigue Score",
+        "estimatedCost": "Estimated Cost",
+        "currentWeights": "Current Weights",
+        "comfort": "Comfort",
+        "experience": "Experience",
+        "cost": "Cost",
+        "adjustWeights": "Adjust Weights",
+        "metricAlerts": "Metric Alerts",
+        "metricAlertsDesc": "Metrics exceeding thresholds or needing optimization",
+        "fatiguePeakHigh": "Fatigue Peak Too High",
+        "fatiguePeakHighDesc": "Day 3 walking 18km (> your limit 10km)",
+        "bufferInsufficient": "Insufficient Buffer",
+        "bufferInsufficientDesc": "Buffer only 12min → delay risk",
+        "costOverBudget": "Cost Over Budget",
+        "costOverBudgetDesc": "Estimated cost ¥5000, 20% over budget",
+        "askAgentOptimize": "Ask Agent to optimize with weights",
+        "operationResult": "Operation Result"
+      },
+      "neptune": {
+        "fixProgress": "Fix Progress",
+        "issuesFound": "Issues Found: {{count}}",
+        "issuesFixed": "Fixed: {{count}}",
+        "minimalChangeCost": "Minimal Change Cost",
+        "replacePoints": "Replace {{count}} points",
+        "moveTimeSlots": "Move {{count}} time slots",
+        "viewPatch": "View Patch",
+        "fixSuggestions": "Fix Suggestions",
+        "fixSuggestionsDesc": "Minimal cost fix solutions",
+        "replaceSuggestion": "Replace Suggestion",
+        "replaceSuggestionDesc": "Replace point A with point B (closer/same type/open)",
+        "timeAdjustment": "Time Adjustment",
+        "timeAdjustmentDesc": "Move lunch 30min earlier, insert rest point",
+        "alternativeRoute": "Alternative Route",
+        "alternativeRouteDesc": "Day 2 route unreachable, suggest using alternative route C",
+        "askAgentFix": "Ask Agent to apply minimal fixes",
+        "noUnavailableNodes": "No unavailable nodes detected, will check all nodes",
+        "noSuggestions": "No fix suggestions available",
+        "clickToGenerate": "Click button to generate fix suggestions",
+        "validation": "Validation Status",
+        "nodesReplaced": "Replaced {{replacements}} nodes",
+        "replaceFailed": "Replace failed"
+      }
+    },
+    "intentTab": {
+      "whatIWantTitle": "What I Want",
+      "whatIWantDescription": "Define your travel style and pace",
+      "rhythm": "Pace",
+      "preferences": "Preferences",
+      "preferenceOptions": {
+        "nature": "Nature",
+        "city": "City",
+        "photography": "Photography",
+        "food": "Food",
+        "history": "History",
+        "art": "Art",
+        "shopping": "Shopping",
+        "nightlife": "Nightlife"
+      },
+      "constraintsTitle": "Constraints",
+      "constraintsDescription": "Set your limiting conditions",
+      "dailyWalkLimit": "Daily Walk Limit (km)",
+      "budget": "Budget (CNY, optional)",
+      "noLimit": "No Limit",
+      "earlyRiser": "Early Riser",
+      "nightOwl": "Night Owl",
+      "mustPlaces": "Must-Visit Places",
+      "avoidPlaces": "Avoid Places",
+      "searchAndAddPlace": "Search and add place...",
+      "searchPlaceName": "Search place name...",
+      "noPlaceFound": "No place found",
+      "alreadyAdded": "Already Added",
+      "planningStrategyTitle": "Planning Strategy",
+      "planningStrategyDescription": "Select system recommended planning strategy preset",
+      "strategy": {
+        "safe": "Robustness First (Safety First, Ample Time)",
+        "experience": "Experience First (Maximize Experience Density)",
+        "challenge": "Extreme Challenge (Tight Time, Rich Experience)"
+      },
+      "cancel": "Cancel",
+      "saveAndContinue": "Save & Continue to Places"
+    },
+    "placesTab": {
+      "title": "Find Places",
+      "description": "Search, Nearby, Recommend - Evidence Display",
+      "getLocationFailed": "Failed to get location:",
+      "enterSearchKeyword": "Please enter search keyword",
+      "needLocationForNearby": "Location access required to find nearby places",
+      "searchFailed": "Search failed, please try again later",
+      "addPlaceFailed": "Failed to add place",
+      "addPlaceSuccess": "Successfully added \"{{placeName}}\" to trip",
+      "placeholders": {
+        "clickNearby": "Click \"Nearby\" button to search",
+        "clickRecommend": "Click \"Recommend\" button to get recommendations",
+        "searchPlace": "Search places..."
+      },
+      "buttons": {
+        "search": "Search",
+        "nearby": "Nearby",
+        "recommend": "Recommend"
+      },
+      "openingHoursUnknown": "Opening hours unknown",
+      "clickNearbyToFind": "Click \"Nearby\" button to find nearby places",
+      "enterKeywordToSearch": "Please enter keyword to search places",
+      "selectDayToAdd": "Select which day to add \"{{placeName}}\" to",
+      "categoryFilter": "Place Category",
+      "categories": {
+        "all": "All",
+        "attraction": "Attraction",
+        "restaurant": "Restaurant",
+        "shopping": "Shopping",
+        "hotel": "Hotel",
+        "transitHub": "Transit Hub"
+      }
+    },
+    "optimizeTab": {
+      "title": "Make Executable",
+      "description": "Generate executable plan, check conflicts and risks",
+      "optimizing": "Optimizing...",
+      "generatePlan": "Generate Executable Plan",
+      "planExecutable": "Plan is executable",
+      "planNotExecutable": "Plan is not executable",
+      "droppedItems": "Dropped Items",
+      "tightestNodes": "Top 3 Tightest Nodes",
+      "abuGateResult": "Abu Gate Result",
+      "passed": "Passed",
+      "rejected": "Rejected"
+    },
+    "scheduleTab": {
+      "lunchWindowTooShort": "Lunch time window too short",
+      "confirmDelete": "Are you sure you want to delete \"{{placeName}}\"?",
+      "deleteSuccess": "Successfully deleted \"{{placeName}}\"",
+      "deleteFailed": "Failed to delete",
+      "loadItemFailed": "Failed to load item",
+      "replaceSuccess": "Replace successful",
+      "replaceFailed": "Replace failed",
+      "moveSuccess": "Move successful",
+      "moveFailed": "Move failed",
+      "moveMissingFields": "Please fill in all required fields",
+      "splitNotImplemented": "Split feature is not implemented yet, please use edit to adjust manually",
+      "actions": {
+        "edit": "Edit",
+        "split": "Split",
+        "move": "Move",
+        "replace": "Replace",
+        "skip": "Skip",
+        "delete": "Delete"
+      },
+      "runOptimize": "Run Optimize",
+      "optimizing": "Optimizing...",
+      "autoAddBuffers": "Auto-add buffers",
+      "addingBuffers": "Adding...",
+      "fix": "Fix",
+      "timeConflict": "{{item1}} conflicts with {{item2}}",
+      "moveDialog": {
+        "title": "Move Itinerary Item",
+        "description": "Select new date and time",
+        "selectDate": "Select Date",
+        "selectDatePlaceholder": "Select target date",
+        "startTime": "Start Time",
+        "endTime": "End Time",
+        "noAvailableDates": "No available dates",
+        "confirm": "Confirm Move"
+      }
+    },
+    "whatIfTab": {
+      "title": "What-If Scenario Comparison",
+      "description": "Generate multiple scenarios and compare to choose the best",
+      "generating": "Generating scenarios...",
+      "generateComparison": "Generate Comparison (600 samples)",
+      "scenarios": {
+        "robust": "Robust Plan",
+        "experienceFirst": "Experience First",
+        "extremeChallenge": "Extreme Challenge"
+      }
+    }
+  },
+  "tripViews": {
+    "abu": {
+      "status": {
+        "executable": "Executable",
+        "needConfirm": "Need Confirmation",
+        "blocked": "Blocked"
+      },
+      "violations": {
+        "nightHikeRisk": "Night Hiking Risk",
+        "bufferInsufficient": "Insufficient Buffer",
+        "reason": {
+          "nightHike": "Day 2 contains night hiking segment with no retreat point",
+          "bufferInsufficient": "Lack of buffer may cause chain reaction of delays"
+        },
+        "evidence": {
+          "sunsetTime": "Sunset Time",
+          "estimatedEndTime": "Estimated End Time",
+          "routeDifficulty": "Route Difficulty",
+          "currentBuffer": "Current Buffer",
+          "recommendedBuffer": "Recommended Buffer"
+        },
+        "tags": {
+          "bufferInsufficient": "Insufficient Buffer",
+          "nightHike": "Night Hiking",
+          "noRetreatPoint": "No Retreat Point",
+          "timeWindowConflict": "Time Window Conflict"
+        },
+        "hardViolation": "Hard Violation",
+        "softViolation": "Soft Violation",
+        "messages": {
+          "safeToExecute": "Route passed safety check, safe to execute",
+          "needConfirm": "Risks requiring confirmation exist, please review details",
+          "mustFix": "Hard violations exist, must be fixed before proceeding"
+        },
+        "acknowledgeRisk": "Acknowledge Risk",
+        "gotoNeptune": "Go to Neptune Repair"
+      }
+    },
+    "dre": {
+      "candidates": {
+        "deltaSummary": {
+          "timeOptimization": "Optimize time allocation, reduce waiting time",
+          "comfortBalance": "Balance comfort and efficiency",
+          "costOptimization": "Cost optimization plan"
+        },
+        "selectBest": "Select the best plan and click \"Apply\" to write to itinerary",
+        "preview": "Preview Plan",
+        "apply": "Apply Plan"
+      }
+    },
+    "neptune": {
+      "descriptions": {
+        "replaceRoute": "Day 2 hiking route is not feasible due to weather, suggest replacing with alternative route",
+        "addBuffer": "Suggest adding buffer time to avoid chain reaction of delays"
+      },
+      "alternatives": {
+        "alternativeRouteA": "Alternative Route A",
+        "alternativeRouteB": "Alternative Route B",
+        "reasonFit1": "Similar distance, lower difficulty, better weather adaptability",
+        "reasonFit2": "Similar experience but safer",
+        "noBooking": "No booking required",
+        "needBooking": "Requires 1 day advance booking"
+      },
+      "severity": {
+        "mustFix": "Must Fix",
+        "recommendFix": "Recommended Fix",
+        "canOptimize": "Can Optimize"
+      },
+      "actions": {
+        "replaceItem": "Replace Itinerary Item",
+        "skipItem": "Skip Itinerary Item",
+        "adjustTime": "Adjust Time",
+        "addBuffer": "Add Buffer"
+      },
+      "status": {
+        "needFix": "Need Fix",
+        "recommendFix": "Recommended Fix"
+      },
+      "applyAlternative": "Apply Alternative",
+      "applyThisAlternative": "Apply This Alternative",
+      "fixQueue": "Fix Queue",
+      "applyAllFixes": "Apply All Fixes",
+      "sortedByUrgency": "Fix suggestions sorted by urgency",
+      "noFixesNeeded": "No fixes needed",
+      "whatToChange": "What to Change:",
+      "cost": "Cost:",
+      "minutes": "minutes",
+      "noScheduleForDay": "No schedule for this day",
+      "lock": "Lock",
+      "replaceable": "Replaceable",
+      "skippable": "Skippable",
+      "mustKeep": "Must Keep",
+      "viewAlternatives": "View Alternatives",
+      "alternativeCandidates": "Alternative Candidates",
+      "alternativesFor": "Alternatives for {{itemName}}",
+      "noAlternatives": "No alternatives available",
+      "whyFit": "Why it fits:",
+      "timeChange": "Time Change",
+      "distanceChange": "Distance Change",
+      "costChange": "Cost Change",
+      "time": "Time",
+      "applyFix": "Apply Fix"
+    }
+  },
+  "dialogs": {
+    "createTripFromTemplate": {
+      "title": "Create Trip from Template",
+      "fillRequired": "Please fill in required fields: destination, start date, end date",
+      "createFailed": "Failed to create trip",
+      "basedOnTemplate": "Create new trip based on template \"{{templateName}}\"",
+      "selectDestination": "Select destination...",
+      "searchCountry": "Search country...",
+      "enterCountryCode": "Enter country code (e.g.: JP, IS)",
+      "exampleBudget": "e.g.: 50000",
+      "selectPace": "Select pace preference",
+      "createTrip": "Create Trip",
+      "creating": "Creating..."
+    },
+    "replaceItineraryItem": {
+      "title": "Replace Itinerary Item",
+      "replacePlace": "Replace \"{{placeName}}\" with a more suitable place",
+      "reason": "Replacement Reason",
+      "preferredStyle": "Preferred Style",
+      "selectStyle": "Select Style",
+      "customReason": "Details",
+      "customReasonPlaceholder": "Please describe the replacement reason...",
+      "replacing": "Replacing...",
+      "findReplacement": "Find Replacement",
+      "foundReplacement": "Replacement Found",
+      "newPlace": "New Place:",
+      "reasonLabel": "Reason:",
+      "otherAlternatives": "Other Alternatives",
+      "confirmReplace": "Confirm Replace",
+      "replaceFailed": "Failed to replace itinerary item",
+      "reasons": {
+        "tooTired": "Too Tired",
+        "weatherChange": "Weather Change",
+        "changeStyle": "Change Style",
+        "tooFar": "Too Far",
+        "closed": "Closed",
+        "other": "Other"
+      },
+      "travelStyles": {
+        "nature": "Nature",
+        "culture": "Culture & History",
+        "food": "Food Exploration",
+        "citywalk": "City Walk",
+        "photography": "Photography",
+        "adventure": "Adventure"
+      }
+    }
   },
   "demTopography": {
     "title": "Terrain is the truth layer of travel planning",
@@ -668,6 +1023,110 @@
     "contactByEmail": "Contact us by email:",
     "email": "Email",
     "cancel": "Cancel"
+  },
+  "dashboard": {
+    "welcome": "Welcome back, {{userName}}",
+    "stats": {
+      "needsAttention": "Today: {{count}} trip needs attention",
+      "tripsReady": "{{count}} trips ready",
+      "blockers": "{{count}} blocker"
+    },
+    "continueLast": "Continue Last",
+    "createTrip": "Create Trip",
+    "continueCard": {
+      "title": "Continue Last",
+      "description": "Most recently edited trip",
+      "continuePlanning": "Continue Planning",
+      "openOverview": "Open Overview"
+    },
+    "attentionQueue": {
+      "title": "Needs Attention",
+      "description": "Issues that require your attention",
+      "empty": "No items requiring attention for now",
+      "emptyDescription": "Everything is going smoothly!",
+      "severity": {
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "status": {
+        "new": "New"
+      },
+      "fix": "Fix"
+    },
+    "templates": {
+      "title": "Route Templates",
+      "description": "Quickly start your journey",
+      "empty": "No templates",
+      "emptyDescription": "Route templates are being prepared",
+      "days": "days",
+      "preview": "Preview",
+      "useTemplate": "Use Template"
+    },
+    "riskOverview": {
+      "title": "Risk Overview",
+      "timeWindowConflict": "Time window conflict",
+      "bufferInsufficient": "Lack of buffer may lead to a chain reaction of delays",
+      "openDrawer": "Open Risk Drawer"
+    },
+    "readiness": {
+      "title": "Readiness",
+      "blockers": "blockers",
+      "continueLastTrip": "Continue Last Trip",
+      "completeReadiness": "Complete Readiness"
+    }
+  },
+  "sidebar": {
+    "home": "Dashboard",
+    "trips": "Trips",
+    "countries": "Countries",
+    "countries-archive": "Country Archive",
+    "countries-templates": "Route Templates",
+    "planStudio": "Plan Studio",
+    "execute": "Execute",
+    "trails": "Trails",
+    "readiness": "Readiness",
+    "insights": "Insights",
+    "settings": "Settings"
+  },
+  "welcomeModal": {
+    "title": "Let's make your first executable route.",
+    "description": "Choose a target experience and we'll recommend the best planning strategy for you",
+    "experiences": {
+      "steady": {
+        "title": "Steady & Safe",
+        "description": "Default Abu weight, safety first"
+      },
+      "balanced": {
+        "title": "Balanced",
+        "description": "Default Dr.Dre weight, time optimized"
+      },
+      "exploratory": {
+        "title": "Exploratory",
+        "description": "Default Neptune, stronger fault tolerance, flexible exploration"
+      }
+    },
+    "startDemo": "Start with a 1-day demo trip",
+    "createOwn": "Create my own trip",
+    "demoHint": "Demo is to let you see 'evidence + executable' in 3 minutes, not fill out forms"
+  },
+  "header": {
+    "nav": {
+      "trips": "My Trips",
+      "routePhilosophy": "Route Philosophy",
+      "professional": "Professional Tools",
+      "share": "Share & Community"
+    },
+    "settings": "Settings",
+    "preferences": "Preferences",
+    "logout": "Logout"
+  },
+  "globalCommandBar": {
+    "placeholder": "Say something: I want to relax a bit more / put hiking in the morning / what if it rains today?",
+    "settings": "Settings",
+    "preferences": "Preferences",
+    "logout": "Logout"
   }
 }
 

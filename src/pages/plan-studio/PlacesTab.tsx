@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,10 +15,10 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, MapPin, Clock } from 'lucide-react';
+import { Search, MapPin, Clock, Star } from 'lucide-react';
 import { placesApi } from '@/api/places';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
-import type { PlaceWithDistance } from '@/types/places-routes';
+import type { PlaceWithDistance, PlaceCategory } from '@/types/places-routes';
 import type { TripDetail, CreateItineraryItemRequest } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import { format } from 'date-fns';
@@ -25,13 +26,16 @@ import { format } from 'date-fns';
 interface PlacesTabProps {
   tripId: string;
   personaMode?: PersonaMode;
+  onPlaceAdded?: () => void; // 添加成功后的回调
 }
 
 type SearchMode = 'search' | 'nearby' | 'recommend';
 
-export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProps) {
+export default function PlacesTab({ tripId, personaMode = 'abu', onPlaceAdded }: PlacesTabProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<SearchMode>('search');
+  const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>('all');
   const [results, setResults] = useState<PlaceWithDistance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +47,7 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string>('');
   const [adding, setAdding] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // 加载行程信息
   useEffect(() => {
@@ -57,7 +62,7 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
           });
         },
         (error) => {
-          console.warn('获取位置失败:', error);
+          console.warn(t('planStudio.placesTab.getLocationFailed'), error);
         }
       );
     }
@@ -74,12 +79,12 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
 
   const handleSearch = async () => {
     if (searchMode === 'search' && !searchQuery.trim()) {
-      setError('请输入搜索关键词');
+      setError(t('planStudio.placesTab.enterSearchKeyword'));
       return;
     }
 
     if (searchMode === 'nearby' && !userLocation) {
-      setError('需要获取您的位置才能查找附近地点');
+      setError(t('planStudio.placesTab.needLocationForNearby'));
       return;
     }
 
@@ -95,12 +100,16 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
           lat: userLocation?.lat,
           lng: userLocation?.lng,
           limit: 20,
+          type: selectedCategory !== 'all' ? selectedCategory : undefined,
+          countryCode: trip?.destination, // 根据行程的国家进行过滤
         });
       } else if (searchMode === 'nearby') {
         searchResults = await placesApi.getNearbyPlaces({
           lat: userLocation!.lat,
           lng: userLocation!.lng,
           radius: 5000, // 5km
+          type: selectedCategory !== 'all' ? selectedCategory : undefined,
+          countryCode: trip?.destination, // 根据行程的国家进行过滤
         });
       } else if (searchMode === 'recommend') {
         const recommendations = await placesApi.getRecommendations({
@@ -124,7 +133,7 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
 
       setResults(searchResults);
     } catch (err: any) {
-      setError(err.message || '搜索失败，请稍后重试');
+      setError(err.message || t('planStudio.placesTab.searchFailed'));
       console.error('Search error:', err);
     } finally {
       setLoading(false);
@@ -159,11 +168,30 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
       };
 
       await itineraryItemsApi.create(data);
+      
+      // 刷新行程数据
+      await loadTrip();
+      
+      // 通知父组件刷新其他 Tab（如 ScheduleTab）
+      if (onPlaceAdded) {
+        onPlaceAdded();
+      }
+      
+      // 显示成功提示
+      setSuccessMessage(t('planStudio.placesTab.addPlaceSuccess', { 
+        placeName: selectedPlace.nameCN || selectedPlace.nameEN || ''
+      }));
+      setError(null);
       setAddDialogOpen(false);
       setSelectedPlace(null);
-      // 可以显示成功提示
+      
+      // 3秒后清除成功提示
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
     } catch (err: any) {
-      setError(err.message || '添加地点失败');
+      setError(err.message || t('planStudio.placesTab.addPlaceFailed'));
+      setSuccessMessage(null);
       console.error('Failed to add place:', err);
     } finally {
       setAdding(false);
@@ -173,8 +201,8 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>找点</CardTitle>
-          <CardDescription>搜索、附近、推荐 - 证据展示</CardDescription>
+          <CardTitle>{t('planStudio.placesTab.title')}</CardTitle>
+          <CardDescription>{t('planStudio.placesTab.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2" data-tour="places-search">
@@ -188,7 +216,13 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
                     handleSearch();
                   }
                 }}
-                placeholder={searchMode === 'nearby' ? '点击"附近"按钮搜索' : searchMode === 'recommend' ? '点击"推荐"按钮获取推荐' : '搜索地点...'}
+                placeholder={
+                  searchMode === 'nearby' 
+                    ? t('planStudio.placesTab.placeholders.clickNearby')
+                    : searchMode === 'recommend' 
+                    ? t('planStudio.placesTab.placeholders.clickRecommend')
+                    : t('planStudio.placesTab.placeholders.searchPlace')
+                }
                 className="pl-10"
                 disabled={searchMode !== 'search'}
               />
@@ -198,33 +232,160 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
               disabled={loading || (searchMode === 'search' && !searchQuery.trim())}
             >
               {loading ? <Spinner className="w-4 h-4 mr-2" /> : null}
-              {searchMode === 'search' ? '搜索' : searchMode === 'nearby' ? '附近' : '推荐'}
+              {searchMode === 'search' 
+                ? t('planStudio.placesTab.buttons.search')
+                : searchMode === 'nearby' 
+                ? t('planStudio.placesTab.buttons.nearby')
+                : t('planStudio.placesTab.buttons.recommend')}
             </Button>
             <Button 
               variant={searchMode === 'nearby' ? 'default' : 'outline'}
-              onClick={() => {
+              onClick={async () => {
                 setSearchMode('nearby');
                 setSearchQuery('');
                 setResults([]);
+                // 切换到附近模式后自动触发搜索
+                if (userLocation) {
+                  try {
+                    setLoading(true);
+                    setError(null);
+                    const searchResults = await placesApi.getNearbyPlaces({
+                      lat: userLocation.lat,
+                      lng: userLocation.lng,
+                      radius: 5000, // 5km
+                      type: selectedCategory !== 'all' ? selectedCategory : undefined,
+                      countryCode: trip?.destination, // 根据行程的国家进行过滤
+                    });
+                    setResults(searchResults);
+                  } catch (err: any) {
+                    setError(err.message || t('planStudio.placesTab.searchFailed'));
+                    console.error('Nearby search error:', err);
+                  } finally {
+                    setLoading(false);
+                  }
+                } else {
+                  setError(t('planStudio.placesTab.needLocationForNearby'));
+                }
               }}
             >
-              附近
+              {t('planStudio.placesTab.buttons.nearby')}
             </Button>
             <Button 
               variant={searchMode === 'recommend' ? 'default' : 'outline'}
-              onClick={() => {
+              onClick={async () => {
                 setSearchMode('recommend');
                 setSearchQuery('');
                 setResults([]);
+                // 切换到推荐模式后自动触发搜索
+                try {
+                  setLoading(true);
+                  setError(null);
+                  const recommendations = await placesApi.getRecommendations({
+                    tripId,
+                    limit: 20,
+                  });
+                  const searchResults = recommendations.map((p: any) => ({
+                    id: p.id,
+                    nameCN: p.nameCN,
+                    nameEN: p.nameEN,
+                    category: p.category,
+                    latitude: p.latitude,
+                    longitude: p.longitude,
+                    address: p.address,
+                    rating: p.rating,
+                    metadata: p.metadata,
+                    distance: 0,
+                  })) as PlaceWithDistance[];
+                  setResults(searchResults);
+                } catch (err: any) {
+                  setError(err.message || t('planStudio.placesTab.searchFailed'));
+                  console.error('Recommend search error:', err);
+                } finally {
+                  setLoading(false);
+                }
               }}
             >
-              推荐
+              {t('planStudio.placesTab.buttons.recommend')}
             </Button>
           </div>
+
+          {/* 类型筛选 - 改为标签形式 */}
+          {(searchMode === 'search' || searchMode === 'nearby') && (
+            <div className="space-y-2">
+              <Label>{t('planStudio.placesTab.categoryFilter')}</Label>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { value: 'all' as const, key: 'all' },
+                  { value: 'ATTRACTION' as const, key: 'attraction' },
+                  { value: 'RESTAURANT' as const, key: 'restaurant' },
+                  { value: 'SHOPPING' as const, key: 'shopping' },
+                  { value: 'HOTEL' as const, key: 'hotel' },
+                  { value: 'TRANSIT_HUB' as const, key: 'transitHub' },
+                ]).map(({ value, key }) => (
+                  <Button
+                    key={value}
+                    variant={selectedCategory === value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={async () => {
+                      const newCategory = value as PlaceCategory | 'all';
+                      setSelectedCategory(newCategory);
+                      // 如果已经有搜索结果，自动重新搜索
+                      if (searchMode === 'search' && searchQuery.trim()) {
+                        try {
+                          setLoading(true);
+                          setError(null);
+                          const searchResults = await placesApi.searchPlaces({
+                            q: searchQuery,
+                            lat: userLocation?.lat,
+                            lng: userLocation?.lng,
+                            limit: 20,
+                            type: newCategory !== 'all' ? newCategory : undefined,
+                            countryCode: trip?.destination, // 根据行程的国家进行过滤
+                          });
+                          setResults(searchResults);
+                        } catch (err: any) {
+                          setError(err.message || t('planStudio.placesTab.searchFailed'));
+                          console.error('Search error:', err);
+                        } finally {
+                          setLoading(false);
+                        }
+                      } else if (searchMode === 'nearby' && userLocation) {
+                        try {
+                          setLoading(true);
+                          setError(null);
+                          const searchResults = await placesApi.getNearbyPlaces({
+                            lat: userLocation.lat,
+                            lng: userLocation.lng,
+                            radius: 5000,
+                            type: newCategory !== 'all' ? newCategory : undefined,
+                            countryCode: trip?.destination, // 根据行程的国家进行过滤
+                          });
+                          setResults(searchResults);
+                        } catch (err: any) {
+                          setError(err.message || t('planStudio.placesTab.searchFailed'));
+                          console.error('Nearby search error:', err);
+                        } finally {
+                          setLoading(false);
+                        }
+                      }
+                    }}
+                  >
+                    {t(`planStudio.placesTab.categories.${key}`)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {error}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              {successMessage}
             </div>
           )}
 
@@ -244,7 +405,10 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
                           <MapPin className="h-4 w-4 text-muted-foreground" />
                           <h3 className="font-semibold">{place.nameCN || place.nameEN}</h3>
                           {place.rating && (
-                            <Badge>{place.rating.toFixed(1)}分</Badge>
+                            <div className="flex items-center gap-1">
+                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm font-medium">{place.rating.toFixed(1)}</span>
+                            </div>
                           )}
                           {place.category && (
                             <Badge variant="outline">{place.category}</Badge>
@@ -259,7 +423,7 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
                           {place.metadata?.openingHours && (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {Object.values(place.metadata.openingHours)[0] || '营业时间未知'}
+                              {Object.values(place.metadata.openingHours)[0] || t('planStudio.placesTab.openingHoursUnknown')}
                             </span>
                           )}
                           {place.distance && (
@@ -281,7 +445,7 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
             </div>
           ) : !loading && searchMode !== 'recommend' ? (
             <div className="text-center py-12 text-muted-foreground">
-              {searchMode === 'nearby' ? '点击"附近"按钮查找附近地点' : '请输入关键词搜索地点'}
+              {searchMode === 'nearby' ? t('planStudio.placesTab.clickNearbyToFind') : t('planStudio.placesTab.enterKeywordToSearch')}
             </div>
           ) : null}
         </CardContent>
@@ -293,7 +457,7 @@ export default function PlacesTab({ tripId, personaMode = 'abu' }: PlacesTabProp
           <DialogHeader>
             <DialogTitle>添加到行程</DialogTitle>
             <DialogDescription>
-              选择要将"{selectedPlace?.nameCN || selectedPlace?.nameEN}"添加到哪一天
+              {t('planStudio.placesTab.selectDayToAdd', { placeName: selectedPlace?.nameCN || selectedPlace?.nameEN || '' })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { agentApi } from '@/api/agent';
 import type { RouteAndRunRequest, RouteAndRunResponse, RouteType } from '@/api/agent';
@@ -28,6 +29,7 @@ export default function GlobalCommandBar({
   onSystem2Response,
   className,
 }: GlobalCommandBarProps) {
+  const { t } = useTranslation();
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [input, setInput] = useState('');
@@ -132,7 +134,7 @@ export default function GlobalCommandBar({
                 // 延迟关闭，允许点击按钮
                 setTimeout(() => setIsExpanded(false), 200);
               }}
-              placeholder="说一句：我想更松一点/把徒步放到上午/今天下雨怎么办？"
+              placeholder={t('globalCommandBar.placeholder')}
               disabled={loading}
               className={cn(
                 'pl-10 pr-10',
@@ -197,14 +199,14 @@ export default function GlobalCommandBar({
                   className="cursor-pointer"
                 >
                   <Settings className="mr-2 h-4 w-4" />
-                  <span>设置</span>
+                  <span>{t('globalCommandBar.settings')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => navigate('/dashboard/settings?tab=preferences')}
                   className="cursor-pointer"
                 >
                   <User className="mr-2 h-4 w-4" />
-                  <span>偏好设置</span>
+                  <span>{t('globalCommandBar.preferences')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -212,7 +214,7 @@ export default function GlobalCommandBar({
                   className="cursor-pointer text-red-600 focus:text-red-600"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>退出登录</span>
+                  <span>{t('globalCommandBar.logout')}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

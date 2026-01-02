@@ -94,6 +94,7 @@ export interface GetNearbyPlacesParams {
   lng: number;
   radius?: number;
   type?: PlaceCategory;
+  countryCode?: string; // 国家代码过滤，如 "JP", "IS"
 }
 
 export interface GetNearbyPlacesResponse {
@@ -126,6 +127,7 @@ export interface SearchPlacesParams {
   radius?: number;
   type?: PlaceCategory;
   limit?: number;
+  countryCode?: string; // 国家代码过滤，如 "JP", "IS"
 }
 
 export interface SearchPlacesResponse {
@@ -166,6 +168,7 @@ export interface AutocompletePlacesParams {
   lat?: number;
   lng?: number;
   limit?: number;
+  countryCode?: string; // 国家代码过滤，如 "JP", "IS"
 }
 
 export interface AutocompletePlacesResponse {

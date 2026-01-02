@@ -77,7 +77,7 @@ export default function ThreePersonasSection() {
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-4px)';
                 e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-                e.currentTarget.style.borderColor = '#DC2626';
+                e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';

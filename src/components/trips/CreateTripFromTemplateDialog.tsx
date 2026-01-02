@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ export function CreateTripFromTemplateDialog({
   onOpenChange,
   onSuccess,
 }: CreateTripFromTemplateDialogProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
@@ -92,7 +94,7 @@ export function CreateTripFromTemplateDialog({
 
   const handleSubmit = async () => {
     if (!formData.destination || !formData.startDate || !formData.endDate) {
-      setError('请填写必填项：目的地、开始日期、结束日期');
+      setError(t('dialogs.createTripFromTemplate.fillRequired'));
       return;
     }
 
@@ -114,7 +116,7 @@ export function CreateTripFromTemplateDialog({
       onSuccess(result.trip.id);
       onOpenChange(false);
     } catch (err: any) {
-      setError(err.message || '创建行程失败');
+      setError(err.message || t('dialogs.createTripFromTemplate.createFailed'));
       console.error('Failed to create trip from template:', err);
     } finally {
       setLoading(false);
@@ -125,9 +127,9 @@ export function CreateTripFromTemplateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>使用模板创建行程</DialogTitle>
+          <DialogTitle>{t('dialogs.createTripFromTemplate.title')}</DialogTitle>
           <DialogDescription>
-            {templateName && `基于模板"${templateName}"创建新行程`}
+            {templateName && t('dialogs.createTripFromTemplate.basedOnTemplate', { templateName })}
           </DialogDescription>
         </DialogHeader>
 
@@ -154,13 +156,13 @@ export function CreateTripFromTemplateDialog({
                   >
                     {formData.destination
                       ? countries.find((c) => c.isoCode === formData.destination)?.nameCN || formData.destination
-                      : '选择目的地...'}
+                      : t('dialogs.createTripFromTemplate.selectDestination')}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[300px] p-0">
                   <Command>
-                    <CommandInput placeholder="搜索国家..." />
+                    <CommandInput placeholder={t('dialogs.createTripFromTemplate.searchCountry')} />
                     <CommandList>
                       <CommandEmpty>未找到国家</CommandEmpty>
                       <CommandGroup>
@@ -194,7 +196,7 @@ export function CreateTripFromTemplateDialog({
                 id="destination"
                 value={formData.destination}
                 onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                placeholder="输入国家代码(如: JP, IS)"
+                placeholder={t('dialogs.createTripFromTemplate.enterCountryCode')}
               />
             )}
           </div>
@@ -234,7 +236,7 @@ export function CreateTripFromTemplateDialog({
                   totalBudget: e.target.value ? parseFloat(e.target.value) : undefined,
                 })
               }
-              placeholder="例如: 50000"
+              placeholder={t('dialogs.createTripFromTemplate.exampleBudget')}
             />
           </div>
 
@@ -248,7 +250,7 @@ export function CreateTripFromTemplateDialog({
               }
             >
               <SelectTrigger id="pacePreference">
-                <SelectValue placeholder="选择节奏偏好" />
+                <SelectValue placeholder={t('dialogs.createTripFromTemplate.selectPace')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="RELAXED">轻松 (RELAXED)</SelectItem>
@@ -359,7 +361,7 @@ export function CreateTripFromTemplateDialog({
             {loading ? (
               <>
                 <Spinner className="w-4 h-4 mr-2" />
-                创建中...
+                {t('dialogs.createTripFromTemplate.creating')}
               </>
             ) : (
               '创建行程'

@@ -119,7 +119,7 @@ export default function ContactPage() {
             backgroundColor: '#007bff',
             color: '#fff',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: '8px',
             fontSize: '1.1rem',
             fontWeight: '600',
             cursor: 'pointer',
