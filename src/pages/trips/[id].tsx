@@ -12,6 +12,10 @@ import type {
   TripMetricsResponse,
   ConflictsResponse
 } from '@/types/trip';
+import type { Suggestion, SuggestionStats } from '@/types/suggestion';
+import { AssistantCenter } from '@/components/trips/AssistantCenter';
+import { SuggestionBadge } from '@/components/trips/SuggestionBadge';
+import { SuggestionGuardBar } from '@/components/trips/SuggestionGuardBar';
 import type { Country } from '@/types/country';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, Plus, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, Plus, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, AlertTriangle, Clock, Cloud, AlertCircle, Info } from 'lucide-react';
 import HealthBar from '@/components/trips/HealthBar';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
@@ -48,11 +52,14 @@ import { EditItineraryItemDialog } from '@/components/trips/EditItineraryItemDia
 import { CreateItineraryItemDialog } from '@/components/trips/CreateItineraryItemDialog';
 import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryItemDialog';
 import { itineraryItemsApi } from '@/api/trips';
+import { cn } from '@/lib/utils';
+import { formatOpeningHoursDescription } from '@/utils/openingHoursFormatter';
 import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
 import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
 import DrDreView from '@/components/trips/views/DrDreView';
 import NeptuneView from '@/components/trips/views/NeptuneView';
+import AutoView from '@/components/trips/views/AutoView';
 
 // 决策记录标签页组件
 function DecisionLogTab({ tripId }: { tripId: string }) {
@@ -246,13 +253,15 @@ export default function TripDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [country, setCountry] = useState<Country | null>(null);
-  const [viewMode, setViewMode] = useState<PersonaMode>('abu');
+  const [viewMode, setViewMode] = useState<PersonaMode>('auto');
   
   // 新增：证据、风险、指标相关状态
   const [evidence, setEvidence] = useState<EvidenceListResponse | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
   const [personaAlertsLoading, setPersonaAlertsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
   const [dayMetricsLoading, setDayMetricsLoading] = useState(false);
   const [tripMetrics, setTripMetrics] = useState<TripMetricsResponse | null>(null);
@@ -320,7 +329,7 @@ export default function TripDetailPage() {
         // 加载相关数据（先加载不依赖 trip 的数据）
         await Promise.all([
           loadEvidence(),
-          loadPersonaAlerts(),
+          loadSuggestions(),
           loadConflicts(),
         ]);
       } else {
@@ -383,23 +392,26 @@ export default function TripDetailPage() {
       // 检查是否已收藏
       // 优化建议：如果后端在 GET /trips/:id 响应中包含 isCollected、isLiked、likeCount 字段，
       // 可以直接从 trip 数据中获取，避免额外的 API 调用
-      const collectedTrips = await tripsApi.getCollected();
-      const collected = collectedTrips.find((ct) => ct.trip.id === id);
-      setIsCollected(!!collected);
+      try {
+        const collectedTrips = await tripsApi.getCollected();
+        const collected = collectedTrips.find((ct) => ct.trip.id === id);
+        setIsCollected(!!collected);
+      } catch (collectedErr: any) {
+        // 如果获取收藏状态失败，静默处理，不影响主流程
+        // 可能是后端路由配置问题或接口未实现
+        if (!collectedErr?.message?.includes('collected') || !collectedErr?.message?.includes('不存在')) {
+          // 只对非"collected不存在"错误进行日志记录
+          console.debug('Failed to load collected status:', collectedErr);
+        }
+        setIsCollected(false);
+      }
       
       // TODO: 如果后端返回点赞状态和点赞数，在这里设置
       // 目前点赞功能已实现，但需要后端提供获取点赞状态的接口
       // 或者从 GET /trips/:id 响应中获取
     } catch (err: any) {
       // 如果检查失败，不影响主流程
-      // 静默处理错误，不显示在控制台（可能是后端路由问题导致的误报）
-      // 如果错误消息包含"collected"且是"不存在"错误，很可能是后端路由配置问题
-      if (err?.message?.includes('collected') && err?.message?.includes('不存在')) {
-        // 这是后端路由配置问题，静默忽略
-        return;
-      }
-      // 其他错误才记录
-      console.error('Failed to check collection status:', err);
+      console.error('Failed to load trip details:', err);
     }
   };
 
@@ -469,16 +481,40 @@ export default function TripDetailPage() {
     }
   };
 
-  // 加载人格警报（风险列表）
-  const loadPersonaAlerts = async () => {
+  // 加载建议列表（使用新的统一接口）
+  const loadSuggestions = async () => {
     if (!id) return;
     try {
       setPersonaAlertsLoading(true);
-      const data = await tripsApi.getPersonaAlerts(id);
-      setPersonaAlerts(data);
+      // 使用新的统一接口获取建议列表
+      const result = await tripsApi.getSuggestions(id, { status: 'new' });
+      
+      // 确保建议 ID 唯一，去重处理
+      const uniqueSuggestions = result.items.reduce((acc, suggestion) => {
+        const existingIndex = acc.findIndex((s) => s.id === suggestion.id);
+        if (existingIndex === -1) {
+          acc.push(suggestion);
+        } else {
+          // 如果 ID 重复，使用更新的数据（或添加索引后缀）
+          const existing = acc[existingIndex];
+          if (suggestion.updatedAt && existing.updatedAt && 
+              new Date(suggestion.updatedAt) > new Date(existing.updatedAt)) {
+            acc[existingIndex] = suggestion;
+          }
+        }
+        return acc;
+      }, [] as typeof result.items);
+      
+      setSuggestions(uniqueSuggestions);
+      
+      // 使用新的统一接口获取统计数据
+      const stats = await tripsApi.getSuggestionStats(id);
+      setSuggestionStats(stats);
     } catch (err: any) {
-      console.error('Failed to load persona alerts:', err);
+      console.error('Failed to load suggestions:', err);
       // 静默处理错误，不影响主流程
+      setSuggestions([]);
+      setSuggestionStats(null);
     } finally {
       setPersonaAlertsLoading(false);
     }
@@ -833,14 +869,13 @@ export default function TripDetailPage() {
         </div>
       </div>
 
-      {/* 三人格守护文案 */}
-      <div className="bg-blue-50/50 border border-blue-200/60 rounded-lg p-4">
-        <p className="text-sm text-blue-900 flex items-center gap-2">
-          <Shield className="w-4 h-4 text-blue-600" />
-          <span>本行程由 <strong>Abu（安全）</strong>、<strong>Dr.Dre（节奏）</strong>、<strong>Neptune（修复）</strong> 实时守护</span>
-        </p>
-      </div>
-
+      {/* 护航提示条（仅在有待处理建议时显示） */}
+      <SuggestionGuardBar
+        stats={suggestionStats}
+        onClick={() => {
+          // 滚动到助手中心或打开助手中心（如果需要）
+        }}
+      />
       {/* 删除确认对话框 */}
       <AlertDialog 
         open={deleteDialogOpen} 
@@ -963,13 +998,60 @@ export default function TripDetailPage() {
                         const riskLevel = hasHighRisk ? '高' : hasMediumRisk ? '中' : '低';
                         const riskColor = hasHighRisk ? 'bg-red-50 text-red-700' : hasMediumRisk ? 'bg-yellow-50 text-yellow-700' : 'bg-green-50 text-green-700';
                         
+                        // 计算该Day的建议统计
+                        const daySuggestions = suggestions.filter(
+                          (s) => s.scope === 'day' && s.scopeId === day.id
+                        );
+                        const abuCount = daySuggestions.filter((s) => s.persona === 'abu').length;
+                        const drdreCount = daySuggestions.filter((s) => s.persona === 'drdre').length;
+                        const neptuneCount = daySuggestions.filter((s) => s.persona === 'neptune').length;
+                        
                         return (
                           <Card key={day.id} className="border-l-4 border-l-primary">
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="font-semibold">
-                                    Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="font-semibold">
+                                      Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
+                                    </div>
+                                    {/* 角标行 */}
+                                    {(abuCount > 0 || drdreCount > 0 || neptuneCount > 0) && (
+                                      <div className="flex gap-1.5">
+                                        <SuggestionBadge
+                                          persona="abu"
+                                          count={abuCount}
+                                          onClick={() => {
+                                            // 点击角标时，可以滚动到助手中心或高亮对应建议
+                                            // 这里可以添加更多交互逻辑，比如设置一个状态来过滤助手中心
+                                            const assistantCenterElement = document.querySelector('[data-assistant-center]');
+                                            if (assistantCenterElement) {
+                                              assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                            }
+                                          }}
+                                        />
+                                        <SuggestionBadge
+                                          persona="drdre"
+                                          count={drdreCount}
+                                          onClick={() => {
+                                            const assistantCenterElement = document.querySelector('[data-assistant-center]');
+                                            if (assistantCenterElement) {
+                                              assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                            }
+                                          }}
+                                        />
+                                        <SuggestionBadge
+                                          persona="neptune"
+                                          count={neptuneCount}
+                                          onClick={() => {
+                                            const assistantCenterElement = document.querySelector('[data-assistant-center]');
+                                            if (assistantCenterElement) {
+                                              assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="text-sm text-muted-foreground mt-1">
                                     {day.ItineraryItem.length} 个行程项
@@ -1012,95 +1094,81 @@ export default function TripDetailPage() {
                 </Card>
               </div>
 
-              {/* 右（4/12）：Top Risks + Evidence Quick Peek */}
+              {/* 右（4/12）：助手中心 + Evidence Quick Peek */}
               <div className="col-span-12 lg:col-span-4 space-y-6">
-                {/* Top Risks */}
-          <Card>
-            <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                      Top Risks
-                    </CardTitle>
-            </CardHeader>
-                  <CardContent className="space-y-3">
-                    {personaAlertsLoading ? (
-                      <div className="flex items-center justify-center py-4">
-                        <Spinner className="w-4 h-4" />
-                      </div>
-                    ) : personaAlerts.length > 0 ? (
-                      <>
-                        {personaAlerts.slice(0, 3).map((alert) => {
-                          const bgColor = alert.severity === 'warning' 
-                            ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
-                            : alert.severity === 'info'
-                            ? 'bg-blue-50 border-blue-200 text-blue-800'
-                            : 'bg-red-50 border-red-200 text-red-800';
+                {/* 助手中心 */}
+                <div data-assistant-center>
+                  <AssistantCenter
+                    suggestions={suggestions}
+                    loading={personaAlertsLoading}
+                    onSuggestionClick={(suggestion) => {
+                      // 点击建议时打开对应的抽屉
+                      setDrawerTab('risk');
+                      setDrawerOpen(true);
+                    }}
+                    onActionClick={async (suggestion, actionId) => {
+                      if (!id) return;
+                      try {
+                        // 查看证据操作
+                        if (actionId === 'view_evidence') {
+                          setDrawerTab('risk');
+                          setDrawerOpen(true);
+                          return;
+                        }
+                        
+                        // 忽略建议操作
+                        if (actionId === 'dismiss') {
+                          await tripsApi.dismissSuggestion(id, suggestion.id);
+                          // 重新加载建议列表
+                          await loadSuggestions();
+                          return;
+                        }
+                        
+                        // 应用建议操作
+                        if (actionId === 'apply' || actionId.startsWith('apply_')) {
+                          const result = await tripsApi.applySuggestion(id, suggestion.id, {
+                            actionId: actionId,
+                            preview: false,
+                          });
                           
-                          const personaName = alert.persona === 'ABU' ? 'Abu' 
-                            : alert.persona === 'DR_DRE' ? 'Dr.Dre' 
-                            : 'Neptune';
+                          // 重新加载建议列表
+                          await loadSuggestions();
                           
-                          return (
-                            <div key={alert.id} className={`p-3 border rounded text-sm ${bgColor}`}>
-                              <div className="font-medium">{alert.title}</div>
-                              <div className="text-xs mt-1">
-                                {personaName}: {alert.message}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {personaAlerts.length > 3 && (
-                          <div className="text-xs text-muted-foreground text-center">
-                            还有 {personaAlerts.length - 3} 条风险提示
-                          </div>
-                        )}
-                      </>
-                    ) : conflicts?.conflicts && conflicts.conflicts.length > 0 ? (
-                      <>
-                        {conflicts.conflicts.slice(0, 3).map((conflict) => {
-                          const bgColor = conflict.severity === 'HIGH'
-                            ? 'bg-red-50 border-red-200 text-red-800'
-                            : conflict.severity === 'MEDIUM'
-                            ? 'bg-yellow-50 border-yellow-200 text-yellow-800'
-                            : 'bg-blue-50 border-blue-200 text-blue-800';
-                          
-                          return (
-                            <div key={conflict.id} className={`p-3 border rounded text-sm ${bgColor}`}>
-                              <div className="font-medium">{conflict.title}</div>
-                              <div className="text-xs mt-1">{conflict.description}</div>
-                            </div>
-                          );
-                        })}
-                        {conflicts.conflicts.length > 3 && (
-                          <div className="text-xs text-muted-foreground text-center">
-                            还有 {conflicts.conflicts.length - 3} 个冲突
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-center py-4 text-sm text-muted-foreground">
-                        暂无风险提示
-                      </div>
-                    )}
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        setDrawerTab('risk');
-                        setDrawerOpen(true);
-                      }}
-                    >
-                      Open Risk Drawer
-                    </Button>
-                  </CardContent>
-                </Card>
+                          // 如果有触发的建议，可以提示用户
+                          if (result.triggeredSuggestions && result.triggeredSuggestions.length > 0) {
+                            console.log('应用建议后触发了新建议:', result.triggeredSuggestions);
+                            // TODO: 可以显示toast提示
+                          }
+                          return;
+                        }
+                        
+                        // 预览操作
+                        if (actionId === 'preview') {
+                          const previewResult = await tripsApi.applySuggestion(id, suggestion.id, {
+                            actionId: actionId,
+                            preview: true,
+                          });
+                          console.log('预览结果:', previewResult);
+                          // TODO: 显示预览对话框
+                          return;
+                        }
+                        
+                        // 其他操作类型
+                        console.log('处理操作:', actionId, suggestion);
+                      } catch (error: any) {
+                        console.error('Failed to handle suggestion action:', error);
+                        // TODO: 显示错误提示
+                      }
+                    }}
+                  />
+                </div>
 
                 {/* Evidence Quick Peek */}
                 <Card data-tour="evidence-quick-peek">
                   <CardHeader>
                     <CardTitle>关键证据</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2">
+                  <CardContent className="space-y-3">
                     {evidenceLoading ? (
                       <div className="flex items-center justify-center py-4">
                         <Spinner className="w-4 h-4" />
@@ -1108,36 +1176,65 @@ export default function TripDetailPage() {
                     ) : evidence && evidence.items.length > 0 ? (
                       <>
                         {evidence.items.map((item) => {
-                          const typeLabels: Record<string, string> = {
-                            opening_hours: '营业时间',
-                            road_closure: '封路信息',
-                            weather: '天气窗口',
-                            booking: '预订信息',
-                            other: '其他',
+                          const typeConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
+                            opening_hours: { label: '营业时间', icon: Clock, color: 'text-blue-600' },
+                            road_closure: { label: '封路信息', icon: AlertCircle, color: 'text-red-600' },
+                            weather: { label: '天气窗口', icon: Cloud, color: 'text-sky-600' },
+                            booking: { label: '预订信息', icon: Calendar, color: 'text-purple-600' },
+                            other: { label: '其他', icon: Info, color: 'text-gray-600' },
                           };
                           
+                          const config = typeConfig[item.type] || { label: item.type, icon: Info, color: 'text-gray-600' };
+                          const Icon = config.icon;
+                          
+                          // 解析营业时间数据
+                          let displayContent = item.description || '';
+                          if (item.type === 'opening_hours' && item.description) {
+                            try {
+                              displayContent = formatOpeningHoursDescription(item.description);
+                            } catch (e) {
+                              // 如果格式化失败，使用原始描述
+                              displayContent = item.description;
+                            }
+                          }
+                          
+                          // 确定显示的标题：优先使用 item.title，如果没有则使用类型标签
+                          const displayTitle = item.title || config.label;
+                          
                           return (
-                            <div key={item.id} className="text-sm">
-                              <div className="font-medium">{typeLabels[item.type] || item.type}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {item.description || item.title}
-                              </div>
-                              {item.day && (
-                                <div className="text-xs text-muted-foreground mt-0.5">
-                                  Day {item.day}
+                            <div
+                              key={item.id}
+                              className="p-3 border rounded-lg hover:bg-muted/50 transition-colors space-y-2"
+                            >
+                              <div className="flex items-start gap-2">
+                                <Icon className={cn('w-4 h-4 mt-0.5 flex-shrink-0', config.color)} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    <span className="text-sm font-medium">{displayTitle}</span>
+                                    {item.day && (
+                                      <Badge variant="outline" className="text-xs">
+                                        Day {item.day}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {displayContent && (
+                                    <div className="text-xs text-muted-foreground break-words">
+                                      {displayContent}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </div>
                           );
                         })}
                         {evidence.total > evidence.items.length && (
-                          <div className="text-xs text-muted-foreground text-center pt-2">
+                          <div className="text-xs text-muted-foreground text-center pt-2 border-t">
                             还有 {evidence.total - evidence.items.length} 条证据
                           </div>
                         )}
                       </>
                     ) : (
-                      <div className="text-center py-4 text-sm text-muted-foreground">
+                      <div className="text-center py-6 text-sm text-muted-foreground">
                         暂无关键证据
                       </div>
                     )}
@@ -1175,39 +1272,42 @@ export default function TripDetailPage() {
             </Card>
           ) : (
             <>
-              {/* 视图模式说明 */}
-              <Card className="bg-blue-50 border-blue-200">
+              {/* 视图模式说明（仅在非Auto模式显示） */}
+              {viewMode !== 'auto' && (
+                <Card className="bg-blue-50 border-blue-200">
                   <CardContent className="p-4">
-                  <div className="text-sm">
-                    {viewMode === 'abu' && (
-                      <div className="flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-red-600" />
-                        <span>
-                          <strong>Abu 视图：</strong>先保证你不会被路线坑到。查看安全门控、红线列表和证据链。
-                        </span>
+                    <div className="text-sm">
+                      {viewMode === 'abu' && (
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4 text-red-600" />
+                          <span>
+                            <strong>Abu Lens：</strong>聚焦风险与证据
+                          </span>
                         </div>
-                    )}
-                    {viewMode === 'dre' && (
-                      <div className="flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-orange-600" />
-                        <span>
-                          <strong>Dr.Dre 视图：</strong>把计划算清楚，效率/体力/成本一眼看懂。使用 What-if 调参和方案对比。
-                        </span>
+                      )}
+                      {viewMode === 'dre' && (
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-orange-600" />
+                          <span>
+                            <strong>Dr.Dre Lens：</strong>聚焦指标与节奏
+                          </span>
+                        </div>
+                      )}
+                      {viewMode === 'neptune' && (
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="w-4 h-4 text-green-600" />
+                          <span>
+                            <strong>Neptune Lens：</strong>聚焦修复与替代
+                          </span>
+                        </div>
+                      )}
                     </div>
-              )}
-                    {viewMode === 'neptune' && (
-                      <div className="flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 text-green-600" />
-                        <span>
-                          <strong>Neptune 视图：</strong>出问题我来修，给你能立刻执行的替代方案。查看修复队列和替代候选。
-                        </span>
-                        </div>
-                              )}
-                            </div>
                   </CardContent>
                 </Card>
+              )}
 
               {/* 根据视图模式显示不同的视图组件 */}
+              {viewMode === 'auto' && <AutoView trip={trip} />}
               {viewMode === 'abu' && <AbuView trip={trip} />}
               {viewMode === 'dre' && <DrDreView trip={trip} />}
               {viewMode === 'neptune' && <NeptuneView trip={trip} />}

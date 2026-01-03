@@ -102,17 +102,21 @@
   },
   "personaModeToggle": {
     "viewMode": "View Mode",
+    "auto": {
+      "label": "Auto",
+      "desc": "Comprehensive view (Recommended)"
+    },
     "abu": {
-      "label": "Abu View",
-      "desc": "Safety: Red lines / Rejection reasons / Evidence"
+      "label": "Abu Lens",
+      "desc": "Focus on risks & evidence"
     },
     "dre": {
-      "label": "Dr.Dre View",
-      "desc": "Rational: Metrics (time, buffer, stamina, cost)"
+      "label": "Dr.Dre Lens",
+      "desc": "Focus on metrics & rhythm"
     },
     "neptune": {
-      "label": "Neptune View",
-      "desc": "Repair: Action priority in execution / Alternative suggestions"
+      "label": "Neptune Lens",
+      "desc": "Focus on repairs & alternatives"
     }
   },
   "planStudio": {
@@ -1037,7 +1041,8 @@
       "title": "Continue Last",
       "description": "Most recently edited trip",
       "continuePlanning": "Continue Planning",
-      "openOverview": "Open Overview"
+      "openOverview": "Open Overview",
+      "enterExecute": "Enter Execute"
     },
     "attentionQueue": {
       "title": "Needs Attention",
@@ -1074,7 +1079,75 @@
       "title": "Readiness",
       "blockers": "blockers",
       "continueLastTrip": "Continue Last Trip",
-      "completeReadiness": "Complete Readiness"
+      "completeReadiness": "Complete Readiness",
+      "page": {
+        "startExecute": "Start Execute",
+        "runRepair": "Run Repair",
+        "blockers": "Blockers",
+        "watchlist": "Watchlist",
+        "repairPreview": "Repair Preview",
+        "noBlockersFound": "No blockers found",
+        "noFixesNeeded": "No fixes needed",
+        "clickFixToSeeOptions": "Click \"Fix\" on a blocker to see repair options",
+        "showTop3": "Show Top 3",
+        "viewAll": "View all ({{count}})",
+        "noPotentialRisks": "No potential risks identified",
+        "tabs": {
+          "readinessBreakdown": "Readiness Breakdown",
+          "capabilityPacks": "Capability Packs",
+          "evidenceChain": "Evidence Chain",
+          "coverageMap": "Coverage Map"
+        },
+        "scoreBreakdown": {
+          "title": "Score Breakdown",
+          "description": "Detailed breakdown of readiness dimensions"
+        },
+        "bestWindow": "Best window: {{start}}–{{end}}",
+        "lastUpdated": "Last updated: {{date}}",
+        "actions": {
+          "viewEvidence": "View Evidence",
+          "share": "Share",
+          "export": "Export",
+          "forceStart": "Force Start (Risky)"
+        },
+        "noTripSelected": "Please select a trip first",
+        "goToTrips": "Go to Trip Library",
+        "dataFormatError": "Data format error, please refresh the page and try again",
+        "refreshPage": "Refresh Page",
+        "topBlocker": "Top Blocker: {{title}}",
+        "fixNow": "Fix Now",
+        "systemCapabilityPacks": "System capability packs triggered for this trip",
+        "packsTriggered": "{{triggered}} of {{total}} packs triggered",
+        "triggered": "Triggered",
+        "reason": "Reason: {{reason}}",
+        "allAvailablePacks": "All Available Packs",
+        "noCapabilityPacksAvailable": "No capability packs available",
+        "evidenceChainDescription": "All evidence sources and their coverage",
+        "risks": "Risks",
+        "checklists": "Checklists",
+        "blockers": "Blockers",
+        "must": "Must",
+        "should": "Should",
+        "optional": "Optional",
+        "mitigations": "Mitigations",
+        "tasks": "Tasks",
+        "deadline": "Deadline",
+        "evidence": "Evidence",
+        "channel": "Channel",
+        "untitledTrip": "Untitled Trip",
+        "plan": "Plan",
+        "unknown": "Unknown",
+        "pacingLevel": {
+          "steady": "Steady & Safe",
+          "balanced": "Balanced",
+          "exploratory": "Exploratory",
+          "standard": "Standard"
+        }
+      }
+    },
+    "recentInsights": {
+      "title": "Recent Insights",
+      "viewInsights": "View Insights"
     }
   },
   "sidebar": {

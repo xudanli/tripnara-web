@@ -70,15 +70,28 @@ export interface CheckReadinessDto {
 }
 
 export interface ReadinessFindingItem {
+  id?: string;                  // 规则ID
+  category?: string;            // 分类
+  severity?: string;            // 严重程度
+  level?: 'blocker' | 'must' | 'should' | 'optional';
   message: string;
-  tasks?: string[];
-  evidence?: string;
-  deadline?: string | null;
-  channel?: string | null;
+  tasks?: Array<{               // 任务列表
+    title: string;
+    dueOffsetDays: number;      // 相对出发日期的天数偏移（负数表示出发前）
+    tags?: string[];
+  }>;
+  askUser?: string[];          // 需要询问用户的问题
+  evidence?: Array<{            // 证据引用
+    sourceId: string;
+    sectionId?: string;
+    quote?: string;
+  }>;
 }
 
 export interface ReadinessFinding {
-  category: string;
+  destinationId?: string;      // 目的地ID，如 "IS-ICELAND"
+  packId?: string;             // Pack ID，如 "pack.is.iceland"
+  packVersion?: string;         // Pack 版本，如 "1.0.0"
   blockers: ReadinessFindingItem[];
   must: ReadinessFindingItem[];
   should: ReadinessFindingItem[];
@@ -222,12 +235,15 @@ export const readinessApi = {
   },
 
   /**
-   * 获取行程准备度数据（整合接口，用于 Readiness 页面）
-   * 这个接口会整合多个 API 调用，返回统一的 ReadinessData 格式
+   * 根据行程ID检查准备度
+   * 基于行程ID自动获取行程信息并检查准备度，返回 must/should/optional 清单
    * GET /readiness/trip/:tripId
+   * 
+   * 注意：此接口返回 ReadinessCheckResult 格式，与 POST /readiness/check 相同
+   * 如需 ReadinessData 格式，请在调用处使用 convertCheckResultToReadinessData 转换
    */
-  getTripReadiness: async (tripId: string): Promise<ReadinessData> => {
-    const response = await apiClient.get<ApiResponseWrapper<ReadinessData>>(
+  getTripReadiness: async (tripId: string): Promise<ReadinessCheckResult> => {
+    const response = await apiClient.get<ApiResponseWrapper<ReadinessCheckResult>>(
       `/readiness/trip/${tripId}`
     );
     return handleResponse(response);

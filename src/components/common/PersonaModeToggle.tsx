@@ -9,10 +9,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Shield, Brain, Wrench } from 'lucide-react';
+import { Shield, Brain, Wrench, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type PersonaMode = 'abu' | 'dre' | 'neptune';
+export type PersonaMode = 'auto' | 'abu' | 'dre' | 'neptune';
 
 interface PersonaModeToggleProps {
   value?: PersonaMode;
@@ -27,10 +27,11 @@ export default function PersonaModeToggle({
 }: PersonaModeToggleProps) {
   const { t } = useTranslation();
   // 如果传入了 value，使用受控模式；否则使用非受控模式
-  const [internalMode, setInternalMode] = useState<PersonaMode>('abu');
+  const [internalMode, setInternalMode] = useState<PersonaMode>('auto');
   const mode = value !== undefined ? value : internalMode;
 
-  const modes: { value: PersonaMode; icon: typeof Shield }[] = [
+  const modes: { value: PersonaMode; icon: typeof Shield | typeof Eye }[] = [
+    { value: 'auto', icon: Eye },
     { value: 'abu', icon: Shield },
     { value: 'dre', icon: Brain },
     { value: 'neptune', icon: Wrench },
@@ -40,10 +41,16 @@ export default function PersonaModeToggle({
   const Icon = currentMode.icon;
   
   const getModeLabel = (modeValue: PersonaMode) => {
+    if (modeValue === 'auto') {
+      return t('personaModeToggle.auto.label', { defaultValue: 'Auto 综合' });
+    }
     return t(`personaModeToggle.${modeValue}.label`);
   };
   
   const getModeDesc = (modeValue: PersonaMode) => {
+    if (modeValue === 'auto') {
+      return t('personaModeToggle.auto.desc', { defaultValue: '综合视图（推荐）' });
+    }
     return t(`personaModeToggle.${modeValue}.desc`);
   };
 

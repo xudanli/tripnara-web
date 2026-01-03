@@ -355,7 +355,7 @@ export default function DashboardPage() {
                       </Button>
                       {recentTrip.status === 'IN_PROGRESS' && (
                         <Button variant="outline" onClick={() => navigate(`/dashboard/execute?tripId=${recentTrip.id}`)}>
-                          Enter Execute
+                          {t('dashboard.continueCard.enterExecute')}
                         </Button>
                       )}
                       <Button variant="ghost" onClick={() => navigate(`/dashboard/trips/${recentTrip.id}`)}>
@@ -636,7 +636,7 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
-                  最近复盘
+                  {t('dashboard.recentInsights.title')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -654,7 +654,7 @@ export default function DashboardPage() {
                     className="w-full mt-4"
                     onClick={() => navigate('/dashboard/insights')}
                   >
-                    View Insights
+                    {t('dashboard.recentInsights.viewInsights')}
                   </Button>
                 </div>
               </CardContent>

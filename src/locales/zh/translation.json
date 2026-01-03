@@ -102,17 +102,21 @@
   },
   "personaModeToggle": {
     "viewMode": "视图模式",
+    "auto": {
+      "label": "Auto 综合",
+      "desc": "综合视图（推荐）"
+    },
     "abu": {
-      "label": "Abu 视图",
-      "desc": "安全：红线/拒绝原因/证据"
+      "label": "Abu Lens",
+      "desc": "聚焦风险与证据"
     },
     "dre": {
-      "label": "Dr.Dre 视图",
-      "desc": "理性：指标化（时间、缓冲、体力、成本）"
+      "label": "Dr.Dre Lens",
+      "desc": "聚焦指标与节奏"
     },
     "neptune": {
-      "label": "Neptune 视图",
-      "desc": "修复：执行中动作优先、替代建议"
+      "label": "Neptune Lens",
+      "desc": "聚焦修复与替代"
     }
   },
   "planStudio": {
@@ -1027,17 +1031,18 @@
   "dashboard": {
     "welcome": "欢迎回来，{{userName}}",
     "stats": {
-      "needsAttention": "Today: {{count}} trip needs attention",
-      "tripsReady": "{{count}} trips ready",
-      "blockers": "{{count}} blocker"
+      "needsAttention": "今天：{{count}} 个行程需要关注",
+      "tripsReady": "{{count}} 个行程就绪",
+      "blockers": "{{count}} 个阻塞项"
     },
-    "continueLast": "Continue Last",
-    "createTrip": "Create Trip",
+    "continueLast": "继续上次",
+    "createTrip": "创建行程",
     "continueCard": {
       "title": "继续上次",
       "description": "最近一次编辑的行程",
-      "continuePlanning": "Continue Planning",
-      "openOverview": "Open Overview"
+      "continuePlanning": "继续规划",
+      "openOverview": "打开总览",
+      "enterExecute": "进入执行"
     },
     "attentionQueue": {
       "title": "需要处理",
@@ -1053,7 +1058,7 @@
       "status": {
         "new": "新"
       },
-      "fix": "Fix"
+      "fix": "修复"
     },
     "templates": {
       "title": "路线模板",
@@ -1061,20 +1066,88 @@
       "empty": "暂无模板",
       "emptyDescription": "路线模板正在准备中",
       "days": "天",
-      "preview": "Preview",
+      "preview": "预览",
       "useTemplate": "使用模板"
     },
     "riskOverview": {
       "title": "风险概览",
       "timeWindowConflict": "时间窗冲突",
       "bufferInsufficient": "缺少缓冲可能导致延误连锁反应",
-      "openDrawer": "Open Risk Drawer"
+      "openDrawer": "打开风险抽屉"
     },
     "readiness": {
       "title": "准备度",
-      "blockers": "blockers",
-      "continueLastTrip": "Continue Last Trip",
-      "completeReadiness": "Complete Readiness"
+      "blockers": "个阻塞项",
+      "continueLastTrip": "继续上次行程",
+      "completeReadiness": "完成准备度",
+      "page": {
+        "startExecute": "开始执行",
+        "runRepair": "运行修复",
+        "blockers": "阻塞项",
+        "watchlist": "关注列表",
+        "repairPreview": "修复预览",
+        "noBlockersFound": "未发现阻塞项",
+        "noFixesNeeded": "无需修复",
+        "clickFixToSeeOptions": "点击阻塞项上的\"修复\"按钮查看修复方案",
+        "showTop3": "显示前3个",
+        "viewAll": "查看全部 ({{count}})",
+        "noPotentialRisks": "未发现潜在风险",
+        "tabs": {
+          "readinessBreakdown": "准备度分解",
+          "capabilityPacks": "能力包",
+          "evidenceChain": "证据链",
+          "coverageMap": "覆盖地图"
+        },
+        "scoreBreakdown": {
+          "title": "分数分解",
+          "description": "准备度各维度的详细分解"
+        },
+        "bestWindow": "最佳时间窗口: {{start}}–{{end}}",
+        "lastUpdated": "最后更新: {{date}}",
+        "actions": {
+          "viewEvidence": "查看证据",
+          "share": "分享",
+          "export": "导出",
+          "forceStart": "强制开始（有风险）"
+        },
+        "noTripSelected": "请先选择一个行程",
+        "goToTrips": "前往行程库",
+        "dataFormatError": "数据格式错误，请刷新页面重试",
+        "refreshPage": "刷新页面",
+        "topBlocker": "主要阻塞项: {{title}}",
+        "fixNow": "立即修复",
+        "systemCapabilityPacks": "系统能力包触发情况",
+        "packsTriggered": "{{triggered}} / {{total}} 个能力包已触发",
+        "triggered": "已触发",
+        "reason": "原因: {{reason}}",
+        "allAvailablePacks": "所有可用能力包",
+        "noCapabilityPacksAvailable": "暂无可用能力包",
+        "evidenceChainDescription": "所有证据来源及其覆盖情况",
+        "risks": "风险信息",
+        "checklists": "准备清单",
+        "blockers": "阻塞项",
+        "must": "必须",
+        "should": "建议",
+        "optional": "可选",
+        "mitigations": "应对措施",
+        "tasks": "任务",
+        "deadline": "截止",
+        "evidence": "证据",
+        "channel": "渠道",
+        "untitledTrip": "未命名行程",
+        "plan": "计划",
+        "unknown": "未知",
+        "pacingLevel": {
+          "steady": "稳健安全",
+          "balanced": "平衡",
+          "exploratory": "探索",
+          "standard": "标准"
+        }
+      }
+    },
+    "recentInsights": {
+      "title": "最近复盘",
+      "viewInsights": "查看复盘"
     }
   },
   "sidebar": {

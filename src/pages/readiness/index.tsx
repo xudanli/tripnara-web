@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { tripsApi } from '@/api/trips';
 import { readinessApi } from '@/api/readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +37,7 @@ import {
 import { format } from 'date-fns';
 import type { TripDetail } from '@/types/trip';
 import type { ReadinessData, RepairOption, EvidenceItem, Blocker } from '@/types/readiness';
+import type { ReadinessCheckResult } from '@/api/readiness';
 import ReadinessStatusBadge from '@/components/readiness/ReadinessStatusBadge';
 import ScoreGauge from '@/components/readiness/ScoreGauge';
 import BlockerCard from '@/components/readiness/BlockerCard';
@@ -43,14 +45,18 @@ import RepairOptionCard from '@/components/readiness/RepairOptionCard';
 import BreakdownBarList from '@/components/readiness/BreakdownBarList';
 import EvidenceListItem from '@/components/readiness/EvidenceListItem';
 import CoverageMiniMap from '@/components/readiness/CoverageMiniMap';
+import RiskCard from '@/components/readiness/RiskCard';
+import ChecklistSection from '@/components/readiness/ChecklistSection';
 
 export default function ReadinessPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
   const [loading, setLoading] = useState(true);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [readinessData, setReadinessData] = useState<ReadinessData | null>(null);
+  const [rawReadinessResult, setRawReadinessResult] = useState<ReadinessCheckResult | null>(null);
   const [selectedBlockerId, setSelectedBlockerId] = useState<string | null>(null);
   const [selectedRepairOptionId, setSelectedRepairOptionId] = useState<string | null>(null);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -90,6 +96,19 @@ export default function ReadinessPage() {
       console.error('Failed to load recent trip:', err);
       setLoading(false);
     }
+  };
+
+  // 验证 ReadinessData 数据格式
+  const validateReadinessData = (data: any): data is ReadinessData => {
+    return (
+      data &&
+      typeof data === 'object' &&
+      data.status &&
+      data.score &&
+      typeof data.score === 'object' &&
+      typeof data.score.overall === 'number' &&
+      Array.isArray(data.blockers)
+    );
   };
 
   // 从 trip 数据构建 CheckReadinessDto
@@ -138,8 +157,9 @@ export default function ReadinessPage() {
       // 并行加载 trip 和 readiness 数据
       const [tripData, readinessData] = await Promise.all([
         tripsApi.getById(tripId),
-        readinessApi.getTripReadiness(tripId).catch(() => {
+        readinessApi.getTripReadiness(tripId).catch((err) => {
           // 如果后端还没有实现 /readiness/trip/:tripId，则使用备用方案
+          console.warn('getTripReadiness failed, trying fallback:', err);
           return null;
         }),
       ]);
@@ -149,28 +169,69 @@ export default function ReadinessPage() {
       // 加载能力包信息（不阻塞主流程）
       loadCapabilityPacks(tripData);
       
+      let finalReadinessData: ReadinessData | null = null;
+      
       if (readinessData) {
-        setReadinessData(readinessData);
-      } else {
+        // getTripReadiness 返回 ReadinessCheckResult，需要转换为 ReadinessData
+        console.log('Using getTripReadiness data for trip:', tripId, 'destination:', tripData.destination);
+        console.log('Raw readiness data from API:', JSON.stringify(readinessData, null, 2));
+        setRawReadinessResult(readinessData); // 保存原始数据用于展示详细信息和清单
+        const convertedData = convertCheckResultToReadinessData(readinessData, tripData);
+        console.log('Converted readiness data:', JSON.stringify(convertedData, null, 2));
+        if (validateReadinessData(convertedData)) {
+          finalReadinessData = convertedData;
+        } else {
+          console.warn('Converted readiness data validation failed, using fallback');
+        }
+      }
+      
+      // 如果 getTripReadiness 失败或转换失败，使用备用方案
+      if (!finalReadinessData) {
         // 备用方案1：尝试使用 check 接口
         try {
-          const checkResult = await readinessApi.check(buildCheckReadinessDto(tripData));
+          const checkDto = buildCheckReadinessDto(tripData);
+          console.log('Trying check API with DTO:', checkDto);
+          const checkResult = await readinessApi.check(checkDto);
+          console.log('✅ Using check API result for trip:', tripId, 'destination:', tripData.destination, 'result:', checkResult);
+          setRawReadinessResult(checkResult); // 保存原始数据用于展示详细信息和清单
           // 将 check 结果转换为 ReadinessData
-          setReadinessData(convertCheckResultToReadinessData(checkResult, tripData));
-        } catch (checkErr) {
+          finalReadinessData = convertCheckResultToReadinessData(checkResult, tripData);
+        } catch (checkErr: any) {
+          console.warn('❌ check API failed, trying fallback 2:', {
+            error: checkErr,
+            message: checkErr?.message,
+            response: checkErr?.response?.data,
+            status: checkErr?.response?.status,
+          });
           // 备用方案2：使用个性化清单和风险预警构建 ReadinessData
           const [checklist, riskWarnings] = await Promise.all([
-            readinessApi.getPersonalizedChecklist(tripId).catch(() => null),
-            readinessApi.getRiskWarnings(tripId).catch(() => null),
+            readinessApi.getPersonalizedChecklist(tripId).catch((err) => {
+              console.warn('getPersonalizedChecklist failed:', err);
+              return null;
+            }),
+            readinessApi.getRiskWarnings(tripId).catch((err) => {
+              console.warn('getRiskWarnings failed:', err);
+              return null;
+            }),
           ]);
           
           if (checklist || riskWarnings) {
-            setReadinessData(convertToReadinessData(checklist, riskWarnings, tripData));
+            console.log('Using checklist/riskWarnings data for trip:', tripId, 'destination:', tripData.destination);
+            finalReadinessData = convertToReadinessData(checklist, riskWarnings, tripData);
           } else {
             // 如果所有 API 都失败，使用模拟数据
-            setReadinessData(generateMockReadinessData());
+            console.warn('All APIs failed, using mock data for trip:', tripId, 'destination:', tripData.destination);
+            finalReadinessData = generateMockReadinessData();
           }
         }
+      }
+      
+      // 设置最终的数据
+      if (finalReadinessData) {
+        setReadinessData(finalReadinessData);
+      } else {
+        // 如果所有方案都失败，使用模拟数据
+        setReadinessData(generateMockReadinessData());
       }
     } catch (err) {
       console.error('Failed to load readiness data:', err);
@@ -199,7 +260,7 @@ export default function ReadinessPage() {
           id: `blocker-${finding.category}-${index}`,
           title: item.message,
           severity: 'critical' as const,
-          impactScope: trip.destination || 'Unknown',
+          impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
           evidenceSummary: {
             source: item.evidence || 'system',
             timestamp: new Date().toISOString(),
@@ -212,15 +273,16 @@ export default function ReadinessPage() {
 
     // 从 findings 中提取 watchlist（从 should 中提取）
     const watchlist: Blocker[] = [];
-    checkResult?.findings?.forEach((finding: any) => {
+    checkResult?.findings?.forEach((finding: any, findingIndex: number) => {
       finding.should?.slice(0, 2).forEach((item: any, index: number) => {
+        const findingId = finding.destinationId || finding.packId || `finding-${findingIndex}`;
         watchlist.push({
-          id: `watch-${finding.category}-${index}`,
+          id: `watch-${findingId}-${index}`,
           title: item.message,
           severity: 'medium' as const,
-          impactScope: trip.destination || 'Unknown',
+          impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
           evidenceSummary: {
-            source: item.evidence || 'system',
+            source: item.evidence?.[0]?.sourceId || 'system',
             timestamp: new Date().toISOString(),
           },
           category: 'other' as const,
@@ -265,7 +327,7 @@ export default function ReadinessPage() {
       id: `blocker-${index}`,
       title: item.message,
       severity: 'critical' as const,
-      impactScope: trip.destination || 'Unknown',
+      impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
       evidenceSummary: {
         source: item.evidence || 'system',
         timestamp: new Date().toISOString(),
@@ -278,7 +340,7 @@ export default function ReadinessPage() {
       id: `watch-${index}`,
       title: item.message,
       severity: 'medium' as const,
-      impactScope: trip.destination || 'Unknown',
+      impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
       evidenceSummary: {
         source: item.evidence || 'system',
         timestamp: new Date().toISOString(),
@@ -541,9 +603,26 @@ export default function ReadinessPage() {
       <div className="h-full flex items-center justify-center">
         <Card className="max-w-md">
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">请先选择一个行程</p>
+            <p className="text-muted-foreground mb-4">{t('dashboard.readiness.page.noTripSelected')}</p>
             <Button onClick={() => navigate('/dashboard/trips')}>
-              前往行程库
+              {t('dashboard.readiness.page.goToTrips')}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // 安全检查：确保 score 字段存在
+  if (!readinessData.score) {
+    console.error('ReadinessData missing score field:', readinessData);
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground mb-4">{t('dashboard.readiness.page.dataFormatError')}</p>
+            <Button onClick={() => window.location.reload()}>
+              {t('dashboard.readiness.page.refreshPage')}
             </Button>
           </CardContent>
         </Card>
@@ -564,11 +643,11 @@ export default function ReadinessPage() {
             {/* 左侧：Trip 基本信息 */}
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold">{trip.destination || 'Untitled Trip'}</h1>
+                <h1 className="text-xl font-bold">{trip.destination || t('dashboard.readiness.page.untitledTrip')}</h1>
                 <Badge variant="outline" className="text-xs">
-                  {trip.pacingConfig?.level === 'STEADY' ? 'Steady & Safe' :
-                   trip.pacingConfig?.level === 'BALANCED' ? 'Balanced' :
-                   trip.pacingConfig?.level === 'EXPLORATORY' ? 'Exploratory' : 'Standard'}
+                  {trip.pacingConfig?.level === 'STEADY' ? t('dashboard.readiness.page.pacingLevel.steady') :
+                   trip.pacingConfig?.level === 'BALANCED' ? t('dashboard.readiness.page.pacingLevel.balanced') :
+                   trip.pacingConfig?.level === 'EXPLORATORY' ? t('dashboard.readiness.page.pacingLevel.exploratory') : t('dashboard.readiness.page.pacingLevel.standard')}
                 </Badge>
               </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -580,11 +659,13 @@ export default function ReadinessPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
-                  <span>Plan v{trip.pipelineStatus?.stages?.length || 1}</span>
+                  <span>{t('dashboard.readiness.page.plan')} v{trip.pipelineStatus?.stages?.length || 1}</span>
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">
-                Last updated: {format(new Date(trip.updatedAt || trip.createdAt), 'MMM dd, HH:mm')}
+                {t('dashboard.readiness.page.lastUpdated', {
+                  date: format(new Date(trip.updatedAt || trip.createdAt), 'MMM dd, HH:mm'),
+                })}
               </div>
             </div>
 
@@ -604,12 +685,12 @@ export default function ReadinessPage() {
               {(isReady || isNearly) ? (
                 <Button size="lg" onClick={handleStartExecute} className="w-full sm:w-auto">
                   <Play className="h-4 w-4 mr-2" />
-                  Start Execute
+                  {t('dashboard.readiness.page.startExecute')}
                 </Button>
               ) : (
                 <Button size="lg" onClick={handleRunRepair} className="w-full sm:w-auto">
                   <Wrench className="h-4 w-4 mr-2" />
-                  Run Repair
+                  {t('dashboard.readiness.page.runRepair')}
                 </Button>
               )}
               <DropdownMenu>
@@ -621,22 +702,22 @@ export default function ReadinessPage() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem>
                     <Eye className="h-4 w-4 mr-2" />
-                    View Evidence
+                    {t('dashboard.readiness.page.actions.viewEvidence')}
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <Share2 className="h-4 w-4 mr-2" />
-                    Share
+                    {t('dashboard.readiness.page.actions.share')}
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <Download className="h-4 w-4 mr-2" />
-                    Export
+                    {t('dashboard.readiness.page.actions.export')}
                   </DropdownMenuItem>
                   {isNotReady && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem className="text-red-600">
                         <AlertTriangle className="h-4 w-4 mr-2" />
-                        Force Start (Risky)
+                        {t('dashboard.readiness.page.actions.forceStart')}
                       </DropdownMenuItem>
                     </>
                   )}
@@ -652,14 +733,14 @@ export default function ReadinessPage() {
                 <AlertTriangle className="h-5 w-5 text-red-600" />
                 <div className="flex-1">
                   <div className="font-semibold text-red-900">
-                    Top Blocker: {readinessData.blockers[0].title}
+                    {t('dashboard.readiness.page.topBlocker', { title: readinessData.blockers[0].title })}
                   </div>
                   <div className="text-sm text-red-700">
                     {readinessData.blockers[0].impactScope}
                   </div>
                 </div>
                 <Button size="sm" onClick={() => handleFixBlocker(readinessData.blockers[0].id)}>
-                  Fix Now
+                  {t('dashboard.readiness.page.fixNow')}
                 </Button>
               </div>
             </div>
@@ -675,7 +756,7 @@ export default function ReadinessPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">
-                  {isReady ? 'Watchlist' : 'Blockers'}
+                  {isReady ? t('dashboard.readiness.page.watchlist') : t('dashboard.readiness.page.blockers')}
                 </h2>
                 {!isReady && readinessData.blockers.length > 3 && (
                   <Button
@@ -683,7 +764,7 @@ export default function ReadinessPage() {
                     size="sm"
                     onClick={() => setShowAllBlockers(!showAllBlockers)}
                   >
-                    {showAllBlockers ? 'Show Top 3' : `View all (${readinessData.blockers.length})`}
+                    {showAllBlockers ? t('dashboard.readiness.page.showTop3') : t('dashboard.readiness.page.viewAll', { count: readinessData.blockers.length })}
                   </Button>
                 )}
               </div>
@@ -701,7 +782,7 @@ export default function ReadinessPage() {
                     <Card>
                       <CardContent className="py-8 text-center">
                         <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">No potential risks identified</p>
+                        <p className="text-sm text-muted-foreground">{t('dashboard.readiness.page.noPotentialRisks')}</p>
                       </CardContent>
                     </Card>
                   )}
@@ -720,7 +801,7 @@ export default function ReadinessPage() {
                     <Card>
                       <CardContent className="py-8 text-center">
                         <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">No blockers found</p>
+                        <p className="text-sm text-muted-foreground">{t('dashboard.readiness.page.noBlockersFound')}</p>
                       </CardContent>
                     </Card>
                   )}
@@ -730,7 +811,7 @@ export default function ReadinessPage() {
 
             {/* 右列：Repair Preview (桌面端) */}
             <div className="hidden lg:block">
-              <h2 className="text-lg font-semibold mb-4">Repair Preview</h2>
+              <h2 className="text-lg font-semibold mb-4">{t('dashboard.readiness.page.repairPreview')}</h2>
               {readinessData.repairOptions && readinessData.repairOptions.length > 0 ? (
                 <div className="space-y-3">
                   {readinessData.repairOptions.map((option) => (
@@ -748,9 +829,9 @@ export default function ReadinessPage() {
                 <Card>
                   <CardContent className="py-12 text-center">
                     <Wrench className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
-                    <p className="text-sm text-muted-foreground mb-2">No fixes needed</p>
+                    <p className="text-sm text-muted-foreground mb-2">{t('dashboard.readiness.page.noFixesNeeded')}</p>
                     <p className="text-xs text-muted-foreground">
-                      Click "Fix" on a blocker to see repair options
+                      {t('dashboard.readiness.page.clickFixToSeeOptions')}
                     </p>
                   </CardContent>
                 </Card>
@@ -762,18 +843,18 @@ export default function ReadinessPage() {
           <div className="mt-8">
             <Tabs defaultValue="breakdown" className="w-full">
               <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="breakdown">Readiness Breakdown</TabsTrigger>
-                <TabsTrigger value="capability">Capability Packs</TabsTrigger>
-                <TabsTrigger value="evidence">Evidence Chain</TabsTrigger>
-                <TabsTrigger value="coverage">Coverage Map</TabsTrigger>
+                <TabsTrigger value="breakdown">{t('dashboard.readiness.page.tabs.readinessBreakdown')}</TabsTrigger>
+                <TabsTrigger value="capability">{t('dashboard.readiness.page.tabs.capabilityPacks')}</TabsTrigger>
+                <TabsTrigger value="evidence">{t('dashboard.readiness.page.tabs.evidenceChain')}</TabsTrigger>
+                <TabsTrigger value="coverage">{t('dashboard.readiness.page.tabs.coverageMap')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="breakdown" className="mt-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Score Breakdown</CardTitle>
+                    <CardTitle>{t('dashboard.readiness.page.scoreBreakdown.title')}</CardTitle>
                     <CardDescription>
-                      Detailed breakdown of readiness dimensions
+                      {t('dashboard.readiness.page.scoreBreakdown.description')}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -791,7 +872,7 @@ export default function ReadinessPage() {
               <TabsContent value="capability" className="mt-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Capability Packs</CardTitle>
+                    <CardTitle>{t('dashboard.readiness.page.tabs.capabilityPacks')}</CardTitle>
                     <CardDescription>
                       System capability packs triggered for this trip
                     </CardDescription>
@@ -804,7 +885,10 @@ export default function ReadinessPage() {
                     ) : evaluatedPacks.length > 0 ? (
                       <div className="space-y-4">
                         <div className="text-sm text-muted-foreground mb-4">
-                          {evaluatedPacks.filter((p) => p.triggered).length} of {evaluatedPacks.length} packs triggered
+                          {t('dashboard.readiness.page.packsTriggered', {
+                            triggered: evaluatedPacks.filter((p) => p.triggered).length,
+                            total: evaluatedPacks.length,
+                          })}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {evaluatedPacks.map((result, index) => {
@@ -822,7 +906,7 @@ export default function ReadinessPage() {
                                         <h3 className="font-semibold text-sm">{pack.displayName}</h3>
                                         {isTriggered && (
                                           <Badge className="bg-primary text-primary-foreground text-xs">
-                                            Triggered
+                                            {t('dashboard.readiness.page.triggered')}
                                           </Badge>
                                         )}
                                       </div>
@@ -831,7 +915,7 @@ export default function ReadinessPage() {
                                       </p>
                                       {isTriggered && result.reason && (
                                         <p className="text-xs text-muted-foreground italic">
-                                          Reason: {result.reason}
+                                          {t('dashboard.readiness.page.reason', { reason: result.reason })}
                                         </p>
                                       )}
                                     </div>
@@ -843,7 +927,7 @@ export default function ReadinessPage() {
                         </div>
                         {capabilityPacks.length > 0 && (
                           <div className="mt-6 pt-4 border-t">
-                            <h4 className="text-sm font-medium mb-3">All Available Packs</h4>
+                            <h4 className="text-sm font-medium mb-3">{t('dashboard.readiness.page.allAvailablePacks')}</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               {capabilityPacks.map((pack, index) => (
                                 <div
@@ -862,7 +946,7 @@ export default function ReadinessPage() {
                       </div>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
-                        <p className="text-sm">No capability packs available</p>
+                        <p className="text-sm">{t('dashboard.readiness.page.noCapabilityPacksAvailable')}</p>
                       </div>
                     )}
                   </CardContent>
@@ -874,9 +958,9 @@ export default function ReadinessPage() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle>Evidence Chain</CardTitle>
+                        <CardTitle>{t('dashboard.readiness.page.tabs.evidenceChain')}</CardTitle>
                         <CardDescription>
-                          All evidence sources and their coverage
+                          {t('dashboard.readiness.page.evidenceChainDescription')}
                         </CardDescription>
                       </div>
                       <Button 
@@ -891,9 +975,90 @@ export default function ReadinessPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
-                      {/* 按类别分组显示证据 */}
-                      {(['road', 'weather', 'poi', 'ticket', 'lodging'] as const).map((category) => {
+                    <div className="space-y-6">
+                      {/* Risks Section */}
+                      {rawReadinessResult && rawReadinessResult.risks && rawReadinessResult.risks.length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="text-sm font-semibold">{t('dashboard.readiness.page.risks')}</h3>
+                          <div className="space-y-3">
+                            {rawReadinessResult.risks.map((risk, index) => (
+                              <RiskCard key={index} risk={risk} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Checklists Section */}
+                      {rawReadinessResult && rawReadinessResult.findings && rawReadinessResult.findings.length > 0 && (
+                        <div className="space-y-4">
+                          <h3 className="text-sm font-semibold">{t('dashboard.readiness.page.checklists')}</h3>
+                          {rawReadinessResult.findings.map((finding, findingIndex) => {
+                            // 收集所有 blockers/must/should/optional 项目
+                            const allBlockers: any[] = finding.blockers || [];
+                            const allMust: any[] = finding.must || [];
+                            const allShould: any[] = finding.should || [];
+                            const allOptional: any[] = finding.optional || [];
+
+                            if (allBlockers.length === 0 && allMust.length === 0 && allShould.length === 0 && allOptional.length === 0) {
+                              return null;
+                            }
+
+                            // 获取行程开始日期用于计算截止日期
+                            const tripStartDate = trip?.startDate;
+
+                            // 使用 destinationId 或 packId 作为标题
+                            const findingTitle = finding.destinationId || finding.packId;
+
+                            return (
+                              <div key={findingIndex} className="space-y-3">
+                                {findingTitle && (
+                                  <h4 className="text-xs font-medium text-muted-foreground uppercase">{findingTitle}</h4>
+                                )}
+                                <div className="space-y-3">
+                                  {allBlockers.length > 0 && (
+                                    <ChecklistSection
+                                      title={t('dashboard.readiness.page.blockers')}
+                                      items={allBlockers}
+                                      level="must"
+                                      tripStartDate={tripStartDate}
+                                    />
+                                  )}
+                                  {allMust.length > 0 && (
+                                    <ChecklistSection
+                                      title={t('dashboard.readiness.page.must')}
+                                      items={allMust}
+                                      level="must"
+                                      tripStartDate={tripStartDate}
+                                    />
+                                  )}
+                                  {allShould.length > 0 && (
+                                    <ChecklistSection
+                                      title={t('dashboard.readiness.page.should')}
+                                      items={allShould}
+                                      level="should"
+                                      tripStartDate={tripStartDate}
+                                    />
+                                  )}
+                                  {allOptional.length > 0 && (
+                                    <ChecklistSection
+                                      title={t('dashboard.readiness.page.optional')}
+                                      items={allOptional}
+                                      level="optional"
+                                      tripStartDate={tripStartDate}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Evidence Section */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold">证据链</h3>
+                        {/* 按类别分组显示证据 */}
+                        {(['road', 'weather', 'poi', 'ticket', 'lodging'] as const).map((category) => {
                         const categoryEvidences: EvidenceItem[] = [
                           {
                             id: `evidence-${category}-1`,
@@ -929,6 +1094,7 @@ export default function ReadinessPage() {
                           </div>
                         );
                       })}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

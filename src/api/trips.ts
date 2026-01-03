@@ -114,10 +114,13 @@ import type {
   AttentionQueueResponse,
   AttentionSeverity,
   AttentionItemType,
-  ItineraryItemDetailResponse,
-  BatchUpdateItemsRequest,
-  BatchUpdateItemsResponse,
 } from '@/types/trip';
+import type {
+  SuggestionListResponse,
+  SuggestionStats,
+  ApplySuggestionRequest,
+  ApplySuggestionResponse,
+} from '@/types/suggestion';
 
 // ==================== 基础接口 ====================
 
@@ -795,6 +798,76 @@ export const tripsApi = {
       data
     );
     return handleResponse(response);
+  },
+
+  // ==================== 建议系统（统一接口）====================
+
+  /**
+   * 获取建议列表
+   * GET /trips/:id/suggestions
+   * 
+   * @param id 行程ID
+   * @param params 过滤参数
+   * @param params.persona 过滤人格类型 (abu, drdre, neptune)
+   * @param params.scope 过滤作用范围 (trip, day, item, segment)
+   * @param params.scopeId 过滤作用范围ID（如dayId、itemId）
+   * @param params.severity 过滤严重级别 (info, warn, blocker)
+   * @param params.status 过滤状态 (new, seen, applied, dismissed)
+   * @param params.limit 返回数量限制，默认100
+   * @param params.offset 偏移量，默认0
+   */
+  getSuggestions: async (
+    id: string,
+    params?: {
+      persona?: 'abu' | 'drdre' | 'neptune';
+      scope?: 'trip' | 'day' | 'item' | 'segment';
+      scopeId?: string;
+      severity?: 'info' | 'warn' | 'blocker';
+      status?: 'new' | 'seen' | 'applied' | 'dismissed';
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<SuggestionListResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<SuggestionListResponse>>(
+      `/trips/${id}/suggestions`,
+      { params }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取建议统计（用于角标数字）
+   * GET /trips/:id/suggestions/stats
+   */
+  getSuggestionStats: async (id: string): Promise<SuggestionStats> => {
+    const response = await apiClient.get<ApiResponseWrapper<SuggestionStats>>(
+      `/trips/${id}/suggestions/stats`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 应用建议
+   * POST /trips/:id/suggestions/:suggestionId/apply
+   */
+  applySuggestion: async (
+    id: string,
+    suggestionId: string,
+    data: ApplySuggestionRequest
+  ): Promise<ApplySuggestionResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<ApplySuggestionResponse>>(
+      `/trips/${id}/suggestions/${suggestionId}/apply`,
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 忽略建议
+   * POST /trips/:id/suggestions/:suggestionId/dismiss
+   */
+  dismissSuggestion: async (id: string, suggestionId: string): Promise<void> => {
+    await apiClient.post(`/trips/${id}/suggestions/${suggestionId}/dismiss`);
   },
 };
 
