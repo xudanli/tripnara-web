@@ -7,8 +7,14 @@ export const formatDate = (date: string | Date): string => {
   });
 };
 
-export const formatCurrency = (amount: number, currency: string = 'USD'): string => {
-  return new Intl.NumberFormat('en-US', {
+export const formatCurrency = (
+  amount: number, 
+  currency: string = 'CNY', 
+  locale?: string
+): string => {
+  // 使用浏览器默认locale，如果没有提供
+  const defaultLocale = locale || navigator.language || 'zh-CN';
+  return new Intl.NumberFormat(defaultLocale, {
     style: 'currency',
     currency,
   }).format(amount);

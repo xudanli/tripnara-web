@@ -22,6 +22,8 @@ export {
   ChecklistProgressIllustration,
   HealthBarIllustration,
   EmptyTemplatesIllustration,
+  DiscoverBoxIllustration,
+  IdeasContainerIllustration,
 } from './OnboardingIllustrations';
 
 export {

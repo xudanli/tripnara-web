@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import IntentTab from './IntentTab';
 import PlacesTab from './PlacesTab';
 import ScheduleTab from './ScheduleTab';
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import WelcomeModal from '@/components/onboarding/WelcomeModal';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
+import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
 
 export default function PlanStudioPage() {
   const { t } = useTranslation();
@@ -36,6 +37,8 @@ export default function PlanStudioPage() {
   const [tripExists, setTripExists] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
+  const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
+  const [highlightFindingId, setHighlightFindingId] = useState<string | undefined>(undefined);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -346,12 +349,30 @@ export default function PlanStudioPage() {
 
               {/* 右侧栏（4/12） */}
               <div className="col-span-12 lg:col-span-4">
-                <PlanStudioSidebar tripId={tripId} personaMode={personaMode} />
+                <PlanStudioSidebar 
+                  tripId={tripId} 
+                  personaMode={personaMode}
+                  onOpenReadinessDrawer={(findingId) => {
+                    setHighlightFindingId(findingId);
+                    setReadinessDrawerOpen(true);
+                  }}
+                />
               </div>
             </div>
           </div>
         </Tabs>
       </div>
+
+      {/* 准备度抽屉 */}
+      <ReadinessDrawer
+        open={readinessDrawerOpen}
+        onClose={() => {
+          setReadinessDrawerOpen(false);
+          setHighlightFindingId(undefined);
+        }}
+        tripId={tripId}
+        highlightFindingId={highlightFindingId}
+      />
     </div>
   );
 }

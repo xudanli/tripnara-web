@@ -22,6 +22,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
+import { DiscoverBoxIllustration } from '@/components/illustrations';
 
 const PLACE_CATEGORIES: { value: PlaceCategory; label: string }[] = [
   { value: 'ATTRACTION', label: '景点' },
@@ -371,10 +372,14 @@ export default function PlacesPage() {
       {/* 空状态 */}
       {!loading && results.length === 0 && searchParams.get('q') && (
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>未找到相关地点</p>
-            <p className="text-sm mt-2">请尝试其他关键词或调整筛选条件</p>
+          <CardContent className="py-12">
+            <div className="flex flex-col items-center justify-center">
+              <div className="mb-4 opacity-50">
+                <DiscoverBoxIllustration size={160} />
+              </div>
+              <p className="text-sm text-muted-foreground font-medium mb-1">未找到相关地点</p>
+              <p className="text-xs text-muted-foreground">请尝试其他关键词或调整筛选条件</p>
+            </div>
           </CardContent>
         </Card>
       )}

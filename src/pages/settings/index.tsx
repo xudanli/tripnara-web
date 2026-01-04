@@ -8,10 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { User, Database, Link2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { countriesApi } from '@/api/countries';
 import type { UserPreferences } from '@/api/user';
+import type { Country } from '@/types/country';
 
 // 可选的景点类型
 const ATTRACTION_TYPES = [
@@ -58,6 +61,15 @@ const ACCOMMODATION_OPTIONS = [
   { value: 'LUXURY', label: '豪华' },
 ];
 
+// 旅行者标签选项
+const TRAVELER_TAGS = [
+  { value: 'senior', label: '老年旅行者' },
+  { value: 'family_with_children', label: '带小孩家庭' },
+  { value: 'solo', label: '独自旅行' },
+  { value: 'adventure', label: '冒险爱好者' },
+  { value: 'photography', label: '摄影爱好者' },
+];
+
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') || 'preferences';
@@ -87,6 +99,9 @@ export default function SettingsPage() {
   };
 
   const [formData, setFormData] = useState<UserPreferences>({
+    nationality: undefined,
+    residencyCountry: undefined,
+    tags: [],
     preferredAttractionTypes: [],
     dietaryRestrictions: [],
     preferOffbeatAttractions: false,
@@ -97,12 +112,33 @@ export default function SettingsPage() {
     },
   });
 
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  // 加载国家列表
+  useEffect(() => {
+    const loadCountries = async () => {
+      try {
+        setCountriesLoading(true);
+        const data = await countriesApi.getAll();
+        setCountries(data);
+      } catch (err) {
+        console.error('Failed to load countries:', err);
+      } finally {
+        setCountriesLoading(false);
+      }
+    };
+    loadCountries();
+  }, []);
 
   // 初始化表单数据
   useEffect(() => {
     if (preferences) {
       setFormData({
+        nationality: preferences.nationality,
+        residencyCountry: preferences.residencyCountry,
+        tags: preferences.tags || [],
         preferredAttractionTypes: preferences.preferredAttractionTypes || [],
         dietaryRestrictions: preferences.dietaryRestrictions || [],
         preferOffbeatAttractions: preferences.preferOffbeatAttractions ?? false,
@@ -114,6 +150,17 @@ export default function SettingsPage() {
       });
     }
   }, [preferences]);
+
+  // 处理旅行者标签选择
+  const handleTagToggle = (value: string) => {
+    setFormData((prev) => {
+      const current = prev.tags || [];
+      const updated = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      return { ...prev, tags: updated };
+    });
+  };
 
   // 处理景点类型选择
   const handleAttractionTypeToggle = (value: string) => {
@@ -231,6 +278,90 @@ export default function SettingsPage() {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* 个人信息 */}
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle>个人信息</CardTitle>
+                      <CardDescription>设置您的国籍和居住国家</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* 国籍 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="nationality">国籍</Label>
+                        <Select
+                          value={formData.nationality || '__none__'}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({ ...prev, nationality: value === '__none__' ? undefined : value }))
+                          }
+                          disabled={countriesLoading}
+                        >
+                          <SelectTrigger id="nationality">
+                            <SelectValue placeholder={countriesLoading ? '加载中...' : '选择国籍'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">未设置</SelectItem>
+                            {countries.map((country) => (
+                              <SelectItem key={country.isoCode} value={country.isoCode}>
+                                {country.nameCN} ({country.isoCode})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* 居住国 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="residencyCountry">居住国</Label>
+                        <Select
+                          value={formData.residencyCountry || '__none__'}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({ ...prev, residencyCountry: value === '__none__' ? undefined : value }))
+                          }
+                          disabled={countriesLoading}
+                        >
+                          <SelectTrigger id="residencyCountry">
+                            <SelectValue placeholder={countriesLoading ? '加载中...' : '选择居住国'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">未设置</SelectItem>
+                            {countries.map((country) => (
+                              <SelectItem key={country.isoCode} value={country.isoCode}>
+                                {country.nameCN} ({country.isoCode})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 旅行者标签 */}
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle>旅行者标签</CardTitle>
+                      <CardDescription>选择适合您的旅行者标签</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {TRAVELER_TAGS.map((tag) => (
+                          <div key={tag.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`tag-${tag.value}`}
+                              checked={formData.tags?.includes(tag.value)}
+                              onCheckedChange={() => handleTagToggle(tag.value)}
+                            />
+                            <Label
+                              htmlFor={`tag-${tag.value}`}
+                              className="text-sm font-normal cursor-pointer"
+                            >
+                              {tag.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   {/* 景点类型 */}
                   <Card className="mb-6">

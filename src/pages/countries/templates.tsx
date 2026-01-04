@@ -13,6 +13,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreateTripFromTemplateDialog } from '@/components/trips/CreateTripFromTemplateDialog';
+import { DiscoverBoxIllustration } from '@/components/illustrations';
 import {
   Search,
   Calendar,
@@ -403,18 +404,19 @@ export default function CountryTemplatesPage() {
       {filteredTemplates.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>未找到模版</EmptyTitle>
-                <EmptyDescription>
-                  {searchQuery || selectedCountry !== 'all' || selectedDuration !== 'all' || selectedIntensity !== 'all'
-                    ? '请尝试调整筛选条件'
-                    : templates.length === 0
-                    ? '暂无路线模版数据'
-                    : `已加载 ${templates.length} 个模版，但筛选后无结果。请检查筛选条件。`}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="mb-4 opacity-50">
+                <DiscoverBoxIllustration size={160} />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">未找到模版</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                {searchQuery || selectedCountry !== 'all' || selectedDuration !== 'all' || selectedIntensity !== 'all'
+                  ? '请尝试调整筛选条件'
+                  : templates.length === 0
+                  ? '暂无路线模版数据'
+                  : `已加载 ${templates.length} 个模版，但筛选后无结果。请检查筛选条件。`}
+              </p>
+            </div>
           </CardContent>
         </Card>
       ) : (

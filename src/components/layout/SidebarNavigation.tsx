@@ -7,7 +7,6 @@ import {
   Compass,
   Play,
   Mountain,
-  Shield,
   BarChart3,
   Settings,
   Menu,
@@ -85,12 +84,6 @@ const navItems: NavItem[] = [
     label: '', // Will be set in component
     icon: Mountain,
     path: '/dashboard/trails',
-  },
-  {
-    key: 'readiness',
-    label: '', // Will be set in component
-    icon: Shield,
-    path: '/dashboard/readiness',
   },
   {
     key: 'insights',

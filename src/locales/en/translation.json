@@ -201,7 +201,13 @@
         "validation": "Validation Status",
         "nodesReplaced": "Replaced {{replacements}} nodes",
         "replaceFailed": "Replace failed"
-      }
+      },
+      "readiness": {
+        "title": "Trip Readiness",
+        "viewDetails": "View Details",
+        "noData": "No readiness data available"
+      },
+      "loading": "Loading..."
     },
     "intentTab": {
       "whatIWantTitle": "What I Want",
@@ -1125,7 +1131,6 @@
         "evidenceChainDescription": "All evidence sources and their coverage",
         "risks": "Risks",
         "checklists": "Checklists",
-        "blockers": "Blockers",
         "must": "Must",
         "should": "Should",
         "optional": "Optional",
@@ -1142,6 +1147,101 @@
           "balanced": "Balanced",
           "exploratory": "Exploratory",
           "standard": "Standard"
+        },
+        "drawer": {
+          "status": {
+            "block": "Blockers found, prioritize resolution",
+            "warn": "Key preparation items need attention",
+            "pass": "Readiness requirements met"
+          },
+          "stats": {
+            "blockers": "Blockers({{count}})",
+            "must": "Must({{count}})",
+            "suggestions": "Suggestions({{count}})",
+            "risks": "Risks({{count}})"
+          },
+          "actions": {
+            "refresh": "Refresh Readiness",
+            "refreshSuccess": "Readiness refreshed",
+            "refreshFailed": "Refresh failed, please try again",
+            "generatePackingList": "Generate Packing List",
+            "generatePackingListInfo": "Packing list feature coming soon",
+            "generatePackingListFailed": "Failed to generate packing list",
+            "viewSolution": "View Solution",
+            "viewSolutionInfo": "Solution feature coming soon",
+            "markNotApplicable": "Mark Not Applicable",
+            "markNotApplicableInfo": "Mark feature coming soon",
+            "handleLater": "Handle Later",
+            "handleLaterInfo": "Added to handle later",
+            "viewEvidence": "View Evidence",
+            "completed": "I'm Done",
+            "itemChecked": "Marked as completed",
+            "itemUnchecked": "Unmarked as completed",
+            "saveFailed": "Save failed, please try again",
+            "saveToLocalOnly": "Saved to local only (backend sync failed)",
+            "generatePackingListSuccess": "Packing list generated with {{count}} items",
+            "solutionsLoaded": "Loaded {{count}} solutions",
+            "noSolutionsAvailable": "No solutions available",
+            "loadSolutionsFailed": "Failed to load solutions",
+            "markedNotApplicable": "Marked as not applicable",
+            "markNotApplicableFailed": "Failed to mark, please try again",
+            "addedToLater": "Added to handle later",
+            "addToLaterFailed": "Failed to add, please try again",
+            "removedFromLater": "Removed from handle later",
+            "removeFromLaterFailed": "Failed to remove, please try again",
+            "unmarkedNotApplicable": "Unmarked as not applicable",
+            "unmarkNotApplicableFailed": "Failed to unmark, please try again",
+            "markedAsLater": "Handle Later",
+            "loading": "Loading..."
+          },
+          "errors": {
+            "tripNotFound": "Trip not found",
+            "findingNotFound": "Finding not found",
+            "invalidFindingId": "Invalid finding ID",
+            "unauthorized": "Unauthorized access"
+          },
+          "blockers": {
+            "title": "🚨 Blockers That Must Be Resolved",
+            "severity": "Severity"
+          },
+          "must": {
+            "title": "✅ Strongly Recommended Preparation Items",
+            "expandMore": "Expand More Suggestions",
+            "collapseMore": "Collapse More Suggestions",
+            "should": "Should Items",
+            "optional": "Optional Items",
+            "tasks": "Tasks",
+            "deadline": "Deadline"
+          },
+          "hazards": {
+            "title": "⚠️ Trip Risk Warnings (Always Active)",
+            "severity": {
+              "high": "High",
+              "medium": "Medium",
+              "low": "Low"
+            },
+            "mitigations": "Mitigations"
+          },
+          "debug": {
+            "toggle": "Debug Info (Developers Only)",
+            "ruleId": "Rule ID",
+            "sourceId": "Source ID",
+            "sectionId": "Section ID",
+            "summary": "Summary",
+            "findings": "Findings({{count}})",
+            "findingNumber": "Finding #{{number}}",
+            "destinationId": "destinationId",
+            "packId": "packId",
+            "packVersion": "packVersion",
+            "blockers": "Blockers",
+            "must": "Must",
+            "risks": "Risks({{count}})",
+            "id": "ID",
+            "message": "Message",
+            "na": "N/A"
+          },
+          "noData": "No readiness data available",
+          "noItems": "No preparation items to handle at the moment"
         }
       }
     },

@@ -49,7 +49,13 @@ import RiskCard from '@/components/readiness/RiskCard';
 import ChecklistSection from '@/components/readiness/ChecklistSection';
 
 export default function ReadinessPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  
+  // 获取当前语言代码（'zh' 或 'en'）
+  const getLangCode = () => {
+    const lang = i18n.language || 'en';
+    return lang.startsWith('zh') ? 'zh' : 'en';
+  };
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
@@ -157,7 +163,7 @@ export default function ReadinessPage() {
       // 并行加载 trip 和 readiness 数据
       const [tripData, readinessData] = await Promise.all([
         tripsApi.getById(tripId),
-        readinessApi.getTripReadiness(tripId).catch((err) => {
+        readinessApi.getTripReadiness(tripId, getLangCode()).catch((err) => {
           // 如果后端还没有实现 /readiness/trip/:tripId，则使用备用方案
           console.warn('getTripReadiness failed, trying fallback:', err);
           return null;
@@ -180,7 +186,7 @@ export default function ReadinessPage() {
         console.log('Converted readiness data:', JSON.stringify(convertedData, null, 2));
         if (validateReadinessData(convertedData)) {
           finalReadinessData = convertedData;
-        } else {
+      } else {
           console.warn('Converted readiness data validation failed, using fallback');
         }
       }
@@ -205,11 +211,11 @@ export default function ReadinessPage() {
           });
           // 备用方案2：使用个性化清单和风险预警构建 ReadinessData
           const [checklist, riskWarnings] = await Promise.all([
-            readinessApi.getPersonalizedChecklist(tripId).catch((err) => {
+            readinessApi.getPersonalizedChecklist(tripId, getLangCode()).catch((err) => {
               console.warn('getPersonalizedChecklist failed:', err);
               return null;
             }),
-            readinessApi.getRiskWarnings(tripId).catch((err) => {
+            readinessApi.getRiskWarnings(tripId, getLangCode()).catch((err) => {
               console.warn('getRiskWarnings failed:', err);
               return null;
             }),
@@ -231,7 +237,7 @@ export default function ReadinessPage() {
         setReadinessData(finalReadinessData);
       } else {
         // 如果所有方案都失败，使用模拟数据
-        setReadinessData(generateMockReadinessData());
+            setReadinessData(generateMockReadinessData());
       }
     } catch (err) {
       console.error('Failed to load readiness data:', err);
@@ -978,7 +984,7 @@ export default function ReadinessPage() {
                     <div className="space-y-6">
                       {/* Risks Section */}
                       {rawReadinessResult && rawReadinessResult.risks && rawReadinessResult.risks.length > 0 && (
-                        <div className="space-y-3">
+                    <div className="space-y-3">
                           <h3 className="text-sm font-semibold">{t('dashboard.readiness.page.risks')}</h3>
                           <div className="space-y-3">
                             {rawReadinessResult.risks.map((risk, index) => (
@@ -1057,8 +1063,8 @@ export default function ReadinessPage() {
                       {/* Evidence Section */}
                       <div className="space-y-3">
                         <h3 className="text-sm font-semibold">证据链</h3>
-                        {/* 按类别分组显示证据 */}
-                        {(['road', 'weather', 'poi', 'ticket', 'lodging'] as const).map((category) => {
+                      {/* 按类别分组显示证据 */}
+                      {(['road', 'weather', 'poi', 'ticket', 'lodging'] as const).map((category) => {
                         const categoryEvidences: EvidenceItem[] = [
                           {
                             id: `evidence-${category}-1`,

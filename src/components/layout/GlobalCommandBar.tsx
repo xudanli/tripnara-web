@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { agentApi } from '@/api/agent';
-import type { RouteAndRunRequest, RouteAndRunResponse, RouteType } from '@/api/agent';
+import type { RouteAndRunRequest, RouteAndRunResponse } from '@/api/agent';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Bell, Send, Settings, LogOut, User, Search } from 'lucide-react';
+import { Bell, Send, Settings, LogOut, User, Search, Globe, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface GlobalCommandBarProps {
@@ -29,7 +29,7 @@ export default function GlobalCommandBar({
   onSystem2Response,
   className,
 }: GlobalCommandBarProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [input, setInput] = useState('');
@@ -207,6 +207,23 @@ export default function GlobalCommandBar({
                 >
                   <User className="mr-2 h-4 w-4" />
                   <span>{t('globalCommandBar.preferences')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => i18n.changeLanguage('zh')}
+                  className="cursor-pointer"
+                >
+                  <Globe className="mr-2 h-4 w-4" />
+                  <span className="flex-1">中文</span>
+                  {i18n.language.startsWith('zh') && <Check className="h-4 w-4" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => i18n.changeLanguage('en')}
+                  className="cursor-pointer"
+                >
+                  <Globe className="mr-2 h-4 w-4" />
+                  <span className="flex-1">English</span>
+                  {i18n.language.startsWith('en') && <Check className="h-4 w-4" />}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

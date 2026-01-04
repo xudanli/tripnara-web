@@ -22,6 +22,7 @@ import type { PlaceWithDistance, PlaceCategory } from '@/types/places-routes';
 import type { TripDetail, CreateItineraryItemRequest } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import { format } from 'date-fns';
+import { EmptyPlacesIllustration } from '@/components/illustrations';
 
 interface PlacesTabProps {
   tripId: string;
@@ -444,8 +445,13 @@ export default function PlacesTab({ tripId, personaMode = 'abu', onPlaceAdded }:
               ))}
             </div>
           ) : !loading && searchMode !== 'recommend' ? (
-            <div className="text-center py-12 text-muted-foreground">
-              {searchMode === 'nearby' ? t('planStudio.placesTab.clickNearbyToFind') : t('planStudio.placesTab.enterKeywordToSearch')}
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="mb-4 opacity-50">
+                <EmptyPlacesIllustration size={160} />
+              </div>
+              <p className="text-sm text-muted-foreground font-medium mb-1">
+                {searchMode === 'nearby' ? t('planStudio.placesTab.clickNearbyToFind') : t('planStudio.placesTab.enterKeywordToSearch')}
+              </p>
             </div>
           ) : null}
         </CardContent>

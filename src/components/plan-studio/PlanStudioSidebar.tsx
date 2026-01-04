@@ -2,22 +2,31 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Shield, Brain, Wrench, CheckCircle2, XCircle, AlertTriangle, BarChart3, TrendingUp, FileText } from 'lucide-react';
+import { Shield, Brain, Wrench, CheckCircle2, XCircle, AlertTriangle, BarChart3, TrendingUp, FileText, ClipboardCheck } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import { tripsApi } from '@/api/trips';
 import { decisionApi } from '@/api/decision';
+import { readinessApi } from '@/api/readiness';
 import type { PersonaAlert, TripDetail, TripMetricsResponse, IntentResponse } from '@/types/trip';
 import type { ValidateSafetyRequest, AdjustPacingRequest, ReplaceNodesRequest, RoutePlanDraft, WorldModelContext, RouteSegment, DEMEvidenceItem } from '@/types/strategy';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/utils/format';
 
 interface PlanStudioSidebarProps {
   tripId: string;
   personaMode: PersonaMode;
+  onOpenReadinessDrawer?: (findingId?: string) => void;
 }
 
-export default function PlanStudioSidebar({ tripId, personaMode }: PlanStudioSidebarProps) {
-  const { t } = useTranslation();
+export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadinessDrawer }: PlanStudioSidebarProps) {
+  const { t, i18n } = useTranslation();
+  
+  // 获取当前语言代码（'zh' 或 'en'）
+  const getLangCode = () => {
+    const lang = i18n.language || 'en';
+    return lang.startsWith('zh') ? 'zh' : 'en';
+  };
   const [loading, setLoading] = useState(false);
   const [alerts, setAlerts] = useState<PersonaAlert[]>([]);
   const [trip, setTrip] = useState<TripDetail | null>(null);
@@ -27,6 +36,8 @@ export default function PlanStudioSidebar({ tripId, personaMode }: PlanStudioSid
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [neptuneReplacements, setNeptuneReplacements] = useState<any[]>([]); // 存储 Neptune 修复建议
   const [operationResult, setOperationResult] = useState<{ type: 'success' | 'info' | 'warning'; message: string } | null>(null); // 存储操作结果
+  const [readinessSummary, setReadinessSummary] = useState<{ totalBlockers: number; totalMust: number; totalShould: number; totalOptional: number; risks: number } | null>(null);
+  const [loadingReadiness, setLoadingReadiness] = useState(false);
   
   // 根据当前 personaMode 过滤提醒
   const personaMap: Record<PersonaMode, 'ABU' | 'DR_DRE' | 'NEPTUNE'> = {
@@ -52,7 +63,30 @@ export default function PlanStudioSidebar({ tripId, personaMode }: PlanStudioSid
     loadTrip();
     loadMetrics();
     loadIntent();
+    loadReadinessSummary();
   }, [tripId]);
+  
+  const loadReadinessSummary = async () => {
+    if (!tripId) return;
+    try {
+      setLoadingReadiness(true);
+      const result = await readinessApi.getTripReadiness(tripId, getLangCode()).catch(() => null);
+      if (result) {
+        const risks = result.risks?.length || result.findings?.flatMap(f => f.risks || []).length || 0;
+        setReadinessSummary({
+          totalBlockers: result.summary.totalBlockers,
+          totalMust: result.summary.totalMust,
+          totalShould: result.summary.totalShould,
+          totalOptional: result.summary.totalOptional,
+          risks,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load readiness summary:', err);
+    } finally {
+      setLoadingReadiness(false);
+    }
+  };
 
   const loadPersonaAlerts = async () => {
     if (!tripId) return;
@@ -711,7 +745,7 @@ export default function PlanStudioSidebar({ tripId, personaMode }: PlanStudioSid
                 <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.estimatedCost')}</div>
                 <div className="font-semibold">
                   {dreMetrics.costEstimate !== undefined 
-                    ? `¥${dreMetrics.costEstimate}` 
+                    ? formatCurrency(dreMetrics.costEstimate, trip?.budgetConfig?.currency || 'CNY')
                     : t('planStudio.sidebar.loading')}
                 </div>
               </div>
@@ -1064,10 +1098,81 @@ export default function PlanStudioSidebar({ tripId, personaMode }: PlanStudioSid
     return null;
   };
 
+  // 准备度汇总卡
+  const renderReadinessCard = () => {
+    if (!onOpenReadinessDrawer) return null;
+    
+    const gateStatus = readinessSummary
+      ? readinessSummary.totalBlockers > 0
+        ? 'BLOCK'
+        : readinessSummary.totalMust > 0
+        ? 'WARN'
+        : 'PASS'
+      : null;
+    
+    return (
+      <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onOpenReadinessDrawer()}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ClipboardCheck className="w-5 h-5 text-blue-600" />
+            {t('planStudio.sidebar.readiness.title')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingReadiness ? (
+            <div className="flex items-center justify-center py-4">
+              <Spinner className="w-4 h-4" />
+            </div>
+          ) : readinessSummary ? (
+            <div className="space-y-3">
+              {/* 状态标签 */}
+              {gateStatus && (
+                <div className={`p-2 rounded-lg text-center text-sm font-semibold ${
+                  gateStatus === 'BLOCK' ? 'bg-red-100 text-red-800 border border-red-200' :
+                  gateStatus === 'WARN' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                  'bg-green-100 text-green-800 border border-green-200'
+                }`}>
+                  {gateStatus === 'BLOCK' && t('dashboard.readiness.page.drawer.status.block')}
+                  {gateStatus === 'WARN' && t('dashboard.readiness.page.drawer.status.warn')}
+                  {gateStatus === 'PASS' && t('dashboard.readiness.page.drawer.status.pass')}
+                </div>
+              )}
+              
+              {/* 数量统计 */}
+              <div className="text-xs text-gray-600 space-y-1">
+                <div className="flex justify-between">
+                  <span>{t('dashboard.readiness.page.drawer.stats.blockers', { count: readinessSummary.totalBlockers })}</span>
+                  <span>{t('dashboard.readiness.page.drawer.stats.must', { count: readinessSummary.totalMust })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>{t('dashboard.readiness.page.drawer.stats.suggestions', { 
+                    count: readinessSummary.totalShould + readinessSummary.totalOptional 
+                  })}</span>
+                  <span>{t('dashboard.readiness.page.drawer.stats.risks', { count: readinessSummary.risks })}</span>
+                </div>
+              </div>
+              
+              <Button variant="outline" className="w-full" size="sm">
+                {t('planStudio.sidebar.readiness.viewDetails')}
+              </Button>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              {t('planStudio.sidebar.readiness.noData')}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {/* 策略预览 */}
       {renderStrategyPreview()}
+
+      {/* 准备度汇总卡 */}
+      {renderReadinessCard()}
 
       {/* 提示卡 */}
       {renderAlertsCard()}

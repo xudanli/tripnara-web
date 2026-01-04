@@ -6,6 +6,9 @@ import apiClient from './client';
  * 用户偏好配置
  */
 export interface UserPreferences {
+  nationality?: string; // ISO 3166-1 alpha-2，如 "CN"
+  residencyCountry?: string; // ISO 3166-1 alpha-2，如 "CN"
+  tags?: string[]; // 旅行者标签，如 ["senior", "family_with_children", "solo", "adventure", "photography"]
   preferredAttractionTypes?: string[];
   dietaryRestrictions?: string[];
   preferOffbeatAttractions?: boolean;

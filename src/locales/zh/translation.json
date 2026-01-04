@@ -201,7 +201,13 @@
         "validation": "验证状态",
         "nodesReplaced": "已替换 {{replacements}} 个节点",
         "replaceFailed": "替换失败"
-      }
+      },
+      "readiness": {
+        "title": "行程准备度",
+        "viewDetails": "查看详情",
+        "noData": "暂无准备度数据"
+      },
+      "loading": "加载中..."
     },
     "intentTab": {
       "whatIWantTitle": "我想要的",
@@ -1125,7 +1131,6 @@
         "evidenceChainDescription": "所有证据来源及其覆盖情况",
         "risks": "风险信息",
         "checklists": "准备清单",
-        "blockers": "阻塞项",
         "must": "必须",
         "should": "建议",
         "optional": "可选",
@@ -1142,6 +1147,101 @@
           "balanced": "平衡",
           "exploratory": "探索",
           "standard": "标准"
+        },
+        "drawer": {
+          "status": {
+            "block": "存在阻塞项，需优先解决",
+            "warn": "需完善关键准备项",
+            "pass": "准备度达标"
+          },
+          "stats": {
+            "blockers": "阻塞项({{count}})",
+            "must": "必须项({{count}})",
+            "suggestions": "建议项({{count}})",
+            "risks": "风险({{count}})"
+          },
+          "actions": {
+            "refresh": "刷新准备度",
+            "refreshSuccess": "准备度已刷新",
+            "refreshFailed": "刷新失败，请稍后重试",
+            "generatePackingList": "生成打包清单",
+            "generatePackingListInfo": "打包清单功能开发中，敬请期待",
+            "generatePackingListFailed": "生成打包清单失败",
+            "viewSolution": "查看解决方案",
+            "viewSolutionInfo": "解决方案功能开发中",
+            "markNotApplicable": "标记不适用",
+            "markNotApplicableInfo": "标记功能开发中",
+            "handleLater": "稍后处理",
+            "handleLaterInfo": "已添加到稍后处理",
+            "viewEvidence": "查看证据",
+            "completed": "我已完成",
+            "itemChecked": "已标记为完成",
+            "itemUnchecked": "已取消完成标记",
+            "saveFailed": "保存失败，请稍后重试",
+            "saveToLocalOnly": "仅保存到本地（后端同步失败）",
+            "generatePackingListSuccess": "已生成打包清单，共 {{count}} 项",
+            "solutionsLoaded": "已加载 {{count}} 个解决方案",
+            "noSolutionsAvailable": "暂无可用解决方案",
+            "loadSolutionsFailed": "加载解决方案失败",
+            "markedNotApplicable": "已标记为不适用",
+            "markNotApplicableFailed": "标记失败，请稍后重试",
+            "addedToLater": "已添加到稍后处理",
+            "addToLaterFailed": "添加失败，请稍后重试",
+            "removedFromLater": "已从稍后处理移除",
+            "removeFromLaterFailed": "移除失败，请稍后重试",
+            "unmarkedNotApplicable": "已取消不适用标记",
+            "unmarkNotApplicableFailed": "取消标记失败，请稍后重试",
+            "markedAsLater": "稍后处理",
+            "loading": "加载中..."
+          },
+          "errors": {
+            "tripNotFound": "行程不存在",
+            "findingNotFound": "检查项不存在",
+            "invalidFindingId": "无效的检查项ID",
+            "unauthorized": "未授权访问"
+          },
+          "blockers": {
+            "title": "🚨 必须解决的阻塞项",
+            "severity": "严重程度"
+          },
+          "must": {
+            "title": "✅ 强烈建议完成的准备项",
+            "expandMore": "展开更多建议",
+            "collapseMore": "收起更多建议",
+            "should": "建议项",
+            "optional": "可选项",
+            "tasks": "任务",
+            "deadline": "截止"
+          },
+          "hazards": {
+            "title": "⚠️ 行程风险预警（始终有效）",
+            "severity": {
+              "high": "高",
+              "medium": "中",
+              "low": "低"
+            },
+            "mitigations": "应对措施"
+          },
+          "debug": {
+            "toggle": "调试信息（仅开发者可见）",
+            "ruleId": "规则ID",
+            "sourceId": "数据源",
+            "sectionId": "章节ID",
+            "summary": "摘要",
+            "findings": "检查项({{count}})",
+            "findingNumber": "检查项 #{{number}}",
+            "destinationId": "destinationId",
+            "packId": "packId",
+            "packVersion": "packVersion",
+            "blockers": "阻塞项",
+            "must": "必须项",
+            "risks": "风险({{count}})",
+            "id": "ID",
+            "message": "消息",
+            "na": "N/A"
+          },
+          "noData": "暂无准备度数据",
+          "noItems": "当前没有需要处理的准备项"
         }
       }
     },

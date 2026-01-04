@@ -54,6 +54,7 @@ import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryI
 import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
 import { formatOpeningHoursDescription } from '@/utils/openingHoursFormatter';
+import { formatCurrency as formatCurrencyAmount } from '@/utils/format';
 import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
 import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
@@ -359,31 +360,7 @@ export default function TripDetailPage() {
   // 格式化货币显示
   const formatCurrency = (amount: number): string => {
     const currencyCode = country?.currencyCode || trip?.budgetConfig?.currency || 'CNY';
-    const formattedAmount = amount.toLocaleString();
-    
-    // 常见货币符号映射
-    const currencySymbols: Record<string, string> = {
-      CNY: '¥',
-      USD: '$',
-      EUR: '€',
-      GBP: '£',
-      JPY: '¥',
-      KRW: '₩',
-      THB: '฿',
-      SGD: 'S$',
-      MYR: 'RM',
-      IDR: 'Rp',
-      PHP: '₱',
-      VND: '₫',
-      INR: '₹',
-      AUD: 'A$',
-      NZD: 'NZ$',
-      CAD: 'C$',
-      CHF: 'CHF',
-    };
-    
-    const symbol = currencySymbols[currencyCode] || currencyCode;
-    return `${symbol}${formattedAmount}`;
+    return formatCurrencyAmount(amount, currencyCode);
   };
 
   const checkCollectionStatus = async () => {
