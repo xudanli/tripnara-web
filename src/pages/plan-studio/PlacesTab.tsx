@@ -20,20 +20,23 @@ import { placesApi } from '@/api/places';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import type { PlaceWithDistance, PlaceCategory } from '@/types/places-routes';
 import type { TripDetail, CreateItineraryItemRequest } from '@/types/trip';
-import type { PersonaMode } from '@/components/common/PersonaModeToggle';
+// PersonaMode 已移除 - 三人格现在是系统内部工具
 import { format } from 'date-fns';
 import { EmptyPlacesIllustration } from '@/components/illustrations';
+import { orchestrator } from '@/services/orchestrator';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 interface PlacesTabProps {
   tripId: string;
-  personaMode?: PersonaMode;
   onPlaceAdded?: () => void; // 添加成功后的回调
 }
 
 type SearchMode = 'search' | 'nearby' | 'recommend';
 
-export default function PlacesTab({ tripId, personaMode = 'abu', onPlaceAdded }: PlacesTabProps) {
+export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<SearchMode>('search');
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>('all');
@@ -168,17 +171,54 @@ export default function PlacesTab({ tripId, personaMode = 'abu', onPlaceAdded }:
         endTime: endTime.toISOString(),
       };
 
+      // 1. 先添加地点到行程
       await itineraryItemsApi.create(data);
       
-      // 刷新行程数据
+      // 2. 自动触发 LangGraph Orchestrator，系统会自动调用三人格进行检查和调整
+      if (user) {
+        try {
+          const result = await orchestrator.addPlace(
+            user.id,
+            tripId,
+            selectedPlace.id,
+            selectedDayId,
+            selectedPlace.nameCN || selectedPlace.nameEN
+          );
+          
+          // 显示系统自动执行的结果
+          if (result.success && result.data) {
+            // 如果有提醒，显示提醒
+            if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
+              toast.info(`系统已自动检查，发现 ${result.data.personaAlerts.length} 条提醒`);
+            }
+            
+            // 如果有自动调整，显示调整信息
+            if (result.data.autoAdjustments && result.data.autoAdjustments.length > 0) {
+              toast.success(`系统已自动调整 ${result.data.autoAdjustments.length} 项`);
+            }
+            
+            // 如果有解释，显示解释
+            if (result.data.explanation) {
+              toast.info(result.data.explanation);
+            }
+          }
+        } catch (orchestratorError: any) {
+          // Orchestrator 调用失败不影响添加地点操作
+          console.warn('Orchestrator execution failed:', orchestratorError);
+          // 可以选择显示警告，但不阻塞用户操作
+          // toast.warning('自动检查失败，但地点已添加');
+        }
+      }
+      
+      // 3. 刷新行程数据
       await loadTrip();
       
-      // 通知父组件刷新其他 Tab（如 ScheduleTab）
+      // 4. 通知父组件刷新其他 Tab（如 ScheduleTab）
       if (onPlaceAdded) {
         onPlaceAdded();
       }
       
-      // 显示成功提示
+      // 5. 显示成功提示
       setSuccessMessage(t('planStudio.placesTab.addPlaceSuccess', { 
         placeName: selectedPlace.nameCN || selectedPlace.nameEN || ''
       }));
@@ -186,7 +226,7 @@ export default function PlacesTab({ tripId, personaMode = 'abu', onPlaceAdded }:
       setAddDialogOpen(false);
       setSelectedPlace(null);
       
-      // 3秒后清除成功提示
+      // 6. 3秒后清除成功提示
       setTimeout(() => {
         setSuccessMessage(null);
       }, 3000);

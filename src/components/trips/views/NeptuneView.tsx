@@ -4,7 +4,7 @@ import type { TripDetail, ItineraryItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Wrench, AlertCircle, CheckCircle2, Info, ArrowRight, RefreshCw, X, Check } from 'lucide-react';
+import { Wrench, CheckCircle2, ArrowRight, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Sheet,
@@ -13,156 +13,38 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { Spinner } from '@/components/ui/spinner';
+import type { NeptuneViewData } from '@/utils/trip-data-extractors';
 
 interface NeptuneViewProps {
   trip: TripDetail;
+  neptuneData: NeptuneViewData | null;
   onItemClick?: (item: ItineraryItem) => void;
 }
 
-// 模拟的修复数据（实际应该从后端获取）
-interface Repair {
-  id: string;
-  type: 'REPLACE' | 'SKIP' | 'RESCHEDULE' | 'ADD_BUFFER';
-  severity: 'CRITICAL' | 'WARNING' | 'INFO';
-  targetItemId: string;
-  patchOps: Array<{ op: string; path: string; value?: any }>;
-  beforeMetrics: {
-    time: number;
-    distance: number;
-    effort: number;
-    cost: number;
-    risk: string;
-  };
-  afterMetrics: {
-    time: number;
-    distance: number;
-    effort: number;
-    cost: number;
-    risk: string;
-  };
-  confidence: number;
-  description: string;
-}
-
-interface Alternative {
-  placeId: number;
-  placeName: string;
-  reasonFit: string;
-  delta: {
-    time: number;
-    distance: number;
-    cost: number;
-  };
-  bookingInfo?: string;
-}
-
-export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
+export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneViewProps) {
   const { t } = useTranslation();
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null);
   const [alternativesSheetOpen, setAlternativesSheetOpen] = useState(false);
-  const [selectedRepair, setSelectedRepair] = useState<Repair | null>(null);
+  const [selectedRepair, setSelectedRepair] = useState<any | null>(null);
   const [patchSheetOpen, setPatchSheetOpen] = useState(false);
 
-  // 模拟数据
-  const repairs: Repair[] = [
-    {
-      id: 'repair-1',
-      type: 'REPLACE',
-      severity: 'CRITICAL',
-      targetItemId: 'item-2',
-      patchOps: [
-        { op: 'replace', path: '/items/1/placeId', value: 123 },
-        { op: 'replace', path: '/items/1/startTime', value: '2024-01-16T10:00:00Z' },
-      ],
-      beforeMetrics: {
-        time: 180,
-        distance: 8,
-        effort: 70,
-        cost: 150,
-        risk: '高',
-      },
-      afterMetrics: {
-        time: 150,
-        distance: 6,
-        effort: 50,
-        cost: 120,
-        risk: '中',
-      },
-      confidence: 0.9,
-      description: t('tripViews.neptune.descriptions.replaceRoute'),
-    },
-    {
-      id: 'repair-2',
-      type: 'ADD_BUFFER',
-      severity: 'WARNING',
-      targetItemId: 'item-1',
-      patchOps: [{ op: 'add', path: '/items/0/buffer', value: 30 }],
-      beforeMetrics: {
-        time: 120,
-        distance: 5,
-        effort: 40,
-        cost: 200,
-        risk: '中',
-      },
-      afterMetrics: {
-        time: 150,
-        distance: 5,
-        effort: 40,
-        cost: 200,
-        risk: '低',
-      },
-      confidence: 0.85,
-      description: t('tripViews.neptune.descriptions.addBuffer'),
-    },
-  ];
+  // 如果数据未加载完成，显示加载状态
+  if (!neptuneData) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Spinner className="w-8 h-8" />
+        <span className="ml-2">加载修复数据...</span>
+      </div>
+    );
+  }
 
-  const alternatives: { [itemId: string]: Alternative[] } = {
-    'item-2': [
-      {
-        placeId: 123,
-        placeName: t('tripViews.neptune.alternatives.alternativeRouteA'),
-        reasonFit: t('tripViews.neptune.alternatives.reasonFit1'),
-        delta: { time: -30, distance: -2, cost: -30 },
-        bookingInfo: t('tripViews.neptune.alternatives.noBooking'),
-      },
-      {
-        placeId: 124,
-        placeName: t('tripViews.neptune.alternatives.alternativeRouteB'),
-        reasonFit: t('tripViews.neptune.alternatives.reasonFit2'),
-        delta: { time: 0, distance: 0, cost: 0 },
-        bookingInfo: t('tripViews.neptune.alternatives.needBooking'),
-      },
-    ],
-  };
-
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'CRITICAL':
-        return <AlertCircle className="w-5 h-5 text-red-600" />;
-      case 'WARNING':
-        return <AlertCircle className="w-5 h-5 text-yellow-600" />;
-      case 'INFO':
-        return <Info className="w-5 h-5 text-blue-600" />;
-      default:
-        return null;
-    }
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'CRITICAL':
-        return 'bg-red-50 border-red-200 text-red-800';
-      case 'WARNING':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-800';
-      case 'INFO':
-        return 'bg-blue-50 border-blue-200 text-blue-800';
-      default:
-        return '';
-    }
-  };
+  // 使用真实数据
+  const repairs = neptuneData.repairs || [];
+  const alternatives = neptuneData.alternatives || {};
 
   const getItemRepairs = (itemId: string) => {
-    return repairs.filter((r) => r.targetItemId === itemId);
+    return repairs.filter((r) => r.target === itemId);
   };
 
   const getItemAlternatives = (itemId: string) => {
@@ -178,19 +60,26 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
   };
 
   const handleQuickFix = () => {
-    // 一键止血：应用所有硬红线修复
-    const criticalRepairs = repairs.filter((r) => r.severity === 'CRITICAL');
-    if (criticalRepairs.length > 0) {
-      setSelectedRepair(criticalRepairs[0]);
+    // 一键止血：应用第一个修复
+    if (repairs.length > 0) {
+      setSelectedRepair(repairs[0]);
       setPatchSheetOpen(true);
     }
   };
 
-  const handleApplyRepair = (repair: Repair, scope: 'all' | 'today' | 'save') => {
-    // 应用修复
-    console.log(t('tripViews.neptune.applyFix'), repair.id, scope);
+  const handleApplyRepair = async (repair: any) => {
+    // 应用修复（需要调用 API）
+    try {
+      // TODO: 调用 API 应用修复
+      // await tripsApi.applySuggestion(trip.id, repair.id, { actionId: 'apply_repair' });
+      console.log('应用修复:', repair.id);
     setPatchSheetOpen(false);
     setSelectedRepair(null);
+      // 可以显示成功提示
+    } catch (error) {
+      console.error('应用修复失败:', error);
+      // 可以显示错误提示
+    }
   };
 
   return (
@@ -220,9 +109,7 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
             repairs.map((repair) => (
               <div
                 key={repair.id}
-                className={`p-4 border rounded-lg cursor-pointer hover:shadow-md ${getSeverityColor(
-                  repair.severity
-                )}`}
+                className="p-4 border border-yellow-300 bg-yellow-50 rounded-lg cursor-pointer hover:shadow-md"
                 onClick={() => {
                   setSelectedRepair(repair);
                   setPatchSheetOpen(true);
@@ -230,47 +117,35 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 flex-1">
-                    {getSeverityIcon(repair.severity)}
+                    <Wrench className="w-5 h-5 text-green-600" />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge
-                          variant={
-                            repair.severity === 'CRITICAL'
-                              ? 'destructive'
-                              : repair.severity === 'WARNING'
-                              ? 'secondary'
-                              : 'outline'
-                          }
-                        >
-                          {repair.severity === 'CRITICAL'
-                            ? t('tripViews.neptune.severity.mustFix')
-                            : repair.severity === 'WARNING'
-                            ? t('tripViews.neptune.severity.recommendFix')
-                            : t('tripViews.neptune.severity.canOptimize')}
+                        <Badge variant="outline">
+                          修复建议
                         </Badge>
-                        <span className="font-medium">{repair.description}</span>
+                        <span className="font-medium">{repair.explanation}</span>
                       </div>
-                      <div className="text-sm mt-2">
-                        <span className="font-medium">{t('tripViews.neptune.whatToChange')}</span>
-                        {repair.type === 'REPLACE'
-                          ? t('tripViews.neptune.actions.replaceItem')
-                          : repair.type === 'SKIP'
-                          ? t('tripViews.neptune.actions.skipItem')
-                          : repair.type === 'RESCHEDULE'
-                          ? t('tripViews.neptune.actions.adjustTime')
-                          : t('tripViews.neptune.actions.addBuffer')}
+                      {repair.reasonCodes && repair.reasonCodes.length > 0 && (
+                        <div className="flex gap-1 mt-2">
+                          {repair.reasonCodes.map((code: string) => (
+                            <Badge key={code} variant="outline" className="text-xs">
+                              {code}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      {repair.target && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          目标: {repair.target}
+                        </div>
+                      )}
+                      {repair.replacement && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          替换为: {repair.replacement}
                       </div>
-                      <div className="text-sm">
-                        <span className="font-medium">{t('tripViews.neptune.cost')}</span>
-                        {repair.afterMetrics.time - repair.beforeMetrics.time > 0
-                          ? `+${repair.afterMetrics.time - repair.beforeMetrics.time}${t('tripViews.neptune.minutes')}`
-                          : `${repair.afterMetrics.time - repair.beforeMetrics.time}${t('tripViews.neptune.minutes')}`}
-                        {repair.afterMetrics.cost - repair.beforeMetrics.cost !== 0 && (
-                          <span className="ml-2">
-                            {repair.afterMetrics.cost - repair.beforeMetrics.cost > 0 ? '+' : ''}
-                            ¥{repair.afterMetrics.cost - repair.beforeMetrics.cost}
-                          </span>
-                        )}
+                      )}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {format(new Date(repair.timestamp), 'yyyy-MM-dd HH:mm')}
                       </div>
                     </div>
                   </div>
@@ -335,14 +210,10 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                               {itemRepairs.map((repair) => (
                                 <Badge
                                   key={repair.id}
-                                  variant={
-                                    repair.severity === 'CRITICAL'
-                                      ? 'destructive'
-                                      : 'secondary'
-                                  }
+                                  variant="outline"
                                   className="text-xs"
                                 >
-                                  {repair.severity === 'CRITICAL' ? t('tripViews.neptune.status.needFix') : t('tripViews.neptune.status.recommendFix')}
+                                  修复建议
                                 </Badge>
                               ))}
                             </div>
@@ -398,75 +269,39 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                   getItemAlternatives(selectedItem.id).map((alt, idx) => (
                     <Card key={idx} className="cursor-pointer hover:shadow-md">
                       <CardHeader>
-                        <CardTitle className="text-lg">{alt.placeName}</CardTitle>
+                        <CardTitle className="text-lg">{alt.title}</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <div>
-                          <div className="font-medium mb-1">{t('tripViews.neptune.whyFit')}</div>
-                          <div className="text-sm text-muted-foreground">{alt.reasonFit}</div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-sm">
+                        {alt.description && (
                           <div>
-                            <div className="text-muted-foreground">{t('tripViews.neptune.timeChange')}</div>
-                            <div
-                              className={
-                                alt.delta.time > 0
-                                  ? 'text-red-600'
-                                  : alt.delta.time < 0
-                                  ? 'text-green-600'
-                                  : ''
-                              }
-                            >
-                              {alt.delta.time > 0 ? '+' : ''}
-                              {alt.delta.time}{t('tripViews.neptune.minutes')}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-muted-foreground">{t('tripViews.neptune.distanceChange')}</div>
-                            <div
-                              className={
-                                alt.delta.distance > 0
-                                  ? 'text-red-600'
-                                  : alt.delta.distance < 0
-                                  ? 'text-green-600'
-                                  : ''
-                              }
-                            >
-                              {alt.delta.distance > 0 ? '+' : ''}
-                              {alt.delta.distance}km
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-muted-foreground">{t('tripViews.neptune.costChange')}</div>
-                            <div
-                              className={
-                                alt.delta.cost > 0
-                                  ? 'text-red-600'
-                                  : alt.delta.cost < 0
-                                  ? 'text-green-600'
-                                  : ''
-                              }
-                            >
-                              {alt.delta.cost > 0 ? '+' : ''}¥{alt.delta.cost}
-                            </div>
-                          </div>
-                        </div>
-                        {alt.bookingInfo && (
-                          <div className="text-sm">
-                            <span className="font-medium">预订信息：</span>
-                            {alt.bookingInfo}
+                            <div className="font-medium mb-1">说明</div>
+                            <div className="text-sm text-muted-foreground">{alt.description}</div>
                           </div>
                         )}
+                        {alt.actions && alt.actions.length > 0 && (
+                          <div className="space-y-2">
+                            {alt.actions.map((action: any) => (
                         <Button
+                                key={action.id}
                           className="w-full"
-                          onClick={() => {
-                            // 应用替代
-                            console.log(t('tripViews.neptune.applyAlternative'), alt.placeId);
+                                variant={action.primary ? 'default' : 'outline'}
+                                onClick={async () => {
+                                  if (action.handler) {
+                                    await action.handler();
+                                  } else {
+                                    // 默认处理：应用替代方案
+                                    console.log('应用替代方案:', alt.id);
+                                    // TODO: 调用 API 应用替代方案
+                                    // await tripsApi.applySuggestion(trip.id, alt.id, { actionId: action.id });
+                                  }
                             setAlternativesSheetOpen(false);
                           }}
                         >
-                          {t('tripViews.neptune.applyAlternative')}
+                                {action.label || '应用'}
                         </Button>
+                            ))}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))
@@ -492,77 +327,48 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">{selectedRepair.description}</CardTitle>
+                    <CardTitle className="text-lg">{selectedRepair.explanation}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Before / After 对比 */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="font-medium mb-2 text-red-600">Before</div>
-                        <div className="space-y-2 text-sm">
-                          <div>{t('tripViews.neptune.time')}: {selectedRepair.beforeMetrics.time}{t('tripViews.neptune.minutes')}</div>
-                          <div>距离: {selectedRepair.beforeMetrics.distance}km</div>
-                          <div>体力: {selectedRepair.beforeMetrics.effort}</div>
-                          <div>花费: ¥{selectedRepair.beforeMetrics.cost}</div>
-                          <div>风险: {selectedRepair.beforeMetrics.risk}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="font-medium mb-2 text-green-600">After</div>
-                        <div className="space-y-2 text-sm">
-                          <div>
-                            时间:{' '}
-                            <span
-                              className={
-                                selectedRepair.afterMetrics.time -
-                                  selectedRepair.beforeMetrics.time >
-                                0
-                                  ? 'text-red-600'
-                                  : 'text-green-600'
-                              }
-                            >
-                              {selectedRepair.afterMetrics.time}{t('tripViews.neptune.minutes')}
-                              {selectedRepair.afterMetrics.time -
-                                selectedRepair.beforeMetrics.time !==
-                              0 && (
-                                <span>
-                                  (
-                                  {selectedRepair.afterMetrics.time -
-                                    selectedRepair.beforeMetrics.time >
-                                  0
-                                    ? '+'
-                                    : ''}
-                                  {selectedRepair.afterMetrics.time -
-                                    selectedRepair.beforeMetrics.time}
-                                  {t('tripViews.neptune.minutes')})
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                          <div>
-                            距离:{' '}
-                            <span
-                              className={
-                                selectedRepair.afterMetrics.distance -
-                                  selectedRepair.beforeMetrics.distance >
-                                0
-                                  ? 'text-red-600'
-                                  : 'text-green-600'
-                              }
-                            >
-                              {selectedRepair.afterMetrics.distance}km
-                            </span>
-                          </div>
-                          <div>体力: {selectedRepair.afterMetrics.effort}</div>
-                          <div>花费: ¥{selectedRepair.afterMetrics.cost}</div>
-                          <div>风险: {selectedRepair.afterMetrics.risk}</div>
-                        </div>
-                      </div>
+                    {/* 修复说明 */}
+                    <div>
+                      <div className="font-medium mb-2">修复说明</div>
+                      <div className="text-sm">{selectedRepair.explanation}</div>
                     </div>
 
-                    <div className="pt-4 border-t">
-                      <div className="text-sm text-muted-foreground mb-2">
-                        置信度: {Math.round(selectedRepair.confidence * 100)}%
+                    {/* 原因码 */}
+                    {selectedRepair.reasonCodes && selectedRepair.reasonCodes.length > 0 && (
+                      <div>
+                        <div className="font-medium mb-2">原因码</div>
+                        <div className="flex gap-2 flex-wrap">
+                          {selectedRepair.reasonCodes.map((code: string) => (
+                            <Badge key={code} variant="outline">
+                              {code}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 修复内容 */}
+                    {selectedRepair.target && (
+                      <div>
+                        <div className="font-medium mb-2">原计划</div>
+                        <div className="text-sm text-muted-foreground">{selectedRepair.originalPlan || selectedRepair.target}</div>
+                      </div>
+                    )}
+                    {selectedRepair.replacement && (
+                          <div>
+                        <div className="font-medium mb-2">替换为</div>
+                        <div className="text-sm text-muted-foreground">{selectedRepair.replacement}</div>
+                      </div>
+                    )}
+
+                    {/* 时间戳 */}
+                    <div>
+                      <div className="font-medium mb-2">时间</div>
+                      <div className="text-sm text-muted-foreground">
+                        {format(new Date(selectedRepair.timestamp), 'yyyy-MM-dd HH:mm:ss')}
                       </div>
                     </div>
                   </CardContent>
@@ -573,22 +379,15 @@ export default function NeptuneView({ trip, onItemClick }: NeptuneViewProps) {
                   <Button
                     variant="outline"
                     className="flex-1"
-                    onClick={() => handleApplyRepair(selectedRepair, 'today')}
+                    onClick={() => setPatchSheetOpen(false)}
                   >
-                    仅应用到今天
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => handleApplyRepair(selectedRepair, 'save')}
-                  >
-                    保存为备选方案
+                    取消
                   </Button>
                   <Button
                     className="flex-1"
-                    onClick={() => handleApplyRepair(selectedRepair, 'all')}
+                    onClick={() => handleApplyRepair(selectedRepair)}
                   >
-                    {t('tripViews.neptune.applyFix')}
+                    {t('tripViews.neptune.applyFix') || '应用修复'}
                   </Button>
                 </div>
               </>

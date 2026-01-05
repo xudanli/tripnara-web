@@ -6,7 +6,19 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        brand: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Courier New', 'monospace'],
+      },
+      fontWeight: {
+        brand: '300',
+      },
+      letterSpacing: {
+        brand: '0.4em',
+      },
+    },
   },
   plugins: [],
 }

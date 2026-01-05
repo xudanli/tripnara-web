@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Settings, LogOut, User, MapPin, Compass, Wrench, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import LanguageSwitcher from '@/components/common/LanguageSwitcher';
+import Logo from '@/components/common/Logo';
 
 export default function Header() {
   const { user, logout, isAuthenticated } = useAuth();
@@ -56,13 +57,13 @@ export default function Header() {
           {/* Logo */}
           <a
             href="/dashboard"
-            className="text-2xl font-bold text-gray-900 no-underline hover:text-gray-700 transition-colors"
+            className="no-underline hover:opacity-80 transition-opacity"
             onClick={(e) => {
               e.preventDefault();
               navigate('/dashboard/trips');
             }}
           >
-            TripNARA
+            <Logo variant="full" size={28} color="#111827" />
           </a>
 
           {/* Navigation Items */}

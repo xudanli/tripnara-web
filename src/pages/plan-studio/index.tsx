@@ -9,7 +9,7 @@ import ScheduleTab from './ScheduleTab';
 import OptimizeTab from './OptimizeTab';
 import WhatIfTab from './WhatIfTab';
 import BookingsTab from './BookingsTab';
-import PersonaModeToggle, { type PersonaMode } from '@/components/common/PersonaModeToggle';
+// PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
 import SpotlightTour from '@/components/onboarding/SpotlightTour';
 import type { TourStep } from '@/components/onboarding/SpotlightTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
@@ -28,7 +28,7 @@ export default function PlanStudioPage() {
   const tripId = searchParams.get('tripId');
   const defaultTab = searchParams.get('tab') || 'intent';
   const [activeTab, setActiveTab] = useState(defaultTab);
-  const [personaMode, setPersonaMode] = useState<PersonaMode>('abu');
+  // personaMode 已移除 - 三人格由系统自动调用，不再需要用户切换视图
   
   const { state: onboardingState, completeTour, completeStep, completeWelcome } = useOnboarding();
   const [showTour, setShowTour] = useState(false);
@@ -52,10 +52,7 @@ export default function PlanStudioPage() {
     if (value === 'schedule') completeStep('schedule');
     if (value === 'optimize') completeStep('optimize');
     
-    // 默认视图切换策略：点击 optimize Tab 自动切到 Dr.Dre
-    if (value === 'optimize' && personaMode !== 'dre') {
-      setPersonaMode('dre');
-    }
+    // 不再需要切换 personaMode，三人格由系统自动调用
   };
 
   // 检查行程数据和验证tripId是否有效
@@ -290,15 +287,14 @@ export default function PlanStudioPage() {
         }}
       />
 
-      {/* 顶部：标题 + 模式切换 */}
-      <div className="border-b bg-white px-6 py-4 flex items-center justify-between">
+      {/* 顶部：标题 */}
+      <div className="border-b bg-white px-6 py-4">
         <div>
           <h1 className="text-2xl font-bold">{t('planStudio.title')}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {t('planStudio.subtitle')}
           </p>
         </div>
-        <PersonaModeToggle value={personaMode} onChange={setPersonaMode} />
       </div>
 
       {/* 主内容区：Tab导航 + 内容 */}
@@ -320,30 +316,28 @@ export default function PlanStudioPage() {
               {/* 主内容区（8/12） */}
               <div className="col-span-12 lg:col-span-8">
                 <TabsContent value="intent" className="mt-0">
-                  <IntentTab tripId={tripId} personaMode={personaMode} />
+                  <IntentTab tripId={tripId} />
                 </TabsContent>
                 <TabsContent value="places" className="mt-0">
                   <PlacesTab 
                     tripId={tripId} 
-                    personaMode={personaMode}
                     onPlaceAdded={() => setRefreshKey(prev => prev + 1)}
                   />
                 </TabsContent>
                 <TabsContent value="schedule" className="mt-0">
                   <ScheduleTab 
                     tripId={tripId} 
-                    personaMode={personaMode}
                     refreshKey={refreshKey}
                   />
                 </TabsContent>
                 <TabsContent value="optimize" className="mt-0">
-                  <OptimizeTab tripId={tripId} personaMode={personaMode} />
+                  <OptimizeTab tripId={tripId} />
                 </TabsContent>
                 <TabsContent value="what-if" className="mt-0">
-                  <WhatIfTab tripId={tripId} personaMode={personaMode} />
+                  <WhatIfTab tripId={tripId} />
                 </TabsContent>
                 <TabsContent value="bookings" className="mt-0">
-                  <BookingsTab tripId={tripId} personaMode={personaMode} />
+                  <BookingsTab tripId={tripId} />
                 </TabsContent>
               </div>
 
@@ -351,7 +345,6 @@ export default function PlanStudioPage() {
               <div className="col-span-12 lg:col-span-4">
                 <PlanStudioSidebar 
                   tripId={tripId} 
-                  personaMode={personaMode}
                   onOpenReadinessDrawer={(findingId) => {
                     setHighlightFindingId(findingId);
                     setReadinessDrawerOpen(true);

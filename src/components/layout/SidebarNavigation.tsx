@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import Logo from '@/components/common/Logo';
 
 interface NavSubItem {
   key: string;
@@ -176,13 +177,22 @@ export default function SidebarNavigation({
               e.preventDefault();
               handleNavClick('/dashboard');
             }}
-            className="text-xl font-bold text-gray-900 no-underline hover:text-gray-700 transition-colors"
+            className="no-underline hover:opacity-80 transition-opacity"
           >
-            TripNARA
+            <Logo variant="full" size={24} color="#111827" />
           </a>
         )}
         {collapsed && (
-          <div className="text-xl font-bold text-gray-900">TN</div>
+          <a
+            href="/dashboard"
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick('/dashboard');
+            }}
+            className="no-underline hover:opacity-80 transition-opacity flex items-center justify-center"
+          >
+            <Logo variant="icon" size={24} color="#111827" />
+          </a>
         )}
         {!isMobile && (
           <Button

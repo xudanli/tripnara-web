@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import LoginIllustration from '@/components/auth/LoginIllustration';
+import Logo from '@/components/common/Logo';
 
 type RegisterStep = 'email' | 'code' | 'register';
 
@@ -156,11 +157,8 @@ export default function RegisterPage() {
         <div className="w-full max-w-md">
           {/* Logo and Title */}
           <div className="mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-black rounded flex items-center justify-center">
-                <span className="text-white font-bold text-xl">T</span>
-              </div>
-              <h1 className="text-2xl font-bold">TripNARA</h1>
+            <div className="mb-4">
+              <Logo variant="full" size={32} color="#000" />
             </div>
             <h2 className="text-2xl font-semibold text-gray-900">
               {t('register.title')}

@@ -2,24 +2,25 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Shield, Brain, Wrench, CheckCircle2, XCircle, AlertTriangle, BarChart3, TrendingUp, FileText, ClipboardCheck } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
-import type { PersonaMode } from '@/components/common/PersonaModeToggle';
+// PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
-import { decisionApi } from '@/api/decision';
+// decisionApi 已移除 - 不再直接调用决策接口，改为通过 LangGraph Orchestrator
 import { readinessApi } from '@/api/readiness';
 import type { PersonaAlert, TripDetail, TripMetricsResponse, IntentResponse } from '@/types/trip';
-import type { ValidateSafetyRequest, AdjustPacingRequest, ReplaceNodesRequest, RoutePlanDraft, WorldModelContext, RouteSegment, DEMEvidenceItem } from '@/types/strategy';
-import { toast } from 'sonner';
+// 以下类型已移除，因为不再直接调用决策接口
+// import type { ValidateSafetyRequest, AdjustPacingRequest, ReplaceNodesRequest, RoutePlanDraft, WorldModelContext, RouteSegment, DEMEvidenceItem } from '@/types/strategy';
 import { formatCurrency } from '@/utils/format';
 
 interface PlanStudioSidebarProps {
   tripId: string;
-  personaMode: PersonaMode;
   onOpenReadinessDrawer?: (findingId?: string) => void;
 }
 
-export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadinessDrawer }: PlanStudioSidebarProps) {
+export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: PlanStudioSidebarProps) {
   const { t, i18n } = useTranslation();
   
   // 获取当前语言代码（'zh' 或 'en'）
@@ -39,14 +40,7 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
   const [readinessSummary, setReadinessSummary] = useState<{ totalBlockers: number; totalMust: number; totalShould: number; totalOptional: number; risks: number } | null>(null);
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   
-  // 根据当前 personaMode 过滤提醒
-  const personaMap: Record<PersonaMode, 'ABU' | 'DR_DRE' | 'NEPTUNE'> = {
-    abu: 'ABU',
-    dre: 'DR_DRE',
-    neptune: 'NEPTUNE',
-  };
-  
-  const currentPersona = personaMap[personaMode];
+  // 显示所有人格的提醒，不再根据 personaMode 过滤
   // 去重：根据 alert.id 去重，避免重复显示
   // 如果 id 不存在，使用 title + message 作为唯一标识
   const uniqueAlerts = alerts.filter((alert, index, self) => {
@@ -56,7 +50,17 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
       return otherIdentifier === identifier;
     });
   });
-  const filteredAlerts = uniqueAlerts.filter(alert => alert.persona === currentPersona);
+  
+  // 按人格分组，用于显示筛选器
+  const [filterPersona, setFilterPersona] = useState<'all' | 'ABU' | 'DR_DRE' | 'NEPTUNE'>('all');
+  const filteredAlerts = filterPersona === 'all' 
+    ? uniqueAlerts 
+    : uniqueAlerts.filter(alert => alert.persona === filterPersona);
+  
+  // 按人格分组的数据
+  const abuAlerts = uniqueAlerts.filter(alert => alert.persona === 'ABU');
+  const drDreAlerts = uniqueAlerts.filter(alert => alert.persona === 'DR_DRE');
+  const neptuneAlerts = uniqueAlerts.filter(alert => alert.persona === 'NEPTUNE');
 
   useEffect(() => {
     loadPersonaAlerts();
@@ -160,7 +164,9 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
   };
 
   // 构建 RoutePlanDraft（从行程数据构建）
-  const buildRoutePlanDraft = (): RoutePlanDraft | null => {
+  // 此函数已废弃，因为不再直接调用决策接口
+  /*
+  const buildRoutePlanDraft = (): any | null => {
     if (!trip || !trip.TripDay || trip.TripDay.length === 0) {
       return null;
     }
@@ -174,22 +180,24 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
           if (item.Place && index > 0) {
             const prevItem = day.ItineraryItem[index - 1];
             if (prevItem?.Place) {
-              // 获取位置信息
+              // 获取位置信息（从 metadata 中获取）
               const fromLat = prevItem.Place.metadata?.location?.lat || 
-                             prevItem.Place.lat || 0;
+                             (prevItem.Place.metadata as any)?.lat || 0;
               const fromLng = prevItem.Place.metadata?.location?.lng || 
-                             prevItem.Place.lng || 0;
+                             (prevItem.Place.metadata as any)?.lng || 0;
               const toLat = item.Place.metadata?.location?.lat || 
-                           item.Place.lat || 0;
+                           (item.Place.metadata as any)?.lat || 0;
               const toLng = item.Place.metadata?.location?.lng || 
-                           item.Place.lng || 0;
+                           (item.Place.metadata as any)?.lng || 0;
               
               // 计算距离
               const distanceKm = calculateDistance(fromLat, fromLng, toLat, toLng);
               
-              // 获取爬升和坡度（从 physicalMetadata 或使用默认值）
-              const ascentM = item.Place.physicalMetadata?.elevationGainM || 0;
-              const slopePct = item.Place.physicalMetadata?.slopePct || 0;
+              // 获取爬升和坡度（从 metadata 中获取）
+              const ascentM = item.Place.metadata?.physicalMetadata?.elevationGainM || 
+                             (item.Place.metadata as any)?.elevationGainM || 0;
+              const slopePct = item.Place.metadata?.physicalMetadata?.slopePct || 
+                               (item.Place.metadata as any)?.slopePct || 0;
               
               segments.push({
                 segmentId: `seg-${day.id}-${index}`,
@@ -224,14 +232,14 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
 
     // 从 segments 构建 DEM 证据
     const plan = buildRoutePlanDraft();
-    const demEvidence: DEMEvidenceItem[] = [];
+    const demEvidence: any[] = [];
     
     if (plan && plan.segments.length > 0) {
       // 计算3天滚动爬升
       let rollingAscent3Days = 0;
-      const last3DaysSegments: RouteSegment[] = [];
+      const last3DaysSegments: any[] = [];
       
-      plan.segments.forEach((segment, index) => {
+      plan.segments.forEach((segment: any, index: number) => {
         // 收集最近3天的 segments
         if (segment.dayIndex >= Math.max(0, plan.segments[plan.segments.length - 1].dayIndex - 2)) {
           last3DaysSegments.push(segment);
@@ -290,7 +298,9 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
     };
   };
 
-  // Abu 策略：安全规则校验
+  // 手动操作函数已移除 - 三人格现在由系统自动调用
+  // 以下函数已废弃，保留作为参考：
+  /*
   const handleValidateSafety = async () => {
     if (!trip) {
       toast.error(t('planStudio.sidebar.noTripData'));
@@ -337,8 +347,9 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
       setProcessing(false);
     }
   };
+  */
 
-  // Dr.Dre 策略：行程节奏调整
+  /*
   const handleAdjustPacing = async () => {
     if (!trip) {
       toast.error(t('planStudio.sidebar.noTripData'));
@@ -402,8 +413,9 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
       setProcessing(false);
     }
   };
+  */
 
-  // Neptune 策略：路线节点替换
+  /*
   const handleReplaceNodes = async () => {
     if (!trip) {
       toast.error(t('planStudio.sidebar.noTripData'));
@@ -491,6 +503,7 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
       setProcessing(false);
     }
   };
+  */
 
   // 从提醒中提取门控状态和违规数量（Abu视图）
   const abuGatingStatus: 'ALLOW' | 'WARN' | 'BLOCK' = 
@@ -557,7 +570,7 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
       }
     };
     
-    const weights = getWeightsFromPolicy(intent?.planningPolicy);
+    const weights = getWeightsFromPolicy((intent as any)?.planningPolicy);
 
     // 计算平均疲劳指数（从所有日期的疲劳指数计算）
     const totalFatigue = metrics.days.reduce((sum, day) => sum + day.metrics.fatigue, 0);
@@ -579,16 +592,12 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
   // 从 alerts 计算 Neptune 修复数据
   // 如果没有数据，返回 null 表示数据未加载
   const neptuneFixes = (() => {
-    if (personaMode !== 'neptune') {
-      return null;
-    }
-    
     // 如果还在加载中，返回 null
     if (loading) {
       return null;
     }
     
-    const neptuneAlerts = alerts.filter(alert => alert.persona === 'NEPTUNE');
+    // 使用上面定义的 neptuneAlerts（从 uniqueAlerts 中过滤）
     const total = neptuneAlerts.length;
     
     // 从 alerts 的 metadata 中提取修复信息
@@ -638,9 +647,10 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
     }
   };
 
-  // 策略预览卡片（顶部）
+  // 策略预览卡片（顶部）- 显示所有人格的数据
   const renderStrategyPreview = () => {
-    if (personaMode === 'abu') {
+    // Abu 预览卡片
+    const renderAbuPreview = () => {
       return (
         <Card>
           <CardHeader>
@@ -669,178 +679,161 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
           </CardContent>
         </Card>
       );
-    }
+    };
 
-    if (personaMode === 'dre') {
+    // Dr.Dre 预览卡片
+    const renderDrDrePreview = () => {
       if (loadingMetrics) {
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <BarChart3 className="w-5 h-5 text-orange-600" />
-                {t('planStudio.sidebar.dre.metricsOverview')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center py-4">
-                <Spinner className="w-4 h-4" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-center py-4">
+            <Spinner className="w-4 h-4" />
+          </div>
         );
       }
 
       // 如果数据未加载，显示加载状态
       if (!dreMetrics) {
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <BarChart3 className="w-5 h-5 text-orange-600" />
-                {t('planStudio.sidebar.dre.metricsOverview')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center py-4">
-                {loadingMetrics ? (
-                  <Spinner className="w-4 h-4" />
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    {t('planStudio.sidebar.loading')}
-                  </div>
-                )}
+          <div className="flex items-center justify-center py-4">
+            {loadingMetrics ? (
+              <Spinner className="w-4 h-4" />
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                {t('planStudio.sidebar.loading')}
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
         );
       }
 
       return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <BarChart3 className="w-5 h-5 text-orange-600" />
-              {t('planStudio.sidebar.dre.metricsOverview')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.totalTime')}</div>
-                <div className="font-semibold">{Math.floor(dreMetrics.timeTotal / 60)}h</div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.totalBuffer')}</div>
-                <div className="font-semibold">
-                  {dreMetrics.bufferTotal !== undefined 
-                    ? `${Math.floor(dreMetrics.bufferTotal / 60)}h` 
-                    : t('planStudio.sidebar.loading')}
-                </div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.fatigueScore')}</div>
-                <div className="font-semibold">{dreMetrics.fatigueScore}</div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.estimatedCost')}</div>
-                <div className="font-semibold">
-                  {dreMetrics.costEstimate !== undefined 
-                    ? formatCurrency(dreMetrics.costEstimate, trip?.budgetConfig?.currency || 'CNY')
-                    : t('planStudio.sidebar.loading')}
-                </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="p-2 border rounded">
+              <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.totalTime')}</div>
+              <div className="font-semibold">{Math.floor(dreMetrics.timeTotal / 60)}h</div>
+            </div>
+            <div className="p-2 border rounded">
+              <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.totalBuffer')}</div>
+              <div className="font-semibold">
+                {dreMetrics.bufferTotal !== undefined 
+                  ? `${Math.floor(dreMetrics.bufferTotal / 60)}h` 
+                  : t('planStudio.sidebar.loading')}
               </div>
             </div>
-            <div className="pt-2 border-t">
-              <div className="text-xs text-muted-foreground mb-2">{t('planStudio.sidebar.dre.currentWeights')}</div>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span>{t('planStudio.sidebar.dre.comfort')}</span>
-                  <span className="font-medium">{dreMetrics.weights.comfort}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t('planStudio.sidebar.dre.experience')}</span>
-                  <span className="font-medium">{dreMetrics.weights.experience}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>{t('planStudio.sidebar.dre.cost')}</span>
-                  <span className="font-medium">{dreMetrics.weights.cost}%</span>
-                </div>
+            <div className="p-2 border rounded">
+              <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.fatigueScore')}</div>
+              <div className="font-semibold">{dreMetrics.fatigueScore}</div>
+            </div>
+            <div className="p-2 border rounded">
+              <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.dre.estimatedCost')}</div>
+              <div className="font-semibold">
+                {dreMetrics.costEstimate !== undefined 
+                  ? formatCurrency(dreMetrics.costEstimate, trip?.budgetConfig?.currency || 'CNY')
+                  : t('planStudio.sidebar.loading')}
               </div>
             </div>
-            <Button variant="outline" className="w-full" size="sm">
-              <TrendingUp className="w-4 h-4 mr-2" />
-              {t('planStudio.sidebar.dre.adjustWeights')}
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="pt-2 border-t">
+            <div className="text-xs text-muted-foreground mb-2">{t('planStudio.sidebar.dre.currentWeights')}</div>
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span>{t('planStudio.sidebar.dre.comfort')}</span>
+                <span className="font-medium">{dreMetrics.weights.comfort}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span>{t('planStudio.sidebar.dre.experience')}</span>
+                <span className="font-medium">{dreMetrics.weights.experience}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span>{t('planStudio.sidebar.dre.cost')}</span>
+                <span className="font-medium">{dreMetrics.weights.cost}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
       );
-    }
+    };
 
-    if (personaMode === 'neptune') {
+    // Neptune 预览卡片
+    const renderNeptunePreview = () => {
       // 如果数据未加载，显示加载状态
       if (!neptuneFixes) {
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Wrench className="w-5 h-5 text-green-600" />
-                {t('planStudio.sidebar.neptune.fixProgress')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center py-4">
-                {loading ? (
-                  <Spinner className="w-4 h-4" />
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    {t('planStudio.sidebar.loading')}
-                  </div>
-                )}
+          <div className="flex items-center justify-center py-4">
+            {loading ? (
+              <Spinner className="w-4 h-4" />
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                {t('planStudio.sidebar.loading')}
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
         );
       }
 
       return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Wrench className="w-5 h-5 text-green-600" />
-              {t('planStudio.sidebar.neptune.fixProgress')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="p-3 border rounded-lg bg-gray-50">
-              <div className="text-sm space-y-1">
-                <div>
-                  {t('planStudio.sidebar.neptune.issuesFound', { count: neptuneFixes.total })}
-                </div>
-                <div>
-                  {t('planStudio.sidebar.neptune.issuesFixed', { count: neptuneFixes.applied })}
-                </div>
-              </div>
-            </div>
+        <div className="space-y-3">
+          <div className="p-3 border rounded-lg bg-gray-50">
             <div className="text-sm space-y-1">
-              <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.neptune.minimalChangeCost')}</div>
-              <div className="space-y-1">
-                <div>• {t('planStudio.sidebar.neptune.replacePoints', { count: neptuneFixes.minimalChanges.replacePoints })}</div>
-                <div>• {t('planStudio.sidebar.neptune.moveTimeSlots', { count: neptuneFixes.minimalChanges.moveTimeSlots })}</div>
+              <div>
+                {t('planStudio.sidebar.neptune.issuesFound', { count: neptuneFixes.total })}
+              </div>
+              <div>
+                {t('planStudio.sidebar.neptune.issuesFixed', { count: neptuneFixes.applied })}
               </div>
             </div>
-            <Button variant="outline" className="w-full" size="sm">
-              <FileText className="w-4 h-4 mr-2" />
-              {t('planStudio.sidebar.neptune.viewPatch')}
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="text-sm space-y-1">
+            <div className="text-xs text-muted-foreground">{t('planStudio.sidebar.neptune.minimalChangeCost')}</div>
+            <div className="space-y-1">
+              <div>• {t('planStudio.sidebar.neptune.replacePoints', { count: neptuneFixes.minimalChanges.replacePoints })}</div>
+              <div>• {t('planStudio.sidebar.neptune.moveTimeSlots', { count: neptuneFixes.minimalChanges.moveTimeSlots })}</div>
+            </div>
+          </div>
+        </div>
       );
-    }
+    };
 
-    return null;
+    // 使用 Tabs 显示所有人格的数据
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">策略概览</CardTitle>
+          <CardDescription>查看所有三人格的自动执行结果</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="abu" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="abu" className="flex items-center gap-1">
+                <Shield className="w-4 h-4" />
+                Abu
+              </TabsTrigger>
+              <TabsTrigger value="dre" className="flex items-center gap-1">
+                <BarChart3 className="w-4 h-4" />
+                Dr.Dre
+              </TabsTrigger>
+              <TabsTrigger value="neptune" className="flex items-center gap-1">
+                <Wrench className="w-4 h-4" />
+                Neptune
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="abu" className="mt-4">
+              {renderAbuPreview()}
+            </TabsContent>
+            <TabsContent value="dre" className="mt-4">
+              {renderDrDrePreview()}
+            </TabsContent>
+            <TabsContent value="neptune" className="mt-4">
+              {renderNeptunePreview()}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    );
   };
 
-  // 提示卡（中部）
+  // 提示卡（中部）- 显示所有人格的提醒，支持筛选
   const renderAlertsCard = () => {
     if (loading) {
       return (
@@ -857,9 +850,11 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
       );
     }
 
-    if (personaMode === 'abu') {
-      // 按照 decisionSource 分组显示 alerts
-      const groupedAlerts = filteredAlerts.reduce((acc, alert) => {
+    // 显示所有人格的提醒，使用筛选器
+    // Abu 提醒显示
+    const renderAbuAlerts = () => {
+      // 按照 decisionSource 分组显示 alerts（使用 abuAlerts）
+      const groupedAlerts = abuAlerts.reduce((acc, alert) => {
         const source = alert.metadata?.decisionSource || 'OTHER';
         if (!acc[source]) {
           acc[source] = [];
@@ -890,7 +885,7 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
             <CardDescription>{t('planStudio.sidebar.abu.riskAlertsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {filteredAlerts.length === 0 ? (
+            {abuAlerts.length === 0 ? (
               <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-center">
                 <div className="text-green-800">{t('planStudio.sidebar.noAlerts')}</div>
             </div>
@@ -900,7 +895,7 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
                 // 如果有多个 alerts，合并显示
                 const hasWarning = sourceAlerts.some(a => a.severity === 'warning');
                 const hasInfo = sourceAlerts.some(a => a.severity === 'info');
-                const hasSuccess = sourceAlerts.some(a => a.severity === 'success');
+                // const hasSuccess = sourceAlerts.some(a => a.severity === 'success'); // 未使用
                 
                 // 确定整体状态：如果有 warning，显示 warning；否则显示 info 或 success
                 const overallSeverity = hasWarning ? 'warning' : hasInfo ? 'info' : 'success';
@@ -928,11 +923,12 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
           </CardContent>
         </Card>
       );
-    }
+    };
 
-    if (personaMode === 'dre') {
-      // 从 alerts 和 metrics 中提取指标异常
-      const metricAlerts = filteredAlerts.filter(alert => 
+    // Dr.Dre 提醒显示
+    const renderDrDreAlerts = () => {
+      // 从 alerts 和 metrics 中提取指标异常（使用 drDreAlerts）
+      const metricAlerts = drDreAlerts.filter(alert => 
         alert.metadata?.type === 'FATIGUE_PEAK' || 
         alert.metadata?.type === 'BUFFER_INSUFFICIENT' || 
         alert.metadata?.type === 'COST_OVER_BUDGET'
@@ -990,9 +986,10 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
           </CardContent>
         </Card>
       );
-    }
+    };
 
-    if (personaMode === 'neptune') {
+    // Neptune 提醒显示
+    const renderNeptuneAlerts = () => {
       // 如果有实际的修复建议，显示它们；否则显示提示信息
       const hasSuggestions = neptuneReplacements.length > 0;
       
@@ -1034,69 +1031,63 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
           </CardContent>
         </Card>
       );
-    }
+    };
 
-    return null;
+    // 使用 Tabs 显示所有人格的提醒
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">人格提醒</CardTitle>
+              <CardDescription>查看所有三人格的自动提醒</CardDescription>
+            </div>
+            <Select value={filterPersona} onValueChange={(value: 'all' | 'ABU' | 'DR_DRE' | 'NEPTUNE') => setFilterPersona(value)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部</SelectItem>
+                <SelectItem value="ABU">Abu</SelectItem>
+                <SelectItem value="DR_DRE">Dr.Dre</SelectItem>
+                <SelectItem value="NEPTUNE">Neptune</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="abu" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="abu" className="flex items-center gap-1">
+                <Shield className="w-4 h-4" />
+                Abu ({abuAlerts.length})
+              </TabsTrigger>
+              <TabsTrigger value="dre" className="flex items-center gap-1">
+                <BarChart3 className="w-4 h-4" />
+                Dr.Dre ({drDreAlerts.length})
+              </TabsTrigger>
+              <TabsTrigger value="neptune" className="flex items-center gap-1">
+                <Wrench className="w-4 h-4" />
+                Neptune ({neptuneAlerts.length})
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="abu" className="mt-4">
+              {renderAbuAlerts()}
+            </TabsContent>
+            <TabsContent value="dre" className="mt-4">
+              {renderDrDreAlerts()}
+            </TabsContent>
+            <TabsContent value="neptune" className="mt-4">
+              {renderNeptuneAlerts()}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    );
   };
 
-  // 底部按钮
-  const renderActionButton = () => {
-    if (personaMode === 'abu') {
-      return (
-        <Button 
-          variant="outline" 
-          className="w-full"
-          onClick={handleValidateSafety}
-          disabled={processing || !trip}
-        >
-          {processing ? (
-            <Spinner className="w-4 h-4 mr-2" />
-          ) : (
-          <Shield className="w-4 h-4 mr-2" />
-          )}
-          {t('planStudio.sidebar.abu.askAgentRefine')}
-        </Button>
-      );
-    }
-
-    if (personaMode === 'dre') {
-      return (
-        <Button 
-          variant="outline" 
-          className="w-full"
-          onClick={handleAdjustPacing}
-          disabled={processing || !trip}
-        >
-          {processing ? (
-            <Spinner className="w-4 h-4 mr-2" />
-          ) : (
-          <Brain className="w-4 h-4 mr-2" />
-          )}
-          {t('planStudio.sidebar.dre.askAgentOptimize')}
-        </Button>
-      );
-    }
-
-    if (personaMode === 'neptune') {
-      return (
-        <Button 
-          variant="outline" 
-          className="w-full"
-          onClick={handleReplaceNodes}
-          disabled={processing || !trip}
-        >
-          {processing ? (
-            <Spinner className="w-4 h-4 mr-2" />
-          ) : (
-          <Wrench className="w-4 h-4 mr-2" />
-          )}
-          {t('planStudio.sidebar.neptune.askAgentFix')}
-        </Button>
-      );
-    }
-
-    return null;
-  };
+  // 手动操作按钮已移除 - 三人格现在由系统自动调用
+  // 不再需要用户手动触发 validate-safety、adjust-pacing、replace-nodes
 
   // 准备度汇总卡
   const renderReadinessCard = () => {
@@ -1177,8 +1168,7 @@ export default function PlanStudioSidebar({ tripId, personaMode, onOpenReadiness
       {/* 提示卡 */}
       {renderAlertsCard()}
 
-      {/* 底部按钮 */}
-      {renderActionButton()}
+      {/* 手动操作按钮已移除 - 三人格由系统自动调用 */}
     </div>
   );
 }

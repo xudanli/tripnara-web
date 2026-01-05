@@ -1,50 +1,33 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TripDetail, ItineraryItem } from '@/types/trip';
+import type { TripDetail, ItineraryItem, TripMetricsResponse } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Brain, TrendingUp, Clock, DollarSign, Activity, Lock, RefreshCw, BarChart3 } from 'lucide-react';
+import { Brain, TrendingUp, Clock, Activity, Lock, RefreshCw, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Spinner } from '@/components/ui/spinner';
+import type { DrDreViewData } from '@/utils/trip-data-extractors';
 
 interface DrDreViewProps {
   trip: TripDetail;
+  drDreData: DrDreViewData | null;
+  tripMetrics: TripMetricsResponse | null;
   onItemClick?: (item: ItineraryItem) => void;
-}
-
-// 模拟的指标数据（实际应该从后端获取）
-interface Metrics {
-  timeTotal: number; // 总耗时（分钟）
-  bufferTotal: number; // 总缓冲（分钟）
-  fatigueScore: number; // 疲劳指数（0-100）
-  ascent: number; // 总爬升（米）
-  costEstimate: number; // 预计花费
-  reliability: number; // 可靠性评分（0-100）
-}
-
-interface MetricsByItem {
-  [itemId: string]: {
-    duration: number;
-    buffer: number;
-    effort: number; // 体力消耗（0-100）
-    cost: number;
-    ascent?: number;
-    distance?: number;
-  };
 }
 
 interface Candidate {
   id: string;
   deltaSummary: string;
-  metrics: Metrics;
+  metrics: any;
   patchPreview: any;
 }
 
-export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
+export default function DrDreView({ trip, drDreData, tripMetrics, onItemClick }: DrDreViewProps) {
   const { t } = useTranslation();
   const [priorities, setPriorities] = useState({
     time: 50,
@@ -62,38 +45,26 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [showCandidates, setShowCandidates] = useState(false);
 
-  // 模拟数据
-  const metrics: Metrics = {
-    timeTotal: 1440, // 24小时
-    bufferTotal: 180, // 3小时
-    fatigueScore: 65,
-    ascent: 1200,
-    costEstimate: 5000,
-    reliability: 85,
+  // 如果数据未加载完成，显示加载状态
+  if (!drDreData) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Spinner className="w-8 h-8" />
+        <span className="ml-2">加载节奏数据...</span>
+      </div>
+    );
+  }
+
+  // 使用真实数据
+  const metrics = drDreData.metrics || {
+    totalFatigue: 0,
+    avgBuffer: 0,
+    totalWalk: 0,
+    totalDrive: 0,
+    maxDailyFatigue: 0,
   };
 
-  const metricsByItem: MetricsByItem = {
-    'item-1': {
-      duration: 120,
-      buffer: 15,
-      effort: 40,
-      cost: 200,
-      distance: 5,
-    },
-    'item-2': {
-      duration: 180,
-      buffer: 30,
-      effort: 70,
-      cost: 150,
-      ascent: 500,
-    },
-    'item-3': {
-      duration: 90,
-      buffer: 20,
-      effort: 30,
-      cost: 100,
-    },
-  };
+  const metricsByItem = drDreData.metricsByItem || {};
 
   const handleLockItem = (itemId: string) => {
     const newLocked = new Set(lockedItems);
@@ -131,11 +102,23 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
   };
 
   const getItemMetrics = (itemId: string) => {
-    return metricsByItem[itemId] || {
+    const itemMetrics = metricsByItem[itemId];
+    if (!itemMetrics) {
+      return {
       duration: 0,
       buffer: 0,
       effort: 0,
       cost: 0,
+      };
+    }
+    // 适配数据结构
+    return {
+      duration: 0, // 从 item 的 startTime 和 endTime 计算
+      buffer: itemMetrics.buffer || 0,
+      effort: itemMetrics.fatigue || 0,
+      cost: 0, // 需要从其他地方获取
+      walk: itemMetrics.walk,
+      drive: itemMetrics.drive,
     };
   };
 
@@ -154,39 +137,40 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <div className="p-3 border rounded-lg">
-              <div className="text-xs text-muted-foreground mb-1">总耗时</div>
-              <div className="text-lg font-bold">{Math.floor(metrics.timeTotal / 60)}h</div>
-              <div className="text-xs text-muted-foreground">{metrics.timeTotal % 60}m</div>
+              <div className="text-xs text-muted-foreground mb-1">总疲劳度</div>
+              <div className="text-lg font-bold">{metrics.totalFatigue.toFixed(1)}</div>
+              <div className="text-xs text-muted-foreground">点</div>
             </div>
             <div className="p-3 border rounded-lg">
-              <div className="text-xs text-muted-foreground mb-1">总缓冲</div>
-              <div className="text-lg font-bold">{Math.floor(metrics.bufferTotal / 60)}h</div>
-              <div className="text-xs text-muted-foreground">{metrics.bufferTotal % 60}m</div>
-            </div>
-            <div className="p-3 border rounded-lg">
-              <div className="text-xs text-muted-foreground mb-1">疲劳指数</div>
-              <div className="text-lg font-bold">{metrics.fatigueScore}</div>
-              <div className="text-xs text-muted-foreground">/100</div>
-            </div>
-            <div className="p-3 border rounded-lg">
-              <div className="text-xs text-muted-foreground mb-1">总爬升</div>
-              <div className="text-lg font-bold">{metrics.ascent}m</div>
-            </div>
-            <div className="p-3 border rounded-lg">
-              <div className="text-xs text-muted-foreground mb-1">预计花费</div>
-              <div className="text-lg font-bold">¥{metrics.costEstimate}</div>
-            </div>
-            <div className="p-3 border rounded-lg">
-              <div className="text-xs text-muted-foreground mb-1">可靠性</div>
-              <div className="text-lg font-bold">{metrics.reliability}</div>
-              <div className="text-xs text-muted-foreground">/100</div>
+              <div className="text-xs text-muted-foreground mb-1">平均缓冲</div>
+              <div className="text-lg font-bold">{Math.round(metrics.avgBuffer)}</div>
+              <div className="text-xs text-muted-foreground">分钟</div>
             </div>
             <div className="p-3 border rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">总步行</div>
-              <div className="text-lg font-bold">12.5km</div>
+              <div className="text-lg font-bold">{(metrics.totalWalk / 1000).toFixed(1)}</div>
+              <div className="text-xs text-muted-foreground">km</div>
             </div>
+            <div className="p-3 border rounded-lg">
+              <div className="text-xs text-muted-foreground mb-1">总车程</div>
+              <div className="text-lg font-bold">{Math.round(metrics.totalDrive)}</div>
+              <div className="text-xs text-muted-foreground">分钟</div>
+            </div>
+            {metrics.maxDailyFatigue !== undefined && (
+            <div className="p-3 border rounded-lg">
+                <div className="text-xs text-muted-foreground mb-1">最大日疲劳</div>
+                <div className="text-lg font-bold">{metrics.maxDailyFatigue.toFixed(1)}</div>
+                <div className="text-xs text-muted-foreground">点</div>
+            </div>
+            )}
+            {trip.totalBudget && (
+            <div className="p-3 border rounded-lg">
+                <div className="text-xs text-muted-foreground mb-1">总预算</div>
+                <div className="text-lg font-bold">¥{trip.totalBudget.toLocaleString()}</div>
+            </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -231,10 +215,11 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
                             )}
                           </div>
                           <div className="flex items-center gap-4 text-sm">
+                            {item.startTime && item.endTime && (
                             <div className="flex items-center gap-1">
                               <Clock className="w-4 h-4 text-muted-foreground" />
                               <span>
-                                {itemMetrics.duration}分
+                                  {format(new Date(item.startTime), 'HH:mm')} - {format(new Date(item.endTime), 'HH:mm')}
                                 {itemMetrics.buffer > 0 && (
                                   <span className="text-muted-foreground ml-1">
                                     (+{itemMetrics.buffer}缓冲)
@@ -242,23 +227,27 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
                                 )}
                               </span>
                             </div>
+                            )}
+                            {itemMetrics.effort !== undefined && itemMetrics.effort > 0 && (
                             <div className="flex items-center gap-1">
                               <Activity className="w-4 h-4 text-muted-foreground" />
                               <span className={isOverThreshold(itemMetrics.effort, 70) ? 'text-red-600 font-medium' : ''}>
-                                体力{itemMetrics.effort}
+                                  疲劳{itemMetrics.effort.toFixed(1)}
                               </span>
                             </div>
-                            {itemMetrics.ascent && (
+                            )}
+                            {itemMetrics.walk !== undefined && itemMetrics.walk > 0 && (
                               <div className="text-muted-foreground">
-                                爬升{itemMetrics.ascent}m
+                                步行{(itemMetrics.walk / 1000).toFixed(1)}km
                               </div>
                             )}
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4 text-muted-foreground" />
-                              <span>¥{itemMetrics.cost}</span>
+                            {itemMetrics.drive !== undefined && itemMetrics.drive > 0 && (
+                              <div className="text-muted-foreground">
+                                车程{Math.round(itemMetrics.drive)}分钟
                             </div>
+                            )}
                           </div>
-                          {isOverThreshold(itemMetrics.effort, 70) && (
+                          {itemMetrics.effort !== undefined && isOverThreshold(itemMetrics.effort, 70) && (
                             <Badge variant="destructive" className="ml-2">
                               超负荷
                             </Badge>
@@ -439,10 +428,19 @@ export default function DrDreView({ trip, onItemClick }: DrDreViewProps) {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="text-sm space-y-1">
-                      <div>总耗时: {Math.floor(candidate.metrics.timeTotal / 60)}h</div>
-                      <div>缓冲: {Math.floor(candidate.metrics.bufferTotal / 60)}h</div>
-                      <div>疲劳: {candidate.metrics.fatigueScore}</div>
-                      <div>花费: ¥{candidate.metrics.costEstimate}</div>
+                      <div>调整说明: {candidate.deltaSummary}</div>
+                      {candidate.patchPreview?.adjustment && (
+                        <div className="text-muted-foreground">调整: {candidate.patchPreview.adjustment}</div>
+                      )}
+                      {candidate.patchPreview?.reasonCodes && candidate.patchPreview.reasonCodes.length > 0 && (
+                        <div className="flex gap-1 mt-2">
+                          {candidate.patchPreview.reasonCodes.map((code: string) => (
+                            <Badge key={code} variant="outline" className="text-xs">
+                              {code}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <Button
                       variant="outline"

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import { useAuth } from '@/hooks/useAuth';
+import Logo from '../common/Logo';
 
 interface NavItem {
   key: string;
@@ -120,13 +121,13 @@ export default function WebsiteNavbar() {
         <Link
           to="/"
           style={{
-            fontSize: '1.5rem',
-            fontWeight: '700',
             textDecoration: 'none',
             color: '#000',
+            display: 'flex',
+            alignItems: 'center',
           }}
         >
-          TripNARA
+          <Logo variant="full" size={28} color="#000" />
         </Link>
 
         {/* Desktop Navigation */}

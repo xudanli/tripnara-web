@@ -55,12 +55,23 @@ import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
 import { formatOpeningHoursDescription } from '@/utils/openingHoursFormatter';
 import { formatCurrency as formatCurrencyAmount } from '@/utils/format';
-import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
+import type { DecisionLogEntry, ReplaceItineraryItemResponse, DecisionLogResponse } from '@/types/trip';
 import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
 import DrDreView from '@/components/trips/views/DrDreView';
 import NeptuneView from '@/components/trips/views/NeptuneView';
 import AutoView from '@/components/trips/views/AutoView';
+import { 
+  extractAbuData, 
+  extractDrDreData, 
+  extractNeptuneData, 
+  calculateOverallMetrics,
+  type AbuViewData,
+  type DrDreViewData,
+  type NeptuneViewData,
+  type OverallMetrics,
+} from '@/utils/trip-data-extractors';
+import { useMemo } from 'react';
 
 // 决策记录标签页组件
 function DecisionLogTab({ tripId }: { tripId: string }) {
@@ -269,6 +280,31 @@ export default function TripDetailPage() {
   const [tripMetricsLoading, setTripMetricsLoading] = useState(false);
   const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null);
   const [conflictsLoading, setConflictsLoading] = useState(false);
+  
+  // 新增：决策日志相关状态
+  const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
+  const [decisionLogsLoading, setDecisionLogsLoading] = useState(false);
+  
+  // 新增：提取的数据状态（通过 useMemo 计算）
+  const abuData = useMemo<AbuViewData | null>(() => {
+    if (decisionLogs.length === 0 && personaAlerts.length === 0) return null;
+    return extractAbuData(decisionLogs, personaAlerts);
+  }, [decisionLogs, personaAlerts]);
+  
+  const drDreData = useMemo<DrDreViewData | null>(() => {
+    if (decisionLogs.length === 0 && !tripMetrics) return null;
+    return extractDrDreData(decisionLogs, tripMetrics);
+  }, [decisionLogs, tripMetrics]);
+  
+  const neptuneData = useMemo<NeptuneViewData | null>(() => {
+    if (decisionLogs.length === 0 && suggestions.length === 0) return null;
+    return extractNeptuneData(decisionLogs, suggestions);
+  }, [decisionLogs, suggestions]);
+  
+  const overallMetrics = useMemo<OverallMetrics | null>(() => {
+    if (decisionLogs.length === 0 && personaAlerts.length === 0 && !suggestionStats) return null;
+    return calculateOverallMetrics(decisionLogs, personaAlerts, suggestionStats);
+  }, [decisionLogs, personaAlerts, suggestionStats]);
 
   useEffect(() => {
     if (id) {
@@ -332,6 +368,7 @@ export default function TripDetailPage() {
           loadEvidence(),
           loadSuggestions(),
           loadConflicts(),
+          loadDecisionLogs(), // 新增：加载决策日志
         ]);
       } else {
         setError('行程数据为空');
@@ -370,9 +407,9 @@ export default function TripDetailPage() {
       // 优化建议：如果后端在 GET /trips/:id 响应中包含 isCollected、isLiked、likeCount 字段，
       // 可以直接从 trip 数据中获取，避免额外的 API 调用
       try {
-        const collectedTrips = await tripsApi.getCollected();
-        const collected = collectedTrips.find((ct) => ct.trip.id === id);
-        setIsCollected(!!collected);
+      const collectedTrips = await tripsApi.getCollected();
+      const collected = collectedTrips.find((ct) => ct.trip.id === id);
+      setIsCollected(!!collected);
       } catch (collectedErr: any) {
         // 如果获取收藏状态失败，静默处理，不影响主流程
         // 可能是后端路由配置问题或接口未实现
@@ -494,6 +531,23 @@ export default function TripDetailPage() {
       setSuggestionStats(null);
     } finally {
       setPersonaAlertsLoading(false);
+    }
+  };
+
+  // 新增：加载决策日志
+  const loadDecisionLogs = async () => {
+    if (!id) return;
+    try {
+      setDecisionLogsLoading(true);
+      // 获取足够多的日志（100条）
+      const response = await tripsApi.getDecisionLog(id, 100, 0);
+      setDecisionLogs(response.items || []);
+    } catch (err: any) {
+      console.error('Failed to load decision logs:', err);
+      // 静默处理错误，不影响主流程
+      setDecisionLogs([]);
+    } finally {
+      setDecisionLogsLoading(false);
     }
   };
 
@@ -984,13 +1038,13 @@ export default function TripDetailPage() {
                         const neptuneCount = daySuggestions.filter((s) => s.persona === 'neptune').length;
                         
                         return (
-                          <Card key={day.id} className="border-l-4 border-l-primary">
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between">
+                        <Card key={day.id} className="border-l-4 border-l-primary">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <div className="font-semibold">
-                                      Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
+                                <div className="font-semibold">
+                                  Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
                                     </div>
                                     {/* 角标行 */}
                                     {(abuCount > 0 || drdreCount > 0 || neptuneCount > 0) && (
@@ -1029,17 +1083,17 @@ export default function TripDetailPage() {
                                         />
                                       </div>
                                     )}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground mt-1">
-                                    {day.ItineraryItem.length} 个行程项
-                                  </div>
-                                </div>
+                        </div>
+                                <div className="text-sm text-muted-foreground mt-1">
+                                  {day.ItineraryItem.length} 个行程项
+                      </div>
+                    </div>
                                 <div className="flex gap-2 text-xs flex-wrap">
                                   {dayMetrics ? (
                                     <>
                                       <Badge variant="outline">
                                         步行: {dayMetrics.metrics.walk.toFixed(1)} km
-                                      </Badge>
+                                </Badge>
                                       <Badge variant="outline">
                                         车程: {Math.round(dayMetrics.metrics.drive)} min
                                       </Badge>
@@ -1060,10 +1114,10 @@ export default function TripDetailPage() {
                                       <Badge variant="outline">风险: --</Badge>
                                     </>
                                   )}
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
+                  </div>
+              </div>
+            </CardContent>
+          </Card>
                         );
                       })}
                     </div>
@@ -1080,9 +1134,9 @@ export default function TripDetailPage() {
                     loading={personaAlertsLoading}
                     onSuggestionClick={(suggestion) => {
                       // 点击建议时打开对应的抽屉
-                      setDrawerTab('risk');
-                      setDrawerOpen(true);
-                    }}
+                        setDrawerTab('risk');
+                        setDrawerOpen(true);
+                      }}
                     onActionClick={async (suggestion, actionId) => {
                       if (!id) return;
                       try {
@@ -1149,7 +1203,7 @@ export default function TripDetailPage() {
                     {evidenceLoading ? (
                       <div className="flex items-center justify-center py-4">
                         <Spinner className="w-4 h-4" />
-                      </div>
+                    </div>
                     ) : evidence && evidence.items.length > 0 ? (
                       <>
                         {evidence.items.map((item) => {
@@ -1193,11 +1247,11 @@ export default function TripDetailPage() {
                                         Day {item.day}
                                       </Badge>
                                     )}
-                                  </div>
+                      </div>
                                   {displayContent && (
                                     <div className="text-xs text-muted-foreground break-words">
                                       {displayContent}
-                                    </div>
+                    </div>
                                   )}
                                 </div>
                               </div>
@@ -1215,8 +1269,8 @@ export default function TripDetailPage() {
                         暂无关键证据
                       </div>
                     )}
-                    <Button
-                      variant="outline"
+                <Button
+                  variant="outline"
                       className="w-full mt-4"
                       onClick={() => {
                         setDrawerTab('evidence');
@@ -1224,7 +1278,7 @@ export default function TripDetailPage() {
                       }}
                     >
                       View All Evidence
-                    </Button>
+                </Button>
                   </CardContent>
                 </Card>
 
@@ -1251,43 +1305,82 @@ export default function TripDetailPage() {
             <>
               {/* 视图模式说明（仅在非Auto模式显示） */}
               {viewMode !== 'auto' && (
-                <Card className="bg-blue-50 border-blue-200">
+              <Card className="bg-blue-50 border-blue-200">
                   <CardContent className="p-4">
-                    <div className="text-sm">
-                      {viewMode === 'abu' && (
-                        <div className="flex items-center gap-2">
-                          <Shield className="w-4 h-4 text-red-600" />
-                          <span>
+                  <div className="text-sm">
+                    {viewMode === 'abu' && (
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-red-600" />
+                        <span>
                             <strong>Abu Lens：</strong>聚焦风险与证据
-                          </span>
+                        </span>
                         </div>
-                      )}
-                      {viewMode === 'dre' && (
-                        <div className="flex items-center gap-2">
-                          <Activity className="w-4 h-4 text-orange-600" />
-                          <span>
+                    )}
+                    {viewMode === 'dre' && (
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-orange-600" />
+                        <span>
                             <strong>Dr.Dre Lens：</strong>聚焦指标与节奏
-                          </span>
-                        </div>
-                      )}
-                      {viewMode === 'neptune' && (
-                        <div className="flex items-center gap-2">
-                          <RefreshCw className="w-4 h-4 text-green-600" />
-                          <span>
-                            <strong>Neptune Lens：</strong>聚焦修复与替代
-                          </span>
-                        </div>
-                      )}
+                        </span>
                     </div>
+              )}
+                    {viewMode === 'neptune' && (
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 text-green-600" />
+                        <span>
+                            <strong>Neptune Lens：</strong>聚焦修复与替代
+                        </span>
+                        </div>
+                              )}
+                            </div>
                   </CardContent>
                 </Card>
               )}
 
               {/* 根据视图模式显示不同的视图组件 */}
-              {viewMode === 'auto' && <AutoView trip={trip} />}
-              {viewMode === 'abu' && <AbuView trip={trip} />}
-              {viewMode === 'dre' && <DrDreView trip={trip} />}
-              {viewMode === 'neptune' && <NeptuneView trip={trip} />}
+              {viewMode === 'auto' && (
+                <AutoView 
+                  trip={trip} 
+                  overallMetrics={overallMetrics}
+                  abuData={abuData}
+                  drDreData={drDreData}
+                  neptuneData={neptuneData}
+                />
+              )}
+              {viewMode === 'abu' && (
+                <AbuView 
+                  trip={trip} 
+                  abuData={abuData}
+                  onItemClick={(item) => {
+                    setHighlightItemId(item.id);
+                    setDrawerTab('risk');
+                    setDrawerOpen(true);
+                  }}
+                />
+              )}
+              {viewMode === 'dre' && (
+                <DrDreView 
+                  trip={trip} 
+                  drDreData={drDreData}
+                  tripMetrics={tripMetrics}
+                  onItemClick={(item) => {
+                    setHighlightItemId(item.id);
+                    setDrawerTab('evidence');
+                    setDrawerOpen(true);
+                  }}
+                />
+              )}
+              {viewMode === 'neptune' && (
+                <NeptuneView 
+                  trip={trip} 
+                  neptuneData={neptuneData}
+                  onItemClick={(item) => {
+                    setHighlightItemId(item.id);
+                    setDrawerTab('evidence');
+                    setDrawerOpen(true);
+                  }}
+                />
+              )}
             </>
           )}
           </TabsContent>
