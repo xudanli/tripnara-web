@@ -83,20 +83,44 @@
     "title": "帮助你做出更好旅行决定的三位合伙人",
     "abu": {
       "name": "Abu",
-      "title": "安全守门人",
-      "description": "风险不过关 → 直接否决",
-      "details": "天气 · 海拔 · 车况 · 能力匹配"
+      "shortTitle": "安全与边界守护",
+      "keywords": ["安全", "合规", "风险预警"],
+      "title": "安全与边界守护者",
+      "subtitle": "北极熊 · Polar Guardian",
+      "tagline": "我负责：这条路，真的能走吗？",
+      "description": "严肃但温柔，永远优先保证安全。",
+      "details": "天气 · 海拔 · 车况 · 能力匹配",
+      "why": "大、稳、冷静。天生生存专家，有保护者气质。比狮虎更柔和，更有「可信赖」感觉。",
+      "personality": "严肃但温柔 · 不强求速度 · 永远把你带去安全地带",
+      "visual": "守护、稳重、有耐心 · 轻微皱眉思考型 · 配色静谧蓝/冰川白 · 图形元素盾牌·雪地·路标"
     },
     "dre": {
       "name": "Dr.Dre",
-      "title": "日程结构师",
-      "description": "帮你把旅程安排得刚刚好"
+      "shortTitle": "节奏与体力设计",
+      "keywords": ["节奏", "体感", "稳定"],
+      "title": "节奏与体力设计师",
+      "subtitle": "牧羊犬 · Mountain Shepherd Dog",
+      "tagline": "别太累，我会让每天刚刚好。",
+      "description": "聪明、稳重，在旁轻声引导节奏。",
+      "details": "最擅长：照顾队伍整体节律",
+      "why": "不冲在最前面，在旁边引导节奏，既聪明又温柔。最擅长：照顾队伍整体节律。",
+      "personality": "体谅 · 节奏 · 稳定 · 贴心",
+      "visual": "温柔·细致·可靠 · 轻笑/思考 · 配色森林绿/柔棕 · 图形元素节拍线·心跳曲线"
     },
     "neptune": {
       "name": "Neptune",
-      "title": "修复替换者",
-      "description": "情况变化？我来兜底"
+      "shortTitle": "修复与替代路径",
+      "keywords": ["替代方案", "机动", "空间直觉"],
+      "title": "修复与替代的空间魔法师",
+      "subtitle": "海獭 · Navigation Otter",
+      "tagline": "如果行不通，我会给你一个刚刚好的替代。",
+      "description": "灵活、体贴，永远理解你的真实需求。",
+      "details": "理解你真正想要 → 提供温柔的新路径",
+      "why": "灵活·聪明·好奇。善于解决问题，永远能找到替代方案。本人自带疗愈气质。",
+      "personality": "聪明 · 灵活 · 创造性 · 共情",
+      "visual": "机灵·温暖 · 微笑·闪光灵感 · 配色深海蓝/星空紫 · 图形元素罗盘·星星·波浪"
     },
+    "viewDetails": "查看详情",
     "decisionLog": "每个判断都在决策日志中解释",
     "decisionLogScreenshot": "决策日志截图"
   },

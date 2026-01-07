@@ -175,6 +175,7 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
       await itineraryItemsApi.create(data);
       
       // 2. 自动触发 LangGraph Orchestrator，系统会自动调用三人格进行检查和调整
+      // 传递已计算好的时间信息，确保与创建行程项时使用的时间一致
       if (user) {
         try {
           const result = await orchestrator.addPlace(
@@ -182,7 +183,9 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
             tripId,
             selectedPlace.id,
             selectedDayId,
-            selectedPlace.nameCN || selectedPlace.nameEN
+            selectedPlace.nameCN || selectedPlace.nameEN,
+            startTime.toISOString(),
+            endTime.toISOString()
           );
           
           // 显示系统自动执行的结果
@@ -201,12 +204,38 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
             if (result.data.explanation) {
               toast.info(result.data.explanation);
             }
+          } else if (!result.success) {
+            // 如果执行失败，显示错误信息
+            const errorMsg = result.error || result.message || '未知错误';
+            console.warn('[PlacesTab] Orchestrator 执行失败，但地点已添加:', {
+              error: result.error,
+              message: result.message,
+              decisionLogCount: result.data?.decisionLog?.length || 0,
+              status: '地点已成功添加，但自动检查未完成',
+            });
+            
+            // 根据错误类型显示不同的提示
+            if (errorMsg.includes('约束条件') || errorMsg.includes('约束')) {
+              toast.warning(`地点已添加，但检测到约束冲突: ${errorMsg}`, {
+                description: '建议检查行程的硬约束设置（如时间、距离、预算等）',
+                duration: 5000,
+              });
+            } else if (errorMsg.includes('无法完成规划')) {
+              toast.warning(`地点已添加，但规划检查失败`, {
+                description: errorMsg,
+                duration: 5000,
+              });
+            } else {
+              toast.warning(`地点已添加，但自动检查未完成`, {
+                description: errorMsg,
+                duration: 4000,
+              });
+            }
           }
         } catch (orchestratorError: any) {
           // Orchestrator 调用失败不影响添加地点操作
-          console.warn('Orchestrator execution failed:', orchestratorError);
-          // 可以选择显示警告，但不阻塞用户操作
-          // toast.warning('自动检查失败，但地点已添加');
+          console.error('[PlacesTab] Orchestrator 执行异常:', orchestratorError);
+          toast.warning(`地点已添加，但自动检查失败: ${orchestratorError.message || '未知错误'}`);
         }
       }
       

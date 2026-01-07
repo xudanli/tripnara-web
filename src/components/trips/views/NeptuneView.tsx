@@ -37,7 +37,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
         <span className="ml-2">加载修复数据...</span>
       </div>
     );
-  }
+    }
 
   // 使用真实数据
   const repairs = neptuneData.repairs || [];

@@ -83,20 +83,44 @@
     "title": "Three Partners Helping You Make Better Travel Decisions",
     "abu": {
       "name": "Abu",
-      "title": "Safety Gatekeeper",
-      "description": "Risk fails → Direct rejection",
-      "details": "Weather · Altitude · Vehicle condition · Capability matching"
+      "shortTitle": "Safety & Boundary Guardian",
+      "keywords": ["Safety", "Compliance", "Risk Alert"],
+      "title": "Safety & Boundary Guardian",
+      "subtitle": "Polar Bear Polar Guardian",
+      "tagline": "I'm responsible: Can this route really be taken?",
+      "description": "Serious but gentle, not rushing for speed, always taking you to safe places",
+      "details": "Weather · Altitude · Vehicle condition · Capability matching",
+      "why": "Big, stable, calm. Natural survival expert with a protective nature. Softer than lions and tigers, more trustworthy.",
+      "personality": "Serious but gentle · Not rushing for speed · Always taking you to safe places",
+      "visual": "Guardian, steady, patient · Slight frown, thoughtful · Colors: serene blue/glacier white · Elements: shield·snow·road signs"
     },
     "dre": {
       "name": "Dr.Dre",
-      "title": "Schedule Architect",
-      "description": "Helps you arrange your journey perfectly"
+      "shortTitle": "Rhythm & Energy Design",
+      "keywords": ["Rhythm", "Body Feel", "Stability"],
+      "title": "Rhythm & Energy Designer",
+      "subtitle": "Mountain Shepherd Dog",
+      "tagline": "Don't push too hard, I'll make every day just right.",
+      "description": "Considerate, rhythmic, stable, caring. Not leading from the front, but guiding the pace from the side, both smart and gentle.",
+      "details": "Best at: Taking care of the team's overall rhythm",
+      "why": "Not leading from the front, but guiding the pace from the side, both smart and gentle. Best at: Taking care of the team's overall rhythm.",
+      "personality": "Considerate · Rhythm · Stable · Caring",
+      "visual": "Gentle·detailed·reliable · Light smile/thoughtful · Colors: forest green/soft brown · Elements: beat lines·heartbeat curves"
     },
     "neptune": {
       "name": "Neptune",
-      "title": "Replacement Fixer",
-      "description": "Circumstances changed? I'll handle it"
+      "shortTitle": "Repair & Alternative Path",
+      "keywords": ["Alternative", "Flexibility", "Spatial Intuition"],
+      "title": "Repair & Alternative Space Magician",
+      "subtitle": "Navigation Otter",
+      "tagline": "If it doesn't work, I'll give you a perfect alternative.",
+      "description": "Smart, flexible, creative, empathetic. Good at solving problems, always finding alternatives, with a healing nature.",
+      "details": "Understanding what you really want → Providing gentle new paths",
+      "why": "Flexible·smart·curious. Good at solving problems, always finding alternatives. Has a healing nature.",
+      "personality": "Smart · Flexible · Creative · Empathetic",
+      "visual": "Clever·warm · Smile·sparkling inspiration · Colors: deep sea blue/starry purple · Elements: compass·stars·waves"
     },
+    "viewDetails": "View Details",
     "decisionLog": "Every judgment is explained in the Decision Log",
     "decisionLogScreenshot": "Decision Log Screenshot"
   },

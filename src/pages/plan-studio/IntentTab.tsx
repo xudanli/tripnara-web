@@ -16,16 +16,18 @@ import { placesApi } from '@/api/places';
 import type { PlaceWithDistance } from '@/types/places-routes';
 import type { TripDetail, UpdateTripRequest } from '@/types/trip';
 import { useDebounce } from '@/hooks/useDebounce';
-import type { PersonaMode } from '@/components/common/PersonaModeToggle';
+// PersonaMode 已移除 - 三人格现在是系统内部工具
 import { toast } from 'sonner';
+import { orchestrator } from '@/services/orchestrator';
+import { useAuth } from '@/hooks/useAuth';
 
 interface IntentTabProps {
   tripId: string;
-  personaMode?: PersonaMode;
 }
 
-export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProps) {
+export default function IntentTab({ tripId }: IntentTabProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [trip, setTrip] = useState<TripDetail | null>(null);
@@ -295,6 +297,42 @@ export default function IntentTab({ tripId, personaMode = 'abu' }: IntentTabProp
         }
       }
       toast.success(t('planStudio.intentTab.saveSuccess'));
+      
+      // 自动触发 LangGraph Orchestrator，系统会自动调用三人格进行检查和调整
+      if (user) {
+        try {
+          const result = await orchestrator.modifySchedule(user.id, tripId, [
+            {
+              type: 'UPDATE_INTENT',
+              changes: {
+                rhythm,
+                preferences,
+                dailyWalkLimit,
+                earlyRiser,
+                nightOwl,
+                mustPlaces: mustPlaces.map(id => parseInt(id)).filter(id => !isNaN(id)),
+                avoidPlaces: avoidPlaces.map(id => parseInt(id)).filter(id => !isNaN(id)),
+                planningPolicy,
+                budget,
+              },
+            },
+          ]);
+          
+          if (result.success && result.data) {
+            if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
+              toast.info(`系统已自动检查，发现 ${result.data.personaAlerts.length} 条提醒`);
+            }
+            if (result.data.autoAdjustments && result.data.autoAdjustments.length > 0) {
+              toast.success(`系统已自动调整 ${result.data.autoAdjustments.length} 项`);
+            }
+            if (result.data.explanation) {
+              toast.info(result.data.explanation);
+            }
+          }
+        } catch (orchestratorError: any) {
+          console.warn('Orchestrator execution failed:', orchestratorError);
+        }
+      }
       
       // 重新加载数据
       await loadTrip();

@@ -17,9 +17,19 @@ import PlanStudioSidebar from '@/components/plan-studio/PlanStudioSidebar';
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
 import { Button } from '@/components/ui/button';
 import WelcomeModal from '@/components/onboarding/WelcomeModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle2, Clock, AlertCircle, Circle } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
+import type { PipelineStatus, PipelineStage } from '@/types/trip';
 
 export default function PlanStudioPage() {
   const { t } = useTranslation();
@@ -39,6 +49,12 @@ export default function PlanStudioPage() {
   const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
   const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
   const [highlightFindingId, setHighlightFindingId] = useState<string | undefined>(undefined);
+  
+  // 行程状态相关
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -101,6 +117,53 @@ export default function PlanStudioPage() {
     
     checkTripsAndTripId();
   }, [tripId, searchParams, setSearchParams]);
+
+  // 获取行程 Pipeline 状态
+  const loadPipelineStatus = async () => {
+    if (!tripId) return;
+    
+    try {
+      setLoadingStatus(true);
+      setStatusError(null);
+      const status = await tripsApi.getPipelineStatus(tripId);
+      setPipelineStatus(status);
+    } catch (err: any) {
+      console.error('[PlanStudio] Failed to load pipeline status:', err);
+      setStatusError(err.message || '获取状态失败');
+      // 如果获取失败，尝试从 trip 详情中获取
+      try {
+        const trip = await tripsApi.getById(tripId);
+        if (trip.pipelineStatus) {
+          setPipelineStatus(trip.pipelineStatus);
+        }
+      } catch (tripErr) {
+        // 忽略错误，保持 statusError
+      }
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  // 当 tripId 变化时，加载 Pipeline 状态
+  useEffect(() => {
+    if (tripId && tripExists) {
+      loadPipelineStatus();
+    } else {
+      setPipelineStatus(null);
+      setStatusError(null);
+    }
+  }, [tripId, tripExists]);
+
+  // 定期刷新状态（每30秒）
+  useEffect(() => {
+    if (!tripId || !tripExists) return;
+
+    const interval = setInterval(() => {
+      loadPipelineStatus();
+    }, 30000); // 30秒
+
+    return () => clearInterval(interval);
+  }, [tripId, tripExists]);
   
   // 根据当前 Tab 显示对应的 Tour
   useEffect(() => {
@@ -287,13 +350,36 @@ export default function PlanStudioPage() {
         }}
       />
 
-      {/* 顶部：标题 */}
+      {/* 顶部：标题 + 状态 */}
       <div className="border-b bg-white px-6 py-4">
-        <div>
-          <h1 className="text-2xl font-bold">{t('planStudio.title')}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t('planStudio.subtitle')}
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{t('planStudio.title')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('planStudio.subtitle')}
+            </p>
+          </div>
+          
+          {/* Pipeline 状态指示器 */}
+          {tripId && tripExists && (
+            <div className="flex items-center gap-2">
+              {loadingStatus ? (
+                <Spinner className="w-4 h-4" />
+              ) : pipelineStatus ? (
+                <button
+                  onClick={() => setShowStatusDialog(true)}
+                  className="hover:opacity-80 transition-opacity"
+                  title="点击查看详细状态"
+                >
+                  <PipelineStatusIndicator status={pipelineStatus} />
+                </button>
+              ) : statusError ? (
+                <div className="text-xs text-muted-foreground">
+                  状态加载失败
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
 
@@ -366,6 +452,134 @@ export default function PlanStudioPage() {
         tripId={tripId}
         highlightFindingId={highlightFindingId}
       />
+
+      {/* Pipeline 状态详情对话框 */}
+      {pipelineStatus && (
+        <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>行程规划状态</DialogTitle>
+              <DialogDescription>
+                查看行程规划的各个阶段完成情况
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-4">
+              {pipelineStatus.stages.map((stage) => (
+                <PipelineStageCard key={stage.id} stage={stage} />
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+// Pipeline 状态指示器组件
+function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
+  // 计算当前进度
+  const totalStages = status.stages.length;
+  const completedStages = status.stages.filter(s => s.status === 'completed').length;
+  const inProgressStages = status.stages.filter(s => s.status === 'in-progress').length;
+  const riskStages = status.stages.filter(s => s.status === 'risk').length;
+  
+  // 获取当前阶段
+  const currentStage = status.stages.find(s => s.status === 'in-progress' || s.status === 'risk');
+  
+  // 计算进度百分比
+  const progressPercentage = totalStages > 0 ? (completedStages / totalStages) * 100 : 0;
+  
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      {/* 进度条 */}
+      <div className="flex items-center gap-2">
+        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div 
+            className={`h-full transition-all ${
+              riskStages > 0 ? 'bg-yellow-500' : 
+              inProgressStages > 0 ? 'bg-blue-500' : 
+              'bg-green-500'
+            }`}
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+        <span className="text-muted-foreground min-w-[3rem]">
+          {completedStages}/{totalStages}
+        </span>
+      </div>
+      
+      {/* 当前阶段 */}
+      {currentStage && (
+        <div className="flex items-center gap-1">
+          <div className={`w-2 h-2 rounded-full ${
+            currentStage.status === 'risk' ? 'bg-yellow-500' : 'bg-blue-500'
+          } animate-pulse`} />
+          <span className="text-muted-foreground">
+            {currentStage.name}
+          </span>
+        </div>
+      )}
+      
+      {/* 风险提示 */}
+      {riskStages > 0 && (
+        <div className="flex items-center gap-1 text-yellow-600">
+          <span>⚠️</span>
+          <span>{riskStages} 个风险项</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Pipeline 阶段卡片组件
+function PipelineStageCard({ stage }: { stage: PipelineStage }) {
+  const getStatusIcon = () => {
+    switch (stage.status) {
+      case 'completed':
+        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case 'in-progress':
+        return <Clock className="w-5 h-5 text-blue-500 animate-spin" />;
+      case 'risk':
+        return <AlertCircle className="w-5 h-5 text-yellow-500" />;
+      default:
+        return <Circle className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
+  const getStatusBadge = () => {
+    switch (stage.status) {
+      case 'completed':
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">已完成</Badge>;
+      case 'in-progress':
+        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">进行中</Badge>;
+      case 'risk':
+        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">有风险</Badge>;
+      default:
+        return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">待处理</Badge>;
+    }
+  };
+
+  return (
+    <div className="flex items-start gap-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+      <div className="flex-shrink-0 mt-0.5">
+        {getStatusIcon()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="font-medium text-sm">{stage.name}</h4>
+          {getStatusBadge()}
+        </div>
+        {stage.summary && (
+          <p className="text-xs text-muted-foreground mt-2 whitespace-pre-line">
+            {stage.summary}
+          </p>
+        )}
+        {stage.completedAt && (
+          <p className="text-xs text-muted-foreground mt-1">
+            完成时间: {new Date(stage.completedAt).toLocaleString('zh-CN')}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -5,20 +5,22 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
-import type { PersonaMode } from '@/components/common/PersonaModeToggle';
+// PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import type { TripDetail } from '@/types/trip';
 import type { OptimizeRouteRequest, OptimizeRouteResponse } from '@/types/itinerary-optimization';
 import { toast } from 'sonner';
+import { orchestrator } from '@/services/orchestrator';
+import { useAuth } from '@/hooks/useAuth';
 
 interface OptimizeTabProps {
   tripId: string;
-  personaMode?: PersonaMode;
 }
 
-export default function OptimizeTab({ tripId, personaMode = 'abu' }: OptimizeTabProps) {
+export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [result, setResult] = useState<OptimizeRouteResponse | null>(null);
@@ -80,9 +82,33 @@ export default function OptimizeTab({ tripId, personaMode = 'abu' }: OptimizeTab
         },
       };
 
-      // 调用优化接口
+      // 1. 先调用优化接口
       const optimizeResult = await itineraryOptimizationApi.optimize(request);
       setResult(optimizeResult);
+
+      // 2. 自动触发 LangGraph Orchestrator，系统会自动调用三人格进行检查和调整
+      if (user) {
+        try {
+          const result = await orchestrator.optimizeRoute(user.id, tripId, {
+            placeIds,
+            config: request.config,
+          });
+          
+          if (result.success && result.data) {
+            if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
+              toast.info(`系统已自动检查，发现 ${result.data.personaAlerts.length} 条提醒`);
+            }
+            if (result.data.autoAdjustments && result.data.autoAdjustments.length > 0) {
+              toast.success(`系统已自动调整 ${result.data.autoAdjustments.length} 项`);
+            }
+            if (result.data.explanation) {
+              toast.info(result.data.explanation);
+            }
+          }
+        } catch (orchestratorError: any) {
+          console.warn('Orchestrator execution failed:', orchestratorError);
+        }
+      }
 
       toast.success(t('planStudio.optimizeTab.optimizeSuccess'));
     } catch (err: any) {

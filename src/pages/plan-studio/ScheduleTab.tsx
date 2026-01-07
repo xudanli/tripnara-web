@@ -40,18 +40,20 @@ import {
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import type { PersonaMode } from '@/components/common/PersonaModeToggle';
+// PersonaMode 已移除 - 三人格现在是系统内部工具
 import { toast } from 'sonner';
 import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
+import { orchestrator } from '@/services/orchestrator';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ScheduleTabProps {
   tripId: string;
-  personaMode?: PersonaMode;
   refreshKey?: number; // 用于触发刷新
 }
 
-export default function ScheduleTab({ tripId, personaMode = 'abu', refreshKey }: ScheduleTabProps) {
+export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [schedules, setSchedules] = useState<Map<string, ScheduleResponse>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -278,10 +280,37 @@ export default function ScheduleTab({ tripId, personaMode = 'abu', refreshKey }:
   };
 
   const confirmDeleteItem = async () => {
-    if (!deletingItem) return;
+    if (!deletingItem || !user) return;
 
     try {
+      // 1. 先删除行程项
       await itineraryItemsApi.delete(deletingItem.id);
+      
+      // 2. 自动触发 LangGraph Orchestrator，系统会自动调用三人格进行检查和调整
+      try {
+        const result = await orchestrator.removePlace(
+          user.id,
+          tripId,
+          deletingItem.id,
+          deletingItem.placeName
+        );
+        
+        // 显示系统自动执行的结果
+        if (result.success && result.data) {
+          if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
+            toast.info(`系统已自动检查，发现 ${result.data.personaAlerts.length} 条提醒`);
+          }
+          if (result.data.autoAdjustments && result.data.autoAdjustments.length > 0) {
+            toast.success(`系统已自动调整 ${result.data.autoAdjustments.length} 项`);
+          }
+          if (result.data.explanation) {
+            toast.info(result.data.explanation);
+          }
+        }
+      } catch (orchestratorError: any) {
+        console.warn('Orchestrator execution failed:', orchestratorError);
+      }
+      
       toast.success(t('planStudio.scheduleTab.deleteSuccess', { placeName: deletingItem.placeName }));
       await loadTrip();
       setDeleteDialogOpen(false);
@@ -309,14 +338,42 @@ export default function ScheduleTab({ tripId, personaMode = 'abu', refreshKey }:
   };
 
   const handleReplaceSuccess = async (result: ReplaceItineraryItemResponse) => {
-    if (!replacingItem) return;
+    if (!replacingItem || !user) return;
     try {
+      // 1. 先更新行程项
       await itineraryItemsApi.update(replacingItem.id, {
         placeId: result.newItem.placeId,
         startTime: result.newItem.startTime,
         endTime: result.newItem.endTime,
         note: result.newItem.reason,
       });
+      
+      // 2. 自动触发 LangGraph Orchestrator
+      try {
+        const orchestratorResult = await orchestrator.modifySchedule(user.id, tripId, [
+          {
+            type: 'REPLACE',
+            itemId: replacingItem.id,
+            newPlaceId: result.newItem.placeId,
+            reason: result.newItem.reason,
+          },
+        ]);
+        
+        if (orchestratorResult.success && orchestratorResult.data) {
+          if (orchestratorResult.data.personaAlerts && orchestratorResult.data.personaAlerts.length > 0) {
+            toast.info(`系统已自动检查，发现 ${orchestratorResult.data.personaAlerts.length} 条提醒`);
+          }
+          if (orchestratorResult.data.autoAdjustments && orchestratorResult.data.autoAdjustments.length > 0) {
+            toast.success(`系统已自动调整 ${orchestratorResult.data.autoAdjustments.length} 项`);
+          }
+          if (orchestratorResult.data.explanation) {
+            toast.info(orchestratorResult.data.explanation);
+          }
+        }
+      } catch (orchestratorError: any) {
+        console.warn('Orchestrator execution failed:', orchestratorError);
+      }
+      
       toast.success(t('planStudio.scheduleTab.replaceSuccess'));
       await loadTrip();
       setReplaceDialogOpen(false);
@@ -347,18 +404,52 @@ export default function ScheduleTab({ tripId, personaMode = 'abu', refreshKey }:
   };
 
   const handleConfirmMove = async () => {
-    if (!movingItem || !moveDayId || !moveStartTime || !moveEndTime) {
+    if (!movingItem || !moveDayId || !moveStartTime || !moveEndTime || !user) {
+      if (!user) {
+        toast.error('用户未登录');
+        return;
+      }
       toast.error(t('planStudio.scheduleTab.moveMissingFields'));
       return;
     }
 
     try {
       setMoving(true);
+      // 1. 先更新行程项
       await itineraryItemsApi.update(movingItem.id, {
         tripDayId: moveDayId,
         startTime: new Date(moveStartTime).toISOString(),
         endTime: new Date(moveEndTime).toISOString(),
       });
+      
+      // 2. 自动触发 LangGraph Orchestrator
+      try {
+        const orchestratorResult = await orchestrator.modifySchedule(user.id, tripId, [
+          {
+            type: 'MOVE',
+            itemId: movingItem.id,
+            fromDayId: movingItem.currentDayId,
+            toDayId: moveDayId,
+            startTime: moveStartTime,
+            endTime: moveEndTime,
+          },
+        ]);
+        
+        if (orchestratorResult.success && orchestratorResult.data) {
+          if (orchestratorResult.data.personaAlerts && orchestratorResult.data.personaAlerts.length > 0) {
+            toast.info(`系统已自动检查，发现 ${orchestratorResult.data.personaAlerts.length} 条提醒`);
+          }
+          if (orchestratorResult.data.autoAdjustments && orchestratorResult.data.autoAdjustments.length > 0) {
+            toast.success(`系统已自动调整 ${orchestratorResult.data.autoAdjustments.length} 项`);
+          }
+          if (orchestratorResult.data.explanation) {
+            toast.info(orchestratorResult.data.explanation);
+          }
+        }
+      } catch (orchestratorError: any) {
+        console.warn('Orchestrator execution failed:', orchestratorError);
+      }
+      
       toast.success(t('planStudio.scheduleTab.moveSuccess'));
       await loadTrip();
       setMoveDialogOpen(false);
@@ -678,14 +769,13 @@ export default function ScheduleTab({ tripId, personaMode = 'abu', refreshKey }:
                             item={item}
                             dayIndex={idx}
                             itemIndex={itemIdx}
-                            personaMode={personaMode}
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                             onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
-                            onApplyPatch={personaMode === 'neptune' ? (_item) => {
-                              // TODO: 实现应用补丁功能
+                            onApplyPatch={(_item) => {
+                              // 应用补丁功能 - 现在通过自动触发机制处理
                               toast.info(t('planStudio.scheduleTab.applyPatchNotImplemented'));
-                            } : undefined}
+                            }}
                           />
                         ));
                       }
@@ -703,7 +793,6 @@ export default function ScheduleTab({ tripId, personaMode = 'abu', refreshKey }:
                                   item={fullItem}
                                   dayIndex={idx}
                                   itemIndex={itemIdx}
-                                  personaMode={personaMode}
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                                   onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}

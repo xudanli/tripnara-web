@@ -65,18 +65,52 @@ class PlanStudioOrchestrator {
         throw new Error('行程ID不能为空');
       }
 
-      // 构建用户友好的操作描述
-      const actionMessages: Record<UserAction, string> = {
-        add_place: `添加地点 ${params.placeName || params.placeId} 到行程`,
-        remove_place: `从行程中移除地点 ${params.placeName || params.placeId}`,
-        modify_schedule: `修改行程日程`,
-        optimize_route: `优化行程路线`,
-        validate_safety: `验证行程安全性`,
-        adjust_pacing: `调整行程节奏`,
-        apply_repairs: `应用修复建议`,
-      };
-
-      const message = actionMessages[action] || `执行操作: ${action}`;
+      // 构建用户友好的操作描述，包含关键信息
+      let message: string;
+      
+      switch (action) {
+        case 'add_place':
+          // 添加地点：构建详细的结构化消息，便于后端理解
+          const placeDetails = {
+            action: 'add_place',
+            placeId: params.placeId,
+            dayId: params.dayId,
+            placeName: params.placeName || `地点ID: ${params.placeId}`,
+            startTime: params.startTime,
+            endTime: params.endTime,
+          };
+          // 构建自然语言描述和结构化信息
+          message = `用户添加地点到行程。地点名称: ${placeDetails.placeName}，地点ID: ${placeDetails.placeId}，日期ID: ${placeDetails.dayId}${placeDetails.startTime ? `，开始时间: ${placeDetails.startTime}` : ''}${placeDetails.endTime ? `，结束时间: ${placeDetails.endTime}` : ''}。请检查这个地点是否符合安全要求、节奏要求和行程合理性。`;
+          break;
+          
+        case 'remove_place':
+          // 移除地点：包含行程项ID和地点信息
+          const removeInfo = [
+            `行程项ID: ${params.itemId}`,
+            params.placeName ? `地点名称: ${params.placeName}` : null,
+          ].filter(Boolean);
+          message = `从行程中移除地点。${removeInfo.join('; ')}`;
+          break;
+          
+        case 'modify_schedule':
+          // 修改日程：包含变更详情
+          const changeInfo = params.changes ? 
+            `变更详情: ${JSON.stringify(params.changes)}` : 
+            '修改了行程日程';
+          message = `修改行程日程。${changeInfo}`;
+          break;
+          
+        case 'optimize_route':
+          // 优化路线：包含优化配置
+          const optInfo = params.optimizationConfig ? 
+            `优化配置: ${JSON.stringify(params.optimizationConfig)}` : 
+            '优化行程路线';
+          message = `优化行程路线。${optInfo}`;
+          break;
+          
+        default:
+          message = `执行操作: ${action}`;
+      }
 
       // 构建请求
       const request: RouteAndRunRequest = {
@@ -100,27 +134,118 @@ class PlanStudioOrchestrator {
       // 解析响应
       const routeType = response.route.route;
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
+      
+      // 判断执行是否成功
+      // SUCCESS 表示成功，其他状态（NEED_MORE_INFO, NEED_CONSENT, NEED_CONFIRMATION, FAILED, TIMEOUT）都视为失败
+      const isSuccess = response.result.status === 'SUCCESS';
+      const statusMessage = response.result.answer_text || '未知状态';
+      const decisionLog = response.explain?.decision_log || [];
+
+      // 尝试从决策日志中提取更详细的错误信息
+      let detailedError: string | undefined;
+      if (!isSuccess && decisionLog.length > 0) {
+        // 查找最后一个失败的决策步骤
+        const lastFailedStep = decisionLog
+          .filter(step => step.reason_code && (
+            step.reason_code.includes('FAILED') || 
+            step.reason_code.includes('ERROR') ||
+            step.reason_code.includes('CONSTRAINT')
+          ))
+          .pop();
+        
+        if (lastFailedStep?.facts) {
+          // 尝试从 facts 中提取错误详情
+          const errorDetails = Object.entries(lastFailedStep.facts)
+            .filter(([key]) => key.toLowerCase().includes('error') || key.toLowerCase().includes('reason'))
+            .map(([, value]) => String(value))
+            .join('; ');
+          
+          if (errorDetails) {
+            detailedError = errorDetails;
+          }
+        }
+      }
+
+      // 构建友好的错误消息
+      let userFriendlyError: string | undefined;
+      if (!isSuccess) {
+        switch (response.result.status) {
+          case 'FAILED':
+            userFriendlyError = detailedError || statusMessage || '规划失败，请检查约束条件';
+            break;
+          case 'NEED_MORE_INFO':
+            userFriendlyError = statusMessage || '需要更多信息才能完成操作';
+            break;
+          case 'NEED_CONSENT':
+            userFriendlyError = statusMessage || '需要您的确认才能继续';
+            break;
+          case 'NEED_CONFIRMATION':
+            userFriendlyError = statusMessage || '需要您的确认';
+            break;
+          case 'TIMEOUT':
+            userFriendlyError = '操作超时，请稍后重试';
+            break;
+          default:
+            userFriendlyError = statusMessage || '操作未成功完成';
+        }
+      }
 
       // 提取结果数据
       const result: OrchestrationResult = {
-        success: response.result.status === 'SUCCESS',
-        message: response.result.answer_text,
+        success: isSuccess,
+        message: statusMessage,
         data: {
           // 从 payload 中提取数据
           trip: response.result.payload?.trip,
           personaAlerts: response.result.payload?.personaAlerts || [],
-          decisionLog: response.explain?.decision_log || [],
-          explanation: response.result.answer_text,
+          decisionLog: decisionLog,
+          explanation: statusMessage,
           autoAdjustments: response.result.payload?.adjustments || [],
         },
+        // 设置友好的错误信息
+        error: userFriendlyError,
       };
+
+      // 根据执行结果输出不同的日志
+      if (isSuccess) {
+        console.log('[Orchestrator] 执行成功:', {
+          action,
+          tripId,
+          success: result.success,
+          hasAlerts: result.data?.personaAlerts?.length > 0,
+          hasAdjustments: result.data?.autoAdjustments?.length > 0,
+        });
+      } else {
+        console.warn('[Orchestrator] 执行未成功:', {
+          action,
+          tripId,
+          success: result.success,
+          status: response.result.status,
+          message: statusMessage,
+          hasAlerts: result.data?.personaAlerts?.length > 0,
+          hasAdjustments: result.data?.autoAdjustments?.length > 0,
+        });
+      }
 
       return result;
     } catch (error: any) {
-      console.error('Orchestrator execution failed:', error);
+      // 在 catch 块中从 params 获取，因为 try 块中的解构可能未执行
+      const tripIdFromParams = params?.tripId;
+      const userIdFromParams = params?.userId;
+      
+      console.error('[Orchestrator] 执行失败:', {
+        action,
+        tripId: tripIdFromParams,
+        userId: userIdFromParams,
+        error,
+        message: error.message,
+        stack: error.stack,
+      });
+      
       return {
         success: false,
         error: error.message || '执行失败',
+        message: `操作失败: ${error.message || '未知错误'}`,
       };
     }
   }
@@ -128,13 +253,23 @@ class PlanStudioOrchestrator {
   /**
    * 添加地点到行程
    */
-  async addPlace(userId: string, tripId: string, placeId: number, dayId: string, placeName?: string): Promise<OrchestrationResult> {
+  async addPlace(
+    userId: string, 
+    tripId: string, 
+    placeId: number, 
+    dayId: string, 
+    placeName?: string,
+    startTime?: string,
+    endTime?: string
+  ): Promise<OrchestrationResult> {
     return this.executeUserAction('add_place', {
       userId,
       tripId,
       placeId,
       dayId,
       placeName,
+      startTime,
+      endTime,
     });
   }
 

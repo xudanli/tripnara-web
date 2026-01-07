@@ -146,11 +146,30 @@ type ApiResponseWrapper<T> = SuccessResponse<T> | ErrorResponse;
  */
 function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
   if (!response?.data) {
+    console.error('[Agent API] 无效的API响应:', response);
     throw new Error('无效的API响应');
   }
 
   if (!response.data.success) {
-    throw new Error(response.data.error?.message || '请求失败');
+    // 尝试从多个可能的位置提取错误信息
+    const errorData = (response.data as ErrorResponse).error;
+    const errorMessage = 
+      errorData?.message || 
+      errorData?.code || 
+      (typeof errorData === 'string' ? errorData : null) ||
+      '请求失败';
+    const errorCode = errorData?.code || 'UNKNOWN_ERROR';
+    
+    console.error('[Agent API] API 返回错误:', {
+      code: errorCode,
+      message: errorMessage,
+      fullError: errorData,
+      fullResponse: response.data,
+      responseType: typeof response.data,
+      hasError: !!errorData,
+    });
+    
+    throw new Error(errorMessage);
   }
 
   return response.data.data;
@@ -166,6 +185,14 @@ export const agentApi = {
    */
   routeAndRun: async (data: RouteAndRunRequest): Promise<RouteAndRunResponse> => {
     try {
+      console.log('[Agent API] 发送 route_and_run 请求:', {
+        request_id: data.request_id,
+        user_id: data.user_id,
+        trip_id: data.trip_id,
+        message: data.message,
+        options: data.options,
+      });
+
       // Agent API 可能需要更长的处理时间，设置 30 秒超时
       const response = await apiClient.post<ApiResponseWrapper<RouteAndRunResponse>>(
         '/agent/route_and_run',
@@ -174,8 +201,57 @@ export const agentApi = {
           timeout: 30000, // 30 秒超时
         }
       );
-      return handleResponse(response);
+
+      // 详细记录响应结构，便于调试
+      const hasError = response.data && !response.data.success && 'error' in response.data;
+      console.log('[Agent API] 收到 route_and_run 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+        hasError: hasError,
+        responseKeys: response.data ? Object.keys(response.data) : [],
+        fullResponse: response.data,
+      });
+
+      // 如果响应格式不符合预期，尝试直接返回
+      if (response.data && !('success' in response.data)) {
+        // 响应可能直接是 RouteAndRunResponse，而不是包装在 ApiResponseWrapper 中
+        console.warn('[Agent API] 响应格式不符合预期，尝试直接解析:', response.data);
+        // 检查是否包含 route 和 result 字段（RouteAndRunResponse 的特征）
+        if ('route' in response.data && 'result' in response.data) {
+          const directResponse = response.data as RouteAndRunResponse;
+          console.log('[Agent API] 直接解析响应成功:', {
+            request_id: directResponse.request_id,
+            route: directResponse.route?.route,
+            status: directResponse.result?.status,
+            answer_text: directResponse.result?.answer_text,
+          });
+          return directResponse;
+        }
+      }
+
+      // 处理包装在 ApiResponseWrapper 中的响应
+      const wrappedResponse = handleResponse(response);
+      console.log('[Agent API] 解析后的响应:', {
+        request_id: wrappedResponse.request_id,
+        route: wrappedResponse.route?.route,
+        status: wrappedResponse.result?.status,
+        answer_text: wrappedResponse.result?.answer_text,
+      });
+
+      return wrappedResponse;
     } catch (error: any) {
+      console.error('[Agent API] route_and_run 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        request: {
+          request_id: data.request_id,
+          user_id: data.user_id,
+          trip_id: data.trip_id,
+        },
+      });
+
       // 确保 Axios 错误消息能够正确传播
       // client.ts 的拦截器已经设置了 error.message，直接抛出即可
       if (error.message) {
