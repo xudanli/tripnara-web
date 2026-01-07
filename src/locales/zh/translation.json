@@ -43,7 +43,17 @@
       "title": "如果情况变化，也不会崩盘",
       "description": "关闭？天气？体力不支？系统会自动生成最优替换方案。"
     },
-    "bottomCTA": "把梦想变成路线 →"
+    "bottomCTA": "把梦想变成路线 →",
+    "testimonial1": {
+      "quote": "终于不用再担心\"计划赶不上变化\"了。TripNARA 让我第一次真正走完了整条路线。",
+      "author": "张明",
+      "role": "深度旅行者"
+    },
+    "testimonial2": {
+      "quote": "作为户外领队，TripNARA 的风险评估功能帮我们避免了很多潜在问题。",
+      "author": "李华",
+      "role": "户外领队"
+    }
   },
   "problem": {
     "title": "大多数旅行工具推荐更多地点。\n我们首先问路线本身是否有意义。",
@@ -66,15 +76,20 @@
     "validation": "没有物理世界验证，您的计划将不存在。"
   },
   "decisionComparison": {
-    "title": "TripNARA 与普通旅行 App 的不同",
-    "traditional": "传统",
+    "title": "TripNARA 如何重新定义旅行规划？",
+    "traditional": "传统旅行 App",
     "tripnara": "TripNARA",
     "step1": "是否成立？",
+    "step1Desc": "从目标出发，判断这段路是否值得存在",
     "step2": "结构化路线",
+    "step2Desc": "梳理节点与节奏，形成逻辑闭环",
     "step3": "风险验证",
+    "step3Desc": "评估安全性与可行性，确保路线可执行",
     "step4": "可执行",
-    "description1": "我们不是从\"推荐更多地方\"开始，而是从一个更基础的问题开始：",
-    "question": "这条路线，本身是否应该存在？",
+    "step4Desc": "生成可执行的完整路线方案",
+    "description1": "我们不是从\"推荐更多景点\"开始，",
+    "description2": "而是从一个更基础的问题出发：",
+    "question": "这条路线，是否本身就应该存在？",
     "traditionalStep1": "景点清单",
     "traditionalStep2": "排序",
     "traditionalStep3": "拼成\"行程\""
@@ -589,54 +604,101 @@
     "title": "TripNARA 是一套「路线与决策系统」",
     "hero": {
       "subtitle": "我们并不是推荐更多地点，而是帮助你判断一条路线是否应该存在，并把它转化为真正能执行的旅行方案。",
-      "cta1": "开始规划 →",
+      "cta1": "开始制定我的路线 →",
       "cta2": "查看系统原理 →"
     },
     "module1": {
       "title": "RouteDirection™",
       "description": "路线方向引擎",
       "scene": "适用场景",
-      "value": "价值"
+      "sceneContent": "计划中跨地域、多日程、多变量不确定行程",
+      "value": "价值",
+      "valueContent": "保证每一步都有数据支持 + 可落地替代选项"
     },
     "module2": {
       "title": "可执行日程生成",
       "description": "把路线转化为每天可执行的结构",
       "scene": "适用场景",
-      "value": "价值"
+      "sceneContent": "需要精确时间安排、节奏控制的复杂行程",
+      "value": "价值",
+      "valueContent": "自动平衡车程、停留、余量，确保每天可完成"
     },
     "module3": {
       "title": "Plan B 备选",
       "description": "自动生成替换方案",
       "scene": "适用场景",
-      "value": "价值"
+      "sceneContent": "天气变化、地点关闭、体力不支等突发情况",
+      "value": "价值",
+      "valueContent": "自动生成结构化替代方案，保持路线完整性"
     },
     "module4": {
       "title": "风险 & DEM",
       "description": "基于地形的风险评估",
       "scene": "适用场景",
-      "value": "价值"
+      "sceneContent": "涉及地形、海拔、天气的户外或复杂路线",
+      "value": "价值",
+      "valueContent": "基于真实地形数据评估可行性，避免纸上谈兵"
     },
     "module5": {
       "title": "行前准备",
       "description": "完整的旅行准备清单",
       "scene": "适用场景",
-      "value": "价值"
+      "sceneContent": "需要全面准备、风险控制的深度旅行",
+      "value": "价值",
+      "valueContent": "系统化检查清单，确保不遗漏关键准备项"
     },
     "workflow": {
       "title": "工作流程",
       "step1": "先判断路线是否成立",
+      "step1Desc": "从目标出发，判断这段路是否值得存在",
       "step2": "自动生成可执行日程",
+      "step2Desc": "梳理节点与节奏，形成逻辑闭环",
       "step3": "风险评估与余量控制",
-      "step4": "Plan B 替换与修复"
+      "step3Desc": "评估安全性与可行性，确保路线可执行",
+      "step4": "Plan B 替换与修复",
+      "step4Desc": "自动生成结构化替代方案，保持路线完整性"
     },
     "reliable": {
       "title": "为什么可靠",
       "firstPrinciples": "第一性原理",
+      "firstPrinciplesDesc": "从最基础的问题出发：这条路线是否应该存在？",
       "dataRigorous": "数据/逻辑严谨性",
-      "aiStructure": "AI + 结构化算法"
+      "dataRigorousDesc": "基于真实地形数据、天气数据、历史经验，而非猜测",
+      "aiStructure": "AI + 结构化算法",
+      "aiStructureDesc": "AI 提供智能建议，结构化算法确保可执行性",
+      "expandTitle": "TripNARA 基于旅行最核心问题的还原：",
+      "expandPoint1": "是否值得存在（第一性原则）",
+      "expandPoint2": "是否可以执行（结构与节奏）",
+      "expandPoint3": "是否具备安全性与恢复能力（决策与备选）",
+      "expandButton": "展开详情",
+      "collapseButton": "收起"
     },
     "cta": {
-      "text": "开始体验 →"
+      "text": "开始制定我的路线 →"
+    },
+    "comparison": {
+      "title": "我们和普通工具的区别",
+      "dimension1": "起点逻辑",
+      "dimension2": "结构生成",
+      "dimension3": "应变能力",
+      "dimension4": "风险处理",
+      "traditional1": "景点推荐列表",
+      "traditional2": "按兴趣拼景点",
+      "traditional3": "无 / 靠用户修改",
+      "traditional4": "手动检查天气/安全",
+      "tripnara1": "路线是否应存在的判断逻辑",
+      "tripnara2": "节奏+余量平衡的结构算法",
+      "tripnara3": "自动生成 Plan B 结构化替代",
+      "tripnara4": "地形+条件+算法评估"
+    },
+    "systemDiagram": {
+      "title": "系统架构",
+      "step1": "用户输入（目标/偏好）",
+      "step2": "路线可行性评估模块（RouteDirection）",
+      "step3": "结构生成模块（节奏 / 时间 / 节点）",
+      "step4": "风险评估模块（地形 / 气候 / 安全）",
+      "step5": "Plan B 替代推荐模块",
+      "output": "最终输出：可执行行程结构（含备用）"
     },
     "firstPrinciples": {
       "title": "第一性原理",
@@ -671,14 +733,21 @@
     "users": {
       "title": "用户是谁？",
       "travelConsultant": "旅行咨询师",
+      "travelConsultantDesc": "为个人或团队提供专业旅行规划建议的顾问",
       "outdoorLeader": "户外领队",
+      "outdoorLeaderDesc": "组织并带领户外活动，负责路线安全与团队管理",
       "photographyTeacher": "摄影旅拍老师",
+      "photographyTeacherDesc": "设计摄影路线，平衡创作需求与行程可行性",
       "explorationPlanner": "探险/极地计划者",
-      "b2bProductManager": "B 端旅行产品经理"
+      "explorationPlannerDesc": "规划极端环境旅行，需要严谨的风险评估与备选方案",
+      "b2bProductManager": "B 端旅行产品经理",
+      "b2bProductManagerDesc": "组织复杂多人旅行产品的设计者"
     },
     "coreValues": {
+      "title": "核心功能模块",
+      "subtitle": "Step 1 → Step 2 → Step 3 → Step 4",
       "feasibility": {
-        "title": "计划成立性评估",
+        "title": "成立性评估",
         "subtitle": "输入路线 → 输出成立报告",
         "riskRating": "风险评级",
         "fatigueModel": "疲劳模型",
@@ -686,7 +755,7 @@
         "tradeoffAdvice": "权衡建议"
       },
       "compliance": {
-        "title": "合规助手",
+        "title": "合规支持",
         "visa": "签证",
         "permit": "许可",
         "environmental": "环保区域",
@@ -704,7 +773,7 @@
         "output": "重新计算成立性"
       },
       "teamCommunication": {
-        "title": "团队沟通模式",
+        "title": "协作与沟通",
         "collaboration": "多人协作",
         "transparency": "决策透明",
         "attribution": "责任归因明确"
@@ -731,16 +800,16 @@
       },
       "examples": {
         "risk": {
-          "title": "当风险出现",
-          "text": "这段路线在当前条件下风险明显高于平均水平，我们建议选择更稳妥方案"
+          "title": "【当风险出现】",
+          "text": "这段路线在当前条件下风险明显高于平均水平，我们建议选择更稳妥方案。"
         },
         "rejection": {
-          "title": "当需要拒绝",
-          "text": "出于安全原因，我们不会推荐这条路线，这是我们对旅行负责的方式"
+          "title": "【当需要拒绝】",
+          "text": "出于安全原因，我们不会推荐这条路线，这是我们对旅行负责的方式。"
         },
         "success": {
-          "title": "当旅程成功",
-          "text": "真正让旅程成立的，是你的选择与投入，我们只是你的合作伙伴"
+          "title": "【当旅程成功】",
+          "text": "真正让旅程成立的，是你的选择与投入，我们只是你的合作伙伴。"
         }
       }
     },
@@ -748,49 +817,51 @@
       "title": "真实用户旅程图（Journey Map）",
       "subtitle": "你现在的产品旅程已经很清晰",
       "discovery": {
-        "title": "触达阶段",
+        "title": "初识阶段",
         "description": "用户想旅行但感到不确定、不想走流水线、想「认真一点」→ 进入 TripNARA"
       },
       "understanding": {
-        "title": "理解阶段",
+        "title": "认知阶段",
         "description": "他发现：哦，这不是旅游App，这是——路线责任系统。信任 + 松一口气"
       },
       "profile": {
-        "title": "建立画像",
+        "title": "能力建模",
         "description": "完成 3 问题，生成 HumanCapabilityModel"
       },
       "routeDirection": {
-        "title": "RouteDirection 选型",
+        "title": "路线策略制定",
         "description": "系统给出：最优方向、解释、风险提示 → 理性 + 人性"
       },
       "planning": {
-        "title": "行程建设",
+        "title": "协同构建",
         "description": "用户参与，不是消费。TripNARA 像伙伴，不像「导游」"
       },
       "preparation": {
-        "title": "执行准备",
+        "title": "风险预案与准备",
         "description": "风险兜底、预算监控、节奏平衡、替补方案 → 心理安全感↑↑↑"
       },
       "execution": {
-        "title": "旅行执行",
+        "title": "路线执行",
         "description": "Abu/Dr.Dre/Neptune 持续守护"
       },
       "review": {
-        "title": "回顾",
+        "title": "成果回顾",
         "description": "旅程被理解，价值留存"
       }
     },
     "manifesto": {
       "title": "品牌宣言",
       "line1": "TripNARA 不是卖旅行，是认真对待「路应该怎么走」",
-      "line2": "我们相信，旅行不是逃离现实，而是以更体面、更成熟的方式面对世界",
-      "line3": "路线成立，我们才推荐",
-      "commitment": "这是我们给世界的承诺"
+      "line2": "我们相信，",
+      "line3": "旅行不是逃离现实，",
+      "line4": "而是以更体面、更成熟的方式面对世界。",
+      "line5": "路线成立，我们才推荐。",
+      "commitment": "——这，是我们给世界的承诺。"
     }
   },
   "pricing": {
     "title": "清晰、简单、无隐藏收费",
-    "heroSubtitle": "清晰、简单、无隐藏收费",
+    "heroSubtitle": "拒绝复杂捆绑，我们的定价就像路线——清晰、透明、可信。",
     "free": "免费版",
     "pro": "Pro",
     "professional": "Professional / Team",
@@ -801,9 +872,9 @@
       "price": "免费",
       "description": "适合个人旅行者",
       "features": {
-        "basic": "基础路线验证",
-        "dem": "DEM 地形检查",
-        "log": "决策日志访问"
+        "basic": "基础路线验证工具",
+        "dem": "地形信息查看（DEM）",
+        "log": "决策日志记录"
       }
     },
     "navigator": {
@@ -811,10 +882,10 @@
       "price": "$29/月",
       "description": "适合小团队",
       "features": {
-        "advanced": "高级路线智能",
-        "personas": "多人格系统",
-        "routeDirection": "路线方向访问",
-        "support": "优先支持"
+        "advanced": "智能路线建议系统",
+        "personas": "多用户能力画像",
+        "routeDirection": "路线策略访问权限",
+        "support": "快速响应支持"
       }
     },
     "pathfinder": {
@@ -822,10 +893,10 @@
       "price": "定制",
       "description": "适合专业人士",
       "features": {
-        "full": "完整路线判断系统",
-        "compliance": "B2B 安全与合规",
-        "integrations": "定制集成",
-        "dedicated": "专属支持"
+        "full": "全量路线决策工具",
+        "compliance": "企业安全与合规配置",
+        "integrations": "系统级定制集成（API、权限管理、白标等）",
+        "dedicated": "一对一专属顾问支持"
       }
     },
     "faq": {
@@ -837,12 +908,14 @@
     },
     "cta": {
       "try": "开始试用 →",
-      "contact": "联系我们 →"
+      "contact": "加入我们 →",
+      "hint": "不确定选哪种？我们可以帮你分析你的路线需求。"
     }
   },
   "stories": {
     "title": "真实旅行，真实决定",
-    "subtitle": "看看 TripNARA 如何陪伴不同旅人，把梦想变成可执行路线。",
+    "subtitle": "每一次真实的旅行决策，背后都有一段独特的逻辑与坚持。",
+    "subtitle2": "来看看他们如何把「我想去」变成「走得成」的路线。",
     "categories": {
       "hiking": "徒步",
       "photography": "摄影",
@@ -858,7 +931,27 @@
       "risk": "风险",
       "replacement": "替换",
       "rhythm": "节奏",
-      "elevation": "海拔"
+      "elevation": "海拔",
+      "goal": "目标",
+      "keywords": "关键词",
+      "clickToView": "点击查看路线详情"
+    },
+    "story1": {
+      "goal": "完整一圈冰岛公路，在风雪中看到蓝冰洞",
+      "keywords": "F-Road 风险评估｜天气备选方案｜节奏优化"
+    },
+    "story2": {
+      "goal": "挑战新西兰经典徒步路线，匹配个人体力节奏",
+      "keywords": "体力节奏匹配｜天气替换机制｜线路结构化生成"
+    },
+    "story3": {
+      "goal": "欧洲多城市深度探索，确保行程衔接顺畅",
+      "keywords": "行程衔接优化｜班次替换方案｜城市停留节奏"
+    },
+    "testimonial": {
+      "quote": "我们本以为计划是'去哪里'，TripNARA 让我意识到其实更重要的是'能不能走完'。",
+      "author": "Z 同学",
+      "role": "2023年冰岛F-Road计划用户"
     },
     "detail": {
       "background": "旅行背景",
@@ -872,39 +965,265 @@
   },
   "about": {
     "title": "我们关心的不是\"去更多地方\"，而是「你是否真正走完一段路」。",
+    "titleEn": "We care not about how many places you've been, but whether you've truly walked through a path.",
     "mission": {
       "title": "使命",
-      "text": "让旅行成为更好的决定过程"
+      "text": "让每一次出发，都成为值得的决定。"
     },
     "believe": {
       "title": "我们相信",
-      "point1": "...",
-      "point2": "...",
-      "point3": "..."
+      "point1": "我们相信，旅行不只是去更多地方，而是走对路径。",
+      "point1Desc": "一个好的旅程，不该是\"累加景点\"，而是\"完成过程\"。",
+      "point2": "我们相信，路线不是默认存在的，它应当被验证与质疑。",
+      "point2Desc": "决策的第一步，是问\"这条路是否成立\"。",
+      "point3": "我们相信，AI 是决策助手，而不是替你决定的工具。",
+      "point3Desc": "技术应当服务于判断，而不是取代思考。",
+      "point4": "我们相信，方向先于细节，结构重于碎片。",
+      "point4Desc": "你不需要更多信息，你需要更好的框架。",
+      "point5": "我们相信，好的路线是可执行的，而不是理想化的。",
+      "point5Desc": "\"浪漫\"要落地，才是真实。"
     },
     "team": {
       "title": "团队介绍",
-      "product": "产品",
-      "data": "数据",
-      "geography": "地理",
-      "ai": "AI",
-      "outdoor": "户外",
-      "design": "设计"
+      "founder": {
+        "role": "创始人",
+        "title": "产品哲学构建者｜路线结构理论提出人",
+        "education": "卡内基梅隆大学（CMU）人机交互专业硕士",
+        "experience": "前 Airbnb 设计系统团队成员，曾在 Google Maps 用户研究组深入参与全球出行行为建模项目。拥有十年以上产品与旅行科技创业经验。",
+        "contribution": "他提出 TripNARA 的核心理念：「我们不只是规划去哪，而是在判断这条路线是否应当存在。」",
+        "achievements": [
+          "主导构建 RouteDirection™ 路线方向系统、可执行节奏模型、风险容错机制等一系列判断框架"
+        ],
+        "impact": "推动 TripNARA 从工具走向系统。",
+        "responsibilities": [
+          "路线哲学设计",
+          "产品方法论与用户结构",
+          "决策系统的框架与可视化定义"
+        ]
+      },
+      "coFounder": {
+        "role": "联合创始人",
+        "title": "AI 推理系统架构师｜决策建模与风控机制专家",
+        "education": "牛津大学计算机科学硕士",
+        "experience": "前 DeepMind 智能代理团队成员，曾参与多项国家级交通与基础设施 AI 项目，研究方向涵盖图推理系统、因果建模、系统 1 & 2 决策结构。",
+        "contribution": "他主张：「AI 不做决定，而是帮你看清哪些路，值得走。」",
+        "achievements": [
+          "路线判断引擎与不确定性建模系统",
+          "多人格用户画像与节奏匹配结构",
+          "风险推理与 DEM 地形验证机制"
+        ],
+        "impact": "在 TripNARA，他构建了完整的 AI 辅助决策系统。",
+        "responsibilities": [
+          "路线推理架构与 AI 模型设计",
+          "安全验证系统、决策日志机制",
+          "决策框架的结构化编码与部署"
+        ]
+      },
+      "designDirector": {
+        "role": "设计总监",
+        "title": "清华大学美术学院｜前 Apple 全球体验设计团队成员",
+        "education": "",
+        "experience": "擅长在极简系统中构建「结构感 + 情绪感」共存的界面语言，曾主导 Apple Watch 健康模块视觉重构，及 Adobe 多端设计体验一体化项目。",
+        "contribution": "她认为：一个好产品，不是设计「看上去很美」的旅行，而是构建「现实约束下依然可信赖」的出发逻辑。",
+        "achievements": [],
+        "impact": "在 TripNARA，她负责全局视觉系统与路线感知设计，确保每一处交互都能传递出「判断-执行-信任」的节奏感。"
+      },
+      "outdoorSafety": {
+        "role": "户外与路线安全负责人",
+        "title": "国家一级登山指导员｜10+ 年路线风控经验",
+        "education": "",
+        "experience": "曾为极地科考、国际品牌溯源项目设计路线判断模型，具备高海拔、沙漠无人区等多种复杂环境下的路线建模能力。",
+        "contribution": "在 TripNARA，他是团队的「现实性守门人」，",
+        "achievements": [
+          "📍 风险事件回溯系统"
+        ],
+        "impact": "负责 DEM 地形判断、可执行性评分与风险事件回溯系统，确保每条路线不只是「理论成立」，更是「现实可行」。"
+      },
+      "dataScience": {
+        "role": "数据科学负责人",
+        "title": "前 BCG Gamma 首席数据科学家｜斯坦福大学统计学硕士",
+        "education": "斯坦福大学统计学硕士",
+        "experience": "拥有十余年复杂系统建模与行为预测经验，曾服务于多家全球出行、能源、城市规划机构。专长于非结构化语义判断的建模方法，擅长在「数据不完美」的条件下，构建可落地的决策支持系统。",
+        "contribution": "决策不是算法算出来的，而是被理解和验证的",
+        "achievements": [
+          "🧠 风险评分与余量判断系统",
+          "🗺 基于地理/气候/交通数据的多源融合模型",
+          "🧾 决策日志追踪与可解释性报告机制"
+        ],
+        "impact": "他的目标是让每一个路线判断都能被复盘、被验证、被质疑，因为数据不是结论，是判断的起点。"
+      },
+      "contentStrategy": {
+        "role": "内容策略 / 品牌负责人",
+        "title": "哥伦比亚大学新闻与哲学双学位｜前 IDEO 内容设计总监",
+        "education": "哥伦比亚大学新闻与哲学双学位",
+        "experience": "曾负责多个全球品牌的叙事重构项目，擅长将抽象结构、复杂产品、哲学概念转化为易于感知、具节奏感的内容体验。也曾在 Lonely Planet 担任高级编辑，深入理解旅行者在不同阶段的真实需求与心理路径。",
+        "contribution": "让「判断」这件事被更多人理解、认同、相信",
+        "achievements": [
+          "📚 路线哲学的外部语言体系",
+          "🗂 用户旅程中的沟通方式与系统话术规范",
+          "🧾 品牌表达中「理性+温度」的文风基线"
+        ],
+        "impact": "她相信，一个值得存在的系统，不能只被理解，还要被信任。"
+      },
+      "mission": "想要构建新一代的旅行决策系统，必须打破「App推荐-用户选择」的旧范式，TripNARA 团队正是以此为使命集结 —— 既来自系统设计一线，也深陷路线实践一线。"
     },
     "contact": {
       "title": "联系方式"
     },
     "recruiting": {
       "title": "招募",
-      "text": "如果你也相信旅行不止于打卡，欢迎加入。"
+      "text": "如果你也相信旅行不止于打卡，欢迎加入。",
+      "cta": "了解我们开放的岗位 →",
+      "positions": {
+        "product": {
+          "title": "产品负责人",
+          "tagline": "路线不是堆功能，而是一次判断。",
+          "description": "我们需要结构感极强、能提出「路线是否应当存在」问题的产品人。",
+          "requirements": [
+            "极强的结构感，善于从混乱中识别方向",
+            "对用户决策路径的理解胜过对\"点击率\"的执着",
+            "能不断发问：\"这条路线应该存在吗？\"而非\"我们能不能做？\"",
+            "拒绝仅用 feature 填满产品，而是用逻辑推导需求"
+          ]
+        },
+        "data": {
+          "title": "数据分析师 / 数据科学家",
+          "tagline": "用数据\"佐证路径成立\"，不是 KPI 工厂。",
+          "description": "我们需要的是能用数据支撑判断的人，深知数据的作用是\"支撑判断\"，而非\"替代判断\"。",
+          "requirements": [
+            "擅长结构化与量化模糊问题",
+            "能评估路线风险、节奏与变数，而不是只报表好看",
+            "深知数据的作用是\"支撑判断\"，而非\"替代判断\"",
+            "有责任划清\"相关\"与\"因果\"的边界"
+          ]
+        },
+        "geography": {
+          "title": "地理工程师 / 路线可达性专家",
+          "tagline": "地图不是装饰，而是决策的约束条件。",
+          "description": "在我们这儿，\"地图不是装饰\"，而是决策的约束条件。能告诉我们\"哪条路不能走\"，比\"想去哪儿\"更重要。",
+          "requirements": [
+            "熟悉真实地形、路径评估（DEM / GIS 优先）",
+            "明白纸上谈兵和真实可行之间的巨大鸿沟",
+            "能告诉我们\"哪条路不能走\"，比\"想去哪儿\"更重要",
+            "重视安全性、路线成本与风险规划"
+          ]
+        },
+        "ai": {
+          "title": "AI 工程师 / 算法研发",
+          "tagline": "不是\"生成路线\"的 AI，而是\"判断应否存在的路线\"的 AI。",
+          "description": "我们不是在做\"生成路线\"的 AI，而是设计\"判断应否存在的路线\"的 AI。对 AI 的定位是\"决策助手\"，而不是\"创作机器\"。",
+          "requirements": [
+            "对 AI 的定位是\"决策助手\"，而不是\"创作机器\"",
+            "熟悉系统 1 / 系统 2 的认知结构（Daniel Kahneman 理论加分）",
+            "能处理不确定性输入，输出\"可信赖的不确定建议\"",
+            "尊重人类判断，避免技术傲慢"
+          ]
+        },
+        "outdoor": {
+          "title": "户外路线专家 / 旅行路线验证人",
+          "tagline": "真正走过的路，才知道地图上那些曲线意味着什么。",
+          "description": "真正走过的路，才知道地图上那些曲线意味着什么。能对路线进行\"节奏性\"、\"风险\"、\"备选方案\"等多维判断。",
+          "requirements": [
+            "实地走过多种类型路线，有真实路线设计经验",
+            "能对路线进行\"节奏性\"、\"风险\"、\"备选方案\"等多维判断",
+            "把经验转化为系统性输入，而非故事分享",
+            "热爱户外，也能客观看待浪漫与现实的差距"
+          ]
+        },
+        "design": {
+          "title": "品牌与视觉设计师",
+          "tagline": "设计不是\"美化行程\"，而是\"表达路径判断\"。",
+          "description": "在这里，设计不是\"美化行程\"，而是\"表达路径判断\"。擅长将复杂理念（哲学、AI、结构）视觉化为用户可理解的信息。",
+          "requirements": [
+            "擅长将复杂理念（哲学、AI、结构）视觉化为用户可理解的信息",
+            "理解\"设计即判断\"的品牌定位",
+            "对极简、结构型设计有偏好（注重留白、关系感）",
+            "你的设计逻辑应该是：「结构先于装饰」"
+          ]
+        }
+      }
+    },
+    "origin": {
+      "title": "TripNARA 的诞生",
+      "quote": "有些路线，是从地图上开始的；有些路线，是从一个问题开始的。",
+      "description": "我们关注\"路线是否该存在\"这个问题，因为真正的旅行不是打卡，而是完成一段值得的旅程。"
     }
   },
   "contact": {
-    "title": "联系我们",
+    "title": "加入我们",
     "name": "姓名",
     "email": "邮箱",
     "message": "消息",
-    "send": "发送消息"
+    "send": "发送消息",
+    "recruiting": {
+      "title": "我们不是在找\"员工\"，我们在找判断者。",
+      "subtitle": "加入我们，不是为了去更多地方，而是为了走对一段路。",
+      "intro": "在 TripNARA，我们不急于发布更多路线。我们花更多时间判断：这条路是否应该存在。",
+      "intro2": "所以，我们寻找的不是\"能做\"，而是\"该做\"的人。",
+      "intro3": "如果你愿意把职业当成一次真实路径的选择，欢迎加入我们。",
+      "apply": {
+        "title": "投递方式",
+        "text": "请将你的简历、作品或你曾做过的\"判断\"，发给我们。",
+        "email": "📩 投递邮箱：join@tripnara.com",
+        "note": "💬 你也可以写一段话告诉我们：\"你为什么选择这条职业路径。\""
+      },
+      "positions": {
+        "product": {
+          "tagline": "我们不是用功能堆砌产品，而是用逻辑判断需求。",
+          "expectations": [
+            "熟悉系统 1 / 系统 2 的思维模型",
+            "能处理不确定输入，辅助判断",
+            "尊重决策边界，而非追求万能模型"
+          ]
+        },
+        "data": {
+          "tagline": "我们不是 KPI 工厂，而是用数据佐证路径成立。",
+          "expectations": [
+            "擅长结构化与量化模糊问题",
+            "能评估路线风险、节奏与变数",
+            "深知数据的作用是\"支撑判断\"，而非\"替代判断\""
+          ]
+        },
+        "geography": {
+          "tagline": "地图不是装饰，而是决策的约束条件。",
+          "expectations": [
+            "熟悉真实地形、路径评估（DEM / GIS 优先）",
+            "明白纸上谈兵和真实可行之间的巨大鸿沟",
+            "能告诉我们\"哪条路不能走\"，比\"想去哪儿\"更重要"
+          ]
+        },
+        "ai": {
+          "tagline": "我们不是用 AI 生成路线，而是判断一条路应否存在的决策系统。",
+          "expectations": [
+            "熟悉系统 1 / 系统 2 的思维模型",
+            "能处理不确定输入，辅助判断",
+            "尊重决策边界，而非追求万能模型"
+          ]
+        },
+        "outdoor": {
+          "tagline": "真正走过的路，才知道地图上那些曲线意味着什么。",
+          "expectations": [
+            "实地走过多种类型路线，有真实路线设计经验",
+            "能对路线进行\"节奏性\"、\"风险\"、\"备选方案\"等多维判断",
+            "把经验转化为系统性输入，而非故事分享"
+          ]
+        },
+        "design": {
+          "tagline": "设计不是\"美化行程\"，而是\"表达路径判断\"。",
+          "expectations": [
+            "擅长将复杂理念（哲学、AI、结构）视觉化为用户可理解的信息",
+            "理解\"设计即判断\"的品牌定位",
+            "对极简、结构型设计有偏好（注重留白、关系感）"
+          ]
+        }
+      },
+      "applyButton": "我要投递",
+      "viewFullDesc": "查看完整职位描述",
+      "closing": {
+        "quote": "🛤️ 有些路，地图上没有，但你知道它存在。",
+        "text": "如果你也相信，不是所有路线都值得存在，那我们可能正好缺你一个人。"
+      }
+    }
   },
   "routeIntelligence": {
     "title": "一条路线，应该如何被理解？",
@@ -912,24 +1231,47 @@
     "corePoints": {
       "title": "四个核心观点",
       "point1": "一条路线不是景点清单",
+      "point1Desc": "而是连接目标、节奏、可行性与安全的结构性路径。",
       "point2": "方向先于细节",
+      "point2Desc": "如果方向错了，再多细节也无法抵达目标。",
       "point3": "可执行先于浪漫",
-      "point4": "变化是常态"
+      "point3Desc": "想法固然美好，落地才是旅行能真正发生的前提。",
+      "point4": "变化是常态",
+      "point4Desc": "旅行中永远会有变量，系统必须预设替代与弹性。",
+      "expandAll": "展开全部",
+      "collapseAll": "收起全部"
     },
     "methodology": {
       "title": "方法论拆解",
-      "routeDirection": "RouteDirection 概念",
-      "system1System2": "System 1 / System 2",
-      "riskGatekeeper": "风险守门人",
-      "executableRhythm": "可执行节奏"
+      "conceptEngine": {
+        "title": "概念引擎",
+        "routeDirection": "RouteDirection 概念",
+        "system1System2": "System 1 / System 2"
+      },
+      "decisionAssistant": {
+        "title": "决策辅助者",
+        "riskGatekeeper": "风险守门人",
+        "executableRhythm": "可执行节奏"
+      }
     },
     "ai": {
       "title": "AI 于我们意味着什么",
-      "subtitle": "不是 AI 玩具，而是决策助手"
+      "subtitle": "不是 AI 玩具，而是决策助手",
+      "description": "TripNARA 并非生成推荐景点或行程清单的 AI。我们构建的是一套基于「是否值得走」的结构判断逻辑，让 AI 成为旅途中真正的\"决策辅助者\"，而非\"选项堆叠者\"。"
     },
     "manifesto": {
       "en": "We decide whether a route should exist.",
       "zh": "当我们决定一条路线，我们也在决定一种生活方式。"
+    },
+    "philosophy": {
+      "title": "TripNARA 如何学习决策哲学",
+      "description": "我们参考了多个领域的知识体系，构建了这套路线决策系统：",
+      "reference1": "卡尼曼的双系统理论（System 1 / System 2）",
+      "reference2": "系统思维与第一性原理",
+      "reference3": "登山规划方法论",
+      "reference4": "风险决策与备选方案理论",
+      "viewWhitePaper": "查看路线哲学白皮书 →",
+      "viewGuide": "查看方法指南 PDF →"
     }
   },
   "login": {
@@ -1285,7 +1627,8 @@
     "trails": "徒步",
     "readiness": "准备度",
     "insights": "复盘",
-    "settings": "设置"
+    "settings": "设置",
+    "contact": "联系我们"
   },
   "welcomeModal": {
     "title": "Let's make your first executable route.",
@@ -1323,6 +1666,7 @@
     "placeholder": "说一句：我想更松一点/把徒步放到上午/今天下雨怎么办？",
     "settings": "设置",
     "preferences": "偏好设置",
+    "contact": "联系我们",
     "logout": "退出登录"
   }
 }

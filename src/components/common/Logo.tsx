@@ -15,7 +15,7 @@ export default function Logo({
 }: LogoProps) {
   if (variant === 'text') {
     return (
-      <span className={cn('text-xl font-brand uppercase', className)}>
+      <span className={cn('text-xl font-brand font-bold uppercase', className)}>
         TRIPNARA
       </span>
     );
@@ -45,7 +45,7 @@ export default function Logo({
   return (
     <div className={cn('flex items-center gap-2', className)}>
       {iconSvg}
-      <span className="text-xl font-brand uppercase">TRIPNARA</span>
+      <span className="text-xl font-brand font-bold uppercase">TRIPNARA</span>
     </div>
   );
 }

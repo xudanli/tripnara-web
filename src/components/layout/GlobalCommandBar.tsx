@@ -15,8 +15,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Bell, Send, Settings, LogOut, User, Search, Globe, Check } from 'lucide-react';
+import { Bell, Send, Settings, LogOut, User, Search, Globe, Check, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 
 interface GlobalCommandBarProps {
   activeTripId?: string | null;
@@ -35,6 +36,7 @@ export default function GlobalCommandBar({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [contactUsOpen, setContactUsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 聚焦时展开
@@ -208,6 +210,13 @@ export default function GlobalCommandBar({
                   <User className="mr-2 h-4 w-4" />
                   <span>{t('globalCommandBar.preferences')}</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setContactUsOpen(true)}
+                  className="cursor-pointer"
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  <span>{t('globalCommandBar.contact')}</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => i18n.changeLanguage('zh')}
@@ -238,6 +247,7 @@ export default function GlobalCommandBar({
           )}
         </div>
       </div>
+      <ContactUsDialog open={contactUsOpen} onOpenChange={setContactUsOpen} />
     </header>
   );
 }

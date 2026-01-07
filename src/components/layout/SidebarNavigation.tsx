@@ -16,6 +16,7 @@ import {
   ChevronRight,
   FileText,
   Route,
+  Mail,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -97,6 +98,12 @@ const navItems: NavItem[] = [
     label: '', // Will be set in component
     icon: Settings,
     path: '/dashboard/settings',
+  },
+  {
+    key: 'contact',
+    label: '', // Will be set in component
+    icon: Mail,
+    path: '/join-us',
   },
 ];
 

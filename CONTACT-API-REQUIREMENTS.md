@@ -178,7 +178,7 @@ CREATE TABLE contact_message_images (
    - 使用 IP 地址或用户 ID 作为限流标识
 
 4. **通知机制：**
-   - 建议在收到消息后发送邮件通知到客服邮箱（contact@youmind.ai）
+   - 建议在收到消息后发送邮件通知到客服邮箱（contact@tripnara.com）
    - 邮件内容应包含消息内容、用户信息（如有）、图片链接等
 
 5. **安全性：**

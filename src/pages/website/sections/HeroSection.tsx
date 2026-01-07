@@ -36,21 +36,51 @@ export default function HeroSection() {
               marginBottom: '2rem',
               lineHeight: '1.2',
               color: '#000',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              flexWrap: 'wrap',
             }}
           >
-            {(() => {
-              const title = t('hero.title', {
-                defaultValue: '你的梦想，不只是 空想 的。',
-              });
-              const parts = title.split(/(空想)/);
-              return parts.map((part, idx) => 
-                part === '空想' ? (
-                  <span key={idx} style={{ color: 'oklch(0.205 0 0)' }}>空想</span>
-                ) : (
-                  <span key={idx}>{part}</span>
-                )
-              );
-            })()}
+            {/* Travel emotion icon */}
+            <span style={{ fontSize: 'clamp(2rem, 4vw, 2.5rem)' }}>
+              <svg
+                width="48"
+                height="48"
+                viewBox="0 0 48 48"
+                fill="none"
+                stroke="oklch(0.205 0 0)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ display: 'inline-block', verticalAlign: 'middle' }}
+              >
+                {/* Compass icon with smile */}
+                <circle cx="24" cy="24" r="18" />
+                <circle cx="24" cy="24" r="2" fill="oklch(0.205 0 0)" />
+                <line x1="24" y1="6" x2="24" y2="10" />
+                <line x1="24" y1="38" x2="24" y2="42" />
+                <line x1="6" y1="24" x2="10" y2="24" />
+                <line x1="38" y1="24" x2="42" y2="24" />
+                {/* Smile */}
+                <path d="M 16 20 Q 24 26 32 20" strokeLinecap="round" />
+              </svg>
+            </span>
+            <span>
+              {(() => {
+                const title = t('hero.title', {
+                  defaultValue: '你的梦想，不只是 空想 的。',
+                });
+                const parts = title.split(/(空想)/);
+                return parts.map((part, idx) => 
+                  part === '空想' ? (
+                    <span key={idx} style={{ color: 'oklch(0.205 0 0)' }}>空想</span>
+                  ) : (
+                    <span key={idx}>{part}</span>
+                  )
+                );
+              })()}
+            </span>
           </h1>
 
           <p
@@ -97,16 +127,18 @@ export default function HeroSection() {
                 borderRadius: '8px',
                 fontWeight: '600',
                 fontSize: '1.1rem',
-                transition: 'all 0.2s',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 boxShadow: '0 4px 6px rgba(0, 0, 0, 0.2)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.3)';
+                e.currentTarget.style.transform = 'translateY(-3px) scale(1.02)';
+                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.25)';
+                e.currentTarget.style.backgroundColor = 'oklch(0.25 0 0)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.transform = 'translateY(0) scale(1)';
                 e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.2)';
+                e.currentTarget.style.backgroundColor = 'oklch(0.205 0 0)';
               }}
             >
               {t('hero.cta1', { defaultValue: '开始规划我的路线' })}
@@ -122,13 +154,19 @@ export default function HeroSection() {
                 fontWeight: '600',
                 fontSize: '1.1rem',
                 border: '2px solid #e0e0e0',
-                transition: 'background-color 0.2s',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = '#f5f5f5';
+                e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = '#e0e0e0';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
               {t('hero.cta2', { defaultValue: '看 TripNARA 如何做决定' })}

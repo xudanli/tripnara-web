@@ -80,6 +80,8 @@ export default function PricingPage() {
             fontSize: 'clamp(1.1rem, 2vw, 1.3rem)',
             lineHeight: '1.8',
             color: '#666',
+            maxWidth: '700px',
+            margin: '0 auto',
           }}
         >
           {t('pricing.heroSubtitle')}
@@ -263,6 +265,7 @@ export default function PricingPage() {
               gap: '1rem',
               justifyContent: 'center',
               flexWrap: 'wrap',
+              marginBottom: '1.5rem',
             }}
           >
             <Link
@@ -280,16 +283,18 @@ export default function PricingPage() {
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
                 e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                e.currentTarget.style.backgroundColor = 'oklch(0.25 0 0)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.backgroundColor = 'oklch(0.205 0 0)';
               }}
             >
               {t('pricing.cta.try')}
             </Link>
             <Link
-              to="/contact"
+              to="/join-us"
               style={{
                 padding: '1rem 2.5rem',
                 backgroundColor: 'transparent',
@@ -303,14 +308,28 @@ export default function PricingPage() {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = '#fff';
+                e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = '#e0e0e0';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               {t('pricing.cta.contact')}
             </Link>
           </div>
+          <p
+            style={{
+              fontSize: '0.95rem',
+              color: '#666',
+              lineHeight: '1.6',
+              margin: 0,
+            }}
+          >
+            {t('pricing.cta.hint')}
+          </p>
         </div>
       </section>
     </div>

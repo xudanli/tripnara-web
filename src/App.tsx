@@ -72,7 +72,7 @@ function App() {
           <Route path="pricing" element={<PricingPage />} />
           <Route path="stories" element={<StoriesPage />} />
           <Route path="about" element={<AboutPage />} />
-          <Route path="contact" element={<ContactPage />} />
+          <Route path="join-us" element={<ContactPage />} />
         </Route>
 
         {/* Login Page */}

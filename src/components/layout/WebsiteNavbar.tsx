@@ -19,13 +19,6 @@ const navItems: NavItem[] = [
   {
     key: 'product',
     path: '/product',
-    dropdownItems: [
-      { key: 'routeDirection', path: '/product#route-direction' },
-      { key: 'executableSchedule', path: '/product#executable-schedule' },
-      { key: 'planB', path: '/product#plan-b' },
-      { key: 'riskDem', path: '/product#risk-dem' },
-      { key: 'travelReadiness', path: '/product#travel-readiness' },
-    ],
   },
   {
     key: 'stories',
