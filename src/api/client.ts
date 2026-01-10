@@ -1,10 +1,32 @@
 import axios from 'axios';
 import { CONFIG } from '@/constants/config';
 
-// API baseURL 配置
-// 默认使用同域 /api（推荐，需要 Nginx 反代）
-// 可通过 VITE_API_BASE_URL 环境变量覆盖（例如独立 API 域名）
-const baseURL = CONFIG.API_BASE_URL;
+// 声明全局类型，支持从 config.js 读取配置
+declare global {
+  interface Window {
+    __CONFIG__?: { apiBaseUrl?: string };
+  }
+}
+
+// API baseURL 配置优先级：
+// 1. window.__CONFIG__.apiBaseUrl (从 /config.js 动态加载)
+// 2. VITE_API_BASE_URL 环境变量
+// 3. 默认使用同域 /api（推荐，避免 Mixed Content，需要 Nginx 反代）
+const runtimeBase =
+  window.__CONFIG__?.apiBaseUrl ||
+  (window as any).__CONFIG__?.apiBaseUrl; // 防御不同写法
+
+// ✅ 默认用同域 /api，避免 Mixed Content
+// 这样前端在 https://tripnara.com 下请求会变成 https://tripnara.com/api/...
+const baseURL = runtimeBase || import.meta.env.VITE_API_BASE_URL || '/api';
+
+// 调试日志：显示最终使用的 baseURL
+console.log('[API Client] 初始化配置:', {
+  windowConfig: window.__CONFIG__,
+  runtimeBase,
+  viteEnv: import.meta.env.VITE_API_BASE_URL,
+  finalBaseURL: baseURL,
+});
 
 const apiClient = axios.create({
   baseURL,
