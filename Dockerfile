@@ -1,5 +1,13 @@
+FROM node:20-bullseye AS builder
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
 FROM nginx:alpine
-# 将构建出来的 dist 目录（Vue/React 默认目录）拷贝到 Nginx
-COPY ./dist /usr/share/nginx/html
+COPY --from=builder /app/build /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
