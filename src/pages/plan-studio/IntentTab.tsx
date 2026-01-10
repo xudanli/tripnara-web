@@ -21,6 +21,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
 
 interface IntentTabProps {
   tripId: string;
@@ -34,7 +35,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   
-  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+  const handleApprovalComplete = async (approved: boolean) => {
     if (approved) {
       toast.success('审批已批准，系统正在继续执行...');
       await loadTrip();
@@ -272,11 +273,6 @@ export default function IntentTab({ tripId }: IntentTabProps) {
 
     try {
       setSaving(true);
-
-      // 根据节奏设置 maxDailyActivities
-      const maxDailyActivities = 
-        rhythm === 'relaxed' ? 3 :
-        rhythm === 'standard' ? 5 : 7;
 
       // 构建更新请求
       // 根据 UpdateTripRequest 的实际定义，只更新支持的字段
@@ -715,7 +711,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         <ApprovalDialog
           approvalId={pendingApprovalId}
           open={approvalDialogOpen}
-          onOpenChange={(open) => {
+          onOpenChange={(open: boolean) => {
             setApprovalDialogOpen(open);
             if (!open) {
               setPendingApprovalId(null);

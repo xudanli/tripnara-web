@@ -624,7 +624,7 @@ export default function ProfessionalsPage() {
               gap: '1.5rem',
             }}
           >
-            {journeySteps.map((step, idx) => {
+            {journeySteps.map((step) => {
               const Icon = step.icon;
               return (
                 <div

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
@@ -13,6 +13,7 @@ import type { OptimizeRouteRequest, OptimizeRouteResponse } from '@/types/itiner
 import { toast } from 'sonner';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
 
 interface OptimizeTabProps {
   tripId: string;
@@ -26,7 +27,7 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   
-  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+  const handleApprovalComplete = async (approved: boolean) => {
     if (approved) {
       toast.success('审批已批准，系统正在继续执行...');
     } else {
@@ -249,7 +250,7 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
         <ApprovalDialog
           approvalId={pendingApprovalId}
           open={approvalDialogOpen}
-          onOpenChange={(open) => {
+          onOpenChange={(open: boolean) => {
             setApprovalDialogOpen(open);
             if (!open) {
               setPendingApprovalId(null);

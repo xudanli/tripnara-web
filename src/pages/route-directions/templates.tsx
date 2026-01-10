@@ -16,12 +16,9 @@ import {
   Calendar,
   MapPin,
   Filter,
-  X,
-  Edit,
   Eye,
   CheckCircle2,
   XCircle,
-  Loader2,
   Sparkles,
 } from 'lucide-react';
 

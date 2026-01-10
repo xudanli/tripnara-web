@@ -5,7 +5,6 @@ import { PersonSitting, Route } from '@/components/illustrations/SimpleIllustrat
 
 // 封面插画组件
 function StoryCoverIllustration({ type, className = '' }: { type: 'iceland' | 'newzealand' | 'europe'; className?: string }) {
-  const size = 200;
   const viewBox = '0 0 200 200';
 
   if (type === 'iceland') {

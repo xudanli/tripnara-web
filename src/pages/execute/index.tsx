@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Input } from '@/components/ui/input';
 import {
   MapPin,
   Clock,
@@ -18,7 +17,6 @@ import {
   MessageSquare,
   Navigation,
   Wifi,
-  WifiOff,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -44,10 +42,8 @@ export default function ExecutePage() {
   const [tripState, setTripState] = useState<TripState | null>(null);
   const [todaySchedule, setTodaySchedule] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [agentInput, setAgentInput] = useState('');
   const [showRepairSheet, setShowRepairSheet] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
-  const [timelineExpanded, setTimelineExpanded] = useState(true);
   const [personaMode, setPersonaMode] = useState<PersonaMode>('abu');
   
   const { state: onboardingState, completeTour, completeStep } = useOnboarding();
@@ -191,8 +187,7 @@ export default function ExecutePage() {
   const currentDay = trip?.TripDay?.find(d => d.id === tripState?.currentDayId);
   const status = tripState?.currentItemId ? 'On track' : 'Needs repair';
 
-  // 获取当前日期
-  const currentDate = currentDay ? format(new Date(currentDay.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+  // 获取当前日期（已移除未使用的 currentDate 变量）
 
   return (
     <div className="h-full flex flex-col">

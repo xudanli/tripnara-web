@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SuggestionBadge } from '@/components/trips/SuggestionBadge';
 import { format } from 'date-fns';
-import { MapPin, TrendingUp, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
+import { MapPin, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TripDay, DayMetricsResponse } from '@/types/trip';
 import type { Suggestion } from '@/types/suggestion';
@@ -60,7 +60,7 @@ export default function DayItineraryCard({
   const dayConflicts = dayMetrics?.conflicts || [];
   const hasHighRisk = dayConflicts.some((c) => c.severity === 'HIGH');
   const hasMediumRisk = dayConflicts.some((c) => c.severity === 'MEDIUM');
-  const riskLevel = hasHighRisk ? '高' : hasMediumRisk ? '中' : '低';
+  // const riskLevel = hasHighRisk ? '高' : hasMediumRisk ? '中' : '低'; // 未使用
   const riskColor = hasHighRisk
     ? 'text-red-600 bg-red-50'
     : hasMediumRisk

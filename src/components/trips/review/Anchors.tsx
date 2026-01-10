@@ -3,8 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Collapsible,
   CollapsibleContent,
@@ -13,10 +11,8 @@ import {
 import {
   Shield,
   Activity,
-  RefreshCw,
   TrendingUp,
   CheckCircle2,
-  XCircle,
   ChevronDown,
   ChevronUp,
   Edit,
@@ -158,7 +154,7 @@ interface AnchorSectionProps {
 }
 
 function AnchorSection({
-  type,
+  type: _type,
   config,
   anchors,
   isSaved = false,

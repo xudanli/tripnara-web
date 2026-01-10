@@ -171,7 +171,6 @@ export default function PipelineSection({ activeTrip }: PipelineSectionProps) {
 
   // 计算进度百分比
   const completedCount = stages.filter((s) => s.status === 'completed').length;
-  const progressPercentage = (completedCount / stages.length) * 100;
 
   return (
     <Card>

@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { ChecklistProgressIllustration } from '@/components/illustrations/OnboardingIllustrations';
@@ -45,9 +44,6 @@ export default function Checklist({
     navigate(url);
   };
 
-  const getStepNumber = (step: ChecklistStep) => {
-    return checklistItems.findIndex((item) => item.id === step) + 1;
-  };
 
   return (
     <Card className={cn('w-full', className)}>

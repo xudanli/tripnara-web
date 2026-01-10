@@ -9,11 +9,9 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, ExternalLink, Brain, History, AlertTriangle } from 'lucide-react';
+import { Send, Bot, User, ExternalLink, Brain, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
-import type { ApprovalRequest } from '@/types/approval';
-import { approvalsApi } from '@/api/approvals';
 import { toast } from 'sonner';
 import { needsApproval, extractApprovalId } from '@/utils/approval';
 
@@ -27,7 +25,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  status?: 'thinking' | 'browsing' | 'verifying' | 'repairing' | 'done' | 'failed';
+  status?: 'thinking' | 'browsing' | 'verifying' | 'repairing' | 'done' | 'failed' | 'awaiting_confirmation' | 'awaiting_consent';
   routeType?: RouteType;
   decisionLogCount?: number;
   hasPlan?: boolean; // 是否有 plan 或调整结果
@@ -44,7 +42,6 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
   // 审批相关状态
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
-  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -154,7 +151,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
             role: 'assistant',
             content: messageContent,
             timestamp: new Date(),
-            status: response.route.ui_hint.status,
+            status: response.route.ui_hint.status as Message['status'],
             routeType,
             decisionLogCount: decisionLogCount > 0 ? decisionLogCount : undefined,
             hasPlan: isSystem2, // System2 通常会有 plan 或调整结果
@@ -336,7 +333,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
               setPendingApprovalId(null);
             }
           }}
-          onDecision={async (approved, approval) => {
+          onDecision={async (approved) => {
             // 审批完成后的处理
             if (approved) {
               toast.success('审批已批准，Agent 正在继续执行...');

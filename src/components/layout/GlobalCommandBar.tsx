@@ -19,7 +19,6 @@ import { Bell, Send, Settings, LogOut, User, Search, Globe, Check, Mail } from '
 import { cn } from '@/lib/utils';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
-import type { ApprovalRequest } from '@/types/approval';
 import { toast } from 'sonner';
 import { needsApproval, extractApprovalId } from '@/utils/approval';
 
@@ -288,7 +287,7 @@ export default function GlobalCommandBar({
               setPendingApprovalId(null);
             }
           }}
-          onDecision={async (approved, approval) => {
+          onDecision={async (approved) => {
             // 审批完成后的处理
             if (approved) {
               toast.success('审批已批准，Agent 正在继续执行...');

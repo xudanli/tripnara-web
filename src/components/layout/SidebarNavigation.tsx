@@ -14,8 +14,6 @@ import {
   Globe,
   ChevronDown,
   ChevronRight,
-  FileText,
-  Route,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';

@@ -4,7 +4,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import type { Suggestion, ApplySuggestionResponse } from '@/types/suggestion';
 import {
   Dialog,
@@ -35,7 +34,6 @@ export function SuggestionPreviewDialog({
   onOpenChange,
   onConfirm,
 }: SuggestionPreviewDialogProps) {
-  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<ApplySuggestionResponse | null>(null);
   const [applying, setApplying] = useState(false);

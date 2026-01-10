@@ -1,5 +1,4 @@
 import apiClient from './client';
-import type { ApiResponse } from './types';
 
 // 文档中的响应格式是 { success: true, data: T }
 interface SuccessResponse<T> {

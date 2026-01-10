@@ -27,7 +27,6 @@ import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
-import type { ApprovalRequest } from '@/types/approval';
 
 interface PlacesTabProps {
   tripId: string;
@@ -44,7 +43,7 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   
-  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+  const handleApprovalComplete = async (approved: boolean) => {
     if (approved) {
       toast.success('审批已批准，系统正在继续执行...');
       // 刷新行程数据

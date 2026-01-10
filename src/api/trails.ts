@@ -1,10 +1,10 @@
 import apiClient from './client';
 import type { ApiResponse, PaginatedResponse } from './types';
-import type { Trail } from '@/types/trail';
+import type { TrailDetail } from '@/types/trail';
 
 export const trailsApi = {
   getAll: async (params?: { page?: number; limit?: number }) => {
-    const response = await apiClient.get<ApiResponse<PaginatedResponse<Trail>>>(
+    const response = await apiClient.get<ApiResponse<PaginatedResponse<TrailDetail>>>(
       '/trails',
       { params }
     );
@@ -12,17 +12,17 @@ export const trailsApi = {
   },
 
   getById: async (id: string) => {
-    const response = await apiClient.get<ApiResponse<Trail>>(`/trails/${id}`);
+    const response = await apiClient.get<ApiResponse<TrailDetail>>(`/trails/${id}`);
     return response.data;
   },
 
-  create: async (data: Partial<Trail>) => {
-    const response = await apiClient.post<ApiResponse<Trail>>('/trails', data);
+  create: async (data: Partial<TrailDetail>) => {
+    const response = await apiClient.post<ApiResponse<TrailDetail>>('/trails', data);
     return response.data;
   },
 
-  update: async (id: string, data: Partial<Trail>) => {
-    const response = await apiClient.put<ApiResponse<Trail>>(`/trails/${id}`, data);
+  update: async (id: string, data: Partial<TrailDetail>) => {
+    const response = await apiClient.put<ApiResponse<TrailDetail>>(`/trails/${id}`, data);
     return response.data;
   },
 

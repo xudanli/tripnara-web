@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Clock, AlertCircle, Circle, ChevronDown } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Circle } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';

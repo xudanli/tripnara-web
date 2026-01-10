@@ -164,7 +164,7 @@ export default function TodayTasksSection({ activeTrip }: TodayTasksSectionProps
                   <Checkbox
                     checked={task.completed}
                     disabled={updatingTaskId === task.id}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={() => {
                       handleTaskToggle(task);
                     }}
                     onClick={(e) => e.stopPropagation()}

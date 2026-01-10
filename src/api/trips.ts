@@ -74,7 +74,6 @@ import type {
   TripShare,
   AddCollaboratorRequest,
   Collaborator,
-  CollectedTrip,
   FeaturedTrip,
   ExportOfflinePackResponse,
   OfflinePackStatus,

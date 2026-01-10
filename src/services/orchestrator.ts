@@ -135,17 +135,13 @@ class PlanStudioOrchestrator {
       const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
 
       // 解析响应
-      const routeType = response.route.route;
-      const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
-      
       // 检查是否需要审批（NEED_CONFIRMATION 不是失败，而是需要用户审批）
-      const needsApproval = 
-        response.result.status === 'NEED_CONFIRMATION' && 
-        response.result.payload?.suspensionInfo;
+      const suspensionInfo = response.result.payload?.suspensionInfo;
+      const needsApproval = response.result.status === 'NEED_CONFIRMATION' && !!suspensionInfo;
       
       // 判断执行是否成功
-      // SUCCESS 表示成功，NEED_CONFIRMATION 表示需要审批（不是失败），其他状态视为失败
-      const isSuccess = response.result.status === 'SUCCESS';
+      // OK 表示成功，NEED_CONFIRMATION 表示需要审批（不是失败），其他状态视为失败
+      const isSuccess = response.result.status === 'OK';
       const statusMessage = response.result.answer_text || '未知状态';
       const decisionLog = response.explain?.decision_log || [];
 
@@ -195,6 +191,10 @@ class PlanStudioOrchestrator {
           case 'TIMEOUT':
             userFriendlyError = '操作超时，请稍后重试';
             break;
+          case 'OK':
+            // 成功状态，不应该到这里
+            userFriendlyError = undefined;
+            break;
           default:
             userFriendlyError = statusMessage || '操作未成功完成';
         }
@@ -204,7 +204,7 @@ class PlanStudioOrchestrator {
       const result: OrchestrationResult = {
         success: isSuccess || needsApproval, // 如果需要审批，也视为"成功"（等待审批）
         message: statusMessage,
-        needsApproval: needsApproval, // 标记是否需要审批
+        needsApproval: needsApproval || false, // 标记是否需要审批
         data: {
           // 从 payload 中提取数据
           trip: response.result.payload?.trip,
@@ -228,8 +228,8 @@ class PlanStudioOrchestrator {
           action,
           tripId,
           success: result.success,
-          hasAlerts: result.data?.personaAlerts?.length > 0,
-          hasAdjustments: result.data?.autoAdjustments?.length > 0,
+          hasAlerts: (result.data?.personaAlerts?.length || 0) > 0,
+          hasAdjustments: (result.data?.autoAdjustments?.length || 0) > 0,
         });
       } else {
         console.warn('[Orchestrator] 执行未成功:', {
@@ -238,8 +238,8 @@ class PlanStudioOrchestrator {
           success: result.success,
           status: response.result.status,
           message: statusMessage,
-          hasAlerts: result.data?.personaAlerts?.length > 0,
-          hasAdjustments: result.data?.autoAdjustments?.length > 0,
+          hasAlerts: (result.data?.personaAlerts?.length || 0) > 0,
+          hasAdjustments: (result.data?.autoAdjustments?.length || 0) > 0,
         });
       }
 

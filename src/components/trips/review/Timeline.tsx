@@ -2,15 +2,6 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   CheckCircle2,
   XCircle,
@@ -21,8 +12,6 @@ import {
   ChevronDown,
   ChevronUp,
   Edit,
-  Plus,
-  Cloud,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -87,7 +76,7 @@ interface DayCardProps {
 
 function DayCard({ dayIndex, date, events }: DayCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [, setEditingEventId] = useState<string | null>(null);
 
   // 关键事件（最多3条）：风险信号、延误、替换、取消
   const criticalEvents = events.filter(

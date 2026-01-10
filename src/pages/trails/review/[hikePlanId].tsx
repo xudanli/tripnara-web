@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowLeft,
   TrendingUp,
-  AlertTriangle,
-  MapPin,
-  Clock,
   CheckCircle2,
   XCircle,
   Edit,
@@ -18,7 +15,7 @@ import {
   Anchor,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { HikeReview, ElevationEvent, HikeInsight, AnchorRule } from '@/types/trail';
+import type { HikeReview } from '@/types/trail';
 
 export default function HikeReviewPage() {
   const { hikePlanId } = useParams<{ hikePlanId: string }>();

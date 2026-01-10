@@ -5,8 +5,6 @@ import { countriesApi } from '@/api/countries';
 import type { 
   GenerateTripDraftRequest, 
   TripDraftResponse, 
-  DraftDay,
-  DraftItineraryItem,
   TimeSlot,
   TravelStyle,
   IntensityLevel,
@@ -28,11 +26,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { 
   ArrowLeft, 
   Sparkles, 
-  MapPin, 
   Calendar, 
   Clock, 
-  Lock, 
-  RefreshCw,
+  Lock,
   CheckCircle2,
   AlertCircle,
   ChevronsUpDown,

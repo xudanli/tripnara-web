@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { routeDirectionsApi } from '@/api/route-directions';
 import type { RouteDirection } from '@/types/places-routes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -52,7 +52,6 @@ const DIFFICULTY_OPTIONS = [
 ];
 
 export default function TrailsExplorePage() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
@@ -69,7 +68,6 @@ export default function TrailsExplorePage() {
   const [elevationRange, setElevationRange] = useState<[number, number]>([0, 5000]);
   const [timeRange, setTimeRange] = useState<[number, number]>([0, 24]);
   const [loopType, setLoopType] = useState<string>('');
-  const [riskTags, setRiskTags] = useState<string[]>([]);
 
   useEffect(() => {
     loadTrails();
@@ -305,8 +303,8 @@ export default function TrailsExplorePage() {
               key={trail.id}
               trail={trail}
               readinessScore={getReadinessScore(trail)}
-              onBookmark={(id) => toast.info('已收藏')}
-              onDownload={(id) => toast.info('离线下载功能开发中')}
+              onBookmark={() => toast.info('已收藏')}
+              onDownload={() => toast.info('离线下载功能开发中')}
             />
           ))}
         </div>

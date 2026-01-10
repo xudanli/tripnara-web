@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Brain, TrendingUp, Clock, Activity, Lock, RefreshCw, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
 import type { DrDreViewData } from '@/utils/trip-data-extractors';
 
@@ -27,7 +26,7 @@ interface Candidate {
   patchPreview: any;
 }
 
-export default function DrDreView({ trip, drDreData, tripMetrics, onItemClick }: DrDreViewProps) {
+export default function DrDreView({ trip, drDreData }: DrDreViewProps) {
   const { t } = useTranslation();
   const [priorities, setPriorities] = useState({
     time: 50,

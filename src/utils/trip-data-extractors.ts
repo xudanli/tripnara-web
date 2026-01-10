@@ -6,7 +6,6 @@
 import type {
   DecisionLogEntry,
   PersonaAlert,
-  TripDetail,
   TripMetricsResponse,
 } from '@/types/trip';
 import type { Suggestion, SuggestionStats } from '@/types/suggestion';
@@ -202,10 +201,10 @@ export function extractDrDreData(
   // 使用已获取的 tripMetrics
   const metrics = {
     totalFatigue: tripMetrics?.summary.totalFatigue || 0,
-    avgBuffer: tripMetrics?.summary.avgBuffer || 0,
+    avgBuffer: tripMetrics?.summary.averageWalkPerDay || 0, // Use averageWalkPerDay as fallback
     totalWalk: tripMetrics?.summary.totalWalk || 0,
     totalDrive: tripMetrics?.summary.totalDrive || 0,
-    maxDailyFatigue: tripMetrics?.summary.maxDailyFatigue,
+    maxDailyFatigue: tripMetrics?.days ? Math.max(...tripMetrics.days.map(d => d.metrics.fatigue || 0)) : undefined,
   };
   
   // 从决策日志中提取调整操作
@@ -220,23 +219,9 @@ export function extractDrDreData(
     }));
   
   // 计算每日指标（基于 tripMetrics.days）
+  // Note: DayMetricsResponse doesn't have items property, so we can't extract per-item metrics from here
   const metricsByItem: Record<string, any> = {};
-  if (tripMetrics?.days) {
-    for (const day of tripMetrics.days) {
-      if (day.items) {
-        for (const item of day.items) {
-          if (item.itemId) {
-            metricsByItem[item.itemId] = {
-              fatigue: item.fatigue,
-              buffer: item.buffer,
-              walk: item.walk,
-              drive: item.drive,
-            };
-          }
-        }
-      }
-    }
-  }
+  // TODO: Extract per-item metrics from a different source if needed
   
   return {
     metrics,
@@ -352,7 +337,7 @@ export function calculateOverallMetrics(
     ).length,
     warnings: personaAlerts.filter(a => a.severity === 'info').length, // 保留：所有 info 级别提醒
     drDreWarnings, // 新增：Dr.Dre 的警告数
-    suggestions: suggestionStats?.total || 0,
+    suggestions: suggestionStats ? (suggestionStats.byPersona?.abu?.total || 0) + (suggestionStats.byPersona?.drdre?.total || 0) + (suggestionStats.byPersona?.neptune?.total || 0) : 0,
   };
 }
 

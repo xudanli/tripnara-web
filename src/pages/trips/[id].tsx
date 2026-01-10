@@ -1329,7 +1329,7 @@ export default function TripDetailPage() {
                 <AbuView 
                   trip={trip} 
                   abuData={abuData}
-                  onItemClick={(item) => {
+                  onItemClick={() => {
                     setDrawerTab('risk');
                     setDrawerOpen(true);
                   }}
@@ -1340,7 +1340,7 @@ export default function TripDetailPage() {
                   trip={trip} 
                   drDreData={drDreData}
                   tripMetrics={tripMetrics}
-                  onItemClick={(item) => {
+                  onItemClick={() => {
                     setDrawerTab('evidence');
                     setDrawerOpen(true);
                   }}
@@ -1350,7 +1350,7 @@ export default function TripDetailPage() {
                 <NeptuneView 
                   trip={trip} 
                   neptuneData={neptuneData}
-                  onItemClick={(item) => {
+                  onItemClick={() => {
                     setDrawerTab('evidence');
                     setDrawerOpen(true);
                   }}
@@ -1581,30 +1581,38 @@ export default function TripDetailPage() {
               </Card>
 
               {/* 访问地点列表 */}
-              {recapReport?.places && recapReport.places.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>访问地点 ({recapReport.places.length})</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {recapReport.places.map((place) => (
-                        <div key={place.id} className="border rounded-lg p-3">
-                          <div className="font-medium">{place.nameCN}</div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {format(new Date(place.visitDate), 'yyyy-MM-dd')} {place.visitTime}
+              {(() => {
+                // 在这个块内，recapReport 已经在外层条件中检查过了（第1505行），所以是非 null 的
+                const report = recapReport!;
+                if (!report.places || report.places.length === 0) {
+                  return null;
+                }
+                const places = report.places;
+                return (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>访问地点 ({places.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {places.map((place) => (
+                          <div key={place.id} className="border rounded-lg p-3">
+                            <div className="font-medium">{place.nameCN}</div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {format(new Date(place.visitDate), 'yyyy-MM-dd')} {place.visitTime}
+                            </div>
+                            {place.category && (
+                              <Badge variant="outline" className="mt-2">
+                                {place.category}
+                              </Badge>
+                            )}
                           </div>
-                          {place.category && (
-                            <Badge variant="outline" className="mt-2">
-                              {place.category}
-                            </Badge>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
             </div>
           ) : (
             <Card>

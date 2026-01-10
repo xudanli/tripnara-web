@@ -67,7 +67,7 @@ export function EditItineraryItemDialog({
         endTime: formData.endTime ? new Date(formData.endTime).toISOString() : undefined,
       };
 
-      const result = await itineraryItemsApi.update(item.id, updateData);
+      await itineraryItemsApi.update(item.id, updateData);
       
       // 更新成功，调用成功回调（会重新加载当天的行程项以获取最新时间）
       onSuccess();

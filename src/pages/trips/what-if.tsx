@@ -14,12 +14,10 @@ import type { TripDetail, ScheduleResponse } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Spinner } from '@/components/ui/spinner';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowLeft,
-  TrendingUp,
   Sparkles,
   CheckCircle2,
   AlertTriangle,
@@ -37,7 +35,7 @@ export default function WhatIfPage() {
   const tripId = searchParams.get('tripId');
   const date = searchParams.get('date') || format(new Date(), 'yyyy-MM-dd');
 
-  const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [, setTrip] = useState<TripDetail | null>(null);
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -294,8 +292,8 @@ export default function WhatIfPage() {
       // 转换策略模块的DayScheduleResult到行程模块的DayScheduleResult
       const scheduleForSave: import('@/types/trip').DayScheduleResult = {
         items: result.schedule.stops.map((stop) => ({
-          placeId: stop.kind === 'POI' ? Number(stop.id) : undefined,
-          placeName: stop.name,
+          placeId: stop.kind === 'POI' ? Number(stop.id) : 0,
+          placeName: stop.name || '',
           type: stop.kind === 'POI' ? 'ACTIVITY' : stop.kind === 'REST' ? 'REST' : 'MEAL_FLOATING',
           startTime: minutesToTimeString(stop.startMin, date),
           endTime: minutesToTimeString(stop.endMin, date),

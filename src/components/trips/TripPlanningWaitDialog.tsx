@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -62,8 +61,7 @@ export default function TripPlanningWaitDialog({
   onPlanningComplete,
   onClose,
 }: TripPlanningWaitDialogProps) {
-  const { t } = useTranslation();
-  const [checking, setChecking] = useState(false);
+  const [, setChecking] = useState(false);
   const [progress, setProgress] = useState<GenerationProgress | null>(null);
   const maxPollTime = 60000; // 最多轮询 60 秒
   const pollInterval = 2000; // 每 2 秒轮询一次

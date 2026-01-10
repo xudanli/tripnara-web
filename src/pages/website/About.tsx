@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PersonSitting, PersonThinking, Route, Compass, Mountains } from '@/components/illustrations/SimpleIllustrations';

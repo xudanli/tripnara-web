@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { X, ArrowRight, ArrowLeft } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export interface TourStep {
   id: string;
@@ -31,7 +30,7 @@ export default function SpotlightTour({
 }: SpotlightTourProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [targetElement, setTargetElement] = useState<HTMLElement | null>(null);
-  const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
+  const [, setOverlayStyle] = useState<React.CSSProperties>({});
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const activeStepIndex = controlledStepIndex !== undefined ? controlledStepIndex : currentStep;
@@ -44,7 +43,7 @@ export default function SpotlightTour({
       const element = document.querySelector(activeStep.target) as HTMLElement;
       if (element) {
         setTargetElement(element);
-        const rect = element.getBoundingClientRect();
+        element.getBoundingClientRect();
         setOverlayStyle({
           position: 'fixed',
           top: 0,

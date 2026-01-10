@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { approvalsApi } from '@/api/approvals';
 import type { ApprovalRequest, RiskLevel } from '@/types/approval';
 import { ApprovalStatus } from '@/types/approval';
-import { CheckCircle2, XCircle, AlertTriangle, Clock, X } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ApprovalDialogProps {
@@ -57,7 +56,6 @@ export default function ApprovalDialog({
   onOpenChange,
   onDecision,
 }: ApprovalDialogProps) {
-  const { t } = useTranslation();
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);

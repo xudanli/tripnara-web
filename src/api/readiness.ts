@@ -1,11 +1,6 @@
 import apiClient from './client';
 import type {
-  ReadinessStatus,
-  ReadinessScore,
-  Blocker,
   RepairOption,
-  EvidenceItem,
-  ReadinessData,
 } from '@/types/readiness';
 
 // 文档中的响应格式是 { success: true, data: T }

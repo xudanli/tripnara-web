@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { tripReviewApi, anchorApi } from '@/api/trip-review';
 import { tripsApi } from '@/api/trips';
-import type { TripReviewDetail, ReviewInsight, AnchorRule, ExecutionEvent, ReviewSummary } from '@/types/trip-review';
+import type { TripReviewDetail, AnchorRule, ReviewSummary } from '@/types/trip-review';
 import type { TripDetail } from '@/types/trip';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
-import { ArrowLeft, Download, Save, RefreshCw, CheckCircle2, XCircle, Clock, TrendingUp, AlertTriangle, DollarSign } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, CheckCircle2, Clock, AlertTriangle, DollarSign } from 'lucide-react';
 import Timeline from '@/components/trips/review/Timeline';
 import Insights from '@/components/trips/review/Insights';
 import Anchors from '@/components/trips/review/Anchors';
@@ -168,7 +168,7 @@ export default function TripReviewPage() {
     );
   }
 
-  const { review, summary, events, insights, anchorsSuggested } = reviewData;
+  const { summary, events, insights, anchorsSuggested } = reviewData;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -368,9 +368,9 @@ function SummaryBar({ summary }: { summary: ReviewSummary }) {
           <KPIPill
             icon={DollarSign}
             label="预算偏差"
-            value={`${budgetDeviation.deviation > 0 ? '+' : ''}${budgetDeviation.deviation?.toFixed(0)}`}
+            value={`${(budgetDeviation.deviation || 0) > 0 ? '+' : ''}${(budgetDeviation.deviation || 0).toFixed(0)}`}
             subtitle={`实际: ${budgetDeviation.actualCost}`}
-            color={budgetDeviation.deviation > 0 ? 'orange' : 'green'}
+            color={(budgetDeviation.deviation || 0) > 0 ? 'orange' : 'green'}
           />
         )}
       </div>

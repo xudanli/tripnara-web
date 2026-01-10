@@ -16,7 +16,7 @@ export default function InsightsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
-  const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [recapReport, setRecapReport] = useState<TripRecapReport | null>(null);
   const [loadingRecap, setLoadingRecap] = useState(false);
@@ -65,7 +65,7 @@ export default function InsightsPage() {
     try {
       setLoadingTemplates(true);
       const data = await routeDirectionsApi.queryTemplates({ isActive: true, limit: 20 });
-      setTemplates(data.templates || []);
+      setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load templates:', err);
       setTemplates([]);
@@ -96,12 +96,12 @@ export default function InsightsPage() {
       title: place.nameCN,
       description: `在 ${place.visitDate} 访问`,
     })),
-    failures: [], // TODO: 从 report 中提取失败点
+    failures: [] as Array<{ id: number | string; title: string; description: string }>, // TODO: 从 report 中提取失败点
   } : {
     robustness: 0,
     rhythm: '',
-    highlights: [],
-    failures: [],
+    highlights: [] as Array<{ id: number | string; title: string; description: string }>,
+    failures: [] as Array<{ id: number | string; title: string; description: string }>,
   };
 
   const preferences = userPreferences ? {
@@ -244,7 +244,7 @@ export default function InsightsPage() {
                   <div>
                     <div className="text-sm text-muted-foreground mb-2">偏好类型</div>
                     <div className="flex gap-2">
-                      {preferences.preferredPlaces.map((place) => (
+                      {preferences.preferredPlaces.map((place: string) => (
                         <Badge key={place} variant="outline">{place}</Badge>
                       ))}
                     </div>

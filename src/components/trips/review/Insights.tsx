@@ -9,7 +9,6 @@ import {
   Activity,
   RefreshCw,
   CheckCircle2,
-  XCircle,
   Edit,
   ThumbsUp,
   ThumbsDown,

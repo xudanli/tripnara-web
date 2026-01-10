@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Settings, LogOut, User, MapPin, Compass, Wrench, Share2 } from 'lucide-react';
+import { Settings, LogOut, MapPin, Compass, Wrench, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import LanguageSwitcher from '@/components/common/LanguageSwitcher';
 import Logo from '@/components/common/Logo';

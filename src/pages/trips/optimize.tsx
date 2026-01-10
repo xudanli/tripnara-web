@@ -7,27 +7,21 @@ import type {
   OptimizeRouteRequest,
   OptimizeRouteResponse,
   OptimizeRouteConfig,
-  PlaceNode,
-  ScheduleItem,
 } from '@/types/itinerary-optimization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft,
   MapPin,
   Clock,
   Zap,
   TrendingUp,
-  Users,
   Baby,
   UserCog,
   Loader2,
@@ -198,13 +192,6 @@ export default function TripOptimizePage() {
     }
   };
 
-  const formatDateTime = (isoTime: string) => {
-    try {
-      return format(parseISO(isoTime), TIME_FORMAT.DATETIME_FORMAT, { locale: zhCN });
-    } catch {
-      return isoTime;
-    }
-  };
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">

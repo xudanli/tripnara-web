@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 export type ChecklistStep = 'style' | 'places' | 'schedule' | 'optimize' | 'execute';
 export type ExperienceType = 'steady' | 'balanced' | 'exploratory';

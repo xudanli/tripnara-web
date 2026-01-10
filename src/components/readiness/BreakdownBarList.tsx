@@ -22,11 +22,6 @@ export default function BreakdownBarList({ score, onShowBlockers }: BreakdownBar
     <div className="space-y-4">
       {dimensions.map((dim) => {
         const value = score[dim.key];
-        const getColor = () => {
-          if (value >= 80) return 'bg-green-600';
-          if (value >= 60) return 'bg-yellow-600';
-          return 'bg-red-600';
-        };
 
         return (
           <div key={dim.key} className="space-y-2">

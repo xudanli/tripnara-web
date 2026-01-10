@@ -4,12 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { TrendingUp, Shield, DollarSign, AlertTriangle } from 'lucide-react';
+import { TrendingUp, Shield, AlertTriangle } from 'lucide-react';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import { tripsApi } from '@/api/trips';
 import { planningPolicyApi } from '@/api/planning-policy';
-import type { TripDetail, ScheduleResponse } from '@/types/trip';
-import type { WhatIfEvaluateRequest, WhatIfEvaluateResponse, Candidate, PlanningPolicy } from '@/types/strategy';
+import type { TripDetail, ScheduleItem } from '@/types/trip';
+import type { WhatIfEvaluateRequest, Candidate, PlanningPolicy, ScheduleStop, ScheduleMetrics } from '@/types/strategy';
 import { toast } from 'sonner';
 
 interface WhatIfTabProps {
@@ -111,11 +111,57 @@ export default function WhatIfTab({ tripId, personaMode = 'abu' }: WhatIfTabProp
       const dayOfWeek = new Date(firstDay.date).getDay();
 
       // 构建 What-If 评估请求
+      // 需要将 trip.DayScheduleResult 转换为 strategy.DayScheduleResult
+      // 如果 schedule 存在，则转换；否则使用默认值
+      const scheduleForWhatIf: { stops: ScheduleStop[]; metrics: ScheduleMetrics } = scheduleResponse.schedule ? {
+        stops: scheduleResponse.schedule.items.map((item: ScheduleItem, idx: number): ScheduleStop => {
+          // 将时间字符串转换为分钟数（从一天开始）
+          const startDate = new Date(`2000-01-01T${item.startTime}`);
+          const endDate = new Date(`2000-01-01T${item.endTime}`);
+          const startMin = startDate.getHours() * 60 + startDate.getMinutes();
+          const endMin = endDate.getHours() * 60 + endDate.getMinutes();
+          
+          // 将 ItineraryItemType 映射到 ScheduleStop kind
+          let kind: 'POI' | 'REST' | 'MEAL' | 'TRANSIT' = 'POI';
+          if (item.type === 'REST') kind = 'REST';
+          else if (item.type === 'MEAL_FLOATING' || item.type === 'MEAL_ANCHOR') kind = 'MEAL';
+          else if (item.type === 'TRANSIT') kind = 'TRANSIT';
+          
+          return {
+            kind,
+            id: item.placeId?.toString() || `item-${idx}`,
+            name: item.placeName || '',
+            startMin,
+            endMin,
+            lat: item.metadata?.lat || item.metadata?.latitude,
+            lng: item.metadata?.lng || item.metadata?.longitude,
+          };
+        }),
+        metrics: {
+          totalTravelMin: scheduleResponse.schedule.totalDuration || 0,
+          totalWalkMin: 0,
+          totalTransfers: 0,
+          totalQueueMin: 0,
+          overtimeMin: 0,
+          hpEnd: 100,
+        },
+      } : {
+        stops: [],
+        metrics: {
+          totalTravelMin: 0,
+          totalWalkMin: 0,
+          totalTransfers: 0,
+          totalQueueMin: 0,
+          overtimeMin: 0,
+          hpEnd: 100,
+        },
+      };
+
       const request: WhatIfEvaluateRequest = {
         placeIds,
         poiLookup,
         policy,
-        schedule: scheduleResponse.schedule,
+        schedule: scheduleForWhatIf,
         dayEndMin,
         dateISO: firstDay.date,
         dayOfWeek,

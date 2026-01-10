@@ -46,7 +46,6 @@ import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
-import type { ApprovalRequest } from '@/types/approval';
 
 interface ScheduleTabProps {
   tripId: string;
@@ -61,7 +60,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   
-  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+  const handleApprovalComplete = async (approved: boolean) => {
     if (approved) {
       toast.success('审批已批准，系统正在继续执行...');
       await loadTrip();
@@ -707,7 +706,6 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
         {trip.TripDay.map((day, idx) => {
           const schedule = schedules.get(day.date);
           const items = schedule?.schedule?.items || [];
-          const dayItems = itineraryItemsMap.get(day.date) || [];
           
           // 使用 API 返回的指标数据（不再使用硬编码的后备计算）
           const apiMetrics = dayMetricsMap.get(day.date);
@@ -822,6 +820,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                             item={item}
                             dayIndex={idx}
                             itemIndex={itemIdx}
+                            personaMode="auto"
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                             onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -846,6 +845,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                   item={fullItem}
                                   dayIndex={idx}
                                   itemIndex={itemIdx}
+                                  personaMode="auto"
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                                   onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}

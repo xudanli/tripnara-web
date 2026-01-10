@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyMedia } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, MapPin, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight } from 'lucide-react';
+import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { TripPlanning } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
@@ -219,40 +219,7 @@ export default function TripsPage() {
     navigate(`/dashboard/trips/${tripId}`);
   };
 
-  // 计算行程成熟度（基于状态和天数）
-  const getMaturity = (trip: TripListItem): 'ROUGH' | 'READY' | 'EXECUTABLE' => {
-    const days = trip.days?.length ?? 0;
-    if (trip.status === 'COMPLETED') return 'EXECUTABLE';
-    if (trip.status === 'IN_PROGRESS') return 'EXECUTABLE';
-    if (days > 0 && trip.status === 'PLANNING') return 'READY';
-    return 'ROUGH';
-  };
-
-  const getMaturityColor = (maturity: string) => {
-    switch (maturity) {
-      case 'EXECUTABLE':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'READY':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'ROUGH':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getMaturityText = (maturity: string) => {
-    switch (maturity) {
-      case 'EXECUTABLE':
-        return '可执行';
-      case 'READY':
-        return '就绪';
-      case 'ROUGH':
-        return '草稿';
-      default:
-        return maturity;
-    }
-  };
+  // getMaturity, getMaturityColor 和 getMaturityText 已移除，未使用
 
   // 过滤行程
   const filteredTrips = statusFilter === 'all' 
@@ -329,8 +296,6 @@ export default function TripsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTrips.map((trip) => {
               if (!trip || !trip.id) return null;
-              const maturity = getMaturity(trip);
-              const days = trip.days?.length ?? 0;
               
               return (
                 <Card

@@ -8,7 +8,7 @@ interface BookingsTabProps {
   personaMode?: PersonaMode;
 }
 
-export default function BookingsTab({ tripId, personaMode = 'abu' }: BookingsTabProps) {
+export default function BookingsTab({ tripId: _tripId, personaMode: _personaMode = 'abu' }: BookingsTabProps) {
   return (
     <div className="space-y-6">
       <Card>

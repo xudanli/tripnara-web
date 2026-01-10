@@ -1,11 +1,8 @@
 import apiClient from './client';
 import type {
-  TripReview,
   TripReviewDetail,
   ExecutionEvent,
-  ReviewInsight,
   AnchorRule,
-  ReviewSummary,
 } from '@/types/trip-review';
 
 // 文档中的响应格式是 { success: true, data: T }
@@ -104,7 +101,7 @@ export const anchorApi = {
    * 保存锚点
    * POST /profile/anchors
    */
-  save: async (data: Omit<AnchorRule, 'anchorId' | 'createdAt' | 'updatedAt'>): Promise<AnchorRule> => {
+  save: async (data: Omit<AnchorRule, 'id' | 'anchorId' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<AnchorRule> => {
     const response = await apiClient.post<ApiResponseWrapper<AnchorRule>>('/profile/anchors', data);
     return handleResponse(response);
   },

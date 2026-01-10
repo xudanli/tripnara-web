@@ -91,7 +91,6 @@ interface ErrorResponse {
   };
 }
 
-type ApiResponseWrapper<T> = SuccessResponse<T> | ErrorResponse;
 
 /**
  * 获取系统状态响应

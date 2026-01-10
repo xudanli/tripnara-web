@@ -136,8 +136,9 @@ export function ElevationProfile({
                   stroke="white"
                   strokeWidth="0.3"
                   className="cursor-pointer"
-                  title={event.description}
-                />
+                >
+                  <title>{event.description}</title>
+                </circle>
               );
             })}
 

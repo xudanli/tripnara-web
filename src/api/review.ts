@@ -1,12 +1,10 @@
 import apiClient from './client';
 import type {
-  TripReview,
   TripReviewData,
   GenerateReviewRequest,
   GenerateReviewResponse,
   UpdateEventRequest,
   ExecutionEvent,
-  ReviewInsight,
   AnchorRule,
   SaveAnchorRequest,
   UpdateAnchorRequest,

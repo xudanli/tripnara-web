@@ -34,7 +34,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
-  const [blockersCount, setBlockersCount] = useState(0);
+  const [blockersCount] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<RouteTemplate | null>(null);
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);

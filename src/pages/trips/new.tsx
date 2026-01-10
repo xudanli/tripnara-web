@@ -18,7 +18,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, CheckCircle2, ArrowRight, AlertCircle, Info, Check, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, CheckCircle2, ArrowRight, AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -52,7 +52,7 @@ export default function NewTripPage() {
   // 多选目的地（城市/国家）
   const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
   // 新增城市输入框
-  const [newCityInput, setNewCityInput] = useState('');
+  // const [newCityInput, setNewCityInput] = useState(''); // 未使用
   
   // 城市选择相关状态
   const [selectedCountry, setSelectedCountry] = useState<string>('');
@@ -264,7 +264,7 @@ export default function NewTripPage() {
         destination: finalDestination,
       };
       
-      const trip = await tripsApi.create(submitData);
+      await tripsApi.create(submitData);
       // 创建成功后跳转到行程列表，并传递状态以触发刷新
       navigate('/dashboard/trips', { state: { from: 'create' } });
     } catch (err: any) {
@@ -274,22 +274,6 @@ export default function NewTripPage() {
     }
   };
   
-  // 处理目的地选择（支持多选）
-  const handleDestinationSelect = (countryCode: string) => {
-    if (selectedDestinations.includes(countryCode)) {
-      // 取消选择
-      setSelectedDestinations(selectedDestinations.filter(code => code !== countryCode));
-    } else {
-      // 添加选择
-      setSelectedDestinations([...selectedDestinations, countryCode]);
-    }
-    // 同时更新formData.destination为第一个选择（向后兼容）
-    const newDestinations = selectedDestinations.includes(countryCode)
-      ? selectedDestinations.filter(code => code !== countryCode)
-      : [...selectedDestinations, countryCode];
-    setFormData({ ...formData, destination: newDestinations.length > 0 ? newDestinations[0] : '' });
-  };
-  
   // 移除目的地
   const handleRemoveDestination = (countryCode: string) => {
     const newDestinations = selectedDestinations.filter(code => code !== countryCode);
@@ -297,18 +281,7 @@ export default function NewTripPage() {
     setFormData({ ...formData, destination: newDestinations.length > 0 ? newDestinations[0] : '' });
   };
   
-  // 添加新城市
-  const handleAddNewCity = () => {
-    const cityCode = newCityInput.trim().toUpperCase();
-    if (cityCode && !selectedDestinations.includes(cityCode)) {
-      setSelectedDestinations([...selectedDestinations, cityCode]);
-      setNewCityInput('');
-      // 更新formData.destination
-      if (selectedDestinations.length === 0) {
-        setFormData({ ...formData, destination: cityCode });
-      }
-    }
-  };
+  // handleDestinationSelect 和 handleAddNewCity 已移除，未使用
 
   const handleNLSubmit = async () => {
     if (!nlText.trim()) return;

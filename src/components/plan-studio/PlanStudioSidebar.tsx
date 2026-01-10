@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shield, Brain, Wrench, CheckCircle2, XCircle, AlertTriangle, BarChart3, TrendingUp, FileText, ClipboardCheck } from 'lucide-react';
+import { Shield, Wrench, CheckCircle2, XCircle, AlertTriangle, BarChart3, FileText, ClipboardCheck } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
@@ -31,12 +31,11 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
   const [loading, setLoading] = useState(false);
   const [alerts, setAlerts] = useState<PersonaAlert[]>([]);
   const [trip, setTrip] = useState<TripDetail | null>(null);
-  const [processing, setProcessing] = useState(false);
   const [metrics, setMetrics] = useState<TripMetricsResponse | null>(null);
   const [intent, setIntent] = useState<IntentResponse | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(false);
-  const [neptuneReplacements, setNeptuneReplacements] = useState<any[]>([]); // 存储 Neptune 修复建议
-  const [operationResult, setOperationResult] = useState<{ type: 'success' | 'info' | 'warning'; message: string } | null>(null); // 存储操作结果
+  const [neptuneReplacements, _setNeptuneReplacements] = useState<any[]>([]); // 存储 Neptune 修复建议
+  const [operationResult, _setOperationResult] = useState<{ type: 'success' | 'info' | 'warning'; message: string } | null>(null); // 存储操作结果
   const [readinessSummary, setReadinessSummary] = useState<{ totalBlockers: number; totalMust: number; totalShould: number; totalOptional: number; risks: number } | null>(null);
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   
@@ -148,20 +147,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     }
   };
 
-  // 计算两点间距离（公里）- Haversine公式
-  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-    const R = 6371; // 地球半径（公里）
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
+  // calculateDistance 函数已移除，仅在注释的废弃代码中使用
 
   // 构建 RoutePlanDraft（从行程数据构建）
   // 此函数已废弃，因为不再直接调用决策接口

@@ -1298,12 +1298,13 @@ export interface ApplyOptimizationResponse {
 
 // ==================== 行程项详细信息 ====================
 
-export interface ItineraryItemDetailResponse extends ItineraryItemDetail {
+export interface ItineraryItemDetailResponse extends Omit<ItineraryItemDetail, 'Place'> {
   Place?: {
     id: number;
     nameCN: string;
-    nameEN?: string;
+    nameEN?: string | null;
     category: string;
+    address: string;
     lat?: number;
     lng?: number;
     rating?: number;
@@ -1325,7 +1326,12 @@ export interface ItineraryItemDetailResponse extends ItineraryItemDetail {
       };
       [key: string]: any;
     };
-  };
+    City?: {
+      id: number;
+      nameCN: string;
+      nameEN: string;
+    };
+  } | null;
 }
 
 // ==================== 批量更新行程项 ====================

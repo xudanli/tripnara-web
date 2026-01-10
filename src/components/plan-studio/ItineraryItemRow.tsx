@@ -49,8 +49,6 @@ const categoryLabels: Record<string, string> = {
 
 export default function ItineraryItemRow({
   item,
-  dayIndex,
-  itemIndex,
   personaMode,
   onEdit,
   onDelete,
@@ -68,13 +66,6 @@ export default function ItineraryItemRow({
       ? place.nameEN 
       : item.type || '未知地点';
   const category = (place?.category || item.type || '').toUpperCase();
-  const cityName = (place?.City?.nameCN && place.City.nameCN.trim()) 
-    ? place.City.nameCN 
-    : (place?.City?.nameEN && place.City.nameEN.trim()) 
-      ? place.City.nameEN 
-      : '';
-  const address = place?.address || '';
-  const rating = place?.rating;
   const startTime = item.startTime ? format(new Date(item.startTime), 'HH:mm') : '';
   const endTime = item.endTime ? format(new Date(item.endTime), 'HH:mm') : '';
 

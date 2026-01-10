@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { placesApi } from '@/api/places';
 import type { PlaceWithDistance, PlaceCategory } from '@/types/places-routes';
@@ -9,17 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Search,
   MapPin,
   Navigation,
-  Sparkles,
   Loader2,
-  X,
   Star,
   Clock,
-  TrendingUp,
 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { DiscoverBoxIllustration } from '@/components/illustrations';
