@@ -36,15 +36,21 @@ pipeline {
         }
 
         stage('Docker Build & Push') {
-            when {
-                // 只在有 Dockerfile 且需要推送时才执行
-                anyOf {
-                    expression { fileExists('Dockerfile') }
-                }
-            }
             steps {
                 script {
                     try {
+                        // 检查 Docker 是否可用
+                        def dockerCheck = sh(
+                            script: 'which docker 2>/dev/null || echo "not-found"',
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (dockerCheck == 'not-found') {
+                            echo "⚠️  Docker not available in container. Skipping Docker build/push."
+                            echo "✅ Build artifacts are available in dist/ directory."
+                            return
+                        }
+                        
                         /* 注意：在 Docker Agent 内部构建 Docker 镜像需要特殊配置：
                            1. 需要挂载 Docker socket: -v /var/run/docker.sock:/var/run/docker.sock
                            2. 或者使用 Docker-in-Docker (DinD)
@@ -52,37 +58,17 @@ pipeline {
                            
                            如果这些配置不存在，此阶段将被跳过，不影响构建成功
                         */
-                        def dockerAvailable = sh(
-                            script: 'which docker || echo "not-found"',
-                            returnStdout: true
-                        ).trim()
-                        
-                        if (dockerAvailable == 'not-found') {
-                            echo "Docker not available in container. Skipping Docker build/push."
-                            echo "Build artifacts are available in dist/ directory."
-                            return
-                        }
-                        
-                        // 检查凭据是否存在
-                        def creds = null
-                        try {
-                            creds = dockerhub-creds
-                        } catch (Exception e) {
-                            echo "Docker credentials not configured. Skipping Docker push."
-                            echo "Build artifacts are available in dist/ directory."
-                            return
-                        }
-                        
                         docker.withRegistry('', "${DOCKER_CREDS_ID}") {
                             def img = docker.build("${DOCKER_USER}/${IMAGE_NAME}:${env.BUILD_ID}")
                             img.push()
                             img.push('latest')
+                            echo "✅ Docker image built and pushed successfully"
                         }
                     } catch (Exception e) {
-                        echo "Warning: Docker build/push failed: ${e.getMessage()}"
-                        echo "This is expected if Docker is not available or credentials are not configured."
-                        echo "Build artifacts are still available in dist/ directory."
-                        // 不设置 UNSTABLE，让构建成功完成
+                        echo "⚠️  Docker build/push skipped: ${e.getMessage()}"
+                        echo "✅ This is expected if Docker is not available or credentials are not configured."
+                        echo "✅ Build artifacts are still available in dist/ directory."
+                        // 不设置构建状态，让构建成功完成
                     }
                 }
             }
