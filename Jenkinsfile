@@ -36,16 +36,26 @@ pipeline {
         }
 
         stage('Docker Build & Push') {
+            when {
+                expression { env.DOCKER_CREDS_ID != null && env.DOCKER_CREDS_ID != '' }
+            }
             steps {
                 script {
-                    /* 这里需要特别注意：
-                       在 Docker Agent 内部构建 Docker 镜像，通常需要宿主机开启 Docker-in-Docker 
-                       或者确保 Jenkins 插件支持。
-                    */
-                    docker.withRegistry('', "${DOCKER_CREDS_ID}") {
-                        def img = docker.build("${DOCKER_USER}/${IMAGE_NAME}:${env.BUILD_ID}")
-                        img.push()
-                        img.push('latest')
+                    try {
+                        /* 这里需要特别注意：
+                           在 Docker Agent 内部构建 Docker 镜像，通常需要宿主机开启 Docker-in-Docker 
+                           或者确保 Jenkins 插件支持。
+                           如果凭据不存在，此阶段将被跳过
+                        */
+                        docker.withRegistry('', "${DOCKER_CREDS_ID}") {
+                            def img = docker.build("${DOCKER_USER}/${IMAGE_NAME}:${env.BUILD_ID}")
+                            img.push()
+                            img.push('latest')
+                        }
+                    } catch (Exception e) {
+                        echo "Warning: Docker build/push failed: ${e.getMessage()}"
+                        echo "This is expected if dockerhub-creds is not configured. Build artifacts are still available."
+                        currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
