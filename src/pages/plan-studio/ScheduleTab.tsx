@@ -45,6 +45,8 @@ import { toast } from 'sonner';
 import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import type { ApprovalRequest } from '@/types/approval';
 
 interface ScheduleTabProps {
   tripId: string;
@@ -54,6 +56,21 @@ interface ScheduleTabProps {
 export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  
+  // 审批相关状态
+  const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  
+  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+    if (approved) {
+      toast.success('审批已批准，系统正在继续执行...');
+      await loadTrip();
+    } else {
+      toast.info('审批已拒绝，系统将调整策略');
+    }
+    setApprovalDialogOpen(false);
+    setPendingApprovalId(null);
+  };
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [schedules, setSchedules] = useState<Map<string, ScheduleResponse>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -295,6 +312,24 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
           deletingItem.placeName
         );
         
+        // 检查是否需要审批
+        if (result.needsApproval && result.data?.approvalId) {
+          const approvalId = result.data.approvalId;
+          setPendingApprovalId(approvalId);
+          setApprovalDialogOpen(true);
+          toast.info('需要您的审批才能继续执行操作');
+          return; // 等待审批，不继续执行后续逻辑
+        }
+        
+        // 检查是否需要审批
+        if (result.needsApproval && result.data?.approvalId) {
+          const approvalId = result.data.approvalId;
+          setPendingApprovalId(approvalId);
+          setApprovalDialogOpen(true);
+          toast.info('需要您的审批才能继续执行操作');
+          return; // 等待审批，不继续执行后续逻辑
+        }
+        
         // 显示系统自动执行的结果
         if (result.success && result.data) {
           if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
@@ -358,6 +393,15 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             reason: result.newItem.reason,
           },
         ]);
+        
+        // 检查是否需要审批
+        if (orchestratorResult.needsApproval && orchestratorResult.data?.approvalId) {
+          const approvalId = orchestratorResult.data.approvalId;
+          setPendingApprovalId(approvalId);
+          setApprovalDialogOpen(true);
+          toast.info('需要您的审批才能继续执行操作');
+          return; // 等待审批，不继续执行后续逻辑
+        }
         
         if (orchestratorResult.success && orchestratorResult.data) {
           if (orchestratorResult.data.personaAlerts && orchestratorResult.data.personaAlerts.length > 0) {
@@ -434,6 +478,15 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             endTime: moveEndTime,
           },
         ]);
+        
+        // 检查是否需要审批
+        if (orchestratorResult.needsApproval && orchestratorResult.data?.approvalId) {
+          const approvalId = orchestratorResult.data.approvalId;
+          setPendingApprovalId(approvalId);
+          setApprovalDialogOpen(true);
+          toast.info('需要您的审批才能继续执行操作');
+          return; // 等待审批，不继续执行后续逻辑
+        }
         
         if (orchestratorResult.success && orchestratorResult.data) {
           if (orchestratorResult.data.personaAlerts && orchestratorResult.data.personaAlerts.length > 0) {
@@ -1145,7 +1198,22 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+        </AlertDialog>
+      
+      {/* 审批对话框 */}
+      {pendingApprovalId && (
+        <ApprovalDialog
+          approvalId={pendingApprovalId}
+          open={approvalDialogOpen}
+          onOpenChange={(open) => {
+            setApprovalDialogOpen(open);
+            if (!open) {
+              setPendingApprovalId(null);
+            }
+          }}
+          onDecision={handleApprovalComplete}
+        />
+      )}
     </>
   );
 }

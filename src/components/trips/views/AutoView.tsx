@@ -4,12 +4,13 @@
  */
 
 import { useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import type { TripDetail, ItineraryItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Progress } from '@/components/ui/progress';
 import { 
   Shield, 
   TrendingUp, 
@@ -21,9 +22,10 @@ import {
   DollarSign,
   BarChart3,
   Eye,
-  ArrowRight
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import AbuView from './AbuView';
 import DrDreView from './DrDreView';
 import NeptuneView from './NeptuneView';
@@ -52,7 +54,6 @@ export default function AutoView({
   neptuneData,
   onItemClick 
 }: AutoViewProps) {
-  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'overview' | 'abu' | 'dre' | 'neptune'>('overview');
 
   // 使用默认值，如果数据未加载完成
@@ -62,6 +63,7 @@ export default function AutoView({
     readinessScore: 0,
     criticalIssues: 0,
     warnings: 0,
+    drDreWarnings: 0,
     suggestions: 0,
   };
 
@@ -96,9 +98,21 @@ export default function AutoView({
   };
 
   const getSafetyBadge = (score: number) => {
-    if (score >= 80) return { label: '良好', className: 'bg-green-100 text-green-800 border-green-200' };
-    if (score >= 60) return { label: '需注意', className: 'bg-yellow-100 text-yellow-800 border-yellow-200' };
-    return { label: '需修复', className: 'bg-red-100 text-red-800 border-red-200' };
+    if (score >= 80) return { 
+      label: '良好', 
+      icon: CheckCircle2,
+      className: 'bg-green-50 text-green-700 border-green-200 rounded-full px-3 py-1' 
+    };
+    if (score >= 60) return { 
+      label: '需注意', 
+      icon: AlertTriangle,
+      className: 'bg-yellow-50 text-yellow-700 border-yellow-200 rounded-full px-3 py-1' 
+    };
+    return { 
+      label: '需修复', 
+      icon: AlertTriangle,
+      className: 'bg-red-50 text-red-700 border-red-200 rounded-full px-3 py-1' 
+    };
   };
 
   const safetyBadge = getSafetyBadge(metrics.safetyScore);
@@ -128,7 +142,8 @@ export default function AutoView({
                 整合三人格的视角，全面了解行程状态
               </CardDescription>
             </div>
-            <Badge variant="outline" className={safetyBadge.className}>
+            <Badge variant="outline" className={cn('flex items-center gap-1.5', safetyBadge.className)}>
+              {safetyBadge.icon && <safetyBadge.icon className="w-3.5 h-3.5" />}
               {safetyBadge.label}
             </Badge>
           </div>
@@ -136,22 +151,33 @@ export default function AutoView({
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Abu 安全视角 */}
-            <Card className="border-l-4 border-l-red-500">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="w-4 h-4 text-red-600" />
-                  <span className="font-medium text-sm">安全视角</span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">安全评分</span>
-                    <span className={`text-sm font-semibold ${getSafetyColor(metrics.safetyScore)}`}>
-                      {metrics.safetyScore}/100
-                    </span>
+            <Card className="border border-red-100 bg-gradient-to-br from-red-50/50 to-white shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 rounded-lg bg-red-100/50">
+                    <Shield className="w-5 h-5 text-red-600" />
                   </div>
-                  <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm">🛡 安全视角</span>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-muted-foreground">安全评分</span>
+                      <span className={`text-base font-bold ${getSafetyColor(metrics.safetyScore)}`}>
+                        {metrics.safetyScore}/100
+                      </span>
+                    </div>
+                    <Progress 
+                      value={metrics.safetyScore} 
+                      className="h-2"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-red-100">
                     <span className="text-xs text-muted-foreground">关键问题</span>
-                    <Badge variant={metrics.criticalIssues > 0 ? 'destructive' : 'secondary'} className="text-xs">
+                    <Badge 
+                      variant={metrics.criticalIssues > 0 ? 'destructive' : 'secondary'} 
+                      className="text-xs"
+                    >
                       {metrics.criticalIssues}
                     </Badge>
                   </div>
@@ -160,44 +186,76 @@ export default function AutoView({
             </Card>
 
             {/* Dr.Dre 节奏视角 */}
-            <Card className="border-l-4 border-l-orange-500">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="w-4 h-4 text-orange-600" />
-                  <span className="font-medium text-sm">节奏视角</span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">节奏评分</span>
-                    <span className="text-sm font-semibold text-orange-600">
-                      {metrics.rhythmScore}/100
-                    </span>
+            <Card className="border border-orange-100 bg-gradient-to-br from-orange-50/50 to-white shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 rounded-lg bg-orange-100/50">
+                    <TrendingUp className="w-5 h-5 text-orange-600" />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">警告</span>
-                    <Badge variant={metrics.warnings > 0 ? 'default' : 'secondary'} className="text-xs">
-                      {metrics.warnings}
-                    </Badge>
+                  <span className="font-semibold text-sm">🧠 节奏视角</span>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-muted-foreground">节奏评分</span>
+                      <span className="text-base font-bold text-orange-600">
+                        {metrics.rhythmScore}/100
+                      </span>
+                    </div>
+                    <Progress 
+                      value={metrics.rhythmScore} 
+                      className="h-2 bg-orange-100"
+                    />
+                  </div>
+                  <div className="pt-2 border-t border-orange-100">
+                    <p className="text-xs text-muted-foreground mb-1.5">
+                      {metrics.rhythmScore >= 80 
+                        ? '📊 节奏适中，建议不多，行程流畅'
+                        : metrics.rhythmScore >= 60
+                        ? '📊 节奏基本合理，有少量优化空间'
+                        : '📊 节奏需要调整，建议优化'}
+                    </p>
+                    {metrics.drDreWarnings > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">⚠️ 有 {metrics.drDreWarnings} 个建议可优化</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => setActiveTab('dre')}
+                        >
+                          查看 →
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Neptune 修复视角 */}
-            <Card className="border-l-4 border-l-green-500">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Wrench className="w-4 h-4 text-green-600" />
-                  <span className="font-medium text-sm">修复视角</span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">准备度</span>
-                    <span className="text-sm font-semibold text-green-600">
-                      {metrics.readinessScore}/100
-                    </span>
+            <Card className="border border-green-100 bg-gradient-to-br from-green-50/50 to-white shadow-sm hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 rounded-lg bg-green-100/50">
+                    <Wrench className="w-5 h-5 text-green-600" />
                   </div>
-                  <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm">🛠 修复视角</span>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-muted-foreground">准备度</span>
+                      <span className="text-base font-bold text-green-600">
+                        {metrics.readinessScore}/100
+                      </span>
+                    </div>
+                    <Progress 
+                      value={metrics.readinessScore} 
+                      className="h-2 bg-green-100"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-green-100">
                     <span className="text-xs text-muted-foreground">建议</span>
                     <Badge variant="outline" className="text-xs">
                       {metrics.suggestions}
@@ -212,24 +270,38 @@ export default function AutoView({
 
       {/* 标签页切换详细视图 */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview" className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" />
-            概览
-          </TabsTrigger>
-          <TabsTrigger value="abu" className="flex items-center gap-2">
-            <Shield className="w-4 h-4" />
-            安全
-          </TabsTrigger>
-          <TabsTrigger value="dre" className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" />
-            节奏
-          </TabsTrigger>
-          <TabsTrigger value="neptune" className="flex items-center gap-2">
-            <Wrench className="w-4 h-4" />
-            修复
-          </TabsTrigger>
-        </TabsList>
+        <div className="sticky top-0 z-10 bg-white border-b">
+          <TabsList className="grid w-full grid-cols-4 h-12">
+            <TabsTrigger 
+              value="overview" 
+              className="flex items-center gap-2 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-semibold"
+            >
+              <BarChart3 className="w-4 h-4" />
+              概览
+            </TabsTrigger>
+            <TabsTrigger 
+              value="abu" 
+              className="flex items-center gap-2 data-[state=active]:bg-red-50 data-[state=active]:text-red-700 data-[state=active]:font-semibold"
+            >
+              <Shield className="w-4 h-4" />
+              🛡 安全
+            </TabsTrigger>
+            <TabsTrigger 
+              value="dre" 
+              className="flex items-center gap-2 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700 data-[state=active]:font-semibold"
+            >
+              <TrendingUp className="w-4 h-4" />
+              🧠 节奏
+            </TabsTrigger>
+            <TabsTrigger 
+              value="neptune" 
+              className="flex items-center gap-2 data-[state=active]:bg-green-50 data-[state=active]:text-green-700 data-[state=active]:font-semibold"
+            >
+              <Wrench className="w-4 h-4" />
+              🛠 修复
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* 概览标签页 */}
         <TabsContent value="overview" className="space-y-4">
@@ -271,9 +343,12 @@ export default function AutoView({
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-6 text-sm text-muted-foreground">
-                      <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-600 opacity-50" />
-                      <p>暂无关键问题</p>
+                    <div className="text-center py-8 text-sm">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-50 mb-3">
+                        <CheckCircle2 className="w-8 h-8 text-green-600" />
+                      </div>
+                      <p className="font-medium text-gray-900 mb-1">行程没有明显阻碍</p>
+                      <p className="text-muted-foreground">放心前往 ✨</p>
                     </div>
                   )}
                 </div>
@@ -289,73 +364,124 @@ export default function AutoView({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">总天数</span>
-                    </div>
-                    <span className="text-sm font-medium">{keyMetrics.totalDays} 天</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">行程项数</span>
-                    </div>
-                    <span className="text-sm font-medium">{keyMetrics.totalItems} 个</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">总预算</span>
-                    </div>
-                    <span className="text-sm font-medium">¥{keyMetrics.totalBudget.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">已使用</span>
-                    </div>
-                    <span className="text-sm font-medium">¥{keyMetrics.budgetUsed.toLocaleString()}</span>
-                  </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex flex-col items-center p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
+                          <Clock className="w-5 h-5 text-blue-600 mb-2" />
+                          <span className="text-xs text-muted-foreground mb-1">总天数</span>
+                          <span className="text-xl font-bold text-blue-700">{keyMetrics.totalDays}</span>
+                          <span className="text-xs text-muted-foreground mt-0.5">天</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>行程总天数</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex flex-col items-center p-4 bg-gradient-to-br from-purple-50 to-white border border-purple-100 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
+                          <Activity className="w-5 h-5 text-purple-600 mb-2" />
+                          <span className="text-xs text-muted-foreground mb-1">行程项数</span>
+                          <span className="text-xl font-bold text-purple-700">{keyMetrics.totalItems}</span>
+                          <span className="text-xs text-muted-foreground mt-0.5">个</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>行程项总数</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex flex-col items-center p-4 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
+                          <DollarSign className="w-5 h-5 text-green-600 mb-2" />
+                          <span className="text-xs text-muted-foreground mb-1">总预算</span>
+                          <span className="text-lg font-bold text-green-700">¥{keyMetrics.totalBudget.toLocaleString()}</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>行程总预算</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex flex-col items-center p-4 bg-gradient-to-br from-amber-50 to-white border border-amber-100 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
+                          <DollarSign className="w-5 h-5 text-amber-600 mb-2" />
+                          <span className="text-xs text-muted-foreground mb-1">预算使用情况</span>
+                          <span className="text-lg font-bold text-amber-700">¥{keyMetrics.budgetUsed.toLocaleString()}</span>
+                          <span className="text-xs text-muted-foreground mt-0.5">
+                            ({keyMetrics.totalBudget > 0 ? Math.round((keyMetrics.budgetUsed / keyMetrics.totalBudget) * 100) : 0}%)
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>已使用的预算金额及占比</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           {/* 快速操作 */}
-          <Card>
+          <Card className="border-t-2 border-t-gray-200">
             <CardHeader>
-              <CardTitle className="text-base">快速操作</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                快速操作
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="default"
+                  size="lg"
                   onClick={() => setActiveTab('abu')}
+                  className="flex items-center justify-center gap-2 h-auto py-4 bg-red-600 hover:bg-red-700"
                 >
-                  <Shield className="w-4 h-4 mr-2" />
-                  查看安全详情
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <Shield className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-semibold">查看安全详情</div>
+                    <div className="text-xs opacity-90">检查风险与合规</div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 ml-auto" />
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="default"
+                  size="lg"
                   onClick={() => setActiveTab('dre')}
+                  className="flex items-center justify-center gap-2 h-auto py-4 bg-orange-600 hover:bg-orange-700"
                 >
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  调整节奏
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <TrendingUp className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-semibold">调整节奏</div>
+                    <div className="text-xs opacity-90">优化行程节奏</div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 ml-auto" />
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="default"
+                  size="lg"
                   onClick={() => setActiveTab('neptune')}
+                  className="flex items-center justify-center gap-2 h-auto py-4 bg-green-600 hover:bg-green-700"
                 >
-                  <Wrench className="w-4 h-4 mr-2" />
-                  查看修复建议
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <Wrench className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-semibold">查看修复建议</div>
+                    <div className="text-xs opacity-90">获取替代方案</div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 ml-auto" />
                 </Button>
               </div>
             </CardContent>

@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { X, FileText, AlertTriangle, History, ExternalLink, Clock, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
 import type { DecisionLogEntry, PersonaAlert, EvidenceItem as EvidenceItemType } from '@/types/trip';
+import BusinessHoursCard from '@/components/trips/BusinessHoursCard';
 
 interface EvidenceDrawerProps {
   open: boolean;
@@ -29,6 +30,8 @@ interface RiskItem {
   reason: string; // Abu 风格的一句话原因
   affectedItems?: string[];
   evidenceIds?: string[];
+  createdAt?: string;
+  persona?: 'ABU' | 'DR_DRE' | 'NEPTUNE';
 }
 
 interface DecisionLogItem {
@@ -133,6 +136,86 @@ export default function EvidenceDrawer({
     };
   };
 
+  // 获取角色信息（emoji + 名称）
+  const getPersonaInfo = (persona: 'ABU' | 'DR_DRE' | 'NEPTUNE') => {
+    switch (persona) {
+      case 'ABU':
+        return { emoji: '🐻‍❄️', name: '安全守护者 Abu', shortName: 'Abu' };
+      case 'DR_DRE':
+        return { emoji: '🐕', name: '节奏设计师 Dr.Dre', shortName: 'Dr.Dre' };
+      case 'NEPTUNE':
+        return { emoji: '🦦', name: '空间魔法师 Neptune', shortName: 'Neptune' };
+    }
+  };
+
+  // 获取风险类型中文描述（根据角色和类别）
+  const getRiskCategoryLabel = (category: RiskItem['category'], persona?: 'ABU' | 'DR_DRE' | 'NEPTUNE'): string => {
+    // 根据角色优先显示特定类型
+    if (persona === 'NEPTUNE' && (category === 'road' || category === 'other')) {
+      return '空间层面阻断 / 封闭问题';
+    }
+    if (persona === 'DR_DRE' && category === 'fatigue') {
+      return '日节奏与连续疲劳';
+    }
+    if (persona === 'ABU' && category === 'other') {
+      return '硬性风险问题（DEM、道路、危险区域、合规）';
+    }
+    
+    // 通用类型
+    switch (category) {
+      case 'time':
+        return '时间冲突';
+      case 'weather':
+        return '天气风险';
+      case 'road':
+        return '道路封闭 / 阻断';
+      case 'fatigue':
+        return '疲劳风险';
+      case 'booking':
+        return '预订问题';
+      case 'other':
+      default:
+        return '其他风险';
+    }
+  };
+
+  // 根据 alert 的 message 推断风险类型
+  const inferRiskCategory = (message: string, persona: 'ABU' | 'DR_DRE' | 'NEPTUNE'): RiskItem['category'] => {
+    // 根据角色和消息内容推断
+    if (persona === 'ABU') {
+      if (message.includes('道路') || message.includes('road') || message.includes('封闭') || message.includes('阻断')) {
+        return 'road';
+      }
+      if (message.includes('危险') || message.includes('合规') || message.includes('DEM')) {
+        return 'other';
+      }
+    } else if (persona === 'DR_DRE') {
+      if (message.includes('节奏') || message.includes('疲劳') || message.includes('连续')) {
+        return 'fatigue';
+      }
+      if (message.includes('时间') || message.includes('time')) {
+        return 'time';
+      }
+    } else if (persona === 'NEPTUNE') {
+      if (message.includes('空间') || message.includes('阻断') || message.includes('封闭')) {
+        return 'road';
+      }
+    }
+    
+    // 通用判断
+    if (message.includes('时间') || message.includes('time')) {
+      return 'time';
+    }
+    if (message.includes('天气') || message.includes('weather')) {
+      return 'weather';
+    }
+    if (message.includes('道路') || message.includes('road')) {
+      return 'road';
+    }
+    
+    return 'other';
+  };
+
   // 将 PersonaAlert 转换为 RiskItem
   const convertPersonaAlertToRiskItem = (alert: PersonaAlert): RiskItem => {
     const severityMap: Record<string, 'high' | 'medium' | 'low'> = {
@@ -141,15 +224,7 @@ export default function EvidenceDrawer({
       'success': 'low',
     };
 
-    // 根据 alert 的 metadata 或 message 推断 category
-    let category: RiskItem['category'] = 'other';
-    if (alert.message.includes('时间') || alert.message.includes('time')) {
-      category = 'time';
-    } else if (alert.message.includes('天气') || alert.message.includes('weather')) {
-      category = 'weather';
-    } else if (alert.message.includes('道路') || alert.message.includes('road')) {
-      category = 'road';
-    }
+    const category = inferRiskCategory(alert.message, alert.persona);
 
     return {
       id: alert.id,
@@ -157,22 +232,23 @@ export default function EvidenceDrawer({
       category,
       title: alert.title,
       description: alert.message,
-      reason: `${alert.persona === 'ABU' ? 'Abu' : alert.persona === 'DR_DRE' ? 'Dr.Dre' : 'Neptune'}: ${alert.message}`,
+      reason: alert.message,
       evidenceIds: alert.metadata?.reasonCodes,
+      createdAt: alert.createdAt,
+      persona: alert.persona,
     };
   };
 
-  // 格式化时间戳显示
+  // 格式化时间戳显示（标准格式：2026/01/04 13:52）
   const formatTimestamp = (timestamp: string): string => {
     try {
       const date = new Date(timestamp);
-      return date.toLocaleString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hour = String(date.getHours()).padStart(2, '0');
+      const minute = String(date.getMinutes()).padStart(2, '0');
+      return `${year}/${month}/${day} ${hour}:${minute}`;
     } catch {
       return timestamp;
     }
@@ -201,28 +277,31 @@ export default function EvidenceDrawer({
     }
   };
 
-  const getRiskColor = (level: RiskItem['level']) => {
+
+  // 获取风险等级显示（icon + 文字）
+  const getRiskLevelDisplay = (level: RiskItem['level']) => {
     switch (level) {
       case 'high':
-        return 'destructive';
+        return { icon: '🔴', text: '高风险', color: 'text-red-600' };
       case 'medium':
-        return 'default';
+        return { icon: '🟠', text: '中风险', color: 'text-orange-600' };
       case 'low':
-        return 'secondary';
+        return { icon: '🟢', text: '低风险', color: 'text-green-600' };
     }
   };
 
-  const getPersonaColor = (persona?: DecisionLogItem['persona']) => {
-    switch (persona) {
-      case 'abu':
-        return 'destructive';
-      case 'dre':
-        return 'default';
-      case 'neptune':
-        return 'secondary';
-      default:
-        return 'outline';
+  // 获取决策结果显示
+  const getDecisionResultDisplay = (action: string) => {
+    if (action === 'ALLOW' || action === '允许' || action.toLowerCase().includes('allow')) {
+      return { icon: '✅', text: '无风险（Allow）', color: 'text-green-600' };
     }
+    if (action === 'REJECT' || action === '拒绝' || action.toLowerCase().includes('reject')) {
+      return { icon: '❌', text: '已拒绝（Reject）', color: 'text-red-600' };
+    }
+    if (action === 'ADJUST' || action === '调整' || action.toLowerCase().includes('adjust')) {
+      return { icon: '⚠️', text: '已调整（Adjust）', color: 'text-orange-600' };
+    }
+    return { icon: '📝', text: action, color: 'text-gray-600' };
   };
 
   return (
@@ -273,67 +352,108 @@ export default function EvidenceDrawer({
                     暂无证据数据
                   </div>
                 ) : (
-                  evidenceItems.map((item) => (
-                    <Card
-                      key={item.id}
-                      className={cn(
-                        'cursor-pointer hover:border-primary transition-colors',
-                        highlightItemId === item.id && 'border-primary bg-primary/5'
-                      )}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5">{getEvidenceIcon(item.type)}</div>
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <div className="font-medium text-sm">{item.title}</div>
-                              {item.severity && (
-                                <Badge
-                                  variant={
-                                    item.severity === 'high'
-                                      ? 'destructive'
-                                      : item.severity === 'medium'
-                                      ? 'default'
-                                      : 'secondary'
-                                  }
-                                  className="text-xs"
-                                >
-                                  {item.severity === 'high' ? '高' : item.severity === 'medium' ? '中' : '低'}
-                                </Badge>
+                  evidenceItems.map((item) => {
+                    // 如果是营业时间类型，使用优化的组件
+                    if (item.type === 'opening_hours') {
+                      // 从 title 或 description 中提取地点名称
+                      let placeName: string | undefined = undefined;
+                      
+                      // 尝试从 title 提取
+                      if (item.title) {
+                        const titleMatch = item.title.match(/^(.+?)\s*营业时间/);
+                        if (titleMatch && titleMatch[1] && titleMatch[1] !== '营业时间') {
+                          placeName = titleMatch[1].trim();
+                        }
+                      }
+                      
+                      // 如果 title 中没有，尝试从 description 开头提取
+                      if (!placeName && item.description) {
+                        const descMatch = item.description.match(/^(.+?)\s*营业时间\s*[:：]/);
+                        if (descMatch && descMatch[1]) {
+                          placeName = descMatch[1].trim();
+                        }
+                      }
+                      
+                      return (
+                        <BusinessHoursCard
+                          key={item.id}
+                          title={placeName}
+                          description={item.description || ''}
+                          day={item.day}
+                          severity={item.severity}
+                          source={item.source}
+                          timestamp={item.timestamp}
+                          link={item.link}
+                          className={cn(
+                            highlightItemId === item.id && 'border-primary bg-primary/5'
+                          )}
+                        />
+                      );
+                    }
+                    
+                    // 其他类型的证据，使用原有样式
+                    return (
+                      <Card
+                        key={item.id}
+                        className={cn(
+                          'cursor-pointer hover:border-primary transition-colors',
+                          highlightItemId === item.id && 'border-primary bg-primary/5'
+                        )}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5">{getEvidenceIcon(item.type)}</div>
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <div className="font-medium text-sm">{item.title}</div>
+                                {item.severity && (
+                                  <Badge
+                                    variant={
+                                      item.severity === 'high'
+                                        ? 'destructive'
+                                        : item.severity === 'medium'
+                                        ? 'default'
+                                        : 'secondary'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    {item.severity === 'high' ? '高' : item.severity === 'medium' ? '中' : '低'}
+                                  </Badge>
+                                )}
+                                {item.day && (
+                                  <Badge variant="outline" className="text-xs">
+                                    Day {item.day}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{item.description}</div>
+                              {item.source && (
+                                <div className="text-xs text-muted-foreground">
+                                  来源: {item.source}
+                                </div>
                               )}
-                              {item.day && (
-                                <Badge variant="outline" className="text-xs">
-                                  Day {item.day}
-                                </Badge>
+                              {item.timestamp && (
+                                <div className="text-xs text-muted-foreground">
+                                  {formatTimestamp(item.timestamp)}
+                                </div>
+                              )}
+                              {item.link && (
+                                <a
+                                  href={item.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  查看详情
+                                </a>
                               )}
                             </div>
-                            <div className="text-xs text-muted-foreground">{item.description}</div>
-                            {item.source && (
-                              <div className="text-xs text-muted-foreground">
-                                来源: {item.source}
-                              </div>
-                            )}
-                            {item.timestamp && (
-                              <div className="text-xs text-muted-foreground">
-                                {formatTimestamp(item.timestamp)}
-                              </div>
-                            )}
-                            {item.link && (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-primary hover:underline flex items-center gap-1"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                查看详情
-                              </a>
-                            )}
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </TabsContent>
 
@@ -348,33 +468,66 @@ export default function EvidenceDrawer({
                     暂无风险提示
                   </div>
                 ) : (
-                  riskItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={cn(
-                      'cursor-pointer hover:border-primary transition-colors',
-                      highlightItemId === item.id && 'border-primary bg-primary/5'
-                    )}
-                  >
-                    <CardContent className="p-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium text-sm">{item.title}</div>
-                          <Badge variant={getRiskColor(item.level)}>{item.level}</Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground">{item.description}</div>
-                        <div className="text-xs font-medium text-red-600 bg-red-50 p-2 rounded">
-                          {item.reason}
-                        </div>
-                        {item.evidenceIds && item.evidenceIds.length > 0 && (
-                          <div className="text-xs text-muted-foreground">
-                            相关证据: {item.evidenceIds.length} 条
-                          </div>
+                  riskItems.map((item) => {
+                    const personaInfo = item.persona ? getPersonaInfo(item.persona) : null;
+                    const riskLevel = getRiskLevelDisplay(item.level);
+                    return (
+                      <Card
+                        key={item.id}
+                        className={cn(
+                          'cursor-pointer hover:border-primary transition-colors shadow-sm',
+                          highlightItemId === item.id && 'border-primary bg-primary/5'
                         )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  ))
+                      >
+                        <CardContent className="p-4 space-y-3">
+                          {/* 角色 + 风险等级 */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {personaInfo && (
+                                <span className="text-base">{personaInfo.emoji}</span>
+                              )}
+                              <span className="font-medium text-sm">
+                                {personaInfo ? personaInfo.name : item.title}
+                              </span>
+                            </div>
+                            <Badge 
+                              variant="outline" 
+                              className={cn('flex items-center gap-1', riskLevel.color)}
+                            >
+                              <span>{riskLevel.icon}</span>
+                              <span>{riskLevel.text}</span>
+                            </Badge>
+                          </div>
+
+                          {/* 风险类型 */}
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-medium">风险类型：</span>
+                            {getRiskCategoryLabel(item.category, item.persona)}
+                          </div>
+
+                          {/* 判定描述 */}
+                          <div className={cn(
+                            'text-xs font-medium p-2 rounded',
+                            item.level === 'high' 
+                              ? 'text-red-700 bg-red-50 border border-red-100' 
+                              : item.level === 'medium'
+                              ? 'text-orange-700 bg-orange-50 border border-orange-100'
+                              : 'text-green-700 bg-green-50 border border-green-100'
+                          )}>
+                            {personaInfo ? `${personaInfo.shortName}：` : ''}{item.reason}
+                          </div>
+
+                          {/* 检测时间 */}
+                          {item.createdAt && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              <span>检测时间：{formatTimestamp(item.createdAt)}</span>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </TabsContent>
 
@@ -389,35 +542,48 @@ export default function EvidenceDrawer({
                     暂无决策记录
                   </div>
                 ) : (
-                  convertedDecisionLogItems.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={cn(
-                      'cursor-pointer hover:border-primary transition-colors',
-                      highlightItemId === item.id && 'border-primary bg-primary/5'
-                    )}
-                  >
-                    <CardContent className="p-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium text-sm">{item.action}</div>
-                          {item.persona && (
-                            <Badge variant={getPersonaColor(item.persona)}>
-                              {item.persona === 'abu' ? 'Abu' : item.persona === 'dre' ? 'Dr.Dre' : 'Neptune'}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{item.reason}</div>
-                        {item.result && (
-                          <div className="text-xs font-medium text-green-600 bg-green-50 p-2 rounded">
-                            {item.result}
-                          </div>
+                  convertedDecisionLogItems.map((item) => {
+                    const decisionResult = getDecisionResultDisplay(item.action);
+                    const personaInfo = item.persona 
+                      ? getPersonaInfo(item.persona === 'abu' ? 'ABU' : item.persona === 'dre' ? 'DR_DRE' : 'NEPTUNE')
+                      : null;
+                    return (
+                      <Card
+                        key={item.id}
+                        className={cn(
+                          'cursor-pointer hover:border-primary transition-colors shadow-sm',
+                          highlightItemId === item.id && 'border-primary bg-primary/5'
                         )}
-                        <div className="text-xs text-muted-foreground">{item.timestamp}</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  ))
+                      >
+                        <CardContent className="p-4 space-y-3">
+                          {/* 决策结果 */}
+                          <div className={cn('text-sm font-semibold', decisionResult.color)}>
+                            {decisionResult.icon} {decisionResult.text}
+                          </div>
+
+                          {/* 角色信息 */}
+                          {personaInfo && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{personaInfo.emoji}</span>
+                              <span className="text-sm font-medium">{personaInfo.name}</span>
+                            </div>
+                          )}
+
+                          {/* 说明 */}
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-medium">📝 说明：</span>
+                            {item.reason}
+                          </div>
+
+                          {/* 时间 */}
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <span>时间：{formatTimestamp(item.timestamp)}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </TabsContent>
             </div>

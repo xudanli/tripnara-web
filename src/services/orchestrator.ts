@@ -37,8 +37,11 @@ export interface OrchestrationResult {
     decisionLog?: any[];           // 决策日志
     explanation?: string;          // 用户友好的解释
     autoAdjustments?: any[];       // 自动执行的调整
+    approvalId?: string;           // 如果需要审批，包含审批 ID
+    needsApproval?: boolean;       // 是否需要审批
   };
   error?: string;
+  needsApproval?: boolean;         // 是否需要审批（用于快速判断）
 }
 
 /**
@@ -135,8 +138,13 @@ class PlanStudioOrchestrator {
       const routeType = response.route.route;
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
       
+      // 检查是否需要审批（NEED_CONFIRMATION 不是失败，而是需要用户审批）
+      const needsApproval = 
+        response.result.status === 'NEED_CONFIRMATION' && 
+        response.result.payload?.suspensionInfo;
+      
       // 判断执行是否成功
-      // SUCCESS 表示成功，其他状态（NEED_MORE_INFO, NEED_CONSENT, NEED_CONFIRMATION, FAILED, TIMEOUT）都视为失败
+      // SUCCESS 表示成功，NEED_CONFIRMATION 表示需要审批（不是失败），其他状态视为失败
       const isSuccess = response.result.status === 'SUCCESS';
       const statusMessage = response.result.answer_text || '未知状态';
       const decisionLog = response.explain?.decision_log || [];
@@ -168,7 +176,8 @@ class PlanStudioOrchestrator {
 
       // 构建友好的错误消息
       let userFriendlyError: string | undefined;
-      if (!isSuccess) {
+      if (!isSuccess && !needsApproval) {
+        // 如果需要审批，不作为错误处理，而是在结果中标记
         switch (response.result.status) {
           case 'FAILED':
             userFriendlyError = detailedError || statusMessage || '规划失败，请检查约束条件';
@@ -180,7 +189,8 @@ class PlanStudioOrchestrator {
             userFriendlyError = statusMessage || '需要您的确认才能继续';
             break;
           case 'NEED_CONFIRMATION':
-            userFriendlyError = statusMessage || '需要您的确认';
+            // 需要审批，不作为错误，而是特殊标记
+            userFriendlyError = undefined;
             break;
           case 'TIMEOUT':
             userFriendlyError = '操作超时，请稍后重试';
@@ -192,8 +202,9 @@ class PlanStudioOrchestrator {
 
       // 提取结果数据
       const result: OrchestrationResult = {
-        success: isSuccess,
+        success: isSuccess || needsApproval, // 如果需要审批，也视为"成功"（等待审批）
         message: statusMessage,
+        needsApproval: needsApproval, // 标记是否需要审批
         data: {
           // 从 payload 中提取数据
           trip: response.result.payload?.trip,
@@ -201,9 +212,14 @@ class PlanStudioOrchestrator {
           decisionLog: decisionLog,
           explanation: statusMessage,
           autoAdjustments: response.result.payload?.adjustments || [],
+          // 如果需要审批，包含审批信息
+          ...(needsApproval && {
+            approvalId: response.result.payload?.suspensionInfo?.approvalId,
+            needsApproval: true,
+          }),
         },
-        // 设置友好的错误信息
-        error: userFriendlyError,
+        // 设置友好的错误信息（如果需要审批，不设置错误）
+        error: needsApproval ? undefined : userFriendlyError,
       };
 
       // 根据执行结果输出不同的日志

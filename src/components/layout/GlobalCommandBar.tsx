@@ -18,6 +18,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Bell, Send, Settings, LogOut, User, Search, Globe, Check, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import type { ApprovalRequest } from '@/types/approval';
+import { toast } from 'sonner';
+import { needsApproval, extractApprovalId } from '@/utils/approval';
 
 interface GlobalCommandBarProps {
   activeTripId?: string | null;
@@ -38,6 +42,10 @@ export default function GlobalCommandBar({
   const [isExpanded, setIsExpanded] = useState(false);
   const [contactUsOpen, setContactUsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // 审批相关状态
+  const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
 
   // 聚焦时展开
   useEffect(() => {
@@ -82,6 +90,23 @@ export default function GlobalCommandBar({
 
       const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
 
+      // 检查是否需要审批
+      if (needsApproval(response)) {
+        const approvalId = extractApprovalId(response);
+        if (!approvalId) {
+          console.error('审批 ID 不存在，但需要审批');
+          toast.error('获取审批信息失败');
+          return;
+        }
+        
+        // 显示审批对话框
+        setPendingApprovalId(approvalId);
+        setApprovalDialogOpen(true);
+        
+        toast.info('需要您的审批才能继续执行操作');
+        return; // 等待审批，不继续处理
+      }
+
       // 根据 routeType 处理响应
       const routeType = response.route.route;
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
@@ -96,8 +121,11 @@ export default function GlobalCommandBar({
       // 如果有 plan 或需要导航，可以在这里处理
       // 目前先简单显示成功消息
       console.log('Agent response:', response);
+      
+      toast.success(response.result.answer_text || '操作完成');
     } catch (err) {
       console.error('Failed to send agent request:', err);
+      toast.error('操作失败，请稍后重试');
     } finally {
       setLoading(false);
     }
@@ -248,6 +276,39 @@ export default function GlobalCommandBar({
         </div>
       </div>
       <ContactUsDialog open={contactUsOpen} onOpenChange={setContactUsOpen} />
+      
+      {/* 审批对话框 */}
+      {pendingApprovalId && (
+        <ApprovalDialog
+          approvalId={pendingApprovalId}
+          open={approvalDialogOpen}
+          onOpenChange={(open) => {
+            setApprovalDialogOpen(open);
+            if (!open) {
+              setPendingApprovalId(null);
+            }
+          }}
+          onDecision={async (approved, approval) => {
+            // 审批完成后的处理
+            if (approved) {
+              toast.success('审批已批准，Agent 正在继续执行...');
+            } else {
+              toast.info('审批已拒绝，Agent 将调整策略');
+            }
+            
+            // 关闭对话框
+            setApprovalDialogOpen(false);
+            setPendingApprovalId(null);
+            
+            // 如果有回调，通知父组件刷新数据
+            if (onSystem2Response) {
+              setTimeout(() => {
+                onSystem2Response();
+              }, 500);
+            }
+          }}
+        />
+      )}
     </header>
   );
 }

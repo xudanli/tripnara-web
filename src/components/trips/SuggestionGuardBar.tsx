@@ -4,7 +4,7 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { Shield, TrendingUp, Wrench, ChevronRight } from 'lucide-react';
+import { Shield, TrendingUp, Wrench, ChevronRight, Search } from 'lucide-react';
 import type { SuggestionStats } from '@/types/suggestion';
 
 interface SuggestionGuardBarProps {
@@ -41,11 +41,11 @@ export function SuggestionGuardBar({ stats, onClick, className }: SuggestionGuar
 
   return (
     <div className={`bg-blue-50/50 border border-blue-200/60 rounded-lg p-4 ${className || ''}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Shield className="w-4 h-4 text-blue-600" />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-1">
+          <Search className="w-5 h-5 text-blue-600 flex-shrink-0" />
           <span className="text-sm text-blue-900">
-            发现 <strong>{total}</strong> 条建议
+            <strong className="text-base">🔍 发现 {total} 条建议</strong>
             {items.length > 0 && (
               <>
                 {' '}（
@@ -54,7 +54,7 @@ export function SuggestionGuardBar({ stats, onClick, className }: SuggestionGuar
                   return (
                     <span key={item.persona} className="inline-flex items-center gap-1">
                       {idx > 0 && '、'}
-                      <Icon className="w-3 h-3" />
+                      <Icon className="w-3.5 h-3.5" />
                       <strong>{item.count}</strong> 个{item.label}
                     </span>
                   );
@@ -66,10 +66,10 @@ export function SuggestionGuardBar({ stats, onClick, className }: SuggestionGuar
         </div>
         {onClick && (
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
             onClick={onClick}
-            className="text-blue-700 border-blue-300 hover:bg-blue-100"
+            className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
           >
             查看建议
             <ChevronRight className="w-4 h-4 ml-1" />

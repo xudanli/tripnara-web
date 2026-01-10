@@ -26,6 +26,8 @@ import { EmptyPlacesIllustration } from '@/components/illustrations';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import type { ApprovalRequest } from '@/types/approval';
 
 interface PlacesTabProps {
   tripId: string;
@@ -37,6 +39,25 @@ type SearchMode = 'search' | 'nearby' | 'recommend';
 export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  
+  // 审批功能
+  const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  
+  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+    if (approved) {
+      toast.success('审批已批准，系统正在继续执行...');
+      // 刷新行程数据
+      await loadTrip();
+      if (onPlaceAdded) {
+        onPlaceAdded();
+      }
+    } else {
+      toast.info('审批已拒绝，系统将调整策略');
+    }
+    setApprovalDialogOpen(false);
+    setPendingApprovalId(null);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<SearchMode>('search');
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>('all');
@@ -187,6 +208,15 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
             startTime.toISOString(),
             endTime.toISOString()
           );
+          
+          // 检查是否需要审批
+          if (result.needsApproval && result.data?.approvalId) {
+            const approvalId = result.data.approvalId;
+            setPendingApprovalId(approvalId);
+            setApprovalDialogOpen(true);
+            toast.info('需要您的审批才能继续执行操作');
+            return; // 等待审批，不继续执行后续逻辑
+          }
           
           // 显示系统自动执行的结果
           if (result.success && result.data) {
@@ -569,6 +599,21 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* 审批对话框 */}
+      {pendingApprovalId && (
+        <ApprovalDialog
+          approvalId={pendingApprovalId}
+          open={approvalDialogOpen}
+          onOpenChange={(open) => {
+            setApprovalDialogOpen(open);
+            if (!open) {
+              setPendingApprovalId(null);
+            }
+          }}
+          onDecision={handleApprovalComplete}
+        />
+      )}
     </div>
   );
 }

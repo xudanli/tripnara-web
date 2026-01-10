@@ -23,8 +23,11 @@ export default function CollectedTripsPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await tripsApi.getCollected();
-      setTrips(data);
+      // 已移除：/trips/collected 接口已废弃
+      // const data = await tripsApi.getCollected();
+      // setTrips(data);
+      setTrips([]); // 返回空列表
+      setError('收藏列表功能暂时不可用：/trips/collected 接口已废弃');
     } catch (err: any) {
       setError(err.message || '加载收藏列表失败');
       console.error('Failed to load collected trips:', err);

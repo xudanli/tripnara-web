@@ -25,11 +25,20 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Clock, AlertCircle, Circle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Circle, ChevronDown } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
-import type { PipelineStatus, PipelineStage } from '@/types/trip';
+import type { PipelineStatus, PipelineStage, TripListItem } from '@/types/trip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { countriesApi } from '@/api/countries';
+import type { Country } from '@/types/country';
 
 export default function PlanStudioPage() {
   const { t } = useTranslation();
@@ -55,6 +64,32 @@ export default function PlanStudioPage() {
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
+  
+  // 行程切换相关
+  const [allTrips, setAllTrips] = useState<TripListItem[]>([]);
+  const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
+  const [loadingTrips, setLoadingTrips] = useState(false);
+
+  // 根据国家代码获取国家名称
+  const getCountryName = (countryCode: string): string => {
+    const country = countryMap.get(countryCode);
+    if (country) {
+      return country.nameCN;
+    }
+    // 如果找不到，返回代码本身
+    return countryCode;
+  };
+
+  // 处理行程切换
+  const handleTripChange = (newTripId: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tripId', newTripId);
+    // 保持当前tab
+    if (activeTab) {
+      newParams.set('tab', activeTab);
+    }
+    setSearchParams(newParams);
+  };
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -71,15 +106,34 @@ export default function PlanStudioPage() {
     // 不再需要切换 personaMode，三人格由系统自动调用
   };
 
+  // 加载国家信息
+  useEffect(() => {
+    const loadCountries = async () => {
+      try {
+        const countries = await countriesApi.getAll();
+        const map = new Map<string, Country>();
+        countries.forEach((country) => {
+          map.set(country.isoCode, country);
+        });
+        setCountryMap(map);
+      } catch (err: any) {
+        console.error('Failed to load countries:', err);
+      }
+    };
+    loadCountries();
+  }, []);
+
   // 检查行程数据和验证tripId是否有效
   useEffect(() => {
     const checkTripsAndTripId = async () => {
       try {
         setLoading(true);
+        setLoadingTrips(true);
         
         // 1. 检查是否有任何行程
-        const allTrips = await tripsApi.getAll();
-        const tripsList = Array.isArray(allTrips) ? allTrips : [];
+        const allTripsData = await tripsApi.getAll();
+        const tripsList = Array.isArray(allTripsData) ? allTripsData : [];
+        setAllTrips(tripsList);
         setHasTrips(tripsList.length > 0);
         
         // 2. 如果有tripId，验证行程是否存在
@@ -112,6 +166,7 @@ export default function PlanStudioPage() {
         setShowWelcomeModal(true);
       } finally {
         setLoading(false);
+        setLoadingTrips(false);
       }
     };
     
@@ -350,15 +405,59 @@ export default function PlanStudioPage() {
         }}
       />
 
-      {/* 顶部：标题 + 状态 */}
+      {/* 顶部：标题 + 行程切换 + 状态 */}
       <div className="border-b bg-white px-6 py-4">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
             <h1 className="text-2xl font-bold">{t('planStudio.title')}</h1>
             <p className="text-sm text-muted-foreground mt-1">
               {t('planStudio.subtitle')}
             </p>
           </div>
+          
+          {/* 行程切换下拉菜单 */}
+          {hasTrips && allTrips.length > 0 && (
+            <div className="flex items-center gap-3">
+              <div className="w-64">
+                <Select
+                  value={tripId || ''}
+                  onValueChange={handleTripChange}
+                  disabled={loadingTrips}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="选择行程">
+                      {tripId && allTrips.find(t => t.id === tripId) ? (
+                        <span className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {getCountryName(allTrips.find(t => t.id === tripId)!.destination)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({allTrips.find(t => t.id === tripId)!.destination})
+                          </span>
+                        </span>
+                      ) : (
+                        '选择行程'
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allTrips.map((trip) => (
+                      <SelectItem key={trip.id} value={trip.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {getCountryName(trip.destination)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {trip.destination} • {trip.days?.length || 0} 天
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
           
           {/* Pipeline 状态指示器 */}
           {tripId && tripExists && (

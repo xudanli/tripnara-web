@@ -103,6 +103,16 @@ export interface ObservabilityMetrics {
 }
 
 /**
+ * 审批挂起信息（当状态为 NEED_CONFIRMATION 时）
+ */
+export interface SuspensionInfo {
+  approvalId: string;
+  skillName: string;
+  summary: string;
+  payload: any;
+}
+
+/**
  * 路由并执行响应
  */
 export interface RouteAndRunResponse {
@@ -111,7 +121,10 @@ export interface RouteAndRunResponse {
   result: {
     status: ResultStatus;
     answer_text: string;
-    payload: any;
+    payload?: {
+      suspensionInfo?: SuspensionInfo;  // 审批挂起信息（当 status === 'NEED_CONFIRMATION' 时）
+      [key: string]: any;
+    };
   };
   explain: {
     decision_log: DecisionLogItem[];

@@ -531,6 +531,26 @@
         "photography": "摄影打卡",
         "adventure": "冒险体验"
       }
+    },
+    "adjustTime": {
+      "title": "调整时间",
+      "infoMessage": "系统会根据实际距离和交通方式自动计算旅行时间，并智能调整后续行程项的时间。调整后请刷新页面查看最新时间安排。",
+      "adjustmentContent": "调整内容：",
+      "impactAnalysis": "影响分析：",
+      "fatigue": "疲劳度",
+      "bufferTime": "缓冲时间",
+      "costChange": "成本变化",
+      "riskAssessment": "风险评估：",
+      "explanation": "说明：",
+      "loading": "正在加载调整方案...",
+      "noPreview": "暂无预览信息",
+      "noActions": "没有可用的调整操作",
+      "previewFailed": "获取调整预览失败",
+      "applyFailed": "应用调整失败",
+      "cancel": "取消",
+      "confirm": "确认调整",
+      "applying": "应用中...",
+      "minutes": "分钟"
     }
   },
   "demTopography": {

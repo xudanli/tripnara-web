@@ -21,6 +21,20 @@ interface OptimizeTabProps {
 export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  
+  // 审批相关状态
+  const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  
+  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+    if (approved) {
+      toast.success('审批已批准，系统正在继续执行...');
+    } else {
+      toast.info('审批已拒绝，系统将调整策略');
+    }
+    setApprovalDialogOpen(false);
+    setPendingApprovalId(null);
+  };
   const [loading, setLoading] = useState(false);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [result, setResult] = useState<OptimizeRouteResponse | null>(null);
@@ -93,6 +107,15 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
             placeIds,
             config: request.config,
           });
+          
+          // 检查是否需要审批
+          if (result.needsApproval && result.data?.approvalId) {
+            const approvalId = result.data.approvalId;
+            setPendingApprovalId(approvalId);
+            setApprovalDialogOpen(true);
+            toast.info('需要您的审批才能继续执行操作');
+            return; // 等待审批，不继续执行后续逻辑
+          }
           
           if (result.success && result.data) {
             if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
@@ -220,6 +243,21 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           )}
         </CardContent>
       </Card>
+      
+      {/* 审批对话框 */}
+      {pendingApprovalId && (
+        <ApprovalDialog
+          approvalId={pendingApprovalId}
+          open={approvalDialogOpen}
+          onOpenChange={(open) => {
+            setApprovalDialogOpen(open);
+            if (!open) {
+              setPendingApprovalId(null);
+            }
+          }}
+          onDecision={handleApprovalComplete}
+        />
+      )}
     </div>
   );
 }

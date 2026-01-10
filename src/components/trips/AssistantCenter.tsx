@@ -9,20 +9,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Shield, TrendingUp, Wrench, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
-import type { Suggestion, PersonaType, SuggestionScope } from '@/types/suggestion';
+import { Shield, TrendingUp, Wrench, AlertTriangle, Info, CheckCircle2, Calendar } from 'lucide-react';
+import type { Suggestion } from '@/types/suggestion';
+import type { TripDetail } from '@/types/trip';
 import { cn } from '@/lib/utils';
 
 interface AssistantCenterProps {
   suggestions: Suggestion[];
   loading?: boolean;
+  trip?: TripDetail | null; // 用于解析 dayId 到 day 索引
   onSuggestionClick?: (suggestion: Suggestion) => void;
   onActionClick?: (suggestion: Suggestion, actionId: string) => void;
   className?: string;
 }
 
 type FilterTab = 'all' | 'abu' | 'drdre' | 'neptune';
-type ScopeFilter = 'all' | 'trip' | 'day' | 'item';
+// type ScopeFilter = 'all' | 'trip' | 'day' | 'item'; // 暂时未使用
 
 const personaConfig = {
   abu: {
@@ -63,17 +65,18 @@ const severityConfig = {
 export function AssistantCenter({
   suggestions,
   loading = false,
+  trip,
   onSuggestionClick,
   onActionClick,
   className,
 }: AssistantCenterProps) {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
+  // const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all'); // 暂时未使用
 
   // 过滤建议
   const filteredSuggestions = suggestions.filter((suggestion) => {
     if (activeTab !== 'all' && suggestion.persona !== activeTab) return false;
-    if (scopeFilter !== 'all' && suggestion.scope !== scopeFilter) return false;
+    // if (scopeFilter !== 'all' && suggestion.scope !== scopeFilter) return false; // 暂时未使用
     return true;
   });
 
@@ -106,20 +109,40 @@ export function AssistantCenter({
       <CardContent>
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FilterTab)}>
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="all">
-              全部 {stats.all > 0 && <span className="ml-1">({stats.all})</span>}
+            <TabsTrigger value="all" className="relative">
+              全部
+              {stats.all > 0 && (
+                <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
+                  {stats.all}
+                </Badge>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="abu">
-              <Shield className="w-3 h-3 mr-1" />
-              风险 {stats.abu > 0 && <span className="ml-1">({stats.abu})</span>}
+            <TabsTrigger value="abu" className="relative">
+              <Shield className="w-3.5 h-3.5 mr-1.5" />
+              风险
+              {stats.abu > 0 && (
+                <Badge variant="destructive" className="ml-1.5 h-5 px-1.5 text-xs">
+                  {stats.abu}
+                </Badge>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="drdre">
-              <TrendingUp className="w-3 h-3 mr-1" />
-              节奏 {stats.drdre > 0 && <span className="ml-1">({stats.drdre})</span>}
+            <TabsTrigger value="drdre" className="relative">
+              <TrendingUp className="w-3.5 h-3.5 mr-1.5" />
+              节奏
+              {stats.drdre > 0 && (
+                <Badge variant="default" className="ml-1.5 h-5 px-1.5 text-xs bg-orange-500">
+                  {stats.drdre}
+                </Badge>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="neptune">
-              <Wrench className="w-3 h-3 mr-1" />
-              修复 {stats.neptune > 0 && <span className="ml-1">({stats.neptune})</span>}
+            <TabsTrigger value="neptune" className="relative">
+              <Wrench className="w-3.5 h-3.5 mr-1.5" />
+              修复
+              {stats.neptune > 0 && (
+                <Badge variant="default" className="ml-1.5 h-5 px-1.5 text-xs bg-yellow-500">
+                  {stats.neptune}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -136,6 +159,7 @@ export function AssistantCenter({
                   <SuggestionCard
                     key={suggestion.id || `suggestion-${index}-${suggestion.createdAt}`}
                     suggestion={suggestion}
+                    trip={trip}
                     onClick={() => onSuggestionClick?.(suggestion)}
                     onActionClick={(actionId) => onActionClick?.(suggestion, actionId)}
                   />
@@ -151,47 +175,119 @@ export function AssistantCenter({
 
 interface SuggestionCardProps {
   suggestion: Suggestion;
+  trip?: TripDetail | null;
   onClick?: () => void;
   onActionClick?: (actionId: string) => void;
 }
 
-function SuggestionCard({ suggestion, onClick, onActionClick }: SuggestionCardProps) {
+function SuggestionCard({ suggestion, trip, onClick, onActionClick }: SuggestionCardProps) {
   const persona = personaConfig[suggestion.persona];
   const PersonaIcon = persona.icon;
   const severity = severityConfig[suggestion.severity];
   const SeverityIcon = severity.icon;
 
+  // 优化标题显示：提炼核心冲突点，使用更自然的语言
+  const getOptimizedTitle = () => {
+    const title = suggestion.title || '';
+    // 如果是时间冲突，优化显示
+    if (title.includes('时间重叠') || title.includes('时间冲突')) {
+      return '🚨 时间冲突';
+    }
+    // 如果是节奏问题
+    if (title.includes('节奏') || title.includes('过快') || title.includes('过慢')) {
+      return '🧠 节奏问题';
+    }
+    // 如果是安全风险
+    if (title.includes('风险') || title.includes('安全')) {
+      return '⚠️ 安全风险';
+    }
+    return title;
+  };
+
+  // 提取 Day 信息：从 dayId 解析为 Day 1, Day 2 等
+  const getDayInfo = (): string | null => {
+    // 如果 metadata 中有 day 索引，直接使用
+    if (suggestion.scope === 'day' && suggestion.metadata?.day) {
+      return `Day ${suggestion.metadata.day}`;
+    }
+    
+    // 如果有 scopeId（可能是 dayId），尝试从 trip 数据中解析
+    if (suggestion.scopeId && trip?.TripDay) {
+      const dayIndex = trip.TripDay.findIndex(day => day.id === suggestion.scopeId);
+      if (dayIndex >= 0) {
+        return `Day ${dayIndex + 1}`;
+      }
+      // 如果找不到，可能是其他类型的 ID，尝试直接显示（但格式化为更友好的形式）
+      // 检查是否是 UUID 格式
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidPattern.test(suggestion.scopeId)) {
+        // 是 UUID，但不匹配任何 day，返回 null（不显示）
+        return null;
+      }
+      // 不是 UUID，可能是其他格式的 ID，直接显示
+      return `Day ${suggestion.scopeId}`;
+    }
+    
+    return null;
+  };
+  
+  const dayInfo = getDayInfo();
+
   return (
     <div
       className={cn(
-        'p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors',
-        severity.className
+        'p-4 border rounded-lg cursor-pointer hover:shadow-md transition-all space-y-3',
+        severity.className,
+        'bg-white' // 降低红色卡片饱和度，使用白色背景
       )}
       onClick={onClick}
     >
-      <div className="flex items-start gap-2 mb-2">
-        <PersonaIcon className={cn('w-4 h-4 mt-0.5', persona.color)} />
+      {/* 标题行 */}
+      <div className="flex items-start gap-2">
+        <PersonaIcon className={cn('w-4 h-4 mt-0.5 flex-shrink-0', persona.color)} />
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-medium text-sm">{suggestion.title}</span>
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="font-semibold text-sm">{getOptimizedTitle()}</span>
             <Badge variant="outline" className={cn('text-xs', severity.className)}>
               <SeverityIcon className="w-3 h-3 mr-1" />
               {severity.label}
             </Badge>
+            {dayInfo && (
+              <Badge variant="outline" className="text-xs">
+                <Calendar className="w-3 h-3 mr-1" />
+                {dayInfo}
+              </Badge>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">{suggestion.summary}</p>
+          {/* 优化描述：使用更自然的语言 */}
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {suggestion.description || suggestion.summary}
+          </p>
+          {/* 如果有建议文本 */}
+          {suggestion.metadata?.suggestion && (
+            <p className="text-xs text-muted-foreground mt-1 italic">
+              建议：{suggestion.metadata.suggestion}
+            </p>
+          )}
         </div>
       </div>
 
+      {/* 操作按钮 */}
       {suggestion.actions.length > 0 && (
-        <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
           {suggestion.actions.slice(0, 2).map((action) => (
             <Button
               key={action.id}
               size="sm"
-              variant={action.primary ? 'default' : 'outline'}
-              className="text-xs h-7"
-              onClick={() => onActionClick?.(action.id)}
+              variant={action.primary || action.label.includes('调整') || action.label.includes('修复') ? 'default' : 'outline'}
+              className={cn(
+                'text-xs h-8',
+                (action.primary || action.label.includes('调整') || action.label.includes('修复')) && 'bg-gray-900 hover:bg-gray-800 text-white'
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                onActionClick?.(action.id);
+              }}
             >
               {action.label}
             </Button>

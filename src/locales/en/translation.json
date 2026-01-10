@@ -516,6 +516,26 @@
         "photography": "Photography",
         "adventure": "Adventure"
       }
+    },
+    "adjustTime": {
+      "title": "Adjust Time",
+      "infoMessage": "The system will automatically calculate travel time based on actual distance and transportation methods, and intelligently adjust the time of subsequent itinerary items. Please refresh the page after adjustment to view the latest schedule.",
+      "adjustmentContent": "Adjustment Content:",
+      "impactAnalysis": "Impact Analysis:",
+      "fatigue": "Fatigue",
+      "bufferTime": "Buffer Time",
+      "costChange": "Cost Change",
+      "riskAssessment": "Risk Assessment:",
+      "explanation": "Explanation:",
+      "loading": "Loading adjustment plan...",
+      "noPreview": "No preview information available",
+      "noActions": "No adjustment actions available",
+      "previewFailed": "Failed to load adjustment preview",
+      "applyFailed": "Failed to apply adjustment",
+      "cancel": "Cancel",
+      "confirm": "Confirm Adjustment",
+      "applying": "Applying...",
+      "minutes": "minutes"
     }
   },
   "demTopography": {

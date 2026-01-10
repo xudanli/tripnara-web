@@ -355,11 +355,12 @@ export const tripsApi = {
   /**
    * 获取用户收藏的行程列表
    * GET /trips/collected
+   * @deprecated 此接口已废弃，请使用其他方式获取收藏状态
    */
-  getCollected: async (): Promise<CollectedTrip[]> => {
-    const response = await apiClient.get<ApiResponseWrapper<CollectedTrip[]>>('/trips/collected');
-    return handleResponse(response);
-  },
+  // getCollected: async (): Promise<CollectedTrip[]> => {
+  //   const response = await apiClient.get<ApiResponseWrapper<CollectedTrip[]>>('/trips/collected');
+  //   return handleResponse(response);
+  // },
 
   // ==================== 点赞 ====================
 
@@ -912,8 +913,20 @@ export const itineraryItemsApi = {
   },
 
   /**
-   * 更新行程项
+   * 更新行程项（支持智能时间调整）
    * PATCH /itinerary-items/:id
+   * 
+   * 智能时间调整功能：
+   * - 当更新 startTime 时，系统会根据实际距离和交通方式自动计算旅行时间
+   * - 自动调整当天后续所有行程项的时间，保持每个行程项的原有时长
+   * - 在行程项之间添加 15 分钟的缓冲时间
+   * - 如果时间不合理（早于计算出的时间超过 30 分钟），会返回警告错误
+   * - 更新后需要重新获取当天的行程项以获取最新时间安排
+   * 
+   * @param id 行程项 ID
+   * @param data 更新数据（所有字段都是可选的）
+   * @returns 更新后的行程项详情
+   * @throws {Error} 如果时间不合理或存在其他验证错误，会抛出包含错误信息的异常
    */
   update: async (id: string, data: UpdateItineraryItemRequest): Promise<ItineraryItemDetail> => {
     const response = await apiClient.patch<ApiResponseWrapper<ItineraryItemDetail>>(

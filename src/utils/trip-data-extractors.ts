@@ -93,7 +93,8 @@ export interface OverallMetrics {
   rhythmScore: number; // 0-100
   readinessScore: number; // 0-100
   criticalIssues: number;
-  warnings: number;
+  warnings: number; // 所有 info 级别的提醒（保留用于兼容性）
+  drDreWarnings: number; // Dr.Dre 的警告数（用于节奏视角）
   suggestions: number;
 }
 
@@ -301,7 +302,8 @@ export function extractNeptuneData(
 export function calculateOverallMetrics(
   decisionLogs: DecisionLogEntry[],
   personaAlerts: PersonaAlert[],
-  suggestionStats: SuggestionStats | null
+  suggestionStats: SuggestionStats | null,
+  suggestions?: Suggestion[] // 新增：用于统计 Dr.Dre 警告数，确保与助手中心数据源一致
 ): OverallMetrics {
   // 1. 按人格分组日志
   const abuLogs = decisionLogs.filter(log => log.persona === 'ABU');
@@ -333,6 +335,14 @@ export function calculateOverallMetrics(
   const neptuneSuggestions = suggestionStats?.byPersona?.neptune?.total || 0;
   const readinessScore = Math.max(0, Math.min(100, 100 - (neptuneReplaces * 10) - (neptuneSuggestions * 3)));
   
+  // 计算 Dr.Dre 的警告数
+  // 优先使用 suggestions（与助手中心数据源一致），如果没有则使用 personaAlerts
+  const drDreWarnings = suggestions
+    ? suggestions.filter(s => s.persona === 'drdre' && s.status === 'new').length
+    : personaAlerts.filter(
+        alert => alert.persona === 'DR_DRE' && alert.severity === 'info'
+      ).length;
+
   return {
     safetyScore: Math.round(safetyScore),
     rhythmScore: Math.round(rhythmScore),
@@ -340,7 +350,8 @@ export function calculateOverallMetrics(
     criticalIssues: personaAlerts.filter(a => 
       a.severity === 'warning' && a.persona === 'ABU'
     ).length,
-    warnings: personaAlerts.filter(a => a.severity === 'info').length,
+    warnings: personaAlerts.filter(a => a.severity === 'info').length, // 保留：所有 info 级别提醒
+    drDreWarnings, // 新增：Dr.Dre 的警告数
     suggestions: suggestionStats?.total || 0,
   };
 }

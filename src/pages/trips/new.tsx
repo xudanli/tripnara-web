@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
+import { citiesApi } from '@/api/cities';
 import type { CreateTripRequest, Traveler, TripDetail } from '@/types/trip';
 import type { Country, CurrencyStrategy } from '@/types/country';
+import type { City } from '@/api/cities';
 import TripPlanningWaitDialog from '@/components/trips/TripPlanningWaitDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,20 +48,44 @@ export default function NewTripPage() {
     totalBudget: 0,
     travelers: [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }],
   });
+  
+  // 多选目的地（城市/国家）
+  const [selectedDestinations, setSelectedDestinations] = useState<string[]>([]);
+  // 新增城市输入框
+  const [newCityInput, setNewCityInput] = useState('');
+  
+  // 城市选择相关状态
+  const [selectedCountry, setSelectedCountry] = useState<string>('');
+  const [cities, setCities] = useState<City[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [citySearchQuery, setCitySearchQuery] = useState('');
+  const [selectedCities, setSelectedCities] = useState<City[]>([]);
+  const [citySelectOpen, setCitySelectOpen] = useState(false);
 
   // 加载国家列表
   useEffect(() => {
     loadCountries();
   }, []);
-
-  // 当选择目的地时，加载国家信息
+  
+  // 当选择国家时，加载该国家的城市列表
   useEffect(() => {
-    if (formData.destination) {
-      loadCountryInfo(formData.destination);
+    if (selectedCountry) {
+      loadCitiesByCountry(selectedCountry);
+    } else {
+      setCities([]);
+      setSelectedCities([]);
+    }
+  }, [selectedCountry]);
+
+  // 当选择目的地时，加载国家信息（使用第一个目的地）
+  useEffect(() => {
+    const primaryDestination = selectedDestinations.length > 0 ? selectedDestinations[0] : formData.destination;
+    if (primaryDestination) {
+      loadCountryInfo(primaryDestination);
     } else {
       setSelectedCountryInfo(null);
     }
-  }, [formData.destination]);
+  }, [formData.destination, selectedDestinations]);
 
   const loadCountries = async () => {
     try {
@@ -85,6 +111,94 @@ export default function NewTripPage() {
     } finally {
       setCountryInfoLoading(false);
     }
+  };
+  
+  // 通过城市API获取城市列表
+  const loadCitiesByCountry = async (countryCode: string) => {
+    try {
+      setCitiesLoading(true);
+      const response = await citiesApi.getByCountry(countryCode);
+      setCities(response.cities);
+    } catch (err: any) {
+      console.error('Failed to load cities:', err);
+      setCities([]);
+    } finally {
+      setCitiesLoading(false);
+    }
+  };
+  
+  // 搜索城市（使用城市API）
+  const searchCities = async (query: string, countryCode: string) => {
+    if (!query.trim() || !countryCode) {
+      return;
+    }
+    
+    try {
+      setCitiesLoading(true);
+      const response = await citiesApi.search(query, countryCode);
+      setCities(response.cities);
+    } catch (err: any) {
+      console.error('Failed to search cities:', err);
+      setCities([]);
+    } finally {
+      setCitiesLoading(false);
+    }
+  };
+  
+  // 处理城市搜索输入变化
+  useEffect(() => {
+    if (!selectedCountry) return;
+    
+    if (citySearchQuery.trim()) {
+      const debounceTimer = setTimeout(() => {
+        searchCities(citySearchQuery, selectedCountry);
+      }, 300);
+      return () => clearTimeout(debounceTimer);
+    } else {
+      // 如果清空搜索，重新加载所有城市
+      loadCitiesByCountry(selectedCountry);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [citySearchQuery, selectedCountry]);
+  
+  // 选择城市
+  const handleCitySelect = (city: City) => {
+    if (!selectedCities.find(c => c.id === city.id)) {
+      setSelectedCities([...selectedCities, city]);
+      // 将城市名称添加到selectedDestinations（使用城市名称作为标识）
+      const cityIdentifier = `${city.countryCode}-${city.id}`;
+      if (!selectedDestinations.includes(cityIdentifier)) {
+        setSelectedDestinations([...selectedDestinations, cityIdentifier]);
+      }
+      // 更新formData.destination
+      if (selectedDestinations.length === 0) {
+        setFormData({ ...formData, destination: city.countryCode });
+      }
+    }
+  };
+  
+  // 移除城市
+  const handleRemoveCity = (city: City) => {
+    setSelectedCities(selectedCities.filter(c => c.id !== city.id));
+    const cityIdentifier = `${city.countryCode}-${city.id}`;
+    setSelectedDestinations(selectedDestinations.filter(d => d !== cityIdentifier));
+    // 更新formData.destination
+    const remaining = selectedCities.filter(c => c.id !== city.id);
+    if (remaining.length > 0) {
+      setFormData({ ...formData, destination: remaining[0].countryCode });
+    } else if (selectedDestinations.filter(d => d !== cityIdentifier).length > 0) {
+      const remainingDests = selectedDestinations.filter(d => d !== cityIdentifier);
+      setFormData({ ...formData, destination: remainingDests[0] });
+    } else {
+      setFormData({ ...formData, destination: '' });
+    }
+  };
+  
+  // 获取城市显示名称（优先使用中文，其次英文，最后通用名称）
+  const getCityDisplayName = (city: City): string => {
+    if (city.nameCN) return city.nameCN;
+    if (city.nameEN) return city.nameEN;
+    return city.name;
   };
 
   // 自然语言模式
@@ -132,13 +246,67 @@ export default function NewTripPage() {
     setError(null);
 
     try {
-      const trip = await tripsApi.create(formData);
+      // 验证至少选择了一个目的地
+      const finalDestination = selectedDestinations.length > 0 
+        ? selectedDestinations[0] 
+        : formData.destination;
+      
+      if (!finalDestination) {
+        setError('请至少选择一个目的地');
+        setLoading(false);
+        return;
+      }
+
+      // 如果选择了多个目的地，使用第一个作为主要目的地
+      // 其他目的地可以在后续的规划阶段添加
+      const submitData = {
+        ...formData,
+        destination: finalDestination,
+      };
+      
+      const trip = await tripsApi.create(submitData);
       // 创建成功后跳转到行程列表，并传递状态以触发刷新
       navigate('/dashboard/trips', { state: { from: 'create' } });
     } catch (err: any) {
       setError(err.message || '创建行程失败');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // 处理目的地选择（支持多选）
+  const handleDestinationSelect = (countryCode: string) => {
+    if (selectedDestinations.includes(countryCode)) {
+      // 取消选择
+      setSelectedDestinations(selectedDestinations.filter(code => code !== countryCode));
+    } else {
+      // 添加选择
+      setSelectedDestinations([...selectedDestinations, countryCode]);
+    }
+    // 同时更新formData.destination为第一个选择（向后兼容）
+    const newDestinations = selectedDestinations.includes(countryCode)
+      ? selectedDestinations.filter(code => code !== countryCode)
+      : [...selectedDestinations, countryCode];
+    setFormData({ ...formData, destination: newDestinations.length > 0 ? newDestinations[0] : '' });
+  };
+  
+  // 移除目的地
+  const handleRemoveDestination = (countryCode: string) => {
+    const newDestinations = selectedDestinations.filter(code => code !== countryCode);
+    setSelectedDestinations(newDestinations);
+    setFormData({ ...formData, destination: newDestinations.length > 0 ? newDestinations[0] : '' });
+  };
+  
+  // 添加新城市
+  const handleAddNewCity = () => {
+    const cityCode = newCityInput.trim().toUpperCase();
+    if (cityCode && !selectedDestinations.includes(cityCode)) {
+      setSelectedDestinations([...selectedDestinations, cityCode]);
+      setNewCityInput('');
+      // 更新formData.destination
+      if (selectedDestinations.length === 0) {
+        setFormData({ ...formData, destination: cityCode });
+      }
     }
   };
 
@@ -356,63 +524,233 @@ export default function NewTripPage() {
             <CardContent>
               <form onSubmit={handleFormSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="destination">目的地</Label>
+                  <div className="space-y-4">
+                    <Label htmlFor="destination">目的地（选择国家后选择城市）</Label>
                     {countries.length > 0 ? (
-                      <Popover open={destinationOpen} onOpenChange={setDestinationOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            id="destination"
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={destinationOpen}
-                            className="w-full justify-between"
-                            disabled={countriesLoading}
-                          >
-                            {formData.destination
-                              ? countries.find((country) => country.isoCode === formData.destination)?.nameCN || formData.destination
-                              : '选择国家...'}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-0 w-[300px]" align="start">
-                          <Command>
-                            <CommandInput placeholder="搜索国家..." />
-                            <CommandList>
-                              <CommandEmpty>未找到国家</CommandEmpty>
-                              <CommandGroup>
-                                {countries.map((country) => (
-                                  <CommandItem
-                                    key={country.isoCode}
-                                    value={`${country.nameCN} ${country.nameEN} ${country.isoCode}`}
-                                    onSelect={() => {
-                                      setFormData({ ...formData, destination: country.isoCode });
-                                      setDestinationOpen(false);
-                                    }}
+                      <div className="space-y-4">
+                        {/* 第一步：选择国家 */}
+                        <div className="space-y-2">
+                          <Label htmlFor="country-select" className="text-sm font-medium">1. 选择国家</Label>
+                          <Popover open={destinationOpen} onOpenChange={setDestinationOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="country-select"
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={destinationOpen}
+                                className="w-full justify-between"
+                                disabled={countriesLoading}
+                              >
+                                {selectedCountry
+                                  ? countries.find((c) => c.isoCode === selectedCountry)?.nameCN || selectedCountry
+                                  : '选择国家...'}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0 w-[300px]" align="start">
+                              <Command>
+                                <CommandInput placeholder="搜索国家..." />
+                                <CommandList>
+                                  <CommandEmpty>未找到国家</CommandEmpty>
+                                  <CommandGroup>
+                                    {countries.map((country) => (
+                                      <CommandItem
+                                        key={country.isoCode}
+                                        value={`${country.nameCN} ${country.nameEN} ${country.isoCode}`}
+                                        onSelect={() => {
+                                          setSelectedCountry(country.isoCode);
+                                          setDestinationOpen(false);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            'mr-2 h-4 w-4',
+                                            selectedCountry === country.isoCode ? 'opacity-100' : 'opacity-0'
+                                          )}
+                                        />
+                                        {country.nameCN} ({country.nameEN})
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        
+                        {/* 第二步：选择城市（仅在选择了国家后显示） */}
+                        {selectedCountry && (
+                          <div className="space-y-2">
+                            <Label htmlFor="city-select" className="text-sm font-medium">2. 选择城市（可多选）</Label>
+                            
+                            {/* 已选择的城市标签 */}
+                            {selectedCities.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {selectedCities.map((city) => (
+                                  <Badge
+                                    key={city.id}
+                                    variant="secondary"
+                                    className="px-3 py-1 text-sm"
                                   >
-                                    <Check
-                                      className={cn(
-                                        'mr-2 h-4 w-4',
-                                        formData.destination === country.isoCode ? 'opacity-100' : 'opacity-0'
-                                      )}
-                                    />
-                                    {country.nameCN} ({country.nameEN})
-                                  </CommandItem>
+                                    {getCityDisplayName(city)}
+                                    {city.nameCN && city.nameEN && ` (${city.nameEN})`}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveCity(city)}
+                                      className="ml-2 hover:text-destructive"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </Badge>
                                 ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                              </div>
+                            )}
+                            
+                            {/* 城市搜索和选择 */}
+                            <Popover open={citySelectOpen} onOpenChange={setCitySelectOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  id="city-select"
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={citySelectOpen}
+                                  className="w-full justify-between"
+                                  disabled={citiesLoading}
+                                >
+                                  {selectedCities.length > 0
+                                    ? `已选择 ${selectedCities.length} 个城市`
+                                    : '搜索并选择城市...'}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="p-0 w-[400px]" align="start">
+                                <Command>
+                                  <CommandInput 
+                                    placeholder="搜索城市名称..." 
+                                    value={citySearchQuery}
+                                    onValueChange={setCitySearchQuery}
+                                  />
+                                  <CommandList>
+                                    {citiesLoading ? (
+                                      <div className="p-4 text-center text-sm text-muted-foreground">
+                                        加载中...
+                                      </div>
+                                    ) : cities.length === 0 ? (
+                                      <CommandEmpty>
+                                        {citySearchQuery ? '未找到匹配的城市' : '暂无城市数据，请先选择国家'}
+                                      </CommandEmpty>
+                                    ) : (
+                                      <CommandGroup>
+                                        {cities.map((city) => {
+                                          const isSelected = selectedCities.some(c => c.id === city.id);
+                                          const displayName = getCityDisplayName(city);
+                                          const searchValue = `${city.nameCN || ''} ${city.nameEN || ''} ${city.name || ''} ${city.id}`.trim();
+                                          return (
+                                            <CommandItem
+                                              key={city.id}
+                                              value={searchValue}
+                                              onSelect={() => {
+                                                handleCitySelect(city);
+                                                // 不自动关闭，允许继续选择
+                                              }}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  'mr-2 h-4 w-4',
+                                                  isSelected ? 'opacity-100' : 'opacity-0'
+                                                )}
+                                              />
+                                              {displayName}
+                                              {city.nameCN && city.nameEN && city.nameCN !== city.nameEN && ` (${city.nameEN})`}
+                                            </CommandItem>
+                                          );
+                                        })}
+                                      </CommandGroup>
+                                    )}
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        )}
+                        
+                        {/* 已选择的目的地汇总（兼容旧的方式） */}
+                        {selectedDestinations.length > 0 && selectedCities.length === 0 && (
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">已选择的目的地</Label>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedDestinations.map((code) => {
+                                const country = countries.find((c) => c.isoCode === code);
+                                return (
+                                  <Badge
+                                    key={code}
+                                    variant="secondary"
+                                    className="px-3 py-1 text-sm"
+                                  >
+                                    {country?.nameCN || country?.nameEN || code}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveDestination(code)}
+                                      className="ml-2 hover:text-destructive"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                    <Input
-                      id="destination"
-                      value={formData.destination}
-                      onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                      placeholder="例如: JP, IS, US"
-                      required
-                        disabled={countriesLoading}
-                    />
+                      <div className="space-y-2">
+                        {/* 已选择的目的地标签 */}
+                        {selectedDestinations.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {selectedDestinations.map((code) => (
+                              <Badge
+                                key={code}
+                                variant="secondary"
+                                className="px-3 py-1 text-sm"
+                              >
+                                {code}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDestination(code)}
+                                  className="ml-2 hover:text-destructive"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        <Input
+                          id="destination"
+                          value={formData.destination}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setFormData({ ...formData, destination: value });
+                            // 如果输入的是新的代码，添加到选择列表
+                            if (value && !selectedDestinations.includes(value)) {
+                              setSelectedDestinations([...selectedDestinations, value]);
+                            }
+                          }}
+                          placeholder="例如: JP, IS, US（可输入多个，用逗号分隔）"
+                          required
+                          disabled={countriesLoading}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                              e.preventDefault();
+                              const value = formData.destination.trim();
+                              if (value && !selectedDestinations.includes(value)) {
+                                setSelectedDestinations([...selectedDestinations, value]);
+                                setFormData({ ...formData, destination: '' });
+                              }
+                            }
+                          }}
+                        />
+                      </div>
                     )}
                   </div>
                   <div className="space-y-2">

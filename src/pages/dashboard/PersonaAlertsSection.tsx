@@ -25,13 +25,40 @@ export default function PersonaAlertsSection({ activeTrip }: PersonaAlertsSectio
     }
   }, [activeTrip]);
 
+  // 检查是否是"未发现问题"类型的提示
+  const isNoIssueAlert = (alert: PersonaAlert): boolean => {
+    const message = alert.message || '';
+    const title = alert.title || '';
+    const text = `${title} ${message}`.toLowerCase();
+    
+    // 检查是否包含"未发现"、"未检测到"、"无"、"通过"等关键词
+    const noIssuePatterns = [
+      '未发现',
+      '未检测到',
+      '未发现.*问题',
+      '无.*问题',
+      '均通过',
+      '允许继续',
+      '检查通过',
+      '没有问题',
+      '一切正常',
+    ];
+    
+    return noIssuePatterns.some(pattern => {
+      const regex = new RegExp(pattern);
+      return regex.test(text);
+    });
+  };
+
   const loadPersonaAlerts = async () => {
     if (!activeTrip) return;
 
     try {
       setLoading(true);
       const data = await tripsApi.getPersonaAlerts(activeTrip.id);
-      setAlerts(data || []);
+      // 过滤掉"未发现问题"类型的提示
+      const filteredData = (data || []).filter(alert => !isNoIssueAlert(alert));
+      setAlerts(filteredData);
     } catch (err: any) {
       console.error('Failed to load persona alerts:', err);
       // 失败时显示空数组，不显示错误（保持安静、理性的调性）

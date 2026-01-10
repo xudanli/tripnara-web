@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import type { 
@@ -14,8 +16,10 @@ import type {
 } from '@/types/trip';
 import type { Suggestion, SuggestionStats } from '@/types/suggestion';
 import { AssistantCenter } from '@/components/trips/AssistantCenter';
-import { SuggestionBadge } from '@/components/trips/SuggestionBadge';
 import { SuggestionGuardBar } from '@/components/trips/SuggestionGuardBar';
+import DayItineraryCard from '@/components/trips/DayItineraryCard';
+import { AdjustTimeDialog } from '@/components/trips/AdjustTimeDialog';
+import { SuggestionPreviewDialog } from '@/components/trips/SuggestionPreviewDialog';
 import type { Country } from '@/types/country';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,7 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, Plus, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, AlertTriangle, Clock, Cloud, AlertCircle, Info } from 'lucide-react';
+import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Clock, Cloud, AlertCircle, Info } from 'lucide-react';
 import HealthBar from '@/components/trips/HealthBar';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
@@ -53,9 +57,9 @@ import { CreateItineraryItemDialog } from '@/components/trips/CreateItineraryIte
 import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryItemDialog';
 import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
-import { formatOpeningHoursDescription } from '@/utils/openingHoursFormatter';
+import BusinessHoursCard from '@/components/trips/BusinessHoursCard';
 import { formatCurrency as formatCurrencyAmount } from '@/utils/format';
-import type { DecisionLogEntry, ReplaceItineraryItemResponse, DecisionLogResponse } from '@/types/trip';
+import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
 import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
 import DrDreView from '@/components/trips/views/DrDreView';
@@ -207,20 +211,20 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
   );
 }
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'PLANNING':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'IN_PROGRESS':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'COMPLETED':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-    case 'CANCELLED':
-      return 'bg-red-100 text-red-800 border-red-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-};
+// const getStatusColor = (status: string) => {
+//   switch (status) {
+//     case 'PLANNING':
+//       return 'bg-blue-100 text-blue-800 border-blue-200';
+//     case 'IN_PROGRESS':
+//       return 'bg-green-100 text-green-800 border-green-200';
+//     case 'COMPLETED':
+//       return 'bg-gray-100 text-gray-800 border-gray-200';
+//     case 'CANCELLED':
+//       return 'bg-red-100 text-red-800 border-red-200';
+//     default:
+//       return 'bg-gray-100 text-gray-800 border-gray-200';
+//   }
+// };
 
 const getStatusText = (status: string) => {
   switch (status) {
@@ -240,6 +244,7 @@ const getStatusText = (status: string) => {
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { setDrawerOpen, setDrawerTab } = useDrawer();
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -254,18 +259,17 @@ export default function TripDetailPage() {
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [replacingItem, setReplacingItem] = useState<ItineraryItem | null>(null);
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
   const [recapReport, setRecapReport] = useState<TripRecapReport | null>(null);
   const [recapLoading, setRecapLoading] = useState(false);
-  const [isCollected, setIsCollected] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [country, setCountry] = useState<Country | null>(null);
   const [viewMode, setViewMode] = useState<PersonaMode>('auto');
+  const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
+  const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewSuggestion, setPreviewSuggestion] = useState<Suggestion | null>(null);
   
   // 新增：证据、风险、指标相关状态
   const [evidence, setEvidence] = useState<EvidenceListResponse | null>(null);
@@ -275,15 +279,11 @@ export default function TripDetailPage() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
-  const [dayMetricsLoading, setDayMetricsLoading] = useState(false);
   const [tripMetrics, setTripMetrics] = useState<TripMetricsResponse | null>(null);
-  const [tripMetricsLoading, setTripMetricsLoading] = useState(false);
   const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null);
-  const [conflictsLoading, setConflictsLoading] = useState(false);
   
   // 新增：决策日志相关状态
   const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
-  const [decisionLogsLoading, setDecisionLogsLoading] = useState(false);
   
   // 新增：提取的数据状态（通过 useMemo 计算）
   const abuData = useMemo<AbuViewData | null>(() => {
@@ -303,8 +303,8 @@ export default function TripDetailPage() {
   
   const overallMetrics = useMemo<OverallMetrics | null>(() => {
     if (decisionLogs.length === 0 && personaAlerts.length === 0 && !suggestionStats) return null;
-    return calculateOverallMetrics(decisionLogs, personaAlerts, suggestionStats);
-  }, [decisionLogs, personaAlerts, suggestionStats]);
+    return calculateOverallMetrics(decisionLogs, personaAlerts, suggestionStats, suggestions);
+  }, [decisionLogs, personaAlerts, suggestionStats, suggestions]);
 
   useEffect(() => {
     if (id) {
@@ -360,7 +360,6 @@ export default function TripDetailPage() {
         // 检查收藏和点赞状态
         // 注意：如果后端在 GET /trips/:id 响应中包含 isCollected、isLiked、likeCount 字段，
         // 可以直接从 data 中获取，无需单独调用接口
-        await checkCollectionStatus();
         // 加载行程状态
         await loadTripState();
         // 加载相关数据（先加载不依赖 trip 的数据）
@@ -368,6 +367,7 @@ export default function TripDetailPage() {
           loadEvidence(),
           loadSuggestions(),
           loadConflicts(),
+          loadPersonaAlerts(), // 新增：加载三人格提醒
           loadDecisionLogs(), // 新增：加载决策日志
         ]);
       } else {
@@ -400,74 +400,46 @@ export default function TripDetailPage() {
     return formatCurrencyAmount(amount, currencyCode);
   };
 
-  const checkCollectionStatus = async () => {
-    if (!id) return;
-    try {
-      // 检查是否已收藏
-      // 优化建议：如果后端在 GET /trips/:id 响应中包含 isCollected、isLiked、likeCount 字段，
-      // 可以直接从 trip 数据中获取，避免额外的 API 调用
-      try {
-      const collectedTrips = await tripsApi.getCollected();
-      const collected = collectedTrips.find((ct) => ct.trip.id === id);
-      setIsCollected(!!collected);
-      } catch (collectedErr: any) {
-        // 如果获取收藏状态失败，静默处理，不影响主流程
-        // 可能是后端路由配置问题或接口未实现
-        if (!collectedErr?.message?.includes('collected') || !collectedErr?.message?.includes('不存在')) {
-          // 只对非"collected不存在"错误进行日志记录
-          console.debug('Failed to load collected status:', collectedErr);
-        }
-        setIsCollected(false);
-      }
-      
-      // TODO: 如果后端返回点赞状态和点赞数，在这里设置
-      // 目前点赞功能已实现，但需要后端提供获取点赞状态的接口
-      // 或者从 GET /trips/:id 响应中获取
-    } catch (err: any) {
-      // 如果检查失败，不影响主流程
-      console.error('Failed to load trip details:', err);
-    }
-  };
 
-  const handleCollect = async () => {
-    if (!id || actionLoading) return;
-    try {
-      setActionLoading('collect');
-      if (isCollected) {
-        await tripsApi.uncollect(id);
-        setIsCollected(false);
-      } else {
-        await tripsApi.collect(id);
-        setIsCollected(true);
-      }
-    } catch (err: any) {
-      console.error('Failed to toggle collection:', err);
-      // 可以在这里添加错误提示
-    } finally {
-      setActionLoading(null);
-    }
-  };
+  // const handleCollect = async () => {
+  //   if (!id || actionLoading) return;
+  //   try {
+  //     setActionLoading('collect');
+  //     if (isCollected) {
+  //       await tripsApi.uncollect(id);
+  //       setIsCollected(false);
+  //     } else {
+  //       await tripsApi.collect(id);
+  //       setIsCollected(true);
+  //     }
+  //   } catch (err: any) {
+  //     console.error('Failed to toggle collection:', err);
+  //     // 可以在这里添加错误提示
+  //   } finally {
+  //     setActionLoading(null);
+  //   }
+  // };
 
-  const handleLike = async () => {
-    if (!id || actionLoading) return;
-    try {
-      setActionLoading('like');
-      if (isLiked) {
-        await tripsApi.unlike(id);
-        setIsLiked(false);
-        setLikeCount((prev) => Math.max(0, prev - 1));
-      } else {
-        await tripsApi.like(id);
-        setIsLiked(true);
-        setLikeCount((prev) => prev + 1);
-      }
-    } catch (err: any) {
-      console.error('Failed to toggle like:', err);
-      // 可以在这里添加错误提示
-    } finally {
-      setActionLoading(null);
-    }
-  };
+  // const handleLike = async () => {
+  //   if (!id || actionLoading) return;
+  //   try {
+  //     setActionLoading('like');
+  //     if (isLiked) {
+  //       await tripsApi.unlike(id);
+  //       setIsLiked(false);
+  //       // setLikeCount((prev) => Math.max(0, prev - 1));
+  //     } else {
+  //       await tripsApi.like(id);
+  //       setIsLiked(true);
+  //       // setLikeCount((prev) => prev + 1);
+  //     }
+  //   } catch (err: any) {
+  //     console.error('Failed to toggle like:', err);
+  //     // 可以在这里添加错误提示
+  //   } finally {
+  //     setActionLoading(null);
+  //   }
+  // };
 
   const loadTripState = async () => {
     if (!id) return;
@@ -495,6 +467,58 @@ export default function TripDetailPage() {
     }
   };
 
+  // 检查是否是"未发现问题"类型的建议
+  const isNoIssueSuggestion = (suggestion: Suggestion): boolean => {
+    const summary = suggestion.summary || '';
+    const title = suggestion.title || '';
+    const description = suggestion.description || '';
+    const text = `${title} ${summary} ${description}`.toLowerCase();
+    
+    // 检查是否包含"未发现"、"未检测到"、"无"、"通过"等关键词
+    const noIssuePatterns = [
+      '未发现',
+      '未检测到',
+      '未发现.*问题',
+      '无.*问题',
+      '均通过',
+      '允许继续',
+      '检查通过',
+      '没有问题',
+      '一切正常',
+    ];
+    
+    return noIssuePatterns.some(pattern => {
+      const regex = new RegExp(pattern);
+      return regex.test(text);
+    });
+  };
+
+  // 修正建议的人格归属（根据内容判断）
+  const correctSuggestionPersona = (suggestion: Suggestion): Suggestion => {
+    const title = suggestion.title || '';
+    const summary = suggestion.summary || '';
+    const text = `${title} ${summary}`.toLowerCase();
+    
+    // 时间冲突应该归属到 Dr.Dre（节奏）
+    if (text.includes('时间冲突') || text.includes('时间重叠') || text.includes('time conflict')) {
+      return {
+        ...suggestion,
+        persona: 'drdre',
+      };
+    }
+    
+    // 安全相关的冲突应该归属到 Abu（风险）
+    if (text.includes('安全') || text.includes('风险') || text.includes('危险') || 
+        text.includes('封路') || text.includes('道路封闭') || text.includes('road closure')) {
+      return {
+        ...suggestion,
+        persona: 'abu',
+      };
+    }
+    
+    return suggestion;
+  };
+
   // 加载建议列表（使用新的统一接口）
   const loadSuggestions = async () => {
     if (!id) return;
@@ -519,7 +543,15 @@ export default function TripDetailPage() {
         return acc;
       }, [] as typeof result.items);
       
-      setSuggestions(uniqueSuggestions);
+      // 修正建议的人格归属（根据内容判断）
+      const correctedSuggestions = uniqueSuggestions.map(correctSuggestionPersona);
+      
+      // 过滤掉"未发现问题"类型的建议
+      const filteredSuggestions = correctedSuggestions.filter(
+        suggestion => !isNoIssueSuggestion(suggestion)
+      );
+      
+      setSuggestions(filteredSuggestions);
       
       // 使用新的统一接口获取统计数据
       const stats = await tripsApi.getSuggestionStats(id);
@@ -534,11 +566,53 @@ export default function TripDetailPage() {
     }
   };
 
+  // 检查是否是"未发现问题"类型的提醒
+  const isNoIssuePersonaAlert = (alert: PersonaAlert): boolean => {
+    const message = alert.message || '';
+    const title = alert.title || '';
+    const text = `${title} ${message}`.toLowerCase();
+    
+    // 检查是否包含"未发现"、"未检测到"、"无"、"通过"等关键词
+    const noIssuePatterns = [
+      '未发现',
+      '未检测到',
+      '未发现.*问题',
+      '无.*问题',
+      '均通过',
+      '允许继续',
+      '检查通过',
+      '没有问题',
+      '一切正常',
+    ];
+    
+    return noIssuePatterns.some(pattern => {
+      const regex = new RegExp(pattern);
+      return regex.test(text);
+    });
+  };
+
+  // 新增：加载三人格提醒
+  const loadPersonaAlerts = async () => {
+    if (!id) return;
+    try {
+      setPersonaAlertsLoading(true);
+      const data = await tripsApi.getPersonaAlerts(id);
+      // 过滤掉"未发现问题"类型的提醒
+      const filteredData = (data || []).filter(alert => !isNoIssuePersonaAlert(alert));
+      setPersonaAlerts(filteredData);
+    } catch (err: any) {
+      console.error('Failed to load persona alerts:', err);
+      // 静默处理错误，不影响主流程
+      setPersonaAlerts([]);
+    } finally {
+      setPersonaAlertsLoading(false);
+    }
+  };
+
   // 新增：加载决策日志
   const loadDecisionLogs = async () => {
     if (!id) return;
     try {
-      setDecisionLogsLoading(true);
       // 获取足够多的日志（100条）
       const response = await tripsApi.getDecisionLog(id, 100, 0);
       setDecisionLogs(response.items || []);
@@ -546,8 +620,6 @@ export default function TripDetailPage() {
       console.error('Failed to load decision logs:', err);
       // 静默处理错误，不影响主流程
       setDecisionLogs([]);
-    } finally {
-      setDecisionLogsLoading(false);
     }
   };
 
@@ -555,7 +627,6 @@ export default function TripDetailPage() {
   const loadTripMetrics = async () => {
     if (!id || !trip) return;
     try {
-      setTripMetricsLoading(true);
       const data = await tripsApi.getMetrics(id);
       setTripMetrics(data);
       
@@ -570,24 +641,6 @@ export default function TripDetailPage() {
     } catch (err: any) {
       console.error('Failed to load trip metrics:', err);
       // 静默处理错误，不影响主流程
-    } finally {
-      setTripMetricsLoading(false);
-    }
-  };
-
-  // 加载每日指标（用于路线骨架图）
-  const loadDayMetrics = async (dayId: string, date: string) => {
-    if (!id) return;
-    try {
-      const data = await tripsApi.getDayMetrics(id, dayId);
-      setDayMetricsMap((prev) => {
-        const newMap = new Map(prev);
-        newMap.set(date, data);
-        return newMap;
-      });
-    } catch (err: any) {
-      console.error('Failed to load day metrics:', err);
-      // 静默处理错误，不影响主流程
     }
   };
 
@@ -595,37 +648,12 @@ export default function TripDetailPage() {
   const loadConflicts = async () => {
     if (!id) return;
     try {
-      setConflictsLoading(true);
       const data = await tripsApi.getConflicts(id);
       setConflicts(data);
     } catch (err: any) {
       console.error('Failed to load conflicts:', err);
       // 静默处理错误，不影响主流程
-    } finally {
-      setConflictsLoading(false);
     }
-  };
-
-  const handleEditItem = (item: ItineraryItem) => {
-    setEditingItem(item);
-    setEditItemDialogOpen(true);
-  };
-
-  const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('确定要删除这个行程项吗？')) return;
-
-    try {
-      await itineraryItemsApi.delete(itemId);
-      await loadTrip(); // 重新加载行程
-    } catch (err: any) {
-      console.error('Failed to delete item:', err);
-      alert(err.message || '删除行程项失败');
-    }
-  };
-
-  const handleReplaceItem = (item: ItineraryItem) => {
-    setReplacingItem(item);
-    setReplaceDialogOpen(true);
   };
 
   const handleReplaceSuccess = async (result: ReplaceItineraryItemResponse) => {
@@ -638,53 +666,15 @@ export default function TripDetailPage() {
         note: result.newItem.reason,
       });
       await loadTrip();
+      toast.success('行程项已替换');
       setReplaceDialogOpen(false);
       setReplacingItem(null);
     } catch (err: any) {
       console.error('Failed to update item:', err);
-      alert(err.message || '更新行程项失败');
+      toast.error(err.message || '更新行程项失败');
     }
   };
 
-  const handleRegenerate = async () => {
-    if (!id || !trip) return;
-    
-    if (!confirm('确定要重新生成整个行程吗？已锁定的项将保持不变。')) return;
-
-    setRegenerating(true);
-    try {
-      const result = await tripsApi.regenerate(id, {
-        // 可以添加用户偏好
-      });
-      
-      // 显示变更列表
-      if (result.changes && result.changes.length > 0) {
-        const changesText = result.changes.map(c => 
-          `${c.type}: ${c.placeName} (Day ${c.day}, ${c.slot})`
-        ).join('\n');
-        
-        if (confirm(`检测到 ${result.changes.length} 处变更：\n\n${changesText}\n\n是否应用这些变更？`)) {
-          // 应用变更：保存新的草案
-          await tripsApi.saveDraft({
-            draft: result.updatedDraft,
-          });
-          await loadTrip();
-        }
-      } else {
-        alert('未检测到变更');
-      }
-    } catch (err: any) {
-      console.error('Failed to regenerate trip:', err);
-      alert(err.message || '重生成行程失败');
-    } finally {
-      setRegenerating(false);
-    }
-  };
-
-  const handleCreateItem = (dayId: string) => {
-    setSelectedDayId(dayId);
-    setCreateItemDialogOpen(true);
-  };
 
   const handleCreateItemSuccess = () => {
     loadTrip(); // 重新加载行程
@@ -710,7 +700,7 @@ export default function TripDetailPage() {
 
     // 验证确认文字
     if (confirmText.trim().toUpperCase() !== trip.destination.toUpperCase()) {
-      alert(`确认文字不匹配。请输入目的地国家代码"${trip.destination}"来确认删除。`);
+      toast.error(`确认文字不匹配。请输入目的地国家代码"${trip.destination}"来确认删除。`);
       return;
     }
 
@@ -718,11 +708,12 @@ export default function TripDetailPage() {
       setDeleting(true);
       await tripsApi.delete(id, confirmText.trim());
       // 删除成功后跳转到行程列表
+      toast.success('行程已删除');
       navigate('/dashboard/trips');
     } catch (err: any) {
       console.error('Failed to delete trip:', err);
       const errorMessage = err.response?.data?.error?.message || err.message || '删除行程失败';
-      alert(errorMessage);
+      toast.error(errorMessage);
       setDeleting(false);
     }
   };
@@ -1021,103 +1012,26 @@ export default function TripDetailPage() {
                     <div className="space-y-4">
                       {trip.TripDay.map((day, idx) => {
                         const dayMetrics = dayMetricsMap.get(day.date);
-                        const dayConflicts = dayMetrics?.conflicts || [];
-                        const hasHighRisk = dayConflicts.some(c => c.severity === 'HIGH');
-                        const hasMediumRisk = dayConflicts.some(c => c.severity === 'MEDIUM');
-                        
-                        // 风险等级
-                        const riskLevel = hasHighRisk ? '高' : hasMediumRisk ? '中' : '低';
-                        const riskColor = hasHighRisk ? 'bg-red-50 text-red-700' : hasMediumRisk ? 'bg-yellow-50 text-yellow-700' : 'bg-green-50 text-green-700';
-                        
-                        // 计算该Day的建议统计
-                        const daySuggestions = suggestions.filter(
-                          (s) => s.scope === 'day' && s.scopeId === day.id
-                        );
-                        const abuCount = daySuggestions.filter((s) => s.persona === 'abu').length;
-                        const drdreCount = daySuggestions.filter((s) => s.persona === 'drdre').length;
-                        const neptuneCount = daySuggestions.filter((s) => s.persona === 'neptune').length;
                         
                         return (
-                        <Card key={day.id} className="border-l-4 border-l-primary">
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                <div className="font-semibold">
-                                  Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
-                                    </div>
-                                    {/* 角标行 */}
-                                    {(abuCount > 0 || drdreCount > 0 || neptuneCount > 0) && (
-                                      <div className="flex gap-1.5">
-                                        <SuggestionBadge
-                                          persona="abu"
-                                          count={abuCount}
-                                          onClick={() => {
-                                            // 点击角标时，可以滚动到助手中心或高亮对应建议
-                                            // 这里可以添加更多交互逻辑，比如设置一个状态来过滤助手中心
-                                            const assistantCenterElement = document.querySelector('[data-assistant-center]');
-                                            if (assistantCenterElement) {
-                                              assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                                            }
-                                          }}
-                                        />
-                                        <SuggestionBadge
-                                          persona="drdre"
-                                          count={drdreCount}
-                                          onClick={() => {
-                                            const assistantCenterElement = document.querySelector('[data-assistant-center]');
-                                            if (assistantCenterElement) {
-                                              assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                                            }
-                                          }}
-                                        />
-                                        <SuggestionBadge
-                                          persona="neptune"
-                                          count={neptuneCount}
-                                          onClick={() => {
-                                            const assistantCenterElement = document.querySelector('[data-assistant-center]');
-                                            if (assistantCenterElement) {
-                                              assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                                            }
-                                          }}
-                                        />
-                                      </div>
-                                    )}
-                        </div>
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  {day.ItineraryItem.length} 个行程项
-                      </div>
-                    </div>
-                                <div className="flex gap-2 text-xs flex-wrap">
-                                  {dayMetrics ? (
-                                    <>
-                                      <Badge variant="outline">
-                                        步行: {dayMetrics.metrics.walk.toFixed(1)} km
-                                </Badge>
-                                      <Badge variant="outline">
-                                        车程: {Math.round(dayMetrics.metrics.drive)} min
-                                      </Badge>
-                                      <Badge variant="outline">
-                                        缓冲: {Math.round(dayMetrics.metrics.buffer)} min
-                                      </Badge>
-                                      <Badge variant="outline" className={riskColor}>
-                                        风险: {riskLevel}
-                                      </Badge>
-                                    </>
-                                  ) : dayMetricsLoading ? (
-                                    <Spinner className="w-4 h-4" />
-                                  ) : (
-                                    <>
-                                      <Badge variant="outline">步行: --</Badge>
-                                      <Badge variant="outline">车程: --</Badge>
-                                      <Badge variant="outline">缓冲: --</Badge>
-                                      <Badge variant="outline">风险: --</Badge>
-                                    </>
-                                  )}
-                  </div>
-              </div>
-            </CardContent>
-          </Card>
+                          <DayItineraryCard
+                            key={day.id}
+                            day={day}
+                            dayIndex={idx}
+                            dayMetrics={dayMetrics}
+                            suggestions={suggestions}
+                            onViewItinerary={() => {
+                              // 可以跳转到该天的详细行程视图
+                              // 这里可以添加导航逻辑
+                            }}
+                            onViewSuggestions={() => {
+                              // 滚动到助手中心
+                              const assistantCenterElement = document.querySelector('[data-assistant-center]');
+                              if (assistantCenterElement) {
+                                assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                              }
+                            }}
+                          />
                         );
                       })}
                     </div>
@@ -1132,7 +1046,8 @@ export default function TripDetailPage() {
                   <AssistantCenter
                     suggestions={suggestions}
                     loading={personaAlertsLoading}
-                    onSuggestionClick={(suggestion) => {
+                    trip={trip}
+                    onSuggestionClick={() => {
                       // 点击建议时打开对应的抽屉
                         setDrawerTab('risk');
                         setDrawerOpen(true);
@@ -1150,6 +1065,7 @@ export default function TripDetailPage() {
                         // 忽略建议操作
                         if (actionId === 'dismiss') {
                           await tripsApi.dismissSuggestion(id, suggestion.id);
+                          toast.success('建议已忽略');
                           // 重新加载建议列表
                           await loadSuggestions();
                           return;
@@ -1165,30 +1081,67 @@ export default function TripDetailPage() {
                           // 重新加载建议列表
                           await loadSuggestions();
                           
-                          // 如果有触发的建议，可以提示用户
+                          // 显示成功提示
+                          toast.success('建议已成功应用');
+                          
+                          // 如果有触发的建议，提示用户
                           if (result.triggeredSuggestions && result.triggeredSuggestions.length > 0) {
-                            console.log('应用建议后触发了新建议:', result.triggeredSuggestions);
-                            // TODO: 可以显示toast提示
+                            toast.info(`应用建议后产生了 ${result.triggeredSuggestions.length} 个新建议`);
                           }
                           return;
                         }
                         
                         // 预览操作
                         if (actionId === 'preview') {
-                          const previewResult = await tripsApi.applySuggestion(id, suggestion.id, {
+                          // 打开预览对话框
+                          setPreviewSuggestion(suggestion);
+                          setPreviewDialogOpen(true);
+                          return;
+                        }
+                        
+                        // 查找 action 对象
+                        const action = suggestion.actions.find(a => a.id === actionId);
+                        
+                        // 调整时间/调整节奏操作（adjust_rhythm, adjust_time 等）
+                        if (actionId === 'adjust_rhythm' || actionId === 'adjust_time' || actionId.includes('adjust') || action?.label?.includes('调整时间')) {
+                          // 打开调整时间对话框
+                          setAdjustingSuggestion(suggestion);
+                          setAdjustTimeDialogOpen(true);
+                          return;
+                        }
+                        
+                        // 其他操作类型：尝试通过 applySuggestion API 处理
+                        // 如果是 apply 类型，使用 applySuggestion
+                        if (action && (action.type === 'apply' || action.type === 'adjust_rhythm' || action.type === 'view_alternatives')) {
+                          const result = await tripsApi.applySuggestion(id, suggestion.id, {
                             actionId: actionId,
-                            preview: true,
+                            preview: false,
                           });
-                          console.log('预览结果:', previewResult);
-                          // TODO: 显示预览对话框
+                          
+                          // 重新加载建议列表和行程数据
+                          await loadSuggestions();
+                          await loadTrip();
+                          
+                          // 显示成功提示
+                          toast.success('建议已成功应用');
+                          
+                          // 如果有触发的建议，提示用户
+                          if (result.triggeredSuggestions && result.triggeredSuggestions.length > 0) {
+                            toast.info(`应用建议后产生了 ${result.triggeredSuggestions.length} 个新建议`);
+                          }
                           return;
                         }
                         
                         // 其他操作类型
                         console.log('处理操作:', actionId, suggestion);
+                        toast.info('该操作正在处理中...');
                       } catch (error: any) {
                         console.error('Failed to handle suggestion action:', error);
-                        // TODO: 显示错误提示
+                        // 显示错误提示
+                        const errorMessage = error.message || '操作失败，请稍后重试';
+                        toast.error(errorMessage, {
+                          description: error.response?.data?.error?.message || '请检查网络连接或稍后重试',
+                        });
                       }
                     }}
                   />
@@ -1218,16 +1171,41 @@ export default function TripDetailPage() {
                           const config = typeConfig[item.type] || { label: item.type, icon: Info, color: 'text-gray-600' };
                           const Icon = config.icon;
                           
-                          // 解析营业时间数据
-                          let displayContent = item.description || '';
-                          if (item.type === 'opening_hours' && item.description) {
-                            try {
-                              displayContent = formatOpeningHoursDescription(item.description);
-                            } catch (e) {
-                              // 如果格式化失败，使用原始描述
-                              displayContent = item.description;
+                          // 如果是营业时间类型，使用优化的组件
+                          if (item.type === 'opening_hours') {
+                            // 从 title 或 description 中提取地点名称
+                            // title 可能是 "营业时间" 或 "地点名 营业时间"
+                            // description 可能包含 "地点名 营业时间: {...JSON...}"
+                            let placeName: string | undefined = undefined;
+                            
+                            // 尝试从 title 提取
+                            if (item.title) {
+                              const titleMatch = item.title.match(/^(.+?)\s*营业时间/);
+                              if (titleMatch && titleMatch[1] && titleMatch[1] !== '营业时间') {
+                                placeName = titleMatch[1].trim();
+                              }
                             }
+                            
+                            // 如果 title 中没有，尝试从 description 开头提取
+                            if (!placeName && item.description) {
+                              const descMatch = item.description.match(/^(.+?)\s*营业时间\s*[:：]/);
+                              if (descMatch && descMatch[1]) {
+                                placeName = descMatch[1].trim();
+                              }
+                            }
+                            
+                            return (
+                              <BusinessHoursCard
+                                key={item.id}
+                                title={placeName}
+                                description={item.description || ''}
+                                day={item.day}
+                              />
+                            );
                           }
+                          
+                          // 其他类型的证据，使用原有样式
+                          let displayContent = item.description || '';
                           
                           // 确定显示的标题：优先使用 item.title，如果没有则使用类型标签
                           const displayTitle = item.title || config.label;
@@ -1312,7 +1290,7 @@ export default function TripDetailPage() {
                       <div className="flex items-center gap-2">
                         <Shield className="w-4 h-4 text-red-600" />
                         <span>
-                            <strong>Abu Lens：</strong>聚焦风险与证据
+                            <strong>{t('personaModeToggle.abu.label')}：</strong>{t('personaModeToggle.abu.desc')}
                         </span>
                         </div>
                     )}
@@ -1320,7 +1298,7 @@ export default function TripDetailPage() {
                       <div className="flex items-center gap-2">
                         <Activity className="w-4 h-4 text-orange-600" />
                         <span>
-                            <strong>Dr.Dre Lens：</strong>聚焦指标与节奏
+                            <strong>{t('personaModeToggle.dre.label')}：</strong>{t('personaModeToggle.dre.desc')}
                         </span>
                     </div>
               )}
@@ -1328,7 +1306,7 @@ export default function TripDetailPage() {
                       <div className="flex items-center gap-2">
                         <RefreshCw className="w-4 h-4 text-green-600" />
                         <span>
-                            <strong>Neptune Lens：</strong>聚焦修复与替代
+                            <strong>{t('personaModeToggle.neptune.label')}：</strong>{t('personaModeToggle.neptune.desc')}
                         </span>
                         </div>
                               )}
@@ -1352,7 +1330,6 @@ export default function TripDetailPage() {
                   trip={trip} 
                   abuData={abuData}
                   onItemClick={(item) => {
-                    setHighlightItemId(item.id);
                     setDrawerTab('risk');
                     setDrawerOpen(true);
                   }}
@@ -1364,7 +1341,6 @@ export default function TripDetailPage() {
                   drDreData={drDreData}
                   tripMetrics={tripMetrics}
                   onItemClick={(item) => {
-                    setHighlightItemId(item.id);
                     setDrawerTab('evidence');
                     setDrawerOpen(true);
                   }}
@@ -1375,7 +1351,6 @@ export default function TripDetailPage() {
                   trip={trip} 
                   neptuneData={neptuneData}
                   onItemClick={(item) => {
-                    setHighlightItemId(item.id);
                     setDrawerTab('evidence');
                     setDrawerOpen(true);
                   }}
@@ -1472,7 +1447,7 @@ export default function TripDetailPage() {
                     className="w-full"
                     onClick={() => {
                       // TODO: 保存为模板
-                      alert('保存为模板功能开发中');
+                      toast.info('保存为模板功能开发中');
                     }}
                   >
                     <TrendingUp className="w-4 h-4 mr-2" />
@@ -1533,7 +1508,7 @@ export default function TripDetailPage() {
                 <div>
                   <h2 className="text-2xl font-bold">行程复盘报告</h2>
                   <p className="text-muted-foreground mt-1">
-                    {recapReport.destination} • {recapReport.totalDays} 天
+                    {recapReport?.destination} • {recapReport?.totalDays} 天
                   </p>
                 </div>
                 <Button onClick={loadRecapReport} variant="outline">
@@ -1550,22 +1525,22 @@ export default function TripDetailPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <div className="text-sm text-muted-foreground">访问地点</div>
-                      <div className="text-2xl font-bold">{recapReport.statistics.totalPlaces}</div>
+                      <div className="text-2xl font-bold">{recapReport?.statistics?.totalPlaces ?? 0}</div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">徒步路线</div>
-                      <div className="text-2xl font-bold">{recapReport.statistics.totalTrails}</div>
+                      <div className="text-2xl font-bold">{recapReport?.statistics?.totalTrails ?? 0}</div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">总里程 (km)</div>
                       <div className="text-2xl font-bold">
-                        {recapReport.statistics.totalTrailDistanceKm.toFixed(1)}
+                        {recapReport?.statistics?.totalTrailDistanceKm?.toFixed(1) ?? '0.0'}
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">累计爬升 (m)</div>
                       <div className="text-2xl font-bold">
-                        {recapReport.statistics.totalElevationGainM.toFixed(0)}
+                        {recapReport?.statistics?.totalElevationGainM?.toFixed(0) ?? '0'}
                       </div>
                     </div>
                   </div>
@@ -1579,7 +1554,7 @@ export default function TripDetailPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {recapReport.timeline.map((dayTimeline, index) => (
+                    {recapReport?.timeline?.map((dayTimeline, index) => (
                       <div key={index} className="border-l-2 border-blue-200 pl-4">
                         <div className="font-medium mb-2">
                           {format(new Date(dayTimeline.date), 'yyyy年MM月dd日')}
@@ -1606,7 +1581,7 @@ export default function TripDetailPage() {
               </Card>
 
               {/* 访问地点列表 */}
-              {recapReport.places.length > 0 && (
+              {recapReport?.places && recapReport.places.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>访问地点 ({recapReport.places.length})</CardTitle>
@@ -1715,6 +1690,46 @@ export default function TripDetailPage() {
             }
           }}
           onSuccess={handleReplaceSuccess}
+        />
+      )}
+
+      {/* 调整时间对话框 */}
+      {id && adjustingSuggestion && (
+        <AdjustTimeDialog
+          tripId={id}
+          suggestion={adjustingSuggestion}
+          open={adjustTimeDialogOpen}
+          onOpenChange={(open) => {
+            setAdjustTimeDialogOpen(open);
+            if (!open) {
+              setAdjustingSuggestion(null);
+            }
+          }}
+          onSuccess={async () => {
+            // 重新加载建议列表和行程数据
+            await loadSuggestions();
+            await loadTrip();
+          }}
+        />
+      )}
+
+      {/* 预览对话框 */}
+      {id && previewSuggestion && (
+        <SuggestionPreviewDialog
+          tripId={id}
+          suggestion={previewSuggestion}
+          open={previewDialogOpen}
+          onOpenChange={(open) => {
+            setPreviewDialogOpen(open);
+            if (!open) {
+              setPreviewSuggestion(null);
+            }
+          }}
+          onConfirm={async () => {
+            // 重新加载建议列表和行程数据
+            await loadSuggestions();
+            await loadTrip();
+          }}
         />
       )}
     </div>

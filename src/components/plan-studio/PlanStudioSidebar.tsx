@@ -641,7 +641,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
       case 'ALLOW':
         return 'bg-green-50 border-green-200 text-green-800';
       case 'WARN':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-800';
+        return 'bg-[#FFF9E6] border-[#FFE699] text-yellow-800'; // 使用淡黄色背景
       case 'BLOCK':
         return 'bg-red-50 border-red-200 text-red-800';
     }
@@ -653,8 +653,8 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     const renderAbuPreview = () => {
       return (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="flex items-center gap-2 text-xl font-semibold">
               <Shield className="w-5 h-5 text-red-600" />
               {t('planStudio.sidebar.abu.gatingStatus')}
             </CardTitle>
@@ -672,7 +672,11 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
                 <div>{t('planStudio.sidebar.abu.softViolations', { count: abuViolations.soft })}</div>
               </div>
             </div>
-            <Button variant="outline" className="w-full" size="sm">
+            <Button 
+              variant="outline" 
+              className="w-full bg-white border-gray-300 hover:bg-gray-50" 
+              size="sm"
+            >
               <FileText className="w-4 h-4 mr-2" />
               {t('planStudio.sidebar.abu.viewEvidence')}
             </Button>
@@ -798,9 +802,9 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     // 使用 Tabs 显示所有人格的数据
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">策略概览</CardTitle>
-          <CardDescription>查看所有三人格的自动执行结果</CardDescription>
+        <CardHeader className="pb-3 border-b">
+          <CardTitle className="text-xl font-semibold">策略概览</CardTitle>
+          <CardDescription className="mt-1">查看所有三人格的自动执行结果</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="abu" className="w-full">
@@ -880,14 +884,16 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
 
       return (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t('planStudio.sidebar.abu.riskAlerts')}</CardTitle>
-            <CardDescription>{t('planStudio.sidebar.abu.riskAlertsDesc')}</CardDescription>
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="text-xl font-semibold">{t('planStudio.sidebar.abu.riskAlerts')}</CardTitle>
+            <CardDescription className="mt-1">{t('planStudio.sidebar.abu.riskAlertsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {abuAlerts.length === 0 ? (
-              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-center">
-                <div className="text-green-800">{t('planStudio.sidebar.noAlerts')}</div>
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-center">
+                <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto mb-2" />
+                <div className="text-green-800 font-medium">一切准备就绪 ✅</div>
+                <div className="text-xs text-green-600 mt-1">当前无风险项</div>
             </div>
             ) : (
               Object.entries(groupedAlerts).map(([source, sourceAlerts]) => {
@@ -902,7 +908,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
                 
                 const bgColor = 
                   overallSeverity === 'warning' ? 'bg-red-50 border-red-200 text-red-800' :
-                  overallSeverity === 'info' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                  overallSeverity === 'info' ? 'bg-[#FFF9E6] border-[#FFE699] text-yellow-800' : // 使用淡黄色背景
                   'bg-green-50 border-green-200 text-green-800';
                 
                 // 合并所有 alerts 的消息
@@ -944,16 +950,16 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
 
       return (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t('planStudio.sidebar.dre.metricAlerts')}</CardTitle>
-            <CardDescription>{t('planStudio.sidebar.dre.metricAlertsDesc')}</CardDescription>
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="text-xl font-semibold">{t('planStudio.sidebar.dre.metricAlerts')}</CardTitle>
+            <CardDescription className="mt-1">{t('planStudio.sidebar.dre.metricAlertsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {/* 显示操作结果 */}
             {operationResult && (
               <div className={`p-3 border rounded text-sm ${
                 operationResult.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
-                operationResult.type === 'warning' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                operationResult.type === 'warning' ? 'bg-[#FFF9E6] border-[#FFE699] text-yellow-800' : // 使用淡黄色背景
                 'bg-blue-50 border-blue-200 text-blue-800'
               }`}>
                 <div className="font-medium">
@@ -965,8 +971,10 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
             )}
             {/* 如果没有操作结果且没有 issues，才显示 noAlerts */}
             {!operationResult && allIssues.length === 0 ? (
-              <div className="p-3 bg-green-50 border border-green-200 rounded text-sm text-center">
-                <div className="text-green-800">{t('planStudio.sidebar.noAlerts')}</div>
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-center">
+                <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto mb-2" />
+                <div className="text-green-800 font-medium">一切准备就绪 ✅</div>
+                <div className="text-xs text-green-600 mt-1">当前无风险项</div>
               </div>
             ) : allIssues.length > 0 ? (
               allIssues.map((issue, index) => {
@@ -995,9 +1003,9 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
       
       return (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t('planStudio.sidebar.neptune.fixSuggestions')}</CardTitle>
-            <CardDescription>{t('planStudio.sidebar.neptune.fixSuggestionsDesc')}</CardDescription>
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="text-xl font-semibold">{t('planStudio.sidebar.neptune.fixSuggestions')}</CardTitle>
+            <CardDescription className="mt-1">{t('planStudio.sidebar.neptune.fixSuggestionsDesc')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {hasSuggestions ? (
@@ -1036,11 +1044,11 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     // 使用 Tabs 显示所有人格的提醒
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3 border-b">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">人格提醒</CardTitle>
-              <CardDescription>查看所有三人格的自动提醒</CardDescription>
+              <CardTitle className="text-xl font-semibold">人格提醒</CardTitle>
+              <CardDescription className="mt-1">查看所有三人格的自动提醒</CardDescription>
             </div>
             <Select value={filterPersona} onValueChange={(value: 'all' | 'ABU' | 'DR_DRE' | 'NEPTUNE') => setFilterPersona(value)}>
               <SelectTrigger className="w-32">
@@ -1103,8 +1111,8 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     
     return (
       <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onOpenReadinessDrawer()}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
+        <CardHeader className="pb-3 border-b">
+          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
             <ClipboardCheck className="w-5 h-5 text-blue-600" />
             {t('planStudio.sidebar.readiness.title')}
           </CardTitle>
@@ -1120,7 +1128,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
               {gateStatus && (
                 <div className={`p-2 rounded-lg text-center text-sm font-semibold ${
                   gateStatus === 'BLOCK' ? 'bg-red-100 text-red-800 border border-red-200' :
-                  gateStatus === 'WARN' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                  gateStatus === 'WARN' ? 'bg-[#FFF9E6] text-yellow-800 border border-[#FFE699]' : // 使用淡黄色背景
                   'bg-green-100 text-green-800 border border-green-200'
                 }`}>
                   {gateStatus === 'BLOCK' && t('dashboard.readiness.page.drawer.status.block')}
@@ -1143,7 +1151,11 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
                 </div>
               </div>
               
-              <Button variant="outline" className="w-full" size="sm">
+              <Button 
+                variant="outline" 
+                className="w-full bg-white border-gray-300 hover:bg-gray-50" 
+                size="sm"
+              >
                 {t('planStudio.sidebar.readiness.viewDetails')}
               </Button>
             </div>

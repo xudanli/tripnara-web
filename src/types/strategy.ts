@@ -125,10 +125,21 @@ export interface RoutePlanDraft {
 
 // ==================== 决策引擎响应 ====================
 
+// 决策日志条目（Skills 架构）
+export interface DecisionLogItem {
+  persona: 'ABU' | 'DR_DRE' | 'NEPTUNE';
+  action: 'ALLOW' | 'REJECT' | 'ADJUST' | 'REPLACE';
+  explanation: string;
+  reasonCodes?: string[];
+  timestamp: string;
+}
+
 export interface SafetyViolation {
-  persona: 'ABU';                       // 策略人格（DEM 文档中固定为 'ABU'）
-  action: 'REJECT' | 'WARN' | 'ALLOW';  // 动作类型
+  segmentId?: string;                   // Skills 架构新增：路段 ID
+  violation?: 'HARD' | 'SOFT' | 'NONE'; // Skills 架构新增：违规类型
   explanation: string;                  // 解释（DEM 文档使用 explanation）
+  persona?: 'ABU';                      // 策略人格（DEM 文档中固定为 'ABU'）
+  action?: 'REJECT' | 'WARN' | 'ALLOW'; // 动作类型
   evidence?: {
     // DEM 证据数据
     elevationProfile?: number[];        // 高程剖面
@@ -165,7 +176,8 @@ export interface ValidateSafetyResponse {
     allowed: boolean;
     violations: SafetyViolation[];
     alternativeRoutes?: AlternativeRoute[];
-    message: string;
+    message?: string;                    // 可选字段
+    decisionLog?: DecisionLogItem[];     // Skills 架构新增：决策日志
   };
 }
 
@@ -201,7 +213,8 @@ export interface AdjustPacingResponse {
     success: boolean;
     adjustedPlan?: RoutePlanDraft;      // DEM 文档中为可选
     changes: PacingChange[];            // DEM 文档格式：直接是数组
-    message: string;
+    message?: string;                    // 可选字段
+    decisionLog?: DecisionLogItem[];     // Skills 架构新增：决策日志
   };
 }
 
@@ -246,7 +259,8 @@ export interface ReplaceNodesResponse {
     success: boolean;
     replacedPlan?: RoutePlanDraft;      // DEM 文档中为可选
     replacements: NodeReplacement[];    // DEM 文档格式：直接是数组
-    message: string;
+    message?: string;                    // 可选字段
+    decisionLog?: DecisionLogItem[];     // Skills 架构新增：决策日志
   };
 }
 

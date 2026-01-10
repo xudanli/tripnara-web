@@ -9,8 +9,13 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, ExternalLink, Brain, History } from 'lucide-react';
+import { Send, Bot, User, ExternalLink, Brain, History, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import type { ApprovalRequest } from '@/types/approval';
+import { approvalsApi } from '@/api/approvals';
+import { toast } from 'sonner';
+import { needsApproval, extractApprovalId } from '@/utils/approval';
 
 interface AgentChatSidebarProps {
   activeTripId?: string | null;
@@ -35,6 +40,11 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // 审批相关状态
+  const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -77,6 +87,41 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
       };
 
       const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
+
+      // 检查是否需要审批
+      if (needsApproval(response)) {
+        const approvalId = extractApprovalId(response);
+        if (!approvalId) {
+          console.error('审批 ID 不存在，但需要审批');
+          return;
+        }
+        
+        // 移除思考中的消息，添加等待审批的消息
+        setMessages((prev) => {
+          const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
+          return [
+            ...filtered,
+            {
+              id: `assistant-${Date.now()}`,
+              role: 'assistant',
+              content: '我需要您的审批才能继续执行操作。请查看下方的审批请求。',
+              timestamp: new Date(),
+              status: 'awaiting_confirmation',
+              routeType: response.route.route,
+            },
+          ];
+        });
+
+        // 显示审批对话框
+        setPendingApprovalId(approvalId);
+        setApprovalDialogOpen(true);
+        
+        // 保存 threadId（如果有的话，用于后续轮询）
+        // 注意：这里可能需要从响应中获取 threadId，或者使用 request_id
+        // 根据实际 API 响应调整
+        
+        return; // 等待审批，不继续处理
+      }
 
       // 根据 routeType 处理响应（按照前端路由指南）
       const routeType = response.route.route;
@@ -279,6 +324,60 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
           </div>
         </div>
       </CardContent>
+      
+      {/* 审批对话框 */}
+      {pendingApprovalId && (
+        <ApprovalDialog
+          approvalId={pendingApprovalId}
+          open={approvalDialogOpen}
+          onOpenChange={(open) => {
+            setApprovalDialogOpen(open);
+            if (!open) {
+              setPendingApprovalId(null);
+            }
+          }}
+          onDecision={async (approved, approval) => {
+            // 审批完成后的处理
+            if (approved) {
+              toast.success('审批已批准，Agent 正在继续执行...');
+              
+              // 更新消息，显示审批已批准
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `approval-approved-${Date.now()}`,
+                  role: 'assistant',
+                  content: '✅ 审批已批准，正在继续执行操作...',
+                  timestamp: new Date(),
+                  status: 'thinking',
+                },
+              ]);
+              
+              // 可选：等待一段时间后，可以轮询或重新调用 Agent API 检查执行结果
+              // 或者等待 WebSocket 推送更新
+              
+            } else {
+              toast.info('审批已拒绝，Agent 将调整策略');
+              
+              // 更新消息，显示审批已拒绝
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `approval-rejected-${Date.now()}`,
+                  role: 'assistant',
+                  content: '❌ 审批已拒绝，我将为您寻找替代方案...',
+                  timestamp: new Date(),
+                  status: 'thinking',
+                },
+              ]);
+            }
+            
+            // 关闭对话框
+            setApprovalDialogOpen(false);
+            setPendingApprovalId(null);
+          }}
+        />
+      )}
     </Card>
   );
 }

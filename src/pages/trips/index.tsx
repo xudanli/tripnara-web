@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/utils/format';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -48,7 +49,7 @@ const getStatusText = (status: string) => {
   }
 };
 
-type StatusFilter = 'all' | 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED';
+type StatusFilter = 'all' | string;
 
 export default function TripsPage() {
   const navigate = useNavigate();
@@ -58,6 +59,7 @@ export default function TripsPage() {
   const [error, setError] = useState<string | null>(null);
   const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [availableStatuses, setAvailableStatuses] = useState<string[]>([]);
   
   // 收藏、分享、协作相关状态
   const [collectedTripIds, setCollectedTripIds] = useState<Set<string>>(new Set());
@@ -70,7 +72,7 @@ export default function TripsPage() {
   useEffect(() => {
     loadCountries();
     loadTrips();
-    loadCollectedStatus();
+    // loadCollectedStatus(); // 已移除：/trips/collected 接口已废弃
   }, []);
 
   // 当从创建页面返回时，刷新行程列表
@@ -108,33 +110,63 @@ export default function TripsPage() {
     return countryCode;
   };
 
+  // 根据国家代码获取货币代码
+  const getCurrencyCode = (countryCode: string): string => {
+    const country = countryMap.get(countryCode);
+    if (country && country.currencyCode) {
+      return country.currencyCode;
+    }
+    // 如果找不到，默认使用 CNY
+    return 'CNY';
+  };
+
+  // 格式化行程预算
+  const formatTripBudget = (trip: TripListItem): string => {
+    const amount = (trip.totalBudget ?? 0) as number;
+    const currencyCode = getCurrencyCode(trip.destination);
+    return formatCurrency(amount, currencyCode);
+  };
+
   const loadTrips = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await tripsApi.getAll();
       // 确保数据是数组，并添加默认值
-      setTrips(Array.isArray(data) ? data : []);
+      const tripsList = Array.isArray(data) ? data : [];
+      setTrips(tripsList);
+      
+      // 从实际数据中提取所有存在的状态值
+      const statusSet = new Set<string>();
+      tripsList.forEach(trip => {
+        if (trip.status) {
+          statusSet.add(trip.status);
+        }
+      });
+      setAvailableStatuses(Array.from(statusSet));
     } catch (err: any) {
       setError(err.message || '加载行程列表失败');
       console.error('Failed to load trips:', err);
       setTrips([]); // 出错时设置为空数组
+      setAvailableStatuses([]);
     } finally {
       setLoading(false);
     }
   };
 
   // 加载收藏状态
-  const loadCollectedStatus = async () => {
-    try {
-      const collectedTrips = await tripsApi.getCollected();
-      const collectedIds = new Set(collectedTrips.map((ct) => ct.trip.id));
-      setCollectedTripIds(collectedIds);
-    } catch (err: any) {
-      // 静默处理错误，不影响主流程
-      console.error('Failed to load collected status:', err);
-    }
-  };
+  // 已移除：/trips/collected 接口已废弃
+  // 收藏状态现在通过用户操作后的本地状态管理
+  // const loadCollectedStatus = async () => {
+  //   try {
+  //     const collectedTrips = await tripsApi.getCollected();
+  //     const collectedIds = new Set(collectedTrips.map((ct) => ct.trip.id));
+  //     setCollectedTripIds(collectedIds);
+  //   } catch (err: any) {
+  //     // 静默处理错误，不影响主流程
+  //     console.error('Failed to load collected status:', err);
+  //   }
+  // };
 
   // 处理收藏/取消收藏
   const handleCollect = async (tripId: string, e: React.MouseEvent) => {
@@ -281,13 +313,15 @@ export default function TripsPage() {
         </Card>
       ) : (
         <>
-          {/* 状态筛选 */}
+          {/* 状态筛选 - 根据实际接口返回的状态动态显示 */}
           <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
             <TabsList>
               <TabsTrigger value="all">全部</TabsTrigger>
-              <TabsTrigger value="PLANNING">草稿</TabsTrigger>
-              <TabsTrigger value="IN_PROGRESS">进行中</TabsTrigger>
-              <TabsTrigger value="COMPLETED">已完成</TabsTrigger>
+              {availableStatuses.map((status) => (
+                <TabsTrigger key={status} value={status}>
+                  {getStatusText(status)}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
 
@@ -324,14 +358,6 @@ export default function TripsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* 行程成熟度 */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">行程成熟度</span>
-                      <Badge className={getMaturityColor(maturity)} variant="outline">
-                        {getMaturityText(maturity)}
-                      </Badge>
-                    </div>
-
                     {/* 三人格评分 */}
                     <div className="space-y-2 border-t pt-3">
                       <div className="flex items-center justify-between text-sm">
@@ -364,7 +390,7 @@ export default function TripsPage() {
                         <span className="text-muted-foreground">预算状态</span>
                       </div>
                       <span className="font-medium">
-                        ¥{((trip.totalBudget ?? 0) as number).toLocaleString()}
+                        {formatTripBudget(trip)}
                       </span>
                     </div>
 

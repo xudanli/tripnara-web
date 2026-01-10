@@ -10,7 +10,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { X, MapPin, Plus } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { X, MapPin, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { PlaceWithDistance } from '@/types/places-routes';
@@ -28,6 +29,21 @@ interface IntentTabProps {
 export default function IntentTab({ tripId }: IntentTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  
+  // 审批相关状态
+  const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  
+  const handleApprovalComplete = async (approved: boolean, approval: ApprovalRequest) => {
+    if (approved) {
+      toast.success('审批已批准，系统正在继续执行...');
+      await loadTrip();
+    } else {
+      toast.info('审批已拒绝，系统将调整策略');
+    }
+    setApprovalDialogOpen(false);
+    setPendingApprovalId(null);
+  };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [trip, setTrip] = useState<TripDetail | null>(null);
@@ -60,6 +76,10 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   const [avoidPlaceSearchQuery, setAvoidPlaceSearchQuery] = useState('');
   const [avoidPlaceSearchResults, setAvoidPlaceSearchResults] = useState<PlaceWithDistance[]>([]);
   const [avoidPlaceSearchLoading, setAvoidPlaceSearchLoading] = useState(false);
+
+  // 折叠/展开状态
+  const [whatIWantOpen, setWhatIWantOpen] = useState(true);
+  const [constraintsOpen, setConstraintsOpen] = useState(true);
 
   const debouncedMustPlaceSearch = useDebounce(mustPlaceSearchQuery, 300);
   const debouncedAvoidPlaceSearch = useDebounce(avoidPlaceSearchQuery, 300);
@@ -318,6 +338,15 @@ export default function IntentTab({ tripId }: IntentTabProps) {
             },
           ]);
           
+          // 检查是否需要审批
+          if (result.needsApproval && result.data?.approvalId) {
+            const approvalId = result.data.approvalId;
+            setPendingApprovalId(approvalId);
+            setApprovalDialogOpen(true);
+            toast.info('需要您的审批才能继续执行操作');
+            return; // 等待审批，不继续执行后续逻辑
+          }
+          
           if (result.success && result.data) {
             if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
               toast.info(`系统已自动检查，发现 ${result.data.personaAlerts.length} 条提醒`);
@@ -355,11 +384,24 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   return (
     <div className="space-y-6">
       <Card data-tour="trip-dna">
-        <CardHeader>
-          <CardTitle>{t('planStudio.intentTab.whatIWantTitle')}</CardTitle>
-          <CardDescription>{t('planStudio.intentTab.whatIWantDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <Collapsible open={whatIWantOpen} onOpenChange={setWhatIWantOpen}>
+          <CardHeader className="pb-3 border-b">
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
+                <div className="flex-1">
+                  <CardTitle className="text-xl font-semibold">{t('planStudio.intentTab.whatIWantTitle')}</CardTitle>
+                  <CardDescription className="mt-1">{t('planStudio.intentTab.whatIWantDescription')}</CardDescription>
+                </div>
+                {whatIWantOpen ? (
+                  <ChevronUp className="w-5 h-5 text-muted-foreground ml-4" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-muted-foreground ml-4" />
+                )}
+              </div>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4 pt-4">
           <div className="space-y-2">
             <Label>{t('planStudio.intentTab.rhythm')}</Label>
             <Select value={rhythm} onValueChange={(v) => setRhythm(v as any)}>
@@ -380,10 +422,14 @@ export default function IntentTab({ tripId }: IntentTabProps) {
               {preferenceOptions.map((prefKey) => {
                 const prefLabel = t(`planStudio.intentTab.preferenceOptions.${prefKey}`);
                 return (
-                  <Button
+                  <Badge
                     key={prefKey}
                     variant={preferences.includes(prefKey) ? 'default' : 'outline'}
-                    size="sm"
+                    className={`cursor-pointer transition-colors ${
+                      preferences.includes(prefKey) 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-[#F2F3F5] text-gray-700 hover:bg-gray-200'
+                    } rounded-full px-3 py-1`}
                     onClick={() => {
                       setPreferences((prev) =>
                         prev.includes(prefKey) ? prev.filter((p) => p !== prefKey) : [...prev, prefKey]
@@ -391,20 +437,35 @@ export default function IntentTab({ tripId }: IntentTabProps) {
                     }}
                   >
                     {prefLabel}
-                  </Button>
+                  </Badge>
                 );
               })}
             </div>
           </div>
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       <Card data-tour="hard-constraints">
-        <CardHeader>
-          <CardTitle>{t('planStudio.intentTab.constraintsTitle')}</CardTitle>
-          <CardDescription>{t('planStudio.intentTab.constraintsDescription')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <Collapsible open={constraintsOpen} onOpenChange={setConstraintsOpen}>
+          <CardHeader className="pb-3 border-b">
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
+                <div className="flex-1">
+                  <CardTitle className="text-xl font-semibold">{t('planStudio.intentTab.constraintsTitle')}</CardTitle>
+                  <CardDescription className="mt-1">{t('planStudio.intentTab.constraintsDescription')}</CardDescription>
+                </div>
+                {constraintsOpen ? (
+                  <ChevronUp className="w-5 h-5 text-muted-foreground ml-4" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-muted-foreground ml-4" />
+                )}
+              </div>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4 pt-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{t('planStudio.intentTab.dailyWalkLimit')}</Label>
@@ -607,12 +668,14 @@ export default function IntentTab({ tripId }: IntentTabProps) {
               </Popover>
             </div>
           </div>
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{t('planStudio.intentTab.planningStrategyTitle')}</CardTitle>
+        <CardHeader className="pb-3 border-b">
+          <CardTitle className="text-xl font-semibold">{t('planStudio.intentTab.planningStrategyTitle')}</CardTitle>
           <CardDescription>{t('planStudio.intentTab.planningStrategyDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
@@ -629,15 +692,38 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-4">
-        <Button variant="outline" onClick={() => window.history.back()}>
+      <div className="flex justify-end gap-3 pt-4 border-t">
+        <Button 
+          variant="outline" 
+          onClick={() => window.history.back()}
+          className="px-6"
+        >
           {t('planStudio.intentTab.cancel')}
         </Button>
-        <Button onClick={handleSave} disabled={saving}>
+        <Button 
+          onClick={handleSave} 
+          disabled={saving}
+          className="px-6 bg-primary text-primary-foreground hover:bg-primary/90"
+        >
           {saving ? <Spinner className="w-4 h-4 mr-2" /> : null}
           {t('planStudio.intentTab.saveAndContinue')}
         </Button>
       </div>
+      
+      {/* 审批对话框 */}
+      {pendingApprovalId && (
+        <ApprovalDialog
+          approvalId={pendingApprovalId}
+          open={approvalDialogOpen}
+          onOpenChange={(open) => {
+            setApprovalDialogOpen(open);
+            if (!open) {
+              setPendingApprovalId(null);
+            }
+          }}
+          onDecision={handleApprovalComplete}
+        />
+      )}
     </div>
   );
 }

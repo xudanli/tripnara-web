@@ -238,8 +238,12 @@ export default function DecisionPage() {
     try {
       setLoading(true);
       setError(null);
+      if (!tripId) {
+        setError('请提供行程ID');
+        return;
+      }
       const result = await decisionApi.adjustPacing({
-        tripId: tripId || undefined,
+        tripId,
         plan,
         worldContext,
       });
@@ -274,8 +278,12 @@ export default function DecisionPage() {
     try {
       setLoading(true);
       setError(null);
+      if (!tripId) {
+        setError('请提供行程ID');
+        return;
+      }
       const result = await decisionApi.replaceNodes({
-        tripId: tripId || undefined,
+        tripId,
         plan,
         worldContext,
         unavailableNodes: [], // 实际应从用户输入或系统检测获取
@@ -430,14 +438,56 @@ export default function DecisionPage() {
                             <div key={idx} className="p-3 border rounded-lg">
                               <div className="flex items-center gap-2 mb-1">
                                 <AlertTriangle className="w-4 h-4 text-red-600" />
-                                <span className="font-medium">{violation.reason}</span>
+                                <span className="font-medium">
+                                  {violation.explanation || violation.reason || '违规项'}
+                                </span>
+                                {violation.violation && (
+                                  <Badge variant={violation.violation === 'HARD' ? 'destructive' : 'secondary'}>
+                                    {violation.violation}
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                证据类型: {violation.evidence.type}
-                                {violation.evidence.segmentId && (
+                                {violation.segmentId && <>路段: {violation.segmentId}</>}
+                                {violation.evidence?.type && (
+                                  <> · 证据类型: {violation.evidence.type}</>
+                                )}
+                                {violation.evidence?.segmentId && (
                                   <> · 路段: {violation.evidence.segmentId}</>
                                 )}
                               </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 决策日志（Skills 架构） */}
+                    {safetyResult.decisionLog && safetyResult.decisionLog.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold mb-2">决策日志</h3>
+                        <div className="space-y-2">
+                          {safetyResult.decisionLog.map((log, idx) => (
+                            <div key={idx} className="p-3 border rounded-lg bg-gray-50">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline">{log.persona}</Badge>
+                                <Badge variant={log.action === 'ALLOW' ? 'default' : 'destructive'}>
+                                  {log.action}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(log.timestamp).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="text-sm">{log.explanation}</div>
+                              {log.reasonCodes && log.reasonCodes.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {log.reasonCodes.map((code, codeIdx) => (
+                                    <Badge key={codeIdx} variant="outline" className="text-xs">
+                                      {code}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -501,12 +551,53 @@ export default function DecisionPage() {
                       <div className="space-y-2">
                         {pacingResult.changes.map((change, idx) => (
                           <div key={idx} className="p-3 border rounded-lg">
-                            <div className="font-medium mb-1">{change.reason}</div>
-                            {change.changes.map((c, cIdx) => (
-                              <div key={cIdx} className="text-sm text-muted-foreground">
-                                • {c.type}: {c.segmentId} {c.reason}
+                            <div className="font-medium mb-1">
+                              {change.explanation || change.reason || '节奏调整'}
+                            </div>
+                            {change.changes && change.changes.length > 0 && (
+                              <div className="space-y-1 mt-2">
+                                {change.changes.map((c, cIdx) => (
+                                  <div key={cIdx} className="text-sm text-muted-foreground">
+                                    • 第 {c.dayIndex + 1} 天: {c.originalDuration}分钟 → {c.adjustedDuration}分钟
+                                    {c.insertedBreaks && c.insertedBreaks > 0 && (
+                                      <> (插入 {c.insertedBreaks} 次休息)</>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 决策日志（Skills 架构） */}
+                  {pacingResult.decisionLog && pacingResult.decisionLog.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold mb-2">决策日志</h3>
+                      <div className="space-y-2">
+                        {pacingResult.decisionLog.map((log, idx) => (
+                          <div key={idx} className="p-3 border rounded-lg bg-gray-50">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline">{log.persona}</Badge>
+                              <Badge variant={log.action === 'ALLOW' ? 'default' : 'destructive'}>
+                                {log.action}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(log.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="text-sm">{log.explanation}</div>
+                            {log.reasonCodes && log.reasonCodes.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {log.reasonCodes.map((code, codeIdx) => (
+                                  <Badge key={codeIdx} variant="outline" className="text-xs">
+                                    {code}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -550,12 +641,72 @@ export default function DecisionPage() {
                       <div className="space-y-2">
                         {replaceResult.replacements.map((replacement, idx) => (
                           <div key={idx} className="p-3 border rounded-lg">
-                            <div className="font-medium mb-1">{replacement.reason}</div>
-                            {replacement.replacements.map((r, rIdx) => (
-                              <div key={rIdx} className="text-sm text-muted-foreground">
-                                • {r.original} → {r.replacement}: {r.reason}
+                            <div className="font-medium mb-1">
+                              {replacement.explanation || replacement.reason || '节点替换'}
+                            </div>
+                            <div className="text-sm text-muted-foreground mt-2">
+                              <div>
+                                <span className="font-medium">原节点:</span> {replacement.originalNodeId}
                               </div>
-                            ))}
+                              <div>
+                                <span className="font-medium">替换为:</span> {replacement.replacementNodeId}
+                              </div>
+                              {replacement.reason && (
+                                <div className="mt-1">
+                                  <span className="font-medium">原因:</span> {replacement.reason}
+                                </div>
+                              )}
+                              {replacement.validation && (
+                                <div className="mt-2 p-2 bg-gray-50 rounded">
+                                  <div className="text-xs font-medium mb-1">验证结果:</div>
+                                  <Badge variant={replacement.validation.safetyCheck === 'PASS' ? 'default' : 'destructive'}>
+                                    {replacement.validation.safetyCheck}
+                                  </Badge>
+                                  {replacement.validation.elevationChange !== undefined && (
+                                    <span className="text-xs ml-2">
+                                      海拔变化: {replacement.validation.elevationChange}m
+                                    </span>
+                                  )}
+                                  {replacement.validation.distanceChange !== undefined && (
+                                    <span className="text-xs ml-2">
+                                      距离变化: {replacement.validation.distanceChange}km
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 决策日志（Skills 架构） */}
+                  {replaceResult.decisionLog && replaceResult.decisionLog.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold mb-2">决策日志</h3>
+                      <div className="space-y-2">
+                        {replaceResult.decisionLog.map((log, idx) => (
+                          <div key={idx} className="p-3 border rounded-lg bg-gray-50">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline">{log.persona}</Badge>
+                              <Badge variant={log.action === 'ALLOW' ? 'default' : 'destructive'}>
+                                {log.action}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(log.timestamp).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="text-sm">{log.explanation}</div>
+                            {log.reasonCodes && log.reasonCodes.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {log.reasonCodes.map((code, codeIdx) => (
+                                  <Badge key={codeIdx} variant="outline" className="text-xs">
+                                    {code}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

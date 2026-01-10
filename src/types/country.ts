@@ -1,6 +1,13 @@
 // ==================== 国家档案类型定义 ====================
 
-export type PaymentType = 'CASH_HEAVY' | 'BALANCED' | 'DIGITAL';
+// 支付类型：根据文档，支持 'CASH_DOMINANT' | 'BALANCED' | 'DIGITAL_DOMINANT'
+// 为了向后兼容，也支持旧格式 'CASH_HEAVY' | 'DIGITAL'
+export type PaymentType = 
+  | 'CASH_DOMINANT'  // 现金为主（新格式）
+  | 'CASH_HEAVY'     // 现金为主（旧格式，向后兼容）
+  | 'BALANCED'       // 混合支付
+  | 'DIGITAL_DOMINANT' // 数字化支付为主（新格式）
+  | 'DIGITAL';       // 数字化支付（旧格式，向后兼容）
 
 // ==================== 国家基本信息 ====================
 
