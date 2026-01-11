@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Shield, TrendingUp, Wrench, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
+import { Shield, TrendingUp, Wrench, AlertTriangle, Info, CheckCircle2, Calendar } from 'lucide-react';
 import type { Suggestion } from '@/types/suggestion';
 import type { TripDetail } from '@/types/trip';
 import { cn } from '@/lib/utils';

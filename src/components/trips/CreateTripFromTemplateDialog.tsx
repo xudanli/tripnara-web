@@ -86,7 +86,7 @@ export function CreateTripFromTemplateDialog({
   const loadCountries = async () => {
     try {
       const data = await countriesApi.getAll();
-      setCountries(data);
+      setCountries(data.countries || []);
     } catch (err: any) {
       console.error('Failed to load countries:', err);
     }

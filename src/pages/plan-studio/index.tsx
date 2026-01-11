@@ -168,7 +168,7 @@ export default function PlanStudioPage() {
         }
         
         // 3. 如果没有行程数据，显示引导状态
-        if (tripsList.length === 0) {
+        if (allTripsList.length === 0) {
           setShowWelcomeModal(true);
         }
       } catch (err) {

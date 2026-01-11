@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SuggestionBadge } from '@/components/trips/SuggestionBadge';
 import { format } from 'date-fns';
-import { MapPin, AlertTriangle, ArrowRight, Lightbulb, Plus, Luggage, Target, Sparkles, Compass, HelpCircle } from 'lucide-react';
+import { MapPin, AlertTriangle, ArrowRight, Lightbulb, Plus, Luggage, Target, Sparkles, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TripDay, DayMetricsResponse } from '@/types/trip';
 import type { Suggestion } from '@/types/suggestion';

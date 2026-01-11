@@ -754,7 +754,6 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                       setInput(lastUserMessage.content);
                       // 使用 setTimeout 确保状态更新后再发送
                       setTimeout(() => {
-                        const userInput = lastUserMessage.content;
                         handleSend();
                       }, 100);
                     }

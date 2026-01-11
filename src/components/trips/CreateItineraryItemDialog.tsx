@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { MapPin, Calendar, Clock, Mountain, Utensils, Coffee, Car, Hotel, Sparkles, History, CheckCircle2 } from 'lucide-react';
+import { MapPin, Calendar, Clock, Mountain, Utensils, Coffee, Car, Hotel, Sparkles, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -155,7 +155,7 @@ export function CreateItineraryItemDialog({
         // 这里需要根据实际的 trails API 实现搜索
         // 暂时使用 getAll，实际应该使用搜索接口
         const results = await trailsApi.getAll({ limit: 10 });
-        const filtered = results.data?.filter((trail: any) =>
+        const filtered = results.data?.data?.filter((trail: any) =>
           trail.name?.toLowerCase().includes(trailSearchQuery.toLowerCase())
         ) || [];
         setTrailSearchResults(filtered);

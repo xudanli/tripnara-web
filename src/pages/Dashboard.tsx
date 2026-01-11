@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { MapPin, Calendar, Eye, AlertCircle, AlertTriangle, Shield, BarChart3, Plus, HelpCircle, Sparkles, Compass } from 'lucide-react';
+import { MapPin, Calendar, Eye, AlertCircle, AlertTriangle, Shield, BarChart3, Plus, HelpCircle, Sparkles, Compass, CheckCircle2 } from 'lucide-react';
 import { EmptyTemplatesIllustration, EmptyTripsIllustration, EmptyRiskIllustration, EmptyInsightsIllustration, ReadinessIllustration, AllClearIllustration } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
 import { useDrawer } from '@/components/layout/DashboardLayout';
