@@ -73,26 +73,34 @@ pipeline {
                         }
                         
                         // 使用 sh 命令直接构建 Docker 镜像（不依赖 Jenkins Docker 插件）
-                        echo "🔨 Building Docker image..."
                         def imageTag = "${DOCKER_USER}/${IMAGE_NAME}:${env.BUILD_ID}"
                         def imageTagLatest = "${DOCKER_USER}/${IMAGE_NAME}:latest"
                         
-                        // 构建镜像
-                        sh """
-                            docker build -t ${imageTag} -t ${imageTagLatest} .
-                        """
-                        
-                        echo "📤 Pushing Docker image..."
-                        // 登录 Docker Hub（如果需要）
+                        // 使用 Docker 凭据登录并构建推送
                         withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDS_ID}", usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                            // 登录 Docker Hub
+                            echo "🔐 Logging in to Docker Hub..."
                             sh """
-                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-                                docker push ${imageTag}
-                                docker push ${imageTagLatest}
+                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin || exit 1
+                            """
+                            
+                            // 构建镜像
+                            echo "🔨 Building Docker image..."
+                            sh """
+                                docker build -t ${imageTag} -t ${imageTagLatest} . || exit 1
+                            """
+                            
+                            // 推送镜像
+                            echo "📤 Pushing Docker image..."
+                            sh """
+                                docker push ${imageTag} || exit 1
+                                docker push ${imageTagLatest} || exit 1
                             """
                         }
                         
-                        echo "✅ Docker image built and pushed successfully: ${imageTag}"
+                        echo "✅ Docker image built and pushed successfully"
+                        echo "   - ${imageTag}"
+                        echo "   - ${imageTagLatest}"
                     } catch (Exception e) {
                         echo "⚠️  Docker build/push failed: ${e.getMessage()}"
                         echo "📋 Error details:"
