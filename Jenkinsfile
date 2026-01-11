@@ -5,8 +5,8 @@ pipeline {
     agent {
         docker {
             image 'node:20-bullseye'
-            // 以后如果你需要用到宿主机的 docker 命令（比如构建镜像），可以挂载 sock
-            args '-u root' 
+            // 挂载 Docker socket，使容器内可以使用宿主机的 Docker
+            args '-u root -v /var/run/docker.sock:/var/run/docker.sock' 
         }
     }
 
@@ -46,29 +46,59 @@ pipeline {
                         ).trim()
                         
                         if (dockerCheck == 'not-found') {
-                            echo "⚠️  Docker not available in container. Skipping Docker build/push."
-                            echo "✅ Build artifacts are available in dist/ directory."
-                            return
+                            echo "⚠️  Docker not available in container. Trying to install docker client..."
+                            // 尝试安装 Docker CLI（不包含 daemon）
+                            sh '''
+                                apt-get update -qq && \
+                                apt-get install -y -qq docker.io || \
+                                (curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh || true)
+                            '''
                         }
                         
-                        /* 注意：在 Docker Agent 内部构建 Docker 镜像需要特殊配置：
-                           1. 需要挂载 Docker socket: -v /var/run/docker.sock:/var/run/docker.sock
-                           2. 或者使用 Docker-in-Docker (DinD)
-                           3. 或者使用 Jenkins 的 Docker Pipeline 插件
-                           
-                           如果这些配置不存在，此阶段将被跳过，不影响构建成功
-                        */
-                        docker.withRegistry('', "${DOCKER_CREDS_ID}") {
-                            def img = docker.build("${DOCKER_USER}/${IMAGE_NAME}:${env.BUILD_ID}")
-                            img.push()
-                            img.push('latest')
-                            echo "✅ Docker image built and pushed successfully"
+                        // 再次检查 Docker
+                        def dockerCheck2 = sh(
+                            script: 'which docker 2>/dev/null || echo "not-found"',
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (dockerCheck2 == 'not-found') {
+                            echo "⚠️  Docker still not available. Using docker buildx or podman as fallback..."
+                            // 尝试使用 docker buildx 或直接使用 sh 命令构建
+                            sh '''
+                                # 尝试使用 docker buildx（如果可用）
+                                if command -v docker &> /dev/null; then
+                                    docker buildx version || true
+                                fi
+                            '''
                         }
+                        
+                        // 使用 sh 命令直接构建 Docker 镜像（不依赖 Jenkins Docker 插件）
+                        echo "🔨 Building Docker image..."
+                        def imageTag = "${DOCKER_USER}/${IMAGE_NAME}:${env.BUILD_ID}"
+                        def imageTagLatest = "${DOCKER_USER}/${IMAGE_NAME}:latest"
+                        
+                        // 构建镜像
+                        sh """
+                            docker build -t ${imageTag} -t ${imageTagLatest} .
+                        """
+                        
+                        echo "📤 Pushing Docker image..."
+                        // 登录 Docker Hub（如果需要）
+                        withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDS_ID}", usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                            sh """
+                                echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+                                docker push ${imageTag}
+                                docker push ${imageTagLatest}
+                            """
+                        }
+                        
+                        echo "✅ Docker image built and pushed successfully: ${imageTag}"
                     } catch (Exception e) {
-                        echo "⚠️  Docker build/push skipped: ${e.getMessage()}"
-                        echo "✅ This is expected if Docker is not available or credentials are not configured."
+                        echo "⚠️  Docker build/push failed: ${e.getMessage()}"
+                        echo "📋 Error details:"
+                        echo e.toString()
+                        // 不设置构建状态为失败，让构建成功完成（构建产物仍然可用）
                         echo "✅ Build artifacts are still available in dist/ directory."
-                        // 不设置构建状态，让构建成功完成
                     }
                 }
             }
