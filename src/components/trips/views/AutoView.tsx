@@ -23,7 +23,10 @@ import {
   BarChart3,
   Eye,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Compass,
+  Plus,
+  Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AbuView from './AbuView';
@@ -44,6 +47,8 @@ interface AutoViewProps {
   drDreData: DrDreViewData | null;
   neptuneData: NeptuneViewData | null;
   onItemClick?: (item: ItineraryItem) => void;
+  onNavigateToPlanStudio?: () => void;
+  onAddItem?: () => void; // ✅ 添加行程项回调
 }
 
 export default function AutoView({ 
@@ -52,7 +57,9 @@ export default function AutoView({
   abuData, 
   drDreData, 
   neptuneData,
-  onItemClick 
+  onItemClick,
+  onNavigateToPlanStudio,
+  onAddItem
 }: AutoViewProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'abu' | 'dre' | 'neptune'>('overview');
 
@@ -117,6 +124,77 @@ export default function AutoView({
 
   const safetyBadge = getSafetyBadge(metrics.safetyScore);
   
+  // ✅ 如果行程项为空，显示优化的空状态引导
+  const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
+  if (!hasTripItems) {
+    return (
+      <Card className="border-2 border-dashed border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
+        <CardContent className="py-24 px-8 min-h-[60vh] flex items-center justify-center">
+          <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-2xl w-full">
+            {/* 大图标 */}
+            <div className="p-6 rounded-full bg-primary/10 animate-pulse">
+              <Compass className="w-16 h-16 text-primary" />
+            </div>
+            
+            {/* 主文案 - 更友好、有温度 */}
+            <div className="space-y-3">
+              <h2 className="text-2xl font-semibold text-foreground">
+                你还没有添加任何行程哦～
+              </h2>
+              <p className="text-base text-muted-foreground leading-relaxed">
+                这里现在空空的，但每一次精彩旅程都从第一步开始 ✨
+                <br />
+                点击下方按钮，轻松开启你的旅行计划！
+              </p>
+            </div>
+            
+            {/* 主次按钮组 */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+              {/* 主按钮：创建第一个行程项 */}
+              {onAddItem ? (
+                <Button
+                  size="lg"
+                  onClick={onAddItem}
+                  className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  创建第一个行程项
+                </Button>
+              ) : onNavigateToPlanStudio ? (
+                <Button
+                  size="lg"
+                  onClick={onNavigateToPlanStudio}
+                  className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
+                >
+                  <Target className="w-5 h-5 mr-2" />
+                  开始规划我的行程
+                </Button>
+              ) : null}
+              
+              {/* 次按钮：进入规划工作台 */}
+              {onNavigateToPlanStudio && onAddItem && (
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={onNavigateToPlanStudio}
+                  className="flex-1 text-base h-12"
+                >
+                  <Compass className="w-5 h-5 mr-2" />
+                  进入规划工作台
+                </Button>
+              )}
+            </div>
+            
+            {/* 辅助提示 - 更轻量 */}
+            <p className="text-xs text-muted-foreground/70 max-w-md">
+              一个行程项可以是景点、美食、住宿或交通，试试添加第一站吧
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // 如果数据未加载完成，显示加载状态
   if (!overallMetrics && !abuData && !drDreData && !neptuneData) {
     return (

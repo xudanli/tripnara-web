@@ -158,4 +158,96 @@ export interface TerrainAdvice {
   };
 }
 
+// ==================== 国家完整档案 ====================
+
+/**
+ * 电源信息
+ */
+export interface PowerInfo {
+  voltage: number;              // 电压
+  frequency: number;            // 频率
+  plugTypes: string[];          // 插座类型数组，如 ["A", "B"]
+  note?: string;                // 备注
+}
+
+/**
+ * 紧急信息
+ */
+export interface EmergencyInfo {
+  police?: string;              // 警察电话
+  fire?: string;                // 火警电话
+  medical?: string;             // 医疗电话
+  ambulance?: string;           // 救护车电话
+  note?: string;                // 备注
+  embassy?: string;             // 大使馆联系方式
+}
+
+/**
+ * 中国公民签证信息
+ */
+export interface VisaInfo {
+  required?: boolean;           // 是否需要签证
+  type?: string;                // 签证类型
+  duration?: string;            // 停留期限
+  requirements?: string;         // 申请要求
+  notes?: string;               // 备注
+}
+
+/**
+ * 合规信息
+ */
+export interface ComplianceInfo {
+  visaPolicy?: string;          // 签证政策
+  drivingRules?: string;        // 驾驶规则
+  droneRules?: string;          // 无人机规则
+  alcoholPolicy?: string;       // 酒精政策
+  travelWarnings?: string;      // 旅行警告
+  customs?: string;             // 海关规定
+}
+
+/**
+ * 旅行文化
+ */
+export interface TravelCulture {
+  tipping?: string;             // 小费文化
+  taboos?: string[];            // 禁忌列表
+  dressCode?: string;           // 着装提示
+  festivals?: string;           // 节庆日历
+  etiquette?: string;           // 礼仪提示
+  customs?: string;             // 风俗习惯
+}
+
+/**
+ * 国家完整档案
+ * 包含所有字段，包括基础字段、货币支付字段和JSON字段
+ */
+export interface CountryProfile {
+  // 基础字段
+  isoCode: string;
+  nameCN: string;
+  nameEN: string;
+  updatedAt: string;            // ISO 8601 格式的时间字符串
+
+  // 货币和支付字段
+  currencyCode: string;
+  currencyName: string;
+  exchangeRateToCNY?: number;
+  exchangeRateToUSD?: number;
+  paymentType: PaymentType;
+  paymentInfo?: {
+    tipping?: string;
+    atm_network?: string;
+    wallet_apps?: string[];
+    notes?: string;
+    [key: string]: any;         // 允许其他字段
+  };
+
+  // JSON字段（可能为 null）
+  powerInfo?: PowerInfo | null;
+  emergency?: EmergencyInfo | null;
+  visaForCN?: VisaInfo | null;
+  complianceInfo?: ComplianceInfo | null;
+  travelCulture?: TravelCulture | null;
+}
+
 

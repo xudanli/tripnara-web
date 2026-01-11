@@ -69,12 +69,17 @@ export default function CountriesPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await countriesApi.getAll();
-      setCountries(data);
-      setFilteredCountries(data);
+      const response = await countriesApi.getAll();
+      // ✅ 从响应中提取 countries 数组
+      const countriesList = response.countries || [];
+      setCountries(countriesList);
+      setFilteredCountries(countriesList);
     } catch (err: any) {
       setError(err.message || '加载国家列表失败');
       console.error('Failed to load countries:', err);
+      // 确保错误时也设置为空数组，避免 map 错误
+      setCountries([]);
+      setFilteredCountries([]);
     } finally {
       setLoading(false);
     }

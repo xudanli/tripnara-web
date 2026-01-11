@@ -31,6 +31,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,7 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Clock, Cloud, AlertCircle, Info } from 'lucide-react';
+import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Clock, Cloud, AlertCircle, Info, AlertTriangle, Plus } from 'lucide-react';
 import HealthBar from '@/components/trips/HealthBar';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
@@ -264,12 +267,17 @@ export default function TripDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+  const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | null>(null);
+  const [statusConfirmText, setStatusConfirmText] = useState(''); // ✅ 状态修改确认输入
+  const [statusConfirmCode, setStatusConfirmCode] = useState<string>(''); // ✅ 随机验证码
   const [country, setCountry] = useState<Country | null>(null);
   const [viewMode, setViewMode] = useState<PersonaMode>('auto');
   const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
   const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewSuggestion, setPreviewSuggestion] = useState<Suggestion | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('overview'); // ✅ Tab 状态控制
   
   // 新增：证据、风险、指标相关状态
   const [evidence, setEvidence] = useState<EvidenceListResponse | null>(null);
@@ -302,15 +310,36 @@ export default function TripDetailPage() {
   }, [decisionLogs, suggestions]);
   
   const overallMetrics = useMemo<OverallMetrics | null>(() => {
+    // ✅ 如果行程项为空，不计算综合指标（避免显示误导性的100/100）
+    const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
+    if (!hasTripItems) {
+      return null; // 行程项为空时，不显示综合指标
+    }
+    
     if (decisionLogs.length === 0 && personaAlerts.length === 0 && !suggestionStats) return null;
     return calculateOverallMetrics(decisionLogs, personaAlerts, suggestionStats, suggestions);
-  }, [decisionLogs, personaAlerts, suggestionStats, suggestions]);
+  }, [decisionLogs, personaAlerts, suggestionStats, suggestions, trip]);
 
   useEffect(() => {
     if (id) {
       loadTrip();
     }
   }, [id]);
+
+  // ✅ 当行程状态变化时，自动调整 Tab（仅在状态变化时，不覆盖用户手动选择）
+  useEffect(() => {
+    if (!trip) return;
+    
+    // 如果当前在"执行"tab，但状态不是进行中或已完成，切换回"规划"tab
+    if (activeTab === 'execute' && trip.status !== 'IN_PROGRESS' && trip.status !== 'COMPLETED') {
+      setActiveTab('plan');
+    }
+    
+    // 如果当前在"复盘"tab，但状态不是已完成，切换回"规划"tab
+    if (activeTab === 'insights' && trip.status !== 'COMPLETED') {
+      setActiveTab('plan');
+    }
+  }, [trip?.status, activeTab]);
 
   const loadTrip = async () => {
     if (!id) return;
@@ -383,7 +412,8 @@ export default function TripDetailPage() {
 
   const loadCountryInfo = async (countryCode: string) => {
     try {
-      const countries = await countriesApi.getAll();
+      const response = await countriesApi.getAll();
+      const countries = response.countries || [];
       const found = countries.find((c) => c.isoCode === countryCode);
       if (found) {
         setCountry(found);
@@ -682,6 +712,290 @@ export default function TripDetailPage() {
     setSelectedDayId(null);
   };
 
+  // ✅ 处理状态修改（先显示确认对话框）
+  // ✅ 生成随机验证码（4位数字）
+  const generateConfirmCode = (): string => {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+  };
+
+  const handleStatusChange = (newStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED') => {
+    setPendingStatus(newStatus);
+    // ✅ 生成随机验证码
+    const code = generateConfirmCode();
+    setStatusConfirmCode(code);
+    setStatusChangeDialogOpen(true);
+  };
+
+  // ✅ 验证状态转换是否合法（根据API文档规则）
+  const validateStatusTransition = (
+    currentStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED',
+    newStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  ): { valid: boolean; message?: string } => {
+    // 1. 已取消的行程不能改回其他状态
+    if (currentStatus === 'CANCELLED') {
+      return {
+        valid: false,
+        message: '已取消的行程不能修改状态'
+      };
+    }
+
+    // 2. 已完成的行程不能改回规划中或进行中
+    if (currentStatus === 'COMPLETED' && 
+        (newStatus === 'PLANNING' || newStatus === 'IN_PROGRESS')) {
+      return {
+        valid: false,
+        message: '已完成的行程不能改回规划中或进行中状态'
+      };
+    }
+
+    // 3. 规划中不能直接跳到已完成（必须先经过进行中）
+    if (currentStatus === 'PLANNING' && newStatus === 'COMPLETED') {
+      return {
+        valid: false,
+        message: '规划中的行程不能直接标记为已完成，请先改为"进行中"'
+      };
+    }
+
+    // 4. ✅ 规划中改为进行中：必须至少有一个行程项
+    if (currentStatus === 'PLANNING' && newStatus === 'IN_PROGRESS') {
+      // 检查是否有任何一天有行程项
+      const hasAnyItineraryItem = trip?.TripDay?.some(
+        day => day.ItineraryItem && day.ItineraryItem.length > 0
+      ) || false;
+
+      if (!hasAnyItineraryItem) {
+        return {
+          valid: false,
+          message: '无法开始执行行程：行程中没有任何行程项。请先添加至少一个行程项后再开始执行。'
+        };
+      }
+    }
+
+    // 5. 其他状态转换都是允许的
+    return { valid: true };
+  };
+
+  // ✅ 获取状态转换对应的操作说明
+  // ✅ 获取状态转换需要的确认词（支持多种确认方式）
+  const getStatusConfirmWord = (
+    currentStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED',
+    newStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  ): { word: string | null; alternatives: string[] } => {
+    // 只有不可逆操作需要确认词
+    if (newStatus === 'CANCELLED') {
+      return {
+        word: '取消',
+        alternatives: [trip?.destination || '行程名称'] // 可以输入"取消"或行程名称
+      };
+    }
+    if (currentStatus === 'PLANNING' && newStatus === 'IN_PROGRESS') {
+      return {
+        word: '开始',
+        alternatives: [trip?.destination || '行程名称'] // 可以输入"开始"或行程名称
+      };
+    }
+    if (currentStatus === 'IN_PROGRESS' && newStatus === 'COMPLETED') {
+      return {
+        word: '完成',
+        alternatives: [trip?.destination || '行程名称'] // 可以输入"完成"或行程名称
+      };
+    }
+    // 其他可逆操作不需要确认词
+    return { word: null, alternatives: [] };
+  };
+
+  // ✅ 验证确认输入是否有效（支持确认词、验证码或行程名称）
+  const validateConfirmInput = (
+    input: string,
+    confirmWord: string | null,
+    confirmCode: string,
+    alternatives: string[]
+  ): boolean => {
+    if (!input.trim()) return false;
+    
+    const trimmedInput = input.trim();
+    
+    // 1. 检查是否匹配确认词
+    if (confirmWord && trimmedInput === confirmWord) {
+      return true;
+    }
+    
+    // 2. 检查是否匹配随机验证码
+    if (confirmCode && trimmedInput === confirmCode) {
+      return true;
+    }
+    
+    // 3. 检查是否匹配行程名称（不区分大小写）
+    if (alternatives.length > 0) {
+      const tripName = alternatives[0];
+      if (tripName && trimmedInput.toLowerCase() === tripName.toLowerCase()) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // ✅ 获取状态转换的标题和说明
+  const getStatusTransitionTitle = (
+    currentStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED',
+    newStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  ): { title: string; description: string } => {
+    if (currentStatus === 'PLANNING' && newStatus === 'CANCELLED') {
+      return {
+        title: '确认取消该行程？',
+        description: `当前行程状态将从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"。`
+      };
+    }
+    if (currentStatus === 'PLANNING' && newStatus === 'IN_PROGRESS') {
+      return {
+        title: '确认开始执行行程？',
+        description: `当前行程状态将从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"，进入执行阶段。`
+      };
+    }
+    if (currentStatus === 'IN_PROGRESS' && newStatus === 'COMPLETED') {
+      return {
+        title: '确认完成行程？',
+        description: `当前行程状态将从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"。`
+      };
+    }
+    // 默认标题
+    return {
+      title: '确认修改行程状态？',
+      description: `您即将将行程状态从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"。`
+    };
+  };
+
+  const getStatusTransitionAction = (
+    currentStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED',
+    newStatus: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  ): { action: string; description: string; consequences: string[] } => {
+    const transitions: Record<string, { action: string; description: string; consequences: string[] }> = {
+      'PLANNING->IN_PROGRESS': {
+        action: '开始执行行程',
+        description: '将行程状态改为"进行中"，开始实际执行阶段',
+        consequences: [
+          '将开启"执行"标签页，可查看实时行程状态',
+          '可记录行程中实际的变更与调整',
+          '此操作不可撤销，无法返回"规划中"状态'
+        ]
+      },
+      'PLANNING->CANCELLED': {
+        action: '取消行程',
+        description: '将行程标记为"已取消"',
+        consequences: [
+          '行程将被永久标记为"已取消"',
+          '已取消的行程将无法恢复或修改',
+          '可在记录中保留以供参考'
+        ]
+      },
+      'IN_PROGRESS->COMPLETED': {
+        action: '完成行程',
+        description: '将进行中的行程标记为"已完成"',
+        consequences: [
+          '将开启"复盘"标签页，可查看行程复盘报告',
+          '行程将无法再编辑或执行',
+          '此操作不可撤销，无法返回"进行中"状态'
+        ]
+      },
+      'IN_PROGRESS->CANCELLED': {
+        action: '取消进行中的行程',
+        description: '将正在进行的行程标记为"已取消"',
+        consequences: [
+          '行程将被永久标记为"已取消"',
+          '已取消的行程将无法恢复或修改',
+          '可在记录中保留以供参考'
+        ]
+      },
+      'IN_PROGRESS->PLANNING': {
+        action: '重新规划行程',
+        description: '将进行中的行程改回"规划中"状态，允许重新规划',
+        consequences: [
+          '可以重新编辑和调整行程安排',
+          '将隐藏"执行"标签页',
+          '此操作可逆，可以再次改为"进行中"'
+        ]
+      },
+      'COMPLETED->CANCELLED': {
+        action: '标记已完成行程为已取消',
+        description: '将已完成的行程标记为"已取消"',
+        consequences: [
+          '行程将被永久标记为"已取消"',
+          '已取消的行程将无法恢复或修改',
+          '可在记录中保留以供参考'
+        ]
+      }
+    };
+
+    const key = `${currentStatus}->${newStatus}`;
+    return transitions[key] || {
+      action: `修改状态为"${getStatusText(newStatus)}"`,
+      description: `将行程状态从"${getStatusText(currentStatus)}"改为"${getStatusText(newStatus)}"`,
+      consequences: ['此操作可能不可逆，请谨慎操作']
+    };
+  };
+
+  // ✅ 确认状态修改（不可逆操作）
+  const confirmStatusChange = async () => {
+    if (!id || !trip || !pendingStatus) return;
+    
+    // 前端验证状态转换合法性
+    const validation = validateStatusTransition(trip.status, pendingStatus);
+    if (!validation.valid) {
+      toast.error(validation.message || '不允许的状态转换');
+      setStatusChangeDialogOpen(false);
+      setPendingStatus(null);
+      setStatusConfirmText('');
+      return;
+    }
+
+    // ✅ 验证确认输入（支持确认词、验证码或行程名称）
+    const confirmInfo = getStatusConfirmWord(trip.status, pendingStatus);
+    if (confirmInfo.word) {
+      const isValid = validateConfirmInput(
+        statusConfirmText,
+        confirmInfo.word,
+        statusConfirmCode,
+        confirmInfo.alternatives
+      );
+      if (!isValid) {
+        toast.error(`请输入"${confirmInfo.word}"、验证码"${statusConfirmCode}"或行程名称"${confirmInfo.alternatives[0]}"以确认操作`);
+        return;
+      }
+    }
+    
+    try {
+      // 通过更新API修改状态（后端已支持 status 字段）
+      await tripsApi.update(id, { status: pendingStatus });
+      toast.success(`行程状态已更新为：${getStatusText(pendingStatus)}`);
+      setStatusChangeDialogOpen(false);
+      setPendingStatus(null);
+      setStatusConfirmText('');
+      
+      // ✅ 根据新状态自动切换到合适的 Tab
+      if (pendingStatus === 'IN_PROGRESS') {
+        // 规划中 → 进行中：切换到"执行"tab
+        setActiveTab('execute');
+      } else if (pendingStatus === 'COMPLETED') {
+        // 进行中 → 已完成：切换到"复盘"tab
+        setActiveTab('insights');
+      } else if (pendingStatus === 'PLANNING') {
+        // 改回规划中：切换到"规划"tab
+        setActiveTab('plan');
+      }
+      // 已取消状态保持当前tab不变
+      
+      loadTrip(); // 重新加载行程
+    } catch (err: any) {
+      console.error('Failed to update trip status:', err);
+      // 显示后端返回的具体错误信息
+      const errorMessage = err.message || '更新行程状态失败';
+      toast.error(errorMessage, {
+        description: err.response?.data?.error?.message || '请检查网络连接或稍后重试'
+      });
+    }
+  };
+
   const loadRecapReport = async () => {
     if (!id) return;
     try {
@@ -741,7 +1055,18 @@ export default function TripDetailPage() {
 
   // 计算健康度指标（从 API 获取真实数据）
   const healthMetrics = (() => {
-    // 默认值
+    // ✅ 如果行程项为空，返回空值（不显示健康度）
+    const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
+    if (!hasTripItems) {
+      return {
+        executable: 0,
+        buffer: 0,
+        risk: 0,
+        cost: 0,
+      };
+    }
+
+    // 默认值（仅在数据加载中时使用）
     const defaultMetrics = {
       executable: 85,
       buffer: 70,
@@ -793,27 +1118,27 @@ export default function TripDetailPage() {
   const getMainCTA = () => {
     if (trip.status === 'PLANNING') {
       return {
-        label: 'Generate Plan',
+        label: '进入规划工作台',
         action: () => navigate(`/dashboard/plan-studio?tripId=${id}`),
         icon: Compass,
       };
     } else if (trip.status === 'IN_PROGRESS') {
       return {
-        label: 'Go to Next Step',
+        label: '继续执行',
         action: () => navigate(`/dashboard/execute?tripId=${id}`),
         icon: Play,
       };
+    } else if (trip.status === 'COMPLETED') {
+      // 已完成状态不显示主CTA按钮
+      return null;
     } else {
-      return {
-        label: 'Start Execute',
-        action: () => navigate(`/dashboard/execute?tripId=${id}`),
-        icon: Play,
-      };
+      // CANCELLED 或其他状态
+      return null;
     }
   };
 
   const mainCTA = getMainCTA();
-  const CTAIcon = mainCTA.icon;
+  const CTAIcon = mainCTA?.icon;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -827,7 +1152,18 @@ export default function TripDetailPage() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
               <h1 className="text-2xl font-bold">{trip.destination}</h1>
-              <Badge variant="outline">{getStatusText(trip.status)}</Badge>
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  'font-medium',
+                  trip.status === 'PLANNING' && 'bg-blue-50 text-blue-700 border-blue-200',
+                  trip.status === 'IN_PROGRESS' && 'bg-green-50 text-green-700 border-green-200',
+                  trip.status === 'COMPLETED' && 'bg-gray-50 text-gray-700 border-gray-200',
+                  trip.status === 'CANCELLED' && 'bg-red-50 text-red-700 border-red-200'
+                )}
+              >
+                {getStatusText(trip.status)}
+              </Badge>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground ml-11">
             <div className="flex items-center gap-1">
@@ -844,21 +1180,34 @@ export default function TripDetailPage() {
 
           {/* 中：Health Bar */}
           <div className="w-80" data-tour="health-bar">
-            <HealthBar
-              executable={healthMetrics.executable}
-              buffer={healthMetrics.buffer}
-              risk={healthMetrics.risk}
-              cost={healthMetrics.cost}
-            />
+            {trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) ? (
+              <HealthBar
+                executable={healthMetrics.executable}
+                buffer={healthMetrics.buffer}
+                risk={healthMetrics.risk}
+                cost={healthMetrics.cost}
+              />
+            ) : (
+              // ✅ 弱化上方提示，只显示简单的占位
+              <div className="text-center text-xs text-muted-foreground/60 py-4">
+                <Info className="w-3 h-3 mx-auto mb-1 opacity-40" />
+                <p className="opacity-60">等待添加行程项</p>
+              </div>
+            )}
           </div>
 
           {/* 右：视图模式切换 + 主 CTA */}
           <div className="flex items-center gap-2" data-tour="primary-cta">
-            <PersonaModeToggle value={viewMode} onChange={setViewMode} />
-            <Button onClick={mainCTA.action} size="lg">
-              <CTAIcon className="w-4 h-4 mr-2" />
-              {mainCTA.label}
-          </Button>
+            {/* ✅ 已取消状态下隐藏视图切换 */}
+            {trip.status !== 'CANCELLED' && (
+              <PersonaModeToggle value={viewMode} onChange={setViewMode} />
+            )}
+            {mainCTA && CTAIcon && (
+              <Button onClick={mainCTA.action} size="lg">
+                <CTAIcon className="w-4 h-4 mr-2" />
+                {mainCTA.label}
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon">
@@ -866,18 +1215,88 @@ export default function TripDetailPage() {
           </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
-            <Edit className="w-4 h-4 mr-2" />
-            编辑
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShareDialogOpen(true)}>
-            <Share2 className="w-4 h-4 mr-2" />
-            分享
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCollaboratorsDialogOpen(true)}>
-            <Users className="w-4 h-4 mr-2" />
-            协作者
-                </DropdownMenuItem>
+                {/* ✅ 已取消状态下隐藏编辑、修改状态、分享、协作者 */}
+                {trip.status !== 'CANCELLED' && (
+                  <>
+                    <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      编辑
+                    </DropdownMenuItem>
+                    {/* ✅ 快速修改状态 */}
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        修改状态
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {/* ✅ 根据当前状态和状态转换规则，只显示允许的状态选项 */}
+                        {(() => {
+                          const currentStatus = trip.status;
+                          const allowedTransitions: Array<{
+                            status: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+                            label: string;
+                            icon: string;
+                            description?: string;
+                          }> = [];
+
+                          // 根据当前状态，添加允许的转换选项
+                          if (currentStatus === 'PLANNING') {
+                            // 规划中 → 进行中、已取消（不能直接跳到已完成）
+                            allowedTransitions.push(
+                              { status: 'IN_PROGRESS', label: '进行中', icon: '🚀', description: '开始执行行程' },
+                              { status: 'CANCELLED', label: '已取消', icon: '❌', description: '取消行程' }
+                            );
+                          } else if (currentStatus === 'IN_PROGRESS') {
+                            // 进行中 → 已完成、已取消、规划中（允许重新规划）
+                            allowedTransitions.push(
+                              { status: 'COMPLETED', label: '已完成', icon: '✅', description: '完成行程' },
+                              { status: 'CANCELLED', label: '已取消', icon: '❌', description: '取消行程' },
+                              { status: 'PLANNING', label: '规划中', icon: '📋', description: '重新规划' }
+                            );
+                          } else if (currentStatus === 'COMPLETED') {
+                            // 已完成 → 已取消（不能改回规划中或进行中）
+                            allowedTransitions.push(
+                              { status: 'CANCELLED', label: '已取消', icon: '❌', description: '标记为已取消' }
+                            );
+                          }
+
+                          if (allowedTransitions.length === 0) {
+                            return null;
+                          }
+
+                          return allowedTransitions.map((transition) => {
+                            const validation = validateStatusTransition(currentStatus, transition.status);
+                            return (
+                              <DropdownMenuItem
+                                key={transition.status}
+                                onClick={() => handleStatusChange(transition.status)}
+                                disabled={!validation.valid}
+                              >
+                                <div className="flex items-center gap-2 flex-1">
+                                  <span className="mr-2">{transition.icon}</span>
+                                  <div className="flex-1">
+                                    <div className="text-sm">{transition.label}</div>
+                                    {transition.description && (
+                                      <div className="text-xs text-muted-foreground">{transition.description}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </DropdownMenuItem>
+                            );
+                          });
+                        })()}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                    <DropdownMenuItem onClick={() => setShareDialogOpen(true)}>
+                      <Share2 className="w-4 h-4 mr-2" />
+                      分享
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCollaboratorsDialogOpen(true)}>
+                      <Users className="w-4 h-4 mr-2" />
+                      协作者
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuItem
             onClick={() => setDeleteDialogOpen(true)}
                   className="text-destructive"
@@ -898,6 +1317,124 @@ export default function TripDetailPage() {
           // 滚动到助手中心或打开助手中心（如果需要）
         }}
       />
+      {/* ✅ 状态修改确认对话框 - 根据状态转换显示对应操作说明 */}
+      <AlertDialog 
+        open={statusChangeDialogOpen} 
+        onOpenChange={(open) => {
+          setStatusChangeDialogOpen(open);
+          if (!open) {
+            setPendingStatus(null);
+            setStatusConfirmText('');
+            setStatusConfirmCode('');
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-2xl">
+          {pendingStatus && (() => {
+            const transitionInfo = getStatusTransitionAction(trip.status, pendingStatus);
+            const isIrreversible = pendingStatus === 'COMPLETED' || pendingStatus === 'CANCELLED' || 
+                                   (trip.status === 'COMPLETED' && (pendingStatus === 'PLANNING' || pendingStatus === 'IN_PROGRESS'));
+            const confirmInfo = getStatusConfirmWord(trip.status, pendingStatus);
+            const titleInfo = getStatusTransitionTitle(trip.status, pendingStatus);
+            const validation = validateStatusTransition(trip.status, pendingStatus);
+            const isConfirmValid = !confirmInfo.word || validateConfirmInput(
+              statusConfirmText,
+              confirmInfo.word,
+              statusConfirmCode,
+              confirmInfo.alternatives
+            );
+            const isButtonDisabled = !validation.valid || !isConfirmValid;
+
+            return (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{titleInfo.title}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {titleInfo.description}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-4">
+                  {/* 影响说明 */}
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="space-y-2 flex-1">
+                        <p className="text-sm font-medium text-amber-900">
+                          {isIrreversible ? '⚠️ 此操作不可撤销：' : '📌 修改后的影响：'}
+                        </p>
+                        <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                          {transitionInfo.consequences.map((consequence, index) => (
+                            <li key={index}>{consequence}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 错误提示（如果转换不合法） */}
+                  {!validation.valid && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-red-900">❌ 不允许的状态转换</p>
+                          <p className="text-xs text-red-700">{validation.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 二次确认输入（仅不可逆操作） */}
+                  {confirmInfo.word && validation.valid && (
+                    <div className="space-y-2 pt-2">
+                      <Label htmlFor="status-confirm-text" className="text-sm font-medium">
+                        为确认{transitionInfo.action}，请输入以下任一内容：
+                      </Label>
+                      <div className="text-xs text-muted-foreground mb-2 space-y-1">
+                        <p>• 确认词：<strong>"{confirmInfo.word}"</strong></p>
+                        <p>• 验证码：<strong>"{statusConfirmCode}"</strong></p>
+                        {confirmInfo.alternatives[0] && (
+                          <p>• 行程名称：<strong>"{confirmInfo.alternatives[0]}"</strong></p>
+                        )}
+                      </div>
+                      <Input
+                        id="status-confirm-text"
+                        type="text"
+                        value={statusConfirmText}
+                        onChange={(e) => setStatusConfirmText(e.target.value)}
+                        placeholder={`请输入"${confirmInfo.word}"、验证码"${statusConfirmCode}"或行程名称`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && isConfirmValid && !isButtonDisabled) {
+                            e.preventDefault();
+                            confirmStatusChange();
+                          }
+                        }}
+                        autoFocus
+                      />
+                      {statusConfirmText && !isConfirmValid && (
+                        <p className="text-sm text-destructive">
+                          请输入确认词"{confirmInfo.word}"、验证码"{statusConfirmCode}"或行程名称"{confirmInfo.alternatives[0]}"以继续
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={confirmStatusChange}
+                    disabled={isButtonDisabled}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    确认修改
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            );
+          })()}
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* 删除确认对话框 */}
       <AlertDialog 
         open={deleteDialogOpen} 
@@ -975,7 +1512,7 @@ export default function TripDetailPage() {
 
       {/* 主体分区（顶部 Tab 4 个） */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
           <div className="border-b bg-white px-6">
         <TabsList>
               <TabsTrigger value="overview">
@@ -986,14 +1523,20 @@ export default function TripDetailPage() {
                 <Compass className="w-4 h-4 mr-2" />
                 规划
               </TabsTrigger>
-              <TabsTrigger value="execute">
-                <Play className="w-4 h-4 mr-2" />
-                执行
-              </TabsTrigger>
-              <TabsTrigger value="insights">
-                <BarChart3 className="w-4 h-4 mr-2" />
-                复盘
-              </TabsTrigger>
+              {/* ✅ 根据行程状态显示"执行"tab：仅在 IN_PROGRESS 或 COMPLETED 时显示 */}
+              {(trip.status === 'IN_PROGRESS' || trip.status === 'COMPLETED') && (
+                <TabsTrigger value="execute">
+                  <Play className="w-4 h-4 mr-2" />
+                  执行
+                </TabsTrigger>
+              )}
+              {/* ✅ 根据行程状态显示"复盘"tab：仅在 COMPLETED 时显示 */}
+              {trip.status === 'COMPLETED' && (
+                <TabsTrigger value="insights">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  复盘
+                </TabsTrigger>
+              )}
         </TabsList>
           </div>
 
@@ -1020,10 +1563,10 @@ export default function TripDetailPage() {
                             dayIndex={idx}
                             dayMetrics={dayMetrics}
                             suggestions={suggestions}
-                            onViewItinerary={() => {
-                              // 可以跳转到该天的详细行程视图
-                              // 这里可以添加导航逻辑
-                            }}
+                            onViewItinerary={trip.status === 'PLANNING' ? () => {
+                              // ✅ 只有规划中状态才能跳转到规划工作台
+                              navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}`);
+                            } : undefined}
                             onViewSuggestions={() => {
                               // 滚动到助手中心
                               const assistantCenterElement = document.querySelector('[data-assistant-center]');
@@ -1031,6 +1574,19 @@ export default function TripDetailPage() {
                                 assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                               }
                             }}
+                            onAddItem={trip.status !== 'CANCELLED' ? () => {
+                              // ✅ 已取消状态下不允许添加行程项
+                              setSelectedDayId(day.id);
+                              setCreateItemDialogOpen(true);
+                            } : undefined}
+                            onQuickPlan={trip.status === 'PLANNING' ? () => {
+                              // ✅ 只有规划中状态才能快速规划
+                              navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}&mode=quick`);
+                            } : undefined}
+                            onViewRecommendations={trip.status === 'PLANNING' ? () => {
+                              // ✅ 只有规划中状态才能查看推荐
+                              navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}&tab=recommendations`);
+                            } : undefined}
                           />
                         );
                       })}
@@ -1041,18 +1597,19 @@ export default function TripDetailPage() {
 
               {/* 右（4/12）：助手中心 + Evidence Quick Peek */}
               <div className="col-span-12 lg:col-span-4 space-y-6">
-                {/* 助手中心 */}
-                <div data-assistant-center>
-                  <AssistantCenter
-                    suggestions={suggestions}
-                    loading={personaAlertsLoading}
-                    trip={trip}
-                    onSuggestionClick={() => {
-                      // 点击建议时打开对应的抽屉
-                        setDrawerTab('risk');
-                        setDrawerOpen(true);
-                      }}
-                    onActionClick={async (suggestion, actionId) => {
+                {/* 助手中心 - 已取消状态下隐藏 */}
+                {trip.status !== 'CANCELLED' && (
+                  <div data-assistant-center>
+                    <AssistantCenter
+                      suggestions={suggestions}
+                      loading={personaAlertsLoading}
+                      trip={trip}
+                      onSuggestionClick={() => {
+                        // 点击建议时打开对应的抽屉
+                          setDrawerTab('risk');
+                          setDrawerOpen(true);
+                        }}
+                      onActionClick={async (suggestion, actionId) => {
                       if (!id) return;
                       try {
                         // 查看证据操作
@@ -1146,9 +1703,11 @@ export default function TripDetailPage() {
                     }}
                   />
                 </div>
+                )}
 
-                {/* Evidence Quick Peek */}
-                <Card data-tour="evidence-quick-peek">
+                {/* Evidence Quick Peek - 已取消状态下隐藏 */}
+                {trip.status !== 'CANCELLED' && (
+                  <Card data-tour="evidence-quick-peek">
                   <CardHeader>
                     <CardTitle>关键证据</CardTitle>
                   </CardHeader>
@@ -1247,26 +1806,31 @@ export default function TripDetailPage() {
                         暂无关键证据
                       </div>
                     )}
-                <Button
-                  variant="outline"
+                    {/* ✅ 查看所有证据按钮 */}
+                    <Button
+                      variant="outline"
                       className="w-full mt-4"
                       onClick={() => {
                         setDrawerTab('evidence');
                         setDrawerOpen(true);
                       }}
                     >
-                      View All Evidence
-                </Button>
+                      查看所有证据
+                    </Button>
                   </CardContent>
                 </Card>
+                )}
 
-                <Button
-                  className="w-full"
-                  onClick={() => navigate(`/dashboard/plan-studio?tripId=${id}`)}
-                >
-                  <Compass className="w-4 h-4 mr-2" />
-                  Open Plan Studio
-                </Button>
+                {/* ✅ 只有规划中状态才显示规划工作台按钮 */}
+                {trip.status === 'PLANNING' && (
+                  <Button
+                    className="w-full"
+                    onClick={() => navigate(`/dashboard/plan-studio?tripId=${id}`)}
+                  >
+                    <Compass className="w-4 h-4 mr-2" />
+                    打开计划工作室
+                  </Button>
+                )}
                     </div>
                       </div>
           </TabsContent>
@@ -1274,9 +1838,61 @@ export default function TripDetailPage() {
           {/* Plan Tab */}
           <TabsContent value="plan" className="mt-0 space-y-4">
           {trip.TripDay.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                暂无日程安排
+            <Card className="border-2 border-dashed border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
+              <CardContent className="py-24 px-8 min-h-[60vh] flex items-center justify-center">
+                <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-2xl w-full">
+                  {/* 图标 */}
+                  <div className="p-6 rounded-full bg-primary/10">
+                    <Compass className="w-16 h-16 text-primary" />
+                  </div>
+                  
+                  {/* 主文案 - 简洁友好 */}
+                  <div className="space-y-2">
+                    <h2 className="text-xl font-semibold text-foreground">
+                      你还没有添加任何行程项～
+                    </h2>
+                    <p className="text-base text-muted-foreground">
+                      添加第一站，开启你的专属旅程吧！
+                    </p>
+                  </div>
+                  
+                  {/* 按钮组 - 已取消状态下不显示 */}
+                  {trip.status !== 'CANCELLED' && (
+                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                      {/* 主按钮：创建第一个行程项 */}
+                      <Button
+                        size="lg"
+                        onClick={() => {
+                          const firstDay = trip.TripDay?.[0];
+                          if (firstDay) {
+                            setSelectedDayId(firstDay.id);
+                            setCreateItemDialogOpen(true);
+                          } else if (trip.status === 'PLANNING') {
+                            // ✅ 只有规划中状态才能进入规划工作台
+                            navigate(`/dashboard/plan-studio?tripId=${id}`);
+                          }
+                        }}
+                        className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        创建第一个行程项
+                      </Button>
+                      
+                      {/* 次按钮：进入规划工作台 - 仅规划中状态显示 */}
+                      {trip.status === 'PLANNING' && (
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          onClick={() => navigate(`/dashboard/plan-studio?tripId=${id}`)}
+                          className="flex-1 text-base h-12"
+                        >
+                          <Compass className="w-5 h-5 mr-2" />
+                          进入规划工作台
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ) : (
@@ -1323,6 +1939,15 @@ export default function TripDetailPage() {
                   abuData={abuData}
                   drDreData={drDreData}
                   neptuneData={neptuneData}
+                  onNavigateToPlanStudio={trip.status === 'PLANNING' ? () => navigate(`/dashboard/plan-studio?tripId=${id}`) : undefined}
+                  onAddItem={trip.status !== 'CANCELLED' ? () => {
+                    // ✅ 已取消状态下不允许添加行程项
+                    const firstDay = trip.TripDay?.[0];
+                    if (firstDay) {
+                      setSelectedDayId(firstDay.id);
+                      setCreateItemDialogOpen(true);
+                    }
+                  } : undefined}
                 />
               )}
               {viewMode === 'abu' && (
@@ -1392,7 +2017,7 @@ export default function TripDetailPage() {
                     onClick={() => navigate(`/dashboard/execute?tripId=${id}`)}
                   >
                     <Play className="w-4 h-4 mr-2" />
-                    Enter Field Mode
+                    进入现场模式
                   </Button>
               </CardContent>
             </Card>
@@ -1658,6 +2283,7 @@ export default function TripDetailPage() {
       {selectedDayId && (
         <CreateItineraryItemDialog
           tripDayId={selectedDayId}
+          trip={trip}
           open={createItemDialogOpen}
           onOpenChange={(open) => {
             setCreateItemDialogOpen(open);

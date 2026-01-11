@@ -5,15 +5,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { routeDirectionsApi } from '@/api/route-directions';
-import type { TripListItem, TripDetail, AttentionItem } from '@/types/trip';
+import type { TripListItem, TripDetail, AttentionItem, PersonaAlert } from '@/types/trip';
 import type { Country } from '@/types/country';
 import type { RouteTemplate } from '@/types/places-routes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { CheckCircle2, MapPin, Calendar, Eye, AlertCircle, AlertTriangle, Shield, BarChart3, Plus, HelpCircle, Sparkles } from 'lucide-react';
-import { EmptyTemplatesIllustration } from '@/components/illustrations';
+import { MapPin, Calendar, Eye, AlertCircle, AlertTriangle, Shield, BarChart3, Plus, HelpCircle, Sparkles, Compass } from 'lucide-react';
+import { EmptyTemplatesIllustration, EmptyTripsIllustration, EmptyRiskIllustration, EmptyInsightsIllustration, ReadinessIllustration, AllClearIllustration } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
@@ -34,11 +34,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
   const [templates, setTemplates] = useState<RouteTemplate[]>([]);
-  const [blockersCount] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<RouteTemplate | null>(null);
   const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
   const [loadingAttentionQueue, setLoadingAttentionQueue] = useState(false);
+  const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
+  const [loadingPersonaAlerts, setLoadingPersonaAlerts] = useState(false);
   
   // Onboarding
   const {
@@ -97,6 +98,19 @@ export default function DashboardPage() {
     };
   }, [showChecklist, onboardingState.dismissed]);
 
+  const loadPersonaAlerts = async (tripId: string) => {
+    try {
+      setLoadingPersonaAlerts(true);
+      const alerts = await tripsApi.getPersonaAlerts(tripId);
+      setPersonaAlerts(alerts || []);
+    } catch (err: any) {
+      console.error('Failed to load persona alerts:', err);
+      setPersonaAlerts([]);
+    } finally {
+      setLoadingPersonaAlerts(false);
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -127,7 +141,11 @@ export default function DashboardPage() {
       // 前端筛选：只显示 isActive 为 true 的模板（如果接口返回了该字段）
       templatesData = templatesData.filter((t) => t.isActive !== false);
 
-      const countriesData = countries.status === 'fulfilled' ? countries.value : [];
+      // ✅ 从响应中提取 countries 数组
+      const countriesResponse = countries.status === 'fulfilled' ? countries.value : null;
+      const countriesData = countriesResponse 
+        ? (Array.isArray(countriesResponse) ? countriesResponse : (countriesResponse.countries || []))
+        : [];
       const tripsList = tripsData.status === 'fulfilled' ? (Array.isArray(tripsData.value) ? tripsData.value : []) : [];
 
       // 建立国家映射
@@ -143,26 +161,39 @@ export default function DashboardPage() {
       // 设置模板列表
       setTemplates(templatesData);
 
-      // 获取最近一次编辑的 Trip
+      // 获取最近一次编辑的 Trip（只显示规划中状态的行程）
       if (tripsList.length > 0) {
-        // 按更新时间排序，获取最新的
-        const sortedTrips = [...tripsList].sort((a, b) => {
-          const aTime = new Date(a.updatedAt || a.createdAt).getTime();
-          const bTime = new Date(b.updatedAt || b.createdAt).getTime();
-          return bTime - aTime;
-        });
+        // ✅ 先过滤出规划中状态的行程
+        const planningTrips = tripsList.filter(trip => trip.status === 'PLANNING');
         
-        try {
-          const tripDetail = await tripsApi.getById(sortedTrips[0].id);
-          setRecentTrip(tripDetail);
-        } catch (err) {
-          console.error('Failed to load recent trip detail:', err);
-          // 如果最近行程加载失败（可能已被删除），清空 recentTrip
+        if (planningTrips.length > 0) {
+          // 按更新时间排序，获取最新的
+          const sortedTrips = [...planningTrips].sort((a, b) => {
+            const aTime = new Date(a.updatedAt || a.createdAt).getTime();
+            const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+            return bTime - aTime;
+          });
+          
+          try {
+            const tripDetail = await tripsApi.getById(sortedTrips[0].id);
+            setRecentTrip(tripDetail);
+            // 加载该行程的风险数据
+            loadPersonaAlerts(tripDetail.id);
+          } catch (err) {
+            console.error('Failed to load recent trip detail:', err);
+            // 如果最近行程加载失败（可能已被删除），清空 recentTrip
+            setRecentTrip(null);
+            setPersonaAlerts([]);
+          }
+        } else {
+          // 如果没有规划中的行程，清空 recentTrip
           setRecentTrip(null);
+          setPersonaAlerts([]);
         }
       } else {
         // 如果没有行程数据，清空 recentTrip
         setRecentTrip(null);
+        setPersonaAlerts([]);
       }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -189,7 +220,8 @@ export default function DashboardPage() {
   // 统计数据
   const needsAttention = trips.filter(t => t.status === 'PLANNING').length;
   const ready = trips.filter(t => t.status === 'IN_PROGRESS' || t.status === 'COMPLETED').length;
-  const blockers = blockersCount;
+  // blockers: 从 attentionItems 中筛选 severity === 'critical' 的项目
+  const blockers = attentionItems.filter(item => item.severity === 'critical').length;
 
   const handleUseTemplate = (template: RouteTemplate) => {
     setSelectedTemplate(template);
@@ -296,13 +328,19 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold">{t('dashboard.welcome', { userName })}</h1>
-              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                <span>{t('dashboard.stats.needsAttention', { count: needsAttention })}</span>
-                <span>·</span>
-                <span>{t('dashboard.stats.tripsReady', { count: ready })}</span>
-                <span>·</span>
-                <span>{t('dashboard.stats.blockers', { count: blockers })}</span>
-              </div>
+              {recentTrip && recentTrip.status === 'PLANNING' ? (
+                <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                  <span>{t('dashboard.stats.needsAttention', { count: needsAttention })}</span>
+                  <span>·</span>
+                  <span>{t('dashboard.stats.tripsReady', { count: ready })}</span>
+                  <span>·</span>
+                  <span>{t('dashboard.stats.blockers', { count: blockers })}</span>
+                </div>
+              ) : (
+                <p className="text-base text-muted-foreground mt-2">
+                  今天没有正在规划的行程，我们来开始一个吧！ ✨
+                </p>
+              )}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => navigate('/dashboard/trips')}>
@@ -320,13 +358,19 @@ export default function DashboardPage() {
           {/* B. 左主区（8/12） */}
           <div className="col-span-12 lg:col-span-8 space-y-6">
             {/* Continue Card */}
-            {recentTrip && (
-              <Card data-tour="continue-card">
-                <CardHeader>
-                  <CardTitle>{t('dashboard.continueCard.title')}</CardTitle>
-                  <CardDescription>{t('dashboard.continueCard.description')}</CardDescription>
-                </CardHeader>
-                <CardContent>
+            <Card 
+              data-tour="continue-card"
+              className={!recentTrip || recentTrip.status !== 'PLANNING' 
+                ? 'border-2 border-dashed border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background' 
+                : ''}
+            >
+              <CardHeader>
+                <CardTitle>{t('dashboard.continueCard.title')}</CardTitle>
+                <CardDescription>{t('dashboard.continueCard.description')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {recentTrip && recentTrip.status === 'PLANNING' ? (
+                  // 有规划中的行程，显示行程信息
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -340,9 +384,7 @@ export default function DashboardPage() {
                             <Calendar className="h-4 w-4" />
                             {format(new Date(recentTrip.startDate), 'yyyy-MM-dd')}
                           </span>
-                          <Badge variant={recentTrip.status === 'IN_PROGRESS' ? 'default' : 'secondary'}>
-                            {recentTrip.status === 'PLANNING' ? 'Draft' : recentTrip.status === 'IN_PROGRESS' ? 'Executing' : recentTrip.status === 'COMPLETED' ? 'Completed' : 'Cancelled'}
-                          </Badge>
+                          <Badge variant="secondary">规划中</Badge>
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                             风险: 低
                           </Badge>
@@ -353,20 +395,56 @@ export default function DashboardPage() {
                       <Button onClick={() => navigate(`/dashboard/plan-studio?tripId=${recentTrip.id}`)}>
                         {t('dashboard.continueCard.continuePlanning')}
                       </Button>
-                      {recentTrip.status === 'IN_PROGRESS' && (
-                        <Button variant="outline" onClick={() => navigate(`/dashboard/execute?tripId=${recentTrip.id}`)}>
-                          {t('dashboard.continueCard.enterExecute')}
-                        </Button>
-                      )}
                       <Button variant="ghost" onClick={() => navigate(`/dashboard/trips/${recentTrip.id}`)}>
                         <Eye className="w-4 h-4 mr-2" />
                         {t('dashboard.continueCard.openOverview')}
                       </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                ) : (
+                  // 没有规划中的行程，显示引导创建新行程（优化版）
+                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                    {/* 插画 */}
+                    <div className="mb-6 opacity-70">
+                      <EmptyTripsIllustration size={180} />
+                    </div>
+                    
+                    {/* 主文案 */}
+                    <div className="space-y-2 mb-6 text-center max-w-md">
+                      <h3 className="text-xl font-semibold text-foreground">
+                        还没有规划中的行程
+                      </h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        每一次精彩旅程都从第一步开始 ✨
+                        <br />
+                        点击下方按钮，轻松开启你的旅行计划！
+                      </p>
+                    </div>
+                    
+                    {/* 主次按钮组 */}
+                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                      <Button 
+                        size="lg" 
+                        onClick={() => navigate('/dashboard/trips/new')}
+                        className="flex-1"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        创建新行程
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="lg"
+                        onClick={() => navigate('/dashboard/trips/featured')}
+                        className="flex-1"
+                      >
+                        <Compass className="w-5 h-5 mr-2" />
+                        浏览推荐行程
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Attention Queue */}
             <Card>
@@ -380,12 +458,16 @@ export default function DashboardPage() {
                     <Spinner className="w-6 h-6" />
                   </div>
                 ) : attentionItems.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="mb-4 opacity-50">
-                      <CheckCircle2 className="w-20 h-20 text-green-500" strokeWidth={1.5} />
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <div className="mb-4 opacity-70">
+                      <AllClearIllustration size={100} />
                     </div>
-                    <p className="text-sm text-muted-foreground font-medium mb-1">{t('dashboard.attentionQueue.empty')}</p>
-                    <p className="text-xs text-muted-foreground">{t('dashboard.attentionQueue.emptyDescription')}</p>
+                    <p className="text-sm font-medium text-foreground mb-1">
+                      🎉 没有待处理事项啦
+                    </p>
+                    <p className="text-xs text-muted-foreground text-center">
+                      一切都很顺利，继续保持！
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -498,12 +580,12 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 {templates.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="mb-4 opacity-50">
-                      <EmptyTemplatesIllustration size={160} />
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <div className="mb-4 opacity-60">
+                      <EmptyTemplatesIllustration size={140} />
                     </div>
-                    <p className="text-sm text-muted-foreground font-medium mb-1">{t('dashboard.templates.empty')}</p>
-                    <p className="text-xs text-muted-foreground">{t('dashboard.templates.emptyDescription')}</p>
+                    <p className="text-sm font-medium text-foreground mb-1">{t('dashboard.templates.empty')}</p>
+                    <p className="text-xs text-muted-foreground text-center max-w-sm">{t('dashboard.templates.emptyDescription')}</p>
                   </div>
                 ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -582,27 +664,73 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="space-y-2">
-                  <div className="p-2 bg-red-50 border border-red-200 rounded text-sm">
-                    <div className="font-medium text-red-800">{t('dashboard.riskOverview.timeWindowConflict')}</div>
-                    <div className="text-xs text-red-600 mt-1">
-                      {onboardingState.experienceType === 'steady' ? 'Abu: ' : 
-                       onboardingState.experienceType === 'balanced' ? 'Dr.Dre: ' : 
-                       'Neptune: '}
-                      {t('dashboard.riskOverview.bufferInsufficient')}
+                {/* ✅ 只有当有规划中的行程时，才显示风险数据 */}
+                {recentTrip && recentTrip.status === 'PLANNING' ? (
+                  <>
+                    {loadingPersonaAlerts ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Spinner className="w-5 h-5" />
+                      </div>
+                    ) : personaAlerts.length > 0 ? (
+                      <div className="space-y-2">
+                        {personaAlerts.slice(0, 3).map((alert) => {
+                          const bgColor = 
+                            alert.severity === 'warning' ? 'bg-red-50 border-red-200 text-red-800' :
+                            alert.severity === 'info' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                            'bg-green-50 border-green-200 text-green-800';
+                          const personaName = 
+                            alert.persona === 'ABU' ? '安全官 (Abu)' :
+                            alert.persona === 'DR_DRE' ? '节奏官 (Dr.Dre)' :
+                            '修复官 (Neptune)';
+                          
+                          return (
+                            <div key={alert.id} className={`p-2 border rounded text-sm ${bgColor}`}>
+                              <div className="font-medium">{alert.title}</div>
+                              <div className="text-xs mt-1 opacity-80">
+                                {personaName}: {alert.message}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <div className="mb-2 p-2 rounded-full bg-green-50">
+                          <CheckCircle2 className="w-6 h-6 text-green-500" strokeWidth={2} />
+                        </div>
+                        <p className="text-xs font-medium text-green-700 text-center">
+                          ✅ 一切正常！
+                        </p>
+                        <p className="text-xs text-muted-foreground text-center mt-1">
+                          无需担忧
+                        </p>
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setDrawerTab('risk');
+                        setDrawerOpen(true);
+                      }}
+                    >
+                      {t('dashboard.riskOverview.openDrawer')}
+                    </Button>
+                  </>
+                ) : (
+                  // 没有规划中的行程时，显示空状态（插画风格）
+                  <div className="flex flex-col items-center justify-center py-6">
+                    <div className="mb-3 opacity-60">
+                      <EmptyRiskIllustration size={120} />
                     </div>
+                    <p className="text-xs text-muted-foreground text-center mb-1">
+                      暂无风险数据
+                    </p>
+                    <p className="text-xs text-muted-foreground text-center">
+                      创建行程后可查看风险提示
+                    </p>
                   </div>
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    setDrawerTab('risk');
-                    setDrawerOpen(true);
-                  }}
-                >
-                  {t('dashboard.riskOverview.openDrawer')}
-                </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -615,19 +743,30 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <div className="text-sm">
-                    <span className="font-medium">{blockers}</span> {t('dashboard.readiness.blockers')}
+                {blockers === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6">
+                    <div className="mb-3 opacity-70">
+                      <ReadinessIllustration size={100} />
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      准备尚未开始
+                    </p>
                   </div>
-                  <div className="text-xs text-muted-foreground">截止日: 2024-02-01</div>
-                  <Button
-                    variant="outline"
-                    className="w-full mt-4"
-                    onClick={() => navigate('/dashboard/readiness')}
-                  >
-                    {t('dashboard.readiness.completeReadiness')}
-                  </Button>
-                </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-sm">
+                      <span className="font-medium">{blockers}</span> {t('dashboard.readiness.blockers')}
+                    </div>
+                    <div className="text-xs text-muted-foreground">截止日: 2024-02-01</div>
+                    <Button
+                      variant="outline"
+                      className="w-full mt-4"
+                      onClick={() => navigate('/dashboard/readiness')}
+                    >
+                      {t('dashboard.readiness.completeReadiness')}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -641,21 +780,38 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="text-sm">
-                    <div className="font-medium">冰岛南岸路线</div>
-                    <div className="text-xs text-muted-foreground mt-1">稳健度: 8.5/10</div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="font-medium">日本关西体验</div>
-                    <div className="text-xs text-muted-foreground mt-1">体验密度: 9/10</div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full mt-4"
-                    onClick={() => navigate('/dashboard/insights')}
-                  >
-                    {t('dashboard.recentInsights.viewInsights')}
-                  </Button>
+                  {/* 这里可以后续从 API 获取真实数据 */}
+                  {false ? (
+                    <>
+                      <div className="text-sm">
+                        <div className="font-medium">冰岛南岸路线</div>
+                        <div className="text-xs text-muted-foreground mt-1">稳健度: 8.5/10</div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="font-medium">日本关西体验</div>
+                        <div className="text-xs text-muted-foreground mt-1">体验密度: 9/10</div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full mt-4"
+                        onClick={() => navigate('/dashboard/insights')}
+                      >
+                        {t('dashboard.recentInsights.viewInsights')}
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-6">
+                      <div className="mb-3 opacity-60">
+                        <EmptyInsightsIllustration size={120} />
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center mb-1">
+                        暂无复盘记录
+                      </p>
+                      <p className="text-xs text-muted-foreground text-center">
+                        旅行结束后可在此查看体验总结
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

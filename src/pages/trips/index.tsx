@@ -88,7 +88,8 @@ export default function TripsPage() {
   // 加载国家列表，建立代码到国家信息的映射
   const loadCountries = async () => {
     try {
-      const countries = await countriesApi.getAll();
+      const response = await countriesApi.getAll();
+      const countries = response.countries || [];
       const map = new Map<string, Country>();
       countries.forEach((country) => {
         map.set(country.isoCode, country);
@@ -221,10 +222,44 @@ export default function TripsPage() {
 
   // getMaturity, getMaturityColor 和 getMaturityText 已移除，未使用
 
+  // ✅ 排序行程：取消的行程在最后面、已收藏+更新时间最新的优先级最高、其次是已收藏、之后是更新时间
+  const sortedTrips = [...trips].sort((a, b) => {
+    // 1. 已取消的行程排在最后
+    if (a.status === 'CANCELLED' && b.status !== 'CANCELLED') return 1;
+    if (a.status !== 'CANCELLED' && b.status === 'CANCELLED') return -1;
+    if (a.status === 'CANCELLED' && b.status === 'CANCELLED') {
+      // 两个都是已取消，按更新时间倒序
+      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    }
+
+    // 2. 已收藏+更新时间最新的优先级最高
+    const aIsCollected = collectedTripIds.has(a.id);
+    const bIsCollected = collectedTripIds.has(b.id);
+    const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+
+    // 两个都收藏：按更新时间倒序
+    if (aIsCollected && bIsCollected) {
+      return bTime - aTime;
+    }
+    // 只有 a 收藏：a 在前
+    if (aIsCollected && !bIsCollected) {
+      return -1;
+    }
+    // 只有 b 收藏：b 在前
+    if (!aIsCollected && bIsCollected) {
+      return 1;
+    }
+    // 两个都不收藏：按更新时间倒序
+    return bTime - aTime;
+  });
+
   // 过滤行程
   const filteredTrips = statusFilter === 'all' 
-    ? trips 
-    : trips.filter(trip => trip.status === statusFilter);
+    ? sortedTrips 
+    : sortedTrips.filter(trip => trip.status === statusFilter);
 
   if (loading) {
     return (
@@ -359,45 +394,47 @@ export default function TripsPage() {
                       </span>
                     </div>
 
-                    {/* 操作按钮 */}
-                    <div className="flex items-center gap-2 border-t pt-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={cn(
-                          "flex-1",
-                          collectedTripIds.has(trip.id) && "text-red-600 hover:text-red-700"
-                        )}
-                        onClick={(e) => handleCollect(trip.id, e)}
-                        disabled={collectingTripId === trip.id}
-                      >
-                        <Heart 
+                    {/* 操作按钮 - 已取消状态下隐藏收藏、分享、协作 */}
+                    {trip.status !== 'CANCELLED' && (
+                      <div className="flex items-center gap-2 border-t pt-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className={cn(
-                            "w-4 h-4 mr-1",
-                            collectedTripIds.has(trip.id) && "fill-current"
-                          )} 
-                        />
-                        收藏
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="flex-1"
-                        onClick={(e) => handleShare(trip.id, e)}
-                      >
-                        <Share2 className="w-4 h-4 mr-1" />
-                        分享
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="flex-1"
-                        onClick={(e) => handleCollaborate(trip.id, e)}
-                      >
-                        <Users className="w-4 h-4 mr-1" />
-                        协作
-                      </Button>
-                    </div>
+                            "flex-1",
+                            collectedTripIds.has(trip.id) && "text-red-600 hover:text-red-700"
+                          )}
+                          onClick={(e) => handleCollect(trip.id, e)}
+                          disabled={collectingTripId === trip.id}
+                        >
+                          <Heart 
+                            className={cn(
+                              "w-4 h-4 mr-1",
+                              collectedTripIds.has(trip.id) && "fill-current"
+                            )} 
+                          />
+                          收藏
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1"
+                          onClick={(e) => handleShare(trip.id, e)}
+                        >
+                          <Share2 className="w-4 h-4 mr-1" />
+                          分享
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1"
+                          onClick={(e) => handleCollaborate(trip.id, e)}
+                        >
+                          <Users className="w-4 h-4 mr-1" />
+                          协作
+                        </Button>
+                      </div>
+                    )}
 
                     {/* 进入行程按钮 */}
                     <Button

@@ -5,7 +5,7 @@ import apiClient from './client';
 /**
  * LLM 提供商
  */
-export type LLMProvider = 'OPENAI' | 'ANTHROPIC' | 'GOOGLE' | 'DEEPSEEK';
+export type LLMProvider = 'auto' | 'openai' | 'deepseek' | 'gemini' | 'anthropic';
 
 /**
  * 路由类型
@@ -41,6 +41,7 @@ export interface AgentOptions {
   max_steps?: number;
   max_browser_steps?: number;
   cost_budget_usd?: number;
+  llm_provider?: LLMProvider;  // LLM 提供商，默认 'auto'
 }
 
 /**

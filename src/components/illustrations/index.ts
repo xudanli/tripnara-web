@@ -24,6 +24,10 @@ export {
   EmptyTemplatesIllustration,
   DiscoverBoxIllustration,
   IdeasContainerIllustration,
+  EmptyRiskIllustration,
+  EmptyInsightsIllustration,
+  ReadinessIllustration,
+  AllClearIllustration,
 } from './OnboardingIllustrations';
 
 export {

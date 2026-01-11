@@ -110,7 +110,8 @@ export default function PlanStudioPage() {
   useEffect(() => {
     const loadCountries = async () => {
       try {
-        const countries = await countriesApi.getAll();
+        const response = await countriesApi.getAll();
+        const countries = response.countries || [];
         const map = new Map<string, Country>();
         countries.forEach((country) => {
           map.set(country.isoCode, country);
@@ -130,17 +131,29 @@ export default function PlanStudioPage() {
         setLoading(true);
         setLoadingTrips(true);
         
-        // 1. 检查是否有任何行程
+        // 1. 检查是否有任何行程（只显示规划中的行程）
         const allTripsData = await tripsApi.getAll();
-        const tripsList = Array.isArray(allTripsData) ? allTripsData : [];
-        setAllTrips(tripsList);
-        setHasTrips(tripsList.length > 0);
+        const allTripsList = Array.isArray(allTripsData) ? allTripsData : [];
+        // ✅ 只显示规划中状态的行程
+        const planningTrips = allTripsList.filter(trip => trip.status === 'PLANNING');
+        setAllTrips(planningTrips);
+        setHasTrips(planningTrips.length > 0);
         
-        // 2. 如果有tripId，验证行程是否存在
+        // 2. 如果有tripId，验证行程是否存在且为规划中状态
         if (tripId) {
           try {
-            await tripsApi.getById(tripId);
-            setTripExists(true);
+            const trip = await tripsApi.getById(tripId);
+            // ✅ 检查行程状态是否为规划中
+            if (trip.status === 'PLANNING') {
+              setTripExists(true);
+            } else {
+              // 行程不是规划中状态，清除tripId参数
+              console.warn('Trip is not in PLANNING status:', tripId, trip.status);
+              setTripExists(false);
+              const newParams = new URLSearchParams(searchParams);
+              newParams.delete('tripId');
+              setSearchParams(newParams);
+            }
           } catch (err: any) {
             // 行程不存在（可能已被删除）
             console.warn('Trip not found or deleted:', tripId);

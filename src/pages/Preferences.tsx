@@ -99,7 +99,8 @@ export default function PreferencesPage() {
     const loadCountries = async () => {
       try {
         setCountriesLoading(true);
-        const data = await countriesApi.getAll();
+        const response = await countriesApi.getAll();
+        const data = response.countries || [];
         setCountries(data);
       } catch (err) {
         console.error('Failed to load countries:', err);

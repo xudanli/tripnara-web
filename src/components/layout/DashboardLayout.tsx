@@ -1,9 +1,9 @@
 import { useState, createContext, useContext } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import SidebarNavigation from './SidebarNavigation';
-import GlobalCommandBar from './GlobalCommandBar';
 import MobileBottomNav from './MobileBottomNav';
 import EvidenceDrawer from './EvidenceDrawer';
+import AgentChatFab from '@/components/agent/AgentChatFab';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -86,9 +86,6 @@ export default function DashboardLayout() {
 
         {/* 主内容区 */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* 顶部全局命令条 */}
-          <GlobalCommandBar activeTripId={activeTripId} />
-
           {/* 页面内容 */}
           <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
             <Outlet />
@@ -108,6 +105,9 @@ export default function DashboardLayout() {
 
         {/* 移动端底部导航 */}
         <MobileBottomNav />
+
+        {/* 智能助手悬浮按钮（桌面端和移动端） */}
+        <AgentChatFab activeTripId={activeTripId} />
       </div>
     </DrawerContext.Provider>
   );

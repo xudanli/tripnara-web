@@ -3,10 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { countriesApi } from '@/api/countries';
 import { routeDirectionsApi } from '@/api/route-directions';
 import type {
+  Country,
   CurrencyStrategy,
   CountryPack,
   PaymentInfo,
   TerrainAdvice,
+  CountryProfile,
 } from '@/types/country';
 import type { RouteDirection } from '@/types/places-routes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +35,10 @@ import {
   Clock,
   Navigation,
   Sparkles,
+  Zap,
+  Phone,
+  FileCheck,
+  Globe,
 } from 'lucide-react';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -45,6 +51,8 @@ export default function CountryDetailPage() {
   const { countryCode } = useParams<{ countryCode: string }>();
   const navigate = useNavigate();
 
+  const [country, setCountry] = useState<Country | null>(null);
+  const [countryProfile, setCountryProfile] = useState<CountryProfile | null>(null);
   const [currencyStrategy, setCurrencyStrategy] = useState<CurrencyStrategy | null>(null);
   const [countryPack, setCountryPack] = useState<CountryPack | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
@@ -70,13 +78,46 @@ export default function CountryDetailPage() {
       setError(null);
 
       // 并行加载所有数据
-      const [currency, payment, pack, terrain, routes] = await Promise.allSettled([
+      const [countriesList, profile, currency, payment, pack, terrain, routes] = await Promise.allSettled([
+        countriesApi.getAll().catch(() => []), // 获取所有国家列表，用于找到当前国家基本信息
+        countriesApi.getCountryProfile(countryCode).catch(() => null), // 完整国家档案
         countriesApi.getCurrencyStrategy(countryCode),
         countriesApi.getPaymentInfo(countryCode),
         countriesApi.getPack(countryCode).catch(() => null), // Pack配置可能不存在
         countriesApi.getTerrainAdvice(countryCode).catch(() => null), // 地形建议可能不存在
         routeDirectionsApi.getByCountry(countryCode).catch(() => []), // 路线方向
       ]);
+
+      // 加载国家基本信息
+      if (countriesList.status === 'fulfilled') {
+        const countriesResponse = countriesList.value;
+        // ✅ 从响应中提取 countries 数组
+        const countries = Array.isArray(countriesResponse) 
+          ? countriesResponse 
+          : (countriesResponse?.countries || []);
+        const foundCountry = countries.find((c) => c.isoCode.toLowerCase() === countryCode.toLowerCase());
+        if (foundCountry) {
+          setCountry(foundCountry);
+        }
+      }
+
+      // 加载完整国家档案
+      if (profile.status === 'fulfilled' && profile.value) {
+        setCountryProfile(profile.value);
+        // 如果完整档案存在，也更新基础国家信息（更完整）
+        if (!country || profile.value.isoCode) {
+          setCountry({
+            isoCode: profile.value.isoCode,
+            nameCN: profile.value.nameCN,
+            nameEN: profile.value.nameEN,
+            currencyCode: profile.value.currencyCode,
+            currencyName: profile.value.currencyName,
+            paymentType: profile.value.paymentType,
+            exchangeRateToCNY: profile.value.exchangeRateToCNY,
+            exchangeRateToUSD: profile.value.exchangeRateToUSD,
+          });
+        }
+      }
 
       if (currency.status === 'fulfilled') {
         setCurrencyStrategy(currency.value);
@@ -224,7 +265,8 @@ export default function CountryDetailPage() {
     );
   }
 
-  const countryName = currencyStrategy?.countryName || paymentInfo?.countryName || '未知国家';
+  // 优先使用 Country 基本信息，其次使用其他数据源
+  const countryName = country?.nameCN || currencyStrategy?.countryName || paymentInfo?.countryName || '未知国家';
 
   return (
     <div className="space-y-6 p-6">
@@ -236,6 +278,9 @@ export default function CountryDetailPage() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold">{countryName}</h1>
+            {country?.nameEN && country.nameEN !== countryName && (
+              <p className="text-muted-foreground mt-1">{country.nameEN}</p>
+            )}
             <p className="text-muted-foreground mt-1">国家代码: {countryCode?.toUpperCase()}</p>
           </div>
         </div>
@@ -276,6 +321,78 @@ export default function CountryDetailPage() {
 
         {/* 概览 */}
         <TabsContent value="overview" className="space-y-6">
+          {/* 国家基本信息 */}
+          {country && (
+            <Card>
+              <CardHeader>
+                <CardTitle>国家基本信息</CardTitle>
+                <CardDescription>国家档案核心数据</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 国家代码 */}
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">国家代码 (ISO)</div>
+                    <div className="text-lg font-semibold font-mono">{country.isoCode}</div>
+                  </div>
+
+                  {/* 中文名称 */}
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">中文名称</div>
+                    <div className="text-lg font-semibold">{country.nameCN}</div>
+                  </div>
+
+                  {/* 英文名称 */}
+                  {country.nameEN && (
+                    <div className="space-y-1">
+                      <div className="text-sm text-muted-foreground">英文名称</div>
+                      <div className="text-lg font-semibold">{country.nameEN}</div>
+                    </div>
+                  )}
+
+                  {/* 货币信息 */}
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">货币</div>
+                    <div className="text-lg font-semibold">
+                      {country.currencyCode} ({country.currencyName})
+                    </div>
+                  </div>
+
+                  {/* 支付类型 */}
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">支付类型</div>
+                    <div>
+                      <Badge variant="outline">
+                        {PAYMENT_TYPE_LABELS[country.paymentType] || country.paymentType}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* 汇率信息 */}
+                  {(country.exchangeRateToCNY || country.exchangeRateToUSD) && (
+                    <div className="space-y-1">
+                      <div className="text-sm text-muted-foreground">汇率</div>
+                      <div className="space-y-1">
+                        {country.exchangeRateToCNY && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">1 {country.currencyCode} = </span>
+                            <span className="font-medium">{country.exchangeRateToCNY.toFixed(4)} CNY</span>
+                          </div>
+                        )}
+                        {country.exchangeRateToUSD && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">1 {country.currencyCode} = </span>
+                            <span className="font-medium">{country.exchangeRateToUSD.toFixed(4)} USD</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>关键结论</CardTitle>
@@ -348,22 +465,150 @@ export default function CountryDetailPage() {
             </CardContent>
           </Card>
 
-          {/* 货币策略（保留原有内容） */}
-          {currencyStrategy && (
+          {/* 货币策略（保留原有内容，优先使用完整档案数据） */}
+          {(countryProfile || currencyStrategy) && (
             <Card>
               <CardHeader>
                 <CardTitle>货币策略</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
-                  <Badge variant="outline">{PAYMENT_TYPE_LABELS[currencyStrategy.paymentType]}</Badge>
+                  <Badge variant="outline">
+                    {PAYMENT_TYPE_LABELS[countryProfile?.paymentType || currencyStrategy?.paymentType || '']}
+                  </Badge>
                 </div>
-                {currencyStrategy.exchangeRateToCNY && (
+                {(countryProfile?.exchangeRateToCNY || currencyStrategy?.exchangeRateToCNY) && (
                   <div className="text-sm">
                     <span className="text-muted-foreground">汇率 (CNY): </span>
                     <span className="font-medium">
-                      1 {currencyStrategy.currencyCode} = {currencyStrategy.exchangeRateToCNY.toFixed(4)} CNY
+                      1 {countryProfile?.currencyCode || currencyStrategy?.currencyCode} ={' '}
+                      {(countryProfile?.exchangeRateToCNY || currencyStrategy?.exchangeRateToCNY)?.toFixed(4)} CNY
                     </span>
+                  </div>
+                )}
+                {countryProfile?.paymentInfo && (
+                  <div className="space-y-3 pt-2 border-t">
+                    {countryProfile.paymentInfo.tipping && (
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">小费建议</div>
+                        <div className="text-sm text-muted-foreground">{countryProfile.paymentInfo.tipping}</div>
+                      </div>
+                    )}
+                    {countryProfile.paymentInfo.atm_network && (
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">ATM网络</div>
+                        <div className="text-sm text-muted-foreground">{countryProfile.paymentInfo.atm_network}</div>
+                      </div>
+                    )}
+                    {countryProfile.paymentInfo.wallet_apps && countryProfile.paymentInfo.wallet_apps.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">钱包应用</div>
+                        <div className="flex flex-wrap gap-2">
+                          {countryProfile.paymentInfo.wallet_apps.map((app, idx) => (
+                            <Badge key={idx} variant="secondary">
+                              {app}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {countryProfile.paymentInfo.notes && (
+                      <div className="space-y-1 pt-2 border-t">
+                        <div className="text-sm text-muted-foreground">{countryProfile.paymentInfo.notes}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 紧急信息 */}
+          {countryProfile?.emergency && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="w-5 h-5" />
+                  紧急联系方式
+                </CardTitle>
+                <CardDescription>重要紧急电话号码</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {countryProfile.emergency.police && (
+                    <div className="space-y-1">
+                      <div className="text-sm text-muted-foreground">报警电话</div>
+                      <div className="text-lg font-semibold font-mono">{countryProfile.emergency.police}</div>
+                    </div>
+                  )}
+                  {countryProfile.emergency.fire && (
+                    <div className="space-y-1">
+                      <div className="text-sm text-muted-foreground">火警电话</div>
+                      <div className="text-lg font-semibold font-mono">{countryProfile.emergency.fire}</div>
+                    </div>
+                  )}
+                  {countryProfile.emergency.medical && (
+                    <div className="space-y-1">
+                      <div className="text-sm text-muted-foreground">医疗急救</div>
+                      <div className="text-lg font-semibold font-mono">{countryProfile.emergency.medical}</div>
+                    </div>
+                  )}
+                  {countryProfile.emergency.ambulance && (
+                    <div className="space-y-1">
+                      <div className="text-sm text-muted-foreground">救护车</div>
+                      <div className="text-lg font-semibold font-mono">{countryProfile.emergency.ambulance}</div>
+                    </div>
+                  )}
+                </div>
+                {countryProfile.emergency.embassy && (
+                  <div className="pt-2 border-t">
+                    <div className="text-sm text-muted-foreground mb-1">大使馆联系方式</div>
+                    <div className="text-sm">{countryProfile.emergency.embassy}</div>
+                  </div>
+                )}
+                {countryProfile.emergency.note && (
+                  <div className="pt-2 border-t">
+                    <div className="text-sm text-muted-foreground">{countryProfile.emergency.note}</div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 电源信息 */}
+          {countryProfile?.powerInfo && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="w-5 h-5" />
+                  电源信息
+                </CardTitle>
+                <CardDescription>电压、频率、插座类型</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">电压</div>
+                    <div className="text-lg font-semibold">{countryProfile.powerInfo.voltage}V</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">频率</div>
+                    <div className="text-lg font-semibold">{countryProfile.powerInfo.frequency}Hz</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">插座类型</div>
+                    <div className="flex gap-1">
+                      {countryProfile.powerInfo.plugTypes.map((type, idx) => (
+                        <Badge key={idx} variant="outline" className="font-mono">
+                          {type}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {countryProfile.powerInfo.note && (
+                  <div className="pt-2 border-t">
+                    <div className="text-sm text-muted-foreground">{countryProfile.powerInfo.note}</div>
                   </div>
                 )}
               </CardContent>
@@ -373,6 +618,115 @@ export default function CountryDetailPage() {
 
         {/* 通行与规则 */}
         <TabsContent value="rules" className="space-y-6">
+          {/* 签证信息 */}
+          {countryProfile?.visaForCN && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileCheck className="w-5 h-5" />
+                  中国公民签证信息
+                </CardTitle>
+                <CardDescription>签证要求、类型、停留期限</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {countryProfile.visaForCN.required !== undefined && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant={countryProfile.visaForCN.required ? 'destructive' : 'default'}>
+                      {countryProfile.visaForCN.required ? '需要签证' : '免签/落地签'}
+                    </Badge>
+                  </div>
+                )}
+                {countryProfile.visaForCN.type && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">签证类型</div>
+                    <div className="text-base font-medium">{countryProfile.visaForCN.type}</div>
+                  </div>
+                )}
+                {countryProfile.visaForCN.duration && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">停留期限</div>
+                    <div className="text-base font-medium">{countryProfile.visaForCN.duration}</div>
+                  </div>
+                )}
+                {countryProfile.visaForCN.requirements && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">申请要求</div>
+                    <div className="text-sm whitespace-pre-wrap">{countryProfile.visaForCN.requirements}</div>
+                  </div>
+                )}
+                {countryProfile.visaForCN.notes && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm text-muted-foreground">备注</div>
+                    <div className="text-sm whitespace-pre-wrap">{countryProfile.visaForCN.notes}</div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 合规信息 */}
+          {countryProfile?.complianceInfo && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  合规信息
+                </CardTitle>
+                <CardDescription>签证政策、驾驶规则、海关规定等</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {countryProfile.complianceInfo.visaPolicy && (
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">签证政策</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.complianceInfo.visaPolicy}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.complianceInfo.drivingRules && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">驾驶规则</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.complianceInfo.drivingRules}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.complianceInfo.droneRules && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">无人机规则</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.complianceInfo.droneRules}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.complianceInfo.alcoholPolicy && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">酒精政策</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.complianceInfo.alcoholPolicy}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.complianceInfo.travelWarnings && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium text-destructive">旅行警告</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.complianceInfo.travelWarnings}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.complianceInfo.customs && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">海关规定</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.complianceInfo.customs}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>通行与规则</CardTitle>
@@ -380,10 +734,12 @@ export default function CountryDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium mb-2">签证/入境</h4>
-                  <p className="text-sm text-muted-foreground">数据待对接（需要新增接口）</p>
-                </div>
+                {!countryProfile?.visaForCN && (
+                  <div>
+                    <h4 className="font-medium mb-2">签证/入境</h4>
+                    <p className="text-sm text-muted-foreground">暂无签证信息</p>
+                  </div>
+                )}
                 <div>
                   <h4 className="font-medium mb-2">安全风险（Abu）</h4>
                   <div className="space-y-2">
@@ -462,6 +818,73 @@ export default function CountryDetailPage() {
 
         {/* 交通与通达 */}
         <TabsContent value="transport" className="space-y-6">
+          {/* 旅行文化 */}
+          {countryProfile?.travelCulture && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="w-5 h-5" />
+                  旅行文化
+                </CardTitle>
+                <CardDescription>小费、禁忌、礼仪、风俗习惯</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {countryProfile.travelCulture.tipping && (
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium">小费文化</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.travelCulture.tipping}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.travelCulture.taboos && countryProfile.travelCulture.taboos.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <div className="text-sm font-medium">禁忌</div>
+                    <div className="flex flex-wrap gap-2">
+                      {countryProfile.travelCulture.taboos.map((taboo, idx) => (
+                        <Badge key={idx} variant="outline">
+                          {taboo}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.travelCulture.dressCode && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">着装提示</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.travelCulture.dressCode}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.travelCulture.etiquette && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">礼仪提示</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.travelCulture.etiquette}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.travelCulture.customs && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">风俗习惯</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.travelCulture.customs}
+                    </div>
+                  </div>
+                )}
+                {countryProfile.travelCulture.festivals && (
+                  <div className="space-y-1 pt-2 border-t">
+                    <div className="text-sm font-medium">节庆日历</div>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {countryProfile.travelCulture.festivals}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>交通与通达</CardTitle>

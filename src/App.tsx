@@ -48,6 +48,7 @@ import ExecutePage from './pages/execute';
 import ReadinessPage from './pages/readiness';
 import InsightsPage from './pages/insights';
 import SettingsPage from './pages/settings';
+import AgentPage from './pages/agent';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -113,6 +114,7 @@ function App() {
           <Route path="execute" element={<ExecutePage />} />
           <Route path="readiness" element={<ReadinessPage />} />
           <Route path="insights" element={<InsightsPage />} />
+          <Route path="agent" element={<AgentPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="places" element={<PlacesPage />} />
           <Route path="places/:id" element={<PlaceDetailPage />} />

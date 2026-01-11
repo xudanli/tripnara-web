@@ -58,9 +58,12 @@ export interface GetCitiesParams {
 
 export interface GetCitiesResponse {
   cities: City[];
-  total: number;                 // 当前返回的城市数量
-  countryCode?: string;          // 如果指定了国家代码，会返回
-  totalInCountry?: number;       // 该国家的总城市数
+  total: number;                 // 符合条件的总城市数
+  hasMore?: boolean;             // 是否还有更多数据（用于滚动加载）
+  limit?: number;                // 本次请求的limit值
+  offset?: number;               // 本次请求的offset值
+  countryCode?: string;          // 如果指定了国家代码，会返回规范化后的值
+  totalInCountry?: number;       // 该国家的总城市数（向后兼容）
 }
 
 // ==================== 城市API ====================
@@ -75,13 +78,23 @@ export const citiesApi = {
    * @returns 城市列表响应，包含 cities 数组和分页信息
    */
   getAll: async (params?: GetCitiesParams): Promise<GetCitiesResponse> => {
+    // ✅ 构建参数对象，axios 的 paramsSerializer 会自动处理 URL 编码（包括中文字符）
+    const requestParams: Record<string, any> = {
+      limit: params?.limit || 50,
+      offset: params?.offset || 0,
+    };
+    
+    if (params?.countryCode) {
+      requestParams.countryCode = params.countryCode;
+    }
+    
+    // 添加搜索参数（如果存在），使用 encodeURIComponent 确保中文正确编码
+    if (params?.q) {
+      requestParams.q = encodeURIComponent(params.q);
+    }
+    
     const response = await apiClient.get<ApiResponseWrapper<GetCitiesResponse>>('/cities', {
-      params: {
-        limit: params?.limit || 50,
-        offset: params?.offset || 0,
-        ...(params?.countryCode && { countryCode: params.countryCode }),
-        ...(params?.q && { q: params.q }),
-      },
+      params: requestParams,
     });
     return handleResponse(response);
   },
@@ -125,12 +138,21 @@ export const citiesApi = {
     countryCode?: string,
     limit?: number
   ): Promise<GetCitiesResponse> => {
+    // ✅ 构建参数对象，使用 encodeURIComponent 确保中文搜索词正确编码
+    const requestParams: Record<string, any> = {
+      q: encodeURIComponent(query),
+    };
+    
+    if (countryCode) {
+      requestParams.countryCode = countryCode;
+    }
+    
+    if (limit) {
+      requestParams.limit = limit;
+    }
+    
     const response = await apiClient.get<ApiResponseWrapper<GetCitiesResponse>>('/cities', {
-      params: {
-        q: query,
-        ...(countryCode && { countryCode }),
-        ...(limit && { limit }),
-      },
+      params: requestParams,
     });
     return handleResponse(response);
   },

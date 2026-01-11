@@ -36,6 +36,15 @@ const apiClient = axios.create({
   },
   // 重要：包含 cookies（用于 refresh_token）
   withCredentials: true,
+  // ✅ 配置 paramsSerializer，确保中文和特殊字符正确编码
+  // 使用 URLSearchParams 自动处理编码，避免双重编码问题
+  paramsSerializer: {
+    encode: (value) => {
+      // URLSearchParams 会自动处理编码，包括中文字符
+      // 这里返回原始值，让 URLSearchParams 处理编码
+      return value;
+    },
+  },
 });
 
 // Request interceptor
@@ -44,16 +53,20 @@ apiClient.interceptors.request.use(
     // Add auth token if available (从 sessionStorage 读取)
     const accessToken = sessionStorage.getItem('accessToken');
     
+    // 构建完整的请求 URL（包括查询参数）
+    const fullUrl = config.baseURL 
+      ? `${config.baseURL}${config.url}${config.params ? '?' + new URLSearchParams(config.params).toString() : ''}`
+      : config.url;
+    
     // 调试日志（使用 console.log 确保在控制台可见）
     console.log('[API Client] 请求:', {
       url: config.url,
+      fullUrl: fullUrl, // 完整 URL（包括 baseURL 和查询参数）
+      baseURL: config.baseURL,
+      params: config.params, // 查询参数对象
       method: config.method?.toUpperCase(),
       hasToken: !!accessToken,
       tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...` : 'none',
-      fullHeaders: {
-        ...config.headers,
-        Authorization: accessToken ? `Bearer ${accessToken.substring(0, 20)}...` : 'none',
-      },
     });
     
     if (accessToken) {
@@ -78,9 +91,16 @@ apiClient.interceptors.request.use(
 // Response interceptor
 apiClient.interceptors.response.use(
   (response) => {
+    // 构建完整的请求 URL（包括查询参数）
+    const fullUrl = response.config.baseURL 
+      ? `${response.config.baseURL}${response.config.url}${response.config.params ? '?' + new URLSearchParams(response.config.params).toString() : ''}`
+      : response.config.url;
+    
     // 成功响应日志
     console.log('[API Client] ✅ 响应成功:', {
       url: response.config.url,
+      fullUrl: fullUrl, // 完整 URL（包括 baseURL 和查询参数）
+      params: response.config.params, // 查询参数对象
       method: response.config.method?.toUpperCase(),
       status: response.status,
       statusText: response.statusText,

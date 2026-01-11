@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SuggestionBadge } from '@/components/trips/SuggestionBadge';
 import { format } from 'date-fns';
-import { MapPin, AlertTriangle, ArrowRight, Lightbulb } from 'lucide-react';
+import { MapPin, AlertTriangle, ArrowRight, Lightbulb, Plus, Luggage, Target, Sparkles, Compass, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TripDay, DayMetricsResponse } from '@/types/trip';
 import type { Suggestion } from '@/types/suggestion';
@@ -20,6 +20,9 @@ interface DayItineraryCardProps {
   suggestions: Suggestion[];
   onViewItinerary?: () => void;
   onViewSuggestions?: () => void;
+  onAddItem?: () => void;
+  onQuickPlan?: () => void;
+  onViewRecommendations?: () => void;
   className?: string;
 }
 
@@ -30,6 +33,9 @@ export default function DayItineraryCard({
   suggestions,
   onViewItinerary,
   onViewSuggestions,
+  onAddItem,
+  onQuickPlan,
+  onViewRecommendations,
   className,
 }: DayItineraryCardProps) {
   const daySuggestions = suggestions.filter(
@@ -122,74 +128,184 @@ export default function DayItineraryCard({
             </div>
           </div>
 
-          {/* 右侧：健康状态摘要 */}
-          {healthStatus && healthScore !== null && (
-            <div className={cn('px-3 py-1.5 rounded-lg text-right', healthStatus.bg)}>
-              <div className="text-xs text-muted-foreground mb-0.5">健康指数</div>
-              <div className={cn('text-sm font-semibold', healthStatus.color)}>
-                ✅ {healthStatus.label} {healthScore}%
+          {/* 右侧：健康状态摘要 或 空状态时的主按钮 */}
+          {day.ItineraryItem.length === 0 && onAddItem ? (
+            <Button
+              size="sm"
+              onClick={onAddItem}
+              className="shrink-0"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              添加第一个行程项
+            </Button>
+          ) : day.ItineraryItem.length === 0 ? (
+            // ✅ 只有当有回调时才显示按钮
+            (onAddItem || onViewItinerary) ? (
+              <Button
+                size="sm"
+                onClick={onAddItem || onViewItinerary}
+                className="shrink-0"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                添加第一个行程项
+              </Button>
+            ) : null
+          ) : (
+            healthStatus && healthScore !== null && (
+              <div className={cn('px-3 py-1.5 rounded-lg text-right', healthStatus.bg)}>
+                <div className="text-xs text-muted-foreground mb-0.5">健康指数</div>
+                <div className={cn('text-sm font-semibold', healthStatus.color)}>
+                  ✅ {healthStatus.label} {healthScore}%
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
       </CardHeader>
 
       <CardContent className="pt-0">
-        {/* 指标横向条 */}
-        {dayMetrics ? (
-          <div className="flex items-center gap-3 flex-wrap mb-4 p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-1.5 text-xs">
-              <span>🚶</span>
-              <span className="font-medium">步行：</span>
-              <span>{dayMetrics.metrics.walk.toFixed(1)}km</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs">
-              <span>🚗</span>
-              <span className="font-medium">车程：</span>
-              <span>{Math.round(dayMetrics.metrics.drive)}min</span>
-            </div>
-            {pacing && (
-              <div className="flex items-center gap-1.5 text-xs">
-                <span>{pacing.icon}</span>
-                <span className="font-medium">节奏：</span>
-                <span>{pacing.label}</span>
+        {/* ✅ 空状态：当没有行程项时显示友好提示和引导 */}
+        {day.ItineraryItem.length === 0 ? (
+          <div className="mb-4 py-8 px-4 bg-gradient-to-br from-gray-50 to-white rounded-lg border-2 border-dashed border-gray-200">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              {/* 图标 */}
+              <div className="p-3 rounded-full bg-gray-100">
+                <Luggage className="w-6 h-6 text-gray-400" />
               </div>
-            )}
-            <div className={cn('flex items-center gap-1.5 text-xs px-2 py-0.5 rounded', riskColor)}>
-              <AlertTriangle className="w-3 h-3" />
-              <span className="font-medium">冲突：</span>
-              <span>{dayConflicts.length}</span>
+              
+              {/* 主文案 */}
+              <div className="text-center space-y-2 max-w-sm">
+                <p className="text-sm font-medium text-gray-700">暂无行程项</p>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  一个行程项可以是景点、美食、住宿或交通。试着添加第一站吧！
+                </p>
+              </div>
+
+              {/* 主要操作按钮组 */}
+              <div className="flex flex-col gap-2 w-full max-w-xs">
+                {/* 主按钮：优先显示添加按钮，如果有快速规划则显示快速规划 */}
+                {onAddItem ? (
+                  <Button
+                    size="sm"
+                    onClick={onAddItem}
+                    className="w-full"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    添加行程项
+                  </Button>
+                ) : onQuickPlan ? (
+                  <Button
+                    size="sm"
+                    onClick={onQuickPlan}
+                    className="w-full"
+                  >
+                    <Target className="w-4 h-4 mr-2" />
+                    快速规划一天行程
+                  </Button>
+                ) : onViewItinerary ? (
+                  <Button
+                    size="sm"
+                    onClick={onViewItinerary}
+                    className="w-full"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    添加行程项
+                  </Button>
+                ) : null}
+
+                {/* 次要操作按钮 */}
+                <div className="flex gap-2">
+                  {onViewRecommendations && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onViewRecommendations}
+                      className="flex-1"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                      热门推荐
+                    </Button>
+                  )}
+                  {onQuickPlan && onAddItem && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onQuickPlan}
+                      className="flex-1"
+                    >
+                      <Target className="w-3.5 h-3.5 mr-1.5" />
+                      快速规划
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* 帮助提示 */}
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-2">
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>不确定从哪开始？试试从热门景点添加吧</span>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-muted-foreground text-center">
-            加载指标中...
-          </div>
-        )}
+          <>
+            {/* 指标横向条 */}
+            {dayMetrics ? (
+              <div className="flex items-center gap-3 flex-wrap mb-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span>🚶</span>
+                  <span className="font-medium">步行：</span>
+                  <span>{dayMetrics.metrics.walk.toFixed(1)}km</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span>🚗</span>
+                  <span className="font-medium">车程：</span>
+                  <span>{Math.round(dayMetrics.metrics.drive)}min</span>
+                </div>
+                {pacing && (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span>{pacing.icon}</span>
+                    <span className="font-medium">节奏：</span>
+                    <span>{pacing.label}</span>
+                  </div>
+                )}
+                <div className={cn('flex items-center gap-1.5 text-xs px-2 py-0.5 rounded', riskColor)}>
+                  <AlertTriangle className="w-3 h-3" />
+                  <span className="font-medium">冲突：</span>
+                  <span>{dayConflicts.length}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-muted-foreground text-center">
+                加载指标中...
+              </div>
+            )}
 
-        {/* 操作按钮 */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onViewItinerary}
-            className="flex-1"
-          >
-            <ArrowRight className="w-4 h-4 mr-1" />
-            查看行程
-          </Button>
-          {(abuCount > 0 || drdreCount > 0 || neptuneCount > 0) && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={onViewSuggestions}
-              className="flex-1"
-            >
-              <Lightbulb className="w-4 h-4 mr-1" />
-              查看建议
-            </Button>
-          )}
-        </div>
+            {/* 操作按钮 */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onViewItinerary}
+                className="flex-1"
+              >
+                <ArrowRight className="w-4 h-4 mr-1" />
+                查看行程
+              </Button>
+              {(abuCount > 0 || drdreCount > 0 || neptuneCount > 0) && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={onViewSuggestions}
+                  className="flex-1"
+                >
+                  <Lightbulb className="w-4 h-4 mr-1" />
+                  查看建议
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

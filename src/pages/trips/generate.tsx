@@ -105,7 +105,8 @@ export default function GenerateTripPage() {
   
   const loadCountries = async () => {
     try {
-      const data = await countriesApi.getAll();
+      const response = await countriesApi.getAll();
+      const data = response.countries || [];
       setCountries(data);
     } catch (err: any) {
       console.error('Failed to load countries:', err);

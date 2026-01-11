@@ -324,6 +324,7 @@ export interface UpdateTripRequest {
   endDate?: string;
   totalBudget?: number;
   travelers?: Traveler[];
+  status?: TripStatus; // ✅ 行程状态（需要后端API支持）
 }
 
 // ==================== 行程状态 ====================

@@ -60,8 +60,9 @@ export default function CountryTemplatesPage() {
       setError(null);
       
       // 先加载国家列表
-      const countriesData = await countriesApi.getAll();
-      setCountries(countriesData || []);
+      const countriesResponse = await countriesApi.getAll();
+      const countriesData = countriesResponse.countries || [];
+      setCountries(countriesData);
       
       // 尝试加载模版（不传参数，避免 400 错误）
       let templatesData: RouteTemplate[] = [];

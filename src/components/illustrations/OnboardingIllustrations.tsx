@@ -610,10 +610,222 @@ export function DiscoverBoxIllustration({
 }
 
 /**
- * Ideas Container - 想法/创意容器插画（手绘风格）
- * 黑白线稿：容器、纸张、铅笔、灯泡
- * 酒红点睛：灯泡填充、装饰圆圈
+ * Empty Risk - 空风险插画
+ * 黑白线稿：盾牌、检查标记
+ * 酒红点睛：安全标识
  */
+export function EmptyRiskIllustration({
+  className = '',
+  size = 200,
+  strokeColor = '#1F2937',
+  highlightColor = BRAND_RED,
+}: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 200 200"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn('stroke-2', className)}
+    >
+      {/* 盾牌（黑白线稿） */}
+      <g transform="translate(100, 80)">
+        <path
+          d="M0 -30 L-25 -10 L-25 20 L0 40 L25 20 L25 -10 Z"
+          stroke={strokeColor}
+          strokeWidth="2.5"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* 盾牌内部装饰线 */}
+        <path
+          d="M0 -20 L-15 -5 L-15 15 L0 30 L15 15 L15 -5 Z"
+          stroke={strokeColor}
+          strokeWidth="1.5"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+      
+      {/* 检查标记（酒红点睛） */}
+      <g transform="translate(100, 100)">
+        <circle cx="0" cy="0" r="12" fill={highlightColor} opacity="0.1" />
+        <path
+          d="M-6 -2 L-2 2 L6 -6"
+          stroke={highlightColor}
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+      
+      {/* 安全标识（小图标） */}
+      <g transform="translate(100, 140)">
+        <circle cx="0" cy="0" r="8" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+        <circle cx="0" cy="0" r="3" fill={highlightColor} />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * Empty Insights - 空复盘插画
+ * 黑白线稿：图表、文档
+ * 酒红点睛：关键数据点
+ */
+export function EmptyInsightsIllustration({
+  className = '',
+  size = 200,
+  strokeColor = '#1F2937',
+  highlightColor = BRAND_RED,
+}: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 200 200"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn('stroke-2', className)}
+    >
+      {/* 图表背景（黑白线稿） */}
+      <g transform="translate(50, 60)">
+        <rect x="0" y="0" width="100" height="80" rx="4" stroke={strokeColor} strokeWidth="2" fill="none" />
+        {/* 网格线 */}
+        <line x1="0" y1="20" x2="100" y2="20" stroke={strokeColor} strokeWidth="1" strokeDasharray="2 2" />
+        <line x1="0" y1="40" x2="100" y2="40" stroke={strokeColor} strokeWidth="1" strokeDasharray="2 2" />
+        <line x1="0" y1="60" x2="100" y2="60" stroke={strokeColor} strokeWidth="1" strokeDasharray="2 2" />
+      </g>
+      
+      {/* 柱状图（黑白） */}
+      <g transform="translate(60, 140)">
+        <rect x="0" y="0" width="12" height="30" rx="2" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+        <rect x="20" y="-10" width="12" height="40" rx="2" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+        <rect x="40" y="-20" width="12" height="50" rx="2" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+        <rect x="60" y="-5" width="12" height="35" rx="2" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+      </g>
+      
+      {/* 关键数据点（酒红点睛） */}
+      <circle cx="116" cy="100" r="4" fill={highlightColor} />
+      <circle cx="136" cy="90" r="4" fill={highlightColor} />
+      
+      {/* 文档图标（黑白） */}
+      <g transform="translate(150, 50)">
+        <path
+          d="M0 0 L20 0 L20 25 L0 25 Z"
+          stroke={strokeColor}
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <line x1="5" y1="8" x2="15" y2="8" stroke={strokeColor} strokeWidth="1.5" />
+        <line x1="5" y1="13" x2="15" y2="13" stroke={strokeColor} strokeWidth="1.5" />
+        <line x1="5" y1="18" x2="12" y2="18" stroke={strokeColor} strokeWidth="1.5" />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * Readiness - 准备度插画
+ * 黑白线稿：行李箱、准备清单
+ * 酒红点睛：准备状态标记
+ */
+export function ReadinessIllustration({
+  className = '',
+  size = 200,
+  strokeColor = '#1F2937',
+  highlightColor = BRAND_RED,
+}: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 200 200"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn('stroke-2', className)}
+    >
+      {/* 行李箱（黑白线稿） */}
+      <g transform="translate(70, 60)">
+        <rect x="0" y="0" width="60" height="50" rx="6" stroke={strokeColor} strokeWidth="2.5" fill="none" />
+        <line x1="20" y1="0" x2="20" y2="50" stroke={strokeColor} strokeWidth="2" />
+        <line x1="40" y1="0" x2="40" y2="50" stroke={strokeColor} strokeWidth="2" />
+        <rect x="8" y="12" width="8" height="8" rx="1.5" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+        <rect x="44" y="12" width="8" height="8" rx="1.5" stroke={strokeColor} strokeWidth="1.5" fill="none" />
+        <line x1="0" y1="25" x2="60" y2="25" stroke={strokeColor} strokeWidth="2" />
+        <line x1="0" y1="38" x2="60" y2="38" stroke={strokeColor} strokeWidth="2" />
+      </g>
+      
+      {/* 准备清单（黑白） */}
+      <g transform="translate(50, 130)">
+        <rect x="0" y="0" width="100" height="50" rx="4" stroke={strokeColor} strokeWidth="2" fill="none" />
+        <line x1="15" y1="12" x2="25" y2="12" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" />
+        <line x1="15" y1="25" x2="30" y2="25" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" />
+        <line x1="15" y1="38" x2="35" y2="38" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" />
+      </g>
+      
+      {/* 准备状态标记（酒红点睛） */}
+      <circle cx="40" cy="137" r="5" fill={highlightColor} />
+      <path
+        d="M37 137 L39 139 L43 135"
+        stroke="white"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/**
+ * All Clear - 一切正常插画
+ * 黑白线稿：对勾、背景装饰
+ * 酒红点睛：对勾标记
+ */
+export function AllClearIllustration({
+  className = '',
+  size = 200,
+  strokeColor = '#1F2937',
+  highlightColor = BRAND_RED,
+}: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 200 200"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn('stroke-2', className)}
+    >
+      {/* 圆形背景（黑白线稿） */}
+      <circle cx="100" cy="100" r="50" stroke={strokeColor} strokeWidth="2.5" fill="none" />
+      
+      {/* 对勾（酒红点睛） */}
+      <path
+        d="M75 100 L90 115 L125 80"
+        stroke={highlightColor}
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      
+      {/* 装饰线条（黑白） */}
+      <g opacity="0.3">
+        <circle cx="100" cy="100" r="60" stroke={strokeColor} strokeWidth="1" fill="none" strokeDasharray="3 3" />
+        <circle cx="100" cy="100" r="70" stroke={strokeColor} strokeWidth="1" fill="none" strokeDasharray="3 3" />
+      </g>
+    </svg>
+  );
+}
+
 export function IdeasContainerIllustration({
   className = '',
   size = 200,
