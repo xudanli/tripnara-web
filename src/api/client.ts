@@ -187,7 +187,7 @@ apiClient.interceptors.response.use(
           code: error.code,
           message: '无法连接到后端服务，请确认后端服务是否运行',
         });
-        error.message = '无法连接到后端服务，请确认后端服务是否在运行（端口 3000）';
+        error.message = '无法连接到后端服务，请检查网络连接或联系管理员';
       } else {
         console.error('[API Client] ❌ 网络错误:', {
           url: error.config?.url,
