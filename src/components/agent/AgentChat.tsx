@@ -526,7 +526,11 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
       }
 
       // 处理不同的结果状态
-      let messageContent = response.result.answer_text || '这个嘛…也许我不是全知的神，但我会努力查查！';
+      // 确保 answer_text 是字符串类型
+      const answerText = response.result.answer_text != null 
+        ? String(response.result.answer_text) 
+        : '这个嘛…也许我不是全知的神，但我会努力查查！';
+      let messageContent = answerText;
       
       // 如果是 NEED_MORE_INFO，answer_text 已经包含了引导性提示
       if (response.result.status === 'NEED_MORE_INFO') {
@@ -534,7 +538,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
       } else if (response.result.status === 'TIMEOUT') {
         messageContent = 'TIMEOUT'; // 特殊标记，用于显示优化的错误UI
       } else if (response.result.status === 'FAILED') {
-        messageContent = response.result.answer_text || 'FAILED'; // 特殊标记，用于显示优化的错误UI
+        messageContent = answerText || 'FAILED'; // 特殊标记，用于显示优化的错误UI
       }
 
       // 移除思考中的消息，添加实际回复
@@ -563,6 +567,10 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
     } catch (error: any) {
       console.error('Agent chat error:', error);
       // 移除思考中的消息，添加错误消息
+      // 确保错误消息是字符串类型
+      const errorMessage = error?.message != null 
+        ? String(error.message) 
+        : '出了一点小状况，要不再试一次？';
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
         return [
@@ -570,7 +578,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
           {
             id: `error-${Date.now()}`,
             role: 'assistant',
-            content: error.message || '出了一点小状况，要不再试一次？',
+            content: errorMessage,
             timestamp: new Date(),
             status: 'failed',
           },
@@ -922,14 +930,18 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                   }, 500);
                 }
                 
-                let retryMessageContent = retryResponse.result.answer_text || '操作完成';
+                // 确保 answer_text 是字符串类型
+                const retryAnswerText = retryResponse.result.answer_text != null 
+                  ? String(retryResponse.result.answer_text) 
+                  : '操作完成';
+                let retryMessageContent = retryAnswerText;
                 
                 if (retryResponse.result.status === 'NEED_MORE_INFO') {
                   // answer_text 已经包含了引导信息
                 } else if (retryResponse.result.status === 'TIMEOUT') {
                   retryMessageContent = 'TIMEOUT'; // 特殊标记，用于显示优化的错误UI
                 } else if (retryResponse.result.status === 'FAILED') {
-                  retryMessageContent = retryResponse.result.answer_text || 'FAILED'; // 特殊标记，用于显示优化的错误UI
+                  retryMessageContent = retryAnswerText || 'FAILED'; // 特殊标记，用于显示优化的错误UI
                 }
                 
                 setMessages((prev) => {
@@ -956,6 +968,10 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                 });
               } catch (retryError: any) {
                 console.error('Retry request failed:', retryError);
+                // 确保错误消息是字符串类型
+                const retryErrorMessage = retryError?.message != null 
+                  ? String(retryError.message) 
+                  : '出了一点小状况，要不再试一次？';
                 setMessages((prev) => {
                   const filtered = prev.filter((m) => m.status !== 'awaiting_consent' && m.status !== 'thinking');
                   return [
@@ -963,7 +979,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                     {
                       id: `error-${Date.now()}`,
                       role: 'assistant',
-                      content: retryError.message || '出了一点小状况，要不再试一次？',
+                      content: retryErrorMessage,
                       timestamp: new Date(),
                       status: 'failed',
                     },
