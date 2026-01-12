@@ -43,7 +43,10 @@ export default function AgentChatDialog({
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Bot className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">Nara</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">Nara</span>
+                <span className="text-xs text-muted-foreground">你的智能旅行副驾驶</span>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -108,7 +111,10 @@ export default function AgentChatDialog({
         <div className="flex-shrink-0 border-b px-4 py-3 flex items-center justify-between bg-background">
           <div className="flex items-center gap-2">
             <Bot className="w-5 h-5 text-primary" />
-            <span className="text-lg font-semibold">Nara</span>
+            <div className="flex flex-col">
+              <span className="text-lg font-semibold">Nara</span>
+              <span className="text-xs text-muted-foreground">你的智能旅行副驾驶</span>
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <Button

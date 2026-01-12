@@ -702,52 +702,60 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
             <div className="py-8 px-4">
               <div className="text-center mb-6">
                 <Bot className="w-14 h-14 mx-auto mb-4 text-primary/60" />
-                <p className="text-base font-semibold mb-2 text-foreground">🎯 我能帮你做这些：</p>
+                <p className="text-lg font-semibold mb-3 text-foreground">嗨，我是 Nara 👋</p>
+                <p className="text-sm text-muted-foreground mb-6">
+                  你可以直接告诉我你的旅行想法，<br />
+                  剩下的交给我来一起想。
+                </p>
               </div>
               
-              {/* 常用操作按钮 */}
-              <div className="flex flex-wrap gap-2 justify-center mb-6">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-xs h-8 px-3"
-                  onClick={() => setInput('帮我规划冰岛7日行程')}
-                >
-                  <MapPin className="w-3 h-3 mr-1.5" />
-                  规划行程
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-xs h-8 px-3"
-                  onClick={() => setInput('新宿有哪些拉面店？')}
-                >
-                  <Utensils className="w-3 h-3 mr-1.5" />
-                  地点推荐
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-xs h-8 px-3"
-                  onClick={() => setInput('查找浅草寺')}
-                >
-                  <Search className="w-3 h-3 mr-1.5" />
-                  景点搜索
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-xs h-8 px-3"
-                  onClick={() => setInput('告诉我目的地、日期和偏好，我来为您规划')}
-                >
-                  <Calendar className="w-3 h-3 mr-1.5" />
-                  创建日程
-                </Button>
+              {/* 意图按钮 */}
+              <div className="mb-4">
+                <p className="text-xs text-muted-foreground text-center mb-3">你可以试试这样说：</p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs h-8 px-3"
+                    onClick={() => setInput('帮我规划一次旅行')}
+                  >
+                    <MapPin className="w-3 h-3 mr-1.5" />
+                    帮我规划一次旅行
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs h-8 px-3"
+                    onClick={() => setInput('推荐一些好吃的地方')}
+                  >
+                    <Utensils className="w-3 h-3 mr-1.5" />
+                    推荐一些好吃的地方
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs h-8 px-3"
+                    onClick={() => setInput('找几个值得去的景点')}
+                  >
+                    <Search className="w-3 h-3 mr-1.5" />
+                    找几个值得去的景点
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs h-8 px-3"
+                    onClick={() => setInput('帮我安排一个行程')}
+                  >
+                    <Calendar className="w-3 h-3 mr-1.5" />
+                    帮我安排一个行程
+                  </Button>
+                </div>
               </div>
 
               <div className="text-center text-sm text-muted-foreground">
-                <p className="mb-1">如：<span className="text-primary font-medium">"帮我规划冰岛7日行程"</span></p>
-                <p className="text-xs">想开始什么任务呢？👇</p>
+                <p className="mb-1">
+                  比如：<span className="text-primary font-medium">我想去冰岛玩一周，你来帮我安排吧 ✈️</span>
+                </p>
               </div>
             </div>
           ) : (
@@ -806,7 +814,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
             value={input}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="试试：规划东京3日自由行 ✈️"
+            placeholder="你想去哪儿？我来帮你一起规划 🙂"
             disabled={loading || isAwaitingConfirmation}
             className="flex-1"
           />
@@ -818,7 +826,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
             data-send-button
           >
             <Send className="w-4 h-4 mr-2" />
-            <span className="text-sm">发送</span>
+            <span className="text-sm">开始</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
