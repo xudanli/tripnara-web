@@ -9,14 +9,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -33,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Send, Bot, User, ChevronRight, Settings, CheckCircle2, XCircle, Loader2, Trash2, HelpCircle, Zap, Infinity, MapPin, Utensils, Search, Calendar, RotateCw, Brain } from 'lucide-react';
+import { Send, Bot, User, ChevronRight, CheckCircle2, XCircle, Loader2, Zap, Infinity, MapPin, Utensils, Search, Calendar, RotateCw, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { toast } from 'sonner';
@@ -612,13 +604,6 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
     setInput(value);
   };
 
-  // 清除对话历史
-  const handleClearHistory = () => {
-    if (confirm('确定要清除所有对话记录吗？')) {
-      setMessages([]);
-      toast.success('对话记录已清除');
-    }
-  };
 
   return (
     <div className={cn('flex flex-col h-full bg-background', className)}>
@@ -828,31 +813,6 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
             <Send className="w-4 h-4 mr-2" />
             <span className="text-sm">开始</span>
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="outline" 
-                size="icon" 
-                title="设置" 
-                disabled={isAwaitingConfirmation}
-              >
-                <Settings className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuLabel>设置</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleClearHistory} disabled={messages.length === 0}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                <span>清除对话记录</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
-                <HelpCircle className="mr-2 h-4 w-4" />
-                <span>帮助</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
 
