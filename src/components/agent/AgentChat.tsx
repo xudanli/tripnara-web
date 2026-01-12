@@ -288,7 +288,9 @@ function MessageBubble({ message, mode, onRetry }: { message: Message; mode?: 'f
   const isUser = message.role === 'user';
   const isFastMode = mode === 'fast' || message.mode === 'fast';
   const isError = message.status === 'failed';
-  const isTimeout = message.content.includes('超时') || message.content.includes('TIMEOUT');
+  // 确保 content 是字符串
+  const messageContent = typeof message.content === 'string' ? message.content : String(message.content || '');
+  const isTimeout = messageContent.includes('超时') || messageContent.includes('TIMEOUT');
 
   return (
     <div className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}>
@@ -349,7 +351,7 @@ function MessageBubble({ message, mode, onRetry }: { message: Message; mode?: 'f
         
         {!isError && (
           <p className={cn('text-sm whitespace-pre-wrap', isUser ? 'text-primary-foreground' : 'text-foreground')}>
-            {message.content}
+            {messageContent}
           </p>
         )}
         
