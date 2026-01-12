@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
+import { executionApi } from '@/api/execution';
 import type { TripDetail, TripState, ScheduleResponse } from '@/types/trip';
+import type { Reminder, ExecutionState } from '@/api/execution';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,16 +48,23 @@ export default function ExecutePage() {
   const [showEvidence, setShowEvidence] = useState(false);
   const [personaMode, setPersonaMode] = useState<PersonaMode>('abu');
   
+  // 执行阶段相关状态
+  const [executionState, setExecutionState] = useState<ExecutionState | null>(null);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [loadingReminders, setLoadingReminders] = useState(false);
+  
   const { state: onboardingState, completeTour, completeStep } = useOnboarding();
   const [showExecuteTour, setShowExecuteTour] = useState(false);
 
   useEffect(() => {
     if (tripId) {
       loadData();
+      loadReminders();
       // 每30秒轮询一次状态
       const interval = setInterval(() => {
         if (tripId) {
           loadTripState();
+          loadReminders();
         }
       }, 30000);
       
@@ -108,20 +117,86 @@ export default function ExecutePage() {
     }
   };
 
-  const handleAction = async (action: string) => {
-    // TODO: 实现执行动作（Delay, Skip, Replace, Reorder, Call Agent）
-    if (action.startsWith('agent:')) {
-      // 调用 Agent API
-      console.log('Calling Agent:', action);
-    } else if (action === 'delay-15m' || action === 'delay-30m') {
-      // 触发修复
-      setShowRepairSheet(true);
-    } else {
-      console.log('Action:', action);
+  const loadReminders = async () => {
+    if (!tripId) return;
+    try {
+      setLoadingReminders(true);
+      const result = await executionApi.execute({
+        tripId,
+        action: 'remind',
+        remindParams: {
+          reminderTypes: ['departure', 'transport', 'weather', 'check_in', 'check_out'],
+          advanceHours: 24,
+        },
+      });
+      setExecutionState(result.executionState);
+      setReminders(result.uiOutput.reminders || []);
+    } catch (err) {
+      console.error('Failed to load reminders:', err);
+      setReminders([]);
+    } finally {
+      setLoadingReminders(false);
     }
+  };
+
+  const handleAction = async (action: string) => {
+    if (!tripId) return;
     
-    // 完成 execute 步骤
-    completeStep('execute');
+    try {
+      if (action === 'delay-15m' || action === 'delay-30m') {
+        // 处理延迟变更
+        const delayMinutes = action === 'delay-15m' ? 15 : 30;
+        await executionApi.execute({
+          tripId,
+          action: 'handle_change',
+          changeParams: {
+            changeType: 'schedule_change',
+            changeDetails: {
+              reason: `用户请求延迟 ${delayMinutes} 分钟`,
+            },
+          },
+        });
+        // 重新加载数据
+        await loadData();
+        await loadReminders();
+        setShowRepairSheet(true);
+      } else if (action === 'skip') {
+        // 处理跳过变更
+        await executionApi.execute({
+          tripId,
+          action: 'handle_change',
+          changeParams: {
+            changeType: 'activity_cancelled',
+            changeDetails: {
+              reason: '用户请求跳过当前活动',
+            },
+          },
+        });
+        await loadData();
+        await loadReminders();
+      } else if (action === 'replace') {
+        // 触发修复（Neptune 会提供替换方案）
+        await executionApi.execute({
+          tripId,
+          action: 'fallback',
+          fallbackParams: {
+            triggerReason: '用户请求替换当前活动',
+            originalPlan: tripState,
+          },
+        });
+        setShowRepairSheet(true);
+      } else if (action.startsWith('agent:')) {
+        // 调用 Agent API
+        console.log('Calling Agent:', action);
+      } else {
+        console.log('Action:', action);
+      }
+      
+      // 完成 execute 步骤
+      completeStep('execute');
+    } catch (err) {
+      console.error('Failed to handle action:', err);
+    }
   };
 
   // Execute 页面引导步骤
@@ -327,8 +402,47 @@ export default function ExecutePage() {
             )}
           </div>
 
-          {/* C. 右侧：Today Timeline（4/12） */}
-          <div className="col-span-12 lg:col-span-4">
+          {/* C. 右侧：Today Timeline + Reminders（4/12） */}
+          <div className="col-span-12 lg:col-span-4 space-y-6">
+            {/* 提醒卡片 */}
+            {reminders.length > 0 && (
+              <Card className="border-yellow-200 bg-yellow-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-yellow-600" />
+                    提醒
+                  </CardTitle>
+                  <CardDescription>重要提醒事项</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {reminders.map((reminder) => {
+                      const priorityColors = {
+                        urgent: 'bg-red-100 border-red-300 text-red-800',
+                        high: 'bg-orange-100 border-orange-300 text-orange-800',
+                        medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
+                        low: 'bg-blue-100 border-blue-300 text-blue-800',
+                      };
+                      return (
+                        <div
+                          key={reminder.id}
+                          className={`p-3 border rounded-lg ${priorityColors[reminder.priority] || priorityColors.medium}`}
+                        >
+                          <div className="font-medium text-sm mb-1">{reminder.title}</div>
+                          <div className="text-xs opacity-90">{reminder.message}</div>
+                          {reminder.triggerTime && (
+                            <div className="text-xs opacity-70 mt-1">
+                              {format(new Date(reminder.triggerTime), 'MM-dd HH:mm')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle>今日时间线</CardTitle>

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
+import { tripDetailApi } from '@/api/trip-detail';
+import type { Health, StatusUnderstanding, DecisionExplanation } from '@/api/trip-detail';
 import type { 
   TripDetail, 
   ItineraryItem, 
@@ -292,6 +294,13 @@ export default function TripDetailPage() {
   
   // 新增：决策日志相关状态
   const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
+  
+  // 新增：行程详情页 Agent 相关状态
+  const [tripHealth, setTripHealth] = useState<Health | null>(null);
+  const [statusUnderstanding, setStatusUnderstanding] = useState<StatusUnderstanding | null>(null);
+  const [decisionExplanations, setDecisionExplanations] = useState<DecisionExplanation[]>([]);
+  const [loadingHealth, setLoadingHealth] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(false);
   
   // 新增：提取的数据状态（通过 useMemo 计算）
   const abuData = useMemo<AbuViewData | null>(() => {
@@ -650,6 +659,57 @@ export default function TripDetailPage() {
       console.error('Failed to load decision logs:', err);
       // 静默处理错误，不影响主流程
       setDecisionLogs([]);
+    }
+  };
+
+  // 新增：加载行程健康度
+  const loadTripHealth = async () => {
+    if (!id) return;
+    try {
+      setLoadingHealth(true);
+      const health = await tripDetailApi.getHealth(id);
+      setTripHealth(health);
+    } catch (err: any) {
+      console.error('Failed to load trip health:', err);
+      // 静默处理错误，不影响主流程
+      setTripHealth(null);
+    } finally {
+      setLoadingHealth(false);
+    }
+  };
+
+  // 新增：加载行程状态理解
+  const loadTripStatus = async () => {
+    if (!id) return;
+    try {
+      setLoadingStatus(true);
+      const status = await tripDetailApi.getStatus(id);
+      setStatusUnderstanding(status);
+    } catch (err: any) {
+      console.error('Failed to load trip status:', err);
+      // 静默处理错误，不影响主流程
+      setStatusUnderstanding(null);
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  // 新增：加载决策解释（完整信息）
+  const loadTripDetailFull = async () => {
+    if (!id) return;
+    try {
+      const result = await tripDetailApi.execute({
+        tripId: id,
+        action: 'get_full',
+      });
+      if (result.detailState) {
+        setTripHealth(result.detailState.health);
+        setStatusUnderstanding(result.detailState.statusUnderstanding);
+        setDecisionExplanations(result.detailState.decisionExplanations || []);
+      }
+    } catch (err: any) {
+      console.error('Failed to load trip detail full:', err);
+      // 静默处理错误，不影响主流程
     }
   };
 
@@ -1595,8 +1655,120 @@ export default function TripDetailPage() {
                 </Card>
               </div>
 
-              {/* 右（4/12）：助手中心 + Evidence Quick Peek */}
+              {/* 右（4/12）：健康度 + 状态理解 + 助手中心 + Evidence Quick Peek */}
               <div className="col-span-12 lg:col-span-4 space-y-6">
+                {/* 行程健康度（来自 trip-detail API） */}
+                {tripHealth && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">行程健康度</CardTitle>
+                      <CardDescription>理解与掌控旅行现状</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-sm',
+                            tripHealth.overall === 'healthy' && 'bg-green-50 text-green-700 border-green-200',
+                            tripHealth.overall === 'warning' && 'bg-yellow-50 text-yellow-700 border-yellow-200',
+                            tripHealth.overall === 'critical' && 'bg-red-50 text-red-700 border-red-200'
+                          )}
+                        >
+                          {tripHealth.overall === 'healthy' && '健康'}
+                          {tripHealth.overall === 'warning' && '警告'}
+                          {tripHealth.overall === 'critical' && '严重'}
+                        </Badge>
+                      </div>
+                      <div className="space-y-3">
+                        {Object.entries(tripHealth.dimensions).map(([key, dimension]) => (
+                          <div key={key} className="space-y-1">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                {key === 'schedule' && '时间'}
+                                {key === 'budget' && '预算'}
+                                {key === 'pace' && '节奏'}
+                                {key === 'feasibility' && '可达性'}
+                              </span>
+                              <span className="font-medium">{dimension.score}/100</span>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  'h-full transition-all',
+                                  dimension.score >= 80 && 'bg-green-500',
+                                  dimension.score >= 60 && dimension.score < 80 && 'bg-yellow-500',
+                                  dimension.score < 60 && 'bg-red-500'
+                                )}
+                                style={{ width: `${dimension.score}%` }}
+                              />
+                            </div>
+                            {dimension.issues.length > 0 && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {dimension.issues.slice(0, 2).join(', ')}
+                                {dimension.issues.length > 2 && ` +${dimension.issues.length - 2} 更多`}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* 状态理解（来自 trip-detail API） */}
+                {statusUnderstanding && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">状态理解</CardTitle>
+                      <CardDescription>当前行程状态分析</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">进度</span>
+                          <span className="text-sm font-medium">
+                            {statusUnderstanding.progress.completed}/{statusUnderstanding.progress.total} (
+                            {statusUnderstanding.progress.percentage}%)
+                          </span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all"
+                            style={{ width: `${statusUnderstanding.progress.percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                      {statusUnderstanding.nextSteps.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">下一步：</p>
+                          <ul className="space-y-1">
+                            {statusUnderstanding.nextSteps.slice(0, 3).map((step, index) => (
+                              <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
+                                <span className="text-primary mt-1">•</span>
+                                <span>{step.step}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {statusUnderstanding.risks.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-orange-600">风险：</p>
+                          <ul className="space-y-1">
+                            {statusUnderstanding.risks.slice(0, 2).map((risk, index) => (
+                              <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
+                                <AlertTriangle className="w-3 h-3 text-orange-600 mt-0.5 flex-shrink-0" />
+                                <span>{risk.description}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* 助手中心 - 已取消状态下隐藏 */}
                 {trip.status !== 'CANCELLED' && (
                   <div data-assistant-center>

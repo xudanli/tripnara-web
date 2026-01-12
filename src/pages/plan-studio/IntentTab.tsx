@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ interface IntentTabProps {
 export default function IntentTab({ tripId }: IntentTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // 审批相关状态
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
@@ -271,8 +273,17 @@ export default function IntentTab({ tripId }: IntentTabProps) {
       return;
     }
 
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     try {
       setSaving(true);
+      
+      // 设置超时提示（3秒后显示）
+      timeoutId = setTimeout(() => {
+        toast.info('保存操作可能需要较长时间，请稍候...', {
+          duration: 5000,
+        });
+      }, 3000);
 
       // 构建更新请求
       // 根据 UpdateTripRequest 的实际定义，只更新支持的字段
@@ -309,10 +320,16 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         // 如果 intent 接口未实现，只更新 totalBudget
         console.warn('Failed to update intent, only budget updated:', intentErr);
         if (budget === undefined) {
-          throw intentErr; // 如果没有预算更新，抛出错误
+          // 如果没有预算更新，抛出错误
+          throw intentErr;
+        } else {
+          // 如果有预算更新，显示警告但继续
+          toast.warning('部分保存成功：预算已更新，但意图配置更新失败');
         }
       }
-      toast.success(t('planStudio.intentTab.saveSuccess'));
+      
+      // 只有在没有错误或只有部分错误时才显示成功提示
+      toast.success(t('planStudio.intentTab.saveSuccess') || '保存成功');
       
       // 自动触发 LangGraph Orchestrator，系统会自动调用三人格进行检查和调整
       if (user) {
@@ -356,14 +373,30 @@ export default function IntentTab({ tripId }: IntentTabProps) {
           }
         } catch (orchestratorError: any) {
           console.warn('Orchestrator execution failed:', orchestratorError);
+          // 显示警告，但不影响保存流程
+          toast.warning('保存成功，但系统自动检查失败，请稍后手动检查');
         }
       }
       
       // 重新加载数据
       await loadTrip();
+      
+      // 清除超时提示
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      // 保存成功后，提示用户可以继续下一步
+      toast.success('保存成功！您可以继续到"找点"标签页添加地点');
     } catch (err: any) {
+      // 清除超时提示
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
       console.error('Failed to save intent:', err);
-      toast.error(err.message || t('planStudio.intentTab.saveFailed'));
+      const errorMessage = err.message || t('planStudio.intentTab.saveFailed') || '保存失败，请稍后重试';
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -688,22 +721,35 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button 
-          variant="outline" 
-          onClick={() => window.history.back()}
-          className="px-6"
+      <div className="flex justify-between items-center pt-4 border-t">
+        <Button
+          variant="ghost"
+          onClick={() => {
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('tab', 'optimize');
+            setSearchParams(newParams);
+          }}
+          className="text-primary hover:text-primary/80"
         >
-          {t('planStudio.intentTab.cancel')}
+          前往优化与规划工作台 →
         </Button>
-        <Button 
-          onClick={handleSave} 
-          disabled={saving}
-          className="px-6 bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          {saving ? <Spinner className="w-4 h-4 mr-2" /> : null}
-          {t('planStudio.intentTab.saveAndContinue')}
-        </Button>
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => window.history.back()}
+            className="px-6"
+          >
+            {t('planStudio.intentTab.cancel')}
+          </Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={saving}
+            className="px-6 bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            {saving ? <Spinner className="w-4 h-4 mr-2" /> : null}
+            {t('planStudio.intentTab.saveAndContinue')}
+          </Button>
+        </div>
       </div>
       
       {/* 审批对话框 */}
