@@ -106,6 +106,29 @@ export default function GlobalCommandBar({
         return; // 等待审批，不继续处理
       }
 
+      // 根据状态显示不同的提示
+      const status = response.result.status;
+      const answerText = response.result.answer_text || '操作完成';
+      
+      if (status === 'NEED_MORE_INFO') {
+        // 需要更多信息，显示警告提示
+        toast.warning(answerText, {
+          duration: 8000, // 延长显示时间，让用户有时间阅读
+        });
+      } else if (status === 'NEED_CONSENT') {
+        // 需要授权
+        toast.info('需要您的授权才能继续操作');
+      } else if (status === 'FAILED' || status === 'TIMEOUT') {
+        // 失败或超时
+        toast.error(answerText || '操作失败，请稍后重试');
+      } else if (status === 'OK') {
+        // 成功
+        toast.success(answerText);
+      } else {
+        // 其他状态，默认显示成功
+        toast.success(answerText);
+      }
+
       // 根据 routeType 处理响应
       const routeType = response.route.route;
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
@@ -117,11 +140,7 @@ export default function GlobalCommandBar({
         }, 500);
       }
 
-      // 如果有 plan 或需要导航，可以在这里处理
-      // 目前先简单显示成功消息
       console.log('Agent response:', response);
-      
-      toast.success(response.result.answer_text || '操作完成');
     } catch (err) {
       console.error('Failed to send agent request:', err);
       toast.error('操作失败，请稍后重试');

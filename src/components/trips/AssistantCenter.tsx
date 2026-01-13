@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Shield, TrendingUp, Wrench, AlertTriangle, Info, CheckCircle2, Calendar } from 'lucide-react';
+import { Shield, Activity, RefreshCw, AlertTriangle, Info, CheckCircle2, Calendar } from 'lucide-react';
 import type { Suggestion } from '@/types/suggestion';
 import type { TripDetail } from '@/types/trip';
 import { cn } from '@/lib/utils';
@@ -33,12 +33,12 @@ const personaConfig = {
     color: 'text-red-600',
   },
   drdre: {
-    icon: TrendingUp,
+    icon: Activity,
     label: '节奏',
     color: 'text-orange-600',
   },
   neptune: {
-    icon: Wrench,
+    icon: RefreshCw,
     label: '修复',
     color: 'text-yellow-600',
   },
@@ -127,7 +127,7 @@ export function AssistantCenter({
               )}
             </TabsTrigger>
             <TabsTrigger value="drdre" className="relative">
-              <TrendingUp className="w-3.5 h-3.5 mr-1.5" />
+              <Activity className="w-3.5 h-3.5 mr-1.5" />
               节奏
               {stats.drdre > 0 && (
                 <Badge variant="default" className="ml-1.5 h-5 px-1.5 text-xs bg-orange-500">
@@ -136,7 +136,7 @@ export function AssistantCenter({
               )}
             </TabsTrigger>
             <TabsTrigger value="neptune" className="relative">
-              <Wrench className="w-3.5 h-3.5 mr-1.5" />
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
               修复
               {stats.neptune > 0 && (
                 <Badge variant="default" className="ml-1.5 h-5 px-1.5 text-xs bg-yellow-500">

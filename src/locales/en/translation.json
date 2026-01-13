@@ -1297,6 +1297,9 @@
   "sidebar": {
     "home": "Dashboard",
     "trips": "Trips",
+    "trips-all": "My Trips",
+    "trips-collected": "My Collections",
+    "trips-featured": "Featured",
     "countries": "Countries",
     "countries-archive": "Country Archive",
     "countries-templates": "Route Templates",

@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { executionApi } from '@/api/execution';
 import type { TripDetail, TripState, ScheduleResponse } from '@/types/trip';
-import type { Reminder, ExecutionState } from '@/api/execution';
+import type { Reminder } from '@/api/execution';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,9 +49,7 @@ export default function ExecutePage() {
   const [personaMode, setPersonaMode] = useState<PersonaMode>('abu');
   
   // 执行阶段相关状态
-  const [executionState, setExecutionState] = useState<ExecutionState | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [loadingReminders, setLoadingReminders] = useState(false);
   
   const { state: onboardingState, completeTour, completeStep } = useOnboarding();
   const [showExecuteTour, setShowExecuteTour] = useState(false);
@@ -120,7 +118,6 @@ export default function ExecutePage() {
   const loadReminders = async () => {
     if (!tripId) return;
     try {
-      setLoadingReminders(true);
       const result = await executionApi.execute({
         tripId,
         action: 'remind',
@@ -129,13 +126,10 @@ export default function ExecutePage() {
           advanceHours: 24,
         },
       });
-      setExecutionState(result.executionState);
       setReminders(result.uiOutput.reminders || []);
     } catch (err) {
       console.error('Failed to load reminders:', err);
       setReminders([]);
-    } finally {
-      setLoadingReminders(false);
     }
   };
 

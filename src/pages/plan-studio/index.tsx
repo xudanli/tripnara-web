@@ -25,7 +25,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Clock, AlertCircle, Circle } from 'lucide-react';
+// Icons are now imported from pipeline-status.ts
+import {
+  getPipelineStatusIcon,
+  getPipelineStatusLabel,
+  getPipelineStatusClasses,
+  getPipelineProgressColor,
+  type PipelineStageStatus,
+} from '@/lib/pipeline-status';
+import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
@@ -592,8 +600,8 @@ function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
   // 计算当前进度
   const totalStages = status.stages.length;
   const completedStages = status.stages.filter(s => s.status === 'completed').length;
-  const inProgressStages = status.stages.filter(s => s.status === 'in-progress').length;
   const riskStages = status.stages.filter(s => s.status === 'risk').length;
+  const inProgressStages = status.stages.filter(s => s.status === 'in-progress').length;
   
   // 获取当前阶段
   const currentStage = status.stages.find(s => s.status === 'in-progress' || s.status === 'risk');
@@ -601,17 +609,20 @@ function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
   // 计算进度百分比
   const progressPercentage = totalStages > 0 ? (completedStages / totalStages) * 100 : 0;
   
+  // 获取进度条颜色
+  const progressColorClass = riskStages > 0 
+    ? getPipelineProgressColor('risk')
+    : inProgressStages > 0
+    ? getPipelineProgressColor('in-progress')
+    : getPipelineProgressColor('completed');
+  
   return (
     <div className="flex items-center gap-3 text-xs">
       {/* 进度条 */}
       <div className="flex items-center gap-2">
         <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
           <div 
-            className={`h-full transition-all ${
-              riskStages > 0 ? 'bg-yellow-500' : 
-              inProgressStages > 0 ? 'bg-blue-500' : 
-              'bg-green-500'
-            }`}
+            className={cn('h-full transition-all', progressColorClass)}
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
@@ -623,9 +634,10 @@ function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
       {/* 当前阶段 */}
       {currentStage && (
         <div className="flex items-center gap-1">
-          <div className={`w-2 h-2 rounded-full ${
-            currentStage.status === 'risk' ? 'bg-yellow-500' : 'bg-blue-500'
-          } animate-pulse`} />
+          <div className={cn(
+            'w-2 h-2 rounded-full animate-pulse',
+            getPipelineProgressColor(currentStage.status as PipelineStageStatus)
+          )} />
           <span className="text-muted-foreground">
             {currentStage.name}
           </span>
@@ -634,7 +646,7 @@ function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
       
       {/* 风险提示 */}
       {riskStages > 0 && (
-        <div className="flex items-center gap-1 text-yellow-600">
+        <div className={cn('flex items-center gap-1', getPipelineStatusClasses('risk'))}>
           <span>⚠️</span>
           <span>{riskStages} 个风险项</span>
         </div>
@@ -645,41 +657,31 @@ function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
 
 // Pipeline 阶段卡片组件
 function PipelineStageCard({ stage }: { stage: PipelineStage }) {
-  const getStatusIcon = () => {
-    switch (stage.status) {
-      case 'completed':
-        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-      case 'in-progress':
-        return <Clock className="w-5 h-5 text-blue-500 animate-spin" />;
-      case 'risk':
-        return <AlertCircle className="w-5 h-5 text-yellow-500" />;
-      default:
-        return <Circle className="w-5 h-5 text-gray-400" />;
-    }
-  };
-
-  const getStatusBadge = () => {
-    switch (stage.status) {
-      case 'completed':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">已完成</Badge>;
-      case 'in-progress':
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">进行中</Badge>;
-      case 'risk':
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">有风险</Badge>;
-      default:
-        return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">待处理</Badge>;
-    }
-  };
+  const stageStatus = stage.status as PipelineStageStatus;
+  const StatusIcon = getPipelineStatusIcon(stageStatus);
+  const statusClasses = getPipelineStatusClasses(stageStatus);
+  
+  // 对于 in-progress 状态，添加动画
+  const iconClasses = cn(
+    'w-5 h-5',
+    statusClasses.split(' ').find(cls => cls.startsWith('text-')) || 'text-muted-foreground',
+    stageStatus === 'in-progress' && 'animate-spin'
+  );
 
   return (
     <div className="flex items-start gap-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
       <div className="flex-shrink-0 mt-0.5">
-        {getStatusIcon()}
+        <StatusIcon className={iconClasses} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <h4 className="font-medium text-sm">{stage.name}</h4>
-          {getStatusBadge()}
+          <Badge 
+            variant="outline" 
+            className={cn('border', statusClasses)}
+          >
+            {getPipelineStatusLabel(stageStatus)}
+          </Badge>
         </div>
         {stage.summary && (
           <p className="text-xs text-muted-foreground mt-2 whitespace-pre-line">

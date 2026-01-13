@@ -38,6 +38,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import {
+  getGateStatusClasses,
+} from '@/lib/gate-status';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
@@ -763,13 +767,14 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                       {dayConflicts.map((conflict) => (
                         <div
                           key={conflict.id}
-                          className={`flex items-center gap-2 text-sm p-2 rounded ${
+                          className={cn(
+                            'flex items-center gap-2 text-sm p-2 rounded',
                             conflict.severity === 'HIGH' 
-                              ? 'text-red-600 bg-red-50' 
+                              ? getGateStatusClasses('REJECT')
                               : conflict.severity === 'MEDIUM'
-                              ? 'text-yellow-600 bg-yellow-50'
-                              : 'text-blue-600 bg-blue-50'
-                          }`}
+                              ? getGateStatusClasses('SUGGEST_REPLACE')
+                              : getGateStatusClasses('NEED_CONFIRM')
+                          )}
                         >
                           <AlertTriangle className="h-4 w-4" />
                           <div className="flex-1">
@@ -790,7 +795,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                       {dayConflicts.length === 0 && dailyMetrics.conflicts.map((conflict, cIdx) => (
                         <div
                           key={cIdx}
-                          className="flex items-center gap-2 text-sm text-yellow-600 bg-yellow-50 p-2 rounded"
+                          className={cn('flex items-center gap-2 text-sm p-2 rounded', getGateStatusClasses('SUGGEST_REPLACE'))}
                         >
                           <AlertTriangle className="h-4 w-4" />
                           <span>{conflict}</span>
@@ -1016,13 +1021,14 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                 {conflicts.map((conflict) => (
               <div
                     key={conflict.id}
-                    className={`p-2 border rounded cursor-pointer hover:bg-gray-50 ${
-                      conflict.severity === 'HIGH' 
-                        ? 'border-red-200 bg-red-50' 
+                    className={cn(
+                      'p-2 border rounded cursor-pointer hover:bg-gray-50',
+                      conflict.severity === 'HIGH'
+                        ? getGateStatusClasses('REJECT')
                         : conflict.severity === 'MEDIUM'
-                        ? 'border-yellow-200 bg-yellow-50'
-                        : 'border-blue-200 bg-blue-50'
-                    }`}
+                        ? getGateStatusClasses('SUGGEST_REPLACE')
+                        : getGateStatusClasses('NEED_CONFIRM')
+                    )}
                     onClick={() => handleFixConflict(conflict.id, conflict.affectedDays[0] || '')}
               >
                     <div className="text-sm font-medium">{conflict.title}</div>
@@ -1192,7 +1198,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteItem}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              className={cn('hover:opacity-90 focus:ring-2', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('bg-')) || 'bg-destructive')}
             >
               {t('planStudio.scheduleTab.actions.delete')}
             </AlertDialogAction>

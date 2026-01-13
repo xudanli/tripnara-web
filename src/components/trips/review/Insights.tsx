@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { ReviewInsight, InsightCategory } from '@/types/trip-review';
 import { cn } from '@/lib/utils';
+import { getPersonaColorClasses } from '@/lib/persona-colors';
 
 interface InsightsProps {
   insights: ReviewInsight[];
@@ -108,9 +109,9 @@ function InsightCard({ insight, onVote, onSaveAnchor }: InsightCardProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const personaConfig = {
-    abu: { icon: Shield, label: 'Abu', color: 'text-red-600 bg-red-50' },
-    dre: { icon: Activity, label: 'Dr.Dre', color: 'text-orange-600 bg-orange-50' },
-    neptune: { icon: RefreshCw, label: 'Neptune', color: 'text-green-600 bg-green-50' },
+    abu: { icon: Shield, label: 'Abu', color: getPersonaColorClasses('ABU') },
+    dre: { icon: Activity, label: 'Dr.Dre', color: getPersonaColorClasses('DR_DRE') },
+    neptune: { icon: RefreshCw, label: 'Neptune', color: getPersonaColorClasses('NEPTUNE') },
   };
 
   const persona = (insight.persona || undefined) as keyof typeof personaConfig | undefined;

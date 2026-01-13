@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Shield, Brain, Wrench, Eye } from 'lucide-react';
+import { Shield, Activity, RefreshCw, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type PersonaMode = 'auto' | 'abu' | 'dre' | 'neptune';
@@ -30,11 +30,11 @@ export default function PersonaModeToggle({
   const [internalMode, setInternalMode] = useState<PersonaMode>('auto');
   const mode = value !== undefined ? value : internalMode;
 
-  const modes: { value: PersonaMode; icon: typeof Shield | typeof Eye }[] = [
+  const modes: { value: PersonaMode; icon: typeof Shield | typeof Activity | typeof RefreshCw | typeof Eye }[] = [
     { value: 'auto', icon: Eye },
     { value: 'abu', icon: Shield },
-    { value: 'dre', icon: Brain },
-    { value: 'neptune', icon: Wrench },
+    { value: 'dre', icon: Activity },
+    { value: 'neptune', icon: RefreshCw },
   ];
 
   const currentMode = modes.find((m) => m.value === mode) || modes[0];

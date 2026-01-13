@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { tripDetailApi } from '@/api/trip-detail';
-import type { Health, StatusUnderstanding, DecisionExplanation } from '@/api/trip-detail';
+import type { Health, StatusUnderstanding } from '@/api/trip-detail';
 import type { 
   TripDetail, 
   ItineraryItem, 
@@ -81,6 +81,9 @@ import {
   type OverallMetrics,
 } from '@/utils/trip-data-extractors';
 import { useMemo } from 'react';
+import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/persona-colors';
+import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
+import { getGateStatusClasses } from '@/lib/gate-status';
 
 // 决策记录标签页组件
 function DecisionLogTab({ tripId }: { tripId: string }) {
@@ -118,30 +121,23 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
     }
   };
 
+  // 使用三人格颜色工具函数
   const getPersonaIcon = (persona?: string) => {
+    const iconColorClasses = getPersonaIconColorClasses(persona || '');
     switch (persona) {
       case 'ABU':
-        return <Shield className="w-4 h-4 text-red-600" />;
+        return <Shield className={cn('w-4 h-4', iconColorClasses)} />;
       case 'DR_DRE':
-        return <Activity className="w-4 h-4 text-orange-600" />;
+        return <Activity className={cn('w-4 h-4', iconColorClasses)} />;
       case 'NEPTUNE':
-        return <RefreshCw className="w-4 h-4 text-green-600" />;
+        return <RefreshCw className={cn('w-4 h-4', iconColorClasses)} />;
       default:
         return null;
     }
   };
 
   const getPersonaColor = (persona?: string) => {
-    switch (persona) {
-      case 'ABU':
-        return 'bg-red-50 border-red-200 text-red-900';
-      case 'DR_DRE':
-        return 'bg-orange-50 border-orange-200 text-orange-900';
-      case 'NEPTUNE':
-        return 'bg-green-50 border-green-200 text-green-900';
-      default:
-        return 'bg-gray-50 border-gray-200 text-gray-900';
-    }
+    return getPersonaColorClasses(persona || '');
   };
 
   if (loading) {
@@ -231,20 +227,8 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
 //   }
 // };
 
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'PLANNING':
-      return '规划中';
-    case 'IN_PROGRESS':
-      return '进行中';
-    case 'COMPLETED':
-      return '已完成';
-    case 'CANCELLED':
-      return '已取消';
-    default:
-      return status;
-  }
-};
+// 使用统一的工具函数
+// 使用统一的工具函数 getTripStatusLabel，此函数已移除
 
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -298,9 +282,6 @@ export default function TripDetailPage() {
   // 新增：行程详情页 Agent 相关状态
   const [tripHealth, setTripHealth] = useState<Health | null>(null);
   const [statusUnderstanding, setStatusUnderstanding] = useState<StatusUnderstanding | null>(null);
-  const [decisionExplanations, setDecisionExplanations] = useState<DecisionExplanation[]>([]);
-  const [loadingHealth, setLoadingHealth] = useState(false);
-  const [loadingStatus, setLoadingStatus] = useState(false);
   
   // 新增：提取的数据状态（通过 useMemo 计算）
   const abuData = useMemo<AbuViewData | null>(() => {
@@ -407,6 +388,8 @@ export default function TripDetailPage() {
           loadConflicts(),
           loadPersonaAlerts(), // 新增：加载三人格提醒
           loadDecisionLogs(), // 新增：加载决策日志
+          loadTripHealth(), // 新增：加载行程健康度
+          loadTripStatus(), // 新增：加载行程状态理解
         ]);
       } else {
         setError('行程数据为空');
@@ -666,15 +649,12 @@ export default function TripDetailPage() {
   const loadTripHealth = async () => {
     if (!id) return;
     try {
-      setLoadingHealth(true);
       const health = await tripDetailApi.getHealth(id);
       setTripHealth(health);
     } catch (err: any) {
       console.error('Failed to load trip health:', err);
       // 静默处理错误，不影响主流程
       setTripHealth(null);
-    } finally {
-      setLoadingHealth(false);
     }
   };
 
@@ -682,34 +662,12 @@ export default function TripDetailPage() {
   const loadTripStatus = async () => {
     if (!id) return;
     try {
-      setLoadingStatus(true);
       const status = await tripDetailApi.getStatus(id);
       setStatusUnderstanding(status);
     } catch (err: any) {
       console.error('Failed to load trip status:', err);
       // 静默处理错误，不影响主流程
       setStatusUnderstanding(null);
-    } finally {
-      setLoadingStatus(false);
-    }
-  };
-
-  // 新增：加载决策解释（完整信息）
-  const loadTripDetailFull = async () => {
-    if (!id) return;
-    try {
-      const result = await tripDetailApi.execute({
-        tripId: id,
-        action: 'get_full',
-      });
-      if (result.detailState) {
-        setTripHealth(result.detailState.health);
-        setStatusUnderstanding(result.detailState.statusUnderstanding);
-        setDecisionExplanations(result.detailState.decisionExplanations || []);
-      }
-    } catch (err: any) {
-      console.error('Failed to load trip detail full:', err);
-      // 静默处理错误，不影响主流程
     }
   };
 
@@ -904,25 +862,25 @@ export default function TripDetailPage() {
     if (currentStatus === 'PLANNING' && newStatus === 'CANCELLED') {
       return {
         title: '确认取消该行程？',
-        description: `当前行程状态将从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"。`
+        description: `当前行程状态将从 "${getTripStatusLabel(currentStatus as any)}" 修改为 "${getTripStatusLabel(newStatus as any)}"。`
       };
     }
     if (currentStatus === 'PLANNING' && newStatus === 'IN_PROGRESS') {
       return {
         title: '确认开始执行行程？',
-        description: `当前行程状态将从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"，进入执行阶段。`
+        description: `当前行程状态将从 "${getTripStatusLabel(currentStatus as any)}" 修改为 "${getTripStatusLabel(newStatus as any)}"，进入执行阶段。`
       };
     }
     if (currentStatus === 'IN_PROGRESS' && newStatus === 'COMPLETED') {
       return {
         title: '确认完成行程？',
-        description: `当前行程状态将从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"。`
+        description: `当前行程状态将从 "${getTripStatusLabel(currentStatus as any)}" 修改为 "${getTripStatusLabel(newStatus as any)}"。`
       };
     }
     // 默认标题
     return {
       title: '确认修改行程状态？',
-      description: `您即将将行程状态从 "${getStatusText(currentStatus)}" 修改为 "${getStatusText(newStatus)}"。`
+      description: `您即将将行程状态从 "${getTripStatusLabel(currentStatus as any)}" 修改为 "${getTripStatusLabel(newStatus as any)}"。`
     };
   };
 
@@ -989,8 +947,8 @@ export default function TripDetailPage() {
 
     const key = `${currentStatus}->${newStatus}`;
     return transitions[key] || {
-      action: `修改状态为"${getStatusText(newStatus)}"`,
-      description: `将行程状态从"${getStatusText(currentStatus)}"改为"${getStatusText(newStatus)}"`,
+      action: `修改状态为"${getTripStatusLabel(newStatus as any)}"`,
+      description: `将行程状态从"${getTripStatusLabel(currentStatus as any)}"改为"${getTripStatusLabel(newStatus as any)}"`,
       consequences: ['此操作可能不可逆，请谨慎操作']
     };
   };
@@ -1027,7 +985,7 @@ export default function TripDetailPage() {
     try {
       // 通过更新API修改状态（后端已支持 status 字段）
       await tripsApi.update(id, { status: pendingStatus });
-      toast.success(`行程状态已更新为：${getStatusText(pendingStatus)}`);
+      toast.success(`行程状态已更新为：${getTripStatusLabel(pendingStatus as any)}`);
       setStatusChangeDialogOpen(false);
       setPendingStatus(null);
       setStatusConfirmText('');
@@ -1216,13 +1174,10 @@ export default function TripDetailPage() {
                 variant="outline" 
                 className={cn(
                   'font-medium',
-                  trip.status === 'PLANNING' && 'bg-blue-50 text-blue-700 border-blue-200',
-                  trip.status === 'IN_PROGRESS' && 'bg-green-50 text-green-700 border-green-200',
-                  trip.status === 'COMPLETED' && 'bg-gray-50 text-gray-700 border-gray-200',
-                  trip.status === 'CANCELLED' && 'bg-red-50 text-red-700 border-red-200'
+                  getTripStatusClasses(trip.status as any)
                 )}
               >
-                {getStatusText(trip.status)}
+                {getTripStatusLabel(trip.status as any)}
               </Badge>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground ml-11">
@@ -1670,9 +1625,9 @@ export default function TripDetailPage() {
                           variant="outline"
                           className={cn(
                             'text-sm',
-                            tripHealth.overall === 'healthy' && 'bg-green-50 text-green-700 border-green-200',
-                            tripHealth.overall === 'warning' && 'bg-yellow-50 text-yellow-700 border-yellow-200',
-                            tripHealth.overall === 'critical' && 'bg-red-50 text-red-700 border-red-200'
+                            tripHealth.overall === 'healthy' && getGateStatusClasses('ALLOW'),
+                            tripHealth.overall === 'warning' && getGateStatusClasses('NEED_CONFIRM'),
+                            tripHealth.overall === 'critical' && getGateStatusClasses('REJECT')
                           )}
                         >
                           {tripHealth.overall === 'healthy' && '健康'}
@@ -2076,7 +2031,7 @@ export default function TripDetailPage() {
                   <div className="text-sm">
                     {viewMode === 'abu' && (
                       <div className="flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-red-600" />
+                        <Shield className={cn('w-4 h-4', getPersonaIconColorClasses('ABU'))} />
                         <span>
                             <strong>{t('personaModeToggle.abu.label')}：</strong>{t('personaModeToggle.abu.desc')}
                         </span>
@@ -2084,7 +2039,7 @@ export default function TripDetailPage() {
                     )}
                     {viewMode === 'dre' && (
                       <div className="flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-orange-600" />
+                        <Activity className={cn('w-4 h-4', getPersonaIconColorClasses('DR_DRE'))} />
                         <span>
                             <strong>{t('personaModeToggle.dre.label')}：</strong>{t('personaModeToggle.dre.desc')}
                         </span>
@@ -2092,7 +2047,7 @@ export default function TripDetailPage() {
               )}
                     {viewMode === 'neptune' && (
                       <div className="flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 text-green-600" />
+                        <RefreshCw className={cn('w-4 h-4', getPersonaIconColorClasses('NEPTUNE'))} />
                         <span>
                             <strong>{t('personaModeToggle.neptune.label')}：</strong>{t('personaModeToggle.neptune.desc')}
                         </span>

@@ -4,7 +4,7 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { Shield, TrendingUp, Wrench, ChevronRight, Search } from 'lucide-react';
+import { Shield, Activity, RefreshCw, ChevronRight, Search } from 'lucide-react';
 import type { SuggestionStats } from '@/types/suggestion';
 
 interface SuggestionGuardBarProps {
@@ -35,8 +35,8 @@ export function SuggestionGuardBar({ stats, onClick, className }: SuggestionGuar
 
   const personaIcons = {
     abu: Shield,
-    drdre: TrendingUp,
-    neptune: Wrench,
+    drdre: Activity,
+    neptune: RefreshCw,
   };
 
   return (

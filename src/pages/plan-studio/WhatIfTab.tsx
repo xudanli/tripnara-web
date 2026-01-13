@@ -11,6 +11,11 @@ import { planningPolicyApi } from '@/api/planning-policy';
 import type { TripDetail, ScheduleItem } from '@/types/trip';
 import type { WhatIfEvaluateRequest, Candidate, PlanningPolicy, ScheduleStop, ScheduleMetrics } from '@/types/strategy';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import {
+  getGateStatusIcon,
+  getGateStatusClasses,
+} from '@/lib/gate-status';
 
 interface WhatIfTabProps {
   tripId: string;
@@ -212,10 +217,13 @@ export default function WhatIfTab({ tripId, personaMode = 'abu' }: WhatIfTabProp
           </Button>
 
           {error && (
-            <Card className="border-red-200 bg-red-50 mt-6">
+            <Card className={cn('border mt-6', getGateStatusClasses('REJECT'))}>
               <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-red-800">
-                  <AlertTriangle className="h-5 w-5" />
+                <div className={cn('flex items-center gap-2', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))}>
+                  {(() => {
+                    const ErrorIcon = getGateStatusIcon('REJECT');
+                    return <ErrorIcon className="h-5 w-5" />;
+                  })()}
                   <span className="font-medium">{error}</span>
                 </div>
               </CardContent>

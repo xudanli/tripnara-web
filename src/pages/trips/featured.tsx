@@ -9,36 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Calendar, MapPin, DollarSign, ThumbsUp, Heart, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'PLANNING':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'IN_PROGRESS':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'COMPLETED':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-    case 'CANCELLED':
-      return 'bg-red-100 text-red-800 border-red-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-};
-
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'PLANNING':
-      return '规划中';
-    case 'IN_PROGRESS':
-      return '进行中';
-    case 'COMPLETED':
-      return '已完成';
-    case 'CANCELLED':
-      return '已取消';
-    default:
-      return status;
-  }
-};
+import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 
 export default function FeaturedTripsPage() {
   const navigate = useNavigate();
@@ -128,8 +99,11 @@ export default function FeaturedTripsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-xl">{trip.destination || '未知目的地'}</CardTitle>
-                    <Badge className={getStatusColor(trip.status || 'PLANNING')} variant="outline">
-                      {getStatusText(trip.status || 'PLANNING')}
+                    <Badge 
+                      className={getTripStatusClasses((trip.status || 'PLANNING') as any)} 
+                      variant="outline"
+                    >
+                      {getTripStatusLabel((trip.status || 'PLANNING') as any)}
                     </Badge>
                   </div>
                   <CardDescription>

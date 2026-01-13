@@ -13,12 +13,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Progress } from '@/components/ui/progress';
 import { 
   Shield, 
-  TrendingUp, 
-  Wrench, 
+  Activity,
+  RefreshCw,
   AlertTriangle, 
   CheckCircle2, 
   Clock, 
-  Activity,
   DollarSign,
   BarChart3,
   Eye,
@@ -29,6 +28,7 @@ import {
   Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getPersonaIconColorClasses, getPersonaColorClasses, getPersonaBackgroundClasses } from '@/lib/persona-colors';
 import AbuView from './AbuView';
 import DrDreView from './DrDreView';
 import NeptuneView from './NeptuneView';
@@ -105,20 +105,21 @@ export default function AutoView({
   };
 
   const getSafetyBadge = (score: number) => {
+    // 使用设计 Token 而不是硬编码颜色
     if (score >= 80) return { 
       label: '良好', 
       icon: CheckCircle2,
-      className: 'bg-green-50 text-green-700 border-green-200 rounded-full px-3 py-1' 
+      className: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border rounded-full px-3 py-1' 
     };
     if (score >= 60) return { 
       label: '需注意', 
       icon: AlertTriangle,
-      className: 'bg-yellow-50 text-yellow-700 border-yellow-200 rounded-full px-3 py-1' 
+      className: 'bg-gate-confirm text-gate-confirm-foreground border-gate-confirm-border rounded-full px-3 py-1' 
     };
     return { 
       label: '需修复', 
       icon: AlertTriangle,
-      className: 'bg-red-50 text-red-700 border-red-200 rounded-full px-3 py-1' 
+      className: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border rounded-full px-3 py-1' 
     };
   };
 
@@ -229,13 +230,13 @@ export default function AutoView({
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Abu 安全视角 */}
-            <Card className="border border-red-100 bg-gradient-to-br from-red-50/50 to-white shadow-sm hover:shadow-md transition-shadow">
+            <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('ABU'))}>
               <CardContent className="p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="p-2 rounded-lg bg-red-100/50">
-                    <Shield className="w-5 h-5 text-red-600" />
+                  <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('ABU'))}>
+                    <Shield className={cn('w-5 h-5', getPersonaIconColorClasses('ABU'))} />
                   </div>
-                  <span className="font-semibold text-sm">🛡 安全视角</span>
+                  <span className="font-semibold text-sm">安全视角</span>
                 </div>
                 <div className="space-y-3">
                   <div>
@@ -250,7 +251,7 @@ export default function AutoView({
                       className="h-2"
                     />
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-red-100">
+                  <div className={cn('flex items-center justify-between pt-2 border-t', getPersonaColorClasses('ABU').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-abu-accent/30')}>
                     <span className="text-xs text-muted-foreground">关键问题</span>
                     <Badge 
                       variant={metrics.criticalIssues > 0 ? 'destructive' : 'secondary'} 
@@ -264,38 +265,38 @@ export default function AutoView({
             </Card>
 
             {/* Dr.Dre 节奏视角 */}
-            <Card className="border border-orange-100 bg-gradient-to-br from-orange-50/50 to-white shadow-sm hover:shadow-md transition-shadow">
+            <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('DR_DRE'))}>
               <CardContent className="p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="p-2 rounded-lg bg-orange-100/50">
-                    <TrendingUp className="w-5 h-5 text-orange-600" />
+                  <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('DR_DRE'))}>
+                    <Activity className={cn('w-5 h-5', getPersonaIconColorClasses('DR_DRE'))} />
                   </div>
-                  <span className="font-semibold text-sm">🧠 节奏视角</span>
+                  <span className="font-semibold text-sm">节奏视角</span>
                 </div>
                 <div className="space-y-3">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs text-muted-foreground">节奏评分</span>
-                      <span className="text-base font-bold text-orange-600">
+                      <span className={cn('text-base font-bold', getPersonaIconColorClasses('DR_DRE'))}>
                         {metrics.rhythmScore}/100
                       </span>
                     </div>
                     <Progress 
                       value={metrics.rhythmScore} 
-                      className="h-2 bg-orange-100"
+                      className={cn('h-2', getPersonaBackgroundClasses('DR_DRE'))}
                     />
                   </div>
-                  <div className="pt-2 border-t border-orange-100">
+                  <div className={cn('pt-2 border-t', getPersonaColorClasses('DR_DRE').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-dre-accent/30')}>
                     <p className="text-xs text-muted-foreground mb-1.5">
                       {metrics.rhythmScore >= 80 
-                        ? '📊 节奏适中，建议不多，行程流畅'
+                        ? '节奏适中，建议不多，行程流畅'
                         : metrics.rhythmScore >= 60
-                        ? '📊 节奏基本合理，有少量优化空间'
-                        : '📊 节奏需要调整，建议优化'}
+                        ? '节奏基本合理，有少量优化空间'
+                        : '节奏需要调整，建议优化'}
                     </p>
                     {metrics.drDreWarnings > 0 && (
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">⚠️ 有 {metrics.drDreWarnings} 个建议可优化</span>
+                        <span className="text-xs text-muted-foreground">有 {metrics.drDreWarnings} 个建议可优化</span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -312,28 +313,28 @@ export default function AutoView({
             </Card>
 
             {/* Neptune 修复视角 */}
-            <Card className="border border-green-100 bg-gradient-to-br from-green-50/50 to-white shadow-sm hover:shadow-md transition-shadow">
+            <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('NEPTUNE'))}>
               <CardContent className="p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="p-2 rounded-lg bg-green-100/50">
-                    <Wrench className="w-5 h-5 text-green-600" />
+                  <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('NEPTUNE'))}>
+                    <RefreshCw className={cn('w-5 h-5', getPersonaIconColorClasses('NEPTUNE'))} />
                   </div>
-                  <span className="font-semibold text-sm">🛠 修复视角</span>
+                  <span className="font-semibold text-sm">修复视角</span>
                 </div>
                 <div className="space-y-3">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs text-muted-foreground">准备度</span>
-                      <span className="text-base font-bold text-green-600">
+                      <span className={cn('text-base font-bold', getPersonaIconColorClasses('NEPTUNE'))}>
                         {metrics.readinessScore}/100
                       </span>
                     </div>
                     <Progress 
                       value={metrics.readinessScore} 
-                      className="h-2 bg-green-100"
+                      className={cn('h-2', getPersonaBackgroundClasses('NEPTUNE'))}
                     />
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-green-100">
+                  <div className={cn('flex items-center justify-between pt-2 border-t', getPersonaColorClasses('NEPTUNE').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-neptune-accent/30')}>
                     <span className="text-xs text-muted-foreground">建议</span>
                     <Badge variant="outline" className="text-xs">
                       {metrics.suggestions}
@@ -359,24 +360,33 @@ export default function AutoView({
             </TabsTrigger>
             <TabsTrigger 
               value="abu" 
-              className="flex items-center gap-2 data-[state=active]:bg-red-50 data-[state=active]:text-red-700 data-[state=active]:font-semibold"
+              className={cn(
+                'flex items-center gap-2',
+                'data-[state=active]:bg-persona-abu/10 data-[state=active]:text-persona-abu-foreground data-[state=active]:font-semibold'
+              )}
             >
               <Shield className="w-4 h-4" />
-              🛡 安全
+              安全
             </TabsTrigger>
             <TabsTrigger 
               value="dre" 
-              className="flex items-center gap-2 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700 data-[state=active]:font-semibold"
+              className={cn(
+                'flex items-center gap-2',
+                'data-[state=active]:bg-persona-dre/10 data-[state=active]:text-persona-dre-foreground data-[state=active]:font-semibold'
+              )}
             >
-              <TrendingUp className="w-4 h-4" />
-              🧠 节奏
+              <Activity className="w-4 h-4" />
+              节奏
             </TabsTrigger>
             <TabsTrigger 
               value="neptune" 
-              className="flex items-center gap-2 data-[state=active]:bg-green-50 data-[state=active]:text-green-700 data-[state=active]:font-semibold"
+              className={cn(
+                'flex items-center gap-2',
+                'data-[state=active]:bg-persona-neptune/10 data-[state=active]:text-persona-neptune-foreground data-[state=active]:font-semibold'
+              )}
             >
-              <Wrench className="w-4 h-4" />
-              🛠 修复
+              <RefreshCw className="w-4 h-4" />
+              修复
             </TabsTrigger>
           </TabsList>
         </div>
@@ -541,7 +551,7 @@ export default function AutoView({
                   onClick={() => setActiveTab('dre')}
                   className="flex items-center justify-center gap-2 h-auto py-4 bg-orange-600 hover:bg-orange-700"
                 >
-                  <TrendingUp className="w-5 h-5" />
+                  <Activity className="w-5 h-5" />
                   <div className="text-left">
                     <div className="font-semibold">调整节奏</div>
                     <div className="text-xs opacity-90">优化行程节奏</div>
@@ -554,7 +564,7 @@ export default function AutoView({
                   onClick={() => setActiveTab('neptune')}
                   className="flex items-center justify-center gap-2 h-auto py-4 bg-green-600 hover:bg-green-700"
                 >
-                  <Wrench className="w-5 h-5" />
+                  <RefreshCw className="w-5 h-5" />
                   <div className="text-left">
                     <div className="font-semibold">查看修复建议</div>
                     <div className="text-xs opacity-90">获取替代方案</div>

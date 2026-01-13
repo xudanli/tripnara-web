@@ -18,36 +18,8 @@ import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/format';
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'PLANNING':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'IN_PROGRESS':
-      return 'bg-green-100 text-green-800 border-green-200';
-    case 'COMPLETED':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-    case 'CANCELLED':
-      return 'bg-red-100 text-red-800 border-red-200';
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
-  }
-};
-
-const getStatusText = (status: string) => {
-  switch (status) {
-    case 'PLANNING':
-      return '规划中';
-    case 'IN_PROGRESS':
-      return '进行中';
-    case 'COMPLETED':
-      return '已完成';
-    case 'CANCELLED':
-      return '已取消';
-    default:
-      return status;
-  }
-};
+import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
+import { getPersonaIconColorClasses } from '@/lib/persona-colors';
 
 type StatusFilter = 'all' | string;
 
@@ -72,7 +44,16 @@ export default function TripsPage() {
   useEffect(() => {
     loadCountries();
     loadTrips();
-    // loadCollectedStatus(); // 已移除：/trips/collected 接口已废弃
+    // 从 localStorage 加载收藏状态
+    const storedCollected = localStorage.getItem('collectedTripIds');
+    if (storedCollected) {
+      try {
+        const ids = JSON.parse(storedCollected);
+        setCollectedTripIds(new Set(ids));
+      } catch (e) {
+        console.error('Failed to parse stored collected trips:', e);
+      }
+    }
   }, []);
 
   // 当从创建页面返回时，刷新行程列表
@@ -182,12 +163,19 @@ export default function TripsPage() {
         setCollectedTripIds((prev) => {
           const newSet = new Set(prev);
           newSet.delete(tripId);
+          // 保存到 localStorage
+          localStorage.setItem('collectedTripIds', JSON.stringify(Array.from(newSet)));
           return newSet;
         });
         toast.success('已取消收藏');
       } else {
         await tripsApi.collect(tripId);
-        setCollectedTripIds((prev) => new Set(prev).add(tripId));
+        setCollectedTripIds((prev) => {
+          const newSet = new Set(prev).add(tripId);
+          // 保存到 localStorage
+          localStorage.setItem('collectedTripIds', JSON.stringify(Array.from(newSet)));
+          return newSet;
+        });
         toast.success('已收藏');
       }
     } catch (err: any) {
@@ -321,7 +309,7 @@ export default function TripsPage() {
               <TabsTrigger value="all">全部</TabsTrigger>
               {availableStatuses.map((status) => (
                 <TabsTrigger key={status} value={status}>
-                  {getStatusText(status)}
+                  {getTripStatusLabel(status as any)}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -343,8 +331,11 @@ export default function TripsPage() {
                       <CardTitle className="text-xl">
                         {trip.destination ? getCountryName(trip.destination) : '未知目的地'}
                       </CardTitle>
-                      <Badge className={getStatusColor(trip.status || 'PLANNING')} variant="outline">
-                        {getStatusText(trip.status || 'PLANNING')}
+                      <Badge 
+                        className={getTripStatusClasses((trip.status || 'PLANNING') as any)} 
+                        variant="outline"
+                      >
+                        {getTripStatusLabel((trip.status || 'PLANNING') as any)}
                       </Badge>
                     </div>
                     <CardDescription>
@@ -358,28 +349,28 @@ export default function TripsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* 三人格评分 */}
+                    {/* 三人格评分 - 提示查看详情获取完整评估 */}
                     <div className="space-y-2 border-t pt-3">
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <Shield className="w-4 h-4 text-red-600" />
-                          <span className="text-muted-foreground">Abu 通过率</span>
+                          <Shield className={cn('w-4 h-4', getPersonaIconColorClasses('ABU'))} />
+                          <span className="text-muted-foreground">Abu 评估</span>
                         </div>
-                        <span className="font-medium text-green-600">安全 OK</span>
+                        <span className="text-xs text-muted-foreground">查看详情</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <Activity className="w-4 h-4 text-orange-600" />
-                          <span className="text-muted-foreground">Dr.Dre 评分</span>
+                          <Activity className={cn('w-4 h-4', getPersonaIconColorClasses('DR_DRE'))} />
+                          <span className="text-muted-foreground">Dr.Dre 评估</span>
                         </div>
-                        <span className="font-medium text-orange-600">节奏 OK</span>
+                        <span className="text-xs text-muted-foreground">查看详情</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <RefreshCw className="w-4 h-4 text-green-600" />
-                          <span className="text-muted-foreground">Neptune 状态</span>
+                          <RefreshCw className={cn('w-4 h-4', getPersonaIconColorClasses('NEPTUNE'))} />
+                          <span className="text-muted-foreground">Neptune 评估</span>
                         </div>
-                        <span className="font-medium text-green-600">可修复</span>
+                        <span className="text-xs text-muted-foreground">查看详情</span>
                       </div>
                     </div>
 

@@ -193,6 +193,41 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  
+  /* 决策状态 - ALLOW (通过) */
+  --gate-allow: oklch(0.95 0.02 145);
+  --gate-allow-foreground: oklch(0.35 0.15 145);
+  --gate-allow-border: oklch(0.85 0.05 145);
+  
+  /* 决策状态 - NEED_CONFIRM (需确认) */
+  --gate-confirm: oklch(0.98 0.02 85);
+  --gate-confirm-foreground: oklch(0.45 0.15 85);
+  --gate-confirm-border: oklch(0.90 0.05 85);
+  
+  /* 决策状态 - SUGGEST_REPLACE (建议替换) */
+  --gate-suggest: oklch(0.97 0.02 280);
+  --gate-suggest-foreground: oklch(0.50 0.15 280);
+  --gate-suggest-border: oklch(0.88 0.05 280);
+  
+  /* 决策状态 - REJECT (拒绝) */
+  --gate-reject: oklch(0.95 0.02 25);
+  --gate-reject-foreground: oklch(0.45 0.20 25);
+  --gate-reject-border: oklch(0.85 0.08 25);
+  
+  /* 三人格 - Abu (安全守护者: 静谧蓝/冰川白) */
+  --persona-abu: oklch(0.95 0.02 240);
+  --persona-abu-foreground: oklch(0.40 0.12 240);
+  --persona-abu-accent: oklch(0.60 0.15 240);
+  
+  /* 三人格 - Dr.Dre (节奏设计师: 森林绿/柔棕) */
+  --persona-dre: oklch(0.96 0.02 120);
+  --persona-dre-foreground: oklch(0.38 0.12 120);
+  --persona-dre-accent: oklch(0.58 0.15 120);
+  
+  /* 三人格 - Neptune (结构修复者: 修复绿) */
+  --persona-neptune: oklch(0.95 0.02 145);
+  --persona-neptune-foreground: oklch(0.35 0.12 145);
+  --persona-neptune-accent: oklch(0.55 0.15 145);
 }
 
 .dark {
@@ -227,6 +262,36 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  
+  /* 决策状态 - 暗色模式 */
+  --gate-allow: oklch(0.20 0.05 145);
+  --gate-allow-foreground: oklch(0.85 0.10 145);
+  --gate-allow-border: oklch(0.30 0.08 145);
+  
+  --gate-confirm: oklch(0.25 0.05 85);
+  --gate-confirm-foreground: oklch(0.90 0.10 85);
+  --gate-confirm-border: oklch(0.35 0.08 85);
+  
+  --gate-suggest: oklch(0.22 0.05 280);
+  --gate-suggest-foreground: oklch(0.88 0.10 280);
+  --gate-suggest-border: oklch(0.32 0.08 280);
+  
+  --gate-reject: oklch(0.25 0.08 25);
+  --gate-reject-foreground: oklch(0.90 0.15 25);
+  --gate-reject-border: oklch(0.35 0.10 25);
+  
+  /* 三人格 - 暗色模式 */
+  --persona-abu: oklch(0.20 0.05 240);
+  --persona-abu-foreground: oklch(0.85 0.10 240);
+  --persona-abu-accent: oklch(0.60 0.15 240);
+  
+  --persona-dre: oklch(0.22 0.05 120);
+  --persona-dre-foreground: oklch(0.88 0.10 120);
+  --persona-dre-accent: oklch(0.58 0.15 120);
+  
+  --persona-neptune: oklch(0.20 0.05 145);
+  --persona-neptune-foreground: oklch(0.85 0.10 145);
+  --persona-neptune-accent: oklch(0.55 0.15 145);
 }
 
 @layer base {
@@ -236,5 +301,72 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ==================== 状态转换动效 ==================== */
+
+@keyframes gate-status-transition {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gate-status-enter {
+  animation: gate-status-transition 0.2s ease-out;
+}
+
+/* ==================== 证据加载动效 ==================== */
+
+@keyframes evidence-loading {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.evidence-loading {
+  animation: evidence-loading 1.5s ease-in-out infinite;
+}
+
+/* ==================== 建议卡入场动效 ==================== */
+
+@keyframes suggestion-card-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.suggestion-card-enter {
+  animation: suggestion-card-enter 0.3s ease-out;
+}
+
+/* ==================== 确认面板动效 ==================== */
+
+@keyframes confirm-panel-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-4px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(4px);
+  }
+}
+
+.confirm-panel-error {
+  animation: confirm-panel-shake 0.5s ease-in-out;
 }
 

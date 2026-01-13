@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import type {
   AbuPersonaOutput,
   DrDrePersonaOutput,
@@ -9,6 +9,12 @@ import type {
   RecommendationItem,
 } from '@/api/planning-workbench';
 import { cn } from '@/lib/utils';
+import {
+  getGateStatusIcon,
+  getGateStatusLabel,
+  getGateStatusClasses,
+  normalizeGateStatus,
+} from '@/lib/gate-status';
 
 type PersonaOutput = AbuPersonaOutput | DrDrePersonaOutput | NeptunePersonaOutput;
 
@@ -22,49 +28,13 @@ export default function PersonaCard({ persona, className }: PersonaCardProps) {
     return null;
   }
 
-  // 根据 verdict 获取状态样式
-  const getVerdictStyle = (verdict: string) => {
-    switch (verdict) {
-      case 'ALLOW':
-        return {
-          icon: <CheckCircle2 className="w-4 h-4" />,
-          label: '通过',
-          className: 'bg-green-50 text-green-700 border-green-200',
-        };
-      case 'NEED_CONFIRM':
-        return {
-          icon: <AlertCircle className="w-4 h-4" />,
-          label: '需确认',
-          className: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-        };
-      case 'REJECT':
-        return {
-          icon: <XCircle className="w-4 h-4" />,
-          label: '拒绝',
-          className: 'bg-red-50 text-red-700 border-red-200',
-        };
-      case 'ADJUST':
-        return {
-          icon: <RefreshCw className="w-4 h-4" />,
-          label: '需调整',
-          className: 'bg-blue-50 text-blue-700 border-blue-200',
-        };
-      case 'REPLACE':
-        return {
-          icon: <ArrowRight className="w-4 h-4" />,
-          label: '需替换',
-          className: 'bg-purple-50 text-purple-700 border-purple-200',
-        };
-      default:
-        return {
-          icon: <AlertCircle className="w-4 h-4" />,
-          label: verdict,
-          className: 'bg-gray-50 text-gray-700 border-gray-200',
-        };
-    }
-  };
-
-  const verdictStyle = getVerdictStyle(persona.verdict);
+  // 标准化状态（支持旧状态映射：ADJUST/REPLACE -> SUGGEST_REPLACE）
+  const normalizedStatus = normalizeGateStatus(persona.verdict);
+  
+  // 获取状态配置
+  const StatusIcon = getGateStatusIcon(normalizedStatus);
+  const statusLabel = getGateStatusLabel(normalizedStatus);
+  const statusClasses = getGateStatusClasses(normalizedStatus);
 
   return (
     <Card className={cn('border-2', className)}>
@@ -81,10 +51,10 @@ export default function PersonaCard({ persona, className }: PersonaCardProps) {
           </div>
           <Badge
             variant="outline"
-            className={cn('flex items-center gap-1.5 px-3 py-1', verdictStyle.className)}
+            className={cn('flex items-center gap-1.5 px-3 py-1', statusClasses)}
           >
-            {verdictStyle.icon}
-            {verdictStyle.label}
+            <StatusIcon className="w-4 h-4" />
+            {statusLabel}
           </Badge>
         </div>
       </CardHeader>

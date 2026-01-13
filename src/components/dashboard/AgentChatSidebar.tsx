@@ -25,7 +25,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  status?: 'thinking' | 'browsing' | 'verifying' | 'repairing' | 'done' | 'failed' | 'awaiting_confirmation' | 'awaiting_consent';
+  status?: 'thinking' | 'browsing' | 'verifying' | 'repairing' | 'done' | 'failed' | 'awaiting_confirmation' | 'awaiting_consent' | 'awaiting_user_input';
   routeType?: RouteType;
   decisionLogCount?: number;
   hasPlan?: boolean; // 是否有 plan 或调整结果
@@ -124,6 +124,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
       const routeType = response.route.route;
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
       const decisionLogCount = response.explain?.decision_log?.length || 0;
+      const status = response.result.status;
 
       // 如果是 System2 且有回调，通知父组件刷新数据（persona-alerts/decision-log）
       if (isSystem2 && onSystem2Response) {
@@ -136,9 +137,45 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
       // 构建消息内容
       let messageContent = response.result.answer_text || '抱歉，我无法处理这个请求。';
       
+      // 处理 NEED_MORE_INFO 状态
+      if (status === 'NEED_MORE_INFO') {
+        // 如果有澄清信息，结构化展示
+        const clarificationInfo = response.result.payload?.clarificationInfo;
+        if (clarificationInfo) {
+          let clarificationMessage = messageContent;
+          
+          if (clarificationInfo.missingServices && clarificationInfo.missingServices.length > 0) {
+            clarificationMessage += `\n\n**缺失的服务：**\n${clarificationInfo.missingServices.map((s: string) => `- ${s}`).join('\n')}`;
+          }
+          
+          if (clarificationInfo.impact) {
+            clarificationMessage += `\n\n**影响：**\n${clarificationInfo.impact}`;
+          }
+          
+          if (clarificationInfo.solutions && clarificationInfo.solutions.length > 0) {
+            clarificationMessage += `\n\n**解决方案：**\n${clarificationInfo.solutions.map((s: string) => `- ${s}`).join('\n')}`;
+          }
+          
+          messageContent = clarificationMessage;
+        }
+      }
+      
       // 对于 System2，如果有决策日志，在消息中提示
       if (isSystem2 && decisionLogCount > 0) {
         messageContent += `\n\n📊 已生成 ${decisionLogCount} 条决策记录，可在决策看板中查看详情。`;
+      }
+
+      // 确定 UI 状态
+      let uiStatus: Message['status'] = response.route.ui_hint.status as Message['status'];
+      
+      // 如果是 NEED_MORE_INFO，使用 awaiting_user_input 状态
+      if (status === 'NEED_MORE_INFO') {
+        if (response.route.ui_hint.status === 'awaiting_confirmation' || 
+            response.route.ui_hint.status === 'awaiting_user_input') {
+          uiStatus = 'awaiting_user_input';
+        } else {
+          uiStatus = 'awaiting_user_input';
+        }
       }
 
       // 移除思考中的消息，添加实际回复
@@ -151,7 +188,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
             role: 'assistant',
             content: messageContent,
             timestamp: new Date(),
-            status: response.route.ui_hint.status as Message['status'],
+            status: uiStatus,
             routeType,
             decisionLogCount: decisionLogCount > 0 ? decisionLogCount : undefined,
             hasPlan: isSystem2, // System2 通常会有 plan 或调整结果
@@ -275,6 +312,9 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
                         {message.status === 'browsing' && '浏览中...'}
                         {message.status === 'verifying' && '验证中...'}
                         {message.status === 'repairing' && '修复中...'}
+                        {message.status === 'awaiting_user_input' && '⏳ 等待您的输入...'}
+                        {message.status === 'awaiting_confirmation' && '等待确认...'}
+                        {message.status === 'awaiting_consent' && '等待授权...'}
                       </div>
                     )}
                   </div>

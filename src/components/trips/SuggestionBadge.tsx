@@ -19,17 +19,17 @@ const personaConfig = {
   abu: {
     icon: Shield,
     label: '风险',
-    className: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100',
+    className: 'bg-persona-abu/10 text-persona-abu-foreground border-persona-abu-accent/30 hover:bg-persona-abu/20',
   },
   drdre: {
     icon: TrendingUp,
     label: '节奏',
-    className: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
+    className: 'bg-persona-dre/10 text-persona-dre-foreground border-persona-dre-accent/30 hover:bg-persona-dre/20',
   },
   neptune: {
     icon: Wrench,
     label: '修复',
-    className: 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100',
+    className: 'bg-persona-neptune/10 text-persona-neptune-foreground border-persona-neptune-accent/30 hover:bg-persona-neptune/20',
   },
 };
 

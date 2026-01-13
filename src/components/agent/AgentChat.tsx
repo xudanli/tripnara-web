@@ -108,6 +108,12 @@ function StatusIndicator({ status }: { status: UIStatus }) {
           text: '需要你确认一下，再继续行动～',
           color: 'text-red-600',
         };
+      case 'awaiting_user_input':
+        return {
+          icon: <div className="w-4 h-4 rounded-full bg-yellow-500"></div>,
+          text: '需要更多信息，请查看下方提示',
+          color: 'text-yellow-600',
+        };
       case 'done':
         return {
           icon: <CheckCircle2 className="w-4 h-4 text-green-600" />,
@@ -524,13 +530,50 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
         : '这个嘛…也许我不是全知的神，但我会努力查查！';
       let messageContent = answerText;
       
-      // 如果是 NEED_MORE_INFO，answer_text 已经包含了引导性提示
+      // 确定 UI 状态
+      let uiStatus: UIStatus = (response.route.ui_hint.status || 'done') as UIStatus;
+      
+      // 如果是 NEED_MORE_INFO，需要特殊处理
       if (response.result.status === 'NEED_MORE_INFO') {
         // answer_text 已经包含了引导信息，直接使用
+        // 如果 ui_hint.status 是 AWAITING_CONFIRMATION 或类似，使用 awaiting_user_input
+        if (response.route.ui_hint.status === 'awaiting_confirmation' || 
+            response.route.ui_hint.status === 'awaiting_user_input') {
+          uiStatus = 'awaiting_user_input';
+        } else {
+          // 默认使用 awaiting_user_input 状态
+          uiStatus = 'awaiting_user_input';
+        }
+        
+        // 如果有澄清信息，可以结构化展示
+        const clarificationInfo = response.result.payload?.clarificationInfo;
+        if (clarificationInfo) {
+          // 构建结构化的澄清消息
+          let clarificationMessage = answerText;
+          
+          if (clarificationInfo.missingServices && clarificationInfo.missingServices.length > 0) {
+            clarificationMessage += `\n\n**缺失的服务：**\n${clarificationInfo.missingServices.map(s => `- ${s}`).join('\n')}`;
+          }
+          
+          if (clarificationInfo.impact) {
+            clarificationMessage += `\n\n**影响：**\n${clarificationInfo.impact}`;
+          }
+          
+          if (clarificationInfo.solutions && clarificationInfo.solutions.length > 0) {
+            clarificationMessage += `\n\n**解决方案：**\n${clarificationInfo.solutions.map(s => `- ${s}`).join('\n')}`;
+          }
+          
+          messageContent = clarificationMessage;
+        }
       } else if (response.result.status === 'TIMEOUT') {
         messageContent = 'TIMEOUT'; // 特殊标记，用于显示优化的错误UI
+        uiStatus = 'failed';
       } else if (response.result.status === 'FAILED') {
         messageContent = answerText || 'FAILED'; // 特殊标记，用于显示优化的错误UI
+        uiStatus = 'failed';
+      } else if (response.result.status === 'OK') {
+        // 成功状态，使用 ui_hint 中的状态，如果没有则使用 'done'
+        uiStatus = (response.route.ui_hint.status || 'done') as UIStatus;
       }
 
       // 移除思考中的消息，添加实际回复
@@ -543,7 +586,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
             role: 'assistant',
             content: messageContent,
             timestamp: new Date(),
-            status: (response.route.ui_hint.status || 'done') as UIStatus,
+            status: uiStatus,
             routeType,
             routeInfo: {
               confidence: response.route.confidence,
@@ -903,13 +946,45 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                   ? String(retryResponse.result.answer_text) 
                   : '操作完成';
                 let retryMessageContent = retryAnswerText;
+                let retryUiStatus: UIStatus = (retryResponse.route.ui_hint.status || 'done') as UIStatus;
                 
                 if (retryResponse.result.status === 'NEED_MORE_INFO') {
                   // answer_text 已经包含了引导信息
+                  // 如果 ui_hint.status 是 AWAITING_CONFIRMATION 或类似，使用 awaiting_user_input
+                  if (retryResponse.route.ui_hint.status === 'awaiting_confirmation' || 
+                      retryResponse.route.ui_hint.status === 'awaiting_user_input') {
+                    retryUiStatus = 'awaiting_user_input';
+                  } else {
+                    retryUiStatus = 'awaiting_user_input';
+                  }
+                  
+                  // 如果有澄清信息，结构化展示
+                  const clarificationInfo = retryResponse.result.payload?.clarificationInfo;
+                  if (clarificationInfo) {
+                    let clarificationMessage = retryAnswerText;
+                    
+                    if (clarificationInfo.missingServices && clarificationInfo.missingServices.length > 0) {
+                      clarificationMessage += `\n\n**缺失的服务：**\n${clarificationInfo.missingServices.map((s: string) => `- ${s}`).join('\n')}`;
+                    }
+                    
+                    if (clarificationInfo.impact) {
+                      clarificationMessage += `\n\n**影响：**\n${clarificationInfo.impact}`;
+                    }
+                    
+                    if (clarificationInfo.solutions && clarificationInfo.solutions.length > 0) {
+                      clarificationMessage += `\n\n**解决方案：**\n${clarificationInfo.solutions.map((s: string) => `- ${s}`).join('\n')}`;
+                    }
+                    
+                    retryMessageContent = clarificationMessage;
+                  }
                 } else if (retryResponse.result.status === 'TIMEOUT') {
                   retryMessageContent = 'TIMEOUT'; // 特殊标记，用于显示优化的错误UI
+                  retryUiStatus = 'failed';
                 } else if (retryResponse.result.status === 'FAILED') {
                   retryMessageContent = retryAnswerText || 'FAILED'; // 特殊标记，用于显示优化的错误UI
+                  retryUiStatus = 'failed';
+                } else if (retryResponse.result.status === 'OK') {
+                  retryUiStatus = (retryResponse.route.ui_hint.status || 'done') as UIStatus;
                 }
                 
                 setMessages((prev) => {
@@ -921,7 +996,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                       role: 'assistant',
                       content: retryMessageContent,
                       timestamp: new Date(),
-                      status: (retryResponse.route.ui_hint.status || 'done') as UIStatus,
+                      status: retryUiStatus,
                       routeType,
                       routeInfo: {
                         confidence: retryResponse.route.confidence,

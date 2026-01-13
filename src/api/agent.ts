@@ -20,7 +20,7 @@ export type ResultStatus = 'OK' | 'NEED_MORE_INFO' | 'NEED_CONSENT' | 'NEED_CONF
 /**
  * UI 状态
  */
-export type UIStatus = 'thinking' | 'browsing' | 'verifying' | 'repairing' | 'awaiting_consent' | 'awaiting_confirmation' | 'done' | 'failed';
+export type UIStatus = 'thinking' | 'browsing' | 'verifying' | 'repairing' | 'awaiting_consent' | 'awaiting_confirmation' | 'awaiting_user_input' | 'done' | 'failed';
 
 /**
  * 对话上下文
@@ -114,6 +114,16 @@ export interface SuspensionInfo {
 }
 
 /**
+ * 澄清信息（当状态为 NEED_MORE_INFO 时）
+ */
+export interface ClarificationInfo {
+  missingServices?: string[];  // 缺失的服务列表
+  impact?: string;  // 影响说明
+  solutions?: string[];  // 解决方案
+  [key: string]: any;
+}
+
+/**
  * 路由并执行响应
  */
 export interface RouteAndRunResponse {
@@ -124,6 +134,7 @@ export interface RouteAndRunResponse {
     answer_text: string;
     payload?: {
       suspensionInfo?: SuspensionInfo;  // 审批挂起信息（当 status === 'NEED_CONFIRMATION' 时）
+      clarificationInfo?: ClarificationInfo;  // 澄清信息（当 status === 'NEED_MORE_INFO' 时）
       [key: string]: any;
     };
   };

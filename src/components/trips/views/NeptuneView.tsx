@@ -4,7 +4,7 @@ import type { TripDetail, ItineraryItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Wrench, CheckCircle2, ArrowRight, RefreshCw } from 'lucide-react';
+import { RefreshCw, CheckCircle2, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Sheet,
@@ -89,7 +89,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-green-600" />
+              <RefreshCw className="w-5 h-5 text-green-600" />
               {t('tripViews.neptune.fixQueue')}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={handleQuickFix}>
@@ -117,7 +117,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 flex-1">
-                    <Wrench className="w-5 h-5 text-green-600" />
+                    <RefreshCw className="w-5 h-5 text-green-600" />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge variant="outline">
@@ -247,7 +247,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
         <SheetContent side="right" className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-green-600" />
+              <RefreshCw className="w-5 h-5 text-green-600" />
               {t('tripViews.neptune.alternativeCandidates')}
             </SheetTitle>
             <SheetDescription>
@@ -317,7 +317,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
         <SheetContent side="right" className="w-full sm:max-w-2xl">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-green-600" />
+              <RefreshCw className="w-5 h-5 text-green-600" />
               修复详情
             </SheetTitle>
             <SheetDescription>Before / After 对比</SheetDescription>

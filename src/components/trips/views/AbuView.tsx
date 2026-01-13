@@ -4,7 +4,7 @@ import type { TripDetail, ItineraryItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Shield, AlertTriangle, CheckCircle2, XCircle, ChevronRight, ExternalLink } from 'lucide-react';
+import { Shield, CheckCircle2, ChevronRight, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Sheet,
@@ -15,6 +15,12 @@ import {
 } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
 import type { AbuViewData } from '@/utils/trip-data-extractors';
+import {
+  normalizeGateStatus,
+  getGateStatusIcon,
+  getGateStatusLabel,
+  getGateStatusClasses,
+} from '@/lib/gate-status';
 
 interface AbuViewProps {
   trip: TripDetail;
@@ -42,43 +48,32 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
   const violations = abuData.violations;
   const riskMap = abuData.riskMap;
 
+  // 标准化状态（PASSED -> ALLOW, WARN -> NEED_CONFIRM, BLOCKED -> REJECT）
+  const normalizedStatus = normalizeGateStatus(gatingStatus);
+  const StatusIcon = getGateStatusIcon(normalizedStatus);
+  const statusLabel = getGateStatusLabel(normalizedStatus);
+  const statusClasses = getGateStatusClasses(normalizedStatus);
+
   const getStatusIcon = () => {
-    switch (gatingStatus) {
-      case 'PASSED':
-        return <CheckCircle2 className="w-5 h-5 text-green-600" />;
-      case 'WARN':
-        return <AlertTriangle className="w-5 h-5 text-yellow-600" />;
-      case 'BLOCKED':
-        return <XCircle className="w-5 h-5 text-red-600" />;
-      default:
-        return <AlertTriangle className="w-5 h-5 text-gray-600" />;
-    }
+    return <StatusIcon className="w-5 h-5" />;
   };
 
   const getStatusText = () => {
-    switch (gatingStatus) {
-      case 'PASSED':
+    // 保持原有的国际化文本，但使用标准化状态
+    switch (normalizedStatus) {
+      case 'ALLOW':
         return t('tripViews.abu.status.executable') || '已通过所有安全检查';
-      case 'WARN':
+      case 'NEED_CONFIRM':
         return t('tripViews.abu.status.needConfirm') || '存在安全风险，建议检查';
-      case 'BLOCKED':
+      case 'REJECT':
         return t('tripViews.abu.status.blocked') || '存在硬约束违反，路线不可执行';
       default:
-        return '状态未知';
+        return statusLabel;
     }
   };
 
   const getStatusColor = () => {
-    switch (gatingStatus) {
-      case 'PASSED':
-        return 'bg-green-50 border-green-200';
-      case 'WARN':
-        return 'bg-yellow-50 border-yellow-200';
-      case 'BLOCKED':
-        return 'bg-red-50 border-red-200';
-      default:
-        return 'bg-gray-50 border-gray-200';
-    }
+    return statusClasses;
   };
 
 
@@ -126,7 +121,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
               <div>
                 <div className="font-semibold text-lg">安全状态：{getStatusText()}</div>
                 <div className="text-sm opacity-80">
-                  {gatingStatus === 'PASSED'
+                  {normalizedStatus === 'ALLOW'
                     ? t('tripViews.abu.violations.messages.safeToExecute') || '已通过所有安全检查'
                     : gatingStatus === 'WARN'
                     ? t('tripViews.abu.violations.messages.needConfirm') || '存在安全风险，建议检查'
@@ -134,7 +129,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                 </div>
               </div>
             </div>
-            {gatingStatus !== 'PASSED' && (
+            {normalizedStatus !== 'ALLOW' && (
               <Button
                 variant="outline"
                 onClick={() => {

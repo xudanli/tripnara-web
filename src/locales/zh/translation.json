@@ -1639,6 +1639,9 @@
   "sidebar": {
     "home": "工作台",
     "trips": "行程库",
+    "trips-all": "我的行程",
+    "trips-collected": "我的收藏",
+    "trips-featured": "热门推荐",
     "countries": "国家",
     "countries-archive": "国家档案",
     "countries-templates": "国家路线模版",

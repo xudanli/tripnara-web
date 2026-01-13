@@ -1,7 +1,12 @@
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReadinessStatus } from '@/types/readiness';
+import {
+  normalizeGateStatus,
+  getGateStatusClasses,
+  getGateStatusIcon,
+  getGateStatusLabel,
+} from '@/lib/gate-status';
 
 interface ReadinessStatusBadgeProps {
   status: ReadinessStatus;
@@ -14,28 +19,22 @@ export default function ReadinessStatusBadge({
   size = 'md',
   showIcon = true,
 }: ReadinessStatusBadgeProps) {
-  const config = {
-    ready: {
-      label: 'Ready',
-      icon: CheckCircle2,
-      className: 'bg-green-100 text-green-800 border-green-200',
-      iconClassName: 'text-green-600',
-    },
-    nearly: {
-      label: 'Nearly',
-      icon: AlertTriangle,
-      className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      iconClassName: 'text-yellow-600',
-    },
-    'not-ready': {
-      label: 'Not Ready',
-      icon: XCircle,
-      className: 'bg-red-100 text-red-800 border-red-200',
-      iconClassName: 'text-red-600',
-    },
+  // 映射 ReadinessStatus 到 GateStatus
+  const statusMap: Record<ReadinessStatus, string> = {
+    ready: 'ALLOW',
+    nearly: 'NEED_CONFIRM',
+    'not-ready': 'REJECT',
   };
 
-  const { label, icon: Icon, className, iconClassName } = config[status];
+  // 标准化状态并使用设计 Token
+  const gateStatus = normalizeGateStatus(statusMap[status]);
+  const statusClasses = getGateStatusClasses(gateStatus);
+  const StatusIcon = getGateStatusIcon(gateStatus);
+  const label = getGateStatusLabel(gateStatus);
+  
+  const Icon = StatusIcon;
+  const className = statusClasses;
+  const iconClassName = ''; // 使用 Token 中的颜色
   const sizeClasses = {
     sm: 'text-xs px-2 py-0.5',
     md: 'text-sm px-3 py-1',

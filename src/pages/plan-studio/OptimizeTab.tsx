@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { CheckCircle2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
@@ -18,6 +18,12 @@ import { useAuth } from '@/hooks/useAuth';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import PersonaCard from '@/components/planning-workbench/PersonaCard';
 import { cn } from '@/lib/utils';
+import {
+  normalizeGateStatus,
+  getGateStatusIcon,
+  getGateStatusLabel,
+  getGateStatusClasses,
+} from '@/lib/gate-status';
 
 interface OptimizeTabProps {
   tripId: string;
@@ -216,32 +222,19 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   };
 
   const getConsolidatedDecisionStyle = (status: ConsolidatedDecisionStatus) => {
-    switch (status) {
-      case 'ALLOW':
-        return {
-          icon: <CheckCircle2 className="w-5 h-5" />,
-          label: '通过',
-          className: 'bg-green-50 text-green-700 border-green-200',
-        };
-      case 'NEED_CONFIRM':
-        return {
-          icon: <AlertCircle className="w-5 h-5" />,
-          label: '需确认',
-          className: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-        };
-      case 'REJECT':
-        return {
-          icon: <XCircle className="w-5 h-5" />,
-          label: '拒绝',
-          className: 'bg-red-50 text-red-700 border-red-200',
-        };
-      default:
-        return {
-          icon: <AlertCircle className="w-5 h-5" />,
-          label: status,
-          className: 'bg-gray-50 text-gray-700 border-gray-200',
-        };
-    }
+    // 标准化状态（支持旧状态映射）
+    const normalizedStatus = normalizeGateStatus(status);
+    
+    // 获取状态配置
+    const StatusIcon = getGateStatusIcon(normalizedStatus);
+    const label = getGateStatusLabel(normalizedStatus);
+    const className = getGateStatusClasses(normalizedStatus);
+    
+    return {
+      icon: <StatusIcon className="w-5 h-5" />,
+      label,
+      className,
+    };
   };
 
   return (
@@ -288,10 +281,13 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           </p>
 
           {error && (
-            <Card className="border-red-200 bg-red-50">
+            <Card className={cn('border', getGateStatusClasses('REJECT'))}>
               <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-red-800">
-                  <XCircle className="h-5 w-5" />
+                <div className={cn('flex items-center gap-2', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))}>
+                  {(() => {
+                    const ErrorIcon = getGateStatusIcon('REJECT');
+                    return <ErrorIcon className="h-5 w-5" />;
+                  })()}
                   <span className="font-medium">{error}</span>
                 </div>
               </CardContent>
@@ -300,10 +296,13 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
 
           {result && (
             <div className="space-y-4 mt-6">
-              <Card className="border-green-200 bg-green-50">
+              <Card className={cn('border', getGateStatusClasses('ALLOW'))}>
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      {(() => {
+                        const SuccessIcon = getGateStatusIcon('ALLOW');
+                        return <SuccessIcon className={cn('h-5 w-5', getGateStatusClasses('ALLOW').split(' ').find(cls => cls.startsWith('text-')))} />;
+                      })()}
                     <span className="font-medium">{t('planStudio.optimizeTab.optimizeComplete')}</span>
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground">
@@ -370,13 +369,16 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
 
       {/* 规划工作台错误提示 */}
       {workbenchError && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className={cn('border', getGateStatusClasses('REJECT'))}>
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+              {(() => {
+                const ErrorIcon = getGateStatusIcon('REJECT');
+                return <ErrorIcon className={cn('w-5 h-5 mt-0.5 flex-shrink-0', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))} />;
+              })()}
               <div className="flex-1">
-                <p className="text-sm font-medium text-red-900">规划工作台执行失败</p>
-                <p className="text-sm text-red-700 mt-1">{workbenchError}</p>
+                <p className={cn('text-sm font-medium', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))}>规划工作台执行失败</p>
+                <p className={cn('text-sm mt-1', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))}>{workbenchError}</p>
               </div>
             </div>
           </CardContent>

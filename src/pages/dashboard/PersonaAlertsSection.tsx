@@ -75,35 +75,35 @@ export default function PersonaAlertsSection({ activeTrip }: PersonaAlertsSectio
   const getPersonaStyles = (persona: string) => {
     switch (persona) {
       case 'ABU':
-        // Abu: 酒红色（只用于关键风险标识）
+        // Abu: 静谧蓝/冰川白（安全守护者）
         return {
-          bg: 'bg-red-50/50 border-red-200/60',
-          icon: 'text-red-700',
-          title: 'text-red-900',
-          accent: 'text-red-600',
+          bg: 'bg-persona-abu/50 border-persona-abu-accent/60',
+          icon: 'text-persona-abu-foreground',
+          title: 'text-persona-abu-foreground',
+          accent: 'text-persona-abu-accent',
         };
       case 'DR_DRE':
-        // Dr.Dre: 柔和红/暖橙（非常轻）
+        // Dr.Dre: 森林绿/柔棕（节奏设计师）
         return {
-          bg: 'bg-orange-50/50 border-orange-200/60',
-          icon: 'text-orange-600',
-          title: 'text-orange-900',
-          accent: 'text-orange-500',
+          bg: 'bg-persona-dre/50 border-persona-dre-accent/60',
+          icon: 'text-persona-dre-foreground',
+          title: 'text-persona-dre-foreground',
+          accent: 'text-persona-dre-accent',
         };
       case 'NEPTUNE':
-        // Neptune: 绿色（表示修复成功，不破坏核心体验）
+        // Neptune: 修复绿（结构修复者）
         return {
-          bg: 'bg-green-50/50 border-green-200/60',
-          icon: 'text-green-600',
-          title: 'text-green-900',
-          accent: 'text-green-500',
+          bg: 'bg-persona-neptune/50 border-persona-neptune-accent/60',
+          icon: 'text-persona-neptune-foreground',
+          title: 'text-persona-neptune-foreground',
+          accent: 'text-persona-neptune-accent',
         };
       default:
         return {
-          bg: 'bg-gray-50/50 border-gray-200/60',
-          icon: 'text-gray-600',
-          title: 'text-gray-900',
-          accent: 'text-gray-500',
+          bg: 'bg-muted/50 border-border/60',
+          icon: 'text-muted-foreground',
+          title: 'text-foreground',
+          accent: 'text-muted-foreground',
         };
     }
   };

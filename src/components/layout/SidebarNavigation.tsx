@@ -47,6 +47,23 @@ const navItems: NavItem[] = [
     label: '', // Will be set in component
     icon: MapPin,
     path: '/dashboard/trips',
+    subItems: [
+      {
+        key: 'trips-all',
+        label: '', // Will be set in component
+        path: '/dashboard/trips',
+      },
+      {
+        key: 'trips-collected',
+        label: '', // Will be set in component
+        path: '/dashboard/trips/collected',
+      },
+      {
+        key: 'trips-featured',
+        label: '', // Will be set in component
+        path: '/dashboard/trips/featured',
+      },
+    ],
   },
   {
     key: 'countries',

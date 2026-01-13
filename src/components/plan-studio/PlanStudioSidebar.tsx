@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Shield, Wrench, CheckCircle2, XCircle, AlertTriangle, BarChart3, FileText, ClipboardCheck } from 'lucide-react';
+import { Shield, Activity, RefreshCw, CheckCircle2, FileText, ClipboardCheck } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
@@ -14,6 +14,14 @@ import type { PersonaAlert, TripDetail, TripMetricsResponse, IntentResponse } fr
 // 以下类型已移除，因为不再直接调用决策接口
 // import type { ValidateSafetyRequest, AdjustPacingRequest, ReplaceNodesRequest, RoutePlanDraft, WorldModelContext, RouteSegment, DEMEvidenceItem } from '@/types/strategy';
 import { formatCurrency } from '@/utils/format';
+import {
+  normalizeGateStatus,
+  getGateStatusIcon,
+  getGateStatusClasses,
+} from '@/lib/gate-status';
+// 三人格颜色通过 className 直接使用 Token，不需要工具函数
+import { GateStatusBanner } from '@/components/ui/gate-status-banner';
+import { cn } from '@/lib/utils';
 
 interface PlanStudioSidebarProps {
   tripId: string;
@@ -611,26 +619,16 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
   };
   })();
 
+  // 使用统一的状态工具函数
   const getStatusIcon = (status: 'ALLOW' | 'WARN' | 'BLOCK') => {
-    switch (status) {
-      case 'ALLOW':
-        return <CheckCircle2 className="w-5 h-5 text-green-600" />;
-      case 'WARN':
-        return <AlertTriangle className="w-5 h-5 text-yellow-600" />;
-      case 'BLOCK':
-        return <XCircle className="w-5 h-5 text-red-600" />;
-    }
+    const normalizedStatus = normalizeGateStatus(status);
+    const StatusIcon = getGateStatusIcon(normalizedStatus);
+    return <StatusIcon className="w-5 h-5" />;
   };
 
   const getStatusColor = (status: 'ALLOW' | 'WARN' | 'BLOCK') => {
-    switch (status) {
-      case 'ALLOW':
-        return 'bg-green-50 border-green-200 text-green-800';
-      case 'WARN':
-        return 'bg-[#FFF9E6] border-[#FFE699] text-yellow-800'; // 使用淡黄色背景
-      case 'BLOCK':
-        return 'bg-red-50 border-red-200 text-red-800';
-    }
+    const normalizedStatus = normalizeGateStatus(status);
+    return getGateStatusClasses(normalizedStatus);
   };
 
   // 策略预览卡片（顶部）- 显示所有人格的数据
@@ -795,16 +793,34 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
         <CardContent>
           <Tabs defaultValue="abu" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="abu" className="flex items-center gap-1">
+              <TabsTrigger 
+                value="abu" 
+                className={cn(
+                  'flex items-center gap-2',
+                  'data-[state=active]:bg-persona-abu/10 data-[state=active]:text-persona-abu-foreground data-[state=active]:font-semibold'
+                )}
+              >
                 <Shield className="w-4 h-4" />
                 Abu
               </TabsTrigger>
-              <TabsTrigger value="dre" className="flex items-center gap-1">
-                <BarChart3 className="w-4 h-4" />
+              <TabsTrigger 
+                value="dre" 
+                className={cn(
+                  'flex items-center gap-2',
+                  'data-[state=active]:bg-persona-dre/10 data-[state=active]:text-persona-dre-foreground data-[state=active]:font-semibold'
+                )}
+              >
+                <Activity className="w-4 h-4" />
                 Dr.Dre
               </TabsTrigger>
-              <TabsTrigger value="neptune" className="flex items-center gap-1">
-                <Wrench className="w-4 h-4" />
+              <TabsTrigger 
+                value="neptune" 
+                className={cn(
+                  'flex items-center gap-2',
+                  'data-[state=active]:bg-persona-neptune/10 data-[state=active]:text-persona-neptune-foreground data-[state=active]:font-semibold'
+                )}
+              >
+                <RefreshCw className="w-4 h-4" />
                 Neptune
               </TabsTrigger>
             </TabsList>
@@ -1052,16 +1068,34 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
         <CardContent>
           <Tabs defaultValue="abu" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="abu" className="flex items-center gap-1">
+              <TabsTrigger 
+                value="abu" 
+                className={cn(
+                  'flex items-center gap-2',
+                  'data-[state=active]:bg-persona-abu/10 data-[state=active]:text-persona-abu-foreground data-[state=active]:font-semibold'
+                )}
+              >
                 <Shield className="w-4 h-4" />
                 Abu ({abuAlerts.length})
               </TabsTrigger>
-              <TabsTrigger value="dre" className="flex items-center gap-1">
-                <BarChart3 className="w-4 h-4" />
+              <TabsTrigger 
+                value="dre" 
+                className={cn(
+                  'flex items-center gap-2',
+                  'data-[state=active]:bg-persona-dre/10 data-[state=active]:text-persona-dre-foreground data-[state=active]:font-semibold'
+                )}
+              >
+                <Activity className="w-4 h-4" />
                 Dr.Dre ({drDreAlerts.length})
               </TabsTrigger>
-              <TabsTrigger value="neptune" className="flex items-center gap-1">
-                <Wrench className="w-4 h-4" />
+              <TabsTrigger 
+                value="neptune" 
+                className={cn(
+                  'flex items-center gap-2',
+                  'data-[state=active]:bg-persona-neptune/10 data-[state=active]:text-persona-neptune-foreground data-[state=active]:font-semibold'
+                )}
+              >
+                <RefreshCw className="w-4 h-4" />
                 Neptune ({neptuneAlerts.length})
               </TabsTrigger>
             </TabsList>
@@ -1110,17 +1144,22 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
             </div>
           ) : readinessSummary ? (
             <div className="space-y-3">
-              {/* 状态标签 */}
+              {/* 状态标签 - 使用 GateStatusBanner */}
               {gateStatus && (
-                <div className={`p-2 rounded-lg text-center text-sm font-semibold ${
-                  gateStatus === 'BLOCK' ? 'bg-red-100 text-red-800 border border-red-200' :
-                  gateStatus === 'WARN' ? 'bg-[#FFF9E6] text-yellow-800 border border-[#FFE699]' : // 使用淡黄色背景
-                  'bg-green-100 text-green-800 border border-green-200'
-                }`}>
-                  {gateStatus === 'BLOCK' && t('dashboard.readiness.page.drawer.status.block')}
-                  {gateStatus === 'WARN' && t('dashboard.readiness.page.drawer.status.warn')}
-                  {gateStatus === 'PASS' && t('dashboard.readiness.page.drawer.status.pass')}
-                </div>
+                <GateStatusBanner
+                  status={
+                    gateStatus === 'PASS' ? 'ALLOW' :
+                    gateStatus === 'WARN' ? 'NEED_CONFIRM' :
+                    'REJECT'
+                  }
+                  message={
+                    gateStatus === 'PASS' ? t('dashboard.readiness.page.drawer.status.pass') :
+                    gateStatus === 'WARN' ? t('dashboard.readiness.page.drawer.status.warn') :
+                    t('dashboard.readiness.page.drawer.status.block')
+                  }
+                  size="sm"
+                  className="w-full justify-center"
+                />
               )}
               
               {/* 数量统计 */}
