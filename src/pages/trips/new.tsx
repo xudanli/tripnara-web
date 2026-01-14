@@ -1,12 +1,22 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { citiesApi } from '@/api/cities';
+import { agentApi } from '@/api/agent';
+import type { RouteAndRunResponse, UIStatus, OrchestrationStep, DecisionLogEntry } from '@/api/agent';
+import { useAuth } from '@/hooks/useAuth';
 import type { CreateTripRequest, Traveler, TripDetail } from '@/types/trip';
 import type { Country, CurrencyStrategy } from '@/types/country';
 import type { City } from '@/api/cities';
 import TripPlanningWaitDialog from '@/components/trips/TripPlanningWaitDialog';
+import { ClarificationQuestionsPanel } from '@/components/trips/ClarificationQuestionsPanel';
+import { StatusIndicator } from '@/components/trips/StatusIndicator';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import ConsentDialog from '@/components/trips/ConsentDialog';
+import { mockClarificationQuestions } from '@/mocks/clarification-questions';
+import type { ClarificationAnswer, ClarificationQuestion } from '@/types/clarification';
+import { formatClarificationAnswers, parseClarificationMessage } from '@/utils/clarification';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +28,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, CheckCircle2, ArrowRight, AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, CheckCircle2, ArrowRight, AlertCircle, Check, ChevronsUpDown, History, Shield, Activity, RefreshCw, Calendar, MapPin, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -29,9 +39,16 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 
 export default function NewTripPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'form' | 'nl'>('form');
+
+  // DEV-only: enable structured clarification preview with:
+  // /dashboard/trips/new?mockClarification=1
+  const showStructuredClarificationMock =
+    import.meta.env.DEV && new URLSearchParams(location.search).get('mockClarification') === '1';
 
   // 国家列表
   const [countries, setCountries] = useState<Country[]>([]);
@@ -447,11 +464,40 @@ export default function NewTripPage() {
   // 自然语言模式
   const [nlText, setNlText] = useState('');
   const [nlLoading, setNlLoading] = useState(false);
+  
+  // 结构化澄清问题状态（Phase 1）
+  const [structuredQuestions, setStructuredQuestions] = useState<ClarificationQuestion[]>([]);
+  const [structuredAnswers, setStructuredAnswers] = useState<ClarificationAnswer[]>([]);
+  const [clarificationRound, setClarificationRound] = useState(0);
+  const [conversationHistory, setConversationHistory] = useState<string[]>([]);
+  
+  // 向后兼容：旧的字符串澄清问题（逐步淘汰）
   const [clarificationQuestions, setClarificationQuestions] = useState<string[]>([]);
-  const [needsClarification, setNeedsClarification] = useState(false);
   const [clarificationAnswers, setClarificationAnswers] = useState<Record<number, string>>({});
+  
+  const [needsClarification, setNeedsClarification] = useState(false);
   const [originalNLText, setOriginalNLText] = useState('');
   const [submittingAnswers, setSubmittingAnswers] = useState(false);
+  const [uiStatus, setUiStatus] = useState<UIStatus>('done');
+  const [orchestrationStep, setOrchestrationStep] = useState<OrchestrationStep | null>(null);
+  
+  // 行程预览状态（当返回 OK 且有 itinerary 时）
+  const [previewItinerary, setPreviewItinerary] = useState<TripDetail | null>(null);
+  const [gateResult, setGateResult] = useState<any>(null);
+  const [decisionLogs, setDecisionLogs] = useState<any[]>([]);
+  
+  // 审批和授权状态
+  const [approvalId, setApprovalId] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [suspensionInfo, setSuspensionInfo] = useState<any>(null);
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [consentInfo, setConsentInfo] = useState<{
+    title?: string;
+    message?: string;
+    requiredPermissions?: string[];
+    warning?: string;
+  } | null>(null);
+  
   const [creationResult, setCreationResult] = useState<{
     trip: any;
     parsedParams?: any;
@@ -555,77 +601,184 @@ export default function NewTripPage() {
   
   // handleDestinationSelect 和 handleAddNewCity 已移除，未使用
 
+  // 映射 OrchestrationStep 到 UIStatus
+  const mapOrchestrationStepToUIStatus = useCallback((step: OrchestrationStep | undefined): UIStatus => {
+    if (!step) return 'thinking';
+    switch (step) {
+      case 'INTAKE':
+      case 'PLAN_GEN':
+      case 'NARRATE':
+        return 'thinking';
+      case 'RESEARCH':
+        return 'browsing';
+      case 'GATE_EVAL':
+      case 'VERIFY':
+        return 'verifying';
+      case 'REPAIR':
+        return 'repairing';
+      case 'DONE':
+        return 'done';
+      case 'FAILED':
+        return 'failed';
+      default:
+        return 'thinking';
+    }
+  }, []);
+
   const handleNLSubmit = async () => {
-    if (!nlText.trim()) return;
+    if (!nlText.trim() || !user?.id) return;
 
     setNlLoading(true);
     setError(null);
     setNeedsClarification(false);
+    setStructuredQuestions([]);
+    setStructuredAnswers([]);
     setClarificationQuestions([]);
     setClarificationAnswers({});
-    setOriginalNLText(nlText); // 保存原始文本
-
-    // 调试日志：检查 token
-    const token = sessionStorage.getItem('accessToken');
-    console.log('[NewTripPage] 准备创建行程:', {
-      hasToken: !!token,
-      tokenPreview: token ? `${token.substring(0, 20)}...` : 'none',
-      text: nlText,
-    });
+    setOriginalNLText(nlText);
+    setClarificationRound(0);
+    setConversationHistory([nlText]);
+    setPreviewItinerary(null);
+    setGateResult(null);
+    setDecisionLogs([]);
+    setUiStatus('thinking');
+    setOrchestrationStep(null);
 
     try {
-      console.log('[NewTripPage] 调用 tripsApi.createFromNL...');
-      const result = await tripsApi.createFromNL({ text: nlText });
-      console.log('[NewTripPage] ✅ 创建成功:', result);
+      console.log('[NewTripPage] 调用 agentApi.routeAndRun...');
       
-      if (result.needsClarification && result.clarificationQuestions) {
-        setNeedsClarification(true);
-        setClarificationQuestions(result.clarificationQuestions);
-        setCreationResult(null);
-        // 初始化答案对象
-        const initialAnswers: Record<number, string> = {};
-        result.clarificationQuestions.forEach((_, index) => {
-          initialAnswers[index] = '';
-        });
-        setClarificationAnswers(initialAnswers);
-      } else if (result.trip) {
-        const trip = result.trip;
+      const request = {
+        request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        user_id: user.id,
+        trip_id: null,
+        message: nlText,
+        conversation_context: {
+          recent_messages: [],
+          locale: 'zh-CN',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        options: {
+          max_steps: 50,
+          routeType: 'SYSTEM2_REASONING' as const,
+        },
+      };
+
+      const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
+      console.log('[NewTripPage] ✅ Agent 响应:', response);
+
+      // 更新 UI 状态
+      if (response.ui_state?.ui_status) {
+        setUiStatus(response.ui_state.ui_status);
+      } else if (response.ui_state?.phase) {
+        setUiStatus(mapOrchestrationStepToUIStatus(response.ui_state.phase));
+      }
+      if (response.ui_state?.phase) {
+        setOrchestrationStep(response.ui_state.phase);
+      }
+
+      // 处理决策日志
+      if (response.explain?.decision_log) {
+        setDecisionLogs(Array.isArray(response.explain.decision_log) ? response.explain.decision_log : []);
+      }
+
+      // 处理不同状态
+      if (response.result.status === 'NEED_MORE_INFO') {
+        // 需要澄清问题
+        const payload = response.result.payload;
         
-        // 检查是否正在生成规划点
-        if (result.generatingItems) {
-          // 如果正在生成，显示等待弹窗，等待后端完成规划
-          setWaitingTripId(trip.id);
-          setShowPlanningWaitDialog(true);
+        // 优先使用结构化问题
+        if (payload?.clarificationQuestions && payload.clarificationQuestions.length > 0) {
+          setNeedsClarification(true);
+          setStructuredQuestions(payload.clarificationQuestions);
+          setStructuredAnswers([]);
+          setClarificationRound((prev) => prev + 1);
+          setUiStatus('awaiting_user_input');
+        } 
+        // 向后兼容：使用 clarificationMessage
+        else if (payload?.clarificationMessage) {
+          setNeedsClarification(true);
+          const fallbackQuestion = parseClarificationMessage(payload.clarificationMessage);
+          setStructuredQuestions([fallbackQuestion]);
+          setStructuredAnswers([]);
+          setClarificationRound((prev) => prev + 1);
+          setUiStatus('awaiting_user_input');
         } else {
-          // 检查行程是否已经规划完成
-          // 判断标准：有 TripDay 且至少有一个 ItineraryItem，或者 stats.progress 不是 'PLANNING'
-          const hasItems = trip.TripDay && trip.TripDay.length > 0 && trip.TripDay.some((day: any) => 
-            day.ItineraryItem && day.ItineraryItem.length > 0
-          );
-          const isProgressComplete = trip.stats && trip.stats.progress !== 'PLANNING';
-          const hasStatsItems = trip.stats && trip.stats.totalItems > 0;
-          const isProgressStatusComplete = trip.metadata?.generationProgress?.status === 'completed';
-          
-          const isPlanningComplete = hasItems || isProgressComplete || hasStatsItems || isProgressStatusComplete;
-          
-          if (isPlanningComplete) {
-            // 如果已经规划完成，直接跳转到行程详情页
-            navigate(`/dashboard/trips/${trip.id}`);
-          } else {
-            // 如果未规划完成，也显示等待弹窗
-            setWaitingTripId(trip.id);
-            setShowPlanningWaitDialog(true);
-          }
+          setError('需要更多信息，但未收到澄清问题');
+          setUiStatus('failed');
         }
-        
-        setNeedsClarification(false);
-        setClarificationQuestions([]);
-        setClarificationAnswers({});
-        setOriginalNLText('');
+      } else if (response.result.status === 'OK') {
+        // 成功生成行程
+        const payload = response.result.payload;
+        const itinerary = payload?.orchestrationResult?.itinerary;
+        const gate = payload?.orchestrationResult?.gate_result;
+
+        if (itinerary) {
+          // 有行程数据，显示预览
+          setPreviewItinerary(itinerary as TripDetail);
+          setGateResult(gate || null);
+          setUiStatus('done');
+          // TODO: 显示行程预览页面（待实现）
+          console.log('[NewTripPage] 行程预览:', { itinerary, gate });
+        } else {
+          // 没有行程数据，可能需要创建行程
+          // 这里可以根据实际情况决定是否需要调用 tripsApi.create
+          setError('成功响应但未包含行程数据');
+          setUiStatus('failed');
+        }
+      } else if (response.result.status === 'FAILED') {
+        setError(response.result.answer_text || '处理失败');
+        setUiStatus('failed');
+      } else if (response.result.status === 'TIMEOUT') {
+        setError('请求超时，请稍后重试或简化需求');
+        setUiStatus('failed');
+      } else if (response.result.status === 'NEED_CONFIRMATION') {
+        // 需要审批
+        const payload = response.result.payload;
+        const suspension = payload?.suspensionInfo;
+        if (suspension?.approvalId) {
+          setApprovalId(suspension.approvalId);
+          setSuspensionInfo(suspension);
+          setApprovalDialogOpen(true);
+          setUiStatus('awaiting_confirmation');
+        } else {
+          setError('需要审批确认，但未收到审批信息');
+          setUiStatus('awaiting_confirmation');
+        }
+      } else if (response.result.status === 'NEED_CONSENT') {
+        // 需要授权
+        const payload = response.result.payload;
+        setConsentInfo({
+          title: '需要您的授权',
+          message: payload?.consentMessage || response.result.answer_text || '此操作需要您的授权才能继续执行。',
+          requiredPermissions: payload?.requiredPermissions || [],
+          warning: payload?.consentWarning,
+        });
+        setConsentDialogOpen(true);
+        setUiStatus('awaiting_consent');
+      } else if (response.result.status === 'REDIRECT_REQUIRED') {
+        // 需要重定向到规划工作台
+        const payload = response.result.payload;
+        const redirectInfo = payload?.redirectInfo;
+        if (redirectInfo) {
+          setError(
+            redirectInfo.redirect_reason || 
+            response.result.answer_text || 
+            '行程规划功能已迁移到规划工作台，请使用规划工作台功能创建行程。'
+          );
+          setUiStatus('failed');
+          console.warn('[NewTripPage] 需要重定向到:', redirectInfo.redirect_to);
+        } else {
+          setError(response.result.answer_text || '需要重定向到其他页面');
+          setUiStatus('failed');
+        }
+      } else {
+        setError(`未知状态: ${response.result.status}`);
+        setUiStatus('failed');
       }
     } catch (err: any) {
-      console.error('[NewTripPage] ❌ 创建失败:', err);
+      console.error('[NewTripPage] ❌ 请求失败:', err);
       setError(err.message || '创建行程失败');
+      setUiStatus('failed');
     } finally {
       setNlLoading(false);
     }
@@ -638,6 +791,171 @@ export default function NewTripPage() {
     });
   };
 
+  // 处理结构化澄清问题提交
+  const handleStructuredAnswersSubmit = async () => {
+    if (!user?.id) return;
+
+    // 检查澄清轮数（最多5轮）
+    if (clarificationRound >= 5) {
+      setError('澄清轮数过多（最多5轮），建议使用结构化表单创建行程');
+      return;
+    }
+
+    setSubmittingAnswers(true);
+    setError(null);
+    setUiStatus('thinking');
+
+    try {
+      // 格式化回答
+      const formattedAnswers = formatClarificationAnswers(structuredQuestions, structuredAnswers);
+      
+      // 更新对话历史
+      const updatedHistory = [...conversationHistory, formattedAnswers];
+      setConversationHistory(updatedHistory);
+
+      console.log('[NewTripPage] 提交结构化澄清答案，继续规划...');
+      
+      const request = {
+        request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        user_id: user.id,
+        trip_id: null,
+        message: formattedAnswers,
+        conversation_context: {
+          recent_messages: updatedHistory,
+          locale: 'zh-CN',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        options: {
+          max_steps: 50,
+          routeType: 'SYSTEM2_REASONING' as const,
+          entry_point: 'dashboard' as const, // 标识从 Dashboard 创建新行程
+        },
+      };
+
+      const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
+      console.log('[NewTripPage] ✅ Agent 响应:', response);
+
+      // 更新 UI 状态
+      if (response.ui_state?.ui_status) {
+        setUiStatus(response.ui_state.ui_status);
+      } else if (response.ui_state?.phase) {
+        setUiStatus(mapOrchestrationStepToUIStatus(response.ui_state.phase));
+      }
+      if (response.ui_state?.phase) {
+        setOrchestrationStep(response.ui_state.phase);
+      }
+
+      // 处理决策日志
+      if (response.explain?.decision_log) {
+        setDecisionLogs(Array.isArray(response.explain.decision_log) ? response.explain.decision_log : []);
+      }
+
+      // 处理不同状态
+      if (response.result.status === 'NEED_MORE_INFO') {
+        // 需要更多澄清问题
+        const payload = response.result.payload;
+        
+        if (payload?.clarificationQuestions && payload.clarificationQuestions.length > 0) {
+          setStructuredQuestions(payload.clarificationQuestions);
+          setStructuredAnswers([]);
+          setClarificationRound((prev) => prev + 1);
+          setUiStatus('awaiting_user_input');
+          
+          // 检查是否超过5轮
+          if (clarificationRound + 1 >= 5) {
+            setError('澄清轮数较多，建议简化需求或使用结构化表单');
+          }
+        } else if (payload?.clarificationMessage) {
+          // 向后兼容
+          const fallbackQuestion = parseClarificationMessage(payload.clarificationMessage);
+          setStructuredQuestions([fallbackQuestion]);
+          setStructuredAnswers([]);
+          setClarificationRound((prev) => prev + 1);
+          setUiStatus('awaiting_user_input');
+        } else {
+          setError('需要更多信息，但未收到澄清问题');
+          setUiStatus('failed');
+        }
+      } else if (response.result.status === 'OK') {
+        // 成功生成行程
+        const payload = response.result.payload;
+        const itinerary = payload?.orchestrationResult?.itinerary;
+        const gate = payload?.orchestrationResult?.gate_result;
+
+        if (itinerary) {
+          // 有行程数据，显示预览
+          setPreviewItinerary(itinerary as TripDetail);
+          setGateResult(gate || null);
+          setNeedsClarification(false);
+          setStructuredQuestions([]);
+          setStructuredAnswers([]);
+          setUiStatus('done');
+          // TODO: 显示行程预览页面（待实现）
+          console.log('[NewTripPage] 行程预览:', { itinerary, gate });
+        } else {
+          setError('成功响应但未包含行程数据');
+          setUiStatus('failed');
+        }
+      } else if (response.result.status === 'FAILED') {
+        setError(response.result.answer_text || '处理失败');
+        setUiStatus('failed');
+      } else if (response.result.status === 'TIMEOUT') {
+        setError('请求超时，请稍后重试或简化需求');
+        setUiStatus('failed');
+      } else if (response.result.status === 'NEED_CONFIRMATION') {
+        // 需要审批（多轮澄清中也可能需要审批）
+        const payload = response.result.payload;
+        const suspension = payload?.suspensionInfo;
+        if (suspension?.approvalId) {
+          setApprovalId(suspension.approvalId);
+          setSuspensionInfo(suspension);
+          setApprovalDialogOpen(true);
+          setUiStatus('awaiting_confirmation');
+        } else {
+          setError('需要审批确认，但未收到审批信息');
+          setUiStatus('awaiting_confirmation');
+        }
+      } else if (response.result.status === 'NEED_CONSENT') {
+        // 需要授权（多轮澄清中也可能需要授权）
+        const payload = response.result.payload;
+        setConsentInfo({
+          title: '需要您的授权',
+          message: payload?.consentMessage || response.result.answer_text || '此操作需要您的授权才能继续执行。',
+          requiredPermissions: payload?.requiredPermissions || [],
+          warning: payload?.consentWarning,
+        });
+        setConsentDialogOpen(true);
+        setUiStatus('awaiting_consent');
+      } else if (response.result.status === 'REDIRECT_REQUIRED') {
+        // 需要重定向到规划工作台
+        const payload = response.result.payload;
+        const redirectInfo = payload?.redirectInfo;
+        if (redirectInfo) {
+          setError(
+            redirectInfo.redirect_reason || 
+            response.result.answer_text || 
+            '行程规划功能已迁移到规划工作台，请使用规划工作台功能创建行程。'
+          );
+          setUiStatus('failed');
+          console.warn('[NewTripPage] 需要重定向到:', redirectInfo.redirect_to);
+        } else {
+          setError(response.result.answer_text || '需要重定向到其他页面');
+          setUiStatus('failed');
+        }
+      } else {
+        setError(`未知状态: ${response.result.status}`);
+        setUiStatus('failed');
+      }
+    } catch (err: any) {
+      console.error('[NewTripPage] ❌ 提交答案失败:', err);
+      setError(err.message || '提交答案失败');
+      setUiStatus('failed');
+    } finally {
+      setSubmittingAnswers(false);
+    }
+  };
+
+  // 向后兼容：处理旧的字符串澄清问题提交
   const handleSubmitAnswers = async () => {
     // 检查是否所有问题都已回答
     const unansweredQuestions = clarificationQuestions.filter((_, index) => !clarificationAnswers[index]?.trim());
@@ -1297,10 +1615,440 @@ export default function NewTripPage() {
                 <p className="text-sm text-muted-foreground">
                   提示：请包含目的地、日期、预算、旅行者信息等
                 </p>
+                <StatusIndicator status={uiStatus} />
               </div>
 
-              {/* 澄清问题交互界面 */}
-              {needsClarification && clarificationQuestions.length > 0 && (
+              {/* DEV-only: structured clarification preview */}
+              {showStructuredClarificationMock && (
+                <ClarificationQuestionsPanel
+                  questions={mockClarificationQuestions}
+                  answers={structuredAnswers}
+                  onAnswerChange={setStructuredAnswers}
+                  onCancel={() => {
+                    setStructuredAnswers([]);
+                    setUiStatus('done');
+                  }}
+                  onSubmit={() => {
+                    // eslint-disable-next-line no-console
+                    console.log('[mockClarification] answers:', structuredAnswers);
+                    setUiStatus('done');
+                  }}
+                  disabled={nlLoading}
+                />
+              )}
+
+              {/* 结构化澄清问题（真实 API） */}
+              {!showStructuredClarificationMock && needsClarification && structuredQuestions.length > 0 && (
+                <>
+                  {clarificationRound >= 5 && (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+                      <p className="text-sm text-yellow-800">
+                        ⚠️ 澄清轮数较多（{clarificationRound}/5），建议简化需求或使用结构化表单创建行程
+                      </p>
+                    </div>
+                  )}
+                  <ClarificationQuestionsPanel
+                    questions={structuredQuestions}
+                    answers={structuredAnswers}
+                    onAnswerChange={setStructuredAnswers}
+                    onCancel={() => {
+                      setNeedsClarification(false);
+                      setStructuredQuestions([]);
+                      setStructuredAnswers([]);
+                      setClarificationRound(0);
+                      setConversationHistory([]);
+                      setUiStatus('done');
+                    }}
+                    onSubmit={handleStructuredAnswersSubmit}
+                    disabled={nlLoading || submittingAnswers}
+                  />
+                </>
+              )}
+
+              {/* 行程预览（当返回 OK 且有 itinerary 时） */}
+              {previewItinerary && (
+                <Card className="border-green-200 bg-green-50/30">
+                  <CardHeader>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
+                      <div className="flex-1">
+                        <CardTitle className="text-lg text-green-900">行程方案已生成</CardTitle>
+                        <CardDescription className="mt-1">
+                          已为您生成行程方案，请查看并确认
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Tabs defaultValue="overview" className="w-full">
+                      <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="overview">概览</TabsTrigger>
+                        <TabsTrigger value="itinerary">行程详情</TabsTrigger>
+                        <TabsTrigger value="gate">Gate 评估</TabsTrigger>
+                        <TabsTrigger value="logs">决策日志</TabsTrigger>
+                      </TabsList>
+
+                      {/* 概览 Tab */}
+                      <TabsContent value="overview" className="space-y-4 mt-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">目的地：</span>
+                            <span className="font-medium">{previewItinerary.destination}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">日期：</span>
+                            <span className="font-medium">
+                              {previewItinerary.startDate.split('T')[0]} - {previewItinerary.endDate.split('T')[0]}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">预算：</span>
+                            <span className="font-medium">¥{previewItinerary.totalBudget?.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">天数：</span>
+                            <span className="font-medium">{previewItinerary.TripDay?.length || 0} 天</span>
+                          </div>
+                        </div>
+
+                        {/* 行程项统计 */}
+                        {previewItinerary.TripDay && previewItinerary.TripDay.length > 0 && (
+                          <div className="p-4 bg-white rounded-lg border">
+                            <h4 className="font-semibold mb-3">行程统计</h4>
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <div className="text-muted-foreground">总行程项</div>
+                                <div className="text-lg font-semibold">
+                                  {previewItinerary.TripDay.reduce((sum, day) => sum + (day.ItineraryItem?.length || 0), 0)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-muted-foreground">平均每天</div>
+                                <div className="text-lg font-semibold">
+                                  {Math.round(
+                                    previewItinerary.TripDay.reduce((sum, day) => sum + (day.ItineraryItem?.length || 0), 0) /
+                                      previewItinerary.TripDay.length
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-muted-foreground">行程天数</div>
+                                <div className="text-lg font-semibold">{previewItinerary.TripDay.length}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </TabsContent>
+
+                      {/* 行程详情 Tab */}
+                      <TabsContent value="itinerary" className="space-y-4 mt-4">
+                        {previewItinerary.TripDay && previewItinerary.TripDay.length > 0 ? (
+                          <div className="space-y-4">
+                            {previewItinerary.TripDay.map((day, dayIndex) => (
+                              <Card key={day.id} className="border-l-4 border-l-primary">
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="text-base">
+                                    Day {dayIndex + 1} - {day.date.split('T')[0]}
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  {day.ItineraryItem && day.ItineraryItem.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {day.ItineraryItem.map((item, itemIndex) => (
+                                        <div
+                                          key={item.id}
+                                          className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50"
+                                        >
+                                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                                            {itemIndex + 1}
+                                          </div>
+                                          <div className="flex-1">
+                                            <div className="font-medium">{item.Place?.nameCN || item.type}</div>
+                                            {item.note && (
+                                              <div className="text-sm text-muted-foreground mt-1">{item.note}</div>
+                                            )}
+                                            {item.startTime && item.endTime && (
+                                              <div className="text-xs text-muted-foreground mt-1">
+                                                {item.startTime.split('T')[1]?.slice(0, 5)} -{' '}
+                                                {item.endTime.split('T')[1]?.slice(0, 5)}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <Badge variant="outline">{item.type}</Badge>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="py-8 text-center text-muted-foreground">该日暂无安排</div>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-12 text-center text-muted-foreground">暂无行程数据</div>
+                        )}
+                      </TabsContent>
+
+                      {/* Gate 评估 Tab */}
+                      <TabsContent value="gate" className="space-y-4 mt-4">
+                        {gateResult ? (
+                          <div className="space-y-4">
+                            <Card>
+                              <CardHeader>
+                                <CardTitle className="text-base">Gate 评估结果</CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                  <div className="font-semibold text-blue-900 mb-1">评估状态</div>
+                                  <div className="text-sm text-blue-800">
+                                    {gateResult.result || gateResult.status || '评估完成'}
+                                  </div>
+                                </div>
+                                {gateResult.reason && (
+                                  <div className="p-3 bg-gray-50 border rounded-lg">
+                                    <div className="font-semibold mb-1">评估原因</div>
+                                    <div className="text-sm text-muted-foreground">{gateResult.reason}</div>
+                                  </div>
+                                )}
+                                {gateResult.warnings && gateResult.warnings.length > 0 && (
+                                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <div className="font-semibold text-yellow-900 mb-2">警告</div>
+                                    <ul className="list-disc list-inside space-y-1 text-sm text-yellow-800">
+                                      {gateResult.warnings.map((warning: string, idx: number) => (
+                                        <li key={idx}>{warning}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                {gateResult.recommendations && gateResult.recommendations.length > 0 && (
+                                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <div className="font-semibold text-green-900 mb-2">建议</div>
+                                    <ul className="list-disc list-inside space-y-1 text-sm text-green-800">
+                                      {gateResult.recommendations.map((rec: string, idx: number) => (
+                                        <li key={idx}>{rec}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </div>
+                        ) : (
+                          <div className="py-12 text-center text-muted-foreground">暂无 Gate 评估数据</div>
+                        )}
+                      </TabsContent>
+
+                      {/* 决策日志 Tab */}
+                      <TabsContent value="logs" className="space-y-4 mt-4">
+                        {decisionLogs && decisionLogs.length > 0 ? (
+                          <div className="space-y-3">
+                            {decisionLogs.map((log: DecisionLogEntry, idx: number) => {
+                              const getPersonaIcon = () => {
+                                switch (log.actor) {
+                                  case 'Gatekeeper':
+                                    return <Shield className="w-4 h-4 text-blue-600" />;
+                                  case 'Planner':
+                                    return <Activity className="w-4 h-4 text-green-600" />;
+                                  case 'LocalInsight':
+                                    return <RefreshCw className="w-4 h-4 text-orange-600" />;
+                                  default:
+                                    return <History className="w-4 h-4 text-gray-600" />;
+                                }
+                              };
+
+                              const getPersonaName = () => {
+                                switch (log.actor) {
+                                  case 'Gatekeeper':
+                                    return 'Abu (Gatekeeper)';
+                                  case 'Planner':
+                                    return 'Dr.Dre (Planner)';
+                                  case 'LocalInsight':
+                                    return 'Neptune (LocalInsight)';
+                                  default:
+                                    return log.actor;
+                                }
+                              };
+
+                              return (
+                                <Card key={idx} className="border-l-4 border-l-primary">
+                                  <CardContent className="pt-4">
+                                    <div className="flex items-start gap-3">
+                                      {getPersonaIcon()}
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                          <Badge variant="outline">{getPersonaName()}</Badge>
+                                          <Badge variant="secondary">{log.step}</Badge>
+                                          <span className="text-xs text-muted-foreground ml-auto">
+                                            {new Date(log.timestamp).toLocaleString('zh-CN')}
+                                          </span>
+                                        </div>
+                                        {log.inputs_summary && (
+                                          <div className="mb-2">
+                                            <div className="text-xs font-semibold text-muted-foreground mb-1">输入</div>
+                                            <div className="text-sm">{log.inputs_summary}</div>
+                                          </div>
+                                        )}
+                                        {log.outputs_summary && (
+                                          <div className="mb-2">
+                                            <div className="text-xs font-semibold text-muted-foreground mb-1">输出</div>
+                                            <div className="text-sm">{log.outputs_summary}</div>
+                                          </div>
+                                        )}
+                                        {log.evidence_refs && log.evidence_refs.length > 0 && (
+                                          <div>
+                                            <div className="text-xs font-semibold text-muted-foreground mb-1">证据引用</div>
+                                            <div className="flex flex-wrap gap-1">
+                                              {log.evidence_refs.map((ref, refIdx) => (
+                                                <Badge key={refIdx} variant="outline" className="text-xs">
+                                                  {ref}
+                                                </Badge>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="py-12 text-center text-muted-foreground">
+                            <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                            <p>暂无决策日志</p>
+                            <p className="text-sm mt-2">当系统做出决策时，记录会显示在这里</p>
+                          </div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
+
+                    {/* 操作按钮 */}
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setPreviewItinerary(null);
+                          setGateResult(null);
+                          setDecisionLogs([]);
+                          setUiStatus('done');
+                        }}
+                      >
+                        返回修改
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          if (!previewItinerary) return;
+                          
+                          setNlLoading(true);
+                          try {
+                            // 将 TripDetail 转换为 CreateTripRequest
+                            // 尝试从 itinerary 中提取 travelers 信息
+                            let travelers: Traveler[] = [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }]; // 默认值
+                            
+                            // 尝试从 metadata 或其他字段中提取 travelers
+                            if (previewItinerary.metadata?.travelers && Array.isArray(previewItinerary.metadata.travelers)) {
+                              travelers = previewItinerary.metadata.travelers;
+                            } else if ((previewItinerary as any).travelers && Array.isArray((previewItinerary as any).travelers)) {
+                              travelers = (previewItinerary as any).travelers;
+                            }
+                            
+                            const createRequest: CreateTripRequest = {
+                              destination: previewItinerary.destination,
+                              startDate: previewItinerary.startDate.split('T')[0],
+                              endDate: previewItinerary.endDate.split('T')[0],
+                              totalBudget: previewItinerary.totalBudget,
+                              travelers,
+                            };
+
+                            const result = await tripsApi.create(createRequest);
+                            console.log('[NewTripPage] ✅ 创建行程成功:', result);
+                            
+                            // 创建成功后跳转到行程详情页
+                            navigate(`/dashboard/trips/${result.id}`);
+                          } catch (err: any) {
+                            console.error('[NewTripPage] ❌ 创建行程失败:', err);
+                            setError(err.message || '创建行程失败');
+                          } finally {
+                            setNlLoading(false);
+                          }
+                        }}
+                        disabled={nlLoading}
+                      >
+                        {nlLoading && <Spinner className="w-4 h-4 mr-2" />}
+                        接受方案并创建行程
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={async () => {
+                          if (!previewItinerary) return;
+                          
+                          setNlLoading(true);
+                          try {
+                            // 注意：保存草稿功能需要将 TripDetail 转换为 TripDraftResponse 格式
+                            // 但由于 TripDraftResponse 的结构与 TripDetail 不同，这里暂时使用 create API
+                            // 实际应该调用专门的保存草稿接口，或者后端需要支持从 TripDetail 直接保存
+                            
+                            // 将 TripDetail 转换为 CreateTripRequest
+                            // 尝试从 itinerary 中提取 travelers 信息
+                            let travelers: Traveler[] = [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }]; // 默认值
+                            
+                            // 尝试从 metadata 或其他字段中提取 travelers
+                            if (previewItinerary.metadata?.travelers && Array.isArray(previewItinerary.metadata.travelers)) {
+                              travelers = previewItinerary.metadata.travelers;
+                            } else if ((previewItinerary as any).travelers && Array.isArray((previewItinerary as any).travelers)) {
+                              travelers = (previewItinerary as any).travelers;
+                            }
+                            
+                            const createRequest: CreateTripRequest = {
+                              destination: previewItinerary.destination,
+                              startDate: previewItinerary.startDate.split('T')[0],
+                              endDate: previewItinerary.endDate.split('T')[0],
+                              totalBudget: previewItinerary.totalBudget,
+                              travelers,
+                            };
+
+                            // 创建行程（作为草稿）
+                            const result = await tripsApi.create(createRequest);
+                            console.log('[NewTripPage] ✅ 保存草稿成功（已创建为行程）:', result);
+                            
+                            // 保存成功后提示用户
+                            setError(null);
+                            // TODO: 使用 toast 提示成功
+                            alert('草稿已保存成功！您可以在行程列表中查看。');
+                            
+                            // 清空预览状态
+                            setPreviewItinerary(null);
+                            setGateResult(null);
+                            setDecisionLogs([]);
+                            setUiStatus('done');
+                            
+                            // 可选：跳转到行程列表
+                            // navigate('/dashboard/trips');
+                          } catch (err: any) {
+                            console.error('[NewTripPage] ❌ 保存草稿失败:', err);
+                            setError(err.message || '保存草稿失败');
+                          } finally {
+                            setNlLoading(false);
+                          }
+                        }}
+                        disabled={nlLoading}
+                      >
+                        {nlLoading && <Spinner className="w-4 h-4 mr-2" />}
+                        保存为草稿
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 向后兼容：旧的字符串澄清问题交互界面 */}
+              {!showStructuredClarificationMock && !previewItinerary && needsClarification && structuredQuestions.length === 0 && clarificationQuestions.length > 0 && (
                 <Card className="border-yellow-200 bg-yellow-50/30">
                   <CardHeader>
                     <div className="flex items-start gap-3">
@@ -1517,7 +2265,7 @@ export default function NewTripPage() {
                 </div>
               )}
 
-              {!needsClarification && !creationResult && (
+              {!needsClarification && !creationResult && !previewItinerary && (
               <div className="flex justify-end gap-4">
                 <Button type="button" variant="outline" onClick={() => navigate('/dashboard/trips')}>
                   取消
@@ -1527,13 +2275,92 @@ export default function NewTripPage() {
                   创建行程
                 </Button>
               </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+
+    {/* 审批对话框 */}
+    {approvalId && (
+      <ApprovalDialog
+        approvalId={approvalId}
+        open={approvalDialogOpen}
+        onOpenChange={(open) => {
+          setApprovalDialogOpen(open);
+          if (!open) {
+            // 关闭对话框时，如果用户没有做出决定，重置状态
+            setApprovalId(null);
+            setSuspensionInfo(null);
+            setUiStatus('done');
+          }
+        }}
+        onDecision={async (approved, approval) => {
+          console.log('[NewTripPage] 审批决定:', { approved, approval });
+          
+          if (approved) {
+            // 审批通过，继续执行流程
+            // 可以重新调用 routeAndRun 继续处理
+            setApprovalId(null);
+            setSuspensionInfo(null);
+            setApprovalDialogOpen(false);
+            setUiStatus('thinking');
+            
+            // TODO: 重新调用 routeAndRun 继续处理（需要保存原始请求信息）
+            // 这里暂时提示用户
+            setError(null);
+            // alert('审批已通过，正在继续处理...');
+          } else {
+            // 审批拒绝，结束流程
+            setApprovalId(null);
+            setSuspensionInfo(null);
+            setApprovalDialogOpen(false);
+            setUiStatus('done');
+            setError('审批已拒绝，流程已终止');
+          }
+        }}
+      />
+    )}
+
+    {/* 授权对话框 */}
+    <ConsentDialog
+      open={consentDialogOpen}
+      onOpenChange={(open) => {
+        setConsentDialogOpen(open);
+        if (!open) {
+          // 关闭对话框时，如果用户没有做出决定，重置状态
+          setConsentInfo(null);
+          setUiStatus('done');
+        }
+      }}
+      onConsent={(granted) => {
+        console.log('[NewTripPage] 授权决定:', { granted });
+        
+        if (granted) {
+          // 授权通过，继续执行流程
+          setConsentInfo(null);
+          setConsentDialogOpen(false);
+          setUiStatus('thinking');
+          setError(null);
+          
+          // TODO: 重新调用 routeAndRun 继续处理（需要保存原始请求信息）
+          // 这里暂时提示用户
+          // alert('授权已通过，正在继续处理...');
+        } else {
+          // 授权拒绝，结束流程
+          setConsentInfo(null);
+          setConsentDialogOpen(false);
+          setUiStatus('done');
+          setError('授权已拒绝，流程已终止');
+        }
+      }}
+      title={consentInfo?.title}
+      message={consentInfo?.message}
+      requiredPermissions={consentInfo?.requiredPermissions}
+      warning={consentInfo?.warning}
+    />
+  </div>
+);
 }
 
 
