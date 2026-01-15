@@ -5,8 +5,10 @@ pipeline {
     agent {
         docker {
             image 'node:20-bullseye'
+            // 关键修复：禁用 entrypoint 以便 Jenkins 可以运行 cat 保持容器存活
             // 挂载 Docker socket，使容器内可以使用宿主机的 Docker
-            args '-u root -v /var/run/docker.sock:/var/run/docker.sock' 
+            args "--entrypoint='' -u root:root -v /var/run/docker.sock:/var/run/docker.sock"
+            reuseNode true
         }
     }
 
@@ -14,6 +16,10 @@ pipeline {
         DOCKER_USER = 'loomtrip' 
         IMAGE_NAME = "tripnara-frontend"
         DOCKER_CREDS_ID = 'dockerhub-creds'
+    }
+
+    options {
+        skipDefaultCheckout(false)
     }
 
     stages {
@@ -28,10 +34,13 @@ pipeline {
 
         stage('Build Frontend') {
             steps {
-                // 这里直接执行，它会在 node 容器内部运行
-                sh 'node -v'
-                sh 'npm install'
-                sh 'npm run build'
+                // 使用 set -euxo pipefail 确保任何错误都会导致构建失败
+                sh '''
+                    set -euxo pipefail
+                    node -v
+                    npm ci
+                    npm run build
+                '''
             }
         }
 
