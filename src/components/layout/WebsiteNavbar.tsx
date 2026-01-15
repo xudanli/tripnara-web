@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import { useAuth } from '@/hooks/useAuth';
 import Logo from '../common/Logo';
+import { cn } from '@/lib/utils';
 
 interface NavItem {
   key: string;
@@ -91,51 +92,22 @@ export default function WebsiteNavbar() {
   };
 
   return (
-    <nav
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
-        backgroundColor: '#fff',
-        borderBottom: '1px solid #e0e0e0',
-        padding: '1rem 2rem',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
+    <nav className="sticky top-0 z-[1000] bg-background border-b border-border py-4 px-8">
+      <div className="max-w-7xl mx-auto flex justify-between items-center">
         {/* Logo */}
         <Link
           to="/"
-          style={{
-            textDecoration: 'none',
-            color: '#000',
-            display: 'flex',
-            alignItems: 'center',
-          }}
+          className="no-underline text-foreground flex items-center"
         >
-          <Logo variant="full" size={28} color="#000" />
+          <Logo variant="full" size={28} className="text-foreground" />
         </Link>
 
         {/* Desktop Navigation */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '2.5rem',
-            alignItems: 'center',
-          }}
-          className="desktop-nav"
-        >
+        <div className="desktop-nav flex gap-10 items-center">
           {navItems.map((item) => (
             <div
               key={item.key}
-              style={{ position: 'relative' }}
+              className="relative"
               ref={(el) => {
                 dropdownRefs.current[item.key] = el;
               }}
@@ -146,42 +118,16 @@ export default function WebsiteNavbar() {
                 <>
                   <button
                     onClick={() => handleDropdownToggle(item.key)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: isActive(item.path) ? '#000' : '#666',
-                      fontWeight: isActive(item.path) ? '700' : '400',
-                      fontSize: '0.95rem',
-                      padding: '0.5rem 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      position: 'relative',
-                      transition: 'color 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = '#000';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive(item.path)) {
-                        e.currentTarget.style.color = '#666';
-                      }
-                    }}
+                    className={cn(
+                      'bg-transparent border-none cursor-pointer py-2 flex items-center gap-1 relative transition-colors text-sm',
+                      isActive(item.path) ? 'text-foreground font-bold' : 'text-muted-foreground font-normal',
+                      'hover:text-foreground'
+                    )}
                   >
                     {t(`nav.${item.key}`)}
-                    <span style={{ fontSize: '0.7rem' }}>▼</span>
+                    <span className="text-[0.7rem]">▼</span>
                     {isActive(item.path) && (
-                      <span
-                        style={{
-                          position: 'absolute',
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          height: '2px',
-                          backgroundColor: '#000',
-                        }}
-                      />
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
                     )}
                   </button>
                   {openDropdown === item.key && (

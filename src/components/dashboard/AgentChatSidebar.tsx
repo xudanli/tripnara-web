@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
-import { Send, Bot, User, ExternalLink, Brain, History } from 'lucide-react';
+import { Send, User, ExternalLink, Brain, History } from 'lucide-react';
+import { NaraAgentIcon, NaraAgentThinking, NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
 import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { toast } from 'sonner';
@@ -85,6 +86,44 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
 
       const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
 
+      // 处理重定向（REDIRECT_REQUIRED）
+      if (response.result.status === 'REDIRECT_REQUIRED') {
+        const redirectInfo = response.result.payload?.redirectInfo;
+        if (redirectInfo) {
+          // 显示重定向提示
+          toast.info(redirectInfo.redirect_reason, {
+            duration: 3000,
+          });
+
+          // 移除思考中的消息
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
+            return [
+              ...filtered,
+              {
+                id: `assistant-${Date.now()}`,
+                role: 'assistant',
+                content: `需要跳转到其他页面继续操作：${redirectInfo.redirect_reason}`,
+                timestamp: new Date(),
+                status: 'done',
+              },
+            ];
+          });
+
+          // 延迟执行重定向
+          setTimeout(() => {
+            if (redirectInfo.redirect_to.startsWith('http')) {
+              window.location.href = redirectInfo.redirect_to;
+            } else {
+              navigate(redirectInfo.redirect_to);
+            }
+          }, 1000);
+
+          setLoading(false);
+          return;
+        }
+      }
+
       // 检查是否需要审批
       if (needsApproval(response)) {
         const approvalId = extractApprovalId(response);
@@ -139,24 +178,30 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
       
       // 处理 NEED_MORE_INFO 状态
       if (status === 'NEED_MORE_INFO') {
-        // 如果有澄清信息，结构化展示
-        const clarificationInfo = response.result.payload?.clarificationInfo;
-        if (clarificationInfo) {
-          let clarificationMessage = messageContent;
+        // 优先使用新的 clarificationMessage 字段（统一在 payload 中）
+        const clarificationMessage = response.result.payload?.clarificationMessage;
+        const clarificationInfo = response.result.payload?.clarificationInfo; // 向后兼容
+        
+        if (clarificationMessage) {
+          // 使用新的澄清消息（Markdown 格式）
+          messageContent = clarificationMessage;
+        } else if (clarificationInfo) {
+          // 向后兼容：使用旧的 clarificationInfo 字段
+          let clarificationText = messageContent;
           
           if (clarificationInfo.missingServices && clarificationInfo.missingServices.length > 0) {
-            clarificationMessage += `\n\n**缺失的服务：**\n${clarificationInfo.missingServices.map((s: string) => `- ${s}`).join('\n')}`;
+            clarificationText += `\n\n**缺失的服务：**\n${clarificationInfo.missingServices.map((s: string) => `- ${s}`).join('\n')}`;
           }
           
           if (clarificationInfo.impact) {
-            clarificationMessage += `\n\n**影响：**\n${clarificationInfo.impact}`;
+            clarificationText += `\n\n**影响：**\n${clarificationInfo.impact}`;
           }
           
           if (clarificationInfo.solutions && clarificationInfo.solutions.length > 0) {
-            clarificationMessage += `\n\n**解决方案：**\n${clarificationInfo.solutions.map((s: string) => `- ${s}`).join('\n')}`;
+            clarificationText += `\n\n**解决方案：**\n${clarificationInfo.solutions.map((s: string) => `- ${s}`).join('\n')}`;
           }
           
-          messageContent = clarificationMessage;
+          messageContent = clarificationText;
         }
       }
       
@@ -227,7 +272,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
     <Card className="sticky top-4 h-[calc(100vh-2rem)] flex flex-col">
       <CardHeader className="flex-shrink-0">
         <CardTitle className="flex items-center gap-2">
-          <Bot className="w-5 h-5" />
+          <NaraAgentChatting size={20} color="currentColor" highlightColor="currentColor" className="text-primary" />
           智能助手
         </CardTitle>
         <CardDescription>
@@ -240,12 +285,26 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
           <div className="space-y-4 py-4">
             {messages.length === 0 ? (
               <div className="text-center text-sm text-muted-foreground py-8">
-                <Bot className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <div className="flex justify-center mb-2">
+                  <NaraAgentChatting size={32} color="currentColor" highlightColor="currentColor" className="text-muted-foreground" />
+                </div>
                 <p>有什么可以帮助你的吗？</p>
                 <p className="text-xs mt-2">你可以问我关于行程规划的任何问题</p>
               </div>
             ) : (
-              messages.map((message) => (
+              messages.map((message) => {
+                // 根据消息状态选择合适的插画
+                const getAgentIcon = () => {
+                  if (!message.status || message.status === 'done' || message.status === 'failed') {
+                    return <NaraAgentIcon size={16} color="currentColor" className="text-primary" />;
+                  }
+                  if (message.status === 'thinking' || message.status === 'browsing' || message.status === 'verifying' || message.status === 'repairing') {
+                    return <NaraAgentThinking size={16} color="currentColor" highlightColor="currentColor" className="text-primary" />;
+                  }
+                  return <NaraAgentChatting size={16} color="currentColor" highlightColor="currentColor" className="text-primary" />;
+                };
+
+                return (
                 <div
                   key={message.id}
                   className={cn(
@@ -255,7 +314,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
                 >
                   {message.role === 'assistant' && (
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bot className="w-4 h-4 text-primary" />
+                      {getAgentIcon()}
                     </div>
                   )}
                   <div
@@ -324,12 +383,13 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
                     </div>
                   )}
                 </div>
-              ))
+                );
+              })
             )}
             {loading && (
               <div className="flex gap-3 justify-start">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-primary" />
+                  <NaraAgentThinking size={16} color="currentColor" highlightColor="currentColor" className="text-primary" />
                 </div>
                 <div className="bg-muted rounded-lg px-4 py-2">
                   <Spinner className="w-4 h-4" />

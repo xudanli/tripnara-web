@@ -1,6 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Route, Compass, Mountains } from '@/components/illustrations/SimpleIllustrations';
+import { WebsiteSection } from '@/components/website/WebsiteSection';
+import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 export default function HeroFeaturesSection() {
   const { t } = useTranslation();
@@ -29,271 +33,109 @@ export default function HeroFeaturesSection() {
     },
   ];
 
+  const testimonials = [
+    {
+      quote: t('heroFeatures.testimonial1.quote', {
+        defaultValue: '终于不用再担心"计划赶不上变化"了。TripNARA 让我第一次真正走完了整条路线。',
+      }),
+      author: t('heroFeatures.testimonial1.author', { defaultValue: '张明' }),
+      role: t('heroFeatures.testimonial1.role', { defaultValue: '深度旅行者' }),
+    },
+    {
+      quote: t('heroFeatures.testimonial2.quote', {
+        defaultValue: '作为户外领队，TripNARA 的风险评估功能帮我们避免了很多潜在问题。',
+      }),
+      author: t('heroFeatures.testimonial2.author', { defaultValue: '李华' }),
+      role: t('heroFeatures.testimonial2.role', { defaultValue: '户外领队' }),
+    },
+  ];
+
   return (
-    <section
-      style={{
-        padding: '6rem 2rem',
-        backgroundColor: '#fff',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
+    <WebsiteSection variant="default" padding="xl" maxWidth="xl" className="relative overflow-hidden">
       {/* Subtle map texture background */}
       <div
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          opacity: 0.03,
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10 L30 15 L50 10 L70 20 L90 15' stroke='%23000' stroke-width='1' fill='none'/%3E%3Cpath d='M10 30 L30 35 L50 30 L70 40 L90 35' stroke='%23000' stroke-width='1' fill='none'/%3E%3Cpath d='M10 50 L30 55 L50 50 L70 60 L90 55' stroke='%23000' stroke-width='1' fill='none'/%3E%3Cpath d='M10 70 L30 75 L50 70 L70 80 L90 75' stroke='%23000' stroke-width='1' fill='none'/%3E%3Ccircle cx='30' cy='15' r='2' fill='%23000'/%3E%3Ccircle cx='50' cy='10' r='2' fill='%23000'/%3E%3Ccircle cx='70' cy='20' r='2' fill='%23000'/%3E%3Ccircle cx='30' cy='35' r='2' fill='%23000'/%3E%3Ccircle cx='50' cy='30' r='2' fill='%23000'/%3E%3Ccircle cx='70' cy='40' r='2' fill='%23000'/%3E%3C/svg%3E")`,
           backgroundRepeat: 'repeat',
           backgroundSize: '200px 200px',
-          pointerEvents: 'none',
         }}
       />
-      <div
-        style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
+      
+      <div className="relative z-10">
         {/* Feature Cards */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '2.5rem',
-            marginBottom: '4rem',
-          }}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mb-16">
           {features.map((feature, idx) => {
             const IconComponent = feature.icon;
             return (
-              <div
+              <WebsiteCard
                 key={idx}
-                style={{
-                  padding: '2.5rem',
-                  backgroundColor: '#fff',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '12px',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-6px) scale(1.02)';
-                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08)';
-                  e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
-                  e.currentTarget.style.backgroundColor = '#fefefe';
-                  // Icon float animation
-                  const iconContainer = e.currentTarget.querySelector('.icon-container') as HTMLElement;
-                  if (iconContainer) {
-                    iconContainer.style.transform = 'translateY(-4px)';
-                    iconContainer.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.borderColor = '#e0e0e0';
-                  e.currentTarget.style.backgroundColor = '#fff';
-                  // Reset icon
-                  const iconContainer = e.currentTarget.querySelector('.icon-container') as HTMLElement;
-                  if (iconContainer) {
-                    iconContainer.style.transform = 'translateY(0)';
-                  }
-                }}
+                hover
+                className="cursor-pointer group"
               >
-                <div 
-                  className="icon-container"
-                  style={{ 
-                    marginBottom: '1.5rem', 
-                    display: 'flex', 
-                    justifyContent: 'center',
-                    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  }}
-                >
-                  <IconComponent size={70} color="#000" />
-                </div>
-
-                <h3
-                  style={{
-                    fontSize: '1.4rem',
-                    fontWeight: '700',
-                    marginBottom: '1rem',
-                    textAlign: 'center',
-                    color: '#000',
-                  }}
-                >
-                  {feature.title}
-                </h3>
-
-                <p
-                  style={{
-                    fontSize: '1rem',
-                    color: '#666',
-                    textAlign: 'center',
-                    lineHeight: '1.7',
-                    marginBottom: feature.tag ? '1rem' : '0',
-                  }}
-                >
-                  {feature.description}
-                </p>
-
-                {feature.tag && (
-                  <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-                    <span
-                      style={{
-                        padding: '0.4rem 0.8rem',
-                        backgroundColor: '#f5f5f5',
-                        color: '#666',
-                        fontSize: '0.85rem',
-                        borderRadius: '4px',
-                        border: '1px solid #e0e0e0',
-                      }}
-                    >
-                      {feature.tag}
-                    </span>
+                <CardContent className="p-10">
+                  <div className="icon-container mb-6 flex justify-center transition-transform duration-300 group-hover:-translate-y-1">
+                    <IconComponent size={70} className="text-foreground" />
                   </div>
-                )}
-              </div>
+
+                  <h3 className="text-xl font-bold mb-4 text-center text-foreground">
+                    {feature.title}
+                  </h3>
+
+                  <p className="text-base text-muted-foreground text-center leading-relaxed mb-4">
+                    {feature.description}
+                  </p>
+
+                  {feature.tag && (
+                    <div className="text-center mt-4">
+                      <Badge variant="outline" className="text-xs px-3 py-1">
+                        {feature.tag}
+                      </Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </WebsiteCard>
             );
           })}
         </div>
 
         {/* User Testimonials */}
-        <div
-          style={{
-            marginBottom: '4rem',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '2rem',
-          }}
-        >
-          {[
-            {
-              quote: t('heroFeatures.testimonial1.quote', {
-                defaultValue: '终于不用再担心"计划赶不上变化"了。TripNARA 让我第一次真正走完了整条路线。',
-              }),
-              author: t('heroFeatures.testimonial1.author', { defaultValue: '张明' }),
-              role: t('heroFeatures.testimonial1.role', { defaultValue: '深度旅行者' }),
-            },
-            {
-              quote: t('heroFeatures.testimonial2.quote', {
-                defaultValue: '作为户外领队，TripNARA 的风险评估功能帮我们避免了很多潜在问题。',
-              }),
-              author: t('heroFeatures.testimonial2.author', { defaultValue: '李华' }),
-              role: t('heroFeatures.testimonial2.role', { defaultValue: '户外领队' }),
-            },
-          ].map((testimonial, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '2rem',
-                backgroundColor: '#fafafa',
-                borderRadius: '12px',
-                border: '1px solid #f0f0f0',
-                position: 'relative',
-              }}
-            >
-              {/* Quote mark */}
-              <div
-                style={{
-                  fontSize: '4rem',
-                  lineHeight: '1',
-                  color: 'oklch(0.205 0 0)',
-                  opacity: 0.15,
-                  position: 'absolute',
-                  top: '1rem',
-                  left: '1.5rem',
-                  fontFamily: 'Georgia, serif',
-                }}
-              >
-                "
-              </div>
-              <p
-                style={{
-                  fontSize: '1rem',
-                  lineHeight: '1.7',
-                  color: '#333',
-                  marginBottom: '1.5rem',
-                  paddingLeft: '1rem',
-                  fontStyle: 'italic',
-                  position: 'relative',
-                  zIndex: 1,
-                }}
-              >
-                {testimonial.quote}
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  paddingLeft: '1rem',
-                }}
-              >
-                <div
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    backgroundColor: 'oklch(0.205 0 0)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontWeight: '600',
-                    fontSize: '0.9rem',
-                  }}
-                >
-                  {testimonial.author.charAt(0)}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+          {testimonials.map((testimonial, idx) => (
+            <WebsiteCard key={idx} className="bg-muted/30 border-muted">
+              <CardContent className="p-8 relative">
+                {/* Quote mark */}
+                <div className="text-6xl leading-none text-primary opacity-15 absolute top-4 left-6 font-serif">
+                  "
                 </div>
-                <div>
-                  <div style={{ fontWeight: '600', color: '#000', fontSize: '0.95rem' }}>
-                    {testimonial.author}
+                <p className="text-base leading-relaxed text-foreground mb-6 pl-4 italic relative z-10">
+                  {testimonial.quote}
+                </p>
+                <div className="flex items-center gap-3 pl-4">
+                  <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
+                    {testimonial.author.charAt(0)}
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#666' }}>{testimonial.role}</div>
+                  <div>
+                    <div className="font-semibold text-foreground text-sm">
+                      {testimonial.author}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{testimonial.role}</div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </WebsiteCard>
           ))}
         </div>
 
         {/* Bottom CTA */}
-        <div style={{ textAlign: 'center' }}>
-          <Link
-            to="/login"
-            style={{
-              display: 'inline-block',
-              color: '#fff',
-              backgroundColor: 'oklch(0.205 0 0)',
-              textDecoration: 'none',
-              fontWeight: '600',
-              fontSize: '1.1rem',
-              padding: '1rem 2.5rem',
-              borderRadius: '8px',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.2)';
-              e.currentTarget.style.backgroundColor = 'oklch(0.25 0 0)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-              e.currentTarget.style.backgroundColor = 'oklch(0.205 0 0)';
-            }}
-          >
-            {t('heroFeatures.bottomCTA', { defaultValue: '把梦想变成路线 →' })}
-          </Link>
+        <div className="text-center">
+          <Button asChild size="lg" className="text-lg px-10 py-6 shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5">
+            <Link to="/login">
+              {t('heroFeatures.bottomCTA', { defaultValue: '把梦想变成路线 →' })}
+            </Link>
+          </Button>
         </div>
       </div>
-    </section>
+    </WebsiteSection>
   );
 }

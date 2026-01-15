@@ -1,7 +1,5 @@
 import { useTranslation } from 'react-i18next';
-
-// 品牌色：酒红色
-const BRAND_RED = '#DC2626';
+import { cn } from '@/lib/utils';
 
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation();
@@ -10,65 +8,34 @@ export default function LanguageSwitcher() {
     i18n.changeLanguage(lng);
   };
 
+  const isActive = (lang: string) => {
+    return i18n.language === lang || i18n.language?.startsWith(lang);
+  };
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        gap: '0.5rem',
-        alignItems: 'center',
-      }}
-    >
+    <div className="flex gap-2 items-center">
       <button
         onClick={() => changeLanguage('en')}
-        style={{
-          padding: '0.25rem 0.75rem',
-          backgroundColor: i18n.language === 'en' ? BRAND_RED : 'transparent',
-          color: i18n.language === 'en' ? '#fff' : '#333',
-          border: `1px solid ${BRAND_RED}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '0.9rem',
-          transition: 'all 0.2s',
-        }}
-        onMouseEnter={(e) => {
-          if (i18n.language !== 'en') {
-            e.currentTarget.style.backgroundColor = '#FEF2F2';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (i18n.language !== 'en') {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
+        className={cn(
+          'px-3 py-1 rounded border text-sm cursor-pointer transition-all',
+          isActive('en')
+            ? 'bg-primary text-primary-foreground border-primary'
+            : 'bg-transparent text-foreground border-border hover:bg-accent'
+        )}
       >
         EN
       </button>
       <button
         onClick={() => changeLanguage('zh')}
-        style={{
-          padding: '0.25rem 0.75rem',
-          backgroundColor: i18n.language === 'zh' ? BRAND_RED : 'transparent',
-          color: i18n.language === 'zh' ? '#fff' : '#333',
-          border: `1px solid ${BRAND_RED}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '0.9rem',
-          transition: 'all 0.2s',
-        }}
-        onMouseEnter={(e) => {
-          if (i18n.language !== 'zh') {
-            e.currentTarget.style.backgroundColor = '#FEF2F2';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (i18n.language !== 'zh') {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }
-        }}
+        className={cn(
+          'px-3 py-1 rounded border text-sm cursor-pointer transition-all',
+          isActive('zh')
+            ? 'bg-primary text-primary-foreground border-primary'
+            : 'bg-transparent text-foreground border-border hover:bg-accent'
+        )}
       >
         中文
       </button>
     </div>
   );
 }
-

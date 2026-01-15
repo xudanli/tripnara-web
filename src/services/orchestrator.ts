@@ -42,6 +42,8 @@ export interface OrchestrationResult {
   };
   error?: string;
   needsApproval?: boolean;         // 是否需要审批（用于快速判断）
+  needsRedirect?: boolean;         // 是否需要重定向
+  redirectTo?: string;             // 重定向目标 URL
 }
 
 /**
@@ -134,6 +136,19 @@ class PlanStudioOrchestrator {
       // 调用 LangGraph Orchestrator
       const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
 
+      // 处理重定向（REDIRECT_REQUIRED）
+      if (response.result.status === 'REDIRECT_REQUIRED') {
+        const redirectInfo = response.result.payload?.redirectInfo;
+        if (redirectInfo) {
+          return {
+            success: false,
+            message: redirectInfo.redirect_reason,
+            redirectTo: redirectInfo.redirect_to,
+            needsRedirect: true,
+          };
+        }
+      }
+
       // 解析响应
       // 检查是否需要审批（NEED_CONFIRMATION 不是失败，而是需要用户审批）
       const suspensionInfo = response.result.payload?.suspensionInfo;
@@ -148,16 +163,28 @@ class PlanStudioOrchestrator {
       // 尝试从决策日志中提取更详细的错误信息
       let detailedError: string | undefined;
       if (!isSuccess && decisionLog.length > 0) {
-        // 查找最后一个失败的决策步骤
+        // 查找最后一个失败的决策步骤（兼容新旧两种格式）
         const lastFailedStep = decisionLog
-          .filter(step => step.reason_code && (
-            step.reason_code.includes('FAILED') || 
-            step.reason_code.includes('ERROR') ||
-            step.reason_code.includes('CONSTRAINT')
-          ))
+          .filter(step => {
+            // 检查是否是旧格式 DecisionLogItem
+            if ('reason_code' in step && step.reason_code) {
+              return (
+                step.reason_code.includes('FAILED') || 
+                step.reason_code.includes('ERROR') ||
+                step.reason_code.includes('CONSTRAINT')
+              );
+            }
+            // 新格式 DecisionLogEntry 从 outputs_summary 中查找错误信息
+            if ('outputs_summary' in step && step.outputs_summary) {
+              const summary = step.outputs_summary.toLowerCase();
+              return summary.includes('failed') || summary.includes('error') || summary.includes('constraint');
+            }
+            return false;
+          })
           .pop();
         
-        if (lastFailedStep?.facts) {
+        // 处理旧格式的 facts
+        if (lastFailedStep && 'facts' in lastFailedStep && lastFailedStep.facts) {
           // 尝试从 facts 中提取错误详情
           const errorDetails = Object.entries(lastFailedStep.facts)
             .filter(([key]) => key.toLowerCase().includes('error') || key.toLowerCase().includes('reason'))
@@ -167,6 +194,10 @@ class PlanStudioOrchestrator {
           if (errorDetails) {
             detailedError = errorDetails;
           }
+        }
+        // 处理新格式的 outputs_summary
+        else if (lastFailedStep && 'outputs_summary' in lastFailedStep && lastFailedStep.outputs_summary) {
+          detailedError = lastFailedStep.outputs_summary;
         }
       }
 

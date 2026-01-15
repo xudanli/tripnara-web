@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { WebsiteSection } from '@/components/website/WebsiteSection';
+import { WebsiteHeading } from '@/components/website/WebsiteHeading';
+import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
 
 export default function DEMEngineSection() {
   const { t } = useTranslation();
@@ -10,88 +13,36 @@ export default function DEMEngineSection() {
   ];
 
   return (
-    <section
-      style={{
-        padding: '6rem 2rem',
-        maxWidth: '1200px',
-        margin: '0 auto',
-      }}
-    >
-      <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
-        <h2
-          style={{
-            fontSize: 'clamp(2rem, 4vw, 3rem)',
-            fontWeight: '700',
-            marginBottom: '1rem',
-          }}
-        >
+    <WebsiteSection variant="default" padding="xl" maxWidth="xl">
+      <div className="text-center mb-16">
+        <WebsiteHeading level={2} align="center" className="mb-4">
           {t('dem.title')}
-        </h2>
-        <p
-          style={{
-            fontSize: '1.5rem',
-            color: '#666',
-            fontWeight: '600',
-          }}
-        >
+        </WebsiteHeading>
+        <p className="text-2xl text-muted-foreground font-semibold">
           {t('dem.subtitle')}
         </p>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: '2rem',
-          marginBottom: '3rem',
-        }}
-      >
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
         {features.map((feature) => (
-          <div
-            key={feature.key}
-            style={{
-              padding: '2rem',
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              textAlign: 'center',
-              backgroundColor: '#fff',
-            }}
-          >
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
-              {feature.icon}
-            </div>
-            <h3
-              style={{
-                fontSize: '1.3rem',
-                fontWeight: '600',
-                marginBottom: '0.5rem',
-              }}
-            >
-              {feature.name}
-            </h3>
-          </div>
+          <WebsiteCard key={feature.key}>
+            <CardContent className="p-8 text-center">
+              <div className="text-5xl mb-4">
+                {feature.icon}
+              </div>
+              <h3 className="text-xl font-semibold">
+                {feature.name}
+              </h3>
+            </CardContent>
+          </WebsiteCard>
         ))}
       </div>
 
-      <div
-        style={{
-          textAlign: 'center',
-          padding: '2rem',
-          backgroundColor: '#fff3cd',
-          border: '2px solid #ffc107',
-          borderRadius: '8px',
-        }}
-      >
-        <p
-          style={{
-            fontSize: '1.2rem',
-            fontWeight: '600',
-            color: '#856404',
-          }}
-        >
+      <div className="text-center p-8 bg-yellow-50 border-2 border-yellow-400 rounded-lg">
+        <p className="text-xl font-semibold text-yellow-800">
           {t('dem.validation')}
         </p>
       </div>
-    </section>
+    </WebsiteSection>
   );
 }

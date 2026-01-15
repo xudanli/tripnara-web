@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { WebsiteSection } from '@/components/website/WebsiteSection';
+import { WebsiteHeading } from '@/components/website/WebsiteHeading';
+import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
 
 export default function FAQSection() {
   const { t } = useTranslation();
@@ -15,71 +18,25 @@ export default function FAQSection() {
   ];
 
   return (
-    <section
-      style={{
-        padding: '6rem 2rem',
-        backgroundColor: '#fff',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '800px',
-          margin: '0 auto',
-        }}
-      >
-        <h2
-          style={{
-            fontSize: 'clamp(2rem, 4vw, 2.5rem)',
-            fontWeight: '700',
-            textAlign: 'center',
-            marginBottom: '4rem',
-            color: '#000',
-          }}
-        >
-          {t('faq.title', { defaultValue: '常见问题' })}
-        </h2>
+    <WebsiteSection variant="default" padding="xl" maxWidth="lg">
+      <WebsiteHeading level={2} align="center" className="mb-16">
+        {t('faq.title', { defaultValue: '常见问题' })}
+      </WebsiteHeading>
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2rem',
-          }}
-        >
-          {faqs.map((faq, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '2rem',
-                border: '1px solid #e0e0e0',
-                borderRadius: '12px',
-                backgroundColor: '#fff',
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: '1.2rem',
-                  fontWeight: '600',
-                  marginBottom: '1rem',
-                  color: '#000',
-                }}
-              >
+      <div className="flex flex-col gap-8">
+        {faqs.map((faq, idx) => (
+          <WebsiteCard key={idx}>
+            <CardContent className="p-8">
+              <h3 className="text-xl font-semibold mb-4 text-foreground">
                 {faq.question}
               </h3>
-              <p
-                style={{
-                  fontSize: '1rem',
-                  color: '#666',
-                  lineHeight: '1.7',
-                }}
-              >
+              <p className="text-base text-muted-foreground leading-relaxed">
                 {faq.answer}
               </p>
-            </div>
-          ))}
-        </div>
+            </CardContent>
+          </WebsiteCard>
+        ))}
       </div>
-    </section>
+    </WebsiteSection>
   );
 }
-

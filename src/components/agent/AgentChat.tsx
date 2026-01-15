@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { agentApi } from '@/api/agent';
-import type { RouteAndRunRequest, RouteAndRunResponse, RouteType, UIStatus, LLMProvider } from '@/api/agent';
+import type { RouteAndRunRequest, RouteAndRunResponse, RouteType, UIStatus, LLMProvider, EntryPoint, DecisionLogEntry } from '@/api/agent';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -30,11 +31,15 @@ import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { toast } from 'sonner';
 import { needsApproval, extractApprovalId } from '@/utils/approval';
+import { normalizeToNewFormat } from '@/utils/decision-log-migrator';
+import { getErrorHandlingStrategy } from '@/utils/agent-error-types';
 
 interface AgentChatProps {
   activeTripId?: string | null;
   onSystem2Response?: () => void;
   className?: string;
+  entryPoint?: EntryPoint;  // 入口来源标识
+  readonlyMode?: boolean;    // 只读模式
 }
 
 interface Message {
@@ -50,12 +55,7 @@ interface Message {
     tokens_est?: number;
     cost_est_usd?: number;
   };
-  decisionLog?: Array<{
-    step: number;
-    chosen_action: string;
-    reason_code?: string;
-    confidence?: number;
-  }>;
+  decisionLog?: DecisionLogEntry[];  // 使用新的决策日志格式
   mode?: 'fast' | 'slow';
 }
 
@@ -259,16 +259,21 @@ function DecisionLogCard({ decisionLog }: { decisionLog: Message['decisionLog'] 
           {decisionLog.map((log, idx) => (
             <div key={idx} className="border-l-2 border-primary/30 pl-2.5 pb-2 last:pb-0">
               <div className="font-medium mb-0.5">
-                步骤 {log.step}：{log.chosen_action}
+                {log.step} - {log.actor}：{log.outputs_summary}
               </div>
-              {log.reason_code && (
+              {log.inputs_summary && (
                 <div className="text-muted-foreground text-[11px] mt-0.5">
-                  原因：{log.reason_code}
+                  输入：{log.inputs_summary}
                 </div>
               )}
-              {log.confidence !== undefined && (
+              {log.evidence_refs && log.evidence_refs.length > 0 && (
                 <div className="text-muted-foreground text-[11px] mt-0.5">
-                  置信度：{(log.confidence * 100).toFixed(0)}%
+                  证据引用：{log.evidence_refs.join(', ')}
+                </div>
+              )}
+              {log.metadata?.guardian && (
+                <div className="text-muted-foreground text-[11px] mt-0.5">
+                  三人格：{log.metadata.guardian}
                 </div>
               )}
             </div>
@@ -369,7 +374,8 @@ function MessageBubble({ message, mode, onRetry }: { message: Message; mode?: 'f
   );
 }
 
-export default function AgentChat({ activeTripId, onSystem2Response, className }: AgentChatProps) {
+export default function AgentChat({ activeTripId, onSystem2Response, className, entryPoint, readonlyMode }: AgentChatProps) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { i18n } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -445,10 +451,50 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
         },
         options: {
           llm_provider: selectedLLMProvider,
+          entry_point: entryPoint,
+          readonly_mode: readonlyMode,
         },
       };
 
       const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
+
+      // 处理重定向（REDIRECT_REQUIRED）
+      if (response.result.status === 'REDIRECT_REQUIRED') {
+        const redirectInfo = response.result.payload?.redirectInfo;
+        if (redirectInfo) {
+          // 显示重定向提示
+          toast.info(redirectInfo.redirect_reason, {
+            duration: 3000,
+          });
+
+          // 移除思考中的消息
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
+            return [
+              ...filtered,
+              {
+                id: `assistant-${Date.now()}`,
+                role: 'assistant',
+                content: `需要跳转到其他页面继续操作：${redirectInfo.redirect_reason}`,
+                timestamp: new Date(),
+                status: 'done',
+              },
+            ];
+          });
+
+          // 延迟执行重定向，让用户看到提示
+          setTimeout(() => {
+            if (redirectInfo.redirect_to.startsWith('http')) {
+              window.location.href = redirectInfo.redirect_to;
+            } else {
+              navigate(redirectInfo.redirect_to);
+            }
+          }, 1000);
+
+          setLoading(false);
+          return;
+        }
+      }
 
       // 处理 NEED_CONSENT 状态（需要浏览器授权）
       if (response.result.status === 'NEED_CONSENT') {
@@ -510,7 +556,13 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
       // 根据 routeType 处理响应
       const routeType = response.route.route;
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
-      const decisionLog = response.explain?.decision_log || [];
+      
+      // 规范化决策日志格式（支持新旧格式）
+      const rawDecisionLog = response.explain?.decision_log || [];
+      const decisionLog: DecisionLogEntry[] = rawDecisionLog.map((entry: any) => 
+        normalizeToNewFormat(entry, response.request_id)
+      );
+      
       const mode = response.route.ui_hint.mode;
 
       // 更新当前模式
@@ -545,25 +597,40 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
           uiStatus = 'awaiting_user_input';
         }
         
-        // 如果有澄清信息，可以结构化展示
-        const clarificationInfo = response.result.payload?.clarificationInfo;
-        if (clarificationInfo) {
-          // 构建结构化的澄清消息
-          let clarificationMessage = answerText;
+        // 优先使用新的 clarificationMessage 字段（统一在 payload 中）
+        const clarificationMessage = response.result.payload?.clarificationMessage;
+        const clarificationInfo = response.result.payload?.clarificationInfo; // 向后兼容
+        
+        if (clarificationMessage) {
+          // 使用新的澄清消息（Markdown 格式）
+          messageContent = clarificationMessage;
+        } else if (clarificationInfo) {
+          // 向后兼容：使用旧的 clarificationInfo 字段
+          let clarificationText = answerText;
           
           if (clarificationInfo.missingServices && clarificationInfo.missingServices.length > 0) {
-            clarificationMessage += `\n\n**缺失的服务：**\n${clarificationInfo.missingServices.map(s => `- ${s}`).join('\n')}`;
+            clarificationText += `\n\n**缺失的服务：**\n${clarificationInfo.missingServices.map(s => `- ${s}`).join('\n')}`;
           }
           
           if (clarificationInfo.impact) {
-            clarificationMessage += `\n\n**影响：**\n${clarificationInfo.impact}`;
+            clarificationText += `\n\n**影响：**\n${clarificationInfo.impact}`;
           }
           
           if (clarificationInfo.solutions && clarificationInfo.solutions.length > 0) {
-            clarificationMessage += `\n\n**解决方案：**\n${clarificationInfo.solutions.map(s => `- ${s}`).join('\n')}`;
+            clarificationText += `\n\n**解决方案：**\n${clarificationInfo.solutions.map(s => `- ${s}`).join('\n')}`;
           }
           
-          messageContent = clarificationMessage;
+          messageContent = clarificationText;
+        }
+        
+        // 如果有错误类型，可以记录用于监控
+        const errorType = response.result.payload?.errorType;
+        if (errorType) {
+          const strategy = getErrorHandlingStrategy(errorType);
+          console.log('[Agent Chat] 错误处理策略:', {
+            errorType,
+            strategy,
+          });
         }
       } else if (response.result.status === 'TIMEOUT') {
         messageContent = 'TIMEOUT'; // 特殊标记，用于显示优化的错误UI
@@ -930,7 +997,11 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                 // 处理重试响应（复用相同的处理逻辑）
                 const routeType = retryResponse.route.route;
                 const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
-                const decisionLog = retryResponse.explain?.decision_log || [];
+                // 规范化决策日志格式（支持新旧格式）
+                const rawRetryDecisionLog = retryResponse.explain?.decision_log || [];
+                const retryDecisionLog: DecisionLogEntry[] = rawRetryDecisionLog.map((entry: any) => 
+                  normalizeToNewFormat(entry, retryResponse.request_id)
+                );
                 const mode = retryResponse.route.ui_hint.mode;
                 
                 setCurrentMode(mode);
@@ -1004,7 +1075,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className }
                         tokens_est: retryResponse.observability.tokens_est,
                         cost_est_usd: retryResponse.observability.cost_est_usd,
                       },
-                      decisionLog: decisionLog.length > 0 ? decisionLog : undefined,
+                      decisionLog: retryDecisionLog.length > 0 ? retryDecisionLog : undefined,
                       mode,
                     },
                   ];

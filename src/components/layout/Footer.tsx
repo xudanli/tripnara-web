@@ -8,106 +8,64 @@ export default function Footer() {
   const [contactUsOpen, setContactUsOpen] = useState(false);
 
   return (
-    <footer
-      style={{
-        padding: '4rem 2rem 2rem',
-        backgroundColor: '#000',
-        color: '#fff',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '3rem',
-            marginBottom: '3rem',
-          }}
-        >
+    <footer className="py-16 px-8 pb-8 bg-foreground text-background">
+      <div className="max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
           {/* Brand */}
           <div>
-            <div
-              style={{
-                fontSize: '1.5rem',
-                fontWeight: '700',
-                marginBottom: '1rem',
-              }}
-            >
+            <div className="text-2xl font-bold mb-4">
               TripNARA
             </div>
-            <p
-              style={{
-                fontSize: '0.9rem',
-                color: '#999',
-                lineHeight: '1.6',
-              }}
-            >
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Route Intelligence System
             </p>
           </div>
 
           {/* Navigation */}
           <div>
-            <h4
-              style={{
-                fontSize: '1rem',
-                fontWeight: '600',
-                marginBottom: '1rem',
-              }}
-            >
+            <h4 className="text-base font-semibold mb-4">
               {t('footer.navigation', { defaultValue: '导航' })}
             </h4>
-            <nav
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem',
-              }}
-            >
+            <nav className="flex flex-col gap-3">
               <Link
                 to="/product"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('nav.product')}
               </Link>
               <Link
                 to="/stories"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('nav.stories')}
               </Link>
               <Link
                 to="/route-intelligence"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('nav.routeIntelligence')}
               </Link>
               <Link
                 to="/professionals"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('nav.professionals')}
               </Link>
               <Link
                 to="/pricing"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('nav.pricing')}
               </Link>
               <Link
                 to="/about"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('nav.about')}
               </Link>
               <button
                 onClick={() => setContactUsOpen(true)}
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}
+                className="text-muted-foreground text-sm bg-transparent border-none cursor-pointer p-0 text-left hover:text-background transition-colors"
               >
                 {t('footer.contact')}
               </button>
@@ -116,31 +74,19 @@ export default function Footer() {
 
           {/* Legal */}
           <div>
-            <h4
-              style={{
-                fontSize: '1rem',
-                fontWeight: '600',
-                marginBottom: '1rem',
-              }}
-            >
+            <h4 className="text-base font-semibold mb-4">
               {t('footer.legal', { defaultValue: '法律' })}
             </h4>
-            <nav
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem',
-              }}
-            >
+            <nav className="flex flex-col gap-3">
               <Link
                 to="/terms"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('footer.terms', { defaultValue: '服务条款' })}
               </Link>
               <Link
                 to="/privacy"
-                style={{ color: '#ccc', textDecoration: 'none', fontSize: '0.9rem' }}
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('footer.privacy', { defaultValue: '隐私政策' })}
               </Link>
@@ -148,15 +94,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div
-          style={{
-            paddingTop: '2rem',
-            borderTop: '1px solid #333',
-            textAlign: 'center',
-            fontSize: '0.9rem',
-            color: '#666',
-          }}
-        >
+        <div className="pt-8 border-t border-border/20 text-center text-sm text-muted-foreground">
           © {new Date().getFullYear()} TripNARA. All rights reserved.
         </div>
       </div>

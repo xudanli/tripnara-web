@@ -1,12 +1,34 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AbuBearIcon, DrDreDogIcon, NeptuneOtterIcon } from '@/components/illustrations/PersonaIcons';
+import { WebsiteSection } from '@/components/website/WebsiteSection';
+import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
+import { WebsiteHeading } from '@/components/website/WebsiteHeading';
+import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/persona-colors';
+import { cn } from '@/lib/utils';
+
+type PersonaType = 'ABU' | 'DR_DRE' | 'NEPTUNE';
 
 export default function ThreePersonasSection() {
   const { t } = useTranslation();
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
   
-  const personas = [
+  const personas: Array<{
+    name: string;
+    shortTitle: string;
+    keywords: string[];
+    title: string;
+    subtitle: string;
+    tagline: string;
+    description: string;
+    details: string;
+    personality: string;
+    why: string;
+    visual: string;
+    imagePath: string;
+    icon: typeof AbuBearIcon;
+    type: PersonaType;
+  }> = [
     {
       name: t('personas.abu.name', { defaultValue: 'Abu' }),
       shortTitle: t('personas.abu.shortTitle', { defaultValue: '安全与边界守护' }),
@@ -31,6 +53,7 @@ export default function ThreePersonasSection() {
       }),
       imagePath: '/images/personas/abu.png',
       icon: AbuBearIcon,
+      type: 'ABU',
     },
     {
       name: t('personas.dre.name', { defaultValue: 'Dr.Dre' }),
@@ -56,6 +79,7 @@ export default function ThreePersonasSection() {
       }),
       imagePath: '/images/personas/dr-dre.png',
       icon: DrDreDogIcon,
+      type: 'DR_DRE',
     },
     {
       name: t('personas.neptune.name', { defaultValue: 'Neptune' }),
@@ -81,173 +105,80 @@ export default function ThreePersonasSection() {
       }),
       imagePath: '/images/personas/neptune.png',
       icon: NeptuneOtterIcon,
+      type: 'NEPTUNE',
     },
   ];
 
   return (
-    <section
-      style={{
-        padding: '6rem 2rem',
-        backgroundColor: '#fff',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-        }}
-      >
-        <h2
-          style={{
-            fontSize: 'clamp(2rem, 4vw, 2.5rem)',
-            fontWeight: '700',
-            textAlign: 'center',
-            marginBottom: '4rem',
-            color: '#000',
-          }}
-        >
-          {t('personas.title', {
-            defaultValue: '帮助你做出更好旅行决定的三位合伙人',
-          })}
-        </h2>
+    <WebsiteSection variant="default" padding="xl" maxWidth="xl">
+      <WebsiteHeading level={2} align="center" className="mb-16">
+        {t('personas.title', {
+          defaultValue: '帮助你做出更好旅行决定的三位合伙人',
+        })}
+      </WebsiteHeading>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '2.5rem',
-          }}
-        >
-          {personas.map((persona, idx) => (
-            <div
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+        {personas.map((persona, idx) => {
+          const IconComponent = persona.icon;
+          return (
+            <WebsiteCard
               key={idx}
-              style={{
-                padding: '2.5rem',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                borderRadius: '12px',
-                textAlign: 'center',
-                transition: 'all 0.3s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-                e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-                e.currentTarget.style.borderColor = '#e0e0e0';
-              }}
+              hover
+              className={cn('text-center', getPersonaColorClasses(persona.type))}
             >
-              {/* 头像 */}
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  marginBottom: '1.5rem',
-                  minHeight: '100px',
-                  alignItems: 'center',
-                }}
-              >
-                {persona.imagePath && !imageErrors[idx] ? (
-                  <img
-                    src={persona.imagePath}
-                    alt={persona.name}
-                    style={{
-                      width: '100px',
-                      height: '100px',
-                      objectFit: 'contain',
-                    }}
-                    onError={() => {
-                      setImageErrors((prev) => ({ ...prev, [idx]: true }));
-                    }}
-                  />
-                ) : persona.icon ? (
-                  (() => {
-                    const IconComponent = persona.icon;
-                    return (
-                      <IconComponent
-                        size={100}
-                        color="#1F2937"
-                        className="persona-icon"
-                      />
-                    );
-                  })()
-                ) : null}
-              </div>
+              <CardContent className="p-10">
+                {/* 头像 */}
+                <div className="flex justify-center mb-6 min-h-[100px] items-center">
+                  {persona.imagePath && !imageErrors[idx] ? (
+                    <img
+                      src={persona.imagePath}
+                      alt={persona.name}
+                      className="w-24 h-24 object-contain"
+                      onError={() => {
+                        setImageErrors((prev) => ({ ...prev, [idx]: true }));
+                      }}
+                    />
+                  ) : (
+                    <IconComponent
+                      size={100}
+                      className={cn('persona-icon', getPersonaIconColorClasses(persona.type))}
+                    />
+                  )}
+                </div>
 
-              {/* 名字 */}
-              <h3
-                style={{
-                  fontSize: '1.8rem',
-                  fontWeight: '700',
-                  marginBottom: '0.75rem',
-                  color: '#000',
-                }}
-              >
-                {persona.name}
-              </h3>
+                {/* 名字 */}
+                <h3 className="text-3xl font-bold mb-3 text-foreground">
+                  {persona.name}
+                </h3>
 
-              {/* 标题 */}
-              <p
-                style={{
-                  fontSize: '1.1rem',
-                  fontWeight: '600',
-                  color: '#333',
-                  marginBottom: '0.5rem',
-                  lineHeight: '1.5',
-                }}
-              >
-                {persona.title}
-              </p>
-
-              {/* 副标题 */}
-              {persona.subtitle && (
-                <p
-                  style={{
-                    fontSize: '0.95rem',
-                    color: '#666',
-                    marginBottom: '1rem',
-                    fontStyle: 'italic',
-                  }}
-                >
-                  {persona.subtitle}
+                {/* 标题 */}
+                <p className="text-lg font-semibold text-foreground mb-2 leading-tight">
+                  {persona.title}
                 </p>
-              )}
 
-              {/* 口头禅 */}
-              {persona.tagline && (
-                <p
-                  style={{
-                    fontSize: '1rem',
-                    color: '#333',
-                    lineHeight: '1.7',
-                    marginBottom: '1rem',
-                    fontWeight: '500',
-                    fontStyle: 'italic',
-                  }}
-                >
-                  {persona.tagline}
+                {/* 副标题 */}
+                {persona.subtitle && (
+                  <p className="text-sm text-muted-foreground mb-4 italic">
+                    {persona.subtitle}
+                  </p>
+                )}
+
+                {/* 口头禅 */}
+                {persona.tagline && (
+                  <p className="text-base text-foreground leading-relaxed mb-4 font-medium italic">
+                    {persona.tagline}
+                  </p>
+                )}
+
+                {/* 描述 */}
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {persona.description}
                 </p>
-              )}
-
-              {/* 描述 */}
-              <p
-                style={{
-                  fontSize: '0.95rem',
-                  color: '#666',
-                  lineHeight: '1.6',
-                  marginBottom: '0',
-                }}
-              >
-                {persona.description}
-              </p>
-            </div>
-          ))}
-        </div>
+              </CardContent>
+            </WebsiteCard>
+          );
+        })}
       </div>
-
-    </section>
+    </WebsiteSection>
   );
 }

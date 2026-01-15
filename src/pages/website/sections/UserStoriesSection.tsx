@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { WebsiteSection } from '@/components/website/WebsiteSection';
+import { WebsiteHeading } from '@/components/website/WebsiteHeading';
+import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
 
 export default function UserStoriesSection() {
   const { t } = useTranslation();
@@ -19,83 +22,27 @@ export default function UserStoriesSection() {
   ];
 
   return (
-    <section
-      style={{
-        padding: '6rem 2rem',
-        backgroundColor: '#fff',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-        }}
-      >
-        <h2
-          style={{
-            fontSize: 'clamp(2rem, 4vw, 2.5rem)',
-            fontWeight: '700',
-            textAlign: 'center',
-            marginBottom: '4rem',
-            color: '#000',
-          }}
-        >
-          {t('userStories.title', {
-            defaultValue: '看看大家如何使用 TripNARA',
-          })}
-        </h2>
+    <WebsiteSection variant="default" padding="xl" maxWidth="xl">
+      <WebsiteHeading level={2} align="center" className="mb-16">
+        {t('userStories.title', {
+          defaultValue: '看看大家如何使用 TripNARA',
+        })}
+      </WebsiteHeading>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '2rem',
-          }}
-        >
-          {stories.map((story, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: '2.5rem',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                borderRadius: '12px',
-                transition: 'all 0.3s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-                e.currentTarget.style.borderColor = 'oklch(0.205 0 0)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-                e.currentTarget.style.borderColor = '#e0e0e0';
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: '700',
-                  marginBottom: '0.5rem',
-                  color: '#000',
-                }}
-              >
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {stories.map((story, idx) => (
+          <WebsiteCard key={idx} hover>
+            <CardContent className="p-10">
+              <h3 className="text-2xl font-bold mb-2 text-foreground">
                 {story.title}
               </h3>
-              <p
-                style={{
-                  fontSize: '1rem',
-                  color: '#666',
-                }}
-              >
+              <p className="text-base text-muted-foreground">
                 {story.subtitle}
               </p>
-            </div>
-          ))}
-        </div>
+            </CardContent>
+          </WebsiteCard>
+        ))}
       </div>
-    </section>
+    </WebsiteSection>
   );
 }
-

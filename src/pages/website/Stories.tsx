@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { PersonSitting, Route } from '@/components/illustrations/SimpleIllustrations';
+import { Badge } from '@/components/ui/badge';
 
 // 封面插画组件
 function StoryCoverIllustration({ type, className = '' }: { type: 'iceland' | 'newzealand' | 'europe'; className?: string }) {
@@ -413,51 +414,25 @@ export default function StoriesPage() {
                       </div>
                     </div>
 
-                    <div
-                      style={{
-                        paddingTop: '1rem',
-                        borderTop: '1px solid #e0e0e0',
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <span
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          backgroundColor: '#fff5f5',
-                          color: 'oklch(0.205 0 0)',
-                          fontSize: '0.85rem',
-                          borderRadius: '4px',
-                          border: '1px solid oklch(0.205 0 0)',
-                        }}
+                    <div className="pt-4 border-t border-border flex flex-wrap gap-2">
+                      <Badge
+                        variant="outline"
+                        className="px-3 py-1 text-xs bg-destructive/10 border-destructive text-destructive"
                       >
                         {t('stories.card.risk')}: {story.tags.risk}
-                      </span>
-                      <span
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          backgroundColor: '#f0f9ff',
-                          color: '#2563eb',
-                          fontSize: '0.85rem',
-                          borderRadius: '4px',
-                          border: '1px solid #2563eb',
-                        }}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="px-3 py-1 text-xs bg-primary/10 border-primary text-primary"
                       >
                         {t('stories.card.replacement')}: {story.tags.replacement}
-                      </span>
-                      <span
-                        style={{
-                          padding: '0.25rem 0.75rem',
-                          backgroundColor: '#f0fdf4',
-                          color: '#16a34a',
-                          fontSize: '0.85rem',
-                          borderRadius: '4px',
-                          border: '1px solid #16a34a',
-                        }}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="px-3 py-1 text-xs bg-persona-dre/10 border-persona-dre-accent text-persona-dre-foreground"
                       >
                         {t('stories.card.rhythm')}: {story.tags.rhythm}
-                      </span>
+                      </Badge>
                     </div>
 
                     {/* Arrow indicator on hover */}

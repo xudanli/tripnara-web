@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AgentChatDialog from './AgentChatDialog';
+import { NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
 
 interface AgentChatFabProps {
   activeTripId?: string | null;
@@ -26,7 +26,7 @@ export default function AgentChatFab({ activeTripId, onSystem2Response }: AgentC
           onClick={() => setOpen(true)}
           title="打开 Nara"
         >
-          <Bot className="w-6 h-6" />
+          <NaraAgentChatting size={24} color="currentColor" highlightColor="currentColor" className="text-primary-foreground" />
         </Button>
       </div>
 

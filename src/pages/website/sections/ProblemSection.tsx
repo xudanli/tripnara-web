@@ -1,127 +1,67 @@
 import { useTranslation } from 'react-i18next';
+import { WebsiteSection } from '@/components/website/WebsiteSection';
+import { WebsiteHeading } from '@/components/website/WebsiteHeading';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export default function ProblemSection() {
   const { t } = useTranslation();
   return (
-    <section
-      style={{
-        padding: '6rem 2rem',
-        maxWidth: '1200px',
-        margin: '0 auto',
-      }}
-    >
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '4rem',
-          alignItems: 'center',
-        }}
-      >
+    <WebsiteSection variant="default" padding="xl" maxWidth="xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
         <div>
-          <h2
-            style={{
-              fontSize: '2.5rem',
-              fontWeight: '700',
-              marginBottom: '1.5rem',
-              lineHeight: '1.3',
-              whiteSpace: 'pre-line',
-            }}
-          >
+          <WebsiteHeading level={2} className="mb-6 whitespace-pre-line">
             {t('problem.title')}
-          </h2>
+          </WebsiteHeading>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2rem',
-          }}
-        >
+        <div className="flex flex-col gap-8">
           {/* Regular Trip - Red Hotspots */}
-          <div
-            style={{
-              padding: '1.5rem',
-              border: '2px solid #ff4444',
-              borderRadius: '8px',
-              backgroundColor: '#fff5f5',
-            }}
-          >
-            <h3 style={{ marginBottom: '1rem', color: '#ff4444' }}>
+          <div className="p-6 border-2 border-destructive rounded-lg bg-destructive/10">
+            <h3 className="mb-4 text-destructive font-semibold">
               {t('problem.regularTrip')}
             </h3>
-            <div
-              style={{
-                display: 'flex',
-                gap: '0.5rem',
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className="flex gap-2 flex-wrap">
               {['Place A', 'Place B', 'Place C', 'Place D', 'Place E'].map(
                 (place) => (
-                  <span
+                  <Badge
                     key={place}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      backgroundColor: '#ff4444',
-                      color: '#fff',
-                      borderRadius: '4px',
-                      fontSize: '0.9rem',
-                    }}
+                    className="px-4 py-2 text-sm bg-destructive text-destructive-foreground"
                   >
                     {place}
-                  </span>
+                  </Badge>
                 )
               )}
             </div>
-            <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
+            <p className="mt-4 text-sm text-muted-foreground">
               {t('problem.regularTripDesc')}
             </p>
           </div>
 
           {/* TripNARA - Linear Structure */}
-          <div
-            style={{
-              padding: '1.5rem',
-              border: '2px solid #007bff',
-              borderRadius: '8px',
-              backgroundColor: '#f0f8ff',
-            }}
-          >
-            <h3 style={{ marginBottom: '1rem', color: '#007bff' }}>
+          <div className="p-6 border-2 border-primary rounded-lg bg-primary/10">
+            <h3 className="mb-4 text-primary font-semibold">
               {t('problem.tripnaraRoute')}
             </h3>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}
-            >
+            <div className="flex items-center gap-2">
               {['A', '→', 'B', '→', 'C', '→', 'D'].map((item, idx) => (
                 <span
                   key={idx}
-                  style={{
-                    padding: item === '→' ? '0' : '0.5rem 1rem',
-                    backgroundColor: item === '→' ? 'transparent' : '#007bff',
-                    color: item === '→' ? '#007bff' : '#fff',
-                    borderRadius: '4px',
-                    fontSize: item === '→' ? '1.2rem' : '0.9rem',
-                    fontWeight: item === '→' ? 'bold' : 'normal',
-                  }}
+                  className={cn(
+                    item === '→' ? 'px-0 text-primary font-bold text-xl' : 'px-4 py-2 text-sm bg-primary text-primary-foreground rounded',
+                    'inline-block'
+                  )}
                 >
                   {item}
                 </span>
               ))}
             </div>
-            <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
+            <p className="mt-4 text-sm text-muted-foreground">
               {t('problem.tripnaraRouteDesc')}
             </p>
           </div>
         </div>
       </div>
-    </section>
+    </WebsiteSection>
   );
 }
-

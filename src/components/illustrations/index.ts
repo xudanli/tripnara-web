@@ -40,3 +40,9 @@ export {
 
 export { HeroIllustration } from './HeroIllustration';
 
+export {
+  NaraAgentIcon,
+  NaraAgentThinking,
+  NaraAgentChatting,
+} from './AgentIllustrations';
+

@@ -703,14 +703,7 @@ export default function ProductPage() {
                     功能维度
                   </th>
                   <th
-                    style={{
-                      padding: '1.25rem',
-                      textAlign: 'left',
-                      fontWeight: '600',
-                      color: '#dc2626',
-                      borderBottom: '2px solid #e0e0e0',
-                      fontSize: '1rem',
-                    }}
+                    className="p-5 text-left font-semibold text-destructive border-b-2 border-border text-base"
                   >
                     普通旅行 App
                   </th>
@@ -829,56 +822,26 @@ export default function ProductPage() {
               }}
             >
               {/* Step 1 */}
-              <div
-                style={{
-                  padding: '1.5rem 2rem',
-                  backgroundColor: '#f0f9ff',
-                  borderRadius: '12px',
-                  border: '2px solid oklch(0.205 0 0)',
-                  textAlign: 'center',
-                  minWidth: '300px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-                }}
-              >
-                <div style={{ fontWeight: '600', color: '#000', fontSize: '1rem' }}>
+              <div className="px-8 py-6 rounded-xl border-2 border-primary text-center min-w-[300px] shadow-sm bg-primary/10">
+                <div className="font-semibold text-foreground text-base">
                   {t('product.systemDiagram.step1', { defaultValue: '用户输入（目标/偏好）' })}
                 </div>
               </div>
-              <div style={{ fontSize: '2rem', color: 'oklch(0.205 0 0)' }}>↓</div>
+              <div className="text-4xl text-primary">↓</div>
 
               {/* Step 2 */}
-              <div
-                style={{
-                  padding: '1.5rem 2rem',
-                  backgroundColor: '#fef2f2',
-                  borderRadius: '12px',
-                  border: '2px solid oklch(0.205 0 0)',
-                  textAlign: 'center',
-                  minWidth: '300px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-                }}
-              >
-                <div style={{ fontWeight: '600', color: '#000', fontSize: '1rem' }}>
+              <div className="px-8 py-6 rounded-xl border-2 border-primary text-center min-w-[300px] shadow-sm bg-destructive/10">
+                <div className="font-semibold text-foreground text-base">
                   {t('product.systemDiagram.step2', {
                     defaultValue: '路线可行性评估模块（RouteDirection）',
                   })}
                 </div>
               </div>
-              <div style={{ fontSize: '2rem', color: 'oklch(0.205 0 0)' }}>↓</div>
+              <div className="text-4xl text-primary">↓</div>
 
               {/* Step 3 */}
-              <div
-                style={{
-                  padding: '1.5rem 2rem',
-                  backgroundColor: '#f0fdf4',
-                  borderRadius: '12px',
-                  border: '2px solid oklch(0.205 0 0)',
-                  textAlign: 'center',
-                  minWidth: '300px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-                }}
-              >
-                <div style={{ fontWeight: '600', color: '#000', fontSize: '1rem' }}>
+              <div className="px-8 py-6 rounded-xl border-2 border-primary text-center min-w-[300px] shadow-sm bg-persona-dre/10">
+                <div className="font-semibold text-foreground text-base">
                   {t('product.systemDiagram.step3', {
                     defaultValue: '结构生成模块（节奏 / 时间 / 节点）',
                   })}

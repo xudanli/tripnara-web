@@ -479,7 +479,7 @@ export default function NewTripPage() {
   const [originalNLText, setOriginalNLText] = useState('');
   const [submittingAnswers, setSubmittingAnswers] = useState(false);
   const [uiStatus, setUiStatus] = useState<UIStatus>('done');
-  const [orchestrationStep, setOrchestrationStep] = useState<OrchestrationStep | null>(null);
+  const [, setOrchestrationStep] = useState<OrchestrationStep | null>(null);
   
   // 行程预览状态（当返回 OK 且有 itinerary 时）
   const [previewItinerary, setPreviewItinerary] = useState<TripDetail | null>(null);
@@ -489,7 +489,7 @@ export default function NewTripPage() {
   // 审批和授权状态
   const [approvalId, setApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
-  const [suspensionInfo, setSuspensionInfo] = useState<any>(null);
+  const [, setSuspensionInfo] = useState<any>(null);
   const [consentDialogOpen, setConsentDialogOpen] = useState(false);
   const [consentInfo, setConsentInfo] = useState<{
     title?: string;

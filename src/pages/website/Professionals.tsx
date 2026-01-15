@@ -251,75 +251,33 @@ export default function ProfessionalsPage() {
               marginBottom: '4rem',
             }}
           >
-            <div
-              style={{
-                padding: '2rem',
-                backgroundColor: '#fef2f2',
-                border: '2px solid #fecaca',
-                borderRadius: '12px',
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: '1.2rem',
-                  fontWeight: '700',
-                  color: 'oklch(0.205 0 0)',
-                  marginBottom: '1.5rem',
-                }}
-              >
+            <div className="p-8 bg-destructive/10 border-2 border-destructive/30 rounded-xl">
+              <h3 className="text-xl font-bold text-foreground mb-6">
                 {t('professionals.voice.not.title')}
               </h3>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <ul className="list-none p-0 m-0">
                 {['mystical', 'sales', 'viral', 'overpromise'].map((key) => (
                   <li
                     key={key}
-                    style={{
-                      padding: '0.5rem 0',
-                      fontSize: '1rem',
-                      color: '#666',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                    }}
+                    className="py-2 text-base text-muted-foreground flex items-center gap-2"
                   >
-                    <span style={{ color: 'oklch(0.205 0 0)' }}>❌</span>
+                    <span className="text-destructive">❌</span>
                     {t(`professionals.voice.not.${key}`)}
                   </li>
                 ))}
               </ul>
             </div>
-            <div
-              style={{
-                padding: '2rem',
-                backgroundColor: '#f0fdf4',
-                border: '2px solid #bbf7d0',
-                borderRadius: '12px',
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: '1.2rem',
-                  fontWeight: '700',
-                  color: '#16a34a',
-                  marginBottom: '1.5rem',
-                }}
-              >
+            <div className="p-8 bg-persona-dre/10 border-2 border-persona-dre-accent/30 rounded-xl">
+              <h3 className="text-xl font-bold text-persona-dre-foreground mb-6">
                 {t('professionals.voice.is.title')}
               </h3>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <ul className="list-none p-0 m-0">
                 {['integrity', 'transparency', 'understanding', 'human', 'boundary'].map((key) => (
                   <li
                     key={key}
-                    style={{
-                      padding: '0.5rem 0',
-                      fontSize: '1rem',
-                      color: '#666',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                    }}
+                    className="py-2 text-base text-muted-foreground flex items-center gap-2"
                   >
-                    <span style={{ color: '#16a34a' }}>✔</span>
+                    <span className="text-persona-dre-foreground">✔</span>
                     {t(`professionals.voice.is.${key}`)}
                   </li>
                 ))}

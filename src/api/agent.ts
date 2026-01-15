@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { ClarificationQuestion } from '@/types/clarification';
 
 // ==================== 类型定义 ====================
 
@@ -15,7 +16,7 @@ export type RouteType = 'SYSTEM1_API' | 'SYSTEM1_RAG' | 'SYSTEM2_REASONING' | 'S
 /**
  * 结果状态
  */
-export type ResultStatus = 'OK' | 'NEED_MORE_INFO' | 'NEED_CONSENT' | 'NEED_CONFIRMATION' | 'FAILED' | 'TIMEOUT';
+export type ResultStatus = 'OK' | 'NEED_MORE_INFO' | 'NEED_CONSENT' | 'NEED_CONFIRMATION' | 'FAILED' | 'TIMEOUT' | 'REDIRECT_REQUIRED';
 
 /**
  * UI 状态
@@ -32,6 +33,11 @@ export interface ConversationContext {
 }
 
 /**
+ * 入口来源标识
+ */
+export type EntryPoint = 'trip_detail_page' | 'trip_list_page' | 'dashboard' | 'planning_workbench';
+
+/**
  * 智能体执行选项
  */
 export interface AgentOptions {
@@ -42,6 +48,9 @@ export interface AgentOptions {
   max_browser_steps?: number;
   cost_budget_usd?: number;
   llm_provider?: LLMProvider;  // LLM 提供商，默认 'auto'
+  // 新增字段
+  entry_point?: EntryPoint;  // 入口来源标识，用于权限控制和操作限制
+  readonly_mode?: boolean;  // 只读模式标志，true 时限制为查询类操作
 }
 
 /**
@@ -78,7 +87,60 @@ export interface RouteAndRunRequest {
 }
 
 /**
- * 决策日志项
+ * 编排步骤
+ */
+export type OrchestrationStep = 
+  | 'INTAKE' 
+  | 'RESEARCH' 
+  | 'GATE_EVAL' 
+  | 'PLAN_GEN' 
+  | 'VERIFY' 
+  | 'REPAIR' 
+  | 'NARRATE' 
+  | 'DONE' 
+  | 'FAILED';
+
+/**
+ * 子智能体类型
+ */
+export type SubAgentType = 
+  | 'Orchestrator' 
+  | 'Planner' 
+  | 'Gatekeeper' 
+  | 'Compliance' 
+  | 'LocalInsight' 
+  | 'CoreDecision' 
+  | 'Narrator';
+
+/**
+ * 三人格类型
+ */
+export type GuardianType = 'ABU' | 'DR_DRE' | 'NEPTUNE';
+
+/**
+ * 决策日志项（新格式 - 完整格式）
+ */
+export interface DecisionLogEntry {
+  request_id: string;
+  step: OrchestrationStep;
+  actor: SubAgentType;
+  inputs_summary: string;
+  outputs_summary: string;
+  evidence_refs: string[];
+  timestamp: string;
+  metadata?: {
+    duration_ms?: number;
+    tool_calls?: number;
+    cost_est_usd?: number;
+    alternatives_considered?: number;
+    guardian?: GuardianType;
+    [key: string]: any;
+  };
+}
+
+/**
+ * 决策日志项（旧格式 - 向后兼容）
+ * @deprecated 使用 DecisionLogEntry 替代
  */
 export interface DecisionLogItem {
   step: number;
@@ -95,7 +157,7 @@ export interface DecisionLogItem {
 export interface ObservabilityMetrics {
   latency_ms: number;
   router_ms: number;
-  system_mode: 'SYSTEM1' | 'SYSTEM2';
+  system_mode: 'SYSTEM1' | 'SYSTEM2' | 'REDIRECT';
   tool_calls: number;
   browser_steps: number;
   tokens_est: number;
@@ -114,12 +176,50 @@ export interface SuspensionInfo {
 }
 
 /**
+ * 错误类型
+ */
+export type ErrorType = 
+  | 'CRITICAL_DEPENDENCY_MISSING'  // 关键依赖缺失：关键服务不可用，无法继续执行
+  | 'MISSING_REQUIRED_PARAM'       // 缺少必需参数：缺少必需的信息，需要用户澄清
+  | 'INSUFFICIENT_PERMISSIONS'     // 权限不足：用户没有执行该操作的权限
+  | 'SERVICE_UNAVAILABLE'         // 服务不可用：外部服务暂时不可用
+  | 'VALIDATION_ERROR'            // 验证错误：输入参数验证失败
+  | 'TIMEOUT_ERROR'              // 超时错误：操作超时
+  | 'UNKNOWN_ERROR';              // 未知错误：未分类的错误
+
+/**
+ * 重定向原因
+ */
+export type RedirectReason = 
+  | 'READONLY_MODE_RESTRICTION'    // 只读模式限制
+  | 'PLANNING_REQUEST_DETECTED'   // 检测到规划请求
+  | 'INSUFFICIENT_PERMISSIONS'     // 权限不足
+  | 'FEATURE_MIGRATED'            // 功能已迁移
+  | 'MISSING_TRIP_ID';            // 缺少行程 ID
+
+/**
+ * 重定向信息
+ */
+export interface RedirectInfo {
+  redirect_to: string;           // 重定向目标 URL（相对路径或绝对路径）
+  redirect_reason: RedirectReason;  // 重定向原因
+  original_request: {
+    message: string;             // 原始请求消息（已脱敏，最多 200 字符）
+    user_id: string;             // 原始用户 ID
+    trip_id?: string;            // 原始行程 ID（如果存在）
+  };
+}
+
+/**
  * 澄清信息（当状态为 NEED_MORE_INFO 时）
  */
 export interface ClarificationInfo {
-  missingServices?: string[];  // 缺失的服务列表
-  impact?: string;  // 影响说明
-  solutions?: string[];  // 解决方案
+  needsUserConfirmation?: boolean;  // 是否需要用户确认
+  clarificationMessage?: string;    // 用户友好的澄清消息（Markdown 格式）
+  missingServices?: string[];       // 缺失的服务列表
+  solutions?: string[];             // 解决方案列表
+  errorType?: ErrorType;             // 错误类型
+  impact?: string;                   // 影响说明（向后兼容）
   [key: string]: any;
 }
 
@@ -129,17 +229,49 @@ export interface ClarificationInfo {
 export interface RouteAndRunResponse {
   request_id: string;
   route: RouteDecision;
+  ui_state?: {
+    phase?: OrchestrationStep;
+    ui_status?: UIStatus;
+    progress_percent?: number;
+    message?: string;
+    requires_user_action?: boolean;
+  };
   result: {
     status: ResultStatus;
     answer_text: string;
     payload?: {
       suspensionInfo?: SuspensionInfo;  // 审批挂起信息（当 status === 'NEED_CONFIRMATION' 时）
-      clarificationInfo?: ClarificationInfo;  // 澄清信息（当 status === 'NEED_MORE_INFO' 时）
+      clarificationInfo?: ClarificationInfo;  // 澄清信息（当 status === 'NEED_MORE_INFO' 时，向后兼容）
+      // 新增字段
+      redirectInfo?: RedirectInfo;  // 重定向信息（当 status === 'REDIRECT_REQUIRED' 时）
+      // 澄清消息相关字段（统一在 payload 中）
+      needsUserConfirmation?: boolean;
+      clarificationMessage?: string;  // 向后兼容：简单字符串格式
+      clarificationQuestions?: ClarificationQuestion[];  // 结构化澄清问题（Phase 1）
+      missingServices?: string[];
+      solutions?: string[];
+      errorType?: ErrorType;
+      // 授权相关字段（当 status === 'NEED_CONSENT' 时）
+      consentMessage?: string;  // 授权消息
+      requiredPermissions?: string[];  // 需要的权限列表
+      consentWarning?: string;  // 授权警告
+      // 其他字段
+      timeline?: any[];
+      dropped_items?: any[];
+      candidates?: any[];
+      evidence?: any[];
+      robustness?: number | null;
+      orchestrationResult?: {
+        state?: any;
+        itinerary?: any;
+        gate_result?: any;
+        decision_log?: DecisionLogEntry[];
+      };
       [key: string]: any;
     };
   };
   explain: {
-    decision_log: DecisionLogItem[];
+    decision_log: DecisionLogEntry[] | DecisionLogItem[];  // 支持新旧两种格式
   };
   observability: ObservabilityMetrics;
 }

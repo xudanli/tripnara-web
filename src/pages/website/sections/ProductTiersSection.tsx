@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { WebsiteSection } from '@/components/website/WebsiteSection';
+import { WebsiteHeading } from '@/components/website/WebsiteHeading';
+import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
 
 export default function ProductTiersSection() {
   const { t } = useTranslation();
@@ -18,58 +21,25 @@ export default function ProductTiersSection() {
   ];
 
   return (
-    <section
-      style={{
-        padding: '6rem 2rem',
-        maxWidth: '1200px',
-        margin: '0 auto',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: 'clamp(2rem, 4vw, 3rem)',
-          fontWeight: '700',
-          textAlign: 'center',
-          marginBottom: '4rem',
-        }}
-      >
+    <WebsiteSection variant="default" padding="xl" maxWidth="xl">
+      <WebsiteHeading level={2} align="center" className="mb-16">
         {t('tiers.title')}
-      </h2>
+      </WebsiteHeading>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '2rem',
-        }}
-      >
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {tiers.map((tier) => (
-          <div
-            key={tier.name}
-            style={{
-              padding: '2.5rem',
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              backgroundColor: '#fff',
-              textAlign: 'center',
-            }}
-          >
-            <h3
-              style={{
-                fontSize: '1.8rem',
-                fontWeight: '700',
-                marginBottom: '1rem',
-                color: '#007bff',
-              }}
-            >
-              {tier.name}
-            </h3>
-            <p style={{ color: '#666', lineHeight: '1.6' }}>
-              {tier.description}
-            </p>
-          </div>
+          <WebsiteCard key={tier.name}>
+            <CardContent className="p-10 text-center">
+              <h3 className="text-3xl font-bold mb-4 text-primary">
+                {tier.name}
+              </h3>
+              <p className="text-muted-foreground leading-relaxed">
+                {tier.description}
+              </p>
+            </CardContent>
+          </WebsiteCard>
         ))}
       </div>
-    </section>
+    </WebsiteSection>
   );
 }
