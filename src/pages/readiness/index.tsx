@@ -37,7 +37,7 @@ import {
 import { format } from 'date-fns';
 import type { TripDetail } from '@/types/trip';
 import type { ReadinessData, RepairOption, EvidenceItem, Blocker } from '@/types/readiness';
-import type { ReadinessCheckResult } from '@/api/readiness';
+import type { ReadinessCheckResult, PersonalizedChecklistResponse, RiskWarningsResponse, CheckReadinessDto } from '@/api/readiness';
 import ReadinessStatusBadge from '@/components/readiness/ReadinessStatusBadge';
 import ScoreGauge from '@/components/readiness/ScoreGauge';
 import BlockerCard from '@/components/readiness/BlockerCard';
@@ -105,20 +105,20 @@ export default function ReadinessPage() {
   };
 
   // 验证 ReadinessData 数据格式
-  const validateReadinessData = (data: any): data is ReadinessData => {
-    return (
-      data &&
-      typeof data === 'object' &&
-      data.status &&
-      data.score &&
-      typeof data.score === 'object' &&
-      typeof data.score.overall === 'number' &&
-      Array.isArray(data.blockers)
-    );
+  const validateReadinessData = (data: unknown): data is ReadinessData => {
+    if (!data || typeof data !== 'object') return false;
+    const obj = data as Record<string, unknown>;
+    if (!('status' in obj) || !('score' in obj) || !('blockers' in obj)) return false;
+    const score = obj.score;
+    if (!score || typeof score !== 'object') return false;
+    const scoreObj = score as Record<string, unknown>;
+    if (typeof scoreObj.overall !== 'number') return false;
+    if (!Array.isArray(obj.blockers)) return false;
+    return true;
   };
 
   // 从 trip 数据构建 CheckReadinessDto
-  const buildCheckReadinessDto = (trip: TripDetail): any => {
+  const buildCheckReadinessDto = (trip: TripDetail): CheckReadinessDto => {
     return {
       destinationId: trip.destination || '',
       trip: {
@@ -126,7 +126,7 @@ export default function ReadinessPage() {
         endDate: trip.endDate,
       },
       itinerary: {
-        countries: [trip.destination].filter(Boolean),
+        countries: [trip.destination].filter(Boolean) as string[],
         // TODO: 从 trip 数据中提取更多信息（activities, season, region 等）
       },
     };
@@ -221,7 +221,7 @@ export default function ReadinessPage() {
             }),
           ]);
           
-          if (checklist || riskWarnings) {
+          if (checklist && riskWarnings) {
             console.log('Using checklist/riskWarnings data for trip:', tripId, 'destination:', tripData.destination);
             finalReadinessData = convertToReadinessData(checklist, riskWarnings, tripData);
           } else {
@@ -250,7 +250,7 @@ export default function ReadinessPage() {
 
   // 将 check 接口结果转换为 ReadinessData 格式
   const convertCheckResultToReadinessData = (
-    checkResult: any,
+    checkResult: ReadinessCheckResult,
     trip: TripDetail
   ): ReadinessData => {
     const totalBlockers = checkResult?.summary?.totalBlockers || 0;
@@ -260,27 +260,39 @@ export default function ReadinessPage() {
 
     // 从 findings 中提取 blockers
     const blockers: Blocker[] = [];
-    checkResult?.findings?.forEach((finding: any) => {
-      finding.blockers?.forEach((item: any, index: number) => {
+    checkResult?.findings?.forEach((finding, findingIndex) => {
+      const findingId = finding.destinationId || finding.packId || `finding-${findingIndex}`;
+      finding.blockers?.forEach((item, index: number) => {
+        // 从 item 的 category 或推断类别
+        const category = item.category === 'entry' ? 'ticket' : 
+                        item.category === 'safety' ? 'road' : 
+                        'other' as const;
+        
+        // 处理 evidence：可能是数组或字符串
+        const evidenceSource = Array.isArray(item.evidence) 
+          ? item.evidence[0]?.sourceId || 'system'
+          : typeof item.evidence === 'string' 
+          ? item.evidence 
+          : 'system';
+        
         blockers.push({
-          id: `blocker-${finding.category}-${index}`,
+          id: `blocker-${findingId}-${index}`,
           title: item.message,
           severity: 'critical' as const,
           impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
           evidenceSummary: {
-            source: item.evidence || 'system',
+            source: evidenceSource,
             timestamp: new Date().toISOString(),
           },
-          category: finding.category === 'entry' ? 'ticket' : 
-                   finding.category === 'safety' ? 'road' : 'other' as const,
+          category,
         });
       });
     });
 
     // 从 findings 中提取 watchlist（从 should 中提取）
     const watchlist: Blocker[] = [];
-    checkResult?.findings?.forEach((finding: any, findingIndex: number) => {
-      finding.should?.slice(0, 2).forEach((item: any, index: number) => {
+    checkResult?.findings?.forEach((finding, findingIndex: number) => {
+      finding.should?.slice(0, 2).forEach((item, index: number) => {
         const findingId = finding.destinationId || finding.packId || `finding-${findingIndex}`;
         watchlist.push({
           id: `watch-${findingId}-${index}`,
@@ -298,7 +310,7 @@ export default function ReadinessPage() {
 
     // 计算分数
     const riskCount = checkResult?.risks?.length || 0;
-    const highRiskCount = checkResult?.risks?.filter((r: any) => r.severity === 'high').length || 0;
+    const highRiskCount = checkResult?.risks?.filter((r) => r.severity === 'high').length || 0;
     const overallScore = Math.max(0, 100 - (totalBlockers * 20) - (highRiskCount * 10) - (riskCount * 5));
 
     return {
@@ -318,8 +330,8 @@ export default function ReadinessPage() {
 
   // 将 API 响应转换为 ReadinessData 格式
   const convertToReadinessData = (
-    checklist: any,
-    riskWarnings: any,
+    checklist: PersonalizedChecklistResponse,
+    riskWarnings: RiskWarningsResponse,
     trip: TripDetail
   ): ReadinessData => {
     // 计算总体状态
@@ -329,30 +341,48 @@ export default function ReadinessPage() {
       totalBlockers > 0 ? 'not-ready' : totalMust > 0 ? 'nearly' : 'ready';
 
     // 转换 blockers
-    const blockers: Blocker[] = (checklist?.checklist?.blocker || []).map((item: any, index: number) => ({
-      id: `blocker-${index}`,
-      title: item.message,
-      severity: 'critical' as const,
-      impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
-      evidenceSummary: {
-        source: item.evidence || 'system',
-        timestamp: new Date().toISOString(),
-      },
-      category: 'other' as const,
-    }));
+    const blockers: Blocker[] = (checklist?.checklist?.blocker || []).map((item, index: number) => {
+      // 处理 evidence：可能是数组或字符串
+      const evidenceSource = Array.isArray(item.evidence) 
+        ? item.evidence[0]?.sourceId || 'system'
+        : typeof item.evidence === 'string' 
+        ? item.evidence 
+        : 'system';
+      
+      return {
+        id: `blocker-${index}`,
+        title: item.message,
+        severity: 'critical' as const,
+        impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
+        evidenceSummary: {
+          source: evidenceSource,
+          timestamp: new Date().toISOString(),
+        },
+        category: 'other' as const,
+      };
+    });
 
     // 转换 watchlist（从 should/optional 中提取）
-    const watchlist: Blocker[] = (checklist?.checklist?.should || []).slice(0, 3).map((item: any, index: number) => ({
-      id: `watch-${index}`,
-      title: item.message,
-      severity: 'medium' as const,
-      impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
-      evidenceSummary: {
-        source: item.evidence || 'system',
-        timestamp: new Date().toISOString(),
-      },
-      category: 'other' as const,
-    }));
+    const watchlist: Blocker[] = (checklist?.checklist?.should || []).slice(0, 3).map((item, index: number) => {
+      // 处理 evidence：可能是数组或字符串
+      const evidenceSource = Array.isArray(item.evidence) 
+        ? item.evidence[0]?.sourceId || 'system'
+        : typeof item.evidence === 'string' 
+        ? item.evidence 
+        : 'system';
+      
+      return {
+        id: `watch-${index}`,
+        title: item.message,
+        severity: 'medium' as const,
+        impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
+        evidenceSummary: {
+          source: evidenceSource,
+          timestamp: new Date().toISOString(),
+        },
+        category: 'other' as const,
+      };
+    });
 
     // 计算分数（基于 blockers 和 risks）
     const riskCount = riskWarnings?.summary?.totalRisks || 0;

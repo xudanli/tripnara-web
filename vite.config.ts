@@ -15,23 +15,56 @@ export default defineConfig(({ mode }) => {
   console.log(`[vite] proxy target -> ${BACKEND_TARGET}`)
 
   return {
-  plugins: [react(), tailwindcss()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
     },
-  },
-  server: {
-    proxy: {
-      '/api': {
+    server: {
+      proxy: {
+        '/api': {
           target: BACKEND_TARGET,
-        changeOrigin: true,
-        secure: false,
+          changeOrigin: true,
+          secure: false,
           // 保留 /api 前缀，转发到后端
           // 如果后端不需要 /api 前缀，取消下面的注释：
           // rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: (id) => {
+            // React 相关库（react, react-dom, react-router-dom）
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            // UI 组件库（@radix-ui）
+            if (id.includes('@radix-ui')) {
+              return 'ui-vendor';
+            }
+            // 工具库（date-fns, axios, i18next 等）
+            if (id.includes('date-fns') || id.includes('axios') || id.includes('i18next')) {
+              return 'utils-vendor';
+            }
+            // 图表库（recharts）
+            if (id.includes('recharts')) {
+              return 'charts-vendor';
+            }
+            // API 层代码
+            if (id.includes('/src/api/')) {
+              return 'api';
+            }
+            // 类型定义（通常较小，可以合并）
+            if (id.includes('/src/types/')) {
+              return 'types';
+            }
+          },
+        },
+      },
+      chunkSizeWarningLimit: 1000, // 提高警告阈值到 1MB
     },
   }
 })

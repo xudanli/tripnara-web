@@ -176,6 +176,24 @@ export interface SuspensionInfo {
 }
 
 /**
+ * Gate 评估结果（三人格评估结果）
+ */
+export interface GateResult {
+  result?: string;  // 评估结果状态
+  status?: string;  // 评估状态（向后兼容）
+  allowed?: boolean;  // 是否允许（向后兼容 ValidateSafetyResponse）
+  reason?: string;  // 评估原因
+  warnings?: string[];  // 警告列表
+  recommendations?: string[];  // 建议列表
+  violations?: Array<{
+    explanation: string;
+    violation?: 'HARD' | 'SOFT' | 'NONE';
+    [key: string]: unknown;
+  }>;  // 违规列表（向后兼容）
+  [key: string]: unknown;  // 允许其他未知字段
+}
+
+/**
  * 错误类型
  */
 export type ErrorType = 
@@ -264,7 +282,7 @@ export interface RouteAndRunResponse {
       orchestrationResult?: {
         state?: any;
         itinerary?: any;
-        gate_result?: any;
+        gate_result?: GateResult;
         decision_log?: DecisionLogEntry[];
       };
       [key: string]: any;

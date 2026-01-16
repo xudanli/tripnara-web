@@ -4,7 +4,7 @@ import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { citiesApi } from '@/api/cities';
 import { agentApi } from '@/api/agent';
-import type { RouteAndRunResponse, UIStatus, OrchestrationStep, DecisionLogEntry } from '@/api/agent';
+import type { RouteAndRunResponse, UIStatus, OrchestrationStep, DecisionLogEntry, GateResult, SuspensionInfo } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
 import type { CreateTripRequest, Traveler, TripDetail } from '@/types/trip';
 import type { Country, CurrencyStrategy } from '@/types/country';
@@ -483,13 +483,13 @@ export default function NewTripPage() {
   
   // 行程预览状态（当返回 OK 且有 itinerary 时）
   const [previewItinerary, setPreviewItinerary] = useState<TripDetail | null>(null);
-  const [gateResult, setGateResult] = useState<any>(null);
-  const [decisionLogs, setDecisionLogs] = useState<any[]>([]);
+  const [gateResult, setGateResult] = useState<GateResult | null>(null);
+  const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
   
   // 审批和授权状态
   const [approvalId, setApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
-  const [, setSuspensionInfo] = useState<any>(null);
+  const [, setSuspensionInfo] = useState<SuspensionInfo | null>(null);
   const [consentDialogOpen, setConsentDialogOpen] = useState(false);
   const [consentInfo, setConsentInfo] = useState<{
     title?: string;
@@ -676,9 +676,14 @@ export default function NewTripPage() {
         setOrchestrationStep(response.ui_state.phase);
       }
 
-      // 处理决策日志
+      // 处理决策日志（兼容新旧两种格式）
       if (response.explain?.decision_log) {
-        setDecisionLogs(Array.isArray(response.explain.decision_log) ? response.explain.decision_log : []);
+        const logs = Array.isArray(response.explain.decision_log) ? response.explain.decision_log : [];
+        // 过滤出 DecisionLogEntry 格式的日志（新格式）
+        const decisionLogEntries = logs.filter((log): log is DecisionLogEntry => 
+          'request_id' in log && 'step' in log && 'actor' in log
+        );
+        setDecisionLogs(decisionLogEntries);
       }
 
       // 处理不同状态
@@ -845,9 +850,14 @@ export default function NewTripPage() {
         setOrchestrationStep(response.ui_state.phase);
       }
 
-      // 处理决策日志
+      // 处理决策日志（兼容新旧两种格式）
       if (response.explain?.decision_log) {
-        setDecisionLogs(Array.isArray(response.explain.decision_log) ? response.explain.decision_log : []);
+        const logs = Array.isArray(response.explain.decision_log) ? response.explain.decision_log : [];
+        // 过滤出 DecisionLogEntry 格式的日志（新格式）
+        const decisionLogEntries = logs.filter((log): log is DecisionLogEntry => 
+          'request_id' in log && 'step' in log && 'actor' in log
+        );
+        setDecisionLogs(decisionLogEntries);
       }
 
       // 处理不同状态
