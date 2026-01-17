@@ -640,12 +640,13 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
     const segments: Array<{
       type: 'text' | 'problem-list';
       content: string;
-      problems?: string[];
+      problems?: Array<{ description: string; suggestion?: string }>;
     }> = [];
     
-    let currentProblemList: string[] = [];
+    let currentProblemList: Array<{ description: string; suggestion?: string }> = [];
     let currentText: string[] = [];
     let inProblemSection = false;
+    const processedLineIndices = new Set<number>(); // 跟踪已处理的行索引
     
     const shouldSkip = (line: string) => {
       const trimmed = line.trim();
@@ -678,7 +679,14 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
       return false;
     };
     
-    for (const line of lines) {
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const line = lines[lineIndex];
+      
+      // 跳过已处理的行
+      if (processedLineIndices.has(lineIndex)) {
+        continue;
+      }
+      
       // 跳过冗余内容
       if (shouldSkip(line)) {
         continue;
@@ -717,11 +725,26 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
       const problemMatch = trimmedLine.match(/^\d+[\.、]\s*(.+)$/);
       
       if (problemMatch) {
-        // 清理问题项内容：移除"→ 建议..."部分
+        // 清理问题项内容：分离问题和解决方案
         let problemText = problemMatch[1].trim();
-        // 移除建议文本（以"→"或"建议"开头的部分）
-        problemText = problemText.split(/\s*→/)[0].trim();
-        problemText = problemText.split(/\s*建议/)[0].trim();
+        let suggestion: string | undefined;
+        
+        // 检查是否在同一行包含解决方案（以"→"开头）
+        const suggestionMatch = problemText.match(/\s*→\s*(.+)$/);
+        if (suggestionMatch) {
+          suggestion = suggestionMatch[1].trim();
+          problemText = problemText.split(/\s*→/)[0].trim();
+        }
+        
+        // 检查下一行是否是解决方案
+        if (!suggestion && lineIndex + 1 < lines.length) {
+          const nextLineIndex = lineIndex + 1;
+          const nextLine = lines[nextLineIndex].trim();
+          if (nextLine.startsWith('→') || nextLine.startsWith('建议') || nextLine.startsWith('请')) {
+            suggestion = nextLine.replace(/^[→建议请]\s*/, '').trim();
+            processedLineIndices.add(nextLineIndex); // 标记为已处理
+          }
+        }
         
         // 容错处理：将"未命名活动"替换为更友好的提示
         // 后端已修复：会显示真实的活动名称，但前端仍保留容错处理作为备用
@@ -750,10 +773,13 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
           continue;
         }
         
+        const problemItem = { description: problemText, suggestion };
+        
         if (inProblemSection) {
-          // 在问题区块中，直接添加（去重）
-          if (!currentProblemList.includes(problemText)) {
-            currentProblemList.push(problemText);
+          // 在问题区块中，直接添加（去重：基于描述）
+          const exists = currentProblemList.some(p => p.description === problemText);
+          if (!exists) {
+            currentProblemList.push(problemItem);
           }
           continue;
         } else {
@@ -767,17 +793,25 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
               currentText = [];
             }
             inProblemSection = true;
-            if (!currentProblemList.includes(problemText)) {
-              currentProblemList.push(problemText);
+            const exists = currentProblemList.some(p => p.description === problemText);
+            if (!exists) {
+              currentProblemList.push(problemItem);
             }
             continue;
           }
         }
       }
       
-      // 跳过建议行（以"→"或"建议"开头的行）
-      if (trimmedLine.startsWith('→') || trimmedLine.startsWith('建议') || trimmedLine.startsWith('请')) {
-        continue;
+      // 如果当前在问题区块中，且这一行是解决方案，附加到最后一个问题
+      if (inProblemSection && currentProblemList.length > 0) {
+        if (trimmedLine.startsWith('→') || trimmedLine.startsWith('建议') || trimmedLine.startsWith('请')) {
+          const lastProblem = currentProblemList[currentProblemList.length - 1];
+          if (!lastProblem.suggestion) {
+            lastProblem.suggestion = trimmedLine.replace(/^[→建议请]\s*/, '').trim();
+          }
+          processedLineIndices.add(lineIndex); // 标记为已处理
+          continue;
+        }
       }
       
       // 普通文本处理
@@ -807,16 +841,21 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
   const segments = parseContent(content);
 
   // 合并所有问题列表并去重
-  const allProblems = new Set<string>();
+  const problemMap = new Map<string, { description: string; suggestion?: string }>();
   const problemListSegments = segments.filter(s => s.type === 'problem-list');
   const textSegments = segments.filter(s => s.type === 'text');
   
-  // 收集所有问题并去重
+  // 收集所有问题并去重（基于 description）
   problemListSegments.forEach(segment => {
-    segment.problems?.forEach(p => allProblems.add(p));
+    segment.problems?.forEach(p => {
+      // 如果已存在相同描述的问题，保留有解决方案的版本
+      if (!problemMap.has(p.description) || (!problemMap.get(p.description)?.suggestion && p.suggestion)) {
+        problemMap.set(p.description, p);
+      }
+    });
   });
   
-  const uniqueProblems = Array.from(allProblems);
+  const uniqueProblems = Array.from(problemMap.values());
   
   // 如果有多于一个问题列表段，合并为一个
   const finalSegments: typeof segments = [...textSegments];
@@ -865,14 +904,26 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
                   {segment.problems.map((problem, i) => (
                     <div
                       key={i}
-                      className="group flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/50 transition-colors cursor-default"
+                      className="group flex flex-col gap-1.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/50 transition-colors cursor-default"
                     >
-                      {/* 编号：使用胶囊形状，更现代 */}
-                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-slate-200/70 text-slate-500 text-[10px] font-semibold mt-0.5 flex-shrink-0">
-                        {i + 1}
-                      </span>
-                      {/* 内容 - 后端已确保活动名称不为空 */}
-                      <span className="text-[13px] text-slate-600 leading-relaxed">{problem}</span>
+                      <div className="flex items-start gap-2.5">
+                        {/* 编号：使用胶囊形状，更现代 */}
+                        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-slate-200/70 text-slate-500 text-[10px] font-semibold mt-0.5 flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        {/* 问题描述 - 后端已确保活动名称不为空 */}
+                        <span className="text-[13px] text-slate-600 leading-relaxed flex-1">
+                          {problem.description}
+                        </span>
+                      </div>
+                      {/* 解决方案 */}
+                      {problem.suggestion && (
+                        <div className="flex items-start gap-2.5 ml-[26px]">
+                          <span className="text-[11px] text-slate-500 flex-1 leading-relaxed">
+                            → {problem.suggestion}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
