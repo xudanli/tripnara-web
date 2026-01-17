@@ -597,26 +597,24 @@ function FormattedMessage({ content }: { content: string }) {
     let currentText: string[] = [];
     let inProblemSection = false;
     
-    // 需要过滤的冗余内容模式
-    const skipPatterns = [
-      /^.{1,4}\s*\*\*.+?\*\*\s*[-–—]\s*.+$/, // emoji **标题** - 描述（功能介绍）
-      /^现在我可以帮您/, // "现在我可以帮您："
-      /^有什么我可以帮您/, // "有什么我可以帮您的吗？"
-      /^有什么.*帮.*吗/, // 类似问句
-    ];
-    
     const shouldSkip = (line: string) => {
       const trimmed = line.trim();
-      // 检查是否匹配任何跳过模式
-      for (const pattern of skipPatterns) {
-        if (pattern.test(trimmed)) {
+      if (!trimmed) return false;
+      
+      // 1. 跳过 "现在我可以帮您" 类的引导语
+      if (/^现在我可以帮您/.test(trimmed)) return true;
+      if (/^有什么.*帮.*吗/.test(trimmed)) return true;
+      
+      // 2. 跳过功能介绍行：emoji + **标题** + - + 描述
+      // 检测模式：包含 ** 和 - 的行，且以 emoji 或特殊字符开头
+      if (trimmed.includes('**') && /[-–—]/.test(trimmed)) {
+        // 检查是否以 emoji 开头（使用 Unicode 属性）
+        const firstChar = [...trimmed][0]; // 正确处理 Unicode 字符
+        if (firstChar && /\p{Emoji}/u.test(firstChar)) {
           return true;
         }
       }
-      // 检查是否是 emoji 开头的功能介绍行
-      if (/\p{Emoji}/u.test(trimmed.charAt(0)) && trimmed.includes('**') && trimmed.includes('-')) {
-        return true;
-      }
+      
       return false;
     };
     
