@@ -1690,13 +1690,27 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
   // 注册来自左侧的提问处理
   useEffect(() => {
     setOnAskAssistant((question: string, context: SelectedContext) => {
-      // 带上下文发送消息
-      const contextPrefix = context.placeName 
-        ? `关于"${context.placeName}"：` 
-        : context.dayIndex 
-          ? `关于第${context.dayIndex}天：` 
-          : '';
-      sendMessage(contextPrefix + question);
+      console.log('[TripPlannerAssistant] 收到左侧提问:', { question, context });
+      
+      // 带完整上下文发送消息
+      sendMessage(question, {
+        targetDay: context.dayIndex || undefined,
+        targetItemId: context.itemId || undefined,
+        context: {
+          selectedContext: {
+            dayIndex: context.dayIndex || undefined,
+            date: context.date || undefined,
+            itemId: context.itemId || undefined,
+            placeName: context.placeName || undefined,
+            itemType: context.itemType || undefined,
+          },
+          adjacentItems: context.prevItem || context.nextItem ? {
+            prevItem: context.prevItem,
+            nextItem: context.nextItem,
+          } : undefined,
+          dayStats: context.dayStats,
+        },
+      });
     });
   }, [setOnAskAssistant, sendMessage]);
 
