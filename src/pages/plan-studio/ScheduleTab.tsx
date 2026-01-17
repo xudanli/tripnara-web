@@ -286,10 +286,11 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   };
 
   // 注册建议应用回调 - 处理 NARA 推荐的地点添加到行程
+  const setOnApplySuggestion = planStudioContext?.setOnApplySuggestion;
   useEffect(() => {
-    if (!planStudioContext) return;
+    if (!setOnApplySuggestion) return;
     
-    planStudioContext.setOnApplySuggestion(async (suggestion: PendingSuggestion) => {
+    setOnApplySuggestion(async (suggestion: PendingSuggestion) => {
       try {
         if (suggestion.type === 'add_place' && suggestion.place && trip?.TripDay) {
           // 找到目标天
@@ -337,7 +338,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
         return false;
       }
     });
-  }, [planStudioContext, trip, tripId, loadTrip]);
+  }, [setOnApplySuggestion, trip, tripId, loadTrip]);
 
   const handleFixConflict = (conflictType: string, dayDate: string) => {
     setDrawerTab('risk');
