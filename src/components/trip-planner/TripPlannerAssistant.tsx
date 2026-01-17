@@ -51,6 +51,7 @@ import {
   Loader2,
   MessageCircle,
   List,
+  ListChecks,
   BarChart3,
   ChevronRight,
   Lightbulb,
@@ -683,23 +684,29 @@ function FormattedMessage({ content }: { content: string }) {
           
           case 'problem-list':
             return (
-              <div key={idx} className="mt-3">
-                <div className="flex items-center gap-1.5 mb-2 text-muted-foreground">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">
-                    发现 {segment.problems?.length} 个待处理项
+              <div key={idx} className="mt-4 -mx-1">
+                {/* 标题行：使用柔和的分隔线和图标 */}
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent" />
+                  <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <ListChecks className="w-3 h-3" />
+                    待处理 · {segment.problems?.length}
                   </span>
+                  <div className="h-px flex-1 bg-gradient-to-l from-slate-200 to-transparent" />
                 </div>
-                <div className="space-y-1 pl-0.5">
+                {/* 列表项：清晰的层级和可读性 */}
+                <div className="space-y-1.5">
                   {segment.problems?.map((problem, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-2 text-sm"
+                      className="group flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/50 transition-colors cursor-default"
                     >
-                      <span className="text-muted-foreground text-xs mt-0.5 w-4 text-right flex-shrink-0">
-                        {i + 1}.
+                      {/* 编号：使用胶囊形状，更现代 */}
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-slate-200/70 text-slate-500 text-[10px] font-semibold mt-0.5 flex-shrink-0">
+                        {i + 1}
                       </span>
-                      <span className="text-foreground/80">{problem}</span>
+                      {/* 内容 */}
+                      <span className="text-[13px] text-slate-600 leading-relaxed">{problem}</span>
                     </div>
                   ))}
                 </div>
