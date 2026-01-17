@@ -124,6 +124,9 @@ interface PlanStudioContextValue {
   /** 注册建议应用处理器 */
   onApplySuggestion: ((suggestion: PendingSuggestion) => Promise<boolean>) | null;
   setOnApplySuggestion: (handler: (suggestion: PendingSuggestion) => Promise<boolean>) => void;
+  /** 注册打开助手抽屉处理器 */
+  onOpenAssistant: (() => void) | null;
+  setOnOpenAssistant: (handler: () => void) => void;
 }
 
 // ==================== Context 创建 ====================
@@ -151,6 +154,7 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
   // 回调处理器
   const [onAskAssistant, setOnAskAssistantState] = useState<((question: string, context: SelectedContext) => void) | null>(null);
   const [onApplySuggestion, setOnApplySuggestionState] = useState<((suggestion: PendingSuggestion) => Promise<boolean>) | null>(null);
+  const [onOpenAssistant, setOnOpenAssistantState] = useState<(() => void) | null>(null);
 
   // ========== 左侧 → 右侧 ==========
   
@@ -219,10 +223,15 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const askAssistantAbout = useCallback((question: string) => {
+    // 先打开助手抽屉
+    if (onOpenAssistant) {
+      onOpenAssistant();
+    }
+    // 然后发送问题
     if (onAskAssistant) {
       onAskAssistant(question, selectedContext);
     }
-  }, [onAskAssistant, selectedContext]);
+  }, [onAskAssistant, onOpenAssistant, selectedContext]);
 
   // ========== 右侧 → 左侧 ==========
 
@@ -261,6 +270,10 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     setOnApplySuggestionState(() => handler);
   }, []);
 
+  const setOnOpenAssistant = useCallback((handler: () => void) => {
+    setOnOpenAssistantState(() => handler);
+  }, []);
+
   // ========== Context Value ==========
 
   const value = useMemo<PlanStudioContextValue>(() => ({
@@ -280,6 +293,8 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     setOnAskAssistant,
     onApplySuggestion,
     setOnApplySuggestion,
+    onOpenAssistant,
+    setOnOpenAssistant,
   }), [
     selectedContext,
     pendingSuggestions,
@@ -297,6 +312,8 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     setOnAskAssistant,
     onApplySuggestion,
     setOnApplySuggestion,
+    onOpenAssistant,
+    setOnOpenAssistant,
   ]);
 
   return (

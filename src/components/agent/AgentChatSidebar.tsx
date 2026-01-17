@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PanelRightClose, PanelRightOpen, Sparkles, Compass, Bot, RefreshCw } from 'lucide-react';
@@ -10,6 +10,8 @@ import { NaraAgentChatting } from '@/components/illustrations/AgentIllustrations
 import Logo from '@/components/common/Logo';
 import type { EntryPoint } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
+import { useContext } from 'react';
+import PlanStudioContext from '@/contexts/PlanStudioContext';
 
 // localStorage key for sidebar state
 const SIDEBAR_STATE_KEY = 'agent-sidebar-expanded';
@@ -65,6 +67,9 @@ export default function AgentChatSidebar({
   const tripPlannerRef = useRef<TripPlannerAssistantRef>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
+  // 获取 PlanStudio context（可能不在 Provider 内，所以直接用 useContext）
+  const planStudioContext = useContext(PlanStudioContext);
+  
   // Initialize from localStorage
   const [isExpanded, setIsExpanded] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_STATE_KEY);
@@ -79,6 +84,17 @@ export default function AgentChatSidebar({
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
   };
+  
+  // 注册打开助手抽屉的回调
+  const openAssistant = useCallback(() => {
+    setIsExpanded(true);
+  }, []);
+  
+  useEffect(() => {
+    if (planStudioContext?.setOnOpenAssistant) {
+      planStudioContext.setOnOpenAssistant(openAssistant);
+    }
+  }, [planStudioContext, openAssistant]);
 
   const handleRefresh = () => {
     if (tripPlannerRef.current) {

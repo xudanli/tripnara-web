@@ -8,6 +8,7 @@ import type { ItineraryItem } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import type { PlacePhoto } from '@/types/place-image';
 import { PlaceImageWithAttribution } from '@/components/common/UnsplashAttribution';
+import Logo from '@/components/common/Logo';
 import {
   Tooltip,
   TooltipContent,
@@ -600,22 +601,22 @@ export default function ItineraryItemRow({
 
         {/* 右侧：操作按钮 */}
         <div className="flex-shrink-0 flex items-center gap-1">
-          {/* 问 NARA 按钮 */}
+          {/* 问 NARA 按钮 - Logo 图标 */}
           {onAskNara && place && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button 
                     variant="ghost" 
-                    size="sm" 
-                    className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={() => onAskNara(item, `这个地点有什么推荐？`)}
+                    size="icon"
+                    className="h-7 w-7 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                    onClick={() => onAskNara(item, `关于${place.nameCN || place.nameEN}，有什么推荐或注意事项？`)}
                   >
-                    🤖 问NARA
+                    <Logo variant="icon" size={16} color="currentColor" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  <p>让 NARA 助手帮你了解这个地点</p>
+                  <p>问 NARA</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
