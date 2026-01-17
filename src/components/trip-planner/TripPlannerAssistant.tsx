@@ -602,19 +602,26 @@ function FormattedMessage({ content }: { content: string }) {
       const trimmed = line.trim();
       if (!trimmed) return false;
       
-      // 1. 跳过 "现在我可以帮您" 类的引导语
+      // 1. 跳过引导语
       if (/^现在我可以帮您/.test(trimmed)) return true;
       if (/^有什么.*帮.*吗/.test(trimmed)) return true;
+      if (/^我可以帮您/.test(trimmed)) return true;
+      if (/^您可以/.test(trimmed)) return true;
       
-      // 2. 跳过功能介绍行：emoji + **标题** + - + 描述
-      // 检测模式：包含 ** 和 - 的行，且以 emoji 或特殊字符开头
-      if (trimmed.includes('**') && /[-–—]/.test(trimmed)) {
-        // 检查是否以 emoji 开头（使用 Unicode 属性）
-        const firstChar = [...trimmed][0]; // 正确处理 Unicode 字符
-        if (firstChar && /\p{Emoji}/u.test(firstChar)) {
-          return true;
-        }
+      // 2. 跳过功能介绍行（多种格式）
+      // 格式1: emoji + **标题** + - + 描述
+      // 格式2: - **标题**: 描述  
+      // 格式3: • 标题 - 描述
+      if (trimmed.includes('**') && /[-–—:：]/.test(trimmed)) {
+        const firstChar = [...trimmed][0];
+        // emoji 开头
+        if (firstChar && /\p{Emoji}/u.test(firstChar)) return true;
+        // - 或 • 开头
+        if (/^[-•·]/.test(trimmed)) return true;
       }
+      
+      // 3. 跳过单独的功能关键词行
+      if (/^(优化行程|细化安排|解答疑问|行前准备|智能填充|路线优化)/.test(trimmed)) return true;
       
       return false;
     };

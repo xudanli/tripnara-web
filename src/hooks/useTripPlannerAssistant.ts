@@ -473,12 +473,15 @@ export function useTripPlannerAssistant({
     prevTripIdRef.current = tripId;
   }, [tripId, clearMessages]);
 
-  // 自动开始会话
+  // 自动开始会话（使用 ref 防止 Strict Mode 重复调用）
+  const hasStartedRef = useRef(false);
   useEffect(() => {
-    if (autoStart && tripId && !isInitialized && !initializingRef.current) {
+    // 防止重复启动：检查 ref 标记和 sessionId
+    if (autoStart && tripId && !isInitialized && !initializingRef.current && !hasStartedRef.current && !sessionId) {
+      hasStartedRef.current = true;
       startSession();
     }
-  }, [autoStart, tripId, isInitialized, startSession]);
+  }, [autoStart, tripId, isInitialized, startSession, sessionId]);
 
   return {
     // 状态
