@@ -62,6 +62,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { usePlanStudioAssistant, type SelectedContext, type PendingSuggestion } from '@/contexts/PlanStudioContext';
+import { tripsApi } from '@/api/trips';
 
 /**
  * 安全使用 PlanStudio 上下文
@@ -631,7 +632,7 @@ const inputQuickCommands: { id: string; label: string; action: string }[] = [
  * 格式化消息内容渲染器
  * 解析简单的 Markdown 格式并美化显示
  */
-function FormattedMessage({ content }: { content: string }) {
+function FormattedMessage({ content, itemNameMap }: { content: string; itemNameMap?: Map<string, string> }) {
   // 简化的消息解析：过滤冗余内容，只保留核心信息
   // 遵循 TripNARA "Clarity over Charm" 原则
   const parseContent = (text: string) => {
@@ -727,6 +728,18 @@ function FormattedMessage({ content }: { content: string }) {
         problemText = problemText
           .replace(/「未命名活动」/g, '「活动（名称缺失）」')
           .replace(/未命名活动/g, '活动（名称缺失）');
+        
+        // 替换 itemId 为中文名称
+        if (itemNameMap && itemNameMap.size > 0) {
+          itemNameMap.forEach((name, itemId) => {
+            // 转义 itemId 中的特殊字符
+            const escapedItemId = itemId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // 替换「itemId」格式
+            problemText = problemText.replace(new RegExp(`「${escapedItemId}」`, 'g'), `「${name}」`);
+            // 替换 itemId（不在引号中，使用单词边界）
+            problemText = problemText.replace(new RegExp(`\\b${escapedItemId}\\b`, 'g'), name);
+          });
+        }
         
         // 跳过空内容
         if (!problemText) {
@@ -1725,6 +1738,7 @@ function MessageBubble({
   isLatest,
   isNewMessage,
   loading,
+  itemNameMap,
 }: {
   message: PlannerMessage;
   onFollowUpSelect?: (value: string) => void;
@@ -1740,6 +1754,8 @@ function MessageBubble({
   isLatest?: boolean;
   isNewMessage?: boolean;
   loading?: boolean;
+  /** itemId -> 中文名称映射 */
+  itemNameMap?: Map<string, string>;
 }) {
   const isUser = message.role === 'user';
   
@@ -1814,7 +1830,7 @@ function MessageBubble({
             <p className="whitespace-pre-wrap">{textToShow}</p>
           ) : (
             <>
-              <FormattedMessage content={textToShow} />
+              <FormattedMessage content={textToShow} itemNameMap={itemNameMap} />
             {isTyping && (
               <span className="inline-block w-0.5 h-4 bg-slate-600 ml-0.5 animate-pulse" />
             )}
@@ -1906,6 +1922,8 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState('');
   const [newMessageId, setNewMessageId] = useState<string | null>(null);
+  // itemId -> 中文名称映射
+  const [itemNameMap, setItemNameMap] = useState<Map<string, string>>(new Map());
 
   // 左右联动上下文
   const { 
@@ -1934,6 +1952,42 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
     autoStart: true,
     onTripUpdate: onTripUpdate ? () => onTripUpdate() : undefined,
   });
+
+  // 获取行程数据并构建 itemId -> 中文名称映射
+  useEffect(() => {
+    const loadTripItems = async () => {
+      try {
+        const trip = await tripsApi.getById(tripId);
+        const nameMap = new Map<string, string>();
+        
+        // 遍历所有天和行程项
+        if (trip.TripDay) {
+          trip.TripDay.forEach(day => {
+            if (day.ItineraryItem) {
+              day.ItineraryItem.forEach(item => {
+                // 检查 item 是否有 Place 属性
+                if (item.id && 'Place' in item && item.Place) {
+                  const place = item.Place as { nameCN?: string; nameEN?: string };
+                  const name = place.nameCN || place.nameEN || '';
+                  if (name) {
+                    nameMap.set(item.id, name);
+                  }
+                }
+              });
+            }
+          });
+        }
+        
+        setItemNameMap(nameMap);
+      } catch (error) {
+        console.error('[TripPlannerAssistant] 获取行程数据失败:', error);
+      }
+    };
+    
+    if (tripId) {
+      loadTripItems();
+    }
+  }, [tripId]);
 
   // 注册来自左侧的提问处理
   useEffect(() => {
@@ -2238,6 +2292,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
                       isLatest={idx === messages.length - 1}
                       isNewMessage={msg.id === newMessageId}
                       loading={loading}
+                      itemNameMap={itemNameMap}
                     />
                   </MeasuredMessageWrapper>
                 ))}
@@ -2262,6 +2317,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
                 isLatest={idx === messages.length - 1}
                 isNewMessage={msg.id === newMessageId}
                 loading={loading}
+                itemNameMap={itemNameMap}
               />
             ))}
           </div>
