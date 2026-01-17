@@ -684,57 +684,63 @@ function FormattedMessage({ content }: { content: string }) {
       }
       
       // 检测待处理项标题（支持多种格式）
+      const trimmedLine = line.trim();
       const isProblemHeader = 
-        (line.includes('**发现') && line.includes('问题**')) ||
-        line.includes('问题需要解决') ||
-        line.includes('必须解决的问题') ||
-        line.includes('潜在问题') ||
-        (line.includes('问题') && (line.includes('以下') || line.includes('以下')));
+        (trimmedLine.includes('**发现') && trimmedLine.includes('问题**')) ||
+        trimmedLine.includes('问题需要解决') ||
+        trimmedLine.includes('必须解决的问题') ||
+        trimmedLine.includes('潜在问题') ||
+        (trimmedLine.includes('问题') && trimmedLine.includes('以下'));
       
       if (isProblemHeader) {
+        // 结束之前的文本段
         if (currentText.length > 0) {
           segments.push({ type: 'text', content: currentText.join('\n') });
           currentText = [];
+        }
+        // 如果之前有问题列表，先保存
+        if (currentProblemList.length > 0) {
+          segments.push({ type: 'problem-list', content: '', problems: currentProblemList });
+          currentProblemList = [];
         }
         inProblemSection = true;
         continue;
       }
       
       // 检测待处理项 (数字. 内容) - 支持多种格式
-      const problemMatch = line.match(/^\d+[\.、]\s*(.+)$/);
-      let isProblemItem = false;
+      const problemMatch = trimmedLine.match(/^\d+[\.、]\s*(.+)$/);
       
-      if (problemMatch && inProblemSection) {
-        currentProblemList.push(problemMatch[1]);
-        isProblemItem = true;
-      } else if (!inProblemSection && problemMatch) {
-        // 如果没有标题但检测到数字列表，也认为是问题列表
-        // 检查上下文，如果前面有"问题"相关文本，开始问题列表
-        const prevText = currentText.join('\n');
-        if (prevText.includes('问题') || prevText.includes('冲突') || prevText.includes('需要')) {
-          inProblemSection = true;
+      if (problemMatch) {
+        if (inProblemSection) {
+          // 在问题区块中，直接添加
           currentProblemList.push(problemMatch[1]);
-          isProblemItem = true;
+          continue;
+        } else {
+          // 不在问题区块中，检查上下文
+          const prevText = currentText.join('\n');
+          if (prevText.includes('问题') || prevText.includes('冲突') || prevText.includes('需要')) {
+            // 结束之前的文本段
+            if (currentText.length > 0) {
+              segments.push({ type: 'text', content: currentText.join('\n') });
+              currentText = [];
+            }
+            inProblemSection = true;
+            currentProblemList.push(problemMatch[1]);
+            continue;
+          }
         }
       }
       
-      // 如果已处理为问题项，跳过后续处理
-      if (isProblemItem) {
-        continue;
-      }
-      
-      // 普通文本 - 结束待处理项区块
-      if (line.trim()) {
-        // 如果当前在问题区块中，但这一行不是问题项，结束问题区块
+      // 普通文本处理
+      if (trimmedLine) {
+        // 如果当前在问题区块中，但这一行不是问题项格式，结束问题区块
         if (inProblemSection && currentProblemList.length > 0) {
           segments.push({ type: 'problem-list', content: '', problems: currentProblemList });
           currentProblemList = [];
           inProblemSection = false;
         }
-        // 只有在非问题区块时才添加到普通文本
-        if (!inProblemSection) {
-          currentText.push(line);
-        }
+        // 添加到普通文本
+        currentText.push(line);
       }
     }
     
@@ -750,12 +756,6 @@ function FormattedMessage({ content }: { content: string }) {
   };
 
   const segments = parseContent(content);
-
-  // 调试：检查是否识别到问题列表
-  const hasProblemList = segments.some(s => s.type === 'problem-list');
-  if (hasProblemList) {
-    console.log('[FormattedMessage] 识别到问题列表:', segments.filter(s => s.type === 'problem-list'));
-  }
 
   // 只有普通文本时直接返回
   if (segments.length === 1 && segments[0].type === 'text') {
