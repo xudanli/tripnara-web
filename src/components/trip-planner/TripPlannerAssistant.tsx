@@ -348,6 +348,52 @@ function TypingIndicator() {
 }
 
 /**
+ * 行程项上下文卡片
+ * 视觉设计：简洁的信息卡片，显示选中行程项的关键信息
+ */
+function SelectedItemCard({ context }: { context: SelectedContext }) {
+  if (!context.placeName) return null;
+  
+  // 类型映射
+  const typeLabels: Record<string, { label: string; emoji: string; color: string }> = {
+    'ATTRACTION': { label: '景点', emoji: '🏛️', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    'RESTAURANT': { label: '餐厅', emoji: '🍽️', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+    'CAFE': { label: '咖啡', emoji: '☕', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    'HOTEL': { label: '住宿', emoji: '🏨', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    'SHOPPING': { label: '购物', emoji: '🛍️', color: 'bg-pink-50 text-pink-700 border-pink-200' },
+    'TRANSIT': { label: '交通', emoji: '🚌', color: 'bg-slate-50 text-slate-700 border-slate-200' },
+    'MEAL_ANCHOR': { label: '用餐', emoji: '🍴', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+    'ACTIVITY': { label: '活动', emoji: '🎯', color: 'bg-green-50 text-green-700 border-green-200' },
+  };
+  
+  const typeInfo = typeLabels[context.itemType || ''] || { label: '地点', emoji: '📍', color: 'bg-slate-50 text-slate-700 border-slate-200' };
+
+  return (
+    <div className="mb-2 animate-in fade-in slide-in-from-left-2 duration-200">
+      <div className={cn(
+        "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs",
+        typeInfo.color
+      )}>
+        <span>{typeInfo.emoji}</span>
+        <span className="font-medium">{context.placeName}</span>
+        {context.itemTime && (
+          <>
+            <span className="opacity-50">·</span>
+            <span className="opacity-75">{context.itemTime.start}-{context.itemTime.end}</span>
+          </>
+        )}
+        {context.dayIndex && (
+          <>
+            <span className="opacity-50">·</span>
+            <span className="opacity-75">第{context.dayIndex}天</span>
+          </>
+                        )}
+                      </div>
+    </div>
+  );
+}
+
+/**
  * 对比表渲染组件
  */
 function ComparisonContent({ content }: { content: ComparisonRichContent }) {
@@ -1562,6 +1608,11 @@ function MessageBubble({
           {isUser ? '我' : '🧳 NARA'}
         </span>
 
+        {/* 🆕 用户消息的行程上下文卡片 */}
+        {isUser && message.selectedContext?.placeName && (
+          <SelectedItemCard context={message.selectedContext as SelectedContext} />
+        )}
+
         {/* 消息气泡 */}
         <div className={cn(
           "rounded-2xl px-4 py-3 text-sm",
@@ -1703,6 +1754,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
             itemId: context.itemId || undefined,
             placeName: context.placeName || undefined,
             itemType: context.itemType || undefined,
+            itemTime: context.itemTime,
           },
           adjacentItems: context.prevItem || context.nextItem ? {
             prevItem: context.prevItem,

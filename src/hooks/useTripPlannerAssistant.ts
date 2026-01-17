@@ -38,6 +38,16 @@ export interface PlannerMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  // 用户消息特有字段
+  /** 用户消息关联的行程上下文 */
+  selectedContext?: {
+    dayIndex?: number;
+    date?: string;
+    itemId?: string;
+    placeName?: string;
+    itemType?: string;
+    itemTime?: { start: string; end: string };
+  };
   // 助手消息特有字段
   phase?: PlannerPhase;
   intent?: PlannerIntent;
@@ -78,6 +88,7 @@ export interface SendMessageOptions {
       itemId?: string;
       placeName?: string;
       itemType?: string;
+      itemTime?: { start: string; end: string };
     };
     adjacentItems?: {
       prevItem?: { name: string; endTime: string; type?: string };
@@ -156,13 +167,14 @@ export function useTripPlannerAssistant({
   /**
    * 添加用户消息
    */
-  const addUserMessage = useCallback((content: string): string => {
+  const addUserMessage = useCallback((content: string, selectedContext?: PlannerMessage['selectedContext']): string => {
     const id = generateMessageId();
     const message: PlannerMessage = {
       id,
       role: 'user',
       content,
       timestamp: new Date(),
+      selectedContext,
     };
     setMessages(prev => [...prev, message]);
     return id;
@@ -303,8 +315,16 @@ export function useTripPlannerAssistant({
   ) => {
     if (!tripId || !message.trim() || loading) return;
     
-    // 添加用户消息
-    addUserMessage(message);
+    // 添加用户消息（附带上下文信息）
+    const ctx = options?.context?.selectedContext;
+    addUserMessage(message, ctx ? {
+      dayIndex: ctx.dayIndex,
+      date: ctx.date,
+      itemId: ctx.itemId,
+      placeName: ctx.placeName,
+      itemType: ctx.itemType,
+      itemTime: ctx.itemTime,
+    } : undefined);
     
     setLoading(true);
     setError(null);
