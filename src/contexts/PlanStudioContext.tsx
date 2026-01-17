@@ -223,6 +223,13 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const askAssistantAbout = useCallback((question: string, contextOverride?: SelectedContext) => {
+    console.log('[PlanStudioContext] askAssistantAbout called', { 
+      question, 
+      contextOverride,
+      hasOnOpenAssistant: !!onOpenAssistant,
+      hasOnAskAssistant: !!onAskAssistant,
+    });
+    
     // 先打开助手抽屉
     if (onOpenAssistant) {
       onOpenAssistant();
@@ -230,6 +237,8 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     // 然后发送问题（优先使用传入的 context，解决异步状态更新问题）
     if (onAskAssistant) {
       onAskAssistant(question, contextOverride || selectedContext);
+    } else {
+      console.warn('[PlanStudioContext] onAskAssistant is not registered!');
     }
   }, [onAskAssistant, onOpenAssistant, selectedContext]);
 
