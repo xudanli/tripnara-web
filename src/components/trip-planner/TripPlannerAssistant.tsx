@@ -1711,15 +1711,17 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
     scrollToBottom();
   }, [messages.length, loading, scrollToBottom]);
 
-  // 监听新消息，设置打字机效果
+  // 监听新消息，设置打字机效果（只在消息数量增加时触发）
+  const prevMessageCountRef = useRef(0);
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > prevMessageCountRef.current) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.role === 'assistant') {
         setNewMessageId(lastMessage.id);
       }
     }
-  }, [messages]);
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length]);
 
   // 构建上下文参数
   const buildContextOptions = useCallback(() => ({

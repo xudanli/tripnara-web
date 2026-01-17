@@ -462,19 +462,23 @@ export function useTripPlannerAssistant({
     setError(null);
   }, []);
 
+  // 记录上一次的 tripId，用于检测变化
+  const prevTripIdRef = useRef<string | null>(null);
+
+  // tripId 变化时重置（仅当 tripId 真正变化时）
+  useEffect(() => {
+    if (tripId && prevTripIdRef.current && prevTripIdRef.current !== tripId) {
+      clearMessages();
+    }
+    prevTripIdRef.current = tripId;
+  }, [tripId, clearMessages]);
+
   // 自动开始会话
   useEffect(() => {
     if (autoStart && tripId && !isInitialized && !initializingRef.current) {
       startSession();
     }
   }, [autoStart, tripId, isInitialized, startSession]);
-
-  // tripId 变化时重置
-  useEffect(() => {
-    if (tripId) {
-      clearMessages();
-    }
-  }, [tripId, clearMessages]);
 
   return {
     // 状态
