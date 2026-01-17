@@ -222,7 +222,7 @@ export default function TripSchedulePage() {
                       <div className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
                         <span>
-                          {item.startTime} - {item.endTime}
+                          {/^\d{2}:\d{2}$/.test(item.startTime) ? item.startTime : format(new Date(item.startTime), 'HH:mm')} - {/^\d{2}:\d{2}$/.test(item.endTime) ? item.endTime : format(new Date(item.endTime), 'HH:mm')}
                         </span>
                       </div>
                       {item.metadata?.cost && (

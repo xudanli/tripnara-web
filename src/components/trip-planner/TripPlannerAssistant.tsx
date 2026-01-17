@@ -1,0 +1,2087 @@
+/**
+ * 行程规划智能助手组件
+ * 
+ * 规划工作台右侧的 AI 助手聊天界面
+ * 支持：
+ * - 自然语言对话
+ * - 富文本内容展示（时间线、对比表、清单）
+ * - 快捷操作按钮
+ * - 修改确认/拒绝
+ */
+
+import { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
+import { 
+  useTripPlannerAssistant, 
+  type PlannerMessage,
+} from '@/hooks/useTripPlannerAssistant';
+import type { 
+  QuickAction, 
+  RichContent,
+  ComparisonRichContent,
+  ChecklistRichContent,
+  POIRichContent,
+  PendingChange,
+  FollowUp,
+  // 三人格守护者系统
+  GuardianPersona,
+  // 意图消歧系统
+  GapHighlightRichContent,
+  GapSeverity,
+  PlannerResponseMeta,
+} from '@/api/trip-planner';
+import { IntentUncertainty } from '@/api/trip-planner';
+import { GuardianPanel, DisclaimerBanner } from './guardian';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import {
+  Send,
+  Sparkles,
+  User,
+  MapPin,
+  Check,
+  X,
+  Star,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  MessageCircle,
+  List,
+  BarChart3,
+  ChevronRight,
+  Lightbulb,
+  Info,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { usePlanStudioAssistant, type SelectedContext, type PendingSuggestion } from '@/contexts/PlanStudioContext';
+
+/**
+ * 安全使用 PlanStudio 上下文
+ * 当组件在 Provider 外部使用时返回默认值
+ */
+function usePlanStudioSafe() {
+  try {
+    return usePlanStudioAssistant();
+  } catch {
+    // 在 Provider 外部使用时返回默认值
+    return {
+      selectedContext: {
+        dayIndex: null,
+        date: null,
+        itemId: null,
+        placeName: null,
+        itemType: null,
+      } as SelectedContext,
+      pendingSuggestions: [] as PendingSuggestion[],
+      recentAction: null,
+      addSuggestion: (_suggestion: Omit<PendingSuggestion, 'id'>) => {},
+      applySuggestion: (_id: string) => {},
+      dismissSuggestion: (_id: string) => {},
+      setOnAskAssistant: (_handler: (question: string, context: SelectedContext) => void) => {},
+      setOnApplySuggestion: (_handler: (suggestion: PendingSuggestion) => Promise<boolean>) => {},
+    };
+  }
+}
+
+// ==================== Props 定义 ====================
+
+interface TripPlannerAssistantProps {
+  tripId: string;
+  className?: string;
+  onTripUpdate?: () => void; // 当行程被修改后的回调
+  compact?: boolean; // 紧凑模式
+}
+
+// 暴露给父组件的方法
+export interface TripPlannerAssistantRef {
+  refresh: () => void;
+  isLoading: boolean;
+}
+
+// ==================== 子组件 ====================
+
+/**
+ * 打字机效果 Hook
+ */
+function useTypewriter(text: string, enabled: boolean, speed: number = 25) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setDisplayedText(text);
+      setIsTyping(false);
+      return;
+    }
+
+    setDisplayedText('');
+    setIsTyping(true);
+
+    let currentIndex = 0;
+    const intervalId = setInterval(() => {
+      if (currentIndex < text.length) {
+        const charsToAdd = Math.min(
+          Math.floor(Math.random() * 2) + 1,
+          text.length - currentIndex
+        );
+        setDisplayedText(text.slice(0, currentIndex + charsToAdd));
+        currentIndex += charsToAdd;
+      } else {
+        setIsTyping(false);
+        clearInterval(intervalId);
+      }
+    }, speed);
+
+    return () => clearInterval(intervalId);
+  }, [text, enabled, speed]);
+
+  return { displayedText, isTyping };
+}
+
+// ==================== 虚拟滚动相关 ====================
+
+/**
+ * 消息项高度缓存
+ */
+interface HeightCache {
+  [key: string]: number;
+}
+
+/**
+ * 虚拟列表配置
+ */
+interface VirtualConfig {
+  estimatedItemHeight: number; // 预估单条消息高度
+  overscan: number; // 上下缓冲区条数
+  threshold: number; // 启用虚拟滚动的消息数量阈值
+}
+
+const DEFAULT_VIRTUAL_CONFIG: VirtualConfig = {
+  estimatedItemHeight: 120, // 预估消息高度（含富文本可能更高）
+  overscan: 3, // 上下各缓冲 3 条
+  threshold: 20, // 超过 20 条消息启用虚拟滚动
+};
+
+/**
+ * 虚拟滚动 Hook
+ * 
+ * 只在消息数量超过阈值时启用，避免小数据量时的额外开销
+ */
+function useVirtualMessages<T extends { id: string }>(
+  items: T[],
+  containerRef: React.RefObject<HTMLElement | null>,
+  config: Partial<VirtualConfig> = {}
+) {
+  const { estimatedItemHeight, overscan, threshold } = {
+    ...DEFAULT_VIRTUAL_CONFIG,
+    ...config,
+  };
+
+  // 高度缓存
+  const heightCacheRef = useRef<HeightCache>({});
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(0);
+
+  // 是否启用虚拟滚动
+  const isVirtualEnabled = items.length > threshold;
+
+  // 监听滚动事件
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !isVirtualEnabled) return;
+
+    const handleScroll = () => {
+      setScrollTop(container.scrollTop);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [containerRef, isVirtualEnabled]);
+
+  // 监听容器大小变化
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateHeight = () => {
+      setContainerHeight(container.clientHeight);
+    };
+    
+    updateHeight();
+
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [containerRef]);
+
+  // 获取单项高度（使用缓存或预估值）
+  const getItemHeight = useCallback((id: string): number => {
+    return heightCacheRef.current[id] || estimatedItemHeight;
+  }, [estimatedItemHeight]);
+
+  // 更新高度缓存
+  const measureHeight = useCallback((id: string, height: number) => {
+    if (heightCacheRef.current[id] !== height) {
+      heightCacheRef.current[id] = height;
+    }
+  }, []);
+
+  // 计算可见范围和总高度
+  const virtualData = useMemo(() => {
+    if (!isVirtualEnabled) {
+      return {
+        visibleItems: items.map((item, index) => ({ item, index, offset: 0 })),
+        totalHeight: 0,
+        startOffset: 0,
+        enabled: false,
+      };
+    }
+
+    // 计算每项的偏移量和总高度
+    let totalHeight = 0;
+    const itemMeta: { item: T; index: number; offset: number; height: number }[] = [];
+    
+    items.forEach((item, index) => {
+      const height = getItemHeight(item.id);
+      itemMeta.push({ item, index, offset: totalHeight, height });
+      totalHeight += height;
+    });
+
+    // 计算可见范围
+    const startOffset = scrollTop;
+    const endOffset = scrollTop + containerHeight;
+
+    // 找到第一个可见项
+    let startIndex = 0;
+    for (let i = 0; i < itemMeta.length; i++) {
+      if (itemMeta[i].offset + itemMeta[i].height > startOffset) {
+        startIndex = Math.max(0, i - overscan);
+        break;
+      }
+    }
+
+    // 找到最后一个可见项
+    let endIndex = items.length - 1;
+    for (let i = startIndex; i < itemMeta.length; i++) {
+      if (itemMeta[i].offset > endOffset) {
+        endIndex = Math.min(items.length - 1, i + overscan);
+        break;
+      }
+    }
+
+    // 返回可见项
+    const visibleItems = itemMeta.slice(startIndex, endIndex + 1);
+    const visibleStartOffset = visibleItems.length > 0 ? visibleItems[0].offset : 0;
+
+    return {
+      visibleItems,
+      totalHeight,
+      startOffset: visibleStartOffset,
+      enabled: true,
+    };
+  }, [items, scrollTop, containerHeight, getItemHeight, overscan, isVirtualEnabled]);
+
+  // 滚动到底部
+  const scrollToBottom = useCallback(() => {
+    const container = containerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [containerRef]);
+
+  return {
+    ...virtualData,
+    measureHeight,
+    scrollToBottom,
+    isVirtualEnabled,
+  };
+}
+
+/**
+ * 测量消息高度的包装组件
+ */
+function MeasuredMessageWrapper({
+  children,
+  messageId,
+  onMeasure,
+}: {
+  children: React.ReactNode;
+  messageId: string;
+  onMeasure: (id: string, height: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (ref.current) {
+      const height = ref.current.getBoundingClientRect().height;
+      onMeasure(messageId, height);
+    }
+  });
+
+  return (
+    <div ref={ref}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 打字指示器
+ */
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex gap-1">
+        <span className="w-2 h-2 bg-slate-500/60 rounded-full animate-bounce [animation-delay:0ms]" />
+        <span className="w-2 h-2 bg-slate-500/60 rounded-full animate-bounce [animation-delay:150ms]" />
+        <span className="w-2 h-2 bg-slate-500/60 rounded-full animate-bounce [animation-delay:300ms]" />
+      </div>
+      <span className="text-sm text-muted-foreground">NARA 正在思考...</span>
+    </div>
+  );
+}
+
+/**
+ * 对比表渲染组件
+ */
+function ComparisonContent({ content }: { content: ComparisonRichContent }) {
+  return (
+    <div className="mt-3">
+      <div className="text-sm font-medium mb-2 flex items-center gap-2">
+        <BarChart3 className="w-4 h-4" />
+        {content.titleCN || content.title}
+      </div>
+      <div className="grid gap-2">
+        {content.items.map((item) => (
+          <Card 
+            key={item.id}
+            className={cn(
+              "overflow-hidden",
+              item.recommended && "ring-2 ring-green-300 bg-green-50/50"
+            )}
+          >
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium">{item.nameCN || item.name}</span>
+                {item.recommended && (
+                  <Badge className="bg-green-500">推荐</Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {Object.entries(item.metrics).map(([key, value]) => (
+                  <div key={key} className="flex justify-between">
+                    <span className="text-muted-foreground">{key}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
+              <Separator className="my-2" />
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-green-600 font-medium">优点</span>
+                  <ul className="mt-1 space-y-0.5">
+                    {item.pros.map((pro, idx) => (
+                      <li key={idx} className="flex items-start gap-1">
+                        <Check className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span>{pro}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <span className="text-orange-600 font-medium">缺点</span>
+                  <ul className="mt-1 space-y-0.5">
+                    {item.cons.map((con, idx) => (
+                      <li key={idx} className="flex items-start gap-1">
+                        <X className="w-3 h-3 text-orange-500 mt-0.5 flex-shrink-0" />
+                        <span>{con}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 清单渲染组件
+ */
+function ChecklistContent({ content }: { content: ChecklistRichContent }) {
+  const [items, setItems] = useState(content.items);
+  
+  const groupedItems = useMemo(() => {
+    const groups: Record<string, typeof items> = {};
+    items.forEach((item) => {
+      const category = item.categoryCN || item.category;
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(item);
+    });
+    return groups;
+  }, [items]);
+
+  const progress = useMemo(() => {
+    const checked = items.filter(i => i.checked).length;
+    return Math.round((checked / items.length) * 100);
+  }, [items]);
+
+  const handleToggle = (itemId: string) => {
+    setItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, checked: !item.checked } : item
+    ));
+  };
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <List className="w-4 h-4" />
+          <span className="font-medium text-sm">{content.titleCN || content.title}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Progress value={progress} className="w-20 h-2" />
+          <span className="text-xs text-muted-foreground">{progress}%</span>
+        </div>
+      </div>
+      
+      <div className="space-y-3">
+        {Object.entries(groupedItems).map(([category, categoryItems]) => (
+          <div key={category}>
+            <div className="text-xs font-medium text-muted-foreground mb-1.5">
+              {category}
+            </div>
+            <div className="space-y-1">
+              {categoryItems.map((item) => (
+                <div 
+                  key={item.id}
+                  className={cn(
+                    "flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors",
+                    item.checked && "opacity-60"
+                  )}
+                >
+                  <Checkbox
+                    checked={item.checked}
+                    onCheckedChange={() => handleToggle(item.id)}
+                    className="data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
+                  />
+                  <span className={cn(
+                    "text-sm flex-1",
+                    item.checked && "line-through"
+                  )}>
+                    {item.textCN || item.text}
+                  </span>
+                  {item.priority === 'high' && (
+                    <Badge variant="destructive" className="text-xs">重要</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * POI 推荐列表组件
+ */
+function POIListContent({ content }: { content: POIRichContent }) {
+  return (
+    <div className="mt-3">
+      <div className="text-sm font-medium mb-2 flex items-center gap-2">
+        <MapPin className="w-4 h-4" />
+        {content.titleCN || content.title}
+      </div>
+      <div className="space-y-2">
+        {content.items.map((poi) => (
+          <Card key={poi.id} className="overflow-hidden">
+            <CardContent className="p-3">
+              <div className="flex items-start gap-3">
+                {poi.imageUrl && (
+                  <img 
+                    src={poi.imageUrl} 
+                    alt={poi.nameCN || poi.name}
+                    className="w-16 h-16 rounded-md object-cover flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm truncate">
+                      {poi.nameCN || poi.name}
+                    </span>
+                    {poi.rating && (
+                      <div className="flex items-center gap-1 text-amber-500">
+                        <Star className="w-3 h-3 fill-current" />
+                        <span className="text-xs">{poi.rating}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                    <Badge variant="secondary" className="text-xs">
+                      {poi.type}
+                    </Badge>
+                    {poi.distance && <span>{poi.distance}</span>}
+                    {poi.priceLevel && <span>{poi.priceLevel}</span>}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {poi.reasonCN || poi.reason}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 富文本内容渲染器
+ * 注：timeline 类型不再渲染，因为左侧已有完整行程列表，避免信息冗余
+ */
+function RichContentRenderer({ content }: { content: RichContent }) {
+  switch (content.type) {
+    case 'timeline':
+      // 不渲染 timeline，左侧行程列表已提供完整信息
+      return null;
+    case 'comparison':
+      return <ComparisonContent content={content} />;
+    case 'checklist':
+      return <ChecklistContent content={content} />;
+    case 'poi_list':
+      return <POIListContent content={content} />;
+    default:
+      return null;
+  }
+}
+
+// ==================== 快捷命令配置 ====================
+
+// 输入框下方的常用快捷命令
+const inputQuickCommands: { id: string; label: string; action: string }[] = [
+  { id: 'quick-optimize', label: '🚀 优化行程', action: '帮我优化今天的行程安排' },
+  { id: 'quick-conflicts', label: '🔍 检查冲突', action: '检查行程中是否有时间或路线冲突' },
+  { id: 'quick-fill', label: '✨ 智能填充', action: '帮我填充空闲时间段' },
+  { id: 'quick-summary', label: '📋 行程摘要', action: '给我一份今天的行程摘要' },
+];
+
+/**
+ * 格式化消息内容渲染器
+ * 解析简单的 Markdown 格式并美化显示
+ */
+function FormattedMessage({ content }: { content: string }) {
+  // 简化的消息解析：过滤冗余内容，只保留核心信息
+  // 遵循 TripNARA "Clarity over Charm" 原则
+  const parseContent = (text: string) => {
+    const lines = text.split('\n');
+    const segments: Array<{
+      type: 'text' | 'problem-list';
+      content: string;
+      problems?: string[];
+    }> = [];
+    
+    let currentProblemList: string[] = [];
+    let currentText: string[] = [];
+    let inProblemSection = false;
+    
+    // 需要过滤的冗余内容模式
+    const skipPatterns = [
+      /^.{1,4}\s*\*\*.+?\*\*\s*[-–—]\s*.+$/, // emoji **标题** - 描述（功能介绍）
+      /^现在我可以帮您/, // "现在我可以帮您："
+      /^有什么我可以帮您/, // "有什么我可以帮您的吗？"
+      /^有什么.*帮.*吗/, // 类似问句
+    ];
+    
+    const shouldSkip = (line: string) => {
+      const trimmed = line.trim();
+      // 检查是否匹配任何跳过模式
+      for (const pattern of skipPatterns) {
+        if (pattern.test(trimmed)) {
+          return true;
+        }
+      }
+      // 检查是否是 emoji 开头的功能介绍行
+      if (/\p{Emoji}/u.test(trimmed.charAt(0)) && trimmed.includes('**') && trimmed.includes('-')) {
+        return true;
+      }
+      return false;
+    };
+    
+    for (const line of lines) {
+      // 跳过冗余内容
+      if (shouldSkip(line)) {
+        continue;
+      }
+      
+      // 检测待处理项标题
+      if (line.includes('**发现') && line.includes('问题**')) {
+        if (currentText.length > 0) {
+          segments.push({ type: 'text', content: currentText.join('\n') });
+          currentText = [];
+        }
+        inProblemSection = true;
+        continue;
+      }
+      
+      // 检测待处理项 (数字. 内容)
+      const problemMatch = line.match(/^\d+\.\s+(.+)$/);
+      if (problemMatch && inProblemSection) {
+        currentProblemList.push(problemMatch[1]);
+        continue;
+      }
+      
+      // 普通文本 - 结束待处理项区块
+      if (line.trim()) {
+        if (currentProblemList.length > 0) {
+          segments.push({ type: 'problem-list', content: '', problems: currentProblemList });
+          currentProblemList = [];
+          inProblemSection = false;
+        }
+        currentText.push(line);
+      }
+    }
+    
+    // 处理剩余内容
+    if (currentText.length > 0) {
+      segments.push({ type: 'text', content: currentText.join('\n') });
+    }
+    if (currentProblemList.length > 0) {
+      segments.push({ type: 'problem-list', content: '', problems: currentProblemList });
+    }
+    
+    return segments;
+  };
+
+  const segments = parseContent(content);
+
+  // 只有普通文本时直接返回
+  if (segments.length === 1 && segments[0].type === 'text') {
+    return <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {segments.map((segment, idx) => {
+        switch (segment.type) {
+          case 'text':
+            return (
+              <p key={idx} className="whitespace-pre-wrap text-sm leading-relaxed">
+                {segment.content}
+              </p>
+            );
+          
+          case 'problem-list':
+            return (
+              <div key={idx} className="mt-2 p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/80">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="text-xs font-medium text-amber-800">
+                    发现 {segment.problems?.length} 个待处理项
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {segment.problems?.map((problem, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-1.5 text-xs text-amber-700"
+                    >
+                      <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-700 flex items-center justify-center text-[10px] font-medium flex-shrink-0">
+                        {i + 1}
+                      </span>
+                      <span className="truncate">{problem}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
+
+// 上下文相关的快捷命令
+const contextQuickCommands = {
+  // 选中地点时的命令
+  place: [
+    { id: 'ctx-nearby', label: '🍽️ 附近餐厅', action: (name: string) => `在${name}附近推荐一个好吃的餐厅` },
+    { id: 'ctx-duration', label: '⏱️ 停留时间', action: (name: string) => `${name}建议游玩多长时间？` },
+    { id: 'ctx-tips', label: '💡 注意事项', action: (name: string) => `去${name}有什么注意事项？` },
+    { id: 'ctx-alt', label: '🔄 替代方案', action: (name: string) => `有没有${name}的替代景点推荐？` },
+  ],
+  // 选中天时的命令
+  day: [
+    { id: 'ctx-optimize', label: '🚀 优化当天', action: (day: number) => `帮我优化第${day}天的行程安排` },
+    { id: 'ctx-fill', label: '✨ 填充空闲', action: (day: number) => `第${day}天有空闲时间吗？帮我填充` },
+    { id: 'ctx-meal', label: '🍽️ 餐厅推荐', action: (day: number) => `第${day}天推荐一个午餐地点` },
+    { id: 'ctx-route', label: '📍 路线优化', action: (day: number) => `帮我优化第${day}天的路线顺序` },
+  ],
+};
+
+/**
+ * 输入框下方快捷命令条
+ * 智能切换：有上下文时显示上下文相关命令，无上下文时显示通用命令
+ */
+function QuickCommandsBar({ 
+  onCommandClick,
+  disabled,
+  visible = true,
+  context,
+}: { 
+  onCommandClick: (command: string) => void;
+  disabled?: boolean;
+  visible?: boolean;
+  context?: SelectedContext;
+}) {
+  if (!visible) return null;
+
+  // 智能选择命令
+  const hasPlaceContext = context?.placeName;
+  const hasDayContext = context?.dayIndex && !hasPlaceContext;
+  
+  // 根据上下文选择命令列表
+  let commands: Array<{ id: string; label: string; action: string }>;
+  let labelPrefix: string;
+  
+  if (hasPlaceContext) {
+    commands = contextQuickCommands.place.map(cmd => ({
+      id: cmd.id,
+      label: cmd.label,
+      action: cmd.action(context.placeName!),
+    }));
+    labelPrefix = '关于此地点：';
+  } else if (hasDayContext) {
+    commands = contextQuickCommands.day.map(cmd => ({
+      id: cmd.id,
+      label: cmd.label,
+      action: cmd.action(context.dayIndex!),
+    }));
+    labelPrefix = `Day ${context.dayIndex}：`;
+  } else {
+    commands = inputQuickCommands;
+    labelPrefix = '快捷：';
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200">
+      <span className={cn(
+        "text-[10px] font-medium flex-shrink-0 mr-1",
+        hasPlaceContext || hasDayContext ? "text-blue-500" : "text-slate-400"
+      )}>
+        {labelPrefix}
+      </span>
+      {commands.map((cmd) => (
+        <button
+          key={cmd.id}
+          onClick={() => onCommandClick(cmd.action)}
+          disabled={disabled}
+          className={cn(
+            "flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-150",
+            hasPlaceContext || hasDayContext 
+              ? "bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 hover:border-blue-300"
+              : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 hover:border-slate-300 hover:text-slate-700",
+            "active:scale-95",
+            "disabled:opacity-50 disabled:cursor-not-allowed"
+          )}
+        >
+          {cmd.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 上下文状态栏
+ * 显示当前选中的天数/行程项，提供快捷操作入口
+ */
+function ContextStatusBar({ 
+  context,
+  onAskAbout,
+}: { 
+  context: SelectedContext;
+  onAskAbout: (question: string) => void;
+}) {
+  const { dayIndex, date, placeName, itemType } = context;
+  
+  // 没有选中任何内容时不显示
+  if (!dayIndex && !placeName) return null;
+
+  const typeLabels: Record<string, string> = {
+    'ACTIVITY': '活动',
+    'TRANSIT': '交通',
+    'MEAL_ANCHOR': '用餐',
+    'MEAL_FLOATING': '用餐',
+    'REST': '休息',
+  };
+
+  const contextQuickActions = placeName ? [
+    { label: '附近餐厅', action: `在${placeName}附近推荐一个好吃的餐厅` },
+    { label: '停留时间', action: `${placeName}建议游玩多长时间？` },
+    { label: '注意事项', action: `去${placeName}有什么注意事项？` },
+  ] : dayIndex ? [
+    { label: '优化当天', action: `帮我优化第${dayIndex}天的行程安排` },
+    { label: '填充空闲', action: `第${dayIndex}天有空闲时间吗？帮我填充` },
+    { label: '餐厅推荐', action: `第${dayIndex}天推荐一个午餐地点` },
+  ] : [];
+
+  return (
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200/60 p-2.5 mb-2">
+      {/* 当前上下文 */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-5 h-5 rounded bg-blue-500 flex items-center justify-center">
+          <MapPin className="w-3 h-3 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium text-blue-800 truncate">
+            {placeName ? (
+              <>
+                <span className="text-blue-500">Day {dayIndex}</span>
+                <span className="mx-1 text-blue-300">›</span>
+                <span>{placeName}</span>
+                {itemType && (
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-100 text-[10px] text-blue-600">
+                    {typeLabels[itemType] || itemType}
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                <span>正在查看：</span>
+                <span className="text-blue-600">第 {dayIndex} 天</span>
+                {date && (
+                  <span className="ml-1 text-blue-400 text-[10px]">
+                    ({format(new Date(date), 'M月d日')})
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* 快捷问题 */}
+      <div className="flex flex-wrap gap-1">
+        {contextQuickActions.map((action, idx) => (
+          <button
+            key={idx}
+            onClick={() => onAskAbout(action.action)}
+            className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/80 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors"
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 待处理建议面板
+ * 显示 NARA 推荐的地点/操作，支持一键添加到行程
+ */
+function PendingSuggestionsPanel({ 
+  suggestions,
+  onApply,
+  onDismiss,
+  loading,
+}: { 
+  suggestions: PendingSuggestion[];
+  onApply: (id: string) => void;
+  onDismiss: (id: string) => void;
+  loading?: boolean;
+}) {
+  if (suggestions.length === 0) return null;
+
+  const categoryIcons: Record<string, string> = {
+    'RESTAURANT': '🍽️',
+    'CAFE': '☕',
+    'ATTRACTION': '🏛️',
+    'MUSEUM': '🖼️',
+    'PARK': '🌳',
+    'SHOPPING': '🛍️',
+    'HOTEL': '🏨',
+    'OTHER': '📍',
+  };
+
+  return (
+    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200/60 p-2.5 mb-2">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
+          <Sparkles className="w-3 h-3 text-white" />
+        </div>
+        <span className="text-xs font-medium text-emerald-800">
+          NARA 的建议 ({suggestions.length})
+        </span>
+      </div>
+      
+      <div className="space-y-2">
+        {suggestions.map((suggestion) => (
+          <div 
+            key={suggestion.id}
+            className="bg-white/80 rounded-lg border border-emerald-200 p-2"
+          >
+            <div className="flex items-start gap-2">
+              {/* 图标 */}
+              <span className="text-lg flex-shrink-0">
+                {suggestion.place?.category 
+                  ? categoryIcons[suggestion.place.category] || '📍'
+                  : '💡'}
+              </span>
+              
+              {/* 内容 */}
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm text-slate-800 truncate">
+                  {suggestion.place?.nameCN || suggestion.description}
+                </div>
+                {suggestion.place?.address && (
+                  <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                    📍 {suggestion.place.address}
+                  </div>
+                )}
+                {suggestion.place?.rating && (
+                  <div className="text-[11px] text-amber-600 mt-0.5">
+                    ⭐ {suggestion.place.rating}
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-400 mt-1">
+                  建议添加到 Day {suggestion.targetDay}
+                  {suggestion.suggestedTime && ` · ${suggestion.suggestedTime}`}
+                </div>
+              </div>
+              
+              {/* 操作按钮 */}
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => onApply(suggestion.id)}
+                  disabled={loading}
+                  className="px-2 py-1 rounded text-[10px] font-medium bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                >
+                  ➕ 添加
+                </button>
+                <button
+                  onClick={() => onDismiss(suggestion.id)}
+                  disabled={loading}
+                  className="px-2 py-1 rounded text-[10px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                >
+                  忽略
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ==================== 意图消歧系统组件 ====================
+
+/**
+ * 缺口高亮卡片
+ * 用于显示发现的行程缺口（用餐/住宿/交通等）
+ */
+function GapHighlightCard({ 
+  data,
+}: { 
+  data: GapHighlightRichContent['data'];
+}) {
+  const { highlight } = data;
+  
+  // TripNARA 克制风格 - 使用左边框 + 图标，避免大面积彩色背景
+  const severityConfig: Record<GapSeverity, {
+    borderColor: string;
+    bgColor: string;
+    icon: React.ReactNode;
+    iconColor: string;
+    label: string;
+  }> = {
+    CRITICAL: {
+      borderColor: 'border-l-red-500',
+      bgColor: 'bg-red-50/50',
+      icon: <AlertTriangle className="w-4 h-4" />,
+      iconColor: 'text-red-500',
+      label: '需关注',
+    },
+    SUGGESTED: {
+      borderColor: 'border-l-amber-500',
+      bgColor: 'bg-amber-50/50',
+      icon: <Lightbulb className="w-4 h-4" />,
+      iconColor: 'text-amber-500',
+      label: '建议',
+    },
+    OPTIONAL: {
+      borderColor: 'border-l-blue-500',
+      bgColor: 'bg-blue-50/50',
+      icon: <Info className="w-4 h-4" />,
+      iconColor: 'text-blue-500',
+      label: '可选',
+    },
+  };
+  
+  const config = severityConfig[highlight.severity];
+  
+  return (
+    <div 
+      className={cn(
+        "rounded-lg border-l-4 p-3 mb-3",
+        config.borderColor,
+        config.bgColor
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        {/* 图标 */}
+        <div className={cn("flex-shrink-0 mt-0.5", config.iconColor)}>
+          {config.icon}
+        </div>
+        
+        {/* 内容 */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              {config.label}
+            </Badge>
+            <span className="text-xs font-medium text-slate-700">
+              第{highlight.dayNumber}天
+            </span>
+            <span className="text-xs text-slate-500">
+              {highlight.timeSlot.start} - {highlight.timeSlot.end}
+            </span>
+          </div>
+          <p className="text-sm text-slate-600">
+            {highlight.description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 澄清选项按钮组
+ * 用于显示意图澄清选项
+ */
+function ClarificationOptions({ 
+  actions, 
+  onSelect,
+  disabled,
+  followUp,
+  onFreeTextSubmit,
+}: { 
+  actions: QuickAction[];
+  onSelect: (action: QuickAction) => void;
+  disabled?: boolean;
+  followUp?: FollowUp;
+  onFreeTextSubmit?: (text: string) => void;
+}) {
+  const [freeText, setFreeText] = useState('');
+  
+  // 分离主要和次要选项
+  const primaryActions = actions.filter(a => a.style === 'primary');
+  const secondaryActions = actions.filter(a => a.style !== 'primary');
+  
+  const handleFreeTextSubmit = () => {
+    if (freeText.trim() && onFreeTextSubmit) {
+      onFreeTextSubmit(freeText.trim());
+      setFreeText('');
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-3">
+      {/* 选项按钮 */}
+    <div className="flex flex-wrap gap-2">
+        {/* 主要选项 */}
+        {primaryActions.map((action) => (
+          <button
+          key={action.id}
+            onClick={() => onSelect(action)}
+          disabled={disabled}
+            className={cn(
+              "flex-1 min-w-[140px] px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
+              "bg-primary text-primary-foreground hover:bg-primary/90",
+              "border-2 border-primary",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            <span className="block">{action.label}</span>
+            {action.description && (
+              <span className="block text-[11px] opacity-80 mt-0.5">
+                {action.description}
+              </span>
+            )}
+          </button>
+        ))}
+        
+        {/* 次要选项 */}
+        {secondaryActions.map((action) => (
+          <button
+            key={action.id}
+            onClick={() => onSelect(action)}
+            disabled={disabled}
+            className={cn(
+              "flex-1 min-w-[120px] px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
+              "bg-slate-100 text-slate-700 hover:bg-slate-200",
+              "border border-slate-200",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            <span className="block">{action.label}</span>
+            {action.description && (
+              <span className="block text-[11px] text-slate-500 mt-0.5">
+                {action.description}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      
+      {/* 自由输入框（当 followUp.type 为 text 时） */}
+      {followUp?.type === 'text' && onFreeTextSubmit && (
+        <div className="flex gap-2">
+          <Input
+            value={freeText}
+            onChange={(e) => setFreeText(e.target.value)}
+            placeholder="或者告诉我您的想法..."
+            disabled={disabled}
+            className="flex-1 text-sm"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleFreeTextSubmit();
+              }
+            }}
+          />
+          <Button
+            onClick={handleFreeTextSubmit}
+            disabled={disabled || !freeText.trim()}
+            size="sm"
+          >
+            发送
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 判断是否为澄清响应
+ */
+function isClarificationResponse(meta?: PlannerResponseMeta): boolean {
+  return (
+    meta?.uncertainty !== undefined &&
+    meta.uncertainty !== IntentUncertainty.CLEAR
+  );
+}
+
+/**
+ * 待确认修改面板
+ */
+function PendingChangesPanel({
+  changes,
+  onConfirm,
+  onReject,
+  loading,
+}: {
+  changes: PendingChange[];
+  onConfirm: () => void;
+  onReject: () => void;
+  loading?: boolean;
+}) {
+  if (changes.length === 0) return null;
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/50">
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600" />
+          待确认的修改 ({changes.length})
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
+          {changes.map((change) => (
+            <div 
+              key={change.id}
+              className="flex items-start gap-2 text-sm p-2 bg-white rounded"
+            >
+              <Badge variant="outline" className="text-xs flex-shrink-0">
+                {change.type}
+              </Badge>
+              <span>{change.descriptionCN || change.description}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onReject}
+            disabled={loading}
+            className="flex-1"
+          >
+            <X className="w-4 h-4 mr-1" />
+            取消
+          </Button>
+          <Button
+            size="sm"
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 bg-green-600 hover:bg-green-700"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 mr-1" />
+            )}
+            确认应用
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * 追问选项组件
+ */
+function FollowUpOptions({
+  followUp,
+  onSelect,
+}: {
+  followUp: FollowUp;
+  onSelect: (value: string) => void;
+}) {
+  const options = followUp.optionsCN || followUp.options || [];
+
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-sm text-muted-foreground">
+        {followUp.questionCN || followUp.question}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option, idx) => (
+          <Button
+            key={idx}
+            variant="outline"
+            size="sm"
+            onClick={() => onSelect(option)}
+            className="text-xs"
+          >
+            {option}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * P3: 人格显示偏好设置条
+ * 允许用户切换各人格的显示状态
+ */
+const PERSONA_TOGGLES: Array<{
+  persona: GuardianPersona;
+  emoji: string;
+  name: string;
+  description: string;
+  animal: string;
+}> = [
+  { persona: 'Abu', emoji: '🐻‍❄️', name: 'Abu', description: '安全与边界守护者', animal: '北极熊' },
+  { persona: 'DrDre', emoji: '🐕', name: 'Dr.Dre', description: '节奏与体力设计师', animal: '牧羊犬' },
+  { persona: 'Neptune', emoji: '🦦', name: 'Neptune', description: '修复与替代魔法师', animal: '海獭' },
+];
+
+/**
+ * 顾问团状态类型
+ */
+type GuardianStatus = 'standby' | 'analyzing' | 'has_insights' | 'all_clear';
+
+function PersonaPreferencesBar({
+  hiddenPersonas,
+  onToggle,
+  status = 'standby',
+  hasAnyInsights = false,
+}: {
+  hiddenPersonas: Set<GuardianPersona>;
+  onToggle: (persona: GuardianPersona) => void;
+  status?: GuardianStatus;
+  hasAnyInsights?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasHidden = hiddenPersonas.size > 0;
+
+  // 如果没有任何洞察数据，显示待命/分析状态
+  if (!hasAnyInsights) {
+    return (
+      <div className={cn(
+        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs transition-all",
+        status === 'analyzing' 
+          ? "bg-slate-100 border border-slate-200" 
+          : "bg-slate-50/50 border border-dashed border-slate-200"
+      )}>
+        {/* 人格头像 */}
+        <div className="flex -space-x-1.5">
+          {PERSONA_TOGGLES.map(({ persona, emoji }) => (
+            <span 
+              key={persona}
+              className={cn(
+                "text-sm transition-all",
+                status === 'analyzing' ? "animate-pulse" : "opacity-40 grayscale"
+              )}
+            >
+              {emoji}
+            </span>
+          ))}
+        </div>
+        
+        {/* 状态文案 */}
+        <div className="flex-1">
+          {status === 'analyzing' ? (
+            <div className="flex items-center gap-2 text-slate-600">
+              <span>顾问团分析中</span>
+              <div className="flex gap-0.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
+                    style={{ animationDelay: `${i * 100}ms` }}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <span className="text-muted-foreground">
+              顾问团待命中，将在需要时自动分析
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* 紧凑视图 - 点击展开 */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all",
+          "bg-slate-100/80 hover:bg-slate-100 border border-slate-200/50",
+          expanded && "bg-slate-100"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">顾问团</span>
+          <div className="flex -space-x-1">
+            {PERSONA_TOGGLES.map(({ persona, emoji }) => (
+              <span 
+                key={persona}
+                className={cn(
+                  "text-sm transition-opacity",
+                  hiddenPersonas.has(persona) && "opacity-30"
+                )}
+              >
+                {emoji}
+              </span>
+            ))}
+          </div>
+          {hasHidden && (
+            <span className="text-amber-600 text-xs">
+              ({hiddenPersonas.size} 已隐藏)
+            </span>
+          )}
+        </div>
+        <ChevronRight className={cn(
+          "w-3.5 h-3.5 text-muted-foreground transition-transform",
+          expanded && "rotate-90"
+        )} />
+      </button>
+
+      {/* 展开视图 - 带动画 */}
+      {expanded && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-200 px-1">
+          <div className="flex gap-2">
+            {PERSONA_TOGGLES.map(({ persona, emoji, name, description, animal }) => {
+              const isHidden = hiddenPersonas.has(persona);
+              return (
+                <button
+                  key={persona}
+                  onClick={() => onToggle(persona)}
+                  className={cn(
+                    "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all",
+                    "border hover:shadow-sm",
+                    isHidden 
+                      ? "bg-slate-50 border-slate-200 opacity-60" 
+                      : "bg-white border-slate-200 hover:border-slate-300"
+                  )}
+                >
+                  <span className={cn("text-base", isHidden && "grayscale")}>{emoji}</span>
+                  <div className="flex-1 text-left">
+                    <div className={cn(
+                      "font-medium",
+                      isHidden ? "text-slate-400" : "text-slate-700"
+                    )}>
+                      {name}
+                    </div>
+                    <div className="text-muted-foreground text-[10px]">{animal} · {description}</div>
+                  </div>
+                  <div className={cn(
+                    "w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                    isHidden 
+                      ? "border-slate-300 bg-slate-100" 
+                      : "border-slate-900 bg-slate-900"
+                  )}>
+                    {!isHidden && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 消息气泡组件
+ */
+function MessageBubble({
+  message,
+  onFollowUpSelect,
+  onClarificationSelect,
+  onClarificationFreeText,
+  onAcceptSuggestion,
+  onRejectSuggestion,
+  onIgnoreWarning,
+  onAcknowledgeDisclaimer,
+  hiddenPersonas,
+  isLatest,
+  isNewMessage,
+  loading,
+}: {
+  message: PlannerMessage;
+  onFollowUpSelect?: (value: string) => void;
+  /** 🆕 澄清选项选择回调 */
+  onClarificationSelect?: (action: QuickAction) => void;
+  /** 🆕 澄清自由文本输入回调 */
+  onClarificationFreeText?: (text: string) => void;
+  onAcceptSuggestion?: (persona: GuardianPersona, suggestionId?: string) => void;
+  onRejectSuggestion?: (persona: GuardianPersona, reason?: string) => void;
+  onIgnoreWarning?: (persona: GuardianPersona) => void;
+  onAcknowledgeDisclaimer?: () => void;
+  hiddenPersonas?: Set<GuardianPersona>;
+  isLatest?: boolean;
+  isNewMessage?: boolean;
+  loading?: boolean;
+}) {
+  const isUser = message.role === 'user';
+  
+  const enableTypewriter = !isUser && isNewMessage === true;
+  const { displayedText, isTyping } = useTypewriter(
+    message.content,
+    enableTypewriter,
+    20
+  );
+  
+  const textToShow = enableTypewriter ? displayedText : message.content;
+
+  // 过滤隐藏的人格
+  const visibleInsights = useMemo(() => {
+    if (!message.personaInsights || !hiddenPersonas) return message.personaInsights;
+    return message.personaInsights.filter(insight => !hiddenPersonas.has(insight.persona));
+  }, [message.personaInsights, hiddenPersonas]);
+
+  // 是否显示守护者面板
+  const showGuardianPanel = !isUser && visibleInsights && visibleInsights.length > 0 && !isTyping;
+
+  // 🆕 是否是澄清响应
+  const isClarification = !isUser && isClarificationResponse(message.meta);
+  
+  // 🆕 检查是否有缺口高亮内容
+  const gapHighlight = message.richContent?.type === 'gap_highlight' 
+    ? (message.richContent as GapHighlightRichContent) 
+    : null;
+
+  return (
+    <div className={cn(
+      "flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300",
+      isUser ? "flex-row-reverse" : "flex-row"
+    )}>
+      {/* 头像 */}
+      <div className={cn(
+        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+        isUser
+          ? "bg-slate-200"
+          : "bg-gradient-to-br from-slate-700 to-slate-900"
+      )}>
+        {isUser ? (
+          <User className="w-4 h-4 text-slate-600" />
+        ) : (
+          <Sparkles className="w-4 h-4 text-white" />
+        )}
+      </div>
+
+      {/* 消息内容 */}
+      <div className={cn(
+        "flex flex-col max-w-[85%]",
+        isUser ? "items-end" : "items-start"
+      )}>
+        {/* 角色标签 */}
+        <span className="text-xs text-muted-foreground mb-1">
+          {isUser ? '我' : '🧳 NARA'}
+        </span>
+
+        {/* 消息气泡 */}
+        <div className={cn(
+          "rounded-2xl px-4 py-3 text-sm",
+          isUser
+            ? "bg-primary text-primary-foreground rounded-tr-sm"
+            : "bg-gradient-to-br from-slate-50 to-slate-100 text-slate-800 rounded-tl-sm border border-slate-200/50"
+        )}>
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{textToShow}</p>
+          ) : (
+            <>
+              <FormattedMessage content={textToShow} />
+            {isTyping && (
+              <span className="inline-block w-0.5 h-4 bg-slate-600 ml-0.5 animate-pulse" />
+            )}
+            </>
+          )}
+        </div>
+
+        {/* 🆕 缺口高亮卡片（意图消歧系统） */}
+        {!isUser && gapHighlight && !isTyping && (
+          <div className="mt-3 w-full">
+            <GapHighlightCard data={gapHighlight.data} />
+          </div>
+        )}
+
+        {/* 富文本内容（非缺口高亮时） */}
+        {!isUser && message.richContent && !gapHighlight && !isTyping && (
+          <div className="w-full">
+            <RichContentRenderer content={message.richContent} />
+          </div>
+        )}
+
+        {/* 🆕 责任声明横幅 */}
+        {!isUser && message.disclaimer && !isTyping && (
+          <div className="mt-3 w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+            <DisclaimerBanner
+              disclaimer={message.disclaimer}
+              onAcknowledge={onAcknowledgeDisclaimer}
+            />
+          </div>
+        )}
+
+        {/* 🆕 守护者面板 - 带动画效果 */}
+        {showGuardianPanel && (
+          <div className="mt-3 w-full animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <GuardianPanel
+              insights={visibleInsights!}
+              evaluation={message.guardianEvaluation}
+              onAcceptSuggestion={onAcceptSuggestion}
+              onRejectSuggestion={onRejectSuggestion}
+              onIgnoreWarning={onIgnoreWarning}
+            />
+          </div>
+        )}
+
+        {/* 追问选项（非澄清响应时） */}
+        {!isUser && !isClarification && message.followUp && isLatest && !isTyping && onFollowUpSelect && (
+          <FollowUpOptions 
+            followUp={message.followUp}
+            onSelect={onFollowUpSelect}
+          />
+        )}
+
+        {/* 🆕 澄清选项（意图消歧系统 - 包含 followUp） */}
+        {!isUser && isClarification && message.quickActions && message.quickActions.length > 0 && isLatest && !isTyping && onClarificationSelect && (
+          <div className="mt-3 w-full">
+            <ClarificationOptions
+              actions={message.quickActions}
+              onSelect={onClarificationSelect}
+              disabled={loading}
+              followUp={message.followUp}
+              onFreeTextSubmit={onClarificationFreeText}
+            />
+          </div>
+        )}
+
+        {/* 时间戳 */}
+        <span className="text-xs text-muted-foreground mt-1">
+          {format(message.timestamp, 'HH:mm')}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ==================== 主组件 ====================
+
+const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssistantProps>(({
+  tripId,
+  className,
+  onTripUpdate,
+  compact = false,
+}, ref) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [inputValue, setInputValue] = useState('');
+  const [newMessageId, setNewMessageId] = useState<string | null>(null);
+
+  // 左右联动上下文
+  const { 
+    selectedContext, 
+    pendingSuggestions,
+    applySuggestion,
+    dismissSuggestion,
+    setOnAskAssistant,
+  } = usePlanStudioSafe();
+
+  const {
+    messages,
+    currentPhase,
+    loading,
+    error,
+    pendingChanges,
+    isInitialized,
+    sendMessage,
+    confirmChanges,
+    rejectChanges,
+    startSession,
+  } = useTripPlannerAssistant({
+    tripId,
+    autoStart: true,
+    onTripUpdate: onTripUpdate ? () => onTripUpdate() : undefined,
+  });
+
+  // 注册来自左侧的提问处理
+  useEffect(() => {
+    setOnAskAssistant((question: string, context: SelectedContext) => {
+      // 带上下文发送消息
+      const contextPrefix = context.placeName 
+        ? `关于"${context.placeName}"：` 
+        : context.dayIndex 
+          ? `关于第${context.dayIndex}天：` 
+          : '';
+      sendMessage(contextPrefix + question);
+    });
+  }, [setOnAskAssistant, sendMessage]);
+
+  // 暴露给父组件的方法
+  useImperativeHandle(ref, () => ({
+    refresh: () => startSession(),
+    isLoading: loading,
+  }), [startSession, loading]);
+
+  // 虚拟滚动
+  const {
+    visibleItems,
+    totalHeight,
+    startOffset,
+    measureHeight,
+    scrollToBottom,
+    isVirtualEnabled,
+  } = useVirtualMessages(messages, scrollContainerRef, {
+    estimatedItemHeight: 150, // 消息可能包含富文本，预估高一些
+    overscan: 3,
+    threshold: 15, // 超过 15 条消息启用虚拟滚动
+  });
+
+  // 自动滚动到底部
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages.length, loading, scrollToBottom]);
+
+  // 监听新消息，设置打字机效果
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        setNewMessageId(lastMessage.id);
+      }
+    }
+  }, [messages]);
+
+  // 构建上下文参数
+  const buildContextOptions = useCallback(() => ({
+    context: {
+      selectedContext: selectedContext.dayIndex || selectedContext.itemId ? {
+        dayIndex: selectedContext.dayIndex || undefined,
+        date: selectedContext.date || undefined,
+        itemId: selectedContext.itemId || undefined,
+        placeName: selectedContext.placeName || undefined,
+        itemType: selectedContext.itemType || undefined,
+      } : undefined,
+      adjacentItems: selectedContext.prevItem || selectedContext.nextItem ? {
+        prevItem: selectedContext.prevItem,
+        nextItem: selectedContext.nextItem,
+      } : undefined,
+      dayStats: selectedContext.dayStats,
+    },
+    targetDay: selectedContext.dayIndex || undefined,
+    targetItemId: selectedContext.itemId || undefined,
+  }), [selectedContext]);
+
+  // 发送消息
+  const handleSend = useCallback(async () => {
+    if (!inputValue.trim() || loading) return;
+    const message = inputValue.trim();
+    setInputValue('');
+    // 🆕 带上下文发送
+    await sendMessage(message, buildContextOptions());
+    inputRef.current?.focus();
+  }, [inputValue, loading, sendMessage, buildContextOptions]);
+
+  // 发送预设命令（用于快捷命令）
+  const handleSendCommand = useCallback(async (command: string) => {
+    if (!command.trim() || loading) return;
+    // 🆕 带上下文发送
+    await sendMessage(command.trim(), buildContextOptions());
+    inputRef.current?.focus();
+  }, [loading, sendMessage, buildContextOptions]);
+
+  // 键盘事件
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }, [handleSend]);
+
+  // 追问选择
+  const handleFollowUpSelect = useCallback(async (value: string) => {
+    await sendMessage(value);
+  }, [sendMessage]);
+
+  // 🆕 澄清选项选择
+  const handleClarificationSelect = useCallback(async (action: QuickAction) => {
+    // 构建确认消息
+    let confirmMessage: string;
+    
+    switch (action.data?.selectedAction) {
+      case 'QUERY':
+        confirmMessage = '只是了解一下';
+        break;
+      case 'ADD_TO_ITINERARY':
+        if (action.data.params?.dayNumber) {
+          const timeSlot = action.data.params.timeSlot;
+          confirmMessage = timeSlot 
+            ? `帮我加到第${action.data.params.dayNumber}天 ${timeSlot.start}-${timeSlot.end}`
+            : `帮我加到第${action.data.params.dayNumber}天`;
+        } else {
+          confirmMessage = '帮我加到行程里';
+        }
+        break;
+      case 'REPLACE':
+        confirmMessage = `替换${action.data.params?.targetItemId ? '这个行程项' : ''}`;
+        break;
+      case 'REMOVE':
+        confirmMessage = '删除这个';
+        break;
+      case 'MODIFY':
+        confirmMessage = '修改一下';
+        break;
+      default:
+        confirmMessage = action.label;
+    }
+    
+    // 发送消息（带上澄清参数和上下文）
+    await sendMessage(confirmMessage, {
+      targetDay: action.data?.params?.dayNumber,
+      targetItemId: action.data?.params?.targetItemId,
+      // 🆕 传递澄清数据
+      clarificationData: action.data ? {
+        selectedAction: action.data.selectedAction,
+        params: action.data.params,
+      } : undefined,
+      // 🆕 传递当前上下文
+      context: {
+        selectedContext: {
+          dayIndex: selectedContext.dayIndex || undefined,
+          date: selectedContext.date || undefined,
+          itemId: selectedContext.itemId || undefined,
+          placeName: selectedContext.placeName || undefined,
+          itemType: selectedContext.itemType || undefined,
+        },
+        adjacentItems: selectedContext.prevItem || selectedContext.nextItem ? {
+          prevItem: selectedContext.prevItem,
+          nextItem: selectedContext.nextItem,
+        } : undefined,
+        dayStats: selectedContext.dayStats,
+      },
+    });
+  }, [sendMessage, selectedContext]);
+
+  // 🆕 澄清自由文本输入
+  const handleClarificationFreeText = useCallback(async (text: string) => {
+    await sendMessage(text);
+  }, [sendMessage]);
+
+  // ==================== 人格偏好设置 (P3) ====================
+  
+  const [hiddenPersonas, setHiddenPersonas] = useState<Set<GuardianPersona>>(() => {
+    // 从 localStorage 读取偏好
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nara_hidden_personas');
+      if (saved) {
+        try {
+          return new Set(JSON.parse(saved) as GuardianPersona[]);
+        } catch {
+          // 忽略解析错误
+        }
+      }
+    }
+    return new Set();
+  });
+
+  // 切换人格显示
+  const togglePersona = useCallback((persona: GuardianPersona) => {
+    setHiddenPersonas(prev => {
+      const next = new Set(prev);
+      if (next.has(persona)) {
+        next.delete(persona);
+      } else {
+        next.add(persona);
+      }
+      // 保存到 localStorage
+      localStorage.setItem('nara_hidden_personas', JSON.stringify(Array.from(next)));
+      return next;
+    });
+  }, []);
+
+  // ==================== 守护者交互处理 ====================
+
+  // 接受建议
+  const handleAcceptSuggestion = useCallback(async (persona: GuardianPersona, suggestionId?: string) => {
+    // 发送接受建议的消息
+    const personaNames: Record<GuardianPersona, string> = {
+      Abu: 'Abu (北极熊)',
+      DrDre: 'Dr.Dre (牧羊犬)',
+      Neptune: 'Neptune (海獭)',
+    };
+    await sendMessage(`接受${personaNames[persona]}的建议${suggestionId ? `: ${suggestionId}` : ''}`);
+  }, [sendMessage]);
+
+  // 拒绝建议
+  const handleRejectSuggestion = useCallback(async (persona: GuardianPersona, reason?: string) => {
+    const personaNames: Record<GuardianPersona, string> = {
+      Abu: 'Abu (北极熊)',
+      DrDre: 'Dr.Dre (牧羊犬)',
+      Neptune: 'Neptune (海獭)',
+    };
+    await sendMessage(`忽略${personaNames[persona]}的建议${reason ? `，原因：${reason}` : ''}`);
+  }, [sendMessage]);
+
+  // 忽略警告
+  const handleIgnoreWarning = useCallback(async (persona: GuardianPersona) => {
+    const personaNames: Record<GuardianPersona, string> = {
+      Abu: 'Abu (北极熊)',
+      DrDre: 'Dr.Dre (牧羊犬)',
+      Neptune: 'Neptune (海獭)',
+    };
+    await sendMessage(`我了解风险，忽略${personaNames[persona]}的警告`);
+  }, [sendMessage]);
+
+  // 确认责任声明
+  const handleAcknowledgeDisclaimer = useCallback(() => {
+    // 可以发送确认消息或仅在本地记录
+    console.log('[TripPlannerAssistant] 用户确认责任声明');
+  }, []);
+
+  // 阶段标签
+  const phaseLabels: Record<string, string> = {
+    OVERVIEW: '概览',
+    OPTIMIZING: '优化中',
+    DETAILING: '细化中',
+    CONSULTING: '咨询中',
+    EXECUTING: '执行中',
+  };
+
+  return (
+    <div className={cn(
+      "flex flex-col bg-background border rounded-xl overflow-hidden",
+      compact ? "h-[500px]" : "h-full",
+      className
+    )}>
+      {/* 头部 - 当嵌入到 AgentChatSidebar 时不显示，由外层统一处理 */}
+      {/* 注意：这个头部现在仅在 compact 模式下显示，避免与 AgentChatSidebar 重复 */}
+      {compact && (
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center">
+              <MessageCircle className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-800 text-sm">NARA</h3>
+              <p className="text-xs text-muted-foreground">
+                {isInitialized ? phaseLabels[currentPhase] || currentPhase : '连接中...'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 消息区域 - 支持虚拟滚动 */}
+      <div 
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto p-4"
+      >
+        {isVirtualEnabled ? (
+          /* 虚拟滚动模式 */
+          <div style={{ height: totalHeight, position: 'relative' }}>
+            <div style={{ transform: `translateY(${startOffset}px)` }}>
+              <div className="space-y-4">
+                {visibleItems.map(({ item: msg, index: idx }) => (
+                  <MeasuredMessageWrapper
+                    key={msg.id}
+                    messageId={msg.id}
+                    onMeasure={measureHeight}
+                  >
+                    <MessageBubble
+                      message={msg}
+                      onFollowUpSelect={handleFollowUpSelect}
+                      onClarificationSelect={handleClarificationSelect}
+                      onClarificationFreeText={handleClarificationFreeText}
+                      onAcceptSuggestion={handleAcceptSuggestion}
+                      onRejectSuggestion={handleRejectSuggestion}
+                      onIgnoreWarning={handleIgnoreWarning}
+                      onAcknowledgeDisclaimer={handleAcknowledgeDisclaimer}
+                      hiddenPersonas={hiddenPersonas}
+                      isLatest={idx === messages.length - 1}
+                      isNewMessage={msg.id === newMessageId}
+                      loading={loading}
+                    />
+                  </MeasuredMessageWrapper>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* 普通模式 - 消息较少时不启用虚拟滚动 */
+          <div className="space-y-4">
+            {messages.map((msg, idx) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                onFollowUpSelect={handleFollowUpSelect}
+                onClarificationSelect={handleClarificationSelect}
+                onClarificationFreeText={handleClarificationFreeText}
+                onAcceptSuggestion={handleAcceptSuggestion}
+                onRejectSuggestion={handleRejectSuggestion}
+                onIgnoreWarning={handleIgnoreWarning}
+                onAcknowledgeDisclaimer={handleAcknowledgeDisclaimer}
+                hiddenPersonas={hiddenPersonas}
+                isLatest={idx === messages.length - 1}
+                isNewMessage={msg.id === newMessageId}
+                loading={loading}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* 加载状态 */}
+        {loading && <TypingIndicator />}
+      </div>
+
+      {/* 待确认修改面板 */}
+      {pendingChanges.length > 0 && (
+        <div className="px-4 pb-2">
+          <PendingChangesPanel
+            changes={pendingChanges}
+            onConfirm={confirmChanges}
+            onReject={rejectChanges}
+            loading={loading}
+          />
+        </div>
+      )}
+
+      {/* 错误提示 */}
+      {error && (
+        <div className="mx-4 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {/* 输入区域 */}
+      <div className="p-4 border-t bg-slate-50/50 space-y-2.5">
+        {/* P3: 人格显示偏好设置条 */}
+        <PersonaPreferencesBar 
+          hiddenPersonas={hiddenPersonas}
+          onToggle={togglePersona}
+          status={loading ? 'analyzing' : 'standby'}
+          hasAnyInsights={messages.some(m => m.personaInsights && m.personaInsights.length > 0)}
+        />
+
+        {/* 待处理建议面板 - 支持一键添加到行程 */}
+        <PendingSuggestionsPanel
+          suggestions={pendingSuggestions}
+          onApply={applySuggestion}
+          onDismiss={dismissSuggestion}
+          loading={loading}
+        />
+
+        {/* 上下文状态栏 - 显示当前选中的天/行程项 */}
+        <ContextStatusBar
+          context={selectedContext}
+          onAskAbout={handleSendCommand}
+        />
+
+        {/* 快捷命令条 - 输入框上方（智能切换：有上下文时显示上下文命令，无上下文时显示通用命令） */}
+        <QuickCommandsBar
+          onCommandClick={handleSendCommand}
+          disabled={loading || !isInitialized}
+          visible={messages.length > 0}
+          context={selectedContext}
+        />
+        
+        <div className="flex gap-2">
+          <Input
+            ref={inputRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder="输入您的需求，如：帮我优化今天的行程..."
+            disabled={loading || !isInitialized}
+            className="flex-1 bg-white"
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!inputValue.trim() || loading || !isInitialized}
+            className="bg-slate-900 hover:bg-slate-800"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+TripPlannerAssistant.displayName = 'TripPlannerAssistant';
+
+export default TripPlannerAssistant;

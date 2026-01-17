@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { PanelRightClose, PanelRightOpen, Sparkles, Compass, Bot } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, Sparkles, Compass, Bot, RefreshCw } from 'lucide-react';
 import AgentChat from './AgentChat';
 import PlanningAssistantChat from './PlanningAssistantChat';
 import JourneyAssistantChat from './JourneyAssistantChat';
+import { TripPlannerAssistant, type TripPlannerAssistantRef } from '@/components/trip-planner';
 import { NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
+import Logo from '@/components/common/Logo';
 import type { EntryPoint } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -20,15 +22,16 @@ interface AgentChatSidebarProps {
 }
 
 // 根据入口点获取侧边栏配置
-function getSidebarConfig(entryPoint?: EntryPoint) {
+function getSidebarConfig(entryPoint?: EntryPoint, hasTrip?: boolean) {
   switch (entryPoint) {
     case 'planning_workbench':
       return {
-        title: '规划助手',
-        subtitle: '智能行程规划专家',
-        icon: Sparkles,
-        iconBgClass: 'bg-gradient-to-br from-violet-500 to-purple-600',
-        iconTextClass: 'text-white',
+        title: hasTrip ? 'NARA' : '规划助手',
+        subtitle: hasTrip ? '智能行程规划' : '智能行程规划专家',
+        icon: null, // 使用 Logo 组件
+        useLogo: true,
+        iconBgClass: '',
+        iconTextClass: '',
         component: 'planning' as const,
       };
     case 'execute':
@@ -59,6 +62,8 @@ export default function AgentChatSidebar({
   className,
 }: AgentChatSidebarProps) {
   const { user } = useAuth();
+  const tripPlannerRef = useRef<TripPlannerAssistantRef>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Initialize from localStorage
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -75,13 +80,35 @@ export default function AgentChatSidebar({
     setIsExpanded(!isExpanded);
   };
 
-  const config = getSidebarConfig(entryPoint);
+  const handleRefresh = () => {
+    if (tripPlannerRef.current) {
+      setIsRefreshing(true);
+      tripPlannerRef.current.refresh();
+      // 延迟重置刷新状态
+      setTimeout(() => setIsRefreshing(false), 1000);
+    }
+  };
+
+  const config = getSidebarConfig(entryPoint, !!activeTripId);
   const IconComponent = config.icon;
+  const useLogo = 'useLogo' in config && config.useLogo;
 
   // 渲染对应的智能体组件
   const renderAssistant = () => {
     switch (config.component) {
       case 'planning':
+        // 如果有 tripId，使用新的 TripPlannerAssistant (NARA 助手)
+        if (activeTripId) {
+          return (
+            <TripPlannerAssistant
+              ref={tripPlannerRef}
+              tripId={activeTripId}
+              className="h-full"
+              onTripUpdate={onSystem2Response}
+            />
+          );
+        }
+        // 没有 tripId 时，显示传统的规划助手（用于创建新行程）
         return (
           <PlanningAssistantChat
             userId={user?.id}
@@ -139,7 +166,9 @@ export default function AgentChatSidebar({
           <>
             <div className="flex items-center gap-2.5">
               <div className="relative">
-                {IconComponent ? (
+                {useLogo ? (
+                  <Logo variant="icon" size={28} color="currentColor" className="text-slate-800" />
+                ) : IconComponent ? (
                   <div className={cn('w-7 h-7 rounded-full flex items-center justify-center', config.iconBgClass)}>
                     <IconComponent className={cn('w-4 h-4', config.iconTextClass)} />
                   </div>
@@ -163,15 +192,30 @@ export default function AgentChatSidebar({
                 <span className="text-xs text-muted-foreground">{config.subtitle}</span>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleExpanded}
-              className="h-8 w-8 text-gray-500 hover:text-gray-700"
-              title="收起侧边栏"
-            >
-              <PanelRightClose className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {/* 刷新按钮 - 仅在有 tripId 的规划模式下显示 */}
+              {config.component === 'planning' && activeTripId && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                  title="刷新对话"
+                >
+                  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleExpanded}
+                className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                title="收起侧边栏"
+              >
+                <PanelRightClose className="h-4 w-4" />
+              </Button>
+            </div>
           </>
         ) : (
           <Button
@@ -180,11 +224,13 @@ export default function AgentChatSidebar({
             onClick={toggleExpanded}
             className={cn(
               'h-10 w-10',
-              IconComponent ? config.iconBgClass : 'text-primary hover:bg-primary/10'
+              useLogo ? 'text-slate-800 hover:bg-slate-100' : IconComponent ? config.iconBgClass : 'text-primary hover:bg-primary/10'
             )}
             title="展开 AI 助手"
           >
-            {IconComponent ? (
+            {useLogo ? (
+              <Logo variant="icon" size={24} color="currentColor" />
+            ) : IconComponent ? (
               <IconComponent className={cn('w-5 h-5', config.iconTextClass)} />
             ) : (
               <NaraAgentChatting

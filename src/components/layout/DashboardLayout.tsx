@@ -1,5 +1,5 @@
 import { useState, createContext, useContext, useMemo } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import SidebarNavigation from './SidebarNavigation';
 import MobileBottomNav from './MobileBottomNav';
 import EvidenceDrawer from './EvidenceDrawer';
@@ -37,11 +37,13 @@ export default function DashboardLayout() {
   const [drawerTab, setDrawerTab] = useState<'evidence' | 'risk' | 'decision'>('evidence');
   const [highlightItemId, setHighlightItemId] = useState<string | undefined>();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
 
-  // 从当前路径提取 tripId（如果存在）
+  // 从当前路径或查询参数提取 tripId
   const tripIdMatch = location.pathname.match(/\/trips\/([^/]+)/);
-  const activeTripId = tripIdMatch ? tripIdMatch[1] : null;
+  const queryTripId = searchParams.get('tripId');
+  const activeTripId = tripIdMatch ? tripIdMatch[1] : queryTripId;
 
   // 根据路由识别入口点，用于定制 AI 助手开场白
   const entryPoint = useMemo((): EntryPoint | undefined => {
@@ -137,18 +139,22 @@ export default function DashboardLayout() {
           />
         </div>
 
-        {/* AI 助手侧边栏（仅桌面端） */}
-        <div className="hidden lg:block">
-          <AgentChatSidebar activeTripId={activeTripId} entryPoint={entryPoint} />
-        </div>
+        {/* AI 助手侧边栏（仅桌面端 + 仅规划工作台详情页） */}
+        {entryPoint === 'planning_workbench' && activeTripId && (
+          <div className="hidden lg:block">
+            <AgentChatSidebar activeTripId={activeTripId} entryPoint={entryPoint} />
+          </div>
+        )}
 
         {/* 移动端底部导航 */}
         <MobileBottomNav />
 
-        {/* 智能助手悬浮按钮（仅移动端） */}
-        <div className="lg:hidden">
-          <AgentChatFab activeTripId={activeTripId} />
-        </div>
+        {/* 智能助手悬浮按钮（仅移动端 + 仅规划工作台详情页） */}
+        {entryPoint === 'planning_workbench' && activeTripId && (
+          <div className="lg:hidden">
+            <AgentChatFab activeTripId={activeTripId} />
+          </div>
+        )}
       </div>
     </DrawerContext.Provider>
   );

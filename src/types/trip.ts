@@ -36,16 +36,86 @@ export interface BudgetConfig {
   dailyBudget?: number;
 }
 
+// ==================== 地点类别 ====================
+
+export type PlaceCategory = 
+  | 'RESTAURANT'   // 餐厅
+  | 'CAFE'         // 咖啡厅
+  | 'BAR'          // 酒吧
+  | 'HOTEL'        // 酒店
+  | 'ATTRACTION'   // 景点
+  | 'MUSEUM'       // 博物馆
+  | 'PARK'         // 公园
+  | 'SHOPPING'     // 购物
+  | 'TRANSPORT'    // 交通枢纽
+  | 'OTHER';       // 其他
+
+export type PlaceBusinessStatus = 
+  | 'OPERATIONAL'          // 正常营业
+  | 'CLOSED_TEMPORARILY'   // 临时关闭
+  | 'CLOSED_PERMANENTLY'   // 永久关闭
+  | 'UNKNOWN';             // 未知
+
+// ==================== 地点营业时间 ====================
+
+export interface PlaceOpeningHours {
+  // 结构化格式 - 按星期
+  mon?: string;              // e.g., "09:00 - 18:00"
+  tue?: string;
+  wed?: string;
+  thu?: string;
+  fri?: string;
+  sat?: string;
+  sun?: string;
+  // 结构化格式 - 统一时间
+  weekday?: string;          // 工作日统一时间
+  weekend?: string;          // 周末统一时间
+  // 文本格式
+  text?: string;             // e.g., "08:30-17:00（周一闭馆）"
+  // 兼容旧格式
+  [key: string]: string | undefined;
+}
+
+// ==================== 地点元数据 ====================
+
+export interface PlaceMetadata {
+  // P0: 营业时间
+  openingHours?: PlaceOpeningHours;
+  
+  // P1: 价格相关
+  price?: number;              // 参考价格（CNY）
+  priceLevel?: number;         // 价格等级（1-4）
+  tags?: string[];             // 标签数组
+  
+  // P2: 联系方式
+  phone?: string;              // 联系电话
+  website?: string;            // 官方网站
+  
+  // 营业状态
+  business_status?: PlaceBusinessStatus;
+  
+  // 扩展字段
+  [key: string]: any;
+}
+
 // ==================== 地点 ====================
 
 export interface Place {
+  // ========== P0 必须返回 ==========
   id: number;
   nameCN: string;
   nameEN: string | null;
-  category: string;
+  category: PlaceCategory | string;  // 兼容旧数据
   address: string;
-  rating: number;
-  metadata?: Record<string, any>;
+  rating: number | null;
+  
+  // ========== 元数据 ==========
+  metadata?: PlaceMetadata;
+  
+  // ========== 描述 ==========
+  description?: string | null;
+  
+  // ========== 关联数据 ==========
   City?: {
     id: number;
     nameCN: string;

@@ -147,6 +147,9 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           }
         } catch (orchestratorError: any) {
           console.warn('Orchestrator execution failed:', orchestratorError);
+          toast.warning('优化成功，但系统自动检查失败', {
+            description: '建议手动检查行程是否需要调整',
+          });
         }
       }
 

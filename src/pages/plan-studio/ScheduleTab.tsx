@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { AlertTriangle, Clock, MapPin, GripVertical, MoreVertical } from 'lucide-react';
+import { AlertTriangle, Clock, MapPin, GripVertical, MoreVertical, Plus } from 'lucide-react';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
+import { tripPlannerApi } from '@/api/trip-planner';
 import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict } from '@/types/trip';
 import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
 import { format } from 'date-fns';
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EditItineraryItemDialog } from '@/components/trips/EditItineraryItemDialog';
 import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryItemDialog';
+import { EnhancedAddItineraryItemDialog } from '@/components/trips/EnhancedAddItineraryItemDialog';
 import {
   Dialog,
   DialogContent,
@@ -47,9 +49,9 @@ import { Input } from '@/components/ui/input';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { toast } from 'sonner';
 import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
-import { orchestrator } from '@/services/orchestrator';
-import { useAuth } from '@/hooks/useAuth';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import { usePlaceImages } from '@/hooks/usePlaceImages';
+import { usePlanStudioActions, usePlanStudio, type PendingSuggestion } from '@/contexts/PlanStudioContext';
 
 interface ScheduleTabProps {
   tripId: string;
@@ -58,9 +60,26 @@ interface ScheduleTabProps {
 
 export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const { t } = useTranslation();
-  const { user } = useAuth();
   
-  // 审批相关状态
+  // 左右联动上下文 - 安全使用（可能在 Provider 外部）
+  const planStudioActions = (() => {
+    try {
+      return usePlanStudioActions();
+    } catch {
+      return null;
+    }
+  })();
+
+  // 获取完整的 PlanStudio context 用于注册回调
+  const planStudioContext = (() => {
+    try {
+      return usePlanStudio();
+    } catch {
+      return null;
+    }
+  })();
+  
+  // 审批相关状态（保留以备将来使用）
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   
@@ -97,6 +116,38 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const [deletingItem, setDeletingItem] = useState<{ id: string; placeName: string } | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const [addingBuffers, setAddingBuffers] = useState(false);
+  
+  // 添加行程项对话框状态
+  const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
+  const [addItemDay, setAddItemDay] = useState<TripDetail['TripDay'][0] | null>(null);
+
+  // 收集所有地点信息用于批量加载图片（使用 useMemo 避免每次渲染都创建新数组）
+  const allPlaces = useMemo(() => {
+    const places: Array<{ id: number; nameCN?: string; nameEN?: string | null; category?: string }> = [];
+    const seenIds = new Set<number>();
+    
+    itineraryItemsMap.forEach(items => {
+      items.forEach(item => {
+        if (item.Place && item.Place.id && !seenIds.has(item.Place.id)) {
+          seenIds.add(item.Place.id);
+          places.push({
+            id: item.Place.id,
+            nameCN: item.Place.nameCN,
+            nameEN: item.Place.nameEN,
+            category: item.Place.category,
+          });
+        }
+      });
+    });
+    
+    return places;
+  }, [itineraryItemsMap]);
+
+  // 批量加载地点图片
+  const { images: placeImagesMap } = usePlaceImages(allPlaces, {
+    enabled: allPlaces.length > 0,
+    country: trip?.destination, // 使用目的地作为国家参数
+  });
 
   useEffect(() => {
     loadTrip();
@@ -140,6 +191,11 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     try {
       setLoading(true);
       const data = await tripsApi.getById(tripId);
+      console.log('[ScheduleTab] 加载的行程数据:', {
+        tripId: data.id,
+        destination: data.destination,
+        // destination 应该是国家代码如 "IS"（冰岛）、"JP"（日本）
+      });
       setTrip(data);
       
       // 加载所有日期的 Schedule 和 ItineraryItem
@@ -147,6 +203,13 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
         const scheduleMap = new Map<string, ScheduleResponse>();
         
         for (const day of data.TripDay) {
+          // 优先使用 trip 数据中的 ItineraryItem（包含完整的 Place 信息）
+          if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+            const items = day.ItineraryItem as ItineraryItemDetail[];
+            // 保存完整的 ItineraryItem 数据用于显示
+            setItineraryItemsMap(prev => new Map(prev).set(day.date, items));
+          }
+          
           try {
             // 先尝试获取 Schedule
             const scheduleResponse = await tripsApi.getSchedule(tripId, day.date);
@@ -155,53 +218,9 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             if (scheduleResponse.schedule && scheduleResponse.schedule.items && scheduleResponse.schedule.items.length > 0) {
               scheduleMap.set(day.date, scheduleResponse);
             } else {
-              // Schedule 为空，尝试从 ItineraryItem API 获取
-              try {
-                const itineraryItems = await itineraryItemsApi.getAll(day.id);
-                
-                if (itineraryItems && itineraryItems.length > 0) {
-                  // 保存 ItineraryItem 数据用于显示
-                  setItineraryItemsMap(prev => new Map(prev).set(day.date, itineraryItems));
-                  
-                  const scheduleItems = convertItineraryItemsToScheduleItems(itineraryItems);
-                  
-                  scheduleMap.set(day.date, {
-                    date: day.date,
-                    schedule: scheduleItems.length > 0 ? {
-                      items: scheduleItems,
-                    } : null,
-                    persisted: false,
-                  });
-                } else {
-                  // 也检查 trip 数据中是否包含 ItineraryItem（作为后备）
-                  if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-                    const items = day.ItineraryItem as ItineraryItemDetail[];
-                    // 保存 ItineraryItem 数据用于显示
-                    setItineraryItemsMap(prev => new Map(prev).set(day.date, items));
-                    
-                    const scheduleItems = convertItineraryItemsToScheduleItems(items);
-                    
-                    scheduleMap.set(day.date, {
-                      date: day.date,
-                      schedule: scheduleItems.length > 0 ? {
-                        items: scheduleItems,
-                      } : null,
-                      persisted: false,
-                    });
-                  } else {
-                    scheduleMap.set(day.date, {
-                      date: day.date,
-                      schedule: null,
-                      persisted: false,
-                    });
-                  }
-                }
-              } catch (itemErr) {
-                console.error(`Failed to load itinerary items for ${day.date}:`, itemErr);
-                // 如果获取 ItineraryItem 也失败，检查 trip 数据
+              // Schedule 为空，使用 trip 数据中的 ItineraryItem（已在上面设置到 Map 中）
                 if (day.ItineraryItem && day.ItineraryItem.length > 0) {
                   const scheduleItems = convertItineraryItemsToScheduleItems(day.ItineraryItem as ItineraryItemDetail[]);
-                  
                   scheduleMap.set(day.date, {
                     date: day.date,
                     schedule: scheduleItems.length > 0 ? {
@@ -215,21 +234,13 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                     schedule: null,
                     persisted: false,
                   });
-                }
               }
             }
           } catch (err) {
             console.error(`Failed to load schedule for ${day.date}:`, err);
-            // 如果获取 Schedule 失败，尝试从 ItineraryItem API 获取
-            try {
-              const itineraryItems = await itineraryItemsApi.getAll(day.id);
-              
-              if (itineraryItems && itineraryItems.length > 0) {
-                // 保存 ItineraryItem 数据用于显示
-                setItineraryItemsMap(prev => new Map(prev).set(day.date, itineraryItems));
-                
-                const scheduleItems = convertItineraryItemsToScheduleItems(itineraryItems);
-                
+            // 如果获取 Schedule 失败，使用 trip 数据中的 ItineraryItem（已在上面设置到 Map 中）
+            if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+              const scheduleItems = convertItineraryItemsToScheduleItems(day.ItineraryItem as ItineraryItemDetail[]);
                 scheduleMap.set(day.date, {
                   date: day.date,
                   schedule: scheduleItems.length > 0 ? {
@@ -238,14 +249,6 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                   persisted: false,
                 });
               } else {
-                scheduleMap.set(day.date, {
-                  date: day.date,
-                  schedule: null,
-                  persisted: false,
-                });
-              }
-            } catch (itemErr) {
-              console.error(`Failed to load itinerary items for ${day.date}:`, itemErr);
               scheduleMap.set(day.date, {
                 date: day.date,
                 schedule: null,
@@ -288,6 +291,60 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     }
   };
 
+  // 注册建议应用回调 - 处理 NARA 推荐的地点添加到行程
+  useEffect(() => {
+    if (!planStudioContext) return;
+    
+    planStudioContext.setOnApplySuggestion(async (suggestion: PendingSuggestion) => {
+      try {
+        if (suggestion.type === 'add_place' && suggestion.place && trip?.TripDay) {
+          // 找到目标天
+          const targetDayIndex = suggestion.targetDay - 1;
+          const targetDay = trip.TripDay[targetDayIndex];
+          
+          if (!targetDay) {
+            toast.error(`第 ${suggestion.targetDay} 天不存在`);
+            return false;
+          }
+          
+          // 🆕 调用后端 API 应用建议
+          const response = await tripPlannerApi.applySuggestion({
+            tripId,
+            sessionId: '', // TODO: 从 context 获取 sessionId
+            suggestionId: suggestion.id,
+            targetDay: suggestion.targetDay,
+            timeSlot: suggestion.suggestedTime ? {
+              start: suggestion.suggestedTime.split('-')[0]?.trim() || '12:00',
+              end: suggestion.suggestedTime.split('-')[1]?.trim() || '13:00',
+            } : undefined,
+            suggestionType: suggestion.type,
+            place: suggestion.place ? {
+              name: suggestion.place.name,
+              nameCN: suggestion.place.nameCN,
+              category: suggestion.place.category,
+              address: suggestion.place.address,
+            } : undefined,
+          });
+          
+          if (response.success) {
+            toast.success(response.message || `已将"${suggestion.place.nameCN}"添加到第 ${suggestion.targetDay} 天`);
+            // 刷新行程数据
+            await loadTrip();
+            return true;
+          } else {
+            toast.error(response.message || '添加失败');
+            return false;
+          }
+        }
+        return false;
+      } catch (err) {
+        console.error('应用建议失败:', err);
+        toast.error('添加失败，请重试');
+        return false;
+      }
+    });
+  }, [planStudioContext, trip, tripId, loadTrip]);
+
   const handleFixConflict = (conflictType: string, dayDate: string) => {
     setDrawerTab('risk');
     setDrawerOpen(true);
@@ -300,59 +357,27 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   };
 
   const confirmDeleteItem = async () => {
-    if (!deletingItem || !user) return;
+    if (!deletingItem) return;
 
+    const itemToDelete = deletingItem;
+    
     try {
-      // 1. 先删除行程项
-      await itineraryItemsApi.delete(deletingItem.id);
+      // 1. 删除行程项
+      await itineraryItemsApi.delete(itemToDelete.id);
       
-      // 2. 自动触发 LangGraph Orchestrator，系统会自动调用三人格进行检查和调整
-      try {
-        const result = await orchestrator.removePlace(
-          user.id,
-          tripId,
-          deletingItem.id,
-          deletingItem.placeName
-        );
-        
-        // 检查是否需要审批
-        if (result.needsApproval && result.data?.approvalId) {
-          const approvalId = result.data.approvalId;
-          setPendingApprovalId(approvalId);
-          setApprovalDialogOpen(true);
-          toast.info('需要您的审批才能继续执行操作');
-          return; // 等待审批，不继续执行后续逻辑
-        }
-        
-        // 检查是否需要审批
-        if (result.needsApproval && result.data?.approvalId) {
-          const approvalId = result.data.approvalId;
-          setPendingApprovalId(approvalId);
-          setApprovalDialogOpen(true);
-          toast.info('需要您的审批才能继续执行操作');
-          return; // 等待审批，不继续执行后续逻辑
-        }
-        
-        // 显示系统自动执行的结果
-        if (result.success && result.data) {
-          if (result.data.personaAlerts && result.data.personaAlerts.length > 0) {
-            toast.info(`系统已自动检查，发现 ${result.data.personaAlerts.length} 条提醒`);
-          }
-          if (result.data.autoAdjustments && result.data.autoAdjustments.length > 0) {
-            toast.success(`系统已自动调整 ${result.data.autoAdjustments.length} 项`);
-          }
-          if (result.data.explanation) {
-            toast.info(result.data.explanation);
-          }
-        }
-      } catch (orchestratorError: any) {
-        console.warn('Orchestrator execution failed:', orchestratorError);
-      }
+      // 2. 显示成功提示
+      toast.success(t('planStudio.scheduleTab.deleteSuccess', { placeName: itemToDelete.placeName }));
       
-      toast.success(t('planStudio.scheduleTab.deleteSuccess', { placeName: deletingItem.placeName }));
-      await loadTrip();
+      // 3. 关闭对话框并清理状态
       setDeleteDialogOpen(false);
       setDeletingItem(null);
+      
+      // 4. 刷新页面数据
+      await loadTrip();
+      
+      // 注意：不再自动调用 Orchestrator
+      // 原因：删除行程项是用户的确定性操作，不需要 AI 实时检查
+      // AI 检查应该在用户主动触发时执行（如点击"检查行程"或"一键优化"）
     } catch (err: any) {
       console.error('Failed to delete itinerary item:', err);
       toast.error(err.message || t('planStudio.scheduleTab.deleteFailed'));
@@ -376,9 +401,9 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   };
 
   const handleReplaceSuccess = async (result: ReplaceItineraryItemResponse) => {
-    if (!replacingItem || !user) return;
+    if (!replacingItem) return;
     try {
-      // 1. 先更新行程项
+      // 更新行程项
       await itineraryItemsApi.update(replacingItem.id, {
         placeId: result.newItem.placeId,
         startTime: result.newItem.startTime,
@@ -386,40 +411,8 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
         note: result.newItem.reason,
       });
       
-      // 2. 自动触发 LangGraph Orchestrator
-      try {
-        const orchestratorResult = await orchestrator.modifySchedule(user.id, tripId, [
-          {
-            type: 'REPLACE',
-            itemId: replacingItem.id,
-            newPlaceId: result.newItem.placeId,
-            reason: result.newItem.reason,
-          },
-        ]);
-        
-        // 检查是否需要审批
-        if (orchestratorResult.needsApproval && orchestratorResult.data?.approvalId) {
-          const approvalId = orchestratorResult.data.approvalId;
-          setPendingApprovalId(approvalId);
-          setApprovalDialogOpen(true);
-          toast.info('需要您的审批才能继续执行操作');
-          return; // 等待审批，不继续执行后续逻辑
-        }
-        
-        if (orchestratorResult.success && orchestratorResult.data) {
-          if (orchestratorResult.data.personaAlerts && orchestratorResult.data.personaAlerts.length > 0) {
-            toast.info(`系统已自动检查，发现 ${orchestratorResult.data.personaAlerts.length} 条提醒`);
-          }
-          if (orchestratorResult.data.autoAdjustments && orchestratorResult.data.autoAdjustments.length > 0) {
-            toast.success(`系统已自动调整 ${orchestratorResult.data.autoAdjustments.length} 项`);
-          }
-          if (orchestratorResult.data.explanation) {
-            toast.info(orchestratorResult.data.explanation);
-          }
-        }
-      } catch (orchestratorError: any) {
-        console.warn('Orchestrator execution failed:', orchestratorError);
-      }
+      // 注意：不再自动调用 Orchestrator
+      // 原因：替换行程项是用户的确定性操作，不需要 AI 实时检查
       
       toast.success(t('planStudio.scheduleTab.replaceSuccess'));
       await loadTrip();
@@ -451,60 +444,23 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   };
 
   const handleConfirmMove = async () => {
-    if (!movingItem || !moveDayId || !moveStartTime || !moveEndTime || !user) {
-      if (!user) {
-        toast.error('用户未登录');
-        return;
-      }
+    if (!movingItem || !moveDayId || !moveStartTime || !moveEndTime) {
       toast.error(t('planStudio.scheduleTab.moveMissingFields'));
       return;
     }
 
     try {
       setMoving(true);
-      // 1. 先更新行程项
+      
+      // 更新行程项
       await itineraryItemsApi.update(movingItem.id, {
         tripDayId: moveDayId,
         startTime: new Date(moveStartTime).toISOString(),
         endTime: new Date(moveEndTime).toISOString(),
       });
       
-      // 2. 自动触发 LangGraph Orchestrator
-      try {
-        const orchestratorResult = await orchestrator.modifySchedule(user.id, tripId, [
-          {
-            type: 'MOVE',
-            itemId: movingItem.id,
-            fromDayId: movingItem.currentDayId,
-            toDayId: moveDayId,
-            startTime: moveStartTime,
-            endTime: moveEndTime,
-          },
-        ]);
-        
-        // 检查是否需要审批
-        if (orchestratorResult.needsApproval && orchestratorResult.data?.approvalId) {
-          const approvalId = orchestratorResult.data.approvalId;
-          setPendingApprovalId(approvalId);
-          setApprovalDialogOpen(true);
-          toast.info('需要您的审批才能继续执行操作');
-          return; // 等待审批，不继续执行后续逻辑
-        }
-        
-        if (orchestratorResult.success && orchestratorResult.data) {
-          if (orchestratorResult.data.personaAlerts && orchestratorResult.data.personaAlerts.length > 0) {
-            toast.info(`系统已自动检查，发现 ${orchestratorResult.data.personaAlerts.length} 条提醒`);
-          }
-          if (orchestratorResult.data.autoAdjustments && orchestratorResult.data.autoAdjustments.length > 0) {
-            toast.success(`系统已自动调整 ${orchestratorResult.data.autoAdjustments.length} 项`);
-          }
-          if (orchestratorResult.data.explanation) {
-            toast.info(orchestratorResult.data.explanation);
-          }
-        }
-      } catch (orchestratorError: any) {
-        console.warn('Orchestrator execution failed:', orchestratorError);
-      }
+      // 注意：不再自动调用 Orchestrator
+      // 原因：移动行程项是用户的确定性操作，不需要 AI 实时检查
       
       toast.success(t('planStudio.scheduleTab.moveSuccess'));
       await loadTrip();
@@ -730,14 +686,21 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             conflicts: [],
           };
 
+          // 格式化日期显示（处理时区）
+          const dayDate = new Date(day.date);
+          const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+          const weekday = weekdays[dayDate.getUTCDay()];
+          
           return (
             <Card key={day.id}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">
-                    Day {idx + 1} - {format(new Date(day.date), 'yyyy-MM-dd')}
+                    Day {idx + 1} - {format(dayDate, 'yyyy-MM-dd')}
                   </CardTitle>
-                  <Badge variant="outline">{day.date}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {weekday}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -826,6 +789,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                             dayIndex={idx}
                             itemIndex={itemIdx}
                             personaMode="auto"
+                            placePhoto={item.Place?.id ? placeImagesMap.get(item.Place.id) : undefined}
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                             onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -833,6 +797,46 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                               // 应用补丁功能 - 现在通过自动触发机制处理
                               toast.info(t('planStudio.scheduleTab.applyPatchNotImplemented'));
                             }}
+                            onAskNara={planStudioActions ? (item, question) => {
+                              // 计算前后衔接信息
+                              const currentIndex = dayItems.findIndex(i => i.id === item.id);
+                              const prevItem = currentIndex > 0 ? dayItems[currentIndex - 1] : null;
+                              const nextItem = currentIndex < dayItems.length - 1 ? dayItems[currentIndex + 1] : null;
+                              
+                              // 计算当天统计
+                              const dayStats = {
+                                totalItems: dayItems.length,
+                                hasMeal: dayItems.some(i => i.type === 'MEAL_ANCHOR' || i.type === 'MEAL_FLOATING'),
+                                hasTransit: dayItems.some(i => i.type === 'TRANSIT'),
+                              };
+                              
+                              // 选中当天
+                              planStudioActions.selectDay(idx + 1, day.date, dayStats);
+                              
+                              // 选中行程项（带扩展上下文）
+                              planStudioActions.selectItem(
+                                item.id, 
+                                item.Place?.nameCN || '', 
+                                item.type,
+                                {
+                                  itemTime: { start: item.startTime, end: item.endTime },
+                                  prevItem: prevItem ? { 
+                                    name: prevItem.Place?.nameCN || '', 
+                                    endTime: prevItem.endTime,
+                                    type: prevItem.type 
+                                  } : undefined,
+                                  nextItem: nextItem ? { 
+                                    name: nextItem.Place?.nameCN || '', 
+                                    startTime: nextItem.startTime,
+                                    type: nextItem.type 
+                                  } : undefined,
+                                  dayStats,
+                                }
+                              );
+                              
+                              // 触发助手提问
+                              planStudioActions.askAssistantAbout(question);
+                            } : undefined}
                           />
                         ));
                       }
@@ -851,9 +855,37 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                   dayIndex={idx}
                                   itemIndex={itemIdx}
                                   personaMode="auto"
+                                  placePhoto={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                                   onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
+                                  onAskNara={planStudioActions ? (item, question) => {
+                                    // 计算当天统计
+                                    const dayStats = {
+                                      totalItems: dayItems.length,
+                                      hasMeal: dayItems.some(i => i.type === 'MEAL_ANCHOR' || i.type === 'MEAL_FLOATING'),
+                                      hasTransit: dayItems.some(i => i.type === 'TRANSIT'),
+                                    };
+                                    
+                                    // 计算前后衔接
+                                    const currentIndex = dayItems.findIndex(i => i.id === item.id);
+                                    const prevItem = currentIndex > 0 ? dayItems[currentIndex - 1] : null;
+                                    const nextItem = currentIndex < dayItems.length - 1 ? dayItems[currentIndex + 1] : null;
+                                    
+                                    planStudioActions.selectDay(idx + 1, day.date, dayStats);
+                                    planStudioActions.selectItem(
+                                      item.id, 
+                                      item.Place?.nameCN || '', 
+                                      item.type,
+                                      {
+                                        itemTime: { start: item.startTime, end: item.endTime },
+                                        prevItem: prevItem ? { name: prevItem.Place?.nameCN || '', endTime: prevItem.endTime } : undefined,
+                                        nextItem: nextItem ? { name: nextItem.Place?.nameCN || '', startTime: nextItem.startTime } : undefined,
+                                        dayStats,
+                                      }
+                                    );
+                                    planStudioActions.askAssistantAbout(question);
+                                  } : undefined}
                                 />
                               );
                             }
@@ -874,7 +906,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                   {item.placeName}
                                 </div>
                                 <div className="text-sm text-muted-foreground mt-1">
-                                  {item.startTime} - {item.endTime}
+                                  {formatTime(item.startTime)} - {formatTime(item.endTime)}
                                 </div>
                               </div>
                               <Badge variant="outline">{item.type}</Badge>
@@ -956,6 +988,19 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                       </div>
                       );
                     })()}
+                    
+                    {/* 添加行程项按钮 */}
+                    <Button
+                      variant="outline"
+                      className="w-full mt-4 border-dashed hover:border-primary hover:bg-primary/5 transition-colors"
+                      onClick={() => {
+                        setAddItemDay(day);
+                        setAddItemDialogOpen(true);
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      添加行程项
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -1218,6 +1263,23 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             }
           }}
           onDecision={handleApprovalComplete}
+        />
+      )}
+
+      {/* 增强版添加行程项对话框（融合找点功能） */}
+      {addItemDay && (
+        <EnhancedAddItineraryItemDialog
+          tripDay={addItemDay}
+          tripId={tripId}
+          countryCode={trip?.destination}
+          open={addItemDialogOpen}
+          onOpenChange={(open) => {
+            setAddItemDialogOpen(open);
+            if (!open) {
+              setAddItemDay(null);
+            }
+          }}
+          onSuccess={loadTrip}
         />
       )}
     </>

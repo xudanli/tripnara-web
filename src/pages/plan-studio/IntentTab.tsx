@@ -81,7 +81,6 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   const [avoidPlaceSearchLoading, setAvoidPlaceSearchLoading] = useState(false);
 
   // 折叠/展开状态
-  const [whatIWantOpen, setWhatIWantOpen] = useState(true);
   const [constraintsOpen, setConstraintsOpen] = useState(true);
 
   const debouncedMustPlaceSearch = useDebounce(mustPlaceSearchQuery, 300);
@@ -387,7 +386,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
       }
       
       // 保存成功后，提示用户可以继续下一步
-      toast.success('保存成功！您可以继续到"找点"标签页添加地点');
+      toast.success('保存成功！您可以继续到"时间轴"标签页添加行程');
     } catch (err: any) {
       // 清除超时提示
       if (timeoutId) {
@@ -412,70 +411,6 @@ export default function IntentTab({ tripId }: IntentTabProps) {
 
   return (
     <div className="space-y-6">
-      <Card data-tour="trip-dna">
-        <Collapsible open={whatIWantOpen} onOpenChange={setWhatIWantOpen}>
-          <CardHeader className="pb-3 border-b">
-            <CollapsibleTrigger asChild>
-              <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
-                <div className="flex-1">
-                  <CardTitle className="text-xl font-semibold">{t('planStudio.intentTab.whatIWantTitle')}</CardTitle>
-                  <CardDescription className="mt-1">{t('planStudio.intentTab.whatIWantDescription')}</CardDescription>
-                </div>
-                {whatIWantOpen ? (
-                  <ChevronUp className="w-5 h-5 text-muted-foreground ml-4" />
-                ) : (
-                  <ChevronDown className="w-5 h-5 text-muted-foreground ml-4" />
-                )}
-              </div>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="space-y-4 pt-4">
-          <div className="space-y-2">
-            <Label>{t('planStudio.intentTab.rhythm')}</Label>
-            <Select value={rhythm} onValueChange={(v) => setRhythm(v as any)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="relaxed">轻松（每天2-3个点）</SelectItem>
-                <SelectItem value="standard">标准（每天4-5个点）</SelectItem>
-                <SelectItem value="tight">紧凑（每天6+个点）</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>{t('planStudio.intentTab.preferences')}</Label>
-            <div className="flex flex-wrap gap-2">
-              {preferenceOptions.map((prefKey) => {
-                const prefLabel = t(`planStudio.intentTab.preferenceOptions.${prefKey}`);
-                return (
-                  <Badge
-                    key={prefKey}
-                    variant={preferences.includes(prefKey) ? 'default' : 'outline'}
-                    className={`cursor-pointer transition-colors ${
-                      preferences.includes(prefKey) 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'bg-[#F2F3F5] text-gray-700 hover:bg-gray-200'
-                    } rounded-full px-3 py-1`}
-                    onClick={() => {
-                      setPreferences((prev) =>
-                        prev.includes(prefKey) ? prev.filter((p) => p !== prefKey) : [...prev, prefKey]
-                      );
-                    }}
-                  >
-                    {prefLabel}
-                  </Badge>
-                );
-              })}
-            </div>
-          </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Collapsible>
-      </Card>
-
       <Card data-tour="hard-constraints">
         <Collapsible open={constraintsOpen} onOpenChange={setConstraintsOpen}>
           <CardHeader className="pb-3 border-b">
@@ -721,35 +656,22 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-between items-center pt-4 border-t">
-        <Button
-          variant="ghost"
-          onClick={() => {
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set('tab', 'optimize');
-            setSearchParams(newParams);
-          }}
-          className="text-primary hover:text-primary/80"
+      <div className="flex justify-end items-center pt-4 border-t gap-3">
+        <Button 
+          variant="outline" 
+          onClick={() => window.history.back()}
+          className="px-6"
         >
-          前往优化与规划工作台 →
+          {t('planStudio.intentTab.cancel')}
         </Button>
-        <div className="flex gap-3">
-          <Button 
-            variant="outline" 
-            onClick={() => window.history.back()}
-            className="px-6"
-          >
-            {t('planStudio.intentTab.cancel')}
-          </Button>
-          <Button 
-            onClick={handleSave} 
-            disabled={saving}
-            className="px-6 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            {saving ? <Spinner className="w-4 h-4 mr-2" /> : null}
-            {t('planStudio.intentTab.saveAndContinue')}
-          </Button>
-        </div>
+        <Button 
+          onClick={handleSave} 
+          disabled={saving}
+          className="px-6 bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          {saving ? <Spinner className="w-4 h-4 mr-2" /> : null}
+          {t('planStudio.intentTab.saveAndContinue')}
+        </Button>
       </div>
       
       {/* 审批对话框 */}

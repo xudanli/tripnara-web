@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import IntentTab from './IntentTab';
-import PlacesTab from './PlacesTab';
 import ScheduleTab from './ScheduleTab';
 import OptimizeTab from './OptimizeTab';
 import WhatIfTab from './WhatIfTab';
@@ -48,22 +47,18 @@ import {
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
 import { Settings2, Zap, Footprints, Wallet } from 'lucide-react';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+import { PlanStudioProvider } from '@/contexts/PlanStudioContext';
 
-export default function PlanStudioPage() {
+function PlanStudioPageContent() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
-  const defaultTab = searchParams.get('tab') || 'intent';
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const defaultTab = searchParams.get('tab') || 'schedule';
+  const [activeTab, setActiveTab] = useState(defaultTab === 'intent' || defaultTab === 'places' ? 'schedule' : defaultTab);
+  
+  // 意图与约束弹窗
+  const [showIntentDialog, setShowIntentDialog] = useState(false);
   // personaMode 已移除 - 三人格由系统自动调用，不再需要用户切换视图
   
   const { state: onboardingState, completeTour, completeStep, completeWelcome } = useOnboarding();
@@ -72,7 +67,7 @@ export default function PlanStudioPage() {
   const [hasTrips, setHasTrips] = useState(false);
   const [tripExists, setTripExists] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
+  const [refreshKey] = useState(0); // 用于触发子组件刷新
   const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
   const [highlightFindingId, setHighlightFindingId] = useState<string | undefined>(undefined);
   
@@ -119,7 +114,6 @@ export default function PlanStudioPage() {
     
     // 完成对应步骤
     if (value === 'intent') completeStep('style');
-    if (value === 'places') completeStep('places');
     if (value === 'schedule') completeStep('schedule');
     if (value === 'optimize') completeStep('optimize');
     
@@ -283,31 +277,6 @@ export default function PlanStudioPage() {
     },
   ];
 
-  // Places Tab Tour
-  const placesTourSteps: TourStep[] = [
-    {
-      id: 'search',
-      target: '[data-tour="places-search"]',
-      title: 'Search Places',
-      description: 'Search places with real metadata (hours, location, booking). 搜索带有真实元数据的地点。',
-      position: 'bottom',
-    },
-    {
-      id: 'evidence',
-      target: '[data-tour="places-evidence"]',
-      title: 'Evidence Tags',
-      description: "If it has no evidence, it can't be scheduled reliably. 没有证据的地点无法可靠地排入日程。",
-      position: 'right',
-    },
-    {
-      id: 'day-basket',
-      target: '[data-tour="day-basket"]',
-      title: 'Day Basket',
-      description: "Drag places here. We'll schedule later. 将地点拖到这里，稍后我们会安排时间。",
-      position: 'left',
-    },
-  ];
-
   // Schedule Tab Tour
   const scheduleTourSteps: TourStep[] = [
     {
@@ -355,8 +324,6 @@ export default function PlanStudioPage() {
     switch (activeTab) {
       case 'intent':
         return intentTourSteps;
-      case 'places':
-        return placesTourSteps;
       case 'schedule':
         return scheduleTourSteps;
       case 'optimize':
@@ -521,54 +488,46 @@ export default function PlanStudioPage() {
         <TripSummaryBar 
           trip={currentTrip} 
           countryName={getCountryName(currentTrip.destination)}
-          onOpenSettings={() => setActiveTab('intent')}
+          onOpenSettings={() => setShowIntentDialog(true)}
         />
       )}
 
       {/* 主内容区：Tab导航 + 内容 */}
-      <div className="flex-1 overflow-hidden">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
-          <div className="border-b bg-white px-6">
-            <TabsList className="w-full justify-start">
-              <TabsTrigger value="intent">{t('planStudio.tabs.intent')}</TabsTrigger>
-              <TabsTrigger value="places">{t('planStudio.tabs.places')}</TabsTrigger>
-              <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
-              <TabsTrigger value="optimize">{t('planStudio.tabs.optimize')}</TabsTrigger>
-              <TabsTrigger value="what-if">{t('planStudio.tabs.whatIf')}</TabsTrigger>
-              <TabsTrigger value="bookings">{t('planStudio.tabs.bookings')}</TabsTrigger>
-            </TabsList>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6">
-            {/* 主内容区（全宽） */}
-            <div className="max-w-5xl mx-auto">
-              <TabsContent value="intent" className="mt-0">
-                <IntentTab tripId={tripId} />
-              </TabsContent>
-              <TabsContent value="places" className="mt-0">
-                <PlacesTab 
-                  tripId={tripId} 
-                  onPlaceAdded={() => setRefreshKey(prev => prev + 1)}
-                />
-              </TabsContent>
-              <TabsContent value="schedule" className="mt-0">
-                <ScheduleTab 
-                  tripId={tripId} 
-                  refreshKey={refreshKey}
-                />
-              </TabsContent>
-              <TabsContent value="optimize" className="mt-0">
-                <OptimizeTab tripId={tripId} />
-              </TabsContent>
-              <TabsContent value="what-if" className="mt-0">
-                <WhatIfTab tripId={tripId} />
-              </TabsContent>
-              <TabsContent value="bookings" className="mt-0">
-                <BookingsTab tripId={tripId} />
-              </TabsContent>
+      <div className="flex-1 overflow-hidden flex">
+        {/* 主内容区 */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
+            <div className="border-b bg-white px-6">
+              <TabsList className="justify-start">
+                <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
+                <TabsTrigger value="optimize">{t('planStudio.tabs.optimize')}</TabsTrigger>
+                <TabsTrigger value="what-if">{t('planStudio.tabs.whatIf')}</TabsTrigger>
+                <TabsTrigger value="bookings">{t('planStudio.tabs.bookings')}</TabsTrigger>
+              </TabsList>
             </div>
-          </div>
-        </Tabs>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* 主内容区 */}
+              <div className="max-w-5xl mx-auto">
+                <TabsContent value="schedule" className="mt-0">
+                  <ScheduleTab 
+                    tripId={tripId} 
+                    refreshKey={refreshKey}
+                  />
+                </TabsContent>
+                <TabsContent value="optimize" className="mt-0">
+                  <OptimizeTab tripId={tripId} />
+                </TabsContent>
+                <TabsContent value="what-if" className="mt-0">
+                  <WhatIfTab tripId={tripId} />
+                </TabsContent>
+                <TabsContent value="bookings" className="mt-0">
+                  <BookingsTab tripId={tripId} />
+                </TabsContent>
+              </div>
+            </div>
+          </Tabs>
+        </div>
       </div>
 
       {/* 准备度抽屉 */}
@@ -600,6 +559,24 @@ export default function PlanStudioPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* 意图与约束弹窗 */}
+      <Dialog open={showIntentDialog} onOpenChange={setShowIntentDialog}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="w-5 h-5" />
+              调整约束
+            </DialogTitle>
+            <DialogDescription>
+              设置行程的意图、偏好和约束条件
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <IntentTab tripId={tripId} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -798,3 +775,11 @@ function PipelineStageCard({ stage }: { stage: PipelineStage }) {
   );
 }
 
+// 导出包裹了 Provider 的页面组件
+export default function PlanStudioPage() {
+  return (
+    <PlanStudioProvider>
+      <PlanStudioPageContent />
+    </PlanStudioProvider>
+  );
+}
