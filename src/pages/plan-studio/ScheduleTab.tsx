@@ -810,32 +810,36 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                 hasTransit: dayItems.some(i => i.type === 'TRANSIT'),
                               };
                               
-                              // 选中当天
+                              // 构建完整上下文
+                              const context = {
+                                dayIndex: idx + 1,
+                                date: day.date,
+                                itemId: item.id,
+                                placeName: item.Place?.nameCN || item.Place?.nameEN || '',
+                                itemType: item.type,
+                                itemTime: { start: item.startTime, end: item.endTime },
+                                prevItem: prevItem ? { 
+                                  name: prevItem.Place?.nameCN || '', 
+                                  endTime: prevItem.endTime,
+                                } : undefined,
+                                nextItem: nextItem ? { 
+                                  name: nextItem.Place?.nameCN || '', 
+                                  startTime: nextItem.startTime,
+                                } : undefined,
+                                dayStats,
+                              };
+                              
+                              // 选中当天和行程项（同步 UI 状态）
                               planStudioActions.selectDay(idx + 1, day.date, dayStats);
+                              planStudioActions.selectItem(item.id, context.placeName, item.type, {
+                                itemTime: context.itemTime,
+                                prevItem: context.prevItem,
+                                nextItem: context.nextItem,
+                                dayStats,
+                              });
                               
-                              // 选中行程项（带扩展上下文）
-                              planStudioActions.selectItem(
-                                item.id, 
-                                item.Place?.nameCN || '', 
-                                item.type,
-                                {
-                                  itemTime: { start: item.startTime, end: item.endTime },
-                                  prevItem: prevItem ? { 
-                                    name: prevItem.Place?.nameCN || '', 
-                                    endTime: prevItem.endTime,
-                                    type: prevItem.type 
-                                  } : undefined,
-                                  nextItem: nextItem ? { 
-                                    name: nextItem.Place?.nameCN || '', 
-                                    startTime: nextItem.startTime,
-                                    type: nextItem.type 
-                                  } : undefined,
-                                  dayStats,
-                                }
-                              );
-                              
-                              // 触发助手提问
-                              planStudioActions.askAssistantAbout(question);
+                              // 触发助手提问（直接传递 context，避免异步状态问题）
+                              planStudioActions.askAssistantAbout(question, context);
                             } : undefined}
                           />
                         ));
@@ -872,19 +876,27 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                     const prevItem = currentIndex > 0 ? dayItems[currentIndex - 1] : null;
                                     const nextItem = currentIndex < dayItems.length - 1 ? dayItems[currentIndex + 1] : null;
                                     
+                                    // 构建完整上下文
+                                    const context = {
+                                      dayIndex: idx + 1,
+                                      date: day.date,
+                                      itemId: item.id,
+                                      placeName: item.Place?.nameCN || item.Place?.nameEN || '',
+                                      itemType: item.type,
+                                      itemTime: { start: item.startTime, end: item.endTime },
+                                      prevItem: prevItem ? { name: prevItem.Place?.nameCN || '', endTime: prevItem.endTime } : undefined,
+                                      nextItem: nextItem ? { name: nextItem.Place?.nameCN || '', startTime: nextItem.startTime } : undefined,
+                                      dayStats,
+                                    };
+                                    
                                     planStudioActions.selectDay(idx + 1, day.date, dayStats);
-                                    planStudioActions.selectItem(
-                                      item.id, 
-                                      item.Place?.nameCN || '', 
-                                      item.type,
-                                      {
-                                        itemTime: { start: item.startTime, end: item.endTime },
-                                        prevItem: prevItem ? { name: prevItem.Place?.nameCN || '', endTime: prevItem.endTime } : undefined,
-                                        nextItem: nextItem ? { name: nextItem.Place?.nameCN || '', startTime: nextItem.startTime } : undefined,
-                                        dayStats,
-                                      }
-                                    );
-                                    planStudioActions.askAssistantAbout(question);
+                                    planStudioActions.selectItem(item.id, context.placeName, item.type, {
+                                      itemTime: context.itemTime,
+                                      prevItem: context.prevItem,
+                                      nextItem: context.nextItem,
+                                      dayStats,
+                                    });
+                                    planStudioActions.askAssistantAbout(question, context);
                                   } : undefined}
                                 />
                               );

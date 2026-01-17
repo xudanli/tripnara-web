@@ -104,8 +104,8 @@ interface PlanStudioContextValue {
   clearSelection: () => void;
   /** 记录用户操作 */
   recordAction: (action: Omit<UserAction, 'timestamp'>) => void;
-  /** 请求助手帮助（关于当前选中项） */
-  askAssistantAbout: (question: string) => void;
+  /** 请求助手帮助（关于当前选中项，可传入 context 覆盖） */
+  askAssistantAbout: (question: string, contextOverride?: SelectedContext) => void;
   
   // ========== 右侧 → 左侧 (助手 → 行程) ==========
   /** 添加待处理建议 */
@@ -222,14 +222,14 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const askAssistantAbout = useCallback((question: string) => {
+  const askAssistantAbout = useCallback((question: string, contextOverride?: SelectedContext) => {
     // 先打开助手抽屉
     if (onOpenAssistant) {
       onOpenAssistant();
     }
-    // 然后发送问题
+    // 然后发送问题（优先使用传入的 context，解决异步状态更新问题）
     if (onAskAssistant) {
-      onAskAssistant(question, selectedContext);
+      onAskAssistant(question, contextOverride || selectedContext);
     }
   }, [onAskAssistant, onOpenAssistant, selectedContext]);
 
