@@ -638,9 +638,11 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
   const parseContent = (text: string) => {
     const lines = text.split('\n');
     const segments: Array<{
-      type: 'text' | 'problem-list';
+      type: 'text' | 'problem-list' | 'night-segments' | 'no-rescue-segments' | 'candidate-routes' | 'safety-risks';
       content: string;
       problems?: Array<{ description: string; suggestion?: string }>;
+      items?: Array<{ day: number; description: string; riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH'; emoji?: string }>;
+      routes?: Array<{ id: string; strategy: string; description: string; isBest?: boolean }>;
     }> = [];
     
     let currentProblemList: Array<{ description: string; suggestion?: string }> = [];
@@ -687,13 +689,132 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
         continue;
       }
       
-      // 跳过冗余内容
-      if (shouldSkip(line)) {
+      // 检测新的信息块类型（在 shouldSkip 之前，避免被跳过）
+      const trimmedLine = line.trim();
+      
+      // 跳过冗余内容（但保留新信息块）
+      const isNewInfoBlock = 
+        (trimmedLine.includes('🌙') && trimmedLine.includes('夜间活动提醒')) ||
+        (trimmedLine.includes('⚠️') && trimmedLine.includes('偏远区域提醒')) ||
+        (trimmedLine.includes('🔄') && trimmedLine.includes('候选路线方案')) ||
+        (trimmedLine.includes('📊') && trimmedLine.includes('综合评分')) ||
+        (trimmedLine.includes('🚨') && trimmedLine.includes('必须解决的问题'));
+      
+      if (!isNewInfoBlock && shouldSkip(line)) {
+        continue;
+      }
+      
+      // 检测夜间段提醒
+      if (trimmedLine.includes('🌙') && trimmedLine.includes('夜间活动提醒')) {
+        processedLineIndices.add(lineIndex); // 标记标题行为已处理
+        if (currentText.length > 0) {
+          segments.push({ type: 'text', content: currentText.join('\n') });
+          currentText = [];
+        }
+        // 收集夜间段信息
+        const nightSegments: Array<{ day: number; description: string; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; emoji: string }> = [];
+        let collectingNightSegments = true;
+        let i = lineIndex + 1;
+        while (i < lines.length && collectingNightSegments) {
+          const nextLine = lines[i].trim();
+          if (!nextLine || nextLine.startsWith('⚠️') || nextLine.startsWith('🔄') || nextLine.startsWith('📊') || nextLine.startsWith('🚨')) {
+            collectingNightSegments = false;
+            break;
+          }
+          // 解析夜间段行：• 🔴 第1天: 描述
+          const nightMatch = nextLine.match(/[•·]\s*([🔴🟡🟢])\s*第(\d+)天[：:]\s*(.+)/);
+          if (nightMatch) {
+            const emoji = nightMatch[1];
+            const day = parseInt(nightMatch[2]);
+            const description = nightMatch[3];
+            const riskLevel = emoji === '🔴' ? 'HIGH' : emoji === '🟡' ? 'MEDIUM' : 'LOW';
+            nightSegments.push({ day, description, riskLevel, emoji });
+            processedLineIndices.add(i);
+          } else if (nextLine && !nextLine.startsWith('•') && !nextLine.startsWith('·')) {
+            collectingNightSegments = false;
+          }
+          i++;
+        }
+        if (nightSegments.length > 0) {
+          segments.push({ type: 'night-segments', content: '', items: nightSegments });
+        }
+        continue;
+      }
+      
+      // 检测无救援段提醒
+      if (trimmedLine.includes('⚠️') && trimmedLine.includes('偏远区域提醒')) {
+        processedLineIndices.add(lineIndex); // 标记标题行为已处理
+        if (currentText.length > 0) {
+          segments.push({ type: 'text', content: currentText.join('\n') });
+          currentText = [];
+        }
+        // 收集无救援段信息
+        const noRescueSegments: Array<{ day: number; description: string; riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; emoji: string }> = [];
+        let collectingNoRescue = true;
+        let i = lineIndex + 1;
+        while (i < lines.length && collectingNoRescue) {
+          const nextLine = lines[i].trim();
+          if (!nextLine || nextLine.startsWith('🌙') || nextLine.startsWith('🔄') || nextLine.startsWith('📊') || nextLine.startsWith('🚨')) {
+            collectingNoRescue = false;
+            break;
+          }
+          // 解析无救援段行：• 🔴 第3天: 描述
+          const rescueMatch = nextLine.match(/[•·]\s*([🔴🟡🟢])\s*第(\d+)天[：:]\s*(.+)/);
+          if (rescueMatch) {
+            const emoji = rescueMatch[1];
+            const day = parseInt(rescueMatch[2]);
+            const description = rescueMatch[3];
+            const riskLevel = emoji === '🔴' ? 'HIGH' : emoji === '🟡' ? 'MEDIUM' : 'LOW';
+            noRescueSegments.push({ day, description, riskLevel, emoji });
+            processedLineIndices.add(i);
+          } else if (nextLine && !nextLine.startsWith('•') && !nextLine.startsWith('·')) {
+            collectingNoRescue = false;
+          }
+          i++;
+        }
+        if (noRescueSegments.length > 0) {
+          segments.push({ type: 'no-rescue-segments', content: '', items: noRescueSegments });
+        }
+        continue;
+      }
+      
+      // 检测候选路线方案
+      if (trimmedLine.includes('🔄') && trimmedLine.includes('候选路线方案')) {
+        processedLineIndices.add(lineIndex); // 标记标题行为已处理
+        if (currentText.length > 0) {
+          segments.push({ type: 'text', content: currentText.join('\n') });
+          currentText = [];
+        }
+        // 收集候选路线信息
+        const candidateRoutes: Array<{ id: string; strategy: string; description: string; isBest?: boolean }> = [];
+        let collectingRoutes = true;
+        let i = lineIndex + 1;
+        while (i < lines.length && collectingRoutes) {
+          const nextLine = lines[i].trim();
+          if (!nextLine || nextLine.startsWith('🌙') || nextLine.startsWith('⚠️') || nextLine.startsWith('📊') || nextLine.startsWith('🚨')) {
+            collectingRoutes = false;
+            break;
+          }
+          // 解析候选路线行：1. ⭐ 均衡型: 描述
+          const routeMatch = nextLine.match(/^\d+[\.、]\s*(⭐\s*)?(.+?)[：:]\s*(.+)/);
+          if (routeMatch) {
+            const isBest = !!routeMatch[1];
+            const strategy = routeMatch[2].trim();
+            const description = routeMatch[3].trim();
+            candidateRoutes.push({ id: `route_${i}`, strategy, description, isBest });
+            processedLineIndices.add(i);
+          } else if (nextLine && !nextLine.match(/^\d+[\.、]/)) {
+            collectingRoutes = false;
+          }
+          i++;
+        }
+        if (candidateRoutes.length > 0) {
+          segments.push({ type: 'candidate-routes', content: '', routes: candidateRoutes });
+        }
         continue;
       }
       
       // 检测待处理项标题（支持多种格式）
-      const trimmedLine = line.trim();
       const isProblemHeader = 
         (trimmedLine.includes('**发现') && trimmedLine.includes('问题**')) ||
         trimmedLine.includes('问题需要解决') ||
@@ -844,6 +965,12 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
   const problemMap = new Map<string, { description: string; suggestion?: string }>();
   const problemListSegments = segments.filter(s => s.type === 'problem-list');
   const textSegments = segments.filter(s => s.type === 'text');
+  const otherSegments = segments.filter(s => 
+    s.type === 'night-segments' || 
+    s.type === 'no-rescue-segments' || 
+    s.type === 'candidate-routes' ||
+    s.type === 'safety-risks'
+  );
   
   // 收集所有问题并去重（基于 description）
   problemListSegments.forEach(segment => {
@@ -857,8 +984,8 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
   
   const uniqueProblems = Array.from(problemMap.values());
   
-  // 如果有多于一个问题列表段，合并为一个
-  const finalSegments: typeof segments = [...textSegments];
+  // 构建最终 segments：文本段 + 其他信息块 + 问题列表
+  const finalSegments: typeof segments = [...textSegments, ...otherSegments];
   if (uniqueProblems.length > 0 && problemListSegments.length > 0) {
     finalSegments.push({
       type: 'problem-list',
@@ -924,6 +1051,97 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
                           </span>
                         </div>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          
+          case 'night-segments':
+            if (!segment.items || segment.items.length === 0) {
+              return null;
+            }
+            
+            return (
+              <div key={idx} className="mt-3 -mx-1">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                    🌙 夜间活动提醒
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {segment.items.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 px-2 py-1 rounded text-[12px]"
+                    >
+                      <span className="text-base">{item.emoji}</span>
+                      <span className="text-slate-600 flex-1">
+                        第{item.day}天: {item.description}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          
+          case 'no-rescue-segments':
+            if (!segment.items || segment.items.length === 0) {
+              return null;
+            }
+            
+            return (
+              <div key={idx} className="mt-3 -mx-1">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                    ⚠️ 偏远区域提醒
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {segment.items.map((item, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 px-2 py-1 rounded text-[12px]"
+                    >
+                      <span className="text-base">{item.emoji}</span>
+                      <span className="text-slate-600 flex-1">
+                        第{item.day}天: {item.description}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          
+          case 'candidate-routes':
+            if (!segment.routes || segment.routes.length === 0) {
+              return null;
+            }
+            
+            return (
+              <div key={idx} className="mt-3 -mx-1">
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <span className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                    🔄 候选路线方案
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {segment.routes.map((route, i) => (
+                    <div
+                      key={route.id}
+                      className={cn(
+                        "px-3 py-2 rounded-lg border text-[12px]",
+                        route.isBest 
+                          ? "bg-blue-50 border-blue-200" 
+                          : "bg-slate-50 border-slate-200"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-slate-700">
+                          {i + 1}. {route.isBest && <span className="text-blue-600">⭐</span>} {route.strategy}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 leading-relaxed">{route.description}</p>
                     </div>
                   ))}
                 </div>
