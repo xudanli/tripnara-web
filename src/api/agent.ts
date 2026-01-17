@@ -35,7 +35,7 @@ export interface ConversationContext {
 /**
  * 入口来源标识
  */
-export type EntryPoint = 'trip_detail_page' | 'trip_list_page' | 'dashboard' | 'planning_workbench';
+export type EntryPoint = 'trip_detail_page' | 'trip_list_page' | 'dashboard' | 'planning_workbench' | 'execute';
 
 /**
  * 智能体执行选项

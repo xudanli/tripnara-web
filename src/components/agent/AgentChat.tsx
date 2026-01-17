@@ -3,7 +3,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { agentApi } from '@/api/agent';
+import { tripsApi } from '@/api/trips';
 import type { RouteAndRunRequest, RouteAndRunResponse, RouteType, UIStatus, LLMProvider, EntryPoint, DecisionLogEntry } from '@/api/agent';
+import type { TripInsightResponse, TripInsightFinding } from '@/api/trips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -26,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Send, Bot, User, ChevronRight, CheckCircle2, XCircle, Loader2, Zap, Infinity, MapPin, Utensils, Search, Calendar, RotateCw, Brain } from 'lucide-react';
+import { Send, Bot, User, ChevronRight, CheckCircle2, XCircle, Loader2, Zap, Infinity, MapPin, Utensils, Search, Calendar, RotateCw, Brain, Compass, Target, Lightbulb, ClipboardCheck, Clock, Route, AlertTriangle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { toast } from 'sonner';
@@ -41,6 +43,238 @@ interface AgentChatProps {
   entryPoint?: EntryPoint;  // 入口来源标识
   readonlyMode?: boolean;    // 只读模式
 }
+
+/**
+ * 开场白配置接口
+ */
+interface WelcomeConfig {
+  icon: LucideIcon;
+  title: string;
+  subtitle: string;
+  greeting: string | React.ReactNode;
+  quickIntents: Array<{
+    icon: LucideIcon;
+    label: string;
+    prompt: string;
+  }>;
+  example?: string;
+}
+
+/**
+ * 获取 finding 图标
+ */
+const getFindingIcon = (iconName: string): LucideIcon => {
+  switch (iconName) {
+    case 'clock': return Clock;
+    case 'route': return Route;
+    case 'check': return CheckCircle2;
+    case 'alert': return AlertTriangle;
+    default: return Lightbulb;
+  }
+};
+
+/**
+ * 获取 finding 样式
+ */
+const getFindingStyles = (type: TripInsightFinding['type']) => {
+  switch (type) {
+    case 'warning':
+      return {
+        bg: 'bg-amber-50',
+        border: 'border-amber-200',
+        icon: 'text-amber-600',
+        text: 'text-amber-900',
+      };
+    case 'suggestion':
+      return {
+        bg: 'bg-blue-50',
+        border: 'border-blue-200',
+        icon: 'text-blue-600',
+        text: 'text-blue-900',
+      };
+    case 'positive':
+      return {
+        bg: 'bg-green-50',
+        border: 'border-green-200',
+        icon: 'text-green-600',
+        text: 'text-green-900',
+      };
+  }
+};
+
+/**
+ * 根据入口点获取开场白配置
+ */
+const getWelcomeConfig = (entryPoint?: EntryPoint, tripInsight?: TripInsightResponse | null): WelcomeConfig => {
+  switch (entryPoint) {
+    case 'planning_workbench':
+      // 如果有行程洞察信息，展示上下文感知的开场白
+      if (tripInsight && tripInsight.tripSummary.days > 0) {
+        const { tripSummary, findings } = tripInsight;
+        
+        // 根据 findings 生成动态快捷按钮
+        const dynamicIntents: WelcomeConfig['quickIntents'] = [];
+        
+        // 优先添加有 actionPrompt 的 findings
+        findings.forEach((finding) => {
+          if (finding.actionLabel && finding.actionPrompt && dynamicIntents.length < 3) {
+            dynamicIntents.push({
+              icon: getFindingIcon(finding.icon),
+              label: finding.actionLabel,
+              prompt: finding.actionPrompt,
+            });
+          }
+        });
+        
+        // 补充默认按钮
+        if (dynamicIntents.length < 4) {
+          dynamicIntents.push({ icon: Search, label: '全面分析', prompt: '帮我全面分析当前行程，看看还有什么问题或可以优化的地方' });
+        }
+        if (dynamicIntents.length < 4) {
+          dynamicIntents.push({ icon: Target, label: '推荐景点', prompt: '根据我的行程，推荐一些适合加入的景点' });
+        }
+        
+        return {
+          icon: Compass,
+          title: '规划助手 Nara 🧭',
+          subtitle: '专注让行程变得「可执行」',
+          greeting: (
+            <div className="space-y-3">
+              {/* 行程摘要卡片 */}
+              <div className="bg-primary/5 rounded-lg p-3 text-left">
+                <div className="flex items-center gap-2 mb-1">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-foreground">{tripSummary.destination}</span>
+                  <span className="text-xs text-muted-foreground">· {tripSummary.days} 天</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  已安排 {tripSummary.placesCount} 个地点
+                </div>
+              </div>
+              
+              {/* AI 发现 */}
+              {findings.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground font-medium">💡 我注意到：</p>
+                  <div className="space-y-1.5">
+                    {findings.slice(0, 3).map((finding, idx) => {
+                      const styles = getFindingStyles(finding.type);
+                      const FindingIcon = getFindingIcon(finding.icon);
+                      return (
+                        <div 
+                          key={idx} 
+                          className={cn(
+                            'rounded-md px-2.5 py-2 text-left border',
+                            styles.bg,
+                            styles.border
+                          )}
+                        >
+                          <div className="flex items-start gap-2">
+                            <FindingIcon className={cn('w-3.5 h-3.5 mt-0.5 flex-shrink-0', styles.icon)} />
+                            <div className="flex-1 min-w-0">
+                              <p className={cn('text-xs font-medium', styles.text)}>{finding.title}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{finding.message}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {/* 如果没有发现，显示正面信息 */}
+              {findings.length === 0 && (
+                <div className="text-sm text-green-700 bg-green-50 rounded-md p-2.5 text-left">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>行程看起来安排得不错！有什么需要我帮忙的吗？</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ),
+          quickIntents: dynamicIntents,
+          example: undefined,
+        };
+      }
+      
+      // 没有行程信息时的默认开场白
+      return {
+        icon: Compass,
+        title: '规划助手 Nara 🧭',
+        subtitle: '专注让行程变得「可执行」',
+        greeting: (
+          <>
+            我可以帮你：
+            <ul className="mt-2 space-y-1 text-left list-disc list-inside">
+              <li>优化景点顺序，减少绕路</li>
+              <li>检查行程风险和准备度</li>
+              <li>推荐符合你风格的新地点</li>
+            </ul>
+          </>
+        ),
+        quickIntents: [
+          { icon: MapPin, label: '优化路线', prompt: '帮我优化当前行程的路线顺序，减少绕路' },
+          { icon: ClipboardCheck, label: '检查准备度', prompt: '检查当前行程的准备度，有哪些风险或待办事项？' },
+          { icon: Target, label: '推荐景点', prompt: '根据我的偏好，推荐一些适合加入行程的景点' },
+          { icon: Lightbulb, label: '分析可行性', prompt: '分析当前行程的整体可行性，有什么需要改进的吗？' },
+        ],
+        example: '帮我把第二天的行程优化一下，感觉有点赶',
+      };
+
+    case 'trip_detail_page':
+      return {
+        icon: Bot,
+        title: '嗨，我是 Nara 👋',
+        subtitle: '这趟旅行的专属助手',
+        greeting: '我可以帮你完善这个行程，有什么想调整的吗？',
+        quickIntents: [
+          { icon: MapPin, label: '调整行程安排', prompt: '帮我调整一下行程安排' },
+          { icon: Search, label: '推荐附近景点', prompt: '推荐一些这个目的地附近值得去的景点' },
+          { icon: Calendar, label: '优化时间分配', prompt: '帮我优化一下每天的时间分配' },
+          { icon: Utensils, label: '美食推荐', prompt: '推荐一些当地特色美食和餐厅' },
+        ],
+        example: '帮我在第三天加一个下午茶的安排',
+      };
+
+    case 'trip_list_page':
+      return {
+        icon: Bot,
+        title: '嗨，我是 Nara 👋',
+        subtitle: '你的智能旅行助手',
+        greeting: '想规划新旅行，还是找找灵感？',
+        quickIntents: [
+          { icon: MapPin, label: '规划新旅行', prompt: '帮我规划一次新的旅行' },
+          { icon: Search, label: '找旅行灵感', prompt: '给我一些旅行目的地的灵感和建议' },
+          { icon: Calendar, label: '查看我的行程', prompt: '帮我整理一下现有的行程' },
+          { icon: Target, label: '热门推荐', prompt: '推荐一些当季热门的旅行目的地' },
+        ],
+        example: '我想去冰岛玩一周，你来帮我安排吧 ✈️',
+      };
+
+    // 默认开场白
+    default:
+      return {
+        icon: Bot,
+        title: '嗨，我是 Nara 👋',
+        subtitle: '你的智能旅行副驾驶',
+        greeting: (
+          <>
+            你可以直接告诉我你的旅行想法，<br />
+            剩下的交给我来一起想。
+          </>
+        ),
+        quickIntents: [
+          { icon: MapPin, label: '帮我规划一次旅行', prompt: '帮我规划一次旅行' },
+          { icon: Utensils, label: '推荐一些好吃的地方', prompt: '推荐一些好吃的地方' },
+          { icon: Search, label: '找几个值得去的景点', prompt: '找几个值得去的景点' },
+          { icon: Calendar, label: '帮我安排一个行程', prompt: '帮我安排一个行程' },
+        ],
+        example: '我想去冰岛玩一周，你来帮我安排吧 ✈️',
+      };
+  }
+};
 
 interface Message {
   id: string;
@@ -393,10 +627,35 @@ export default function AgentChat({ activeTripId, onSystem2Response, className, 
   const [consentDialogOpen, setConsentDialogOpen] = useState(false);
   const [pendingConsentRequest, setPendingConsentRequest] = useState<RouteAndRunRequest | null>(null);
   
+  // 行程洞察状态（用于上下文感知开场白）
+  const [tripInsight, setTripInsight] = useState<TripInsightResponse | null>(null);
+  const [tripInsightLoading, setTripInsightLoading] = useState(false);
+  
   // 检查是否处于等待确认/授权状态
   const isAwaitingConfirmation = messages.some(
     (m) => m.status === 'awaiting_confirmation' || m.status === 'awaiting_consent'
   );
+
+  // 加载行程洞察（规划工作台场景）
+  useEffect(() => {
+    const loadTripInsight = async () => {
+      if (entryPoint === 'planning_workbench' && activeTripId) {
+        setTripInsightLoading(true);
+        try {
+          const insight = await tripsApi.getInsight(activeTripId);
+          setTripInsight(insight);
+        } catch (err) {
+          console.error('Failed to load trip insight:', err);
+          setTripInsight(null);
+        } finally {
+          setTripInsightLoading(false);
+        }
+      } else {
+        setTripInsight(null);
+      }
+    };
+    loadTripInsight();
+  }, [activeTripId, entryPoint]);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -794,65 +1053,74 @@ export default function AgentChat({ activeTripId, onSystem2Response, className, 
       <ScrollArea className="flex-1 px-4">
         <div className="space-y-4 py-4">
           {messages.length === 0 ? (
-            <div className="py-8 px-4">
-              <div className="text-center mb-6">
-                <Bot className="w-14 h-14 mx-auto mb-4 text-primary/60" />
-                <p className="text-lg font-semibold mb-3 text-foreground">嗨，我是 Nara 👋</p>
-                <p className="text-sm text-muted-foreground mb-6">
-                  你可以直接告诉我你的旅行想法，<br />
-                  剩下的交给我来一起想。
-                </p>
-              </div>
+            (() => {
+              // 规划工作台场景：加载中显示骨架屏
+              if (entryPoint === 'planning_workbench' && tripInsightLoading) {
+                return (
+                  <div className="py-8 px-4">
+                    <div className="text-center mb-6">
+                      <Compass className="w-14 h-14 mx-auto mb-4 text-primary/60" />
+                      <p className="text-lg font-semibold mb-3 text-foreground">规划助手 Nara 🧭</p>
+                      <p className="text-xs text-muted-foreground mb-4">正在分析你的行程...</p>
+                      <div className="flex justify-center">
+                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
               
-              {/* 意图按钮 */}
-              <div className="mb-4">
-                <p className="text-xs text-muted-foreground text-center mb-3">你可以试试这样说：</p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full text-xs h-8 px-3"
-                    onClick={() => setInput('帮我规划一次旅行')}
-                  >
-                    <MapPin className="w-3 h-3 mr-1.5" />
-                    帮我规划一次旅行
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full text-xs h-8 px-3"
-                    onClick={() => setInput('推荐一些好吃的地方')}
-                  >
-                    <Utensils className="w-3 h-3 mr-1.5" />
-                    推荐一些好吃的地方
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full text-xs h-8 px-3"
-                    onClick={() => setInput('找几个值得去的景点')}
-                  >
-                    <Search className="w-3 h-3 mr-1.5" />
-                    找几个值得去的景点
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full text-xs h-8 px-3"
-                    onClick={() => setInput('帮我安排一个行程')}
-                  >
-                    <Calendar className="w-3 h-3 mr-1.5" />
-                    帮我安排一个行程
-                  </Button>
-                </div>
-              </div>
+              const welcomeConfig = getWelcomeConfig(entryPoint, tripInsight);
+              const WelcomeIcon = welcomeConfig.icon;
+              return (
+                <div className="py-6 px-4">
+                  <div className="text-center mb-5">
+                    <WelcomeIcon className="w-12 h-12 mx-auto mb-3 text-primary/60" />
+                    <p className="text-base font-semibold mb-1 text-foreground">{welcomeConfig.title}</p>
+                    <p className="text-xs text-muted-foreground mb-3">{welcomeConfig.subtitle}</p>
+                    <div className="text-sm text-muted-foreground">
+                      {welcomeConfig.greeting}
+                    </div>
+                  </div>
+                  
+                  {/* 意图按钮 */}
+                  <div className="mb-4">
+                    <p className="text-xs text-muted-foreground text-center mb-3">
+                      {entryPoint === 'planning_workbench' && tripInsight 
+                        ? '想让我帮你处理哪个问题？' 
+                        : entryPoint === 'planning_workbench' 
+                          ? '告诉我你现在想做什么：' 
+                          : '你可以试试这样说：'}
+                    </p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {welcomeConfig.quickIntents.map((intent, index) => {
+                        const IntentIcon = intent.icon;
+                        return (
+                          <Button
+                            key={index}
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full text-xs h-8 px-3"
+                            onClick={() => setInput(intent.prompt)}
+                          >
+                            <IntentIcon className="w-3 h-3 mr-1.5" />
+                            {intent.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              <div className="text-center text-sm text-muted-foreground">
-                <p className="mb-1">
-                  比如：<span className="text-primary font-medium">我想去冰岛玩一周，你来帮我安排吧 ✈️</span>
-                </p>
-              </div>
-            </div>
+                  {welcomeConfig.example && (
+                    <div className="text-center text-sm text-muted-foreground">
+                      <p className="mb-1">
+                        比如：<span className="text-primary font-medium">{welcomeConfig.example}</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             messages.map((message, index) => {
               // 为错误消息提供重试功能

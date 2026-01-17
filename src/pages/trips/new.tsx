@@ -6,7 +6,7 @@ import { citiesApi } from '@/api/cities';
 import { agentApi } from '@/api/agent';
 import type { RouteAndRunResponse, UIStatus, OrchestrationStep, DecisionLogEntry, GateResult, SuspensionInfo } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
-import type { CreateTripRequest, Traveler, TripDetail } from '@/types/trip';
+import type { CreateTripRequest, Traveler, TripDetail, TripPace, TripPreference } from '@/types/trip';
 import type { Country, CurrencyStrategy } from '@/types/country';
 import type { City } from '@/api/cities';
 import TripPlanningWaitDialog from '@/components/trips/TripPlanningWaitDialog';
@@ -69,6 +69,8 @@ export default function NewTripPage() {
     endDate: '',
     totalBudget: 0,
     travelers: [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }],
+    pace: 'standard',  // 默认标准节奏
+    preferences: [],   // 兴趣偏好
   });
   
   // 多选目的地（城市/国家）
@@ -1588,6 +1590,81 @@ export default function NewTripPage() {
                       )}
                     </div>
                   ))}
+                </div>
+
+                {/* 旅行风格 - 节奏选择 */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label className="text-base font-medium">旅行风格</Label>
+                    <p className="text-sm text-muted-foreground">选择您期望的旅行节奏</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { value: 'relaxed' as TripPace, label: '悠闲', desc: '每天2-3个点', emoji: '🌿' },
+                      { value: 'standard' as TripPace, label: '标准', desc: '每天4-5个点', emoji: '⚖️' },
+                      { value: 'tight' as TripPace, label: '紧凑', desc: '每天6+个点', emoji: '🚀' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, pace: option.value })}
+                        className={cn(
+                          'p-4 rounded-lg border-2 text-left transition-all',
+                          formData.pace === option.value
+                            ? 'border-primary bg-primary/5'
+                            : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <div className="text-2xl mb-2">{option.emoji}</div>
+                        <div className="font-medium">{option.label}</div>
+                        <div className="text-xs text-muted-foreground">{option.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 兴趣偏好 - 多选标签 */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-base font-medium">兴趣偏好</Label>
+                    <p className="text-sm text-muted-foreground">选择您感兴趣的内容（可多选，用于AI推荐）</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: 'nature' as TripPreference, label: '自然', emoji: '🏞️' },
+                      { value: 'city' as TripPreference, label: '城市', emoji: '🏙️' },
+                      { value: 'photography' as TripPreference, label: '摄影', emoji: '📷' },
+                      { value: 'food' as TripPreference, label: '美食', emoji: '🍜' },
+                      { value: 'history' as TripPreference, label: '历史', emoji: '🏛️' },
+                      { value: 'art' as TripPreference, label: '艺术', emoji: '🎨' },
+                      { value: 'shopping' as TripPreference, label: '购物', emoji: '🛍️' },
+                      { value: 'nightlife' as TripPreference, label: '夜生活', emoji: '🌃' },
+                    ].map((pref) => {
+                      const isSelected = formData.preferences?.includes(pref.value);
+                      return (
+                        <button
+                          key={pref.value}
+                          type="button"
+                          onClick={() => {
+                            const current = formData.preferences || [];
+                            const updated = isSelected
+                              ? current.filter(p => p !== pref.value)
+                              : [...current, pref.value];
+                            setFormData({ ...formData, preferences: updated });
+                          }}
+                          className={cn(
+                            'px-4 py-2 rounded-full border transition-all text-sm',
+                            isSelected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                          )}
+                        >
+                          <span className="mr-1">{pref.emoji}</span>
+                          {pref.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-4">

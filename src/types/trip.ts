@@ -148,12 +148,28 @@ export interface TripListItem extends BaseEntity {
 
 // ==================== 创建行程请求 ====================
 
+export type TripPace = 'relaxed' | 'standard' | 'tight';
+
+export type TripPreference = 
+  | 'nature' 
+  | 'city' 
+  | 'photography' 
+  | 'food' 
+  | 'history' 
+  | 'art' 
+  | 'shopping' 
+  | 'nightlife';
+
 export interface CreateTripRequest {
   destination: string;
   startDate: string;
   endDate: string;
   totalBudget: number;
   travelers: Traveler[];
+  // 旅行风格（节奏）- 前置收集，减少进入规划工作台后的设置
+  pace?: TripPace;
+  // 兴趣偏好 - 前置收集，用于AI推荐
+  preferences?: TripPreference[];
 }
 
 export interface CreateTripResponse extends BaseEntity {

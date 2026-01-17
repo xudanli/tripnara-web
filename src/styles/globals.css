@@ -370,3 +370,10 @@
   animation: confirm-panel-shake 0.5s ease-in-out;
 }
 
+/* ==================== AI 助手侧边栏样式 ==================== */
+
+/* 垂直文字 */
+.writing-vertical-rl {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}

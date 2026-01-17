@@ -21,6 +21,8 @@ import {
   Wifi,
   ChevronDown,
   ChevronUp,
+  Compass,
+  X,
 } from 'lucide-react';
 import { EmptyExecuteIllustration } from '@/components/illustrations';
 import PersonaModeToggle, { type PersonaMode } from '@/components/common/PersonaModeToggle';
@@ -35,10 +37,12 @@ import {
 import SpotlightTour from '@/components/onboarding/SpotlightTour';
 import type { TourStep } from '@/components/onboarding/SpotlightTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function ExecutePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const tripId = searchParams.get('tripId');
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [tripState, setTripState] = useState<TripState | null>(null);
@@ -530,15 +534,6 @@ export default function ExecutePage() {
                   className="col-span-2"
                 >
                   Reorder today
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAction('call-agent')}
-                  className="col-span-2 flex items-center gap-1"
-                >
-                  <MessageSquare className="h-3 w-3" />
-                  Call Agent
                 </Button>
               </div>
             </CardContent>

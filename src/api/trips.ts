@@ -121,6 +121,46 @@ import type {
   ApplySuggestionResponse,
 } from '@/types/suggestion';
 
+// ==================== 行程洞察类型定义 ====================
+
+/**
+ * 行程洞察发现项
+ */
+export interface TripInsightFinding {
+  type: 'warning' | 'suggestion' | 'positive';
+  icon: string;           // 图标名称，如 'clock', 'route', 'check'
+  title: string;          // 简短标题
+  message: string;        // 详细说明
+  actionLabel?: string | null;   // 快捷操作按钮文案
+  actionPrompt?: string | null;  // 点击后发送给 AI 的提示词
+}
+
+/**
+ * 行程准备度摘要
+ */
+export interface TripInsightReadiness {
+  status: 'pass' | 'warn' | 'block';
+  blockers: number;
+  warnings: number;
+  suggestions: number;
+}
+
+/**
+ * 行程洞察响应
+ */
+export interface TripInsightResponse {
+  tripSummary: {
+    destination: string;
+    days: number;
+    placesCount: number;
+    startDate: string;
+    endDate: string;
+  };
+  findings: TripInsightFinding[];
+  readiness: TripInsightReadiness;
+  overallStatus: 'good' | 'needs_attention' | 'has_issues';
+}
+
 // ==================== 基础接口 ====================
 
 export const tripsApi = {
@@ -968,5 +1008,20 @@ export const itineraryItemsApi = {
     );
     return handleResponse(response);
   },
-};
 
+  // ==================== 行程洞察 ====================
+
+  /**
+   * 获取行程洞察摘要
+   * GET /trips/:id/insight
+   * 
+   * 获取行程的 AI 洞察摘要，包括行程基本信息、AI 发现的问题/建议、准备度摘要和整体状态。
+   * 用于前端展示行程健康度和优化建议。
+   */
+  getInsight: async (id: string): Promise<TripInsightResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<TripInsightResponse>>(
+      `/trips/${id}/insight`
+    );
+    return handleResponse(response);
+  },
+};

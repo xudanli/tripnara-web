@@ -11,14 +11,12 @@ export default function AgentPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="flex-1 overflow-hidden">
-        <AgentChat
-          activeTripId={tripId}
-          onSystem2Response={handleSystem2Response}
-          className="h-full"
-        />
-      </div>
+    <div className="h-full flex flex-col">
+      <AgentChat
+        activeTripId={tripId}
+        onSystem2Response={handleSystem2Response}
+        className="h-full"
+      />
     </div>
   );
 }

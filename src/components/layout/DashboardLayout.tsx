@@ -1,13 +1,15 @@
-import { useState, createContext, useContext } from 'react';
+import { useState, createContext, useContext, useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import SidebarNavigation from './SidebarNavigation';
 import MobileBottomNav from './MobileBottomNav';
 import EvidenceDrawer from './EvidenceDrawer';
 import AgentChatFab from '@/components/agent/AgentChatFab';
+import AgentChatSidebar from '@/components/agent/AgentChatSidebar';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/useAuth';
+import type { EntryPoint } from '@/api/agent';
 
 // Context for drawer control
 interface DrawerContextType {
@@ -40,6 +42,38 @@ export default function DashboardLayout() {
   // 从当前路径提取 tripId（如果存在）
   const tripIdMatch = location.pathname.match(/\/trips\/([^/]+)/);
   const activeTripId = tripIdMatch ? tripIdMatch[1] : null;
+
+  // 根据路由识别入口点，用于定制 AI 助手开场白
+  const entryPoint = useMemo((): EntryPoint | undefined => {
+    const path = location.pathname;
+    
+    // 规划工作台
+    if (path.includes('/plan-studio')) {
+      return 'planning_workbench';
+    }
+    
+    // 执行页面
+    if (path.includes('/execute')) {
+      return 'execute';
+    }
+    
+    // 行程详情页
+    if (tripIdMatch && !path.includes('/trips/new') && !path.includes('/trips/generate')) {
+      return 'trip_detail_page';
+    }
+    
+    // 行程列表页
+    if (path === '/dashboard/trips' || path.includes('/trips/collected') || path.includes('/trips/featured')) {
+      return 'trip_list_page';
+    }
+    
+    // 仪表盘
+    if (path === '/dashboard') {
+      return 'dashboard';
+    }
+    
+    return undefined;
+  }, [location.pathname, tripIdMatch]);
 
   if (!isAuthenticated) {
     return null;
@@ -103,11 +137,18 @@ export default function DashboardLayout() {
           />
         </div>
 
+        {/* AI 助手侧边栏（仅桌面端） */}
+        <div className="hidden lg:block">
+          <AgentChatSidebar activeTripId={activeTripId} entryPoint={entryPoint} />
+        </div>
+
         {/* 移动端底部导航 */}
         <MobileBottomNav />
 
-        {/* 智能助手悬浮按钮（桌面端和移动端） */}
-        <AgentChatFab activeTripId={activeTripId} />
+        {/* 智能助手悬浮按钮（仅移动端） */}
+        <div className="lg:hidden">
+          <AgentChatFab activeTripId={activeTripId} />
+        </div>
       </div>
     </DrawerContext.Provider>
   );

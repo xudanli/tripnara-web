@@ -13,7 +13,7 @@ import BookingsTab from './BookingsTab';
 import SpotlightTour from '@/components/onboarding/SpotlightTour';
 import type { TourStep } from '@/components/onboarding/SpotlightTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
-import PlanStudioSidebar from '@/components/plan-studio/PlanStudioSidebar';
+// PlanStudioSidebar 已移除 - 策略概览功能已整合到 AI 助手侧边栏
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
 import { Button } from '@/components/ui/button';
 import WelcomeModal from '@/components/onboarding/WelcomeModal';
@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
-import type { PipelineStatus, PipelineStage, TripListItem } from '@/types/trip';
+import type { PipelineStatus, PipelineStage, TripListItem, TripDetail } from '@/types/trip';
 import {
   Select,
   SelectContent,
@@ -47,6 +47,15 @@ import {
 } from '@/components/ui/select';
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
+import { Settings2, Zap, Footprints, Wallet } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
 export default function PlanStudioPage() {
   const { t } = useTranslation();
@@ -77,6 +86,9 @@ export default function PlanStudioPage() {
   const [allTrips, setAllTrips] = useState<TripListItem[]>([]);
   const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
   const [loadingTrips, setLoadingTrips] = useState(false);
+  
+  // 当前行程详情（用于摘要条显示）
+  const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
 
   // 根据国家代码获取国家名称
   const getCountryName = (countryCode: string): string => {
@@ -154,6 +166,7 @@ export default function PlanStudioPage() {
             // ✅ 检查行程状态是否为规划中
             if (trip.status === 'PLANNING') {
               setTripExists(true);
+              setCurrentTrip(trip); // 保存当前行程详情
             } else {
               // 行程不是规划中状态，清除tripId参数
               console.warn('Trip is not in PLANNING status:', tripId, trip.status);
@@ -503,6 +516,15 @@ export default function PlanStudioPage() {
         </div>
       </div>
 
+      {/* 摘要条 - 显示当前行程核心设置 */}
+      {tripId && tripExists && currentTrip && (
+        <TripSummaryBar 
+          trip={currentTrip} 
+          countryName={getCountryName(currentTrip.destination)}
+          onOpenSettings={() => setActiveTab('intent')}
+        />
+      )}
+
       {/* 主内容区：Tab导航 + 内容 */}
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
@@ -518,45 +540,32 @@ export default function PlanStudioPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid grid-cols-12 gap-6">
-              {/* 主内容区（8/12） */}
-              <div className="col-span-12 lg:col-span-8">
-                <TabsContent value="intent" className="mt-0">
-                  <IntentTab tripId={tripId} />
-                </TabsContent>
-                <TabsContent value="places" className="mt-0">
-                  <PlacesTab 
-                    tripId={tripId} 
-                    onPlaceAdded={() => setRefreshKey(prev => prev + 1)}
-                  />
-                </TabsContent>
-                <TabsContent value="schedule" className="mt-0">
-                  <ScheduleTab 
-                    tripId={tripId} 
-                    refreshKey={refreshKey}
-                  />
-                </TabsContent>
-                <TabsContent value="optimize" className="mt-0">
-                  <OptimizeTab tripId={tripId} />
-                </TabsContent>
-                <TabsContent value="what-if" className="mt-0">
-                  <WhatIfTab tripId={tripId} />
-                </TabsContent>
-                <TabsContent value="bookings" className="mt-0">
-                  <BookingsTab tripId={tripId} />
-                </TabsContent>
-              </div>
-
-              {/* 右侧栏（4/12） */}
-              <div className="col-span-12 lg:col-span-4">
-                <PlanStudioSidebar 
+            {/* 主内容区（全宽） */}
+            <div className="max-w-5xl mx-auto">
+              <TabsContent value="intent" className="mt-0">
+                <IntentTab tripId={tripId} />
+              </TabsContent>
+              <TabsContent value="places" className="mt-0">
+                <PlacesTab 
                   tripId={tripId} 
-                  onOpenReadinessDrawer={(findingId) => {
-                    setHighlightFindingId(findingId);
-                    setReadinessDrawerOpen(true);
-                  }}
+                  onPlaceAdded={() => setRefreshKey(prev => prev + 1)}
                 />
-              </div>
+              </TabsContent>
+              <TabsContent value="schedule" className="mt-0">
+                <ScheduleTab 
+                  tripId={tripId} 
+                  refreshKey={refreshKey}
+                />
+              </TabsContent>
+              <TabsContent value="optimize" className="mt-0">
+                <OptimizeTab tripId={tripId} />
+              </TabsContent>
+              <TabsContent value="what-if" className="mt-0">
+                <WhatIfTab tripId={tripId} />
+              </TabsContent>
+              <TabsContent value="bookings" className="mt-0">
+                <BookingsTab tripId={tripId} />
+              </TabsContent>
             </div>
           </div>
         </Tabs>
@@ -591,6 +600,97 @@ export default function PlanStudioPage() {
           </DialogContent>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+// 行程摘要条组件
+function TripSummaryBar({ 
+  trip, 
+  countryName,
+  onOpenSettings 
+}: { 
+  trip: TripDetail; 
+  countryName: string;
+  onOpenSettings: () => void;
+}) {
+  // 从 pacingConfig 获取节奏信息
+  const getPaceLabel = () => {
+    const level = trip.pacingConfig?.level;
+    const maxActivities = trip.pacingConfig?.maxDailyActivities;
+    
+    if (level === 'relaxed' || (maxActivities && maxActivities <= 3)) {
+      return { label: '悠闲', emoji: '🌿', desc: '每天2-3个点' };
+    } else if (level === 'tight' || (maxActivities && maxActivities > 5)) {
+      return { label: '紧凑', emoji: '🚀', desc: '每天6+个点' };
+    }
+    return { label: '标准', emoji: '⚖️', desc: '每天4-5个点' };
+  };
+
+  const pace = getPaceLabel();
+  const budget = trip.totalBudget || trip.budgetConfig?.totalBudget;
+  const days = trip.days?.length || 0;
+  const startDate = trip.startDate ? new Date(trip.startDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
+  const endDate = trip.endDate ? new Date(trip.endDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
+
+  return (
+    <div className="bg-gradient-to-r from-slate-50 to-slate-100 border-b px-6 py-3">
+      <div className="flex items-center justify-between">
+        {/* 左侧：核心信息 */}
+        <div className="flex items-center gap-6 text-sm">
+          {/* 目的地和日期 */}
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-800">{countryName}</span>
+            {startDate && endDate && (
+              <span className="text-slate-500">
+                {startDate} - {endDate} ({days}天)
+              </span>
+            )}
+          </div>
+          
+          {/* 分隔线 */}
+          <div className="h-4 w-px bg-slate-300" />
+          
+          {/* 节奏 */}
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-amber-500" />
+            <span className="text-slate-600">{pace.emoji} {pace.label}</span>
+          </div>
+          
+          {/* 预算 */}
+          {budget && budget > 0 && (
+            <>
+              <div className="h-4 w-px bg-slate-300" />
+              <div className="flex items-center gap-1.5">
+                <Wallet className="w-4 h-4 text-emerald-500" />
+                <span className="text-slate-600">¥{budget.toLocaleString()}</span>
+              </div>
+            </>
+          )}
+          
+          {/* 旅行者数量 */}
+          {trip.travelers && trip.travelers.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-slate-300" />
+              <div className="flex items-center gap-1.5">
+                <Footprints className="w-4 h-4 text-blue-500" />
+                <span className="text-slate-600">{trip.travelers.length}人</span>
+              </div>
+            </>
+          )}
+        </div>
+        
+        {/* 右侧：调整按钮 */}
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={onOpenSettings}
+          className="text-slate-600 hover:text-slate-800"
+        >
+          <Settings2 className="w-4 h-4 mr-1.5" />
+          调整约束
+        </Button>
+      </div>
     </div>
   );
 }
