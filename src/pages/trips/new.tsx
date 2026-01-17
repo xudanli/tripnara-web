@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { citiesApi } from '@/api/cities';
+import { placesApi } from '@/api/places';
 import { agentApi } from '@/api/agent';
 import type { RouteAndRunResponse, UIStatus, OrchestrationStep, DecisionLogEntry, GateResult, SuspensionInfo } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
 import type { CreateTripRequest, Traveler, TripDetail, TripPace, TripPreference } from '@/types/trip';
 import type { Country, CurrencyStrategy } from '@/types/country';
 import type { City } from '@/api/cities';
+import type { PlaceWithDistance } from '@/types/places-routes';
+import { useDebounce } from '@/hooks/useDebounce';
 import TripPlanningWaitDialog from '@/components/trips/TripPlanningWaitDialog';
 import { ClarificationQuestionsPanel } from '@/components/trips/ClarificationQuestionsPanel';
 import { StatusIndicator } from '@/components/trips/StatusIndicator';
@@ -28,7 +31,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, CheckCircle2, ArrowRight, AlertCircle, Check, ChevronsUpDown, History, Shield, Activity, RefreshCw, Calendar, MapPin, Clock } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, CheckCircle2, ArrowRight, AlertCircle, Check, ChevronsUpDown, History, Shield, Activity, RefreshCw, Calendar, MapPin, Clock, ChevronDown, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -90,6 +94,29 @@ export default function NewTripPage() {
   const [citiesTotal, setCitiesTotal] = useState(0);
   const [citiesOffset, setCitiesOffset] = useState(0);
 
+  // ========== 更多设置：必须点/不去点 ==========
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
+  
+  // 必须点状态
+  const [mustPlaces, setMustPlaces] = useState<number[]>([]);
+  const [mustPlaceMap, setMustPlaceMap] = useState<Map<number, PlaceWithDistance>>(new Map());
+  const [mustPlaceSearchOpen, setMustPlaceSearchOpen] = useState(false);
+  const [mustPlaceSearchQuery, setMustPlaceSearchQuery] = useState('');
+  const [mustPlaceSearchResults, setMustPlaceSearchResults] = useState<PlaceWithDistance[]>([]);
+  const [mustPlaceSearchLoading, setMustPlaceSearchLoading] = useState(false);
+  
+  // 不去点状态
+  const [avoidPlaces, setAvoidPlaces] = useState<number[]>([]);
+  const [avoidPlaceMap, setAvoidPlaceMap] = useState<Map<number, PlaceWithDistance>>(new Map());
+  const [avoidPlaceSearchOpen, setAvoidPlaceSearchOpen] = useState(false);
+  const [avoidPlaceSearchQuery, setAvoidPlaceSearchQuery] = useState('');
+  const [avoidPlaceSearchResults, setAvoidPlaceSearchResults] = useState<PlaceWithDistance[]>([]);
+  const [avoidPlaceSearchLoading, setAvoidPlaceSearchLoading] = useState(false);
+  
+  // 防抖搜索
+  const debouncedMustPlaceSearch = useDebounce(mustPlaceSearchQuery, 300);
+  const debouncedAvoidPlaceSearch = useDebounce(avoidPlaceSearchQuery, 300);
+
   // 加载国家列表（初始加载）
   useEffect(() => {
     loadCountries(0, false);
@@ -117,6 +144,96 @@ export default function NewTripPage() {
     // 注意：不包含 loadCountries 在依赖项中，避免无限循环
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countrySearchQuery, destinationOpen]);
+
+  // ========== 搜索必须点 ==========
+  useEffect(() => {
+    if (debouncedMustPlaceSearch.length >= 2 && mustPlaceSearchOpen && selectedCountry) {
+      searchMustPlaces(debouncedMustPlaceSearch);
+    } else {
+      setMustPlaceSearchResults([]);
+    }
+  }, [debouncedMustPlaceSearch, mustPlaceSearchOpen, selectedCountry]);
+
+  // ========== 搜索不去点 ==========
+  useEffect(() => {
+    if (debouncedAvoidPlaceSearch.length >= 2 && avoidPlaceSearchOpen && selectedCountry) {
+      searchAvoidPlaces(debouncedAvoidPlaceSearch);
+    } else {
+      setAvoidPlaceSearchResults([]);
+    }
+  }, [debouncedAvoidPlaceSearch, avoidPlaceSearchOpen, selectedCountry]);
+
+  // 搜索必须点
+  const searchMustPlaces = async (query: string) => {
+    try {
+      setMustPlaceSearchLoading(true);
+      const results = await placesApi.autocompletePlaces({
+        q: query,
+        limit: 10,
+        countryCode: selectedCountry,
+      });
+      setMustPlaceSearchResults(results);
+    } catch (err) {
+      console.error('Failed to search must places:', err);
+      setMustPlaceSearchResults([]);
+    } finally {
+      setMustPlaceSearchLoading(false);
+    }
+  };
+
+  // 搜索不去点
+  const searchAvoidPlaces = async (query: string) => {
+    try {
+      setAvoidPlaceSearchLoading(true);
+      const results = await placesApi.autocompletePlaces({
+        q: query,
+        limit: 10,
+        countryCode: selectedCountry,
+      });
+      setAvoidPlaceSearchResults(results);
+    } catch (err) {
+      console.error('Failed to search avoid places:', err);
+      setAvoidPlaceSearchResults([]);
+    } finally {
+      setAvoidPlaceSearchLoading(false);
+    }
+  };
+
+  // 添加必须点
+  const handleAddMustPlace = (place: PlaceWithDistance) => {
+    if (!mustPlaces.includes(place.id)) {
+      setMustPlaces([...mustPlaces, place.id]);
+      setMustPlaceMap(new Map(mustPlaceMap).set(place.id, place));
+    }
+    setMustPlaceSearchQuery('');
+    setMustPlaceSearchOpen(false);
+  };
+
+  // 移除必须点
+  const handleRemoveMustPlace = (placeId: number) => {
+    setMustPlaces(mustPlaces.filter(id => id !== placeId));
+    const newMap = new Map(mustPlaceMap);
+    newMap.delete(placeId);
+    setMustPlaceMap(newMap);
+  };
+
+  // 添加不去点
+  const handleAddAvoidPlace = (place: PlaceWithDistance) => {
+    if (!avoidPlaces.includes(place.id)) {
+      setAvoidPlaces([...avoidPlaces, place.id]);
+      setAvoidPlaceMap(new Map(avoidPlaceMap).set(place.id, place));
+    }
+    setAvoidPlaceSearchQuery('');
+    setAvoidPlaceSearchOpen(false);
+  };
+
+  // 移除不去点
+  const handleRemoveAvoidPlace = (placeId: number) => {
+    setAvoidPlaces(avoidPlaces.filter(id => id !== placeId));
+    const newMap = new Map(avoidPlaceMap);
+    newMap.delete(placeId);
+    setAvoidPlaceMap(newMap);
+  };
   
   // 当选择国家时，加载该国家的城市列表
   useEffect(() => {
@@ -579,9 +696,12 @@ export default function NewTripPage() {
 
       // 如果选择了多个目的地，使用第一个作为主要目的地
       // 其他目的地可以在后续的规划阶段添加
-      const submitData = {
+      const submitData: CreateTripRequest = {
         ...formData,
         destination: finalDestination,
+        // 高级设置：必须点/不去点
+        mustPlaces: mustPlaces.length > 0 ? mustPlaces : undefined,
+        avoidPlaces: avoidPlaces.length > 0 ? avoidPlaces : undefined,
       };
       
       await tripsApi.create(submitData);
@@ -1666,6 +1786,211 @@ export default function NewTripPage() {
                     })}
                   </div>
                 </div>
+
+                {/* 更多设置 - 可折叠区域 */}
+                <Collapsible open={advancedSettingsOpen} onOpenChange={setAdvancedSettingsOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      className="w-full justify-between text-muted-foreground hover:text-foreground"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Settings2 className="w-4 h-4" />
+                        <span>更多设置</span>
+                        {(mustPlaces.length > 0 || avoidPlaces.length > 0) && (
+                          <Badge variant="secondary" className="text-xs">
+                            {mustPlaces.length + avoidPlaces.length} 项
+                          </Badge>
+                        )}
+                      </div>
+                      <ChevronDown className={cn(
+                        "w-4 h-4 transition-transform",
+                        advancedSettingsOpen && "rotate-180"
+                      )} />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-6 pt-4">
+                    {/* 提示：需要先选择国家 */}
+                    {!selectedCountry && (
+                      <div className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-4 text-center">
+                        请先选择目的地国家，然后可以搜索添加具体地点
+                      </div>
+                    )}
+
+                    {/* 必须去的地点 */}
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">必须去的地点</Label>
+                        <p className="text-xs text-muted-foreground">添加您一定要去的景点、餐厅或地标</p>
+                      </div>
+                      
+                      {/* 已选择的地点 */}
+                      {mustPlaces.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {mustPlaces.map((placeId) => {
+                            const place = mustPlaceMap.get(placeId);
+                            return (
+                              <Badge key={placeId} variant="secondary" className="px-3 py-1.5 text-sm">
+                                <MapPin className="w-3 h-3 mr-1.5" />
+                                {place?.nameCN || place?.nameEN || `POI ${placeId}`}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMustPlace(placeId)}
+                                  className="ml-2 hover:text-destructive"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
+                      {/* 搜索输入 */}
+                      <Popover open={mustPlaceSearchOpen} onOpenChange={setMustPlaceSearchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                            disabled={!selectedCountry}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            搜索并添加地点...
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0 w-[400px]" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder="输入地点名称搜索..."
+                              value={mustPlaceSearchQuery}
+                              onValueChange={setMustPlaceSearchQuery}
+                            />
+                            <CommandList>
+                              {mustPlaceSearchLoading ? (
+                                <div className="flex items-center justify-center py-6">
+                                  <Spinner className="w-4 h-4" />
+                                </div>
+                              ) : (
+                                <>
+                                  <CommandEmpty>未找到相关地点</CommandEmpty>
+                                  <CommandGroup>
+                                    {mustPlaceSearchResults.map((place) => (
+                                      <CommandItem
+                                        key={place.id}
+                                        value={`${place.nameCN} ${place.nameEN} ${place.id}`}
+                                        onSelect={() => handleAddMustPlace(place)}
+                                        disabled={mustPlaces.includes(place.id)}
+                                      >
+                                        <MapPin className="w-4 h-4 mr-2" />
+                                        <div className="flex-1">
+                                          <div className="font-medium">{place.nameCN || place.nameEN}</div>
+                                          {place.nameEN && place.nameCN && (
+                                            <div className="text-xs text-muted-foreground">{place.nameEN}</div>
+                                          )}
+                                        </div>
+                                        {mustPlaces.includes(place.id) && (
+                                          <Badge variant="outline" className="text-xs">已添加</Badge>
+                                        )}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    {/* 不想去的地点 */}
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium">不想去的地点</Label>
+                        <p className="text-xs text-muted-foreground">添加您想避开的地点（如太商业化的景点）</p>
+                      </div>
+                      
+                      {/* 已选择的地点 */}
+                      {avoidPlaces.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {avoidPlaces.map((placeId) => {
+                            const place = avoidPlaceMap.get(placeId);
+                            return (
+                              <Badge key={placeId} variant="outline" className="px-3 py-1.5 text-sm border-red-200 bg-red-50 text-red-700">
+                                <X className="w-3 h-3 mr-1.5" />
+                                {place?.nameCN || place?.nameEN || `POI ${placeId}`}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAvoidPlace(placeId)}
+                                  className="ml-2 hover:text-red-900"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
+                      {/* 搜索输入 */}
+                      <Popover open={avoidPlaceSearchOpen} onOpenChange={setAvoidPlaceSearchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                            disabled={!selectedCountry}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            搜索并添加地点...
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0 w-[400px]" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder="输入地点名称搜索..."
+                              value={avoidPlaceSearchQuery}
+                              onValueChange={setAvoidPlaceSearchQuery}
+                            />
+                            <CommandList>
+                              {avoidPlaceSearchLoading ? (
+                                <div className="flex items-center justify-center py-6">
+                                  <Spinner className="w-4 h-4" />
+                                </div>
+                              ) : (
+                                <>
+                                  <CommandEmpty>未找到相关地点</CommandEmpty>
+                                  <CommandGroup>
+                                    {avoidPlaceSearchResults.map((place) => (
+                                      <CommandItem
+                                        key={place.id}
+                                        value={`${place.nameCN} ${place.nameEN} ${place.id}`}
+                                        onSelect={() => handleAddAvoidPlace(place)}
+                                        disabled={avoidPlaces.includes(place.id)}
+                                      >
+                                        <MapPin className="w-4 h-4 mr-2" />
+                                        <div className="flex-1">
+                                          <div className="font-medium">{place.nameCN || place.nameEN}</div>
+                                          {place.nameEN && place.nameCN && (
+                                            <div className="text-xs text-muted-foreground">{place.nameEN}</div>
+                                          )}
+                                        </div>
+                                        {avoidPlaces.includes(place.id) && (
+                                          <Badge variant="outline" className="text-xs">已添加</Badge>
+                                        )}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 <div className="flex justify-end gap-4">
                   <Button type="button" variant="outline" onClick={() => navigate('/dashboard/trips')}>

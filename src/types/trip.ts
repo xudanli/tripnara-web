@@ -170,6 +170,10 @@ export interface CreateTripRequest {
   pace?: TripPace;
   // 兴趣偏好 - 前置收集，用于AI推荐
   preferences?: TripPreference[];
+  // 必须去的地点 POI IDs - 高级用户可在创建时指定
+  mustPlaces?: number[];
+  // 不想去的地点 POI IDs - 高级用户可在创建时排除
+  avoidPlaces?: number[];
 }
 
 export interface CreateTripResponse extends BaseEntity {
