@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { citiesApi } from '@/api/cities';
 import { placesApi } from '@/api/places';
-import { agentApi } from '@/api/agent';
-import type { RouteAndRunResponse, UIStatus, OrchestrationStep, DecisionLogEntry, GateResult, SuspensionInfo } from '@/api/agent';
+import type { SuspensionInfo } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
 import type { CreateTripRequest, Traveler, TripDetail, TripPace, TripPreference } from '@/types/trip';
 import type { Country, CurrencyStrategy } from '@/types/country';
@@ -13,13 +12,8 @@ import type { City } from '@/api/cities';
 import type { PlaceWithDistance } from '@/types/places-routes';
 import { useDebounce } from '@/hooks/useDebounce';
 import TripPlanningWaitDialog from '@/components/trips/TripPlanningWaitDialog';
-import { ClarificationQuestionsPanel } from '@/components/trips/ClarificationQuestionsPanel';
-import { StatusIndicator } from '@/components/trips/StatusIndicator';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import ConsentDialog from '@/components/trips/ConsentDialog';
-import { mockClarificationQuestions } from '@/mocks/clarification-questions';
-import type { ClarificationAnswer, ClarificationQuestion } from '@/types/clarification';
-import { formatClarificationAnswers, parseClarificationMessage } from '@/utils/clarification';
 import NLChatInterface from '@/components/trips/NLChatInterface';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,13 +21,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, CheckCircle2, ArrowRight, AlertCircle, Check, ChevronsUpDown, History, Shield, Activity, RefreshCw, Calendar, MapPin, Clock, ChevronDown, Settings2 } from 'lucide-react';
+import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, Check, ChevronsUpDown, MapPin, ChevronDown, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -44,16 +37,10 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 
 export default function NewTripPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useAuth();
+  useAuth(); // 确保用户已登录
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'form' | 'nl'>('form');
-
-  // DEV-only: enable structured clarification preview with:
-  // /dashboard/trips/new?mockClarification=1
-  const showStructuredClarificationMock =
-    import.meta.env.DEV && new URLSearchParams(location.search).get('mockClarification') === '1';
 
   // 国家列表
   const [countries, setCountries] = useState<Country[]>([]);
@@ -580,31 +567,6 @@ export default function NewTripPage() {
     if (city.nameEN) return city.nameEN;
     return city.name;
   };
-
-  // 自然语言模式
-  const [nlText, setNlText] = useState('');
-  const [nlLoading, setNlLoading] = useState(false);
-  
-  // 结构化澄清问题状态（Phase 1）
-  const [structuredQuestions, setStructuredQuestions] = useState<ClarificationQuestion[]>([]);
-  const [structuredAnswers, setStructuredAnswers] = useState<ClarificationAnswer[]>([]);
-  const [clarificationRound, setClarificationRound] = useState(0);
-  const [conversationHistory, setConversationHistory] = useState<string[]>([]);
-  
-  // 向后兼容：旧的字符串澄清问题（逐步淘汰）
-  const [clarificationQuestions, setClarificationQuestions] = useState<string[]>([]);
-  const [clarificationAnswers, setClarificationAnswers] = useState<Record<number, string>>({});
-  
-  const [needsClarification, setNeedsClarification] = useState(false);
-  const [originalNLText, setOriginalNLText] = useState('');
-  const [submittingAnswers, setSubmittingAnswers] = useState(false);
-  const [uiStatus, setUiStatus] = useState<UIStatus>('done');
-  const [, setOrchestrationStep] = useState<OrchestrationStep | null>(null);
-  
-  // 行程预览状态（当返回 OK 且有 itinerary 时）
-  const [previewItinerary, setPreviewItinerary] = useState<TripDetail | null>(null);
-  const [gateResult, setGateResult] = useState<GateResult | null>(null);
-  const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
   
   // 审批和授权状态
   const [approvalId, setApprovalId] = useState<string | null>(null);
@@ -616,13 +578,6 @@ export default function NewTripPage() {
     message?: string;
     requiredPermissions?: string[];
     warning?: string;
-  } | null>(null);
-  
-  const [creationResult, setCreationResult] = useState<{
-    trip: any;
-    parsedParams?: any;
-    nextSteps?: any[];
-    message?: string;
   } | null>(null);
   
   // 等待规划完成弹窗
@@ -723,449 +678,6 @@ export default function NewTripPage() {
   };
   
   // handleDestinationSelect 和 handleAddNewCity 已移除，未使用
-
-  // 映射 OrchestrationStep 到 UIStatus
-  const mapOrchestrationStepToUIStatus = useCallback((step: OrchestrationStep | undefined): UIStatus => {
-    if (!step) return 'thinking';
-    switch (step) {
-      case 'INTAKE':
-      case 'PLAN_GEN':
-      case 'NARRATE':
-        return 'thinking';
-      case 'RESEARCH':
-        return 'browsing';
-      case 'GATE_EVAL':
-      case 'VERIFY':
-        return 'verifying';
-      case 'REPAIR':
-        return 'repairing';
-      case 'DONE':
-        return 'done';
-      case 'FAILED':
-        return 'failed';
-      default:
-        return 'thinking';
-    }
-  }, []);
-
-  const handleNLSubmit = async () => {
-    if (!nlText.trim() || !user?.id) return;
-
-    setNlLoading(true);
-    setError(null);
-    setNeedsClarification(false);
-    setStructuredQuestions([]);
-    setStructuredAnswers([]);
-    setClarificationQuestions([]);
-    setClarificationAnswers({});
-    setOriginalNLText(nlText);
-    setClarificationRound(0);
-    setConversationHistory([nlText]);
-    setPreviewItinerary(null);
-    setGateResult(null);
-    setDecisionLogs([]);
-    setUiStatus('thinking');
-    setOrchestrationStep(null);
-
-    try {
-      console.log('[NewTripPage] 调用 agentApi.routeAndRun...');
-      
-      const request = {
-        request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        user_id: user.id,
-        trip_id: null,
-        message: nlText,
-        conversation_context: {
-          recent_messages: [],
-          locale: 'zh-CN',
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        options: {
-          max_steps: 50,
-          routeType: 'SYSTEM2_REASONING' as const,
-        },
-      };
-
-      const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
-      console.log('[NewTripPage] ✅ Agent 响应:', response);
-
-      // 更新 UI 状态
-      if (response.ui_state?.ui_status) {
-        setUiStatus(response.ui_state.ui_status);
-      } else if (response.ui_state?.phase) {
-        setUiStatus(mapOrchestrationStepToUIStatus(response.ui_state.phase));
-      }
-      if (response.ui_state?.phase) {
-        setOrchestrationStep(response.ui_state.phase);
-      }
-
-      // 处理决策日志（兼容新旧两种格式）
-      if (response.explain?.decision_log) {
-        const logs = Array.isArray(response.explain.decision_log) ? response.explain.decision_log : [];
-        // 过滤出 DecisionLogEntry 格式的日志（新格式）
-        const decisionLogEntries = logs.filter((log): log is DecisionLogEntry => 
-          'request_id' in log && 'step' in log && 'actor' in log
-        );
-        setDecisionLogs(decisionLogEntries);
-      }
-
-      // 处理不同状态
-      if (response.result.status === 'NEED_MORE_INFO') {
-        // 需要澄清问题
-        const payload = response.result.payload;
-        
-        // 优先使用结构化问题
-        if (payload?.clarificationQuestions && payload.clarificationQuestions.length > 0) {
-          setNeedsClarification(true);
-          setStructuredQuestions(payload.clarificationQuestions);
-          setStructuredAnswers([]);
-          setClarificationRound((prev) => prev + 1);
-          setUiStatus('awaiting_user_input');
-        } 
-        // 向后兼容：使用 clarificationMessage
-        else if (payload?.clarificationMessage) {
-          setNeedsClarification(true);
-          const fallbackQuestion = parseClarificationMessage(payload.clarificationMessage);
-          setStructuredQuestions([fallbackQuestion]);
-          setStructuredAnswers([]);
-          setClarificationRound((prev) => prev + 1);
-          setUiStatus('awaiting_user_input');
-        } else {
-          setError('需要更多信息，但未收到澄清问题');
-          setUiStatus('failed');
-        }
-      } else if (response.result.status === 'OK') {
-        // 成功生成行程
-        const payload = response.result.payload;
-        const itinerary = payload?.orchestrationResult?.itinerary;
-        const gate = payload?.orchestrationResult?.gate_result;
-
-        if (itinerary) {
-          // 有行程数据，显示预览
-          setPreviewItinerary(itinerary as TripDetail);
-          setGateResult(gate || null);
-          setUiStatus('done');
-          // TODO: 显示行程预览页面（待实现）
-          console.log('[NewTripPage] 行程预览:', { itinerary, gate });
-        } else {
-          // 没有行程数据，可能需要创建行程
-          // 这里可以根据实际情况决定是否需要调用 tripsApi.create
-          setError('成功响应但未包含行程数据');
-          setUiStatus('failed');
-        }
-      } else if (response.result.status === 'FAILED') {
-        setError(response.result.answer_text || '处理失败');
-        setUiStatus('failed');
-      } else if (response.result.status === 'TIMEOUT') {
-        setError('请求超时，请稍后重试或简化需求');
-        setUiStatus('failed');
-      } else if (response.result.status === 'NEED_CONFIRMATION') {
-        // 需要审批
-        const payload = response.result.payload;
-        const suspension = payload?.suspensionInfo;
-        if (suspension?.approvalId) {
-          setApprovalId(suspension.approvalId);
-          setSuspensionInfo(suspension);
-          setApprovalDialogOpen(true);
-          setUiStatus('awaiting_confirmation');
-        } else {
-          setError('需要审批确认，但未收到审批信息');
-          setUiStatus('awaiting_confirmation');
-        }
-      } else if (response.result.status === 'NEED_CONSENT') {
-        // 需要授权
-        const payload = response.result.payload;
-        setConsentInfo({
-          title: '需要您的授权',
-          message: payload?.consentMessage || response.result.answer_text || '此操作需要您的授权才能继续执行。',
-          requiredPermissions: payload?.requiredPermissions || [],
-          warning: payload?.consentWarning,
-        });
-        setConsentDialogOpen(true);
-        setUiStatus('awaiting_consent');
-      } else if (response.result.status === 'REDIRECT_REQUIRED') {
-        // 需要重定向到规划工作台
-        const payload = response.result.payload;
-        const redirectInfo = payload?.redirectInfo;
-        if (redirectInfo) {
-          setError(
-            redirectInfo.redirect_reason || 
-            response.result.answer_text || 
-            '行程规划功能已迁移到规划工作台，请使用规划工作台功能创建行程。'
-          );
-          setUiStatus('failed');
-          console.warn('[NewTripPage] 需要重定向到:', redirectInfo.redirect_to);
-        } else {
-          setError(response.result.answer_text || '需要重定向到其他页面');
-          setUiStatus('failed');
-        }
-      } else {
-        setError(`未知状态: ${response.result.status}`);
-        setUiStatus('failed');
-      }
-    } catch (err: any) {
-      console.error('[NewTripPage] ❌ 请求失败:', err);
-      setError(err.message || '创建行程失败');
-      setUiStatus('failed');
-    } finally {
-      setNlLoading(false);
-    }
-  };
-
-  const handleAnswerChange = (index: number, value: string) => {
-    setClarificationAnswers({
-      ...clarificationAnswers,
-      [index]: value,
-    });
-  };
-
-  // 处理结构化澄清问题提交
-  const handleStructuredAnswersSubmit = async () => {
-    if (!user?.id) return;
-
-    // 检查澄清轮数（最多5轮）
-    if (clarificationRound >= 5) {
-      setError('澄清轮数过多（最多5轮），建议使用结构化表单创建行程');
-      return;
-    }
-
-    setSubmittingAnswers(true);
-    setError(null);
-    setUiStatus('thinking');
-
-    try {
-      // 格式化回答
-      const formattedAnswers = formatClarificationAnswers(structuredQuestions, structuredAnswers);
-      
-      // 更新对话历史
-      const updatedHistory = [...conversationHistory, formattedAnswers];
-      setConversationHistory(updatedHistory);
-
-      console.log('[NewTripPage] 提交结构化澄清答案，继续规划...');
-      
-      const request = {
-        request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        user_id: user.id,
-        trip_id: null,
-        message: formattedAnswers,
-        conversation_context: {
-          recent_messages: updatedHistory,
-          locale: 'zh-CN',
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        options: {
-          max_steps: 50,
-          routeType: 'SYSTEM2_REASONING' as const,
-          entry_point: 'dashboard' as const, // 标识从 Dashboard 创建新行程
-        },
-      };
-
-      const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
-      console.log('[NewTripPage] ✅ Agent 响应:', response);
-
-      // 更新 UI 状态
-      if (response.ui_state?.ui_status) {
-        setUiStatus(response.ui_state.ui_status);
-      } else if (response.ui_state?.phase) {
-        setUiStatus(mapOrchestrationStepToUIStatus(response.ui_state.phase));
-      }
-      if (response.ui_state?.phase) {
-        setOrchestrationStep(response.ui_state.phase);
-      }
-
-      // 处理决策日志（兼容新旧两种格式）
-      if (response.explain?.decision_log) {
-        const logs = Array.isArray(response.explain.decision_log) ? response.explain.decision_log : [];
-        // 过滤出 DecisionLogEntry 格式的日志（新格式）
-        const decisionLogEntries = logs.filter((log): log is DecisionLogEntry => 
-          'request_id' in log && 'step' in log && 'actor' in log
-        );
-        setDecisionLogs(decisionLogEntries);
-      }
-
-      // 处理不同状态
-      if (response.result.status === 'NEED_MORE_INFO') {
-        // 需要更多澄清问题
-        const payload = response.result.payload;
-        
-        if (payload?.clarificationQuestions && payload.clarificationQuestions.length > 0) {
-          setStructuredQuestions(payload.clarificationQuestions);
-          setStructuredAnswers([]);
-          setClarificationRound((prev) => prev + 1);
-          setUiStatus('awaiting_user_input');
-          
-          // 检查是否超过5轮
-          if (clarificationRound + 1 >= 5) {
-            setError('澄清轮数较多，建议简化需求或使用结构化表单');
-          }
-        } else if (payload?.clarificationMessage) {
-          // 向后兼容
-          const fallbackQuestion = parseClarificationMessage(payload.clarificationMessage);
-          setStructuredQuestions([fallbackQuestion]);
-          setStructuredAnswers([]);
-          setClarificationRound((prev) => prev + 1);
-          setUiStatus('awaiting_user_input');
-        } else {
-          setError('需要更多信息，但未收到澄清问题');
-          setUiStatus('failed');
-        }
-      } else if (response.result.status === 'OK') {
-        // 成功生成行程
-        const payload = response.result.payload;
-        const itinerary = payload?.orchestrationResult?.itinerary;
-        const gate = payload?.orchestrationResult?.gate_result;
-
-        if (itinerary) {
-          // 有行程数据，显示预览
-          setPreviewItinerary(itinerary as TripDetail);
-          setGateResult(gate || null);
-          setNeedsClarification(false);
-          setStructuredQuestions([]);
-          setStructuredAnswers([]);
-          setUiStatus('done');
-          // TODO: 显示行程预览页面（待实现）
-          console.log('[NewTripPage] 行程预览:', { itinerary, gate });
-        } else {
-          setError('成功响应但未包含行程数据');
-          setUiStatus('failed');
-        }
-      } else if (response.result.status === 'FAILED') {
-        setError(response.result.answer_text || '处理失败');
-        setUiStatus('failed');
-      } else if (response.result.status === 'TIMEOUT') {
-        setError('请求超时，请稍后重试或简化需求');
-        setUiStatus('failed');
-      } else if (response.result.status === 'NEED_CONFIRMATION') {
-        // 需要审批（多轮澄清中也可能需要审批）
-        const payload = response.result.payload;
-        const suspension = payload?.suspensionInfo;
-        if (suspension?.approvalId) {
-          setApprovalId(suspension.approvalId);
-          setSuspensionInfo(suspension);
-          setApprovalDialogOpen(true);
-          setUiStatus('awaiting_confirmation');
-        } else {
-          setError('需要审批确认，但未收到审批信息');
-          setUiStatus('awaiting_confirmation');
-        }
-      } else if (response.result.status === 'NEED_CONSENT') {
-        // 需要授权（多轮澄清中也可能需要授权）
-        const payload = response.result.payload;
-        setConsentInfo({
-          title: '需要您的授权',
-          message: payload?.consentMessage || response.result.answer_text || '此操作需要您的授权才能继续执行。',
-          requiredPermissions: payload?.requiredPermissions || [],
-          warning: payload?.consentWarning,
-        });
-        setConsentDialogOpen(true);
-        setUiStatus('awaiting_consent');
-      } else if (response.result.status === 'REDIRECT_REQUIRED') {
-        // 需要重定向到规划工作台
-        const payload = response.result.payload;
-        const redirectInfo = payload?.redirectInfo;
-        if (redirectInfo) {
-          setError(
-            redirectInfo.redirect_reason || 
-            response.result.answer_text || 
-            '行程规划功能已迁移到规划工作台，请使用规划工作台功能创建行程。'
-          );
-          setUiStatus('failed');
-          console.warn('[NewTripPage] 需要重定向到:', redirectInfo.redirect_to);
-        } else {
-          setError(response.result.answer_text || '需要重定向到其他页面');
-          setUiStatus('failed');
-        }
-      } else {
-        setError(`未知状态: ${response.result.status}`);
-        setUiStatus('failed');
-      }
-    } catch (err: any) {
-      console.error('[NewTripPage] ❌ 提交答案失败:', err);
-      setError(err.message || '提交答案失败');
-      setUiStatus('failed');
-    } finally {
-      setSubmittingAnswers(false);
-    }
-  };
-
-  // 向后兼容：处理旧的字符串澄清问题提交
-  const handleSubmitAnswers = async () => {
-    // 检查是否所有问题都已回答
-    const unansweredQuestions = clarificationQuestions.filter((_, index) => !clarificationAnswers[index]?.trim());
-    if (unansweredQuestions.length > 0) {
-      setError('请回答所有澄清问题');
-      return;
-    }
-
-    setSubmittingAnswers(true);
-    setError(null);
-
-    try {
-      // 构建包含答案的文本：原始文本 + 问题和答案
-      const answersText = clarificationQuestions
-        .map((question, index) => {
-          const answer = clarificationAnswers[index]?.trim() || '';
-          return `问题：${question}\n回答：${answer}`;
-        })
-        .join('\n\n');
-
-      const enhancedText = `${originalNLText}\n\n澄清问题的回答：\n${answersText}`;
-
-      console.log('[NewTripPage] 提交澄清答案，重新创建行程...');
-      const result = await tripsApi.createFromNL({ text: enhancedText });
-      console.log('[NewTripPage] ✅ 重新创建成功:', result);
-
-      if (result.needsClarification && result.clarificationQuestions) {
-        // 如果还有新的澄清问题，继续显示
-        setClarificationQuestions(result.clarificationQuestions);
-        const initialAnswers: Record<number, string> = {};
-        result.clarificationQuestions.forEach((_, index) => {
-          initialAnswers[index] = '';
-        });
-        setClarificationAnswers(initialAnswers);
-        setOriginalNLText(enhancedText);
-      } else if (result.trip) {
-        const trip = result.trip;
-        
-        // 检查是否正在生成规划点
-        if (result.generatingItems) {
-          // 如果正在生成，显示等待弹窗，等待后端完成规划
-          setWaitingTripId(trip.id);
-          setShowPlanningWaitDialog(true);
-        } else {
-          // 检查行程是否已经规划完成
-          // 判断标准：有 TripDay 且至少有一个 ItineraryItem，或者 stats.progress 不是 'PLANNING'
-          const hasItems = trip.TripDay && trip.TripDay.length > 0 && trip.TripDay.some((day: any) => 
-            day.ItineraryItem && day.ItineraryItem.length > 0
-          );
-          const isProgressComplete = trip.stats && trip.stats.progress !== 'PLANNING';
-          const hasStatsItems = trip.stats && trip.stats.totalItems > 0;
-          const isProgressStatusComplete = trip.metadata?.generationProgress?.status === 'completed';
-          
-          const isPlanningComplete = hasItems || isProgressComplete || hasStatsItems || isProgressStatusComplete;
-          
-          if (isPlanningComplete) {
-            // 如果已经规划完成，直接跳转到行程详情页
-            navigate(`/dashboard/trips/${trip.id}`);
-          } else {
-            // 如果未规划完成，也显示等待弹窗
-            setWaitingTripId(trip.id);
-            setShowPlanningWaitDialog(true);
-          }
-        }
-        
-        setNeedsClarification(false);
-        setClarificationQuestions([]);
-        setClarificationAnswers({});
-        setOriginalNLText('');
-      }
-    } catch (err: any) {
-      console.error('[NewTripPage] ❌ 提交答案失败:', err);
-      setError(err.message || '提交答案失败');
-    } finally {
-      setSubmittingAnswers(false);
-    }
-  };
 
   // 处理规划完成
   const handlePlanningComplete = (trip: TripDetail) => {
@@ -1715,10 +1227,10 @@ export default function NewTripPage() {
 
                 {/* 旅行风格 - 节奏选择 */}
                 <div className="space-y-4 pt-4 border-t">
-                  <div className="space-y-2">
+              <div className="space-y-2">
                     <Label className="text-base font-medium">旅行风格</Label>
                     <p className="text-sm text-muted-foreground">选择您期望的旅行节奏</p>
-                  </div>
+              </div>
                   <div className="grid grid-cols-3 gap-3">
                     {[
                       { value: 'relaxed' as TripPace, label: '悠闲', desc: '每天2-3个点', emoji: '🌿' },
@@ -1741,15 +1253,15 @@ export default function NewTripPage() {
                         <div className="text-xs text-muted-foreground">{option.desc}</div>
                       </button>
                     ))}
-                  </div>
-                </div>
+                    </div>
+                      </div>
 
                 {/* 兴趣偏好 - 多选标签 */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
+                          <div className="space-y-4">
+                                    <div className="space-y-2">
                     <Label className="text-base font-medium">兴趣偏好</Label>
                     <p className="text-sm text-muted-foreground">选择您感兴趣的内容（可多选，用于AI推荐）</p>
-                  </div>
+                                          </div>
                   <div className="flex flex-wrap gap-2">
                     {[
                       { value: 'nature' as TripPreference, label: '自然', emoji: '🏞️' },
@@ -1785,8 +1297,8 @@ export default function NewTripPage() {
                         </button>
                       );
                     })}
-                  </div>
-                </div>
+                                              </div>
+                                          </div>
 
                 {/* 更多设置 - 可折叠区域 */}
                 <Collapsible open={advancedSettingsOpen} onOpenChange={setAdvancedSettingsOpen}>
@@ -1804,7 +1316,7 @@ export default function NewTripPage() {
                             {mustPlaces.length + avoidPlaces.length} 项
                           </Badge>
                         )}
-                      </div>
+                                  </div>
                       <ChevronDown className={cn(
                         "w-4 h-4 transition-transform",
                         advancedSettingsOpen && "rotate-180"
@@ -1816,11 +1328,11 @@ export default function NewTripPage() {
                     {!selectedCountry && (
                       <div className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-4 text-center">
                         请先选择目的地国家，然后可以搜索添加具体地点
-                      </div>
-                    )}
+                                  </div>
+                                )}
 
                     {/* 必须去的地点 */}
-                    <div className="space-y-3">
+                          <div className="space-y-3">
                       <div className="space-y-1">
                         <Label className="text-sm font-medium">必须去的地点</Label>
                         <p className="text-xs text-muted-foreground">添加您一定要去的景点、餐厅或地标</p>
@@ -1831,7 +1343,7 @@ export default function NewTripPage() {
                         <div className="flex flex-wrap gap-2">
                           {mustPlaces.map((placeId) => {
                             const place = mustPlaceMap.get(placeId);
-                            return (
+                              return (
                               <Badge key={placeId} variant="secondary" className="px-3 py-1.5 text-sm">
                                 <MapPin className="w-3 h-3 mr-1.5" />
                                 {place?.nameCN || place?.nameEN || `POI ${placeId}`}
@@ -1842,24 +1354,24 @@ export default function NewTripPage() {
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
-                              </Badge>
-                            );
-                          })}
-                        </div>
+                                                </Badge>
+                              );
+                            })}
+                          </div>
                       )}
                       
                       {/* 搜索输入 */}
                       <Popover open={mustPlaceSearchOpen} onOpenChange={setMustPlaceSearchOpen}>
                         <PopoverTrigger asChild>
-                          <Button
+                      <Button
                             type="button"
-                            variant="outline"
+                        variant="outline"
                             className="w-full justify-start text-left font-normal"
                             disabled={!selectedCountry}
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             搜索并添加地点...
-                          </Button>
+                      </Button>
                         </PopoverTrigger>
                         <PopoverContent className="p-0 w-[400px]" align="start">
                           <Command>
@@ -1872,7 +1384,7 @@ export default function NewTripPage() {
                               {mustPlaceSearchLoading ? (
                                 <div className="flex items-center justify-center py-6">
                                   <Spinner className="w-4 h-4" />
-                                </div>
+                      </div>
                               ) : (
                                 <>
                                   <CommandEmpty>未找到相关地点</CommandEmpty>
@@ -1890,7 +1402,7 @@ export default function NewTripPage() {
                                           {place.nameEN && place.nameCN && (
                                             <div className="text-xs text-muted-foreground">{place.nameEN}</div>
                                           )}
-                                        </div>
+                    </div>
                                         {mustPlaces.includes(place.id) && (
                                           <Badge variant="outline" className="text-xs">已添加</Badge>
                                         )}
@@ -1903,14 +1415,14 @@ export default function NewTripPage() {
                           </Command>
                         </PopoverContent>
                       </Popover>
-                    </div>
+                  </div>
 
                     {/* 不想去的地点 */}
                     <div className="space-y-3">
                       <div className="space-y-1">
                         <Label className="text-sm font-medium">不想去的地点</Label>
                         <p className="text-xs text-muted-foreground">添加您想避开的地点（如太商业化的景点）</p>
-                      </div>
+                          </div>
                       
                       {/* 已选择的地点 */}
                       {avoidPlaces.length > 0 && (
@@ -1931,21 +1443,21 @@ export default function NewTripPage() {
                               </Badge>
                             );
                           })}
-                        </div>
-                      )}
-                      
+                            </div>
+                  )}
+
                       {/* 搜索输入 */}
                       <Popover open={avoidPlaceSearchOpen} onOpenChange={setAvoidPlaceSearchOpen}>
                         <PopoverTrigger asChild>
-                          <Button
+                    <Button
                             type="button"
-                            variant="outline"
+                      variant="outline"
                             className="w-full justify-start text-left font-normal"
                             disabled={!selectedCountry}
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             搜索并添加地点...
-                          </Button>
+                    </Button>
                         </PopoverTrigger>
                         <PopoverContent className="p-0 w-[400px]" align="start">
                           <Command>
@@ -1976,7 +1488,7 @@ export default function NewTripPage() {
                                           {place.nameEN && place.nameCN && (
                                             <div className="text-xs text-muted-foreground">{place.nameEN}</div>
                                           )}
-                                        </div>
+                  </div>
                                         {avoidPlaces.includes(place.id) && (
                                           <Badge variant="outline" className="text-xs">已添加</Badge>
                                         )}
@@ -1993,724 +1505,28 @@ export default function NewTripPage() {
                   </CollapsibleContent>
                 </Collapsible>
 
-                <div className="flex justify-end gap-4">
-                  <Button type="button" variant="outline" onClick={() => navigate('/dashboard/trips')}>
-                    取消
-                  </Button>
+              <div className="flex justify-end gap-4">
+                <Button type="button" variant="outline" onClick={() => navigate('/dashboard/trips')}>
+                  取消
+                </Button>
                   <Button type="submit" disabled={loading}>
                     {loading && <Spinner className="w-4 h-4 mr-2" />}
-                    创建行程
-                  </Button>
-                </div>
+                  创建行程
+                </Button>
+              </div>
               </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
+          </CardContent>
+        </Card>
+      </TabsContent>
 
         <TabsContent value="nl">
-          {/* 新版对话式界面 */}
+          {/* 对话式自然语言创建行程 */}
           <NLChatInterface 
             onTripCreated={(tripId) => {
               console.log('[NewTripPage] 行程创建成功:', tripId);
               navigate(`/dashboard/plan-studio?tripId=${tripId}`);
             }}
-            className="mb-6"
           />
-
-          {/* 经典模式（折叠显示） */}
-          <Collapsible>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground">
-                <ChevronDown className="w-4 h-4 mr-2" />
-                切换到经典输入模式
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-          <Card className="mt-4">
-            <CardHeader>
-              <CardTitle>经典输入模式</CardTitle>
-              <CardDescription>
-                直接输入完整描述，一次性创建行程
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="nl-text">描述您的行程需求</Label>
-                <Textarea
-                  id="nl-text"
-                  value={nlText}
-                  onChange={(e) => setNlText(e.target.value)}
-                  placeholder="例如: 帮我规划带娃去东京5天的行程，预算2万"
-                  rows={6}
-                />
-                <p className="text-sm text-muted-foreground">
-                  提示：请包含目的地、日期、预算、旅行者信息等
-                </p>
-                <StatusIndicator status={uiStatus} />
-              </div>
-
-              {/* DEV-only: structured clarification preview */}
-              {showStructuredClarificationMock && (
-                <ClarificationQuestionsPanel
-                  questions={mockClarificationQuestions}
-                  answers={structuredAnswers}
-                  onAnswerChange={setStructuredAnswers}
-                  onCancel={() => {
-                    setStructuredAnswers([]);
-                    setUiStatus('done');
-                  }}
-                  onSubmit={() => {
-                    // eslint-disable-next-line no-console
-                    console.log('[mockClarification] answers:', structuredAnswers);
-                    setUiStatus('done');
-                  }}
-                  disabled={nlLoading}
-                />
-              )}
-
-              {/* 结构化澄清问题（真实 API） */}
-              {!showStructuredClarificationMock && needsClarification && structuredQuestions.length > 0 && (
-                <>
-                  {clarificationRound >= 5 && (
-                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-                      <p className="text-sm text-yellow-800">
-                        ⚠️ 澄清轮数较多（{clarificationRound}/5），建议简化需求或使用结构化表单创建行程
-                      </p>
-                    </div>
-                  )}
-                  <ClarificationQuestionsPanel
-                    questions={structuredQuestions}
-                    answers={structuredAnswers}
-                    onAnswerChange={setStructuredAnswers}
-                    onCancel={() => {
-                      setNeedsClarification(false);
-                      setStructuredQuestions([]);
-                      setStructuredAnswers([]);
-                      setClarificationRound(0);
-                      setConversationHistory([]);
-                      setUiStatus('done');
-                    }}
-                    onSubmit={handleStructuredAnswersSubmit}
-                    disabled={nlLoading || submittingAnswers}
-                  />
-                </>
-              )}
-
-              {/* 行程预览（当返回 OK 且有 itinerary 时） */}
-              {previewItinerary && (
-                <Card className="border-green-200 bg-green-50/30">
-                  <CardHeader>
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-                      <div className="flex-1">
-                        <CardTitle className="text-lg text-green-900">行程方案已生成</CardTitle>
-                        <CardDescription className="mt-1">
-                          已为您生成行程方案，请查看并确认
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Tabs defaultValue="overview" className="w-full">
-                      <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="overview">概览</TabsTrigger>
-                        <TabsTrigger value="itinerary">行程详情</TabsTrigger>
-                        <TabsTrigger value="gate">Gate 评估</TabsTrigger>
-                        <TabsTrigger value="logs">决策日志</TabsTrigger>
-                      </TabsList>
-
-                      {/* 概览 Tab */}
-                      <TabsContent value="overview" className="space-y-4 mt-4">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">目的地：</span>
-                            <span className="font-medium">{previewItinerary.destination}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">日期：</span>
-                            <span className="font-medium">
-                              {previewItinerary.startDate.split('T')[0]} - {previewItinerary.endDate.split('T')[0]}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">预算：</span>
-                            <span className="font-medium">¥{previewItinerary.totalBudget?.toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">天数：</span>
-                            <span className="font-medium">{previewItinerary.TripDay?.length || 0} 天</span>
-                          </div>
-                        </div>
-
-                        {/* 行程项统计 */}
-                        {previewItinerary.TripDay && previewItinerary.TripDay.length > 0 && (
-                          <div className="p-4 bg-white rounded-lg border">
-                            <h4 className="font-semibold mb-3">行程统计</h4>
-                            <div className="grid grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <div className="text-muted-foreground">总行程项</div>
-                                <div className="text-lg font-semibold">
-                                  {previewItinerary.TripDay.reduce((sum, day) => sum + (day.ItineraryItem?.length || 0), 0)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-muted-foreground">平均每天</div>
-                                <div className="text-lg font-semibold">
-                                  {Math.round(
-                                    previewItinerary.TripDay.reduce((sum, day) => sum + (day.ItineraryItem?.length || 0), 0) /
-                                      previewItinerary.TripDay.length
-                                  )}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-muted-foreground">行程天数</div>
-                                <div className="text-lg font-semibold">{previewItinerary.TripDay.length}</div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </TabsContent>
-
-                      {/* 行程详情 Tab */}
-                      <TabsContent value="itinerary" className="space-y-4 mt-4">
-                        {previewItinerary.TripDay && previewItinerary.TripDay.length > 0 ? (
-                          <div className="space-y-4">
-                            {previewItinerary.TripDay.map((day, dayIndex) => (
-                              <Card key={day.id} className="border-l-4 border-l-primary">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="text-base">
-                                    Day {dayIndex + 1} - {day.date.split('T')[0]}
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  {day.ItineraryItem && day.ItineraryItem.length > 0 ? (
-                                    <div className="space-y-2">
-                                      {day.ItineraryItem.map((item, itemIndex) => (
-                                        <div
-                                          key={item.id}
-                                          className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50"
-                                        >
-                                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
-                                            {itemIndex + 1}
-                                          </div>
-                                          <div className="flex-1">
-                                            <div className="font-medium">{item.Place?.nameCN || item.type}</div>
-                                            {item.note && (
-                                              <div className="text-sm text-muted-foreground mt-1">{item.note}</div>
-                                            )}
-                                            {item.startTime && item.endTime && (
-                                              <div className="text-xs text-muted-foreground mt-1">
-                                                {item.startTime.split('T')[1]?.slice(0, 5)} -{' '}
-                                                {item.endTime.split('T')[1]?.slice(0, 5)}
-                                              </div>
-                                            )}
-                                          </div>
-                                          <Badge variant="outline">{item.type}</Badge>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <div className="py-8 text-center text-muted-foreground">该日暂无安排</div>
-                                  )}
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="py-12 text-center text-muted-foreground">暂无行程数据</div>
-                        )}
-                      </TabsContent>
-
-                      {/* Gate 评估 Tab */}
-                      <TabsContent value="gate" className="space-y-4 mt-4">
-                        {gateResult ? (
-                          <div className="space-y-4">
-                            <Card>
-                              <CardHeader>
-                                <CardTitle className="text-base">Gate 评估结果</CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-3">
-                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                  <div className="font-semibold text-blue-900 mb-1">评估状态</div>
-                                  <div className="text-sm text-blue-800">
-                                    {gateResult.result || gateResult.status || '评估完成'}
-                                  </div>
-                                </div>
-                                {gateResult.reason && (
-                                  <div className="p-3 bg-gray-50 border rounded-lg">
-                                    <div className="font-semibold mb-1">评估原因</div>
-                                    <div className="text-sm text-muted-foreground">{gateResult.reason}</div>
-                                  </div>
-                                )}
-                                {gateResult.warnings && gateResult.warnings.length > 0 && (
-                                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                    <div className="font-semibold text-yellow-900 mb-2">警告</div>
-                                    <ul className="list-disc list-inside space-y-1 text-sm text-yellow-800">
-                                      {gateResult.warnings.map((warning: string, idx: number) => (
-                                        <li key={idx}>{warning}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                                {gateResult.recommendations && gateResult.recommendations.length > 0 && (
-                                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                                    <div className="font-semibold text-green-900 mb-2">建议</div>
-                                    <ul className="list-disc list-inside space-y-1 text-sm text-green-800">
-                                      {gateResult.recommendations.map((rec: string, idx: number) => (
-                                        <li key={idx}>{rec}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-                          </div>
-                        ) : (
-                          <div className="py-12 text-center text-muted-foreground">暂无 Gate 评估数据</div>
-                        )}
-                      </TabsContent>
-
-                      {/* 决策日志 Tab */}
-                      <TabsContent value="logs" className="space-y-4 mt-4">
-                        {decisionLogs && decisionLogs.length > 0 ? (
-                          <div className="space-y-3">
-                            {decisionLogs.map((log: DecisionLogEntry, idx: number) => {
-                              const getPersonaIcon = () => {
-                                switch (log.actor) {
-                                  case 'Gatekeeper':
-                                    return <Shield className="w-4 h-4 text-blue-600" />;
-                                  case 'Planner':
-                                    return <Activity className="w-4 h-4 text-green-600" />;
-                                  case 'LocalInsight':
-                                    return <RefreshCw className="w-4 h-4 text-orange-600" />;
-                                  default:
-                                    return <History className="w-4 h-4 text-gray-600" />;
-                                }
-                              };
-
-                              const getPersonaName = () => {
-                                switch (log.actor) {
-                                  case 'Gatekeeper':
-                                    return 'Abu (Gatekeeper)';
-                                  case 'Planner':
-                                    return 'Dr.Dre (Planner)';
-                                  case 'LocalInsight':
-                                    return 'Neptune (LocalInsight)';
-                                  default:
-                                    return log.actor;
-                                }
-                              };
-
-                              return (
-                                <Card key={idx} className="border-l-4 border-l-primary">
-                                  <CardContent className="pt-4">
-                                    <div className="flex items-start gap-3">
-                                      {getPersonaIcon()}
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                          <Badge variant="outline">{getPersonaName()}</Badge>
-                                          <Badge variant="secondary">{log.step}</Badge>
-                                          <span className="text-xs text-muted-foreground ml-auto">
-                                            {new Date(log.timestamp).toLocaleString('zh-CN')}
-                                          </span>
-                                        </div>
-                                        {log.inputs_summary && (
-                                          <div className="mb-2">
-                                            <div className="text-xs font-semibold text-muted-foreground mb-1">输入</div>
-                                            <div className="text-sm">{log.inputs_summary}</div>
-                                          </div>
-                                        )}
-                                        {log.outputs_summary && (
-                                          <div className="mb-2">
-                                            <div className="text-xs font-semibold text-muted-foreground mb-1">输出</div>
-                                            <div className="text-sm">{log.outputs_summary}</div>
-                                          </div>
-                                        )}
-                                        {log.evidence_refs && log.evidence_refs.length > 0 && (
-                                          <div>
-                                            <div className="text-xs font-semibold text-muted-foreground mb-1">证据引用</div>
-                                            <div className="flex flex-wrap gap-1">
-                                              {log.evidence_refs.map((ref, refIdx) => (
-                                                <Badge key={refIdx} variant="outline" className="text-xs">
-                                                  {ref}
-                                                </Badge>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="py-12 text-center text-muted-foreground">
-                            <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                            <p>暂无决策日志</p>
-                            <p className="text-sm mt-2">当系统做出决策时，记录会显示在这里</p>
-                          </div>
-                        )}
-                      </TabsContent>
-                    </Tabs>
-
-                    {/* 操作按钮 */}
-                    <div className="flex justify-end gap-3 pt-4 border-t">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setPreviewItinerary(null);
-                          setGateResult(null);
-                          setDecisionLogs([]);
-                          setUiStatus('done');
-                        }}
-                      >
-                        返回修改
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          if (!previewItinerary) return;
-                          
-                          setNlLoading(true);
-                          try {
-                            // 将 TripDetail 转换为 CreateTripRequest
-                            // 尝试从 itinerary 中提取 travelers 信息
-                            let travelers: Traveler[] = [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }]; // 默认值
-                            
-                            // 尝试从 metadata 或其他字段中提取 travelers
-                            if (previewItinerary.metadata?.travelers && Array.isArray(previewItinerary.metadata.travelers)) {
-                              travelers = previewItinerary.metadata.travelers;
-                            } else if ((previewItinerary as any).travelers && Array.isArray((previewItinerary as any).travelers)) {
-                              travelers = (previewItinerary as any).travelers;
-                            }
-                            
-                            const createRequest: CreateTripRequest = {
-                              destination: previewItinerary.destination,
-                              startDate: previewItinerary.startDate.split('T')[0],
-                              endDate: previewItinerary.endDate.split('T')[0],
-                              totalBudget: previewItinerary.totalBudget,
-                              travelers,
-                            };
-
-                            const result = await tripsApi.create(createRequest);
-                            console.log('[NewTripPage] ✅ 创建行程成功:', result);
-                            
-                            // 创建成功后跳转到行程详情页
-                            navigate(`/dashboard/trips/${result.id}`);
-                          } catch (err: any) {
-                            console.error('[NewTripPage] ❌ 创建行程失败:', err);
-                            setError(err.message || '创建行程失败');
-                          } finally {
-                            setNlLoading(false);
-                          }
-                        }}
-                        disabled={nlLoading}
-                      >
-                        {nlLoading && <Spinner className="w-4 h-4 mr-2" />}
-                        接受方案并创建行程
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={async () => {
-                          if (!previewItinerary) return;
-                          
-                          setNlLoading(true);
-                          try {
-                            // 注意：保存草稿功能需要将 TripDetail 转换为 TripDraftResponse 格式
-                            // 但由于 TripDraftResponse 的结构与 TripDetail 不同，这里暂时使用 create API
-                            // 实际应该调用专门的保存草稿接口，或者后端需要支持从 TripDetail 直接保存
-                            
-                            // 将 TripDetail 转换为 CreateTripRequest
-                            // 尝试从 itinerary 中提取 travelers 信息
-                            let travelers: Traveler[] = [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }]; // 默认值
-                            
-                            // 尝试从 metadata 或其他字段中提取 travelers
-                            if (previewItinerary.metadata?.travelers && Array.isArray(previewItinerary.metadata.travelers)) {
-                              travelers = previewItinerary.metadata.travelers;
-                            } else if ((previewItinerary as any).travelers && Array.isArray((previewItinerary as any).travelers)) {
-                              travelers = (previewItinerary as any).travelers;
-                            }
-                            
-                            const createRequest: CreateTripRequest = {
-                              destination: previewItinerary.destination,
-                              startDate: previewItinerary.startDate.split('T')[0],
-                              endDate: previewItinerary.endDate.split('T')[0],
-                              totalBudget: previewItinerary.totalBudget,
-                              travelers,
-                            };
-
-                            // 创建行程（作为草稿）
-                            const result = await tripsApi.create(createRequest);
-                            console.log('[NewTripPage] ✅ 保存草稿成功（已创建为行程）:', result);
-                            
-                            // 保存成功后提示用户
-                            setError(null);
-                            // TODO: 使用 toast 提示成功
-                            alert('草稿已保存成功！您可以在行程列表中查看。');
-                            
-                            // 清空预览状态
-                            setPreviewItinerary(null);
-                            setGateResult(null);
-                            setDecisionLogs([]);
-                            setUiStatus('done');
-                            
-                            // 可选：跳转到行程列表
-                            // navigate('/dashboard/trips');
-                          } catch (err: any) {
-                            console.error('[NewTripPage] ❌ 保存草稿失败:', err);
-                            setError(err.message || '保存草稿失败');
-                          } finally {
-                            setNlLoading(false);
-                          }
-                        }}
-                        disabled={nlLoading}
-                      >
-                        {nlLoading && <Spinner className="w-4 h-4 mr-2" />}
-                        保存为草稿
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* 向后兼容：旧的字符串澄清问题交互界面 */}
-              {!showStructuredClarificationMock && !previewItinerary && needsClarification && structuredQuestions.length === 0 && clarificationQuestions.length > 0 && (
-                <Card className="border-yellow-200 bg-yellow-50/30">
-                  <CardHeader>
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                      <div className="flex-1">
-                        <CardTitle className="text-lg text-yellow-900">需要澄清的问题</CardTitle>
-                        <CardDescription className="mt-1">
-                          为了更好地创建您的行程，请回答以下问题：
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {clarificationQuestions.map((question, index) => (
-                      <div key={index} className="space-y-2">
-                        <Label htmlFor={`clarification-${index}`} className="text-sm font-medium">
-                          问题 {index + 1}：{question}
-                        </Label>
-                        <Textarea
-                          id={`clarification-${index}`}
-                          value={clarificationAnswers[index] || ''}
-                          onChange={(e) => handleAnswerChange(index, e.target.value)}
-                          placeholder="请输入您的回答..."
-                          rows={3}
-                          className="resize-none"
-                        />
-                      </div>
-                    ))}
-                    <div className="flex justify-end gap-3 pt-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setNeedsClarification(false);
-                          setClarificationQuestions([]);
-                          setClarificationAnswers({});
-                          setOriginalNLText('');
-                        }}
-                        disabled={submittingAnswers}
-                      >
-                        取消
-                      </Button>
-                      <Button
-                        onClick={handleSubmitAnswers}
-                        disabled={submittingAnswers || Object.values(clarificationAnswers).some(answer => !answer?.trim())}
-                      >
-                        {submittingAnswers && <Spinner className="w-4 h-4 mr-2" />}
-                        提交答案并创建行程
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* 创建成功结果显示 */}
-              {creationResult && creationResult.trip && !needsClarification && (
-                <div className="space-y-4">
-                  {/* 成功消息 */}
-                  <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-green-900 mb-1">行程创建成功！</h4>
-                        {creationResult.message && (
-                          <p className="text-sm text-green-800">{creationResult.message}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 解析的参数信息 */}
-                  {creationResult.parsedParams && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">解析的参数</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">目的地：</span>
-                            <span className="font-medium ml-2">{creationResult.parsedParams.destination}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">预算：</span>
-                            <span className="font-medium ml-2">¥{creationResult.parsedParams.totalBudget?.toLocaleString()}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">开始日期：</span>
-                            <span className="font-medium ml-2">{creationResult.parsedParams.startDate}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">结束日期：</span>
-                            <span className="font-medium ml-2">{creationResult.parsedParams.endDate}</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* 统计信息 */}
-                  {creationResult.trip.stats && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">行程统计</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div>
-                            <div className="text-2xl font-bold">{creationResult.trip.stats.totalDays}</div>
-                            <div className="text-sm text-muted-foreground">总天数</div>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold">{creationResult.trip.stats.daysWithActivities || 0}</div>
-                            <div className="text-sm text-muted-foreground">有活动天数</div>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold">{creationResult.trip.stats.totalItems || 0}</div>
-                            <div className="text-sm text-muted-foreground">总行程项</div>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold">{creationResult.trip.stats.totalActivities || 0}</div>
-                            <div className="text-sm text-muted-foreground">活动数</div>
-                          </div>
-                        </div>
-                        {creationResult.trip.stats.budgetStats && (
-                          <div className="mt-4 pt-4 border-t grid grid-cols-3 gap-4">
-                            <div>
-                              <div className="text-lg font-semibold">¥{creationResult.trip.stats.budgetStats.totalBudget?.toLocaleString()}</div>
-                              <div className="text-sm text-muted-foreground">总预算</div>
-                            </div>
-                            <div>
-                              <div className="text-lg font-semibold">¥{creationResult.trip.stats.budgetStats.budgetUsed?.toLocaleString() || 0}</div>
-                              <div className="text-sm text-muted-foreground">已使用</div>
-                            </div>
-                            <div>
-                              <div className="text-lg font-semibold">¥{creationResult.trip.stats.budgetStats.budgetRemaining?.toLocaleString() || 0}</div>
-                              <div className="text-sm text-muted-foreground">剩余</div>
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* 下一步操作建议 */}
-                  {creationResult.nextSteps && creationResult.nextSteps.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">下一步操作</CardTitle>
-                        <CardDescription>建议您执行的下一步操作</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        {creationResult.nextSteps.map((step, index) => (
-                          <div
-                            key={index}
-                            className={`p-3 rounded-lg border ${
-                              step.priority === 'high'
-                                ? 'border-blue-200 bg-blue-50'
-                                : step.priority === 'medium'
-                                ? 'border-yellow-200 bg-yellow-50'
-                                : 'border-gray-200 bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1">
-                                <div className="font-medium mb-1">{step.action}</div>
-                                <div className="text-sm text-muted-foreground">{step.description}</div>
-                              </div>
-                              <Badge
-                                variant={
-                                  step.priority === 'high'
-                                    ? 'default'
-                                    : step.priority === 'medium'
-                                    ? 'secondary'
-                                    : 'outline'
-                                }
-                              >
-                                {step.priority === 'high' ? '高优先级' : step.priority === 'medium' ? '中优先级' : '低优先级'}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* 操作按钮 */}
-                  <div className="flex justify-end gap-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setCreationResult(null);
-                        setNlText('');
-                      }}
-                    >
-                      创建新行程
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        navigate(`/dashboard/trips/${creationResult.trip.id}`);
-                      }}
-                    >
-                      查看行程详情
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                    <Button
-                      variant="default"
-                      onClick={() => {
-                        navigate('/dashboard/trips', { state: { from: 'create' } });
-                      }}
-                    >
-                      返回行程列表
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {!needsClarification && !creationResult && !previewItinerary && (
-              <div className="flex justify-end gap-4">
-                <Button type="button" variant="outline" onClick={() => navigate('/dashboard/trips')}>
-                  取消
-                </Button>
-                <Button onClick={handleNLSubmit} disabled={nlLoading || !nlText.trim()}>
-                  {nlLoading && <Spinner className="w-4 h-4 mr-2" />}
-                  创建行程
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-            </CollapsibleContent>
-          </Collapsible>
       </TabsContent>
     </Tabs>
 
@@ -2719,36 +1535,19 @@ export default function NewTripPage() {
       <ApprovalDialog
         approvalId={approvalId}
         open={approvalDialogOpen}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           setApprovalDialogOpen(open);
           if (!open) {
-            // 关闭对话框时，如果用户没有做出决定，重置状态
             setApprovalId(null);
             setSuspensionInfo(null);
-            setUiStatus('done');
           }
         }}
-        onDecision={async (approved, approval) => {
-          console.log('[NewTripPage] 审批决定:', { approved, approval });
-          
-          if (approved) {
-            // 审批通过，继续执行流程
-            // 可以重新调用 routeAndRun 继续处理
+        onDecision={async (approved: boolean) => {
+          console.log('[NewTripPage] 审批决定:', { approved });
             setApprovalId(null);
             setSuspensionInfo(null);
             setApprovalDialogOpen(false);
-            setUiStatus('thinking');
-            
-            // TODO: 重新调用 routeAndRun 继续处理（需要保存原始请求信息）
-            // 这里暂时提示用户
-            setError(null);
-            // alert('审批已通过，正在继续处理...');
-          } else {
-            // 审批拒绝，结束流程
-            setApprovalId(null);
-            setSuspensionInfo(null);
-            setApprovalDialogOpen(false);
-            setUiStatus('done');
+          if (!approved) {
             setError('审批已拒绝，流程已终止');
           }
         }}
@@ -2758,32 +1557,17 @@ export default function NewTripPage() {
     {/* 授权对话框 */}
     <ConsentDialog
       open={consentDialogOpen}
-      onOpenChange={(open) => {
+      onOpenChange={(open: boolean) => {
         setConsentDialogOpen(open);
         if (!open) {
-          // 关闭对话框时，如果用户没有做出决定，重置状态
           setConsentInfo(null);
-          setUiStatus('done');
         }
       }}
-      onConsent={(granted) => {
+      onConsent={(granted: boolean) => {
         console.log('[NewTripPage] 授权决定:', { granted });
-        
-        if (granted) {
-          // 授权通过，继续执行流程
           setConsentInfo(null);
           setConsentDialogOpen(false);
-          setUiStatus('thinking');
-          setError(null);
-          
-          // TODO: 重新调用 routeAndRun 继续处理（需要保存原始请求信息）
-          // 这里暂时提示用户
-          // alert('授权已通过，正在继续处理...');
-        } else {
-          // 授权拒绝，结束流程
-          setConsentInfo(null);
-          setConsentDialogOpen(false);
-          setUiStatus('done');
+        if (!granted) {
           setError('授权已拒绝，流程已终止');
         }
       }}
