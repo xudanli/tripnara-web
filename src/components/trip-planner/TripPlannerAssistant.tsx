@@ -683,23 +683,23 @@ function FormattedMessage({ content }: { content: string }) {
           
           case 'problem-list':
             return (
-              <div key={idx} className="mt-2 p-2.5 rounded-lg bg-amber-50/80 border border-amber-200/80">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="text-xs font-medium text-amber-800">
+              <div key={idx} className="mt-3">
+                <div className="flex items-center gap-1.5 mb-2 text-muted-foreground">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">
                     发现 {segment.problems?.length} 个待处理项
                   </span>
                 </div>
-                <div className="space-y-0.5">
+                <div className="space-y-1 pl-0.5">
                   {segment.problems?.map((problem, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-1.5 text-xs text-amber-700"
+                      className="flex items-start gap-2 text-sm"
                     >
-                      <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-700 flex items-center justify-center text-[10px] font-medium flex-shrink-0">
-                        {i + 1}
+                      <span className="text-muted-foreground text-xs mt-0.5 w-4 text-right flex-shrink-0">
+                        {i + 1}.
                       </span>
-                      <span className="truncate">{problem}</span>
+                      <span className="text-foreground/80">{problem}</span>
                     </div>
                   ))}
                 </div>
