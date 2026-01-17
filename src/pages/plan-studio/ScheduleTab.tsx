@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,7 @@ import { toast } from 'sonner';
 import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { usePlaceImages } from '@/hooks/usePlaceImages';
-import { usePlanStudioActions, usePlanStudio, type PendingSuggestion } from '@/contexts/PlanStudioContext';
+import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudioContext';
 
 interface ScheduleTabProps {
   tripId: string;
@@ -61,23 +61,17 @@ interface ScheduleTabProps {
 export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const { t } = useTranslation();
   
-  // 左右联动上下文 - 安全使用（可能在 Provider 外部）
-  const planStudioActions = (() => {
-    try {
-      return usePlanStudioActions();
-    } catch {
-      return null;
-    }
-  })();
-
-  // 获取完整的 PlanStudio context 用于注册回调
-  const planStudioContext = (() => {
-    try {
-      return usePlanStudio();
-    } catch {
-      return null;
-    }
-  })();
+  // 左右联动上下文 - 使用 useContext 直接访问（可能为 null）
+  const planStudioContext = useContext(PlanStudioContext);
+  
+  // 从 context 中解构需要的 actions
+  const planStudioActions = planStudioContext ? {
+    selectDay: planStudioContext.selectDay,
+    selectItem: planStudioContext.selectItem,
+    clearSelection: planStudioContext.clearSelection,
+    recordAction: planStudioContext.recordAction,
+    askAssistantAbout: planStudioContext.askAssistantAbout,
+  } : null;
   
   // 审批相关状态（保留以备将来使用）
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
