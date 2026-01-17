@@ -654,19 +654,22 @@ function FormattedMessage({ content }: { content: string }) {
       if (/^我可以帮您/.test(trimmed)) return true;
       if (/^您可以/.test(trimmed)) return true;
       
-      // 2. 跳过功能介绍行（多种格式）
-      // 格式1: emoji + **标题** + - + 描述
-      // 格式2: - **标题**: 描述  
-      // 格式3: • 标题 - 描述
-      if (trimmed.includes('**') && /[-–—:：]/.test(trimmed)) {
-        const firstChar = [...trimmed][0];
-        // emoji 开头
-        if (firstChar && /\p{Emoji}/u.test(firstChar)) return true;
-        // - 或 • 开头
-        if (/^[-•·]/.test(trimmed)) return true;
+      // 2. 跳过功能介绍行（包含 **加粗标题** 和描述的行）
+      // 匹配模式：包含 **xxx** 格式的行，通常是功能介绍
+      if (/\*\*[^*]+\*\*/.test(trimmed) && /[-–—:：]/.test(trimmed)) {
+        // 检查是否包含功能关键词
+        if (/优化|细化|解答|行前|准备|填充|路线|餐厅|交通|天气|签证|清单|提醒|导出/.test(trimmed)) {
+          return true;
+        }
       }
       
-      // 3. 跳过单独的功能关键词行
+      // 3. 跳过 emoji 开头的功能介绍行
+      const firstChars = [...trimmed].slice(0, 2).join('');
+      if (/\p{Emoji}/u.test(firstChars) && trimmed.includes('**')) {
+        return true;
+      }
+      
+      // 4. 跳过单独的功能关键词行
       if (/^(优化行程|细化安排|解答疑问|行前准备|智能填充|路线优化)/.test(trimmed)) return true;
       
       return false;
