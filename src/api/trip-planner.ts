@@ -332,6 +332,26 @@ export interface Disclaimer {
 }
 
 /**
+ * 检测到的缺口
+ */
+export interface DetectedGap {
+  id: string;
+  type: GapType;
+  dayNumber: number;
+  timeSlot: {
+    start: string;  // HH:mm
+    end: string;    // HH:mm
+  };
+  description: string;
+  severity: GapSeverity;
+  context?: {
+    beforeItem?: string;
+    afterItem?: string;
+    nearbyLocation?: string;
+  };
+}
+
+/**
  * 响应元数据
  */
 export interface PlannerResponseMeta {
@@ -339,6 +359,8 @@ export interface PlannerResponseMeta {
   guardiansInvoked?: GuardianPersona[];
   /** 🆕 意图不确定性类型 */
   uncertainty?: IntentUncertainty;
+  /** 🆕 检测到的缺口 */
+  detectedGaps?: DetectedGap[];
 }
 
 // ==================== 意图消歧系统 ====================

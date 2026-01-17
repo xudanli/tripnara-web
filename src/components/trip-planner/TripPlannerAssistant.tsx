@@ -28,6 +28,7 @@ import type {
   GapHighlightRichContent,
   GapSeverity,
   PlannerResponseMeta,
+  DetectedGap,
 } from '@/api/trip-planner';
 import { IntentUncertainty } from '@/api/trip-planner';
 import { GuardianPanel, DisclaimerBanner } from './guardian';
@@ -1243,6 +1244,83 @@ function ClarificationOptions({
 }
 
 /**
+ * 缺口检测面板
+ * 视觉设计：简洁的警告卡片，显示午餐、住宿等未安排的缺口
+ */
+function DetectedGapsPanel({ gaps }: { gaps: DetectedGap[] }) {
+  if (!gaps || gaps.length === 0) return null;
+  
+  // 缺口类型配置
+  const gapConfig: Record<string, { emoji: string; label: string; color: string }> = {
+    MEAL: { emoji: '🍽️', label: '用餐', color: 'text-orange-600 bg-orange-50 border-orange-200' },
+    HOTEL: { emoji: '🏨', label: '住宿', color: 'text-purple-600 bg-purple-50 border-purple-200' },
+    TRANSPORT: { emoji: '🚌', label: '交通', color: 'text-blue-600 bg-blue-50 border-blue-200' },
+    ACTIVITY: { emoji: '🎯', label: '活动', color: 'text-green-600 bg-green-50 border-green-200' },
+    FREE_TIME: { emoji: '⏰', label: '空闲', color: 'text-slate-600 bg-slate-50 border-slate-200' },
+  };
+  
+  // 严重程度配置
+  const severityConfig: Record<string, { badge: string; icon: string }> = {
+    CRITICAL: { badge: 'bg-red-100 text-red-700 border-red-200', icon: '❗' },
+    SUGGESTED: { badge: 'bg-amber-100 text-amber-700 border-amber-200', icon: '💡' },
+    OPTIONAL: { badge: 'bg-slate-100 text-slate-600 border-slate-200', icon: '💭' },
+  };
+  
+  // 按严重程度排序
+  const sortedGaps = [...gaps].sort((a, b) => {
+    const order = { CRITICAL: 0, SUGGESTED: 1, OPTIONAL: 2 };
+    return (order[a.severity] || 2) - (order[b.severity] || 2);
+  });
+  
+  return (
+    <div className="mt-3 space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+        <AlertTriangle className="w-3.5 h-3.5" />
+        <span>检测到 {gaps.length} 个待完善项</span>
+      </div>
+      
+      <div className="space-y-1.5">
+        {sortedGaps.map((gap) => {
+          const config = gapConfig[gap.type] || gapConfig.ACTIVITY;
+          const severity = severityConfig[gap.severity] || severityConfig.SUGGESTED;
+          
+          return (
+            <div 
+              key={gap.id}
+              className={cn(
+                "flex items-start gap-2.5 px-3 py-2 rounded-lg border text-sm",
+                config.color
+              )}
+            >
+              <span className="text-base flex-shrink-0 mt-0.5">{config.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">第{gap.dayNumber}天 {config.label}</span>
+                  {gap.severity === 'CRITICAL' && (
+                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full border", severity.badge)}>
+                      {severity.icon} 必要
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs opacity-80 mt-0.5">{gap.description}</p>
+                {gap.context?.beforeItem && gap.context?.afterItem && (
+                  <p className="text-[10px] opacity-60 mt-1">
+                    在「{gap.context.beforeItem}」和「{gap.context.afterItem}」之间
+                  </p>
+                )}
+              </div>
+              <span className="text-xs opacity-60 flex-shrink-0">
+                {gap.timeSlot.start}-{gap.timeSlot.end}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
  * 判断是否为澄清响应
  */
 function isClarificationResponse(meta?: PlannerResponseMeta): boolean {
@@ -1678,6 +1756,11 @@ function MessageBubble({
             followUp={message.followUp}
             onSelect={onFollowUpSelect}
           />
+        )}
+
+        {/* 🆕 缺口检测面板 */}
+        {!isUser && message.meta?.detectedGaps && message.meta.detectedGaps.length > 0 && !isTyping && (
+          <DetectedGapsPanel gaps={message.meta.detectedGaps} />
         )}
 
         {/* 🆕 澄清选项（意图消歧系统 - 包含 followUp） */}
