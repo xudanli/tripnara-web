@@ -619,12 +619,12 @@ function RichContentRenderer({ content }: { content: RichContent }) {
 
 // ==================== 快捷命令配置 ====================
 
-// 输入框下方的常用快捷命令
+// 输入框下方的常用快捷命令（与开场白功能介绍一致）
 const inputQuickCommands: { id: string; label: string; action: string }[] = [
-  { id: 'quick-optimize', label: '🚀 优化行程', action: '帮我优化今天的行程安排' },
-  { id: 'quick-conflicts', label: '🔍 检查冲突', action: '检查行程中是否有时间或路线冲突' },
-  { id: 'quick-fill', label: '✨ 智能填充', action: '帮我填充空闲时间段' },
-  { id: 'quick-summary', label: '📋 行程摘要', action: '给我一份今天的行程摘要' },
+  { id: 'quick-optimize', label: '🎯 优化行程', action: '帮我优化行程路线和景点安排' },
+  { id: 'quick-arrange', label: '📝 细化安排', action: '帮我添加餐厅和填充空闲时间' },
+  { id: 'quick-ask', label: '💡 解答疑问', action: '我想了解一些旅行相关的问题' },
+  { id: 'quick-prepare', label: '✅ 行前准备', action: '帮我生成行前准备清单' },
 ];
 
 /**
@@ -1374,15 +1374,15 @@ function PendingChangesPanel({
           {changes.map((change) => {
             const typeInfo = getChangeTypeInfo(change.type);
             return (
-              <div 
-                key={change.id}
-                className="flex items-start gap-2 text-sm p-2 bg-white rounded"
-              >
+            <div 
+              key={change.id}
+              className="flex items-start gap-2 text-sm p-2 bg-white rounded"
+            >
                 <Badge variant="outline" className={cn("text-xs flex-shrink-0", typeInfo.color)}>
                   {typeInfo.label}
-                </Badge>
-                <span>{change.descriptionCN || change.description}</span>
-              </div>
+              </Badge>
+              <span>{change.descriptionCN || change.description}</span>
+            </div>
             );
           })}
         </div>
