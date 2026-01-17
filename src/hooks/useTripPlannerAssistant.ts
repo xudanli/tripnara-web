@@ -132,6 +132,8 @@ export interface UseTripPlannerAssistantReturn {
   executeAction: (action: QuickActionType, params?: Record<string, unknown>) => Promise<void>;
   confirmChanges: (changeIds?: string[]) => Promise<void>;
   rejectChanges: () => void;
+  /** 撤销上一次修改 */
+  undoLastChange: () => Promise<void>;
   clearMessages: () => void;
 }
 
@@ -472,6 +474,43 @@ export function useTripPlannerAssistant({
   }, [generateMessageId]);
 
   /**
+   * 撤销上一次修改
+   */
+  const undoLastChange = useCallback(async () => {
+    if (!tripId || !sessionId || loading) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await tripPlannerApi.undo({
+        tripId,
+        sessionId,
+      });
+      
+      // 添加撤销结果消息
+      const undoMessage: PlannerMessage = {
+        id: generateMessageId(),
+        role: 'assistant',
+        content: response.success 
+          ? `✅ ${response.message || '已撤销上一次修改'}${response.undoneAction ? `\n撤销的操作：${response.undoneAction}` : ''}`
+          : `❌ ${response.message || '撤销失败'}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, undoMessage]);
+      
+      // 通知行程更新
+      if (response.tripUpdate && onTripUpdate) {
+        onTripUpdate(response.tripUpdate);
+      }
+    } catch (err: any) {
+      handleError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [tripId, sessionId, loading, generateMessageId, handleError, onTripUpdate]);
+
+  /**
    * 清空消息
    */
   const clearMessages = useCallback(() => {
@@ -525,6 +564,7 @@ export function useTripPlannerAssistant({
     executeAction,
     confirmChanges,
     rejectChanges,
+    undoLastChange,
     clearMessages,
   };
 }

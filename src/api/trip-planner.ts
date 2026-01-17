@@ -602,6 +602,20 @@ export interface ApplySuggestionResponse {
   followUpSuggestions?: string[];
 }
 
+/**
+ * 撤销响应
+ */
+export interface UndoResponse {
+  success: boolean;
+  message: string;
+  /** 恢复到的版本号 */
+  restoredVersion?: number;
+  /** 被撤销的操作描述 */
+  undoneAction?: string;
+  /** 行程更新摘要 */
+  tripUpdate?: TripUpdateSummary;
+}
+
 // ==================== API 响应包装类型 ====================
 
 /**
@@ -832,6 +846,36 @@ export const tripPlannerApi = {
       console.error('[Trip Planner API] apply-suggestion 请求失败:', error);
       if (error.code === 'ECONNABORTED') {
         throw new Error('应用建议超时，请稍后重试');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * 撤销上一次修改
+   * POST /api/trip-planner/undo
+   */
+  undo: async (data: { tripId: string; sessionId: string }): Promise<UndoResponse> => {
+    try {
+      console.log('[Trip Planner API] 发送 undo 请求:', data);
+      
+      const response = await apiClient.post<ApiResponseWrapper<UndoResponse>>(
+        '/trip-planner/undo',
+        data,
+        { timeout: 15000 }
+      );
+      
+      const result = handleResponse(response);
+      console.log('[Trip Planner API] undo 响应:', {
+        success: result.success,
+        restoredVersion: result.restoredVersion,
+      });
+      
+      return result;
+    } catch (error: any) {
+      console.error('[Trip Planner API] undo 请求失败:', error);
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('撤销操作超时，请稍后重试');
       }
       throw error;
     }

@@ -57,6 +57,7 @@ import {
   ChevronRight,
   Lightbulb,
   Info,
+  Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -1810,6 +1811,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
   const {
     messages,
     currentPhase,
+    sessionId,
     loading,
     error,
     pendingChanges,
@@ -1817,6 +1819,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
     sendMessage,
     confirmChanges,
     rejectChanges,
+    undoLastChange,
     startSession,
   } = useTripPlannerAssistant({
     tripId,
@@ -2221,6 +2224,19 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
             disabled={loading || !isInitialized}
             className="flex-1 bg-white"
           />
+          {/* 撤销按钮 - 只有在有会话时显示 */}
+          {sessionId && (
+            <Button
+              onClick={undoLastChange}
+              disabled={loading || !isInitialized}
+              variant="outline"
+              size="icon"
+              title="撤销上一次修改"
+              className="flex-shrink-0"
+            >
+              <Undo2 className="w-4 h-4" />
+            </Button>
+          )}
           <Button
             onClick={handleSend}
             disabled={!inputValue.trim() || loading || !isInitialized}
