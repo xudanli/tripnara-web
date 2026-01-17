@@ -318,6 +318,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
               nameCN: suggestion.place.nameCN,
               category: suggestion.place.category,
               address: suggestion.place.address,
+              location: suggestion.place.location,
             } : undefined,
           });
           

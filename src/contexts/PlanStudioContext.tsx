@@ -50,6 +50,11 @@ export interface PendingSuggestion {
     category: string;
     address?: string;
     rating?: number;
+    /** 地点经纬度（用于距离计算） */
+    location?: {
+      lat: number;
+      lng: number;
+    };
   };
   /** 目标天数 */
   targetDay: number;

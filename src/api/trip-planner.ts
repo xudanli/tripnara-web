@@ -199,6 +199,11 @@ export interface POIRecommendation {
   imageUrl?: string;
   reason: string;
   reasonCN?: string;
+  /** 地点经纬度（用于距离计算） */
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 /**
@@ -546,6 +551,11 @@ export interface ApplySuggestionRequest {
     placeId?: number;
     category?: string;
     address?: string;
+    /** 地点经纬度（用于距离计算和冲突检测） */
+    location?: {
+      lat: number;
+      lng: number;
+    };
   };
 }
 
