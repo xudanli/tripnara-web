@@ -707,28 +707,54 @@ function FormattedMessage({ content }: { content: string }) {
         continue;
       }
       
+      // 跳过"待处理"标题行本身
+      if (trimmedLine.includes('待处理') && trimmedLine.match(/待处理\s*·\s*\d+/)) {
+        continue;
+      }
+      
       // 检测待处理项 (数字. 内容) - 支持多种格式
       const problemMatch = trimmedLine.match(/^\d+[\.、]\s*(.+)$/);
       
       if (problemMatch) {
+        // 清理问题项内容：移除"→ 建议..."部分
+        let problemText = problemMatch[1].trim();
+        // 移除建议文本（以"→"或"建议"开头的部分）
+        problemText = problemText.split(/\s*→/)[0].trim();
+        problemText = problemText.split(/\s*建议/)[0].trim();
+        
+        // 跳过空内容
+        if (!problemText) {
+          continue;
+        }
+        
         if (inProblemSection) {
-          // 在问题区块中，直接添加
-          currentProblemList.push(problemMatch[1]);
+          // 在问题区块中，直接添加（去重）
+          if (!currentProblemList.includes(problemText)) {
+            currentProblemList.push(problemText);
+          }
           continue;
         } else {
-          // 不在问题区块中，检查上下文
-          const prevText = currentText.join('\n');
-          if (prevText.includes('问题') || prevText.includes('冲突') || prevText.includes('需要')) {
+          // 不在问题区块中，检查上下文（更严格的条件）
+          const prevText = currentText.slice(-3).join('\n'); // 只检查最近3行
+          if ((prevText.includes('问题') || prevText.includes('冲突')) && 
+              (prevText.includes('需要解决') || prevText.includes('以下') || prevText.includes('存在'))) {
             // 结束之前的文本段
             if (currentText.length > 0) {
               segments.push({ type: 'text', content: currentText.join('\n') });
               currentText = [];
             }
             inProblemSection = true;
-            currentProblemList.push(problemMatch[1]);
+            if (!currentProblemList.includes(problemText)) {
+              currentProblemList.push(problemText);
+            }
             continue;
           }
         }
+      }
+      
+      // 跳过建议行（以"→"或"建议"开头的行）
+      if (trimmedLine.startsWith('→') || trimmedLine.startsWith('建议') || trimmedLine.startsWith('请')) {
+        continue;
       }
       
       // 普通文本处理
@@ -757,14 +783,36 @@ function FormattedMessage({ content }: { content: string }) {
 
   const segments = parseContent(content);
 
+  // 合并所有问题列表并去重
+  const allProblems = new Set<string>();
+  const problemListSegments = segments.filter(s => s.type === 'problem-list');
+  const textSegments = segments.filter(s => s.type === 'text');
+  
+  // 收集所有问题并去重
+  problemListSegments.forEach(segment => {
+    segment.problems?.forEach(p => allProblems.add(p));
+  });
+  
+  const uniqueProblems = Array.from(allProblems);
+  
+  // 如果有多于一个问题列表段，合并为一个
+  const finalSegments: typeof segments = [...textSegments];
+  if (uniqueProblems.length > 0 && problemListSegments.length > 0) {
+    finalSegments.push({
+      type: 'problem-list',
+      content: '',
+      problems: uniqueProblems,
+    });
+  }
+
   // 只有普通文本时直接返回
-  if (segments.length === 1 && segments[0].type === 'text') {
+  if (finalSegments.length === 1 && finalSegments[0].type === 'text') {
     return <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>;
   }
 
   return (
     <div className="space-y-2">
-      {segments.map((segment, idx) => {
+      {finalSegments.map((segment, idx) => {
         switch (segment.type) {
           case 'text':
             return (
@@ -774,6 +822,10 @@ function FormattedMessage({ content }: { content: string }) {
             );
           
           case 'problem-list':
+            if (!segment.problems || segment.problems.length === 0) {
+              return null;
+            }
+            
             return (
               <div key={idx} className="mt-4 -mx-1">
                 {/* 标题行：使用柔和的分隔线和图标 */}
@@ -781,13 +833,13 @@ function FormattedMessage({ content }: { content: string }) {
                   <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent" />
                   <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                     <ListChecks className="w-3 h-3" />
-                    待处理 · {segment.problems?.length}
+                    待处理 · {segment.problems.length}
                   </span>
                   <div className="h-px flex-1 bg-gradient-to-l from-slate-200 to-transparent" />
                 </div>
                 {/* 列表项：清晰的层级和可读性 */}
                 <div className="space-y-1.5">
-                  {segment.problems?.map((problem, i) => (
+                  {segment.problems.map((problem, i) => (
                     <div
                       key={i}
                       className="group flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/50 transition-colors cursor-default"
