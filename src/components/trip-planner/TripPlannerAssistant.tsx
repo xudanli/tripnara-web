@@ -724,12 +724,14 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
         problemText = problemText.split(/\s*建议/)[0].trim();
         
         // 容错处理：将"未命名活动"替换为更友好的提示
-        // 虽然后端已修复，但前端仍需要容错处理
+        // 后端已修复：会显示真实的活动名称，但前端仍保留容错处理作为备用
         problemText = problemText
           .replace(/「未命名活动」/g, '「活动（名称缺失）」')
           .replace(/未命名活动/g, '活动（名称缺失）');
         
-        // 替换 itemId 为中文名称
+        // 替换 itemId 为中文名称（备用方案）
+        // 后端已修复：会从上下文查找真实名称，但前端仍保留此逻辑作为备用
+        // 如果后端返回的消息中仍包含 itemId（如 "活动 c0af6b"），前端会尝试替换为中文名称
         if (itemNameMap && itemNameMap.size > 0) {
           itemNameMap.forEach((name, itemId) => {
             // 转义 itemId 中的特殊字符
@@ -738,6 +740,8 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
             problemText = problemText.replace(new RegExp(`「${escapedItemId}」`, 'g'), `「${name}」`);
             // 替换 itemId（不在引号中，使用单词边界）
             problemText = problemText.replace(new RegExp(`\\b${escapedItemId}\\b`, 'g'), name);
+            // 替换 "活动 itemId" 格式（后端可能返回 "活动 c0af6b"）
+            problemText = problemText.replace(new RegExp(`活动\\s+${escapedItemId}`, 'g'), name);
           });
         }
         
