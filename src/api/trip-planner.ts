@@ -665,6 +665,7 @@ export const tripPlannerApi = {
         message: data.message.slice(0, 50) + (data.message.length > 50 ? '...' : ''),
         sessionId: data.sessionId,
         targetDay: data.targetDay,
+        clarificationData: data.clarificationData, // 🔧 添加调试
       });
       
       const response = await apiClient.post<ApiResponseWrapper<PlannerChatResponse>>(

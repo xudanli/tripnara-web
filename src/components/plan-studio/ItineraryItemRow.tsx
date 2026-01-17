@@ -305,7 +305,7 @@ export default function ItineraryItemRow({
       };
       const today = new Date().getDay();
       const dayKey = dayMap[today];
-      
+    
       // 尝试获取具体星期的时间
       if (openingHours[dayKey]) {
         return openingHours[dayKey];

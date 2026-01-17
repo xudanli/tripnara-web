@@ -1154,7 +1154,7 @@ function ClarificationOptions({
               </span>
             )}
           </button>
-        ))}
+      ))}
       </div>
       
       {/* 自由输入框（当 followUp.type 为 text 时） */}
@@ -1783,45 +1783,35 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
 
   // 🆕 澄清选项选择
   const handleClarificationSelect = useCallback(async (action: QuickAction) => {
-    // 构建确认消息
-    let confirmMessage: string;
+    console.log('[ClarificationSelect] 选择的 action:', action);
     
-    switch (action.data?.selectedAction) {
-      case 'QUERY':
-        confirmMessage = '只是了解一下';
-        break;
-      case 'ADD_TO_ITINERARY':
-        if (action.data.params?.dayNumber) {
-          const timeSlot = action.data.params.timeSlot;
-          confirmMessage = timeSlot 
-            ? `帮我加到第${action.data.params.dayNumber}天 ${timeSlot.start}-${timeSlot.end}`
-            : `帮我加到第${action.data.params.dayNumber}天`;
-        } else {
-          confirmMessage = '帮我加到行程里';
-        }
-        break;
-      case 'REPLACE':
-        confirmMessage = `替换${action.data.params?.targetItemId ? '这个行程项' : ''}`;
-        break;
-      case 'REMOVE':
-        confirmMessage = '删除这个';
-        break;
-      case 'MODIFY':
-        confirmMessage = '修改一下';
-        break;
-      default:
-        confirmMessage = action.label;
+    // 直接使用 label 作为消息（更自然）
+    const confirmMessage = action.label;
+    
+    // 🔧 从 params 推断 selectedAction（如果后端没设置）
+    let selectedAction = action.data?.selectedAction;
+    if (!selectedAction && action.data?.params) {
+      // 如果有 dayNumber 或 timeSlot，说明是添加到行程
+      if (action.data.params.dayNumber || action.data.params.timeSlot) {
+        selectedAction = 'ADD_TO_ITINERARY';
+      }
     }
+    
+    console.log('[ClarificationSelect] 发送消息:', {
+      message: confirmMessage,
+      selectedAction,
+      params: action.data?.params,
+    });
     
     // 发送消息（带上澄清参数和上下文）
     await sendMessage(confirmMessage, {
       targetDay: action.data?.params?.dayNumber,
       targetItemId: action.data?.params?.targetItemId,
-      // 🆕 传递澄清数据
-      clarificationData: action.data ? {
-        selectedAction: action.data.selectedAction,
-        params: action.data.params,
-      } : undefined,
+      // 🆕 传递澄清数据（确保 selectedAction 被设置）
+      clarificationData: {
+        selectedAction: selectedAction,
+        params: action.data?.params,
+      },
       // 🆕 传递当前上下文
       context: {
         selectedContext: {
