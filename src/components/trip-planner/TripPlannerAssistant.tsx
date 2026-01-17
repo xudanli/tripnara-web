@@ -722,6 +722,12 @@ function FormattedMessage({ content }: { content: string }) {
         problemText = problemText.split(/\s*→/)[0].trim();
         problemText = problemText.split(/\s*建议/)[0].trim();
         
+        // 容错处理：将"未命名活动"替换为更友好的提示
+        // 虽然后端已修复，但前端仍需要容错处理
+        problemText = problemText
+          .replace(/「未命名活动」/g, '「活动（名称缺失）」')
+          .replace(/未命名活动/g, '活动（名称缺失）');
+        
         // 跳过空内容
         if (!problemText) {
           continue;
