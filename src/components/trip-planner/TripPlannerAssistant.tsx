@@ -754,19 +754,26 @@ function FormattedMessage({ content }: { content: string }) {
                 </div>
                 {/* 列表项：清晰的层级和可读性 */}
                 <div className="space-y-1.5">
-                  {segment.problems?.map((problem, i) => (
-                    <div
-                      key={i}
-                      className="group flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/50 transition-colors cursor-default"
-                    >
-                      {/* 编号：使用胶囊形状，更现代 */}
-                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-slate-200/70 text-slate-500 text-[10px] font-semibold mt-0.5 flex-shrink-0">
-                        {i + 1}
-                      </span>
-                      {/* 内容 */}
-                      <span className="text-[13px] text-slate-600 leading-relaxed">{problem}</span>
-                    </div>
-                  ))}
+                  {segment.problems?.map((problem, i) => {
+                    // 容错处理：将"未命名活动"替换为更友好的提示
+                    const displayProblem = problem
+                      .replace(/「未命名活动」/g, '「未知活动」')
+                      .replace(/未命名活动/g, '未知活动');
+                    
+                    return (
+                      <div
+                        key={i}
+                        className="group flex items-start gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-100/50 transition-colors cursor-default"
+                      >
+                        {/* 编号：使用胶囊形状，更现代 */}
+                        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-slate-200/70 text-slate-500 text-[10px] font-semibold mt-0.5 flex-shrink-0">
+                          {i + 1}
+                        </span>
+                        {/* 内容 */}
+                        <span className="text-[13px] text-slate-600 leading-relaxed">{displayProblem}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
