@@ -9,17 +9,14 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import type { 
-  CreateTripFromNLResponse, 
   ParsedTripParams, 
   ConversationContext,
-  LLMProvider,
 } from '@/types/trip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Spinner } from '@/components/ui/spinner';
 import { 
   Send, 
   Sparkles, 
@@ -58,6 +55,49 @@ interface NLChatInterfaceProps {
 // ==================== 子组件 ====================
 
 /**
+ * 打字机效果 Hook
+ * @param text 要显示的完整文本
+ * @param enabled 是否启用打字机效果
+ * @param speed 打字速度（毫秒/字符）
+ */
+function useTypewriter(text: string, enabled: boolean, speed: number = 30) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setDisplayedText(text);
+      setIsTyping(false);
+      return;
+    }
+
+    // 重置
+    setDisplayedText('');
+    setIsTyping(true);
+
+    let currentIndex = 0;
+    const intervalId = setInterval(() => {
+      if (currentIndex < text.length) {
+        // 每次添加 1-3 个字符，模拟更自然的打字
+        const charsToAdd = Math.min(
+          Math.floor(Math.random() * 2) + 1,
+          text.length - currentIndex
+        );
+        setDisplayedText(text.slice(0, currentIndex + charsToAdd));
+        currentIndex += charsToAdd;
+      } else {
+        setIsTyping(false);
+        clearInterval(intervalId);
+      }
+    }, speed);
+
+    return () => clearInterval(intervalId);
+  }, [text, enabled, speed]);
+
+  return { displayedText, isTyping };
+}
+
+/**
  * 打字指示器
  */
 function TypingIndicator() {
@@ -82,14 +122,27 @@ function MessageBubble({
   onConfirm,
   onEdit,
   isLatest,
+  isNewMessage,
 }: { 
   message: ChatMessage;
   onQuickReply?: (text: string) => void;
   onConfirm?: () => void;
   onEdit?: () => void;
   isLatest?: boolean;
+  isNewMessage?: boolean;  // 是否是刚收到的新消息（用于打字机效果）
 }) {
   const isUser = message.role === 'user';
+  
+  // AI 消息使用打字机效果（仅新消息）
+  const enableTypewriter = !isUser && isNewMessage === true;
+  const { displayedText, isTyping } = useTypewriter(
+    message.content, 
+    enableTypewriter,
+    25  // 打字速度：25ms/字符
+  );
+  
+  // 显示的文本内容
+  const textToShow = enableTypewriter ? displayedText : message.content;
   
   return (
     <div className={cn(
@@ -127,12 +180,18 @@ function MessageBubble({
             ? "bg-primary text-primary-foreground rounded-tr-sm" 
             : "bg-slate-100 text-slate-800 rounded-tl-sm"
         )}>
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap">
+            {textToShow}
+            {/* 打字光标 */}
+            {isTyping && (
+              <span className="inline-block w-0.5 h-4 bg-violet-500 ml-0.5 animate-pulse" />
+            )}
+          </p>
         </div>
 
-        {/* 快捷回复选项 - 仅 AI 消息且是最新消息时显示 */}
-        {!isUser && message.suggestedQuestions && message.suggestedQuestions.length > 0 && isLatest && (
-          <div className="flex flex-wrap gap-2 mt-3">
+        {/* 快捷回复选项 - 仅 AI 消息且是最新消息且打字完成时显示 */}
+        {!isUser && message.suggestedQuestions && message.suggestedQuestions.length > 0 && isLatest && !isTyping && (
+          <div className="flex flex-wrap gap-2 mt-3 animate-in fade-in duration-300">
             {message.suggestedQuestions.map((question, idx) => (
               <Button
                 key={idx}
@@ -142,7 +201,7 @@ function MessageBubble({
                   "rounded-full text-xs h-8 px-3 hover:bg-primary/10 hover:border-primary",
                   "animate-in fade-in slide-in-from-bottom-1 duration-300"
                 )}
-                style={{ animationDelay: `${idx * 50}ms` }}
+                style={{ animationDelay: `${idx * 80}ms` }}
                 onClick={() => onQuickReply?.(question)}
               >
                 {question}
@@ -151,8 +210,8 @@ function MessageBubble({
           </div>
         )}
 
-        {/* 信息确认卡片 */}
-        {!isUser && message.showConfirmCard && message.parsedParams && isLatest && (
+        {/* 信息确认卡片 - 打字完成后显示 */}
+        {!isUser && message.showConfirmCard && message.parsedParams && isLatest && !isTyping && (
           <TripSummaryCard
             params={message.parsedParams}
             onConfirm={onConfirm}
@@ -332,8 +391,10 @@ export default function NLChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [conversationContext, setConversationContext] = useState<ConversationContext | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [conversationContext, setConversationContext] = useState<ConversationContext | null>(null);  // 保留用于多轮对话上下文
   const [latestParams, setLatestParams] = useState<ParsedTripParams | null>(null);
+  const [newMessageId, setNewMessageId] = useState<string | null>(null);  // 用于打字机效果
 
   // 自动滚动到底部
   useEffect(() => {
@@ -358,6 +419,7 @@ export default function NLChatInterface({
         ],
       };
       setMessages([welcomeMessage]);
+      setNewMessageId('welcome');  // 触发打字机效果
     }
   }, []);
 
@@ -383,8 +445,9 @@ export default function NLChatInterface({
       // 处理响应
       if (response.needsClarification) {
         // 需要澄清 - 显示规划师回复
+        const messageId = `ai-${Date.now()}`;
         const aiMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
+          id: messageId,
           role: 'assistant',
           content: response.plannerReply || '让我更了解一下您的需求...',
           timestamp: new Date(),
@@ -392,6 +455,7 @@ export default function NLChatInterface({
           parsedParams: response.partialParams,
         };
         setMessages(prev => [...prev, aiMessage]);
+        setNewMessageId(messageId);  // 触发打字机效果
         
         if (response.conversationContext) {
           setConversationContext(response.conversationContext);
@@ -401,8 +465,9 @@ export default function NLChatInterface({
         }
       } else if (response.trip) {
         // 行程创建成功
+        const messageId = `ai-${Date.now()}`;
         const successMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
+          id: messageId,
           role: 'assistant',
           content: response.message || '太棒了！我已经为您创建好行程了 🎉',
           timestamp: new Date(),
@@ -410,6 +475,7 @@ export default function NLChatInterface({
           showConfirmCard: false, // 直接创建成功，不需要确认卡片
         };
         setMessages(prev => [...prev, successMessage]);
+        setNewMessageId(messageId);  // 触发打字机效果
         
         // 通知父组件
         if (onTripCreated) {
@@ -422,8 +488,9 @@ export default function NLChatInterface({
         }, 1500);
       } else if (response.parsedParams && !response.parsedParams.needsClarification) {
         // 信息完整，显示确认卡片
+        const messageId = `ai-${Date.now()}`;
         const confirmMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
+          id: messageId,
           role: 'assistant',
           content: '我已经理解了您的需求！请确认以下信息是否正确：',
           timestamp: new Date(),
@@ -431,6 +498,7 @@ export default function NLChatInterface({
           showConfirmCard: true,
         };
         setMessages(prev => [...prev, confirmMessage]);
+        setNewMessageId(messageId);  // 触发打字机效果
         setLatestParams(response.parsedParams);
       }
     } catch (err: any) {
@@ -465,13 +533,15 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
       const response = await tripsApi.createFromNL({ text: confirmText });
 
       if (response.trip) {
+        const messageId = `ai-${Date.now()}`;
         const successMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
+          id: messageId,
           role: 'assistant',
           content: '🎉 行程创建成功！正在为您跳转到规划工作台...',
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, successMessage]);
+        setNewMessageId(messageId);  // 触发打字机效果
 
         if (onTripCreated) {
           onTripCreated(response.trip.id);
@@ -492,8 +562,9 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
   const handleEdit = useCallback(() => {
     // 可以触发回调让父组件切换到表单 Tab
     // 或者在这里显示内联编辑界面
+    const messageId = `ai-${Date.now()}`;
     const editMessage: ChatMessage = {
-      id: `ai-${Date.now()}`,
+      id: messageId,
       role: 'assistant',
       content: '好的，请告诉我您想修改哪些信息？或者您可以直接输入完整的新需求。',
       timestamp: new Date(),
@@ -505,6 +576,7 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
       ],
     };
     setMessages(prev => [...prev, editMessage]);
+    setNewMessageId(messageId);  // 触发打字机效果
   }, []);
 
   // 处理提交
@@ -537,6 +609,7 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
               onConfirm={handleConfirmCreate}
               onEdit={handleEdit}
               isLatest={idx === messages.length - 1}
+              isNewMessage={msg.id === newMessageId}
             />
           ))}
           
