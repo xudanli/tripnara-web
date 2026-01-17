@@ -20,6 +20,7 @@ import ConsentDialog from '@/components/trips/ConsentDialog';
 import { mockClarificationQuestions } from '@/mocks/clarification-questions';
 import type { ClarificationAnswer, ClarificationQuestion } from '@/types/clarification';
 import { formatClarificationAnswers, parseClarificationMessage } from '@/utils/clarification';
+import NLChatInterface from '@/components/trips/NLChatInterface';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -2007,11 +2008,29 @@ export default function NewTripPage() {
         </TabsContent>
 
         <TabsContent value="nl">
-          <Card>
+          {/* 新版对话式界面 */}
+          <NLChatInterface 
+            onTripCreated={(tripId) => {
+              console.log('[NewTripPage] 行程创建成功:', tripId);
+              navigate(`/dashboard/plan-studio?tripId=${tripId}`);
+            }}
+            className="mb-6"
+          />
+
+          {/* 经典模式（折叠显示） */}
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground">
+                <ChevronDown className="w-4 h-4 mr-2" />
+                切换到经典输入模式
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+          <Card className="mt-4">
             <CardHeader>
-              <CardTitle>自然语言创建</CardTitle>
+              <CardTitle>经典输入模式</CardTitle>
               <CardDescription>
-                用自然语言描述您的行程需求，AI 会自动解析并创建行程
+                直接输入完整描述，一次性创建行程
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -2690,6 +2709,8 @@ export default function NewTripPage() {
             )}
           </CardContent>
         </Card>
+            </CollapsibleContent>
+          </Collapsible>
       </TabsContent>
     </Tabs>
 

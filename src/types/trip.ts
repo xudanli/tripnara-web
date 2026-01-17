@@ -283,57 +283,98 @@ export interface GenerationProgress {
   updatedAt: string; // ISO 8601 时间戳
 }
 
+// 对话上下文（用于多轮对话）
+export interface ConversationContext {
+  userIntent?: string;           // 用户意图，如 'family_trip', 'honeymoon', 'business'
+  travelStyle?: string;          // 旅行风格，如 'family', 'luxury', 'budget'
+  urgency?: string;              // 紧迫程度，如 'flexible', 'fixed'
+  specialNeeds?: string[];       // 特殊需求，如 ['亲子', '儿童友好', '无障碍']
+}
+
+// 解析出的参数（部分或完整）
+export interface ParsedTripParams {
+  destination?: string;
+  startDate?: string;
+  endDate?: string;
+  totalBudget?: number;
+  hasChildren?: boolean;
+  hasElderly?: boolean;
+  preferences?: {
+    style?: string;
+    [key: string]: any;
+  };
+  needsClarification?: boolean;
+  inferredFields?: string[];     // 推断的字段列表，如 ['startDate', 'totalBudget']
+}
+
 export interface CreateTripFromNLResponse {
+  // ========== 场景1: 需要澄清（旅行规划师对话）==========
+  needsClarification?: boolean;
+  
+  // 旅行规划师的自然语言回复
+  plannerReply?: string;
+  
+  // 建议的快捷回复选项
+  suggestedQuestions?: string[];
+  
+  // 对话上下文（用于多轮对话）
+  conversationContext?: ConversationContext;
+  
+  // 澄清问题列表（简化版）
+  clarificationQuestions?: string[];
+  
+  // 部分解析的参数
+  partialParams?: ParsedTripParams;
+
+  // ========== 场景2: 信息完整，创建行程 ==========
   trip?: {
     // 基本信息
     id: string;
     destination: string;
     startDate: string;
     endDate: string;
+    status?: TripStatus;
     budgetConfig?: BudgetConfig;
     pacingConfig?: PacingConfig;
     
-    // 完整的行程树
+    // 行程天数列表
+    days?: Array<{
+      id: string;
+      date: string;
+      tripId?: string;
+    }>;
+    
+    // 完整的行程树（兼容旧格式）
     TripDay?: TripDay[];
     
-    // 统计信息（新增）
+    // 统计信息
     stats?: TripCreationStats;
     
-    // Pipeline状态（新增）
+    // Pipeline状态
     pipelineStatus?: PipelineStatus;
     
-    // 提醒和任务（新增）
+    // 提醒和任务
     activeAlertsCount?: number;
     pendingTasksCount?: number;
     
-    // 生成进度（新增）
+    // 元数据（包含生成进度等）
     metadata?: {
       generationProgress?: GenerationProgress;
       [key: string]: any;
     };
   };
   
-  parsedParams?: {
-    destination: string;
-    startDate: string;
-    endDate: string;
-    totalBudget: number;
-    hasChildren?: boolean;
-    hasElderly?: boolean;
-  };
+  // 解析后的参数（创建成功时返回）
+  parsedParams?: ParsedTripParams;
   
-  // 下一步操作建议（新增）
+  // 下一步操作建议
   nextSteps?: NextStep[];
   
-  // 成功消息（新增）
+  // 成功消息
   message?: string;
   
-  // 是否正在生成规划点（新增）
+  // 是否正在后台生成规划点
   generatingItems?: boolean;
-  
-  needsClarification?: boolean;
-  clarificationQuestions?: string[];
-  partialParams?: any;
 }
 
 // ==================== 更新行程 ====================
