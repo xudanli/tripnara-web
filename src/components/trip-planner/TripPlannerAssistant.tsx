@@ -1346,6 +1346,20 @@ function PendingChangesPanel({
   loading?: boolean;
 }) {
   if (changes.length === 0) return null;
+  
+  // 修改类型映射
+  const changeTypeLabels: Record<string, { label: string; color: string }> = {
+    add: { label: '添加', color: 'bg-green-50 text-green-700 border-green-200' },
+    remove: { label: '删除', color: 'bg-red-50 text-red-700 border-red-200' },
+    modify: { label: '修改', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    reorder: { label: '调整顺序', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    update: { label: '更新', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  };
+  
+  const getChangeTypeInfo = (type: string) => {
+    const lowerType = type.toLowerCase();
+    return changeTypeLabels[lowerType] || { label: type, color: 'bg-slate-50 text-slate-700 border-slate-200' };
+  };
 
   return (
     <Card className="border-amber-200 bg-amber-50/50">
@@ -1357,17 +1371,20 @@ function PendingChangesPanel({
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
-          {changes.map((change) => (
-            <div 
-              key={change.id}
-              className="flex items-start gap-2 text-sm p-2 bg-white rounded"
-            >
-              <Badge variant="outline" className="text-xs flex-shrink-0">
-                {change.type}
-              </Badge>
-              <span>{change.descriptionCN || change.description}</span>
-            </div>
-          ))}
+          {changes.map((change) => {
+            const typeInfo = getChangeTypeInfo(change.type);
+            return (
+              <div 
+                key={change.id}
+                className="flex items-start gap-2 text-sm p-2 bg-white rounded"
+              >
+                <Badge variant="outline" className={cn("text-xs flex-shrink-0", typeInfo.color)}>
+                  {typeInfo.label}
+                </Badge>
+                <span>{change.descriptionCN || change.description}</span>
+              </div>
+            );
+          })}
         </div>
         <div className="flex gap-2">
           <Button
