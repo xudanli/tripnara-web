@@ -632,13 +632,13 @@ export default function ItineraryItemRow({
             <DropdownMenuContent align="end">
               {onAskNara && place && (
                 <>
-                  <DropdownMenuItem onClick={() => onAskNara(item, `${place.nameCN}附近有什么好吃的餐厅？`)}>
+                  <DropdownMenuItem onSelect={() => onAskNara(item, `${place.nameCN || place.nameEN}附近有什么好吃的餐厅？`)}>
                     🍽️ 附近餐厅
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onAskNara(item, `${place.nameCN}建议游玩多长时间？`)}>
+                  <DropdownMenuItem onSelect={() => onAskNara(item, `${place.nameCN || place.nameEN}建议游玩多长时间？`)}>
                     ⏱️ 停留时间
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onAskNara(item, `去${place.nameCN}有什么注意事项？`)}>
+                  <DropdownMenuItem onSelect={() => onAskNara(item, `去${place.nameCN || place.nameEN}有什么注意事项？`)}>
                     ⚠️ 注意事项
                   </DropdownMenuItem>
                   <div className="h-px bg-slate-200 my-1" />
