@@ -1,5 +1,6 @@
 import type { ApprovalRequest, RiskLevel } from '@/types/approval';
 import { ApprovalStatus } from '@/types/approval';
+import { getRiskScoreConfig, getRiskScoreColorClasses } from '@/lib/risk-score';
 
 /**
  * 检查审批请求是否已过期
@@ -23,16 +24,26 @@ export function getRiskLevelLabel(riskLevel: RiskLevel): string {
 }
 
 /**
+ * 将旧的 RiskLevel 转换为风险评分 (0-100)
+ * 兼容层：保持向后兼容，同时支持新的风险评分系统
+ */
+export function riskLevelToScore(riskLevel: RiskLevel): number {
+  const mapping: Record<RiskLevel, number> = {
+    low: 25,        // 0-30 范围的中值
+    medium: 50,     // 46-60 范围的中值
+    high: 80,       // 76-90 范围的中值
+    critical: 95,   // 91-100 范围的高值
+  };
+  return mapping[riskLevel];
+}
+
+/**
  * 获取风险等级的颜色类名（Tailwind CSS）
+ * 使用新的风险评分系统，保持向后兼容
  */
 export function getRiskLevelColorClass(riskLevel: RiskLevel): string {
-  const colors: Record<RiskLevel, string> = {
-    low: 'bg-green-100 text-green-800 border-green-200',
-    medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    high: 'bg-orange-100 text-orange-800 border-orange-200',
-    critical: 'bg-red-100 text-red-800 border-red-200',
-  };
-  return colors[riskLevel];
+  const score = riskLevelToScore(riskLevel);
+  return getRiskScoreColorClasses(score);
 }
 
 /**

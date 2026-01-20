@@ -15,8 +15,19 @@ export interface Destination {
  * 预算约束
  */
 export interface BudgetConstraint {
-  total?: number;      // 总预算
-  currency?: string;  // 货币单位（默认 "CNY"）
+  total?: number;           // 总预算（必填，单位：CNY）
+  currency?: string;        // 货币单位（默认 "CNY"）
+  dailyBudget?: number;     // 日均预算（可选，自动计算或手动设置）
+  categoryLimits?: {        // 分类预算限制（可选）
+    accommodation?: number;
+    transportation?: number;
+    food?: number;
+    activities?: number;
+    other?: number;
+  };
+  alertThreshold?: number;  // 预警阈值（默认 0.8，即 80%）
+  createdAt?: string;       // 创建时间
+  updatedAt?: string;       // 更新时间
 }
 
 /**
@@ -219,6 +230,189 @@ export interface ExecutePlanningWorkbenchResponse {
 }
 
 /**
+ * 提交方案选项
+ */
+export interface CommitPlanOptions {
+  partialCommit?: boolean;      // 是否部分提交
+  commitDays?: number[];         // 要提交的天数（如果部分提交）
+}
+
+/**
+ * 提交方案请求
+ */
+export interface CommitPlanRequest {
+  tripId: string;
+  options?: CommitPlanOptions;
+}
+
+/**
+ * 提交方案响应
+ */
+export interface CommitPlanResponse {
+  tripId: string;
+  planId: string;
+  committedAt: string;
+  changes: {
+    added: number;
+    modified: number;
+    removed: number;
+  };
+}
+
+/**
+ * 方案摘要（用于列表展示）
+ */
+export interface PlanSummary {
+  planId: string;
+  planVersion: number;
+  status: 'DRAFT' | 'PROPOSED' | 'NEED_CONFIRM' | 'LOCKED';
+  createdAt: string;
+  updatedAt: string;
+  summary?: {
+    itemCount: number;
+    days: number;
+    budget?: { total: number; currency: string };
+    consolidatedDecision?: { status: string; summary: string };
+    personas?: {
+      abu?: { verdict: string };
+      drdre?: { verdict: string };
+      neptune?: { verdict: string };
+    };
+  };
+}
+
+/**
+ * 当前方案信息
+ */
+export interface CurrentPlan {
+  planId: string;
+  planVersion: number;
+  status: 'DRAFT' | 'PROPOSED' | 'NEED_CONFIRM' | 'LOCKED';
+  planState: PlanState;
+  uiOutput: UIOutput;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 行程工作台数据
+ */
+export interface TripWorkbench {
+  tripId: string;
+  currentPlan?: CurrentPlan;
+  planHistory: PlanSummary[];
+  workbenchStatus: 'DRAFT' | 'PROPOSED' | 'NEED_CONFIRM' | 'LOCKED';
+}
+
+/**
+ * 方案列表响应
+ */
+export interface TripPlansResponse {
+  plans: PlanSummary[];
+  total: number;
+  hasMore: boolean;
+}
+
+/**
+ * 方案详情
+ */
+export interface PlanDetail {
+  planId: string;
+  planVersion: number;
+  tripId: string;
+  status: 'DRAFT' | 'PROPOSED' | 'NEED_CONFIRM' | 'LOCKED';
+  planState: PlanState;
+  uiOutput: UIOutput;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}
+
+/**
+ * 对比方案请求
+ */
+export interface ComparePlansRequest {
+  planIds: string[];              // 要对比的方案 ID 列表（至少 2 个）
+  compareFields?: string[];      // 要对比的字段（可选）
+}
+
+/**
+ * 方案差异
+ */
+export interface PlanDifference {
+  field: string;
+  plan1Value: any;
+  plan2Value: any;
+  impact: 'low' | 'medium' | 'high';
+  description?: string;
+}
+
+/**
+ * 对比摘要
+ */
+export interface CompareSummary {
+  bestBudget?: string;
+  bestRoute?: string;
+  bestTime?: string;
+  recommendations?: string[];
+}
+
+/**
+ * 对比方案响应
+ */
+export interface ComparePlansResponse {
+  plans: Array<{
+    planId: string;
+    planVersion: number;
+    planState: PlanState;
+    uiOutput: UIOutput;
+  }>;
+  differences: PlanDifference[];
+  summary: CompareSummary;
+}
+
+/**
+ * 调整类型
+ */
+export type AdjustmentType = 'add_place' | 'remove_place' | 'modify_constraint' | 'change_day' | 'modify_budget';
+
+/**
+ * 调整项
+ */
+export interface Adjustment {
+  type: AdjustmentType;
+  data: any;
+}
+
+/**
+ * 调整方案请求
+ */
+export interface AdjustPlanRequest {
+  adjustments: Adjustment[];
+  regenerate?: boolean;  // 是否重新生成方案，默认 true
+}
+
+/**
+ * 变更项
+ */
+export interface PlanChange {
+  type: string;
+  description: string;
+  impact: 'low' | 'medium' | 'high';
+}
+
+/**
+ * 调整方案响应
+ */
+export interface AdjustPlanResponse {
+  newPlanId: string;
+  newPlanVersion: number;
+  planState: PlanState;
+  uiOutput: UIOutput;
+  changes: PlanChange[];
+}
+
+/**
  * 成功响应包装
  */
 interface SuccessResponse<T> {
@@ -398,6 +592,609 @@ export const planningWorkbenchApi = {
         throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
       } else {
         throw new Error(error.message || '获取规划状态失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 提交方案到行程
+   * POST /api/planning-workbench/plans/:planId/commit
+   * 
+   * 将规划方案提交并保存到行程。
+   */
+  commitPlan: async (
+    planId: string,
+    data: CommitPlanRequest
+  ): Promise<CommitPlanResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 commitPlan 请求:', {
+        planId,
+        tripId: data.tripId,
+        options: data.options,
+      });
+
+      const response = await apiClient.post<ApiResponseWrapper<CommitPlanResponse>>(
+        `/planning-workbench/plans/${planId}/commit`,
+        data,
+        {
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 commitPlan 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        tripId: wrappedResponse.tripId,
+        planId: wrappedResponse.planId,
+        committedAt: wrappedResponse.committedAt,
+        changes: wrappedResponse.changes,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] commitPlan 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planId,
+        tripId: data.tripId,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '提交方案失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 获取指定行程的规划工作台数据
+   * GET /api/planning-workbench/trips/:tripId
+   * 
+   * 获取工作台数据，包括当前方案和方案历史列表。
+   */
+  getTripWorkbench: async (tripId: string): Promise<TripWorkbench> => {
+    try {
+      console.log('[Planning Workbench API] 发送 getTripWorkbench 请求:', {
+        tripId,
+      });
+
+      const response = await apiClient.get<ApiResponseWrapper<TripWorkbench>>(
+        `/planning-workbench/trips/${tripId}`,
+        {
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 getTripWorkbench 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        tripId: wrappedResponse.tripId,
+        hasCurrentPlan: !!wrappedResponse.currentPlan,
+        planHistoryCount: wrappedResponse.planHistory.length,
+        workbenchStatus: wrappedResponse.workbenchStatus,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] getTripWorkbench 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        tripId,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '获取工作台数据失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 获取指定行程的所有规划方案列表
+   * GET /api/planning-workbench/trips/:tripId/plans
+   * 
+   * 获取方案列表，支持状态筛选和分页。
+   */
+  getTripPlans: async (
+    tripId: string,
+    params?: {
+      status?: 'DRAFT' | 'PROPOSED' | 'NEED_CONFIRM' | 'LOCKED';
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<TripPlansResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 getTripPlans 请求:', {
+        tripId,
+        params,
+      });
+
+      const response = await apiClient.get<ApiResponseWrapper<TripPlansResponse>>(
+        `/planning-workbench/trips/${tripId}/plans`,
+        {
+          params,
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 getTripPlans 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        plansCount: wrappedResponse.plans.length,
+        total: wrappedResponse.total,
+        hasMore: wrappedResponse.hasMore,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] getTripPlans 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        tripId,
+        params,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '获取方案列表失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 获取指定方案的详细信息
+   * GET /api/planning-workbench/plans/:planId
+   * 
+   * 获取方案的完整信息，包括 planState 和 uiOutput。
+   */
+  getPlan: async (planId: string): Promise<PlanDetail> => {
+    try {
+      console.log('[Planning Workbench API] 发送 getPlan 请求:', {
+        planId,
+      });
+
+      const response = await apiClient.get<ApiResponseWrapper<PlanDetail>>(
+        `/planning-workbench/plans/${planId}`,
+        {
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 getPlan 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        planId: wrappedResponse.planId,
+        planVersion: wrappedResponse.planVersion,
+        tripId: wrappedResponse.tripId,
+        status: wrappedResponse.status,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] getPlan 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planId,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '获取方案详情失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 对比多个规划方案
+   * POST /api/planning-workbench/plans/compare
+   * 
+   * 对比多个方案，生成差异列表和摘要。
+   */
+  comparePlans: async (data: ComparePlansRequest): Promise<ComparePlansResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 comparePlans 请求:', {
+        planIds: data.planIds,
+        compareFields: data.compareFields,
+      });
+
+      const response = await apiClient.post<ApiResponseWrapper<ComparePlansResponse>>(
+        '/planning-workbench/plans/compare',
+        data,
+        {
+          timeout: 60000, // 60 秒超时（对比可能需要较长时间）
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 comparePlans 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        plansCount: wrappedResponse.plans.length,
+        differencesCount: wrappedResponse.differences.length,
+        hasSummary: !!wrappedResponse.summary,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] comparePlans 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planIds: data.planIds,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，对比处理时间较长，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '对比方案失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 基于现有方案进行调整
+   * POST /api/planning-workbench/plans/:planId/adjust
+   * 
+   * 调整方案并可选地重新生成。
+   */
+  adjustPlan: async (
+    planId: string,
+    data: AdjustPlanRequest
+  ): Promise<AdjustPlanResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 adjustPlan 请求:', {
+        planId,
+        adjustments: data.adjustments,
+        regenerate: data.regenerate,
+      });
+
+      const response = await apiClient.post<ApiResponseWrapper<AdjustPlanResponse>>(
+        `/planning-workbench/plans/${planId}/adjust`,
+        data,
+        {
+          timeout: 60000, // 60 秒超时（调整可能需要重新生成）
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 adjustPlan 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        newPlanId: wrappedResponse.newPlanId,
+        newPlanVersion: wrappedResponse.newPlanVersion,
+        changesCount: wrappedResponse.changes.length,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] adjustPlan 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planId,
+        adjustments: data.adjustments,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，调整处理时间较长，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '调整方案失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 预算合理性评估（Should-Exist Gate）
+   * POST /planning-workbench/budget/evaluate
+   */
+  evaluateBudget: async (
+    data: {
+      planId: string;
+      tripId: string;
+      estimatedCost: number;
+      categoryBreakdown: {
+        accommodation: number;
+        transportation: number;
+        food: number;
+        activities: number;
+        other: number;
+      };
+      budgetConstraint: BudgetConstraint;
+    }
+  ): Promise<import('@/types/trip').BudgetEvaluationResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 evaluateBudget 请求:', {
+        planId: data.planId,
+        tripId: data.tripId,
+        estimatedCost: data.estimatedCost,
+      });
+
+      const response = await apiClient.post<ApiResponseWrapper<import('@/types/trip').BudgetEvaluationResponse>>(
+        '/planning-workbench/budget/evaluate',
+        data,
+        {
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 evaluateBudget 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        verdict: wrappedResponse.verdict,
+        confidence: wrappedResponse.confidence,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] evaluateBudget 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planId: data.planId,
+        tripId: data.tripId,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '预算评估失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 获取预算决策日志
+   * GET /planning-workbench/budget/decision-log
+   */
+  getBudgetDecisionLog: async (
+    planId: string,
+    tripId: string,
+    params?: {
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<import('@/types/trip').BudgetDecisionLogResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 getBudgetDecisionLog 请求:', {
+        planId,
+        tripId,
+        params,
+      });
+
+      const response = await apiClient.get<ApiResponseWrapper<import('@/types/trip').BudgetDecisionLogResponse>>(
+        '/planning-workbench/budget/decision-log',
+        {
+          params: {
+            planId,
+            tripId,
+            ...(params?.limit !== undefined && { limit: params.limit }),
+            ...(params?.offset !== undefined && { offset: params.offset }),
+          },
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 getBudgetDecisionLog 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        total: wrappedResponse.total,
+        itemsCount: wrappedResponse.items.length,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] getBudgetDecisionLog 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planId,
+        tripId,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '获取预算决策日志失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 应用预算优化建议
+   * POST /planning-workbench/budget/apply-optimization
+   */
+  applyBudgetOptimization: async (
+    data: import('@/types/trip').ApplyBudgetOptimizationRequest
+  ): Promise<import('@/types/trip').ApplyBudgetOptimizationResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 applyBudgetOptimization 请求:', {
+        planId: data.planId,
+        tripId: data.tripId,
+        optimizationIds: data.optimizationIds,
+        autoCommit: data.autoCommit,
+      });
+
+      const response = await apiClient.post<ApiResponseWrapper<import('@/types/trip').ApplyBudgetOptimizationResponse>>(
+        '/planning-workbench/budget/apply-optimization',
+        data,
+        {
+          timeout: 60000, // 60 秒超时（优化可能需要较长时间）
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 applyBudgetOptimization 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        planId: wrappedResponse.planId,
+        newPlanId: wrappedResponse.newPlanId,
+        totalSavings: wrappedResponse.totalSavings,
+        newEstimatedCost: wrappedResponse.newEstimatedCost,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] applyBudgetOptimization 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planId: data.planId,
+        tripId: data.tripId,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，优化处理时间较长，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '应用预算优化失败，请稍后重试');
+      }
+    }
+  },
+
+  /**
+   * 获取规划方案预算评估结果
+   * GET /planning-workbench/plans/:planId/budget-evaluation
+   */
+  getPlanBudgetEvaluation: async (
+    planId: string
+  ): Promise<import('@/types/trip').PlanBudgetEvaluationResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 getPlanBudgetEvaluation 请求:', {
+        planId,
+      });
+
+      const response = await apiClient.get<ApiResponseWrapper<import('@/types/trip').PlanBudgetEvaluationResponse>>(
+        `/planning-workbench/plans/${planId}/budget-evaluation`,
+        {
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Planning Workbench API] 收到 getPlanBudgetEvaluation 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] 解析后的响应:', {
+        planId: wrappedResponse.planId,
+        verdict: wrappedResponse.budgetEvaluation.verdict,
+        personaOutput: wrappedResponse.personaOutput?.persona,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] getPlanBudgetEvaluation 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        planId,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '获取预算评估结果失败，请稍后重试');
       }
     }
   },

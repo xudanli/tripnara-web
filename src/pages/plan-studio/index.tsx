@@ -5,9 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import IntentTab from './IntentTab';
 import ScheduleTab from './ScheduleTab';
-import OptimizeTab from './OptimizeTab';
-import WhatIfTab from './WhatIfTab';
 import BookingsTab from './BookingsTab';
+import PlanningWorkbenchTab from './PlanningWorkbenchTab';
 // PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
 import SpotlightTour from '@/components/onboarding/SpotlightTour';
 import type { TourStep } from '@/components/onboarding/SpotlightTour';
@@ -55,7 +54,9 @@ function PlanStudioPageContent() {
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
   const defaultTab = searchParams.get('tab') || 'schedule';
-  const [activeTab, setActiveTab] = useState(defaultTab === 'intent' || defaultTab === 'places' ? 'schedule' : defaultTab);
+  // 如果访问已移除的 tab，重定向到 schedule
+  const normalizedTab = (defaultTab === 'optimize' || defaultTab === 'what-if') ? 'schedule' : defaultTab;
+  const [activeTab, setActiveTab] = useState(normalizedTab === 'intent' || normalizedTab === 'places' ? 'schedule' : normalizedTab);
   
   // 意图与约束弹窗
   const [showIntentDialog, setShowIntentDialog] = useState(false);
@@ -115,7 +116,6 @@ function PlanStudioPageContent() {
     // 完成对应步骤
     if (value === 'intent') completeStep('style');
     if (value === 'schedule') completeStep('schedule');
-    if (value === 'optimize') completeStep('optimize');
     
     // 不再需要切换 personaMode，三人格由系统自动调用
   };
@@ -302,32 +302,12 @@ function PlanStudioPageContent() {
     },
   ];
 
-  // Optimize Tab Tour
-  const optimizeTourSteps: TourStep[] = [
-    {
-      id: 'before-after',
-      target: '[data-tour="optimize-comparison"]',
-      title: 'Before/After',
-      description: "What changed, and why it's now executable. 查看变化，了解为什么现在可执行。",
-      position: 'bottom',
-    },
-    {
-      id: 'reason-codes',
-      target: '[data-tour="optimize-reasons"]',
-      title: 'Reason Codes',
-      description: 'Every move has a reason code and evidence. 每个变更都有原因码和证据。',
-      position: 'right',
-    },
-  ];
-
   const getCurrentTourSteps = () => {
     switch (activeTab) {
       case 'intent':
         return intentTourSteps;
       case 'schedule':
         return scheduleTourSteps;
-      case 'optimize':
-        return optimizeTourSteps;
       default:
         return [];
     }
@@ -500,8 +480,7 @@ function PlanStudioPageContent() {
             <div className="border-b bg-white px-6">
               <TabsList className="justify-start">
                 <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
-                <TabsTrigger value="optimize">{t('planStudio.tabs.optimize')}</TabsTrigger>
-                <TabsTrigger value="what-if">{t('planStudio.tabs.whatIf')}</TabsTrigger>
+                <TabsTrigger value="workbench">{t('planStudio.tabs.workbench')}</TabsTrigger>
                 <TabsTrigger value="bookings">{t('planStudio.tabs.bookings')}</TabsTrigger>
               </TabsList>
             </div>
@@ -515,11 +494,8 @@ function PlanStudioPageContent() {
                     refreshKey={refreshKey}
                   />
                 </TabsContent>
-                <TabsContent value="optimize" className="mt-0">
-                  <OptimizeTab tripId={tripId} />
-                </TabsContent>
-                <TabsContent value="what-if" className="mt-0">
-                  <WhatIfTab tripId={tripId} />
+                <TabsContent value="workbench" className="mt-0">
+                  <PlanningWorkbenchTab tripId={tripId!} />
                 </TabsContent>
                 <TabsContent value="bookings" className="mt-0">
                   <BookingsTab tripId={tripId} />

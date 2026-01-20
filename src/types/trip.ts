@@ -1033,6 +1033,257 @@ export interface BudgetReport {
   recommendations: string[];
 }
 
+// ==================== 预算约束管理 ====================
+
+/**
+ * 设置预算约束请求
+ */
+export interface SetBudgetConstraintRequest {
+  total?: number;           // 总预算（必填，单位：CNY）
+  currency?: string;        // 货币单位（默认 "CNY"）
+  dailyBudget?: number;     // 日均预算（可选，自动计算或手动设置）
+  categoryLimits?: {        // 分类预算限制（可选）
+    accommodation?: number;
+    transportation?: number;
+    food?: number;
+    activities?: number;
+    other?: number;
+  };
+  alertThreshold?: number;  // 预警阈值（默认 0.8，即 80%）
+}
+
+/**
+ * 设置预算约束响应
+ */
+export interface SetBudgetConstraintResponse {
+  tripId: string;
+  budgetConstraint: {
+    total?: number;
+    currency?: string;
+    dailyBudget?: number;
+    categoryLimits?: {
+      accommodation?: number;
+      transportation?: number;
+      food?: number;
+      activities?: number;
+      other?: number;
+    };
+    alertThreshold?: number;
+  };
+  updatedAt: string;
+}
+
+/**
+ * 获取预算约束响应
+ */
+export interface GetBudgetConstraintResponse {
+  budgetConstraint: {
+    total?: number;
+    currency?: string;
+    dailyBudget?: number;
+    categoryLimits?: {
+      accommodation?: number;
+      transportation?: number;
+      food?: number;
+      activities?: number;
+      other?: number;
+    };
+    alertThreshold?: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 删除预算约束响应
+ */
+export interface DeleteBudgetConstraintResponse {
+  tripId: string;
+  deletedAt: string;
+}
+
+// ==================== 预算明细 ====================
+
+/**
+ * 预算明细项
+ */
+export interface BudgetDetailsItem {
+  id: string;
+  date: string;
+  category: string;
+  itemName: string;
+  amount: number;
+  currency: string;
+  itineraryItemId?: string;  // 关联的行程项 ID
+  evidenceRefs?: string[];    // 证据引用（价格来源）
+}
+
+/**
+ * 获取预算明细响应
+ */
+export interface BudgetDetailsResponse {
+  items: BudgetDetailsItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// ==================== 预算趋势 ====================
+
+/**
+ * 获取预算趋势响应
+ */
+export interface BudgetTrendsResponse {
+  dailySpending: Array<{
+    date: string;
+    budget: number;
+    spent: number;
+    ratio: number;  // spent / budget
+  }>;
+  categoryDistribution: CategoryDistribution;
+  forecast?: {      // 预算预测（可选）
+    projectedTotal: number;
+    projectedRemaining: number;
+    confidence: number;  // 0-1
+  };
+}
+
+// ==================== 预算统计 ====================
+
+/**
+ * 预算执行统计响应
+ */
+export interface BudgetStatisticsResponse {
+  completionRate: number;      // 完成度（0-1）
+  overspendRate: number;       // 超支率（负数表示节省）
+  categoryPercentages: {       // 分类占比
+    accommodation: number;
+    transportation: number;
+    food: number;
+    activities: number;
+    other: number;
+  };
+  dailyAverage: number;        // 日均支出
+  projectedCompletion: string;  // 预计完成日期
+  riskLevel: 'low' | 'medium' | 'high';  // 风险等级
+}
+
+// ==================== 预算监控 ====================
+
+/**
+ * 实时预算监控响应
+ */
+export interface BudgetMonitorResponse {
+  currentSpent: number;
+  remaining: number;
+  dailySpent: Record<string, number>;
+  alerts: BudgetAlert[];
+  lastUpdated: string;
+}
+
+// ==================== 预算评估 ====================
+
+/**
+ * 预算评估违规项
+ */
+export interface BudgetViolation {
+  category: string;
+  exceeded: number;  // 超出金额
+  percentage: number;  // 超出百分比
+}
+
+/**
+ * 预算评估建议
+ */
+export interface BudgetRecommendation {
+  action: string;
+  impact: string;
+  estimatedSavings: number;
+}
+
+/**
+ * 预算评估响应
+ */
+export interface BudgetEvaluationResponse {
+  verdict: 'ALLOW' | 'NEED_ADJUST' | 'REJECT';  // 评估结果
+  reason: string;                                // 评估原因
+  confidence: number;                            // 置信度（0-1）
+  violations?: BudgetViolation[];               // 违规项（如有）
+  recommendations?: BudgetRecommendation[];     // 调整建议
+  evidenceRefs?: string[];                      // 证据引用
+}
+
+/**
+ * 预算决策日志项
+ */
+export interface BudgetDecisionLogItem {
+  id: string;
+  timestamp: string;
+  planId: string;
+  verdict: 'ALLOW' | 'NEED_ADJUST' | 'REJECT';
+  estimatedCost: number;
+  budgetConstraint: {
+    total?: number;
+    currency?: string;
+  };
+  reason: string;
+  evidenceRefs: string[];
+  persona?: 'ABU';  // 预算评估属于 Abu 的职责
+}
+
+/**
+ * 预算决策日志响应
+ */
+export interface BudgetDecisionLogResponse {
+  items: BudgetDecisionLogItem[];
+  total: number;
+}
+
+/**
+ * 应用预算优化建议请求
+ */
+export interface ApplyBudgetOptimizationRequest {
+  planId: string;
+  tripId: string;
+  optimizationIds: string[];  // 要应用的优化建议 ID 列表
+  autoCommit?: boolean;        // 是否自动提交（默认 false）
+}
+
+/**
+ * 应用预算优化建议响应
+ */
+export interface ApplyBudgetOptimizationResponse {
+  planId: string;
+  newPlanId?: string;  // 如果生成了新方案
+  appliedOptimizations: Array<{
+    id: string;
+    type: string;
+    estimatedSavings: number;
+    status: 'success' | 'failed';
+    reason?: string;
+  }>;
+  totalSavings: number;
+  newEstimatedCost: number;
+}
+
+/**
+ * 规划方案预算评估响应
+ */
+export interface PlanBudgetEvaluationResponse {
+  planId: string;
+  budgetEvaluation: BudgetEvaluationResponse;
+  personaOutput?: {  // 三人格输出（Abu）
+    persona: 'ABU';
+    verdict: 'ALLOW' | 'NEED_CONFIRM' | 'REJECT';
+    explanation: string;
+    evidence: Array<{
+      source: string;
+      excerpt: string;
+      relevance: string;
+    }>;
+  };
+}
+
 // ==================== Dashboard 决策系统 ====================
 
 // 三人格提醒

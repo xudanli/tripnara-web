@@ -13,6 +13,7 @@ import ContactPage from './pages/website/Contact';
 import LoginPage from './pages/Login';
 import RegisterPage from './pages/Register';
 import UiTestPage from './pages/UiTest';
+import UiTestExperienceDesignPage from './pages/UiTestExperienceDesign';
 import DashboardPage from './pages/Dashboard';
 import TripsPage from './pages/trips';
 import TripDetailPage from './pages/trips/[id]';
@@ -85,8 +86,9 @@ function App() {
         {/* Shared Trip Page (Public) */}
         <Route path="/trips/shared/:shareToken" element={<SharedTripPage />} />
 
-        {/* UI Test Page */}
+        {/* UI Test Pages */}
         <Route path="/ui-test" element={<UiTestPage />} />
+        <Route path="/ui-test/experience-design" element={<UiTestExperienceDesignPage />} />
 
         {/* Dashboard Routes (Protected) - New Layout */}
         <Route

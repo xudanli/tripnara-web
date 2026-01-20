@@ -1,22 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { RefreshCw } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
-import { planningWorkbenchApi } from '@/api/planning-workbench';
 import type { TripDetail } from '@/types/trip';
 import type { OptimizeRouteRequest, OptimizeRouteResponse } from '@/types/itinerary-optimization';
-import type { ExecutePlanningWorkbenchResponse, ConsolidatedDecisionStatus } from '@/api/planning-workbench';
 import { toast } from 'sonner';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
-import PersonaCard from '@/components/planning-workbench/PersonaCard';
 import { cn } from '@/lib/utils';
 import {
   normalizeGateStatus,
@@ -32,6 +30,7 @@ interface OptimizeTabProps {
 export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // 审批相关状态
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
@@ -51,11 +50,12 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   const [result, setResult] = useState<OptimizeRouteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // 规划工作台相关状态
-  const [workbenchResult, setWorkbenchResult] = useState<ExecutePlanningWorkbenchResponse | null>(null);
-  const [loadingWorkbench, setLoadingWorkbench] = useState(false);
-  const [workbenchError, setWorkbenchError] = useState<string | null>(null);
-  const [showWorkbench, setShowWorkbench] = useState(false);
+  // 跳转到决策评估 Tab
+  const handleGoToWorkbench = () => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tab', 'workbench');
+    setSearchParams(newParams);
+  };
 
   useEffect(() => {
     loadTrip();
@@ -154,9 +154,6 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
       }
 
       toast.success(t('planStudio.optimizeTab.optimizeSuccess'));
-      
-      // 优化成功后，自动触发规划工作台评估（可选）
-      // 用户也可以手动点击"执行规划"按钮
     } catch (err: any) {
       console.error('Failed to optimize:', err);
       const errorMessage = err.message || t('planStudio.optimizeTab.optimizeFailed');
@@ -167,78 +164,6 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
     }
   };
 
-  const handleExecutePlanning = async () => {
-    if (!trip) {
-      toast.error('请先加载行程信息');
-      return;
-    }
-
-    setLoadingWorkbench(true);
-    setWorkbenchError(null);
-
-    try {
-      // 构建规划上下文
-      const destinationParts = trip.destination?.split(',') || [];
-      const country = destinationParts[0]?.trim().toUpperCase() || '';
-      const city = destinationParts.length > 1 ? destinationParts.slice(1).join(',').trim() : undefined;
-
-      const days = trip.TripDay?.length || 0;
-      if (days === 0) {
-        toast.error('行程天数不能为0，请先设置行程日期');
-        return;
-      }
-
-      const constraints: any = {};
-      if (trip.totalBudget) {
-        constraints.budget = {
-          total: trip.totalBudget,
-          currency: 'CNY',
-        };
-      }
-
-      // 调用规划工作台 API
-      const response = await planningWorkbenchApi.execute({
-        context: {
-          destination: {
-            country,
-            city,
-          },
-          days,
-          travelMode: 'mixed',
-          constraints: Object.keys(constraints).length > 0 ? constraints : undefined,
-        },
-        tripId,
-        userAction: 'generate',
-      });
-
-      setWorkbenchResult(response);
-      setShowWorkbench(true);
-      toast.success('规划工作台执行成功');
-    } catch (err: any) {
-      console.error('Planning workbench execution failed:', err);
-      const errorMessage = err.message || '执行规划工作台失败，请稍后重试';
-      setWorkbenchError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setLoadingWorkbench(false);
-    }
-  };
-
-  const getConsolidatedDecisionStyle = (status: ConsolidatedDecisionStatus) => {
-    // 标准化状态（支持旧状态映射）
-    const normalizedStatus = normalizeGateStatus(status);
-    
-    // 获取状态配置
-    const StatusIcon = getGateStatusIcon(normalizedStatus);
-    const label = getGateStatusLabel(normalizedStatus);
-    const className = getGateStatusClasses(normalizedStatus);
-    
-    return {
-      icon: <StatusIcon className="w-5 h-5" />,
-      label,
-      className,
-    };
-  };
 
   return (
     <div className="space-y-6">
@@ -248,40 +173,48 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           <CardDescription>{t('planStudio.optimizeTab.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Button onClick={handleOptimize} disabled={loading} className="w-full">
-              {loading ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  {t('planStudio.optimizeTab.optimizing')}
-                </>
-              ) : (
-                t('planStudio.optimizeTab.generatePlan')
-              )}
-            </Button>
-            <Button 
-              onClick={handleExecutePlanning} 
-              disabled={loadingWorkbench || !trip}
-              variant="outline"
-              className="w-full"
-            >
-              {loadingWorkbench ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  执行中...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  执行规划
-                </>
-              )}
-            </Button>
-          </div>
+          <Button onClick={handleOptimize} disabled={loading} className="w-full">
+            {loading ? (
+              <>
+                <Spinner className="w-4 h-4 mr-2" />
+                {t('planStudio.optimizeTab.optimizing')}
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                {t('planStudio.optimizeTab.generatePlan')}
+              </>
+            )}
+          </Button>
           
           <p className="text-xs text-muted-foreground">
-            优化路线顺序后，可点击"执行规划"让三人格（Abu/Dr.Dre/Neptune）评估行程方案的可行性
+            {t('planStudio.optimizeTab.description')}
           </p>
+          
+          {/* 引导提示：前往决策评估 Tab */}
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 mb-1">
+                    {t('planStudio.optimizeTab.workbenchHint.title')}
+                  </p>
+                  <p className="text-xs text-blue-700 mb-3">
+                    {t('planStudio.optimizeTab.workbenchHint.description')}
+                  </p>
+                  <Button
+                    onClick={handleGoToWorkbench}
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                  >
+                    {t('planStudio.optimizeTab.workbenchHint.action')}
+                    <ArrowRight className="w-3 h-3 ml-1.5" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {error && (
             <Card className={cn('border', getGateStatusClasses('REJECT'))}>
@@ -369,77 +302,6 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           )}
         </CardContent>
       </Card>
-
-      {/* 规划工作台错误提示 */}
-      {workbenchError && (
-        <Card className={cn('border', getGateStatusClasses('REJECT'))}>
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              {(() => {
-                const ErrorIcon = getGateStatusIcon('REJECT');
-                return <ErrorIcon className={cn('w-5 h-5 mt-0.5 flex-shrink-0', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))} />;
-              })()}
-              <div className="flex-1">
-                <p className={cn('text-sm font-medium', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))}>规划工作台执行失败</p>
-                <p className={cn('text-sm mt-1', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('text-')))}>{workbenchError}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 规划工作台结果展示 */}
-      {workbenchResult && showWorkbench && (
-        <div className="space-y-6">
-          {/* 综合决策 */}
-          {workbenchResult.uiOutput.consolidatedDecision && (
-            <Card className="border-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>规划工作台 - 综合决策</CardTitle>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-1',
-                      getConsolidatedDecisionStyle(workbenchResult.uiOutput.consolidatedDecision.status)
-                        .className
-                    )}
-                  >
-                    {getConsolidatedDecisionStyle(workbenchResult.uiOutput.consolidatedDecision.status).icon}
-                    {getConsolidatedDecisionStyle(workbenchResult.uiOutput.consolidatedDecision.status).label}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  {workbenchResult.uiOutput.consolidatedDecision.summary}
-                </p>
-                {workbenchResult.uiOutput.consolidatedDecision.nextSteps &&
-                  workbenchResult.uiOutput.consolidatedDecision.nextSteps.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-gray-900">下一步：</p>
-                      <ul className="space-y-1">
-                        {workbenchResult.uiOutput.consolidatedDecision.nextSteps.map((step, index) => (
-                          <li key={index} className="text-sm text-gray-700 flex items-start gap-2">
-                            <span className="text-primary mt-1">•</span>
-                            <span>{step}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* 三人格输出 */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <PersonaCard persona={workbenchResult.uiOutput.personas.abu} />
-            <PersonaCard persona={workbenchResult.uiOutput.personas.drdre} />
-            <PersonaCard persona={workbenchResult.uiOutput.personas.neptune} />
-          </div>
-        </div>
-      )}
       
       {/* 审批对话框 */}
       {pendingApprovalId && (

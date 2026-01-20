@@ -15,6 +15,10 @@ import {
   getGateStatusClasses,
   normalizeGateStatus,
 } from '@/lib/gate-status';
+import {
+  getPersonaIcon,
+  getPersonaIconColorClasses,
+} from '@/lib/persona-icons';
 
 type PersonaOutput = AbuPersonaOutput | DrDrePersonaOutput | NeptunePersonaOutput;
 
@@ -36,12 +40,16 @@ export default function PersonaCard({ persona, className }: PersonaCardProps) {
   const statusLabel = getGateStatusLabel(normalizedStatus);
   const statusClasses = getGateStatusClasses(normalizedStatus);
 
+  // 获取三人格图标（使用符号系统而非 Emoji）
+  const PersonaIcon = getPersonaIcon(persona.persona);
+  const personaIconColorClasses = getPersonaIconColorClasses(persona.persona);
+
   return (
     <Card className={cn('border-2', className)}>
       <CardHeader className="pb-3 border-b">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">{persona.icon}</span>
+            <PersonaIcon className={cn('w-8 h-8 flex-shrink-0', personaIconColorClasses)} />
             <div>
               <CardTitle className="text-lg font-semibold">
                 {persona.persona === 'ABU' ? 'Abu' : persona.persona === 'DR_DRE' ? 'Dr.Dre' : 'Neptune'}

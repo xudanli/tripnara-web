@@ -28,6 +28,21 @@ import {
   Zap,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { RiskScoreDisplay, RiskScoreBadge } from '@/components/ui/risk-score-display';
+import type { RiskDimension } from '@/components/ui/risk-score-display';
+
+/**
+ * 将字符串风险等级转换为风险评分 (0-100)
+ */
+function riskLevelToScore(riskLevel: string): number {
+  const mapping: Record<string, number> = {
+    'LOW': 25,
+    'MEDIUM': 50,
+    'HIGH': 80,
+    'CRITICAL': 95,
+  };
+  return mapping[riskLevel] || 50;
+}
 
 export default function WhatIfPage() {
   const navigate = useNavigate();
@@ -488,23 +503,30 @@ export default function WhatIfPage() {
                     <Progress value={baseMetrics.onTimeProb * 100} className="mt-2" />
                   </div>
                 </div>
+                {/* 风险评估 - 使用新的风险评分组件 */}
+                <RiskScoreDisplay
+                  overallScore={riskLevelToScore(baseMetrics.riskLevel)}
+                  dimensions={[
+                    {
+                      name: '时间风险',
+                      score: baseMetrics.onTimeProb * 10, // 转换为 0-100
+                      description: '基于准时概率评估',
+                      source: '行程调度算法',
+                      confidence: 85,
+                    },
+                    {
+                      name: '完成度风险',
+                      score: (1 - baseMetrics.completionRateP10) * 100,
+                      description: '基于完成率评估',
+                      source: '历史数据分析',
+                      confidence: 80,
+                    },
+                  ]}
+                  compact={true}
+                />
+                
                 <div className="mt-4 p-4 bg-muted rounded-lg">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm text-muted-foreground">风险等级</div>
-                      <Badge
-                        variant={
-                          baseMetrics.riskLevel === 'HIGH'
-                            ? 'destructive'
-                            : baseMetrics.riskLevel === 'MEDIUM'
-                            ? 'default'
-                            : 'secondary'
-                        }
-                        className="mt-1"
-                      >
-                        {baseMetrics.riskLevel}
-                      </Badge>
-                    </div>
                     <div>
                       <div className="text-sm text-muted-foreground">总缓冲时间</div>
                       <div className="font-semibold">{baseMetrics.totalBufferMin} 分钟</div>
@@ -589,7 +611,10 @@ export default function WhatIfPage() {
                     <div>
                       <div className="text-sm text-muted-foreground">风险等级</div>
                       <Badge variant="secondary">
-                        {evaluationResult.base.metrics?.riskLevel || 'UNKNOWN'}
+                        <RiskScoreBadge 
+                          score={riskLevelToScore(evaluationResult.base.metrics?.riskLevel || 'MEDIUM')} 
+                          showLabel={true}
+                        />
                       </Badge>
                     </div>
                   </div>
@@ -692,17 +717,10 @@ export default function WhatIfPage() {
                               </div>
                               <div>
                                 <div className="text-sm text-muted-foreground">风险等级</div>
-                                <Badge
-                                  variant={
-                                    candidate.metrics.riskLevel === 'HIGH'
-                                      ? 'destructive'
-                                      : candidate.metrics.riskLevel === 'MEDIUM'
-                                      ? 'default'
-                                      : 'secondary'
-                                  }
-                                >
-                                  {candidate.metrics.riskLevel}
-                                </Badge>
+                                <RiskScoreBadge 
+                                  score={riskLevelToScore(candidate.metrics.riskLevel)} 
+                                  showLabel={false}
+                                />
                               </div>
                             </div>
                           )}

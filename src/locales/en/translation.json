@@ -150,8 +150,7 @@
       "intent": "Intent & Constraints",
       "places": "Places",
       "schedule": "Schedule",
-      "optimize": "Optimize",
-      "whatIf": "What-If",
+      "workbench": "Decision Evaluation",
       "bookings": "Bookings"
     },
     "noTrip": "Please select a trip first",
@@ -306,7 +305,7 @@
     },
     "optimizeTab": {
       "title": "Make Executable",
-      "description": "Generate executable plan, check conflicts and risks",
+      "description": "Optimize route order and generate executable itinerary. After optimization, go to the \"Decision Evaluation\" tab to view persona assessments (Abu/Dr.Dre/Neptune).",
       "optimizing": "Optimizing...",
       "generatePlan": "Generate Executable Plan",
       "planExecutable": "Plan is executable",
@@ -315,7 +314,12 @@
       "tightestNodes": "Top 3 Tightest Nodes",
       "abuGateResult": "Abu Gate Result",
       "passed": "Passed",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "workbenchHint": {
+        "title": "Need to evaluate your plan?",
+        "description": "After optimization, go to the \"Decision Evaluation\" tab to view comprehensive persona assessments including safety, pacing, and alternative suggestions.",
+        "action": "Go to Decision Evaluation"
+      }
     },
     "scheduleTab": {
       "lunchWindowTooShort": "Lunch time window too short",
@@ -354,9 +358,22 @@
         "confirm": "Confirm Move"
       }
     },
+    "workbenchTab": {
+      "title": "Decision Evaluation",
+      "description": "Evaluate itinerary plans through three personas (Abu/Dr.Dre/Neptune) for safety, pacing, and feasibility. Generate consolidated decisions and support plan comparison, adjustment, and commitment.",
+      "emptyState": {
+        "title": "Decision Evaluation Workbench",
+        "subtitle": "Let three personas help evaluate your itinerary plan",
+        "description": "Through comprehensive persona evaluation, ensure your itinerary plan is both safe and reasonable."
+      }
+    },
+    "scheduleTab": {
+      "title": "Schedule",
+      "description": "Edit and manage daily itinerary, adjust time windows, resolve time conflicts, and add buffer time."
+    },
     "whatIfTab": {
       "title": "What-If Scenario Comparison",
-      "description": "Generate multiple scenarios and compare to choose the best",
+      "description": "Generate multiple scenarios with different strategies and compare to choose the best. Difference from \"Decision Evaluation\" tab: What-If focuses on multi-scenario generation and comparison, while Decision Evaluation focuses on deep evaluation of a single plan.",
       "generating": "Generating scenarios...",
       "generateComparison": "Generate Comparison (600 samples)",
       "scenarios": {

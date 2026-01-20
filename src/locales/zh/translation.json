@@ -165,8 +165,7 @@
       "intent": "意图与约束",
       "places": "找点",
       "schedule": "时间轴",
-      "optimize": "优化",
-      "whatIf": "What-If",
+      "workbench": "决策评估",
       "bookings": "预订"
     },
     "noTrip": "请先选择一个行程",
@@ -321,18 +320,25 @@
     },
     "optimizeTab": {
       "title": "一键变可执行",
-      "description": "生成可执行计划，检查冲突和风险",
+      "description": "优化路线顺序，生成可执行的行程计划。优化完成后，可前往「决策评估」Tab 查看三人格（Abu/Dr.Dre/Neptune）的评估结果。",
       "optimizing": "正在优化...",
-      "generatePlan": "Generate Executable Plan",
+      "generatePlan": "生成可执行计划",
       "planExecutable": "计划可执行",
       "planNotExecutable": "计划不可执行",
       "droppedItems": "Dropped Items",
       "tightestNodes": "最紧张的 3 个节点",
       "abuGateResult": "Abu Gate 结果",
       "passed": "通过",
-      "rejected": "拒绝"
+      "rejected": "拒绝",
+      "workbenchHint": {
+        "title": "需要评估行程方案？",
+        "description": "优化完成后，前往「决策评估」Tab 查看三人格的综合评估结果，包括安全性、节奏和替代方案建议。",
+        "action": "前往决策评估"
+      }
     },
     "scheduleTab": {
+      "title": "时间轴",
+      "description": "编辑和管理每日行程安排，调整时间窗口，解决时间冲突，添加缓冲时间。",
       "lunchWindowTooShort": "午餐时间窗过短",
       "confirmDelete": "确定要删除「{{placeName}}」吗？",
       "deleteSuccess": "已成功删除「{{placeName}}」",
@@ -369,9 +375,18 @@
         "confirm": "确认移动"
       }
     },
+    "workbenchTab": {
+      "title": "决策评估",
+      "description": "通过三人格（Abu/Dr.Dre/Neptune）评估行程方案的安全性、节奏和可行性，生成综合决策并支持方案对比、调整和提交。",
+      "emptyState": {
+        "title": "决策评估工作台",
+        "subtitle": "让三人格帮你评估行程方案的可行性",
+        "description": "通过三人格的综合评估，确保你的行程方案既安全又合理。"
+      }
+    },
     "whatIfTab": {
       "title": "What-If 多方案对比",
-      "description": "生成多个方案并对比，选择最适合的",
+      "description": "生成多个不同策略的方案并对比，选择最适合的。与「决策评估」Tab 的区别：What-If 专注于多方案生成和对比，决策评估专注于单个方案的深度评估。",
       "generating": "正在生成方案...",
       "generateComparison": "生成对比方案 (600 samples)",
       "scenarios": {

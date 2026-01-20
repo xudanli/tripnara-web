@@ -36,9 +36,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataCard } from '@/components/ui/data-card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import {
   Send,
   Sparkles,
@@ -398,66 +398,84 @@ function SelectedItemCard({ context }: { context: SelectedContext }) {
 
 /**
  * 对比表渲染组件
+ * 使用新的 DataCard 组件，符合体验设计文档规范
  */
 function ComparisonContent({ content }: { content: ComparisonRichContent }) {
   return (
     <div className="mt-3">
-      <div className="text-sm font-medium mb-2 flex items-center gap-2">
+      <div className="text-sm font-medium mb-3 flex items-center gap-2">
         <BarChart3 className="w-4 h-4" />
         {content.titleCN || content.title}
       </div>
-      <div className="grid gap-2">
-        {content.items.map((item) => (
-          <Card 
-            key={item.id}
-            className={cn(
-              "overflow-hidden",
-              item.recommended && "ring-2 ring-green-300 bg-green-50/50"
-            )}
-          >
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium">{item.nameCN || item.name}</span>
-                {item.recommended && (
-                  <Badge className="bg-green-500">推荐</Badge>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {Object.entries(item.metrics).map(([key, value]) => (
-                  <div key={key} className="flex justify-between">
-                    <span className="text-muted-foreground">{key}</span>
-                    <span className="font-medium">{value}</span>
-                  </div>
-                ))}
-              </div>
-              <Separator className="my-2" />
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-green-600 font-medium">优点</span>
-                  <ul className="mt-1 space-y-0.5">
-                    {item.pros.map((pro, idx) => (
-                      <li key={idx} className="flex items-start gap-1">
-                        <Check className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
-                        <span>{pro}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <span className="text-orange-600 font-medium">缺点</span>
-                  <ul className="mt-1 space-y-0.5">
-                    {item.cons.map((con, idx) => (
-                      <li key={idx} className="flex items-start gap-1">
-                        <X className="w-3 h-3 text-orange-500 mt-0.5 flex-shrink-0" />
-                        <span>{con}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {content.items.map((item) => {
+          // 将 metrics 对象转换为 DataCard 需要的格式
+          const metrics = Object.entries(item.metrics).map(([key, value]) => ({
+            label: key,
+            value: String(value),
+            highlight: false,
+          }));
+
+          // 尝试从 metrics 中提取风险评分和匹配度（如果有）
+          let riskScore: number | undefined;
+          let matchScore: number | undefined;
+
+          // 查找风险相关的指标
+          const riskKey = Object.keys(item.metrics).find(
+            k => k.toLowerCase().includes('风险') || k.toLowerCase().includes('risk')
+          );
+          if (riskKey) {
+            const riskValue = item.metrics[riskKey];
+            // 如果是百分比字符串，提取数字
+            if (typeof riskValue === 'string' && riskValue.includes('%')) {
+              riskScore = parseInt(riskValue.replace('%', ''), 10);
+            } else if (typeof riskValue === 'number') {
+              riskScore = riskValue;
+            }
+          }
+
+          // 查找匹配度相关的指标
+          const matchKey = Object.keys(item.metrics).find(
+            k => k.toLowerCase().includes('匹配') || k.toLowerCase().includes('match')
+          );
+          if (matchKey) {
+            const matchValue = item.metrics[matchKey];
+            if (typeof matchValue === 'string' && matchValue.includes('%')) {
+              matchScore = parseInt(matchValue.replace('%', ''), 10);
+            } else if (typeof matchValue === 'number') {
+              matchScore = matchValue;
+            }
+          }
+
+          return (
+            <DataCard
+              key={item.id}
+              title={item.nameCN || item.name}
+              metrics={metrics}
+              riskScore={riskScore}
+              matchScore={matchScore}
+              recommended={item.recommended}
+              actions={[
+                {
+                  label: '选择',
+                  onClick: () => {
+                    // 可以添加选择回调
+                    console.log('Selected option:', item.id);
+                  },
+                  variant: 'default',
+                },
+                {
+                  label: '查看详情',
+                  onClick: () => {
+                    // 可以添加详情查看回调
+                    console.log('View details:', item.id);
+                  },
+                  variant: 'outline',
+                },
+              ]}
+            />
+          );
+        })}
       </div>
     </div>
   );

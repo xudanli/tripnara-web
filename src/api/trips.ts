@@ -97,6 +97,14 @@ import type {
   BudgetAlert,
   BudgetOptimizationSuggestion,
   BudgetReport,
+  SetBudgetConstraintRequest,
+  SetBudgetConstraintResponse,
+  GetBudgetConstraintResponse,
+  DeleteBudgetConstraintResponse,
+  BudgetDetailsResponse,
+  BudgetTrendsResponse,
+  BudgetStatisticsResponse,
+  BudgetMonitorResponse,
   PersonaAlert,
   DecisionLogResponse,
   Task,
@@ -547,8 +555,143 @@ export const tripsApi = {
    * 获取行程预算摘要
    * GET /trips/:id/budget/summary
    */
-  getBudgetSummary: async (id: string): Promise<BudgetSummary> => {
-    const response = await apiClient.get<ApiResponseWrapper<BudgetSummary>>(`/trips/${id}/budget/summary`);
+  getBudgetSummary: async (
+    id: string,
+    params?: {
+      startDate?: string;
+      endDate?: string;
+      category?: string;
+    }
+  ): Promise<BudgetSummary> => {
+    const response = await apiClient.get<ApiResponseWrapper<BudgetSummary>>(
+      `/trips/${id}/budget/summary`,
+      {
+        params: params ? {
+          ...(params.startDate && { startDate: params.startDate }),
+          ...(params.endDate && { endDate: params.endDate }),
+          ...(params.category && { category: params.category }),
+        } : undefined,
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 设置行程预算约束
+   * POST /trips/:id/budget/constraint
+   */
+  setBudgetConstraint: async (
+    id: string,
+    data: SetBudgetConstraintRequest
+  ): Promise<SetBudgetConstraintResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<SetBudgetConstraintResponse>>(
+      `/trips/${id}/budget/constraint`,
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取行程预算约束
+   * GET /trips/:id/budget/constraint
+   */
+  getBudgetConstraint: async (id: string): Promise<GetBudgetConstraintResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<GetBudgetConstraintResponse>>(
+      `/trips/${id}/budget/constraint`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 删除行程预算约束
+   * DELETE /trips/:id/budget/constraint
+   */
+  deleteBudgetConstraint: async (id: string): Promise<DeleteBudgetConstraintResponse> => {
+    const response = await apiClient.delete<ApiResponseWrapper<DeleteBudgetConstraintResponse>>(
+      `/trips/${id}/budget/constraint`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取预算明细
+   * GET /trips/:id/budget/details
+   */
+  getBudgetDetails: async (
+    id: string,
+    params?: {
+      startDate?: string;
+      endDate?: string;
+      category?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<BudgetDetailsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<BudgetDetailsResponse>>(
+      `/trips/${id}/budget/details`,
+      {
+        params: params ? {
+          ...(params.startDate && { startDate: params.startDate }),
+          ...(params.endDate && { endDate: params.endDate }),
+          ...(params.category && { category: params.category }),
+          ...(params.limit !== undefined && { limit: params.limit }),
+          ...(params.offset !== undefined && { offset: params.offset }),
+        } : undefined,
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取预算趋势
+   * GET /trips/:id/budget/trends
+   */
+  getBudgetTrends: async (
+    id: string,
+    params?: {
+      startDate?: string;
+      endDate?: string;
+      granularity?: 'daily' | 'weekly' | 'monthly';
+    }
+  ): Promise<BudgetTrendsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<BudgetTrendsResponse>>(
+      `/trips/${id}/budget/trends`,
+      {
+        params: params ? {
+          ...(params.startDate && { startDate: params.startDate }),
+          ...(params.endDate && { endDate: params.endDate }),
+          ...(params.granularity && { granularity: params.granularity }),
+        } : undefined,
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取预算执行统计
+   * GET /trips/:id/budget/statistics
+   */
+  getBudgetStatistics: async (id: string): Promise<BudgetStatisticsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<BudgetStatisticsResponse>>(
+      `/trips/${id}/budget/statistics`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取实时预算监控
+   * GET /trips/:id/budget/monitor
+   */
+  getBudgetMonitor: async (
+    id: string,
+    realtime?: boolean
+  ): Promise<BudgetMonitorResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<BudgetMonitorResponse>>(
+      `/trips/${id}/budget/monitor`,
+      {
+        params: realtime !== undefined ? { realtime } : undefined,
+      }
+    );
     return handleResponse(response);
   },
 

@@ -228,6 +228,50 @@
   --persona-neptune: oklch(0.95 0.02 145);
   --persona-neptune-foreground: oklch(0.35 0.12 145);
   --persona-neptune-accent: oklch(0.55 0.15 145);
+  
+  /* 预算状态颜色（克制、中性，符合 TripNARA 设计哲学） */
+  --budget-safe: oklch(0.97 0.015 150);           /* 预算充足：极浅绿，低饱和度 */
+  --budget-safe-foreground: oklch(0.40 0.08 150);
+  --budget-safe-border: oklch(0.90 0.02 150);
+  
+  --budget-warning: oklch(0.98 0.015 85);        /* 预算警告：极浅黄，低饱和度 */
+  --budget-warning-foreground: oklch(0.45 0.08 85);
+  --budget-warning-border: oklch(0.92 0.02 85);
+  
+  --budget-critical: oklch(0.97 0.015 25);       /* 预算超支：极浅红，低饱和度 */
+  --budget-critical-foreground: oklch(0.45 0.10 25);
+  --budget-critical-border: oklch(0.88 0.03 25);
+  
+  /* 风险评分颜色系统（基于体验设计文档 v1.0） */
+  /* 低风险（0-30）：#4CAF50 */
+  --risk-very-low: #4CAF50;
+  --risk-very-low-bg: #E8F5E9;
+  --risk-very-low-border: #C8E6C9;
+  
+  /* 中低风险（31-45）：#9CCC65 */
+  --risk-low-medium: #9CCC65;
+  --risk-low-medium-bg: #F1F8E9;
+  --risk-low-medium-border: #DCEDC8;
+  
+  /* 中等风险（46-60）：#FFC107 */
+  --risk-medium: #FFC107;
+  --risk-medium-bg: #FFF9C4;
+  --risk-medium-border: #FFF59D;
+  
+  /* 中高风险（61-75）：#FF9800 */
+  --risk-medium-high: #FF9800;
+  --risk-medium-high-bg: #FFF3E0;
+  --risk-medium-high-border: #FFB74D; /* 基于主色的浅色变体，避免与高风险背景重复 */
+  
+  /* 高风险（76-90）：#FF6F00 */
+  --risk-high: #FF6F00;
+  --risk-high-bg: #FFE0B2;
+  --risk-high-border: #FFCC80;
+  
+  /* 极高风险（91-100）：#F44336 */
+  --risk-very-high: #F44336;
+  --risk-very-high-bg: #FFEBEE;
+  --risk-very-high-border: #FFCDD2;
 }
 
 .dark {
@@ -292,6 +336,44 @@
   --persona-neptune: oklch(0.20 0.05 145);
   --persona-neptune-foreground: oklch(0.85 0.10 145);
   --persona-neptune-accent: oklch(0.55 0.15 145);
+  
+  /* 预算状态颜色（暗色模式） */
+  --budget-safe: oklch(0.25 0.03 150);
+  --budget-safe-foreground: oklch(0.75 0.08 150);
+  --budget-safe-border: oklch(0.35 0.05 150);
+  
+  --budget-warning: oklch(0.28 0.03 85);
+  --budget-warning-foreground: oklch(0.80 0.08 85);
+  --budget-warning-border: oklch(0.38 0.05 85);
+  
+  --budget-critical: oklch(0.28 0.04 25);
+  --budget-critical-foreground: oklch(0.80 0.10 25);
+  --budget-critical-border: oklch(0.38 0.06 25);
+  
+  /* 风险评分颜色系统 - 暗色模式 */
+  --risk-very-low: #66BB6A;
+  --risk-very-low-bg: oklch(0.25 0.05 145);
+  --risk-very-low-border: oklch(0.35 0.08 145);
+  
+  --risk-low-medium: #AED581;
+  --risk-low-medium-bg: oklch(0.27 0.05 145);
+  --risk-low-medium-border: oklch(0.37 0.08 145);
+  
+  --risk-medium: #FFD54F;
+  --risk-medium-bg: oklch(0.30 0.05 85);
+  --risk-medium-border: oklch(0.40 0.08 85);
+  
+  --risk-medium-high: #FFB74D;
+  --risk-medium-high-bg: oklch(0.28 0.05 50);
+  --risk-medium-high-border: oklch(0.38 0.08 50);
+  
+  --risk-high: #FF8A65;
+  --risk-high-bg: oklch(0.30 0.05 25);
+  --risk-high-border: oklch(0.40 0.08 25);
+  
+  --risk-very-high: #E57373;
+  --risk-very-high-bg: oklch(0.28 0.05 25);
+  --risk-very-high-border: oklch(0.38 0.08 25);
 }
 
 @layer base {

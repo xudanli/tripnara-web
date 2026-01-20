@@ -17,6 +17,8 @@ import type { ApprovalRequest, RiskLevel } from '@/types/approval';
 import { ApprovalStatus } from '@/types/approval';
 import { CheckCircle2, XCircle, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { riskLevelToScore } from '@/utils/approval';
+import { RiskScoreBadge } from '@/components/ui/risk-score-display';
 
 interface ApprovalDialogProps {
   approvalId: string;
@@ -25,15 +27,7 @@ interface ApprovalDialogProps {
   onDecision?: (approved: boolean, approval: ApprovalRequest) => void;
 }
 
-// 风险等级颜色配置
-const riskLevelColors: Record<RiskLevel, string> = {
-  low: 'bg-green-100 text-green-800 border-green-200',
-  medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  high: 'bg-orange-100 text-orange-800 border-orange-200',
-  critical: 'bg-red-100 text-red-800 border-red-200',
-};
-
-// 风险等级图标
+// 风险等级图标（保持向后兼容）
 const riskLevelIcons: Record<RiskLevel, typeof AlertTriangle> = {
   low: CheckCircle2,
   medium: AlertTriangle,
@@ -242,10 +236,10 @@ export default function ApprovalDialog({
             {/* 风险等级 */}
             <div className="flex items-center gap-2">
               <Label>风险等级：</Label>
-              <Badge className={cn('border flex items-center gap-1', riskLevelColors[approval.riskLevel])}>
-                <RiskIcon className="w-3 h-3" />
-                {approval.riskLevel}
-              </Badge>
+              <RiskScoreBadge 
+                score={riskLevelToScore(approval.riskLevel)} 
+                showLabel={true}
+              />
             </div>
 
             {/* 操作详情 */}

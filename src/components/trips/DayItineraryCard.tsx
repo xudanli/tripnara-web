@@ -3,15 +3,20 @@
  * 优化后的卡片式布局，提高识别与可读性
  */
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SuggestionBadge } from '@/components/trips/SuggestionBadge';
+import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
-import { MapPin, AlertTriangle, ArrowRight, Lightbulb, Plus, Luggage, Target, Sparkles, HelpCircle } from 'lucide-react';
+import { MapPin, AlertTriangle, ArrowRight, Lightbulb, Plus, Luggage, Target, Sparkles, HelpCircle, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TripDay, DayMetricsResponse } from '@/types/trip';
 import type { Suggestion } from '@/types/suggestion';
+import { tripsApi } from '@/api/trips';
+import type { BudgetDetailsResponse } from '@/types/trip';
+import { formatCurrency as formatCurrencyAmount } from '@/utils/format';
 
 interface DayItineraryCardProps {
   day: TripDay;
@@ -24,6 +29,8 @@ interface DayItineraryCardProps {
   onQuickPlan?: () => void;
   onViewRecommendations?: () => void;
   className?: string;
+  tripId?: string; // 用于获取预算数据
+  onViewBudget?: () => void; // 查看预算详情回调
 }
 
 export default function DayItineraryCard({
@@ -37,7 +44,48 @@ export default function DayItineraryCard({
   onQuickPlan,
   onViewRecommendations,
   className,
+  tripId,
+  onViewBudget,
 }: DayItineraryCardProps) {
+  const [dayBudget, setDayBudget] = useState<{ spent: number; budget: number } | null>(null);
+  const [loadingBudget, setLoadingBudget] = useState(false);
+
+  useEffect(() => {
+    if (tripId && day.date) {
+      loadDayBudget();
+    }
+  }, [tripId, day.date]);
+
+  const loadDayBudget = async () => {
+    if (!tripId || !day.date) return;
+    try {
+      setLoadingBudget(true);
+      const details = await tripsApi.getBudgetDetails(tripId, {
+        startDate: day.date,
+        endDate: day.date,
+        limit: 100,
+        offset: 0,
+      });
+      
+      // 计算当日支出
+      const spent = details.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+      
+      // 获取预算约束以计算日均预算
+      try {
+        const constraint = await tripsApi.getBudgetConstraint(tripId);
+        const totalBudget = constraint.budgetConstraint.total || 0;
+        const dailyBudget = constraint.budgetConstraint.dailyBudget || (totalBudget / (dayIndex + 1)); // 简单估算
+        setDayBudget({ spent, budget: dailyBudget });
+      } catch {
+        // 如果没有预算约束，只显示已支出
+        setDayBudget({ spent, budget: 0 });
+      }
+    } catch (err) {
+      console.error('Failed to load day budget:', err);
+    } finally {
+      setLoadingBudget(false);
+    }
+  };
   const daySuggestions = suggestions.filter(
     (s) => s.scope === 'day' && s.scopeId === day.id
   );
@@ -126,6 +174,46 @@ export default function DayItineraryCard({
                 </div>
               )}
             </div>
+
+            {/* 每日预算概览（使用设计 Token，克制呈现） */}
+            {dayBudget && dayBudget.budget > 0 && (() => {
+              const usagePercent = Math.min((dayBudget.spent / dayBudget.budget) * 100, 100);
+              const isOverBudget = dayBudget.spent > dayBudget.budget;
+              const statusColor = isOverBudget ? 'budget-critical' : usagePercent >= 80 ? 'budget-warning' : 'budget-safe';
+              const textColor = isOverBudget ? 'text-budget-critical-foreground' : usagePercent >= 80 ? 'text-budget-warning-foreground' : 'text-budget-safe-foreground';
+              
+              return (
+                <div className="mb-2 p-2.5 bg-muted/50 rounded-lg border border-border/50">
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Wallet className="w-3 h-3" />
+                      当日预算
+                    </span>
+                    <span className={cn('font-semibold', textColor)}>
+                      {formatCurrencyAmount(dayBudget.spent, 'CNY')} / {formatCurrencyAmount(dayBudget.budget, 'CNY')}
+                    </span>
+                  </div>
+                  <Progress
+                    value={usagePercent}
+                    className={cn('h-1.5', {
+                      'bg-budget-safe/20': statusColor === 'budget-safe',
+                      'bg-budget-warning/20': statusColor === 'budget-warning',
+                      'bg-budget-critical/20': statusColor === 'budget-critical',
+                    })}
+                  />
+                  {isOverBudget && onViewBudget && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-1.5 h-6 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={onViewBudget}
+                    >
+                      查看预算详情
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* 右侧：健康状态摘要 或 空状态时的主按钮 */}

@@ -49,7 +49,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Clock, Cloud, AlertCircle, Info, AlertTriangle, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Clock, Cloud, AlertCircle, Info, AlertTriangle, Plus, Wallet, ExternalLink } from 'lucide-react';
+import TripBudgetPage from './budget';
+import BudgetOverviewCard from '@/components/trips/BudgetOverviewCard';
+import BudgetAlertBanner from '@/components/trips/BudgetAlertBanner';
+import BudgetMonitorCard from '@/components/trips/BudgetMonitorCard';
 import HealthBar from '@/components/trips/HealthBar';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
@@ -63,7 +67,6 @@ import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryI
 import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
 import BusinessHoursCard from '@/components/trips/BusinessHoursCard';
-import { formatCurrency as formatCurrencyAmount } from '@/utils/format';
 import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
 import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
@@ -416,11 +419,6 @@ export default function TripDetailPage() {
     }
   };
 
-  // 格式化货币显示
-  const formatCurrency = (amount: number): string => {
-    const currencyCode = country?.currencyCode || trip?.budgetConfig?.currency || 'CNY';
-    return formatCurrencyAmount(amount, currencyCode);
-  };
 
 
   // const handleCollect = async () => {
@@ -1552,6 +1550,11 @@ export default function TripDetailPage() {
                   复盘
                 </TabsTrigger>
               )}
+              {/* 预算标签页 */}
+              <TabsTrigger value="budget">
+                <Wallet className="w-4 h-4 mr-2" />
+                预算
+              </TabsTrigger>
         </TabsList>
           </div>
 
@@ -1578,6 +1581,10 @@ export default function TripDetailPage() {
                             dayIndex={idx}
                             dayMetrics={dayMetrics}
                             suggestions={suggestions}
+                            tripId={id}
+                            onViewBudget={() => {
+                              setActiveTab('budget');
+                            }}
                             onViewItinerary={trip.status === 'PLANNING' ? () => {
                               // ✅ 只有规划中状态才能跳转到规划工作台
                               navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}`);
@@ -1641,7 +1648,17 @@ export default function TripDetailPage() {
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">
                                 {key === 'schedule' && '时间'}
-                                {key === 'budget' && '预算'}
+                                {key === 'budget' && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveTab('budget');
+                                    }}
+                                    className="flex items-center gap-1 hover:text-primary transition-colors"
+                                  >
+                                    预算
+                                    <ExternalLink className="w-3 h-3" />
+                                  </button>
+                                )}
                                 {key === 'pace' && '节奏'}
                                 {key === 'feasibility' && '可达性'}
                               </span>
@@ -1669,6 +1686,22 @@ export default function TripDetailPage() {
                       </div>
                     </CardContent>
                   </Card>
+                )}
+
+                {/* 预算概览卡片 */}
+                {id && (
+                  <BudgetOverviewCard
+                    tripId={id}
+                    onViewDetails={() => {
+                      setActiveTab('budget');
+                    }}
+                    onSetConstraint={() => {
+                      // 跳转到预算标签页，并触发设置约束对话框
+                      setActiveTab('budget');
+                      // 注意：预算约束设置对话框在预算页面内部，这里只是跳转
+                      // 如果需要直接打开对话框，可以通过 URL 参数或状态传递
+                    }}
+                  />
                 )}
 
                 {/* 状态理解（来自 trip-detail API） */}
@@ -2114,7 +2147,22 @@ export default function TripDetailPage() {
 
           {/* Execute Tab */}
           <TabsContent value="execute" className="mt-0">
-            <div className="p-6">
+            <div className="p-6 space-y-6">
+              {/* 实时预算监控卡片 */}
+              {id && (
+                <BudgetMonitorCard
+                  tripId={id}
+                  onViewDetails={() => {
+                    setActiveTab('budget');
+                  }}
+                  onSetConstraint={() => {
+                    setActiveTab('budget');
+                  }}
+                  autoRefresh={true}
+                  refreshInterval={5000}
+                />
+              )}
+
             <Card>
               <CardHeader>
                   <CardTitle>执行模式</CardTitle>
@@ -2152,6 +2200,17 @@ export default function TripDetailPage() {
           </TabsContent>
 
           {/* Insights Tab */}
+          {/* Budget Tab */}
+          <TabsContent value="budget" className="mt-0">
+            {id ? (
+              <TripBudgetPage tripId={id} embedded={true} />
+            ) : (
+              <div className="p-6 text-center text-muted-foreground">
+                <p>无法加载预算信息</p>
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="insights" className="mt-0">
             <div className="p-6">
             <Card>
@@ -2215,33 +2274,6 @@ export default function TripDetailPage() {
           <DecisionLogTab tripId={id!} />
         </TabsContent>
 
-        <TabsContent value="budget" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>预算详情</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <div className="text-sm text-muted-foreground">总预算</div>
-                  <div className="text-2xl font-bold">{formatCurrency((trip.totalBudget ?? 0) as number)}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">已使用</div>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency((trip.statistics.budgetUsed ?? 0) as number)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">剩余</div>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency((trip.statistics.budgetRemaining ?? 0) as number)}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
         </div>
         </Tabs>
       </div>

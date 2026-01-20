@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { X, MapPin, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, MapPin, Plus, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { PlaceWithDistance } from '@/types/places-routes';
@@ -67,6 +67,18 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   const [avoidPlaces, setAvoidPlaces] = useState<string[]>([]); // 存储POI ID
   const [avoidPlaceMap, setAvoidPlaceMap] = useState<Map<number, PlaceWithDistance>>(new Map()); // ID到Place的映射
   const [budget, setBudget] = useState<number | undefined>(undefined);
+  const [budgetCurrency, setBudgetCurrency] = useState<string>('CNY');
+  const [dailyBudget, setDailyBudget] = useState<number | undefined>(undefined);
+  const [categoryLimits, setCategoryLimits] = useState<{
+    accommodation?: number;
+    transportation?: number;
+    food?: number;
+    activities?: number;
+    other?: number;
+  }>({});
+  const [alertThreshold, setAlertThreshold] = useState<number>(0.8);
+  const [budgetConstraint, setBudgetConstraint] = useState<import('@/api/planning-workbench').BudgetConstraint | null>(null);
+  const [loadingBudgetConstraint, setLoadingBudgetConstraint] = useState(false);
   const [planningPolicy, setPlanningPolicy] = useState<'safe' | 'experience' | 'challenge'>('safe');
 
   // 地点搜索状态
@@ -138,6 +150,9 @@ export default function IntentTab({ tripId }: IntentTabProps) {
           setBudget(data.totalBudget);
         }
         
+        // 加载预算约束
+        loadBudgetConstraint();
+        
         // 从 metadata 加载其他配置
         if (intentData.metadata) {
           if (intentData.metadata.preferences) {
@@ -187,6 +202,9 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         } else if (data.totalBudget) {
           setBudget(data.totalBudget);
         }
+        
+        // 加载预算约束
+        loadBudgetConstraint();
       }
     } catch (err) {
       console.error('Failed to load trip:', err);
@@ -266,6 +284,42 @@ export default function IntentTab({ tripId }: IntentTabProps) {
     setAvoidPlaceMap(newMap);
   };
 
+  // 加载预算约束
+  const loadBudgetConstraint = async () => {
+    if (!tripId) return;
+    try {
+      setLoadingBudgetConstraint(true);
+      const data = await tripsApi.getBudgetConstraint(tripId);
+      const constraint = data.budgetConstraint;
+      setBudgetConstraint(constraint);
+      
+      // 填充表单
+      if (constraint.total) {
+        setBudget(constraint.total);
+      }
+      if (constraint.currency) {
+        setBudgetCurrency(constraint.currency);
+      }
+      if (constraint.dailyBudget) {
+        setDailyBudget(constraint.dailyBudget);
+      }
+      if (constraint.categoryLimits) {
+        setCategoryLimits(constraint.categoryLimits);
+      }
+      if (constraint.alertThreshold) {
+        setAlertThreshold(constraint.alertThreshold);
+      }
+    } catch (err: any) {
+      // 如果没有预算约束，不显示错误
+      if (err.message && !err.message.includes('404')) {
+        console.error('Failed to load budget constraint:', err);
+      }
+      setBudgetConstraint(null);
+    } finally {
+      setLoadingBudgetConstraint(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!trip) {
       toast.error(t('planStudio.intentTab.noTripData'));
@@ -284,15 +338,25 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         });
       }, 3000);
 
-      // 构建更新请求
-      // 根据 UpdateTripRequest 的实际定义，只更新支持的字段
-      const updateData: UpdateTripRequest = {
-        totalBudget: budget || trip.totalBudget,
-      };
-
-      // 更新基础字段（totalBudget）
-      if (budget !== undefined) {
-        await tripsApi.update(tripId, updateData);
+      // 更新预算约束（如果预算有变化或设置了详细约束）
+      if (budget !== undefined && (budget !== trip.totalBudget || dailyBudget || Object.values(categoryLimits).some(v => v))) {
+        try {
+          const constraintData: import('@/api/planning-workbench').BudgetConstraint = {
+            total: budget,
+            currency: budgetCurrency,
+            dailyBudget: dailyBudget,
+            categoryLimits: Object.values(categoryLimits).some(v => v) ? categoryLimits : undefined,
+            alertThreshold: alertThreshold,
+          };
+          await tripsApi.setBudgetConstraint(tripId, constraintData);
+        } catch (budgetErr: any) {
+          console.warn('Failed to update budget constraint:', budgetErr);
+          // 如果预算约束接口失败，回退到旧的更新方式
+          const updateData: UpdateTripRequest = {
+            totalBudget: budget,
+          };
+          await tripsApi.update(tripId, updateData);
+        }
       }
       
       // 更新意图与约束配置
@@ -449,6 +513,134 @@ export default function IntentTab({ tripId }: IntentTabProps) {
                 min={0}
                 placeholder={t('planStudio.intentTab.noLimit')}
               />
+            </div>
+          </div>
+
+          {/* 预算约束详细设置 */}
+          <div className="space-y-4 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">预算约束详细设置</Label>
+              {budgetConstraint && (
+                <Badge variant="outline" className="text-xs">
+                  已设置
+                </Badge>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>货币单位</Label>
+                <Select value={budgetCurrency} onValueChange={setBudgetCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CNY">CNY (人民币)</SelectItem>
+                    <SelectItem value="USD">USD (美元)</SelectItem>
+                    <SelectItem value="EUR">EUR (欧元)</SelectItem>
+                    <SelectItem value="JPY">JPY (日元)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>日均预算（可选）</Label>
+                <Input
+                  type="number"
+                  value={dailyBudget || ''}
+                  onChange={(e) => setDailyBudget(e.target.value ? Number(e.target.value) : undefined)}
+                  min={0}
+                  placeholder="自动计算"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>分类预算限制（可选）</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">住宿</Label>
+                  <Input
+                    type="number"
+                    value={categoryLimits.accommodation || ''}
+                    onChange={(e) => setCategoryLimits({
+                      ...categoryLimits,
+                      accommodation: e.target.value ? Number(e.target.value) : undefined,
+                    })}
+                    min={0}
+                    placeholder="不限"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">交通</Label>
+                  <Input
+                    type="number"
+                    value={categoryLimits.transportation || ''}
+                    onChange={(e) => setCategoryLimits({
+                      ...categoryLimits,
+                      transportation: e.target.value ? Number(e.target.value) : undefined,
+                    })}
+                    min={0}
+                    placeholder="不限"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">餐饮</Label>
+                  <Input
+                    type="number"
+                    value={categoryLimits.food || ''}
+                    onChange={(e) => setCategoryLimits({
+                      ...categoryLimits,
+                      food: e.target.value ? Number(e.target.value) : undefined,
+                    })}
+                    min={0}
+                    placeholder="不限"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">活动</Label>
+                  <Input
+                    type="number"
+                    value={categoryLimits.activities || ''}
+                    onChange={(e) => setCategoryLimits({
+                      ...categoryLimits,
+                      activities: e.target.value ? Number(e.target.value) : undefined,
+                    })}
+                    min={0}
+                    placeholder="不限"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">其他</Label>
+                  <Input
+                    type="number"
+                    value={categoryLimits.other || ''}
+                    onChange={(e) => setCategoryLimits({
+                      ...categoryLimits,
+                      other: e.target.value ? Number(e.target.value) : undefined,
+                    })}
+                    min={0}
+                    placeholder="不限"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>预警阈值</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={alertThreshold}
+                  onChange={(e) => setAlertThreshold(Number(e.target.value))}
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">
+                  ({Math.round(alertThreshold * 100)}% 时预警)
+                </span>
+              </div>
             </div>
           </div>
 
