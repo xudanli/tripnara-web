@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -10,8 +10,20 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { User, Database, Link2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { userApi, UserApiError, type User } from '@/api/user';
 import { countriesApi } from '@/api/countries';
 import type { UserPreferences } from '@/api/user';
 import type { Country } from '@/types/country';
@@ -71,6 +83,7 @@ const TRAVELER_TAGS = [
 ];
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') || 'preferences';
   const [activeTab, setActiveTab] = useState(tabParam);
@@ -83,6 +96,24 @@ export default function SettingsPage() {
     updateError,
     updateProfile,
   } = useUserPreferences();
+
+  // 用户信息相关状态
+  const [user, setUser] = useState<User | null>(null);
+  const [userLoading, setUserLoading] = useState(false);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [userUpdating, setUserUpdating] = useState(false);
+  const [userUpdateSuccess, setUserUpdateSuccess] = useState(false);
+  
+  // 账户表单数据
+  const [accountFormData, setAccountFormData] = useState({
+    displayName: '',
+    avatarUrl: '',
+  });
+  
+  // 删除账户相关状态
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // 当URL参数变化时更新Tab
   useEffect(() => {
@@ -115,6 +146,36 @@ export default function SettingsPage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  // 加载用户信息
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        setUserLoading(true);
+        setUserError(null);
+        const userData = await userApi.getMe();
+        setUser(userData);
+        setAccountFormData({
+          displayName: userData.displayName || '',
+          avatarUrl: userData.avatarUrl || '',
+        });
+      } catch (err) {
+        if (err instanceof UserApiError) {
+          setUserError(err.message);
+        } else {
+          setUserError('加载用户信息失败');
+        }
+        console.error('Failed to load user:', err);
+      } finally {
+        setUserLoading(false);
+      }
+    };
+    
+    // 只在账户标签页时加载用户信息
+    if (activeTab === 'account') {
+      loadUser();
+    }
+  }, [activeTab]);
 
   // 加载国家列表
   useEffect(() => {
@@ -185,7 +246,61 @@ export default function SettingsPage() {
     });
   };
 
-  // 处理提交
+  // 处理账户信息提交
+  const handleAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUserUpdateSuccess(false);
+    setUserError(null);
+
+    try {
+      setUserUpdating(true);
+      const updatedUser = await userApi.updateMe({
+        displayName: accountFormData.displayName || undefined,
+        avatarUrl: accountFormData.avatarUrl || undefined,
+      });
+      setUser(updatedUser);
+      setUserUpdateSuccess(true);
+      setTimeout(() => setUserUpdateSuccess(false), 3000);
+    } catch (err) {
+      if (err instanceof UserApiError) {
+        setUserError(err.message);
+      } else {
+        setUserError('更新用户信息失败');
+      }
+      console.error('Failed to update user:', err);
+    } finally {
+      setUserUpdating(false);
+    }
+  };
+
+  // 处理删除账户
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== '确认删除') {
+      setUserError('请输入"确认删除"以确认操作');
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setUserError(null);
+      await userApi.deleteMe('确认删除');
+      // 删除成功后，清除本地状态并跳转到首页
+      sessionStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
+      navigate('/', { replace: true });
+      window.location.reload();
+    } catch (err) {
+      if (err instanceof UserApiError) {
+        setUserError(err.message);
+      } else {
+        setUserError('删除账户失败');
+      }
+      console.error('Failed to delete account:', err);
+      setDeleting(false);
+    }
+  };
+
+  // 处理偏好提交
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitSuccess(false);
@@ -223,25 +338,101 @@ export default function SettingsPage() {
 
             {/* 账户 */}
             <TabsContent value="account" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    账户信息
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>显示名称</Label>
-                    <Input placeholder="输入显示名称" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>邮箱</Label>
-                    <Input type="email" placeholder="输入邮箱" />
-                  </div>
-                  <Button>保存更改</Button>
-                </CardContent>
-              </Card>
+              {userLoading ? (
+                <Card>
+                  <CardContent className="py-12">
+                    <div className="flex items-center justify-center">
+                      <Spinner className="w-8 h-8" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <form onSubmit={handleAccountSubmit}>
+                  {/* 错误提示 */}
+                  {userError && (
+                    <Card className="border-red-200 bg-red-50 mb-6">
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-2 text-red-800">
+                          <AlertCircle className="h-5 w-5" />
+                          <span>{userError}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 成功提示 */}
+                  {userUpdateSuccess && (
+                    <Card className="border-green-200 bg-green-50 mb-6">
+                      <CardContent className="pt-6">
+                        <div className="flex items-center gap-2 text-green-800">
+                          <CheckCircle2 className="h-5 w-5" />
+                          <span>账户信息已更新</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <UserIcon className="h-5 w-5" />
+                        账户信息
+                      </CardTitle>
+                      <CardDescription>更新您的显示名称和头像</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="displayName">显示名称</Label>
+                        <Input
+                          id="displayName"
+                          placeholder="输入显示名称"
+                          value={accountFormData.displayName}
+                          onChange={(e) =>
+                            setAccountFormData((prev) => ({ ...prev, displayName: e.target.value }))
+                          }
+                          maxLength={100}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="avatarUrl">头像URL</Label>
+                        <Input
+                          id="avatarUrl"
+                          type="url"
+                          placeholder="https://example.com/avatar.jpg"
+                          value={accountFormData.avatarUrl}
+                          onChange={(e) =>
+                            setAccountFormData((prev) => ({ ...prev, avatarUrl: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>邮箱</Label>
+                        <Input
+                          type="email"
+                          value={user?.email || ''}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          {user?.emailVerified ? '邮箱已验证' : '邮箱未验证'}
+                        </p>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button type="submit" disabled={userUpdating}>
+                          {userUpdating ? (
+                            <>
+                              <Spinner className="w-4 h-4 mr-2" />
+                              保存中...
+                            </>
+                          ) : (
+                            '保存更改'
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </form>
+              )}
             </TabsContent>
 
             {/* 偏好 */}
@@ -560,9 +751,75 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between p-4 border rounded-lg border-red-200">
                     <div>
                       <div className="font-medium text-red-600">删除账户</div>
-                      <div className="text-sm text-muted-foreground">永久删除所有数据</div>
+                      <div className="text-sm text-muted-foreground">
+                        永久删除所有数据，此操作不可撤销
+                      </div>
                     </div>
-                    <Button variant="destructive">删除</Button>
+                    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive">
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          删除账户
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>确认删除账户</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            此操作将永久删除您的账户及其所有关联数据，包括：
+                            <ul className="list-disc list-inside mt-2 space-y-1">
+                              <li>所有行程数据</li>
+                              <li>用户偏好设置</li>
+                              <li>其他关联数据</li>
+                            </ul>
+                            <p className="mt-4 font-medium text-red-600">
+                              此操作不可撤销！
+                            </p>
+                            <div className="mt-4 space-y-2">
+                              <Label htmlFor="deleteConfirm">
+                                请输入"确认删除"以确认操作：
+                              </Label>
+                              <Input
+                                id="deleteConfirm"
+                                value={deleteConfirmText}
+                                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                placeholder="确认删除"
+                              />
+                            </div>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        {userError && (
+                          <div className="flex items-center gap-2 text-red-600 text-sm">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>{userError}</span>
+                          </div>
+                        )}
+                        <AlertDialogFooter>
+                          <AlertDialogCancel
+                            onClick={() => {
+                              setDeleteConfirmText('');
+                              setUserError(null);
+                            }}
+                          >
+                            取消
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDeleteAccount}
+                            disabled={deleting || deleteConfirmText !== '确认删除'}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            {deleting ? (
+                              <>
+                                <Spinner className="w-4 h-4 mr-2" />
+                                删除中...
+                              </>
+                            ) : (
+                              '确认删除'
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </CardContent>
               </Card>

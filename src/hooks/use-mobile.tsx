@@ -17,3 +17,6 @@ export function useIsMobile() {
 
   return !!isMobile
 }
+
+// 导出 useMobile 作为 useIsMobile 的别名（向后兼容）
+export const useMobile = useIsMobile

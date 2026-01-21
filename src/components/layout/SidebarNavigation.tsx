@@ -14,10 +14,21 @@ import {
   Globe,
   ChevronDown,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Logo from '@/components/common/Logo';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface NavSubItem {
   key: string;
@@ -52,16 +63,6 @@ const navItems: NavItem[] = [
         key: 'trips-all',
         label: '', // Will be set in component
         path: '/dashboard/trips',
-      },
-      {
-        key: 'trips-collected',
-        label: '', // Will be set in component
-        path: '/dashboard/trips/collected',
-      },
-      {
-        key: 'trips-featured',
-        label: '', // Will be set in component
-        path: '/dashboard/trips/featured',
       },
     ],
   },
@@ -129,6 +130,7 @@ export default function SidebarNavigation({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout, isAuthenticated } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   
@@ -172,6 +174,21 @@ export default function SidebarNavigation({
   const hasActiveSubItem = (item: typeof translatedNavItems[0]) => {
     if (!item.subItems) return false;
     return item.subItems.some(subItem => isActive(subItem.path));
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = '/';
+  };
+
+  const getInitials = (name?: string | null, email?: string | null): string => {
+    if (name) {
+      return name.charAt(0).toUpperCase();
+    }
+    if (email) {
+      return email.charAt(0).toUpperCase();
+    }
+    return 'U';
   };
 
   return (
@@ -307,6 +324,79 @@ export default function SidebarNavigation({
           })}
         </div>
       </nav>
+
+      {/* User Menu - Bottom */}
+      {isAuthenticated && user && (
+        <div className="border-t border-gray-200 p-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100',
+                  collapsed && 'justify-center'
+                )}
+                title={collapsed ? user.displayName || user.email || 'User' : undefined}
+              >
+                <Avatar className="h-8 w-8 flex-shrink-0">
+                  <AvatarImage src={user.avatarUrl || undefined} alt={user.displayName || user.email || 'User'} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                    {getInitials(user.displayName, user.email)}
+                  </AvatarFallback>
+                </Avatar>
+                {!collapsed && (
+                  <>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {user.displayName || user.email}
+                      </p>
+                      {user.email && user.displayName && (
+                        <p className="text-xs text-gray-500 truncate">
+                          {user.email}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56" side={collapsed ? 'right' : 'left'}>
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    {user.displayName || 'User'}
+                  </p>
+                  {user.email && (
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {user.email}
+                    </p>
+                  )}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  navigate('/dashboard/settings?tab=preferences');
+                  if (isMobile && onMobileClose) {
+                    onMobileClose();
+                  }
+                }}
+                className="cursor-pointer"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                <span>{t('header.preferences')}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="cursor-pointer text-red-600 focus:text-red-600"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>{t('header.logout')}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </aside>
   );
 }

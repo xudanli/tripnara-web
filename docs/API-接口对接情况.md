@@ -133,11 +133,22 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/user/profile` | 获取用户资料 |
-| PUT | `/user/profile` | 更新用户资料 |
-| GET | `/user/preferences` | 获取用户偏好 |
+| GET | `/users/me` | 获取当前用户信息 |
+| PUT | `/users/me` | 更新当前用户信息 |
+| DELETE | `/users/me` | 删除当前用户账户 |
+| GET | `/users/profile` | 获取用户偏好画像 |
+| PUT | `/users/profile` | 更新用户偏好画像 |
 
 **导出对象：** `userApi`
+
+**类型导出：**
+- `User` - 用户基本信息
+- `UserProfile` - 用户偏好画像
+- `UserPreferences` - 用户偏好配置
+- `UpdateUserMeRequest` - 更新用户信息请求
+- `DeleteUserMeRequest` - 删除用户账户请求
+- `UserApiError` - 用户 API 错误类
+- `UserProfileApiError` - 用户偏好 API 错误类
 
 ---
 

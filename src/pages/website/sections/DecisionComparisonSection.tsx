@@ -37,13 +37,13 @@ export default function DecisionComparisonSection() {
             defaultValue: '而是从一个更基础的问题出发：',
           })}
         </p>
-        <p className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground leading-tight">
+        <div className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground leading-tight">
           👉 {questionParts[0]}
-          <Badge className="ml-2 mr-2 bg-yellow-100 text-primary font-extrabold">
+          <Badge className="ml-2 mr-2 bg-yellow-100 text-primary font-extrabold inline-flex">
             存在
           </Badge>
           {questionParts[1]}
-        </p>
+        </div>
       </div>
 
       {/* Comparison Layout - Side by Side */}

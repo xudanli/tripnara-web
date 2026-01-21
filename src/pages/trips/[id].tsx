@@ -54,6 +54,8 @@ import TripBudgetPage from './budget';
 import BudgetOverviewCard from '@/components/trips/BudgetOverviewCard';
 import BudgetAlertBanner from '@/components/trips/BudgetAlertBanner';
 import BudgetMonitorCard from '@/components/trips/BudgetMonitorCard';
+import TripCostSummaryCard from '@/components/trips/TripCostSummaryCard';
+import UnpaidItemsList from '@/components/trips/UnpaidItemsList';
 import HealthBar from '@/components/trips/HealthBar';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
@@ -66,6 +68,7 @@ import { CreateItineraryItemDialog } from '@/components/trips/CreateItineraryIte
 import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryItemDialog';
 import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
+import ComplianceRulesCard from '@/components/trips/ComplianceRulesCard';
 import BusinessHoursCard from '@/components/trips/BusinessHoursCard';
 import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
 import { zhCN } from 'date-fns/locale';
@@ -237,6 +240,14 @@ export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  // 提取国家代码的辅助函数
+  const extractCountryCodes = (destination: string | undefined): string[] => {
+    if (!destination) return [];
+    const parts = destination.split(',');
+    const countryCode = parts[0]?.trim().toUpperCase();
+    return countryCode ? [countryCode] : [];
+  };
   const { setDrawerOpen, setDrawerTab } = useDrawer();
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2091,6 +2102,15 @@ export default function TripDetailPage() {
                 </Card>
               )}
 
+              {/* 🆕 合规规则卡片 */}
+              {trip && trip.destination && (
+                <ComplianceRulesCard
+                  tripId={id!}
+                  countryCodes={extractCountryCodes(trip.destination)}
+                  ruleTypes={['VISA', 'TRANSPORT', 'ENTRY']}
+                />
+              )}
+
               {/* 根据视图模式显示不同的视图组件 */}
               {viewMode === 'auto' && (
                 <AutoView 
@@ -2160,6 +2180,22 @@ export default function TripDetailPage() {
                   }}
                   autoRefresh={true}
                   refreshInterval={5000}
+                />
+              )}
+
+              {/* 费用汇总卡片 */}
+              {id && (
+                <TripCostSummaryCard tripId={id} />
+              )}
+
+              {/* 未支付费用列表 */}
+              {id && (
+                <UnpaidItemsList 
+                  tripId={id}
+                  onItemClick={(itemId) => {
+                    // TODO: 打开费用编辑对话框或跳转到对应行程项
+                    console.log('Click unpaid item:', itemId);
+                  }}
                 />
               )}
 

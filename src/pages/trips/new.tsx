@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, Check, ChevronsUpDown, MapPin, ChevronDown, Settings2 } from 'lucide-react';
+import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, Check, ChevronsUpDown, MapPin, ChevronDown, Settings2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
@@ -37,10 +37,27 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 
 export default function NewTripPage() {
   const navigate = useNavigate();
-  useAuth(); // 确保用户已登录
+  const { isAuthenticated, loading: authLoading, refreshToken } = useAuth(); // 获取认证状态
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'form' | 'nl'>('form');
+
+  // 检查登录状态，如果未登录则跳转
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      const token = sessionStorage.getItem('accessToken');
+      if (!token) {
+        console.warn('[NewTripPage] 未登录，跳转到登录页');
+        navigate('/login', { replace: true });
+      } else {
+        // 有 token 但 isAuthenticated 为 false，可能是 token 过期，尝试刷新
+        console.log('[NewTripPage] Token 存在但认证状态为 false，尝试刷新 token');
+        refreshToken().catch(() => {
+          navigate('/login', { replace: true });
+        });
+      }
+    }
+  }, [isAuthenticated, authLoading, navigate, refreshToken]);
 
   // 国家列表
   const [countries, setCountries] = useState<Country[]>([]);
@@ -609,62 +626,148 @@ export default function NewTripPage() {
     setLoading(true);
     setError(null);
 
-    try {
-      // ✅ 验证至少选择了一个目的地，并确保使用纯国家代码
-      let finalDestination: string = '';
-      
-      // 优先使用 selectedCountry（纯国家代码）
-      if (selectedCountry) {
-        finalDestination = selectedCountry;
-      } 
-      // 其次使用 formData.destination（如果已设置）
-      else if (formData.destination) {
-        // 如果 formData.destination 是城市标识符格式（如 "IS-7338"），提取国家代码
-        if (formData.destination.includes('-')) {
-          finalDestination = formData.destination.split('-')[0];
-        } else {
-          finalDestination = formData.destination;
-        }
+    // ✅ 验证至少选择了一个目的地，并确保使用纯国家代码
+    let finalDestination: string = '';
+    
+    // 优先使用 selectedCountry（纯国家代码）
+    if (selectedCountry) {
+      finalDestination = selectedCountry;
+    } 
+    // 其次使用 formData.destination（如果已设置）
+    else if (formData.destination) {
+      // 如果 formData.destination 是城市标识符格式（如 "IS-7338"），提取国家代码
+      if (formData.destination.includes('-')) {
+        finalDestination = formData.destination.split('-')[0];
+      } else {
+        finalDestination = formData.destination;
       }
-      // 最后从 selectedDestinations 中提取
-      else if (selectedDestinations.length > 0) {
-        const firstDest = selectedDestinations[0];
-        // 如果是城市标识符格式（如 "IS-7338"），提取国家代码
-        if (firstDest.includes('-')) {
-          finalDestination = firstDest.split('-')[0];
-        } else {
-          finalDestination = firstDest;
-        }
+    }
+    // 最后从 selectedDestinations 中提取
+    else if (selectedDestinations.length > 0) {
+      const firstDest = selectedDestinations[0];
+      // 如果是城市标识符格式（如 "IS-7338"），提取国家代码
+      if (firstDest.includes('-')) {
+        finalDestination = firstDest.split('-')[0];
+      } else {
+        finalDestination = firstDest;
       }
-      
-      // 验证国家代码格式（必须是2个大写字母）
-      if (!finalDestination || !/^[A-Z]{2}$/.test(finalDestination)) {
-        setError(`无效的目的地国家代码: ${finalDestination || '空'}。必须是 ISO 3166-1 alpha-2 格式(2个大写字母,如 JP、IS、US)`);
-        setLoading(false);
-        return;
-      }
-      
-      if (!finalDestination) {
-        setError('请至少选择一个目的地');
-        setLoading(false);
-        return;
-      }
+    }
+    
+    // 验证国家代码格式（必须是2个大写字母）
+    if (!finalDestination || !/^[A-Z]{2}$/.test(finalDestination)) {
+      setError(`无效的目的地国家代码: ${finalDestination || '空'}。必须是 ISO 3166-1 alpha-2 格式(2个大写字母,如 JP、IS、US)`);
+      setLoading(false);
+      return;
+    }
+    
+    if (!finalDestination) {
+      setError('请至少选择一个目的地');
+      setLoading(false);
+      return;
+    }
 
-      // 如果选择了多个目的地，使用第一个作为主要目的地
-      // 其他目的地可以在后续的规划阶段添加
-      const submitData: CreateTripRequest = {
-        ...formData,
-        destination: finalDestination,
-        // 高级设置：必须点/不去点
-        mustPlaces: mustPlaces.length > 0 ? mustPlaces : undefined,
-        avoidPlaces: avoidPlaces.length > 0 ? avoidPlaces : undefined,
-      };
-      
+    // 如果选择了多个目的地，使用第一个作为主要目的地
+    // 其他目的地可以在后续的规划阶段添加
+    const submitData: CreateTripRequest = {
+      ...formData,
+      destination: finalDestination,
+      // 高级设置：必须点/不去点
+      mustPlaces: mustPlaces.length > 0 ? mustPlaces : undefined,
+      avoidPlaces: avoidPlaces.length > 0 ? avoidPlaces : undefined,
+    };
+
+    try {
       await tripsApi.create(submitData);
       // 创建成功后跳转到行程列表，并传递状态以触发刷新
       navigate('/dashboard/trips', { state: { from: 'create' } });
     } catch (err: any) {
-      setError(err.message || '创建行程失败');
+      // 🆕 特殊处理 UNAUTHORIZED 错误
+      const isUnauthorized = 
+        err.code === 'UNAUTHORIZED' ||
+        err.message?.includes('登录') ||
+        err.message?.includes('认证') ||
+        err.response?.data?.error?.code === 'UNAUTHORIZED';
+      
+      if (isUnauthorized) {
+        console.warn('[NewTripPage] 检测到认证错误，尝试刷新 token...');
+        
+        // 尝试刷新 token
+        try {
+          await refreshToken();
+          console.log('[NewTripPage] Token 刷新成功，重试创建行程...');
+          
+          // 重试创建行程
+          try {
+            await tripsApi.create(submitData);
+            navigate('/dashboard/trips', { state: { from: 'create' } });
+            return; // 成功，直接返回
+          } catch (retryErr: any) {
+            // 重试仍然失败，显示错误
+            setError(retryErr.message || '创建行程失败，请重新登录');
+            console.error('[NewTripPage] 重试后仍然失败:', retryErr);
+          }
+        } catch (refreshErr) {
+          // Token 刷新失败，跳转登录
+          console.error('[NewTripPage] Token 刷新失败，跳转登录页:', refreshErr);
+          setError('登录已过期，请重新登录');
+          setTimeout(() => {
+            navigate('/login', { replace: true });
+          }, 2000);
+          return;
+        }
+      }
+      
+      // 改进错误处理，显示更详细的错误信息
+      let errorMessage = '创建行程失败';
+      
+      // 优先使用错误对象上的 code 和 details
+      if (err.code) {
+        console.log('[NewTripPage] 错误代码:', err.code);
+      }
+      if (err.details) {
+        console.log('[NewTripPage] 错误详情:', err.details);
+      }
+      
+      // 解析错误消息
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err.response?.data) {
+        const responseData = err.response.data;
+        
+        // 处理包装格式 { success: false, error: {...} }
+        if (responseData.error) {
+          const error = responseData.error;
+          errorMessage = error.message || error.code || errorMessage;
+          
+          // 如果有详细信息，添加到错误消息中
+          if (error.details) {
+            const detailsStr = typeof error.details === 'string' 
+              ? error.details 
+              : JSON.stringify(error.details, null, 2);
+            errorMessage = `${errorMessage}\n\n详细信息:\n${detailsStr}`;
+          }
+        } 
+        // 处理直接格式 { message: '...' }
+        else if (responseData.message) {
+          errorMessage = responseData.message;
+        }
+      }
+      
+      console.error('[NewTripPage] 创建行程失败:', {
+        error: err,
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        response: err.response?.data,
+        request: {
+          destination: finalDestination,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          totalBudget: formData.totalBudget,
+        },
+      });
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -713,7 +816,21 @@ export default function NewTripPage() {
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-800">{error}</p>
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-red-800 font-medium">创建行程失败</p>
+              <p className="text-red-700 text-sm mt-1 whitespace-pre-wrap">{error}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-700"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       )}
 

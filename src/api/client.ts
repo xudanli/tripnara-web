@@ -96,6 +96,57 @@ apiClient.interceptors.response.use(
       ? `${response.config.baseURL}${response.config.url}${response.config.params ? '?' + new URLSearchParams(response.config.params).toString() : ''}`
       : response.config.url;
     
+    // 🆕 检查响应体中的 success 字段
+    // 即使 HTTP 状态码是 2xx，如果响应体 success: false，也应该当作错误处理
+    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+      if (response.data.success === false) {
+        const errorData = response.data.error;
+        const errorCode = errorData?.code || 'UNKNOWN_ERROR';
+        const errorMessage = errorData?.message || '请求失败';
+        
+        // 如果是 UNAUTHORIZED 错误，需要特殊处理（即使状态码是 201）
+        if (errorCode === 'UNAUTHORIZED' || errorMessage.includes('登录') || errorMessage.includes('认证')) {
+          console.error('[API Client] ❌ 响应体显示未授权错误（状态码可能是 2xx）:', {
+            url: response.config.url,
+            status: response.status,
+            errorCode,
+            errorMessage,
+            responseData: response.data,
+          });
+          
+          // 创建一个类似 401 的错误对象，触发认证流程
+          const authError = new Error(errorMessage) as any;
+          authError.response = {
+            status: 401, // 强制设置为 401，触发认证处理
+            data: response.data,
+          };
+          authError.config = response.config;
+          authError.code = 'UNAUTHORIZED';
+          
+          // 跳转到错误处理流程
+          return Promise.reject(authError);
+        }
+        
+        // 其他业务错误，也当作错误处理
+        console.error('[API Client] ⚠️ 响应体显示失败（状态码可能是 2xx）:', {
+          url: response.config.url,
+          status: response.status,
+          errorCode,
+          errorMessage,
+        });
+        
+        const businessError = new Error(errorMessage) as any;
+        businessError.response = {
+          status: response.status,
+          data: response.data,
+        };
+        businessError.config = response.config;
+        businessError.code = errorCode;
+        
+        return Promise.reject(businessError);
+      }
+    }
+    
     // 成功响应日志
     console.log('[API Client] ✅ 响应成功:', {
       url: response.config.url,
@@ -111,17 +162,27 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
 
     // Handle 401 Unauthorized - token 过期或缺失
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // 包括从响应拦截器转换来的 UNAUTHORIZED 错误（状态码可能是 2xx）
+    const isUnauthorized = 
+      error.response?.status === 401 || 
+      error.code === 'UNAUTHORIZED' ||
+      (error.response?.data?.error?.code === 'UNAUTHORIZED');
+    
+    if (isUnauthorized && !originalRequest._retry) {
       originalRequest._retry = true;
 
       // 调试日志
-      console.error('[API Client] ❌ 401 未授权错误:', {
+      console.error('[API Client] ❌ 401/UNAUTHORIZED 未授权错误:', {
         url: originalRequest.url,
         method: originalRequest.method,
         hasToken: !!originalRequest.headers.Authorization,
         tokenInHeader: originalRequest.headers.Authorization ? '存在' : '不存在',
+        tokenPreview: originalRequest.headers.Authorization 
+          ? `${originalRequest.headers.Authorization.substring(0, 30)}...` 
+          : '不存在',
         responseStatus: error.response?.status,
         responseData: error.response?.data,
+        errorCode: error.code,
         sessionStorageToken: sessionStorage.getItem('accessToken') ? '存在' : '不存在',
       });
 

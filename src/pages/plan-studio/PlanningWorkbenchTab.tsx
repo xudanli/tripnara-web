@@ -23,7 +23,10 @@ import type {
 import { tripsApi } from '@/api/trips';
 import type { TripDetail, PlanBudgetEvaluationResponse } from '@/types/trip';
 import { toast } from 'sonner';
+import { useContextApi } from '@/hooks';
+import type { ContextPackage } from '@/api/context';
 import PersonaCard from '@/components/planning-workbench/PersonaCard';
+import ComplianceRulesCard from '@/components/trips/ComplianceRulesCard';
 import EvidenceDrawer from '@/components/layout/EvidenceDrawer';
 import { cn } from '@/lib/utils';
 import {
@@ -56,6 +59,14 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [result, setResult] = useState<ExecutePlanningWorkbenchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Context API Hook
+  const {
+    buildContextWithCompress,
+    // contextPackage, // 可用于显示 Context Package 信息
+    // loading: contextLoading, // 可用于显示加载状态
+    // error: contextError, // 可用于显示错误信息
+  } = useContextApi();
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
@@ -158,6 +169,49 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
     };
   };
 
+  // 构建 Context Package（使用 Context API）
+  const buildContextPackage = async (userQuery: string): Promise<ContextPackage | null> => {
+    if (!trip) return null;
+
+    try {
+      // 根据用户操作确定 phase 和 agent
+      const phase = 'planning'; // 规划工作台固定为 planning 阶段
+      const agent = 'PLANNER'; // 规划工作台使用 PLANNER agent
+
+      // 构建 Context Package
+      const contextPkg = await buildContextWithCompress(
+        {
+          tripId,
+          phase,
+          agent,
+          userQuery,
+          tokenBudget: 3600, // 默认 Token 预算
+          requiredTopics: ['VISA', 'ROAD_RULES', 'SAFETY'], // 规划阶段需要的主题
+          useCache: true, // 启用缓存
+        },
+        {
+          strategy: 'balanced', // 使用平衡的压缩策略
+          preserveKeys: [], // 可以根据需要保留关键块
+        }
+      );
+
+      if (contextPkg) {
+        console.log('[Planning Workbench] Context Package 构建成功:', {
+          id: contextPkg.id,
+          totalTokens: contextPkg.totalTokens,
+          blocksCount: contextPkg.blocks.length,
+          compressed: contextPkg.compressed,
+        });
+      }
+
+      return contextPkg;
+    } catch (err: any) {
+      console.error('[Planning Workbench] Context Package 构建失败:', err);
+      // 不阻止后续流程，只记录错误
+      return null;
+    }
+  };
+
   // 执行规划工作台操作的通用函数
   const executeWorkbenchAction = async (userAction: UserAction, existingPlanState?: any) => {
     if (!trip) {
@@ -172,6 +226,29 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
     setError(null);
 
     try {
+      // 🆕 构建用户查询文本（根据操作类型）
+      const userQueryMap: Record<UserAction, string> = {
+        generate: `帮我规划${trip.destination || ''}的${trip.TripDay?.length || 0}天行程`,
+        compare: '对比当前方案与其他方案',
+        commit: '提交当前方案到行程',
+        adjust: '调整当前方案',
+      };
+      const userQuery = userQueryMap[userAction] || '执行规划操作';
+
+      // 🆕 构建 Context Package（可选，如果后端支持可以传递）
+      const contextPkg = await buildContextPackage(userQuery);
+      
+      // 如果构建成功，可以在这里记录或传递给后端
+      if (contextPkg) {
+        console.log('[Planning Workbench] 使用 Context Package:', {
+          id: contextPkg.id,
+          blocksCount: contextPkg.blocks.length,
+          totalTokens: contextPkg.totalTokens,
+        });
+        // TODO: 如果后端 API 支持，可以将 contextPkg.id 或 blocks 传递给后端
+        // 例如：contextPackageId: contextPkg.id
+      }
+
       const response = await planningWorkbenchApi.execute({
         context,
         tripId,
@@ -538,6 +615,19 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
             </Button>
           </div>
         </div>
+      )}
+
+      {/* 🆕 合规规则卡片 */}
+      {trip && trip.destination && (
+        <ComplianceRulesCard
+          tripId={tripId}
+          countryCodes={(() => {
+            const parts = trip.destination?.split(',') || [];
+            const countryCode = parts[0]?.trim().toUpperCase();
+            return countryCode ? [countryCode] : [];
+          })()}
+          ruleTypes={['VISA', 'TRANSPORT', 'ENTRY']}
+        />
       )}
 
       {/* 操作区域 - 仅在生成后显示 */}
@@ -1730,6 +1820,9 @@ function PlanComparison({
 
 // 辅助函数：从 planState 中提取行程项
 function extractPlanItems(planState: any): any[] {
+  // 安全检查：确保 planState 存在
+  if (!planState) return [];
+  
   const itinerary = planState.itinerary;
   
   if (!itinerary) return [];
@@ -1753,10 +1846,32 @@ function DEMTerrainAndFatigueView({
   planState: any;
   trip: TripDetail | null;
 }) {
+  // 安全检查：确保 planState 存在
+  if (!planState) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Mountain className="w-5 h-5" />
+            DEM 地形与体力模型
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="py-8 text-center text-muted-foreground">
+            <Mountain className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p className="text-sm">方案数据加载中</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // 从 planState 中提取 DEM 数据
-  const demEvidence = planState.evidence_refs?.filter((ref: any) => 
-    ref.type === 'DEM' || ref.category === 'terrain' || ref.source?.includes('DEM')
-  ) || [];
+  const demEvidence = (planState.evidence_refs && Array.isArray(planState.evidence_refs))
+    ? planState.evidence_refs.filter((ref: any) => 
+        ref.type === 'DEM' || ref.category === 'terrain' || ref.source?.includes('DEM')
+      )
+    : [];
 
   // 从行程项中提取体力相关数据
   const planItems = extractPlanItems(planState);
@@ -1769,14 +1884,23 @@ function DEMTerrainAndFatigueView({
   let fatigueScore = 0;
   
   // 从行程项中提取物理元数据
-  const allItems = [...planItems, ...currentItems];
-  allItems.forEach((item: any) => {
-    const physicalMetadata = item.physicalMetadata || item.Place?.metadata?.physicalMetadata || {};
-    totalAscent += physicalMetadata.elevationGainM || 0;
-    maxSlope = Math.max(maxSlope, physicalMetadata.slopePct || 0);
-    totalDistance += physicalMetadata.distanceKm || 0;
-    fatigueScore += (physicalMetadata.base_fatigue_score || 0) * (physicalMetadata.intensity_factor || 1);
-  });
+  // 确保 planItems 和 currentItems 都是数组
+  const allItems = [
+    ...(Array.isArray(planItems) ? planItems : []),
+    ...(Array.isArray(currentItems) ? currentItems : [])
+  ];
+  
+  // 安全检查：确保 allItems 是数组
+  if (Array.isArray(allItems)) {
+    allItems.forEach((item: any) => {
+      if (!item) return; // 跳过 null 或 undefined 项
+      const physicalMetadata = item.physicalMetadata || item.Place?.metadata?.physicalMetadata || {};
+      totalAscent += physicalMetadata.elevationGainM || 0;
+      maxSlope = Math.max(maxSlope, physicalMetadata.slopePct || 0);
+      totalDistance += physicalMetadata.distanceKm || 0;
+      fatigueScore += (physicalMetadata.base_fatigue_score || 0) * (physicalMetadata.intensity_factor || 1);
+    });
+  }
 
   // 如果没有 DEM 数据，显示提示
   if (demEvidence.length === 0 && totalAscent === 0 && maxSlope === 0) {

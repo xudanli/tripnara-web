@@ -151,17 +151,39 @@ class GoogleAuthService {
       await this.waitForGoogleScript();
       window.google!.accounts.id.prompt((notification) => {
         if (notification.isNotDisplayed) {
-          console.log('One Tap not displayed:', notification.getNotDisplayedReason());
+          const reason = notification.getNotDisplayedReason();
+          // 静默处理常见的"不显示"原因（用户已登录、浏览器不支持等）
+          if (reason !== 'browser_not_supported' && reason !== 'invalid_client') {
+            console.log('One Tap not displayed:', reason);
+          }
         }
         if (notification.isSkippedMoment) {
-          console.log('One Tap skipped:', notification.getSkippedReason());
+          // 静默处理跳过情况
+          const reason = notification.getSkippedReason();
+          if (reason !== 'user_cancel' && reason !== 'tap_outside') {
+            console.log('One Tap skipped:', reason);
+          }
         }
         if (notification.isDismissedMoment) {
-          console.log('One Tap dismissed:', notification.getDismissedReason());
+          // 静默处理用户关闭的情况
+          const reason = notification.getDismissedReason();
+          if (reason !== 'credential_returned' && reason !== 'user_cancel') {
+            console.log('One Tap dismissed:', reason);
+          }
         }
       });
-    } catch (error) {
+    } catch (error: any) {
+      // 忽略 AbortError 和 FedCM 相关的错误（这些是正常的）
+      if (error?.name === 'AbortError' || 
+          error?.message?.includes('FedCM') || 
+          error?.message?.includes('aborted') ||
+          error?.message?.includes('signal is aborted')) {
+        // 静默忽略，这些是正常的用户取消或浏览器不支持的情况
+        return;
+      }
+      // 只记录其他类型的错误
       console.error('Failed to prompt Google One Tap:', error);
+      throw error;
     }
   }
 

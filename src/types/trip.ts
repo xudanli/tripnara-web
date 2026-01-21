@@ -14,6 +14,16 @@ export type BudgetAlertType = 'OVERSPEND' | 'APPROACHING_LIMIT' | 'DAILY_EXCEEDE
 export type SOSStatus = 'SENT' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'RESOLVED';
 export type OptimizationType = 'REPLACE' | 'REMOVE' | 'RESCHEDULE';
 
+// ==================== 费用分类 ====================
+
+export type CostCategory = 
+  | 'ACCOMMODATION'    // 住宿
+  | 'TRANSPORTATION'   // 交通
+  | 'FOOD'             // 餐饮
+  | 'ACTIVITIES'       // 活动/门票
+  | 'SHOPPING'         // 购物
+  | 'OTHER';           // 其他
+
 // ==================== 旅行者 ====================
 
 export interface Traveler {
@@ -136,6 +146,14 @@ export interface ItineraryItem {
   tripDayId?: string;
   Place?: Place | null;
   Trail?: any | null;
+  // 费用相关字段
+  estimatedCost?: number | null;
+  actualCost?: number | null;
+  currency?: string | null;
+  costCategory?: CostCategory | null;
+  costNote?: string | null;
+  isPaid?: boolean | null;
+  paidBy?: string | null;
 }
 
 export interface ItineraryItemDetail extends ItineraryItem {
@@ -958,6 +976,17 @@ export interface CreateItineraryItemRequest {
   startTime: string;
   endTime: string;
   note?: string;
+  // 校验相关字段
+  forceCreate?: boolean;       // 强制创建，忽略 WARNING 级别校验
+  ignoreWarnings?: string[];  // 忽略的警告类型列表
+  // 费用相关字段
+  estimatedCost?: number;
+  actualCost?: number;
+  currency?: string;
+  costCategory?: CostCategory;
+  costNote?: string;
+  isPaid?: boolean;
+  paidBy?: string;
 }
 
 // ==================== 更新行程项 ====================
@@ -970,6 +999,291 @@ export interface UpdateItineraryItemRequest {
   startTime?: string;
   endTime?: string;
   note?: string;
+  // 校验相关字段
+  forceCreate?: boolean;       // 强制更新，忽略 WARNING 级别校验
+  ignoreWarnings?: string[];  // 忽略的警告类型列表
+  // 费用相关字段
+  estimatedCost?: number;
+  actualCost?: number;
+  currency?: string;
+  costCategory?: CostCategory;
+  costNote?: string;
+  isPaid?: boolean;
+  paidBy?: string;
+}
+
+// ==================== 行程项校验 ====================
+
+/**
+ * 校验严重程度
+ */
+export type ValidationSeverity = 'error' | 'warning' | 'info';
+
+/**
+ * 校验代码
+ */
+export type ValidationCode = 
+  | 'TIME_OVERLAP'
+  | 'INSUFFICIENT_TRAVEL_TIME'
+  | 'SHORT_BUFFER'
+  | 'BUSINESS_HOURS_VIOLATION'
+  | 'CASCADE_IMPACT';
+
+/**
+ * 校验建议动作
+ */
+export type ValidationSuggestionAction = 
+  | 'ADJUST_TIME'
+  | 'CHANGE_TRANSPORT'
+  | 'REORDER'
+  | 'REMOVE'
+  | 'ADD_BUFFER';
+
+/**
+ * 校验建议
+ */
+export interface ValidationSuggestion {
+  action: ValidationSuggestionAction;
+  description: string;
+  suggestedValue?: {
+    startTime?: string;
+    endTime?: string;
+    transportMode?: string;
+  };
+  estimatedImprovement?: string;
+}
+
+/**
+ * 校验结果
+ */
+export interface ValidationResult {
+  valid: boolean;
+  severity: ValidationSeverity;
+  code: ValidationCode;
+  message: string;
+  details: Record<string, any>;
+  suggestions?: ValidationSuggestion[];
+}
+
+/**
+ * 交通信息
+ */
+export interface TravelInfo {
+  fromPlace?: string;
+  toPlace?: string;
+  straightDistance: number;
+  roadDistance?: number;
+  estimatedDuration: number;
+  recommendedTransport: string;
+  availableTime: number;
+}
+
+/**
+ * 级联影响项
+ */
+export interface CascadeImpactItem {
+  id: string;
+  name: string;
+  originalTime: string;
+  suggestedTime: string;
+  delayMinutes: number;
+}
+
+/**
+ * 级联影响
+ */
+export interface CascadeImpact {
+  affectedCount: number;
+  affectedItems: CascadeImpactItem[];
+  autoAdjusted: boolean;
+}
+
+/**
+ * 预校验响应
+ */
+export interface ValidateItineraryItemResponse {
+  canProceed: boolean;
+  requiresConfirmation: boolean;
+  errors: ValidationResult[];
+  warnings: ValidationResult[];
+  infos: ValidationResult[];
+  travelInfo?: TravelInfo | null;
+}
+
+/**
+ * 批量校验响应
+ */
+export interface BatchValidateItineraryResponse {
+  valid: boolean;
+  tripId: string;
+  errors: Array<{
+    day: string;
+    itemIds: string[];
+    type: ValidationCode;
+    message: string;
+    severity: ValidationSeverity;
+  }>;
+  warnings: Array<{
+    day: string;
+    itemIds: string[];
+    type: ValidationCode;
+    message: string;
+    severity: ValidationSeverity;
+  }>;
+  summary: {
+    errorCount: number;
+    warningCount: number;
+    infoCount: number;
+  };
+}
+
+/**
+ * 创建行程项响应（增强版，包含校验信息）
+ */
+export interface CreateItineraryItemResponse {
+  item: ItineraryItemDetail;
+  warnings?: ValidationResult[];
+  infos?: ValidationResult[];
+  travelInfo?: TravelInfo | null;
+  cascadeImpact?: CascadeImpact | null;
+}
+
+/**
+ * 更新行程项响应（增强版，包含级联影响）
+ */
+export interface UpdateItineraryItemResponse {
+  item: ItineraryItemDetail;
+  warnings?: ValidationResult[];
+  cascadeImpact?: CascadeImpact | null;
+  travelInfo?: TravelInfo | null;
+}
+
+// ==================== 行程项费用管理 ====================
+
+/**
+ * 费用更新请求
+ */
+export interface ItemCostRequest {
+  estimatedCost?: number;
+  actualCost?: number;
+  currency?: string;
+  costCategory?: CostCategory;
+  costNote?: string;
+  isPaid?: boolean;
+  paidBy?: string;
+}
+
+/**
+ * 获取费用信息响应
+ */
+export interface ItemCostResponse {
+  id: string;
+  estimatedCost?: number | null;
+  actualCost?: number | null;
+  currency?: string | null;
+  costCategory?: CostCategory | null;
+  costNote?: string | null;
+  isPaid?: boolean | null;
+  paidBy?: string | null;
+  type: ItineraryItemType;
+  Place?: {
+    nameCN: string;
+    nameEN?: string | null;
+  } | null;
+}
+
+/**
+ * 更新费用响应
+ */
+export interface UpdateItemCostResponse {
+  item: ItineraryItemDetail;
+  message?: string;
+}
+
+/**
+ * 批量更新费用项
+ */
+export interface BatchUpdateCostItem {
+  id: string;
+  actualCost?: number;
+  isPaid?: boolean;
+  costNote?: string;
+}
+
+/**
+ * 批量更新费用请求
+ */
+export interface BatchUpdateCostRequest {
+  tripId: string;
+  items: BatchUpdateCostItem[];
+}
+
+/**
+ * 批量更新费用响应
+ */
+export interface BatchUpdateCostResponse {
+  updated: number;
+  failed: number;
+  failedIds?: string[];
+  message: string;
+}
+
+/**
+ * 费用汇总 - 按分类
+ */
+export interface CostSummaryByCategory {
+  estimated: number;
+  actual: number;
+  count: number;
+}
+
+/**
+ * 费用汇总 - 按日期
+ */
+export interface CostSummaryByDay {
+  date: string;
+  estimated: number;
+  actual: number;
+  itemCount: number;
+}
+
+/**
+ * 预算偏差
+ */
+export interface CostVariance {
+  amount: number;
+  percentage: number;
+  status: 'UNDER_BUDGET' | 'ON_BUDGET' | 'OVER_BUDGET';
+}
+
+/**
+ * 行程费用汇总
+ */
+export interface TripCostSummary {
+  totalBudget: number;
+  totalEstimated: number;
+  totalActual: number;
+  totalPaid: number;
+  totalUnpaid: number;
+  currency: string;
+  byCategory: Record<CostCategory, CostSummaryByCategory>;
+  byDay: CostSummaryByDay[];
+  variance: CostVariance;
+  budgetUsagePercent: number;
+}
+
+/**
+ * 未支付费用项
+ */
+export interface UnpaidItem {
+  id: string;
+  placeName?: string | null;
+  date: string;
+  estimatedCost?: number | null;
+  actualCost?: number | null;
+  currency?: string | null;
+  costCategory?: CostCategory | null;
+  costNote?: string | null;
 }
 
 // ==================== 预算 ====================

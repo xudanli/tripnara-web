@@ -40,3 +40,24 @@ export type {
   UseJourneyAssistantConfig, 
   UseJourneyAssistantReturn 
 } from './useJourneyAssistant';
+
+// Context API
+export { useContextApi, useContextMetrics } from './useContextApi';
+export type { 
+  UseContextApiReturn, 
+  UseContextMetricsReturn 
+} from './useContextApi';
+
+// RAG API
+export { useRag } from './useRag';
+export type { UseRagReturn } from './useRag';
+
+// 行程项校验
+export { useItineraryValidation } from './useItineraryValidation';
+export type { UseItineraryValidationReturn } from './useItineraryValidation';
+export { formatValidationError, getValidationSuggestionsSummary } from './useItineraryValidation';
+
+// 行程项费用管理
+export { useItineraryCost } from './useItineraryCost';
+export type { UseItineraryCostReturn } from './useItineraryCost';
+export { getDefaultCostCategory, formatCost, formatCostCategory } from './useItineraryCost';

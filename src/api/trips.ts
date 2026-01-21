@@ -25,12 +25,29 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
   
   // 检查是否是错误响应
   if (!response.data.success) {
-    const errorMessage = response.data.error?.message || '请求失败';
+    const errorData = response.data.error;
+    const errorMessage = errorData?.message || errorData?.code || '请求失败';
+    const errorCode = errorData?.code || 'UNKNOWN_ERROR';
+    
     console.error('[API Client] 请求失败:', {
-      error: response.data.error,
+      code: errorCode,
       message: errorMessage,
+      details: errorData?.details,
+      fullError: errorData,
+      fullResponse: response.data,
     });
-    throw new Error(errorMessage);
+    
+    // 创建错误对象，保留更多信息
+    const error = new Error(errorMessage) as Error & {
+      code?: string;
+      details?: any;
+    };
+    error.code = errorCode;
+    if (errorData?.details) {
+      error.details = errorData.details;
+    }
+    
+    throw error;
   }
   
   // 返回数据，如果数据为 undefined 或 null，抛出更明确的错误
@@ -80,6 +97,18 @@ import type {
   SyncOfflineChangesRequest,
   SyncOfflineChangesResponse,
   TripRecapReport,
+  ValidateItineraryItemResponse,
+  BatchValidateItineraryResponse,
+  CreateItineraryItemResponse,
+  UpdateItineraryItemResponse,
+  CostCategory,
+  ItemCostRequest,
+  ItemCostResponse,
+  UpdateItemCostResponse,
+  BatchUpdateCostRequest,
+  BatchUpdateCostResponse,
+  TripCostSummary,
+  UnpaidItem,
   ExportRecapResponse,
   GenerateTrailVideoDataResponse,
   SharedTripResponse,
@@ -1060,13 +1089,96 @@ export const itineraryItemsApi = {
   /**
    * 创建行程项
    * POST /itinerary-items
+   * 
+   * 支持校验功能：
+   * - 自动执行时间重叠、交通时间等校验
+   * - 可通过 forceCreate 强制创建（忽略 WARNING）
+   * - 返回校验结果和交通信息
    */
-  create: async (data: CreateItineraryItemRequest): Promise<ItineraryItemDetail> => {
-    const response = await apiClient.post<ApiResponseWrapper<ItineraryItemDetail>>(
-      '/itinerary-items',
-      data
-    );
-    return handleResponse(response);
+  create: async (data: CreateItineraryItemRequest): Promise<CreateItineraryItemResponse | ItineraryItemDetail> => {
+    try {
+      const response = await apiClient.post<ApiResponseWrapper<CreateItineraryItemResponse | ItineraryItemDetail>>(
+        '/itinerary-items',
+        data
+      );
+      
+      // 检查响应格式
+      if (!response.data.success) {
+        const errorData = response.data as unknown as ErrorResponse;
+        
+        // 如果是需要确认的错误（REQUIRES_CONFIRMATION），返回特殊格式
+        if (errorData.error.code === 'REQUIRES_CONFIRMATION') {
+          const error = new Error(errorData.error.message) as Error & {
+            code?: string;
+            warnings?: any[];
+            cascadeImpact?: any;
+            travelInfo?: any;
+          };
+          error.code = errorData.error.code;
+          // 从 details 中提取 warnings、cascadeImpact、travelInfo
+          if (errorData.error.details) {
+            error.warnings = errorData.error.details.warnings || [];
+            error.cascadeImpact = errorData.error.details.cascadeImpact;
+            error.travelInfo = errorData.error.details.travelInfo;
+          }
+          throw error;
+        }
+        
+        // 其他错误正常抛出
+        throw new Error(errorData.error.message);
+      }
+      
+      const result = handleResponse(response);
+      
+      // 如果返回的是增强版响应（包含 warnings），直接返回
+      if (result && typeof result === 'object' && 'item' in result) {
+        return result as CreateItineraryItemResponse;
+      }
+      
+      // 否则包装为增强版响应
+      return {
+        item: result as ItineraryItemDetail,
+        warnings: [],
+        infos: [],
+      };
+    } catch (error: any) {
+      // 处理网络错误
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('网络异常，请检查网络连接');
+      }
+      
+      // 处理校验错误
+      if (error.code === 'VALIDATION_ERROR' || error.code === 'REQUIRES_CONFIRMATION') {
+        throw error;
+      }
+      
+      // 处理后端错误响应
+      if (error.response?.data) {
+        const errorData = error.response.data as ErrorResponse;
+        if (!errorData.success && errorData.error) {
+          const apiError = new Error(errorData.error.message) as Error & {
+            code?: string;
+            details?: any;
+            warnings?: any[];
+            cascadeImpact?: any;
+            travelInfo?: any;
+          };
+          apiError.code = errorData.error.code;
+          apiError.details = errorData.error.details;
+          
+          // 提取 warnings、cascadeImpact、travelInfo
+          if (errorData.error.details) {
+            apiError.warnings = errorData.error.details.warnings || [];
+            apiError.cascadeImpact = errorData.error.details.cascadeImpact;
+            apiError.travelInfo = errorData.error.details.travelInfo;
+          }
+          
+          throw apiError;
+        }
+      }
+      
+      throw error;
+    }
   },
 
   /**
@@ -1095,7 +1207,7 @@ export const itineraryItemsApi = {
   },
 
   /**
-   * 更新行程项（支持智能时间调整）
+   * 更新行程项（支持智能时间调整和校验）
    * PATCH /itinerary-items/:id
    * 
    * 智能时间调整功能：
@@ -1105,17 +1217,99 @@ export const itineraryItemsApi = {
    * - 如果时间不合理（早于计算出的时间超过 30 分钟），会返回警告错误
    * - 更新后需要重新获取当天的行程项以获取最新时间安排
    * 
+   * 校验功能：
+   * - 自动执行时间重叠、交通时间等校验
+   * - 检测级联影响（对后续行程项的影响）
+   * - 可通过 forceCreate 强制更新（忽略 WARNING）
+   * 
    * @param id 行程项 ID
    * @param data 更新数据（所有字段都是可选的）
-   * @returns 更新后的行程项详情
+   * @returns 更新后的行程项详情（包含级联影响信息）
    * @throws {Error} 如果时间不合理或存在其他验证错误，会抛出包含错误信息的异常
    */
-  update: async (id: string, data: UpdateItineraryItemRequest): Promise<ItineraryItemDetail> => {
-    const response = await apiClient.patch<ApiResponseWrapper<ItineraryItemDetail>>(
-      `/itinerary-items/${id}`,
-      data
-    );
-    return handleResponse(response);
+  update: async (id: string, data: UpdateItineraryItemRequest): Promise<UpdateItineraryItemResponse | ItineraryItemDetail> => {
+    try {
+      const response = await apiClient.patch<ApiResponseWrapper<UpdateItineraryItemResponse | ItineraryItemDetail>>(
+        `/itinerary-items/${id}`,
+        data
+      );
+      
+      // 检查响应格式
+      if (!response.data.success) {
+        const errorData = response.data as unknown as ErrorResponse;
+        
+        // 如果是需要确认的错误（REQUIRES_CONFIRMATION），返回特殊格式
+        if (errorData.error.code === 'REQUIRES_CONFIRMATION') {
+          const error = new Error(errorData.error.message) as Error & {
+            code?: string;
+            warnings?: any[];
+            cascadeImpact?: any;
+            travelInfo?: any;
+          };
+          error.code = errorData.error.code;
+          // 从 details 中提取 warnings、cascadeImpact、travelInfo
+          if (errorData.error.details) {
+            error.warnings = errorData.error.details.warnings || [];
+            error.cascadeImpact = errorData.error.details.cascadeImpact;
+            error.travelInfo = errorData.error.details.travelInfo;
+          }
+          throw error;
+        }
+        
+        // 其他错误正常抛出
+        throw new Error(errorData.error.message);
+      }
+      
+      const result = handleResponse(response);
+      
+      // 如果返回的是增强版响应（包含 cascadeImpact），直接返回
+      if (result && typeof result === 'object' && 'item' in result) {
+        return result as UpdateItineraryItemResponse;
+      }
+      
+      // 否则包装为增强版响应
+      return {
+        item: result as ItineraryItemDetail,
+        warnings: [],
+      };
+    } catch (error: any) {
+      // 处理网络错误
+      if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('网络异常，请检查网络连接');
+      }
+      
+      // 处理校验错误
+      if (error.code === 'VALIDATION_ERROR' || error.code === 'REQUIRES_CONFIRMATION') {
+        throw error;
+      }
+      
+      // 处理后端错误响应
+      if (error.response?.data) {
+        const errorData = error.response.data as ErrorResponse;
+        if (!errorData.success && errorData.error) {
+          const apiError = new Error(errorData.error.message) as Error & {
+            code?: string;
+            details?: any;
+            warnings?: any[];
+            cascadeImpact?: any;
+            travelInfo?: any;
+          };
+          apiError.code = errorData.error.code;
+          apiError.details = errorData.error.details;
+          
+          // 提取 warnings、cascadeImpact、travelInfo
+          if (errorData.error.details) {
+            apiError.warnings = errorData.error.details.warnings || [];
+            apiError.cascadeImpact = errorData.error.details.cascadeImpact;
+            apiError.travelInfo = errorData.error.details.travelInfo;
+          }
+          
+          throw apiError;
+        }
+      }
+      
+      throw error;
+    }
   },
 
   /**
@@ -1164,6 +1358,98 @@ export const itineraryItemsApi = {
   getInsight: async (id: string): Promise<TripInsightResponse> => {
     const response = await apiClient.get<ApiResponseWrapper<TripInsightResponse>>(
       `/trips/${id}/insight`
+    );
+    return handleResponse(response);
+  },
+
+  // ==================== 行程项校验接口 ====================
+
+  /**
+   * 预校验行程项
+   * POST /itinerary-items/validate
+   * 
+   * 校验行程项是否可创建，返回校验结果但不实际创建
+   */
+  validate: async (data: CreateItineraryItemRequest): Promise<ValidateItineraryItemResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<ValidateItineraryItemResponse>>(
+      '/itinerary-items/validate',
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 批量校验行程
+   * POST /itinerary-items/batch-validate/:tripId
+   * 
+   * 校验整个行程的所有行程项，返回所有问题汇总
+   */
+  batchValidate: async (
+    tripId: string,
+    data?: { dates?: string[] }
+  ): Promise<BatchValidateItineraryResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<BatchValidateItineraryResponse>>(
+      `/itinerary-items/batch-validate/${tripId}`,
+      data || {}
+    );
+    return handleResponse(response);
+  },
+
+  // ==================== 行程项费用管理接口 ====================
+
+  /**
+   * 获取行程项费用信息
+   * GET /itinerary-items/:id/cost
+   */
+  getCost: async (id: string): Promise<ItemCostResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<ItemCostResponse>>(
+      `/itinerary-items/${id}/cost`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 更新行程项费用
+   * PATCH /itinerary-items/:id/cost
+   */
+  updateCost: async (id: string, data: ItemCostRequest): Promise<UpdateItemCostResponse> => {
+    const response = await apiClient.patch<ApiResponseWrapper<UpdateItemCostResponse>>(
+      `/itinerary-items/${id}/cost`,
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 批量更新费用
+   * PATCH /itinerary-items/batch-cost
+   */
+  batchUpdateCost: async (data: BatchUpdateCostRequest): Promise<BatchUpdateCostResponse> => {
+    const response = await apiClient.patch<ApiResponseWrapper<BatchUpdateCostResponse>>(
+      '/itinerary-items/batch-cost',
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取行程费用汇总
+   * GET /itinerary-items/trip/:tripId/cost-summary
+   */
+  getCostSummary: async (tripId: string): Promise<TripCostSummary> => {
+    const response = await apiClient.get<ApiResponseWrapper<TripCostSummary>>(
+      `/itinerary-items/trip/${tripId}/cost-summary`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取未支付的行程项
+   * GET /itinerary-items/trip/:tripId/unpaid
+   */
+  getUnpaidItems: async (tripId: string): Promise<UnpaidItem[]> => {
+    const response = await apiClient.get<ApiResponseWrapper<UnpaidItem[]>>(
+      `/itinerary-items/trip/${tripId}/unpaid`
     );
     return handleResponse(response);
   },

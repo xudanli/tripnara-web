@@ -56,6 +56,10 @@ import {
 // cn 已移除 - 未使用
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
+import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time-validation';
+import { getDefaultCostCategory } from '@/hooks';
+import { DollarSign } from 'lucide-react';
+import type { CostCategory } from '@/types/trip';
 
 // ==================== 类型定义 ====================
 
@@ -153,6 +157,23 @@ export function EnhancedAddItineraryItemDialog({
   const [endTime, setEndTime] = useState('10:00');
   const [note, setNote] = useState('');
   
+  // 费用相关状态
+  const [showCostFields, setShowCostFields] = useState<boolean>(false);
+  const [estimatedCost, setEstimatedCost] = useState<string>('');
+  const [actualCost, setActualCost] = useState<string>('');
+  const [currency, setCurrency] = useState<string>('CNY');
+  const [costCategory, setCostCategory] = useState<CostCategory | ''>('');
+  const [costNote, setCostNote] = useState<string>('');
+  const [isPaid, setIsPaid] = useState<boolean>(false);
+  
+  // 当类型改变时，自动设置费用分类
+  useEffect(() => {
+    if (!costCategory && itemType) {
+      const defaultCategory = getDefaultCostCategory(itemType) as CostCategory;
+      setCostCategory(defaultCategory);
+    }
+  }, [itemType, costCategory]);
+  
   // 提交状态
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -189,6 +210,14 @@ export function EnhancedAddItineraryItemDialog({
     setEndTime('10:00');
     setNote('');
     setError(null);
+    // 重置费用字段
+    setEstimatedCost('');
+    setActualCost('');
+    setCurrency('CNY');
+    setCostCategory('');
+    setCostNote('');
+    setIsPaid(false);
+    setShowCostFields(false);
   }, []);
 
   // 打开时重置表单
@@ -361,6 +390,29 @@ export function EnhancedAddItineraryItemDialog({
       return;
     }
 
+    // ✅ 检查时间重叠（严格阻止，不允许边界重叠）
+    const existingItems = (tripDay.ItineraryItem || []).map(item => ({
+      id: item.id,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      note: item.note || undefined,
+      type: item.type,
+      Place: item.Place ? {
+        nameCN: item.Place.nameCN || undefined,
+        nameEN: item.Place.nameEN || undefined,
+      } : undefined,
+    }));
+    const overlaps = checkTimeOverlap(
+      { startTime: startDateTime, endTime: endDateTime },
+      existingItems,
+      false // 不允许边界重叠（严格模式）
+    );
+
+    if (overlaps.length > 0) {
+      setError(formatTimeOverlapError(overlaps));
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -373,6 +425,26 @@ export function EnhancedAddItineraryItemDialog({
         endTime: endDateTime.toISOString(),
         note: note.trim() || undefined,
       };
+      
+      // 添加费用字段（如果有填写）
+      if (showCostFields) {
+        if (estimatedCost) {
+          data.estimatedCost = parseFloat(estimatedCost);
+        }
+        if (actualCost) {
+          data.actualCost = parseFloat(actualCost);
+        }
+        if (currency) {
+          data.currency = currency;
+        }
+        if (costCategory) {
+          data.costCategory = costCategory as CostCategory;
+        }
+        if (costNote.trim()) {
+          data.costNote = costNote.trim();
+        }
+        data.isPaid = isPaid;
+      }
 
       await itineraryItemsApi.create(data);
       
@@ -424,6 +496,29 @@ export function EnhancedAddItineraryItemDialog({
       return;
     }
 
+    // ✅ 检查时间重叠（严格阻止，不允许边界重叠）
+    const existingItems = (tripDay.ItineraryItem || []).map(item => ({
+      id: item.id,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      note: item.note || undefined,
+      type: item.type,
+      Place: item.Place ? {
+        nameCN: item.Place.nameCN || undefined,
+        nameEN: item.Place.nameEN || undefined,
+      } : undefined,
+    }));
+    const overlaps = checkTimeOverlap(
+      { startTime: startDateTime, endTime: endDateTime },
+      existingItems,
+      false // 不允许边界重叠（严格模式）
+    );
+
+    if (overlaps.length > 0) {
+      setError(formatTimeOverlapError(overlaps));
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -435,6 +530,26 @@ export function EnhancedAddItineraryItemDialog({
         endTime: endDateTime.toISOString(),
         note: note.trim() || undefined,
       };
+      
+      // 添加费用字段（如果有填写）
+      if (showCostFields) {
+        if (estimatedCost) {
+          data.estimatedCost = parseFloat(estimatedCost);
+        }
+        if (actualCost) {
+          data.actualCost = parseFloat(actualCost);
+        }
+        if (currency) {
+          data.currency = currency;
+        }
+        if (costCategory) {
+          data.costCategory = costCategory as CostCategory;
+        }
+        if (costNote.trim()) {
+          data.costNote = costNote.trim();
+        }
+        data.isPaid = isPaid;
+      }
 
       await itineraryItemsApi.create(data);
       
@@ -753,6 +868,111 @@ export function EnhancedAddItineraryItemDialog({
                     onChange={(e) => setNote(e.target.value)}
                     rows={2}
                   />
+                </div>
+
+                {/* 费用信息（可选） */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4" />
+                      费用信息（可选）
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCostFields(!showCostFields)}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      {showCostFields ? '隐藏' : '添加费用'}
+                    </button>
+                  </div>
+                  
+                  {showCostFields && (
+                    <div className="space-y-3 p-3 border rounded-lg bg-gray-50">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="estimatedCost" className="text-xs">预估费用</Label>
+                          <Input
+                            id="estimatedCost"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={estimatedCost}
+                            onChange={(e) => setEstimatedCost(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="actualCost" className="text-xs">实际费用</Label>
+                          <Input
+                            id="actualCost"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={actualCost}
+                            onChange={(e) => setActualCost(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="currency" className="text-xs">货币</Label>
+                          <Select value={currency} onValueChange={setCurrency}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="CNY">CNY (人民币)</SelectItem>
+                              <SelectItem value="USD">USD (美元)</SelectItem>
+                              <SelectItem value="EUR">EUR (欧元)</SelectItem>
+                              <SelectItem value="JPY">JPY (日元)</SelectItem>
+                              <SelectItem value="GBP">GBP (英镑)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="costCategory" className="text-xs">费用分类</Label>
+                          <Select value={costCategory} onValueChange={(v) => setCostCategory(v as CostCategory)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="选择分类" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ACCOMMODATION">住宿</SelectItem>
+                              <SelectItem value="TRANSPORTATION">交通</SelectItem>
+                              <SelectItem value="FOOD">餐饮</SelectItem>
+                              <SelectItem value="ACTIVITIES">活动/门票</SelectItem>
+                              <SelectItem value="SHOPPING">购物</SelectItem>
+                              <SelectItem value="OTHER">其他</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <Label htmlFor="costNote" className="text-xs">费用备注</Label>
+                        <Input
+                          id="costNote"
+                          placeholder="如：门票+缆车"
+                          value={costNote}
+                          onChange={(e) => setCostNote(e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="isPaid"
+                          checked={isPaid}
+                          onChange={(e) => setIsPaid(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                        <label htmlFor="isPaid" className="text-xs text-muted-foreground cursor-pointer">
+                          已支付
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 错误提示 */}

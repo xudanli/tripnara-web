@@ -50,10 +50,20 @@ export default function GoogleOneTap({
         // 延迟显示，避免与页面加载冲突
         setTimeout(() => {
           googleAuthService.promptOneTap().catch((err) => {
+            // 忽略 AbortError 和 FedCM 相关的错误（这些是正常的，当用户取消或浏览器不支持时）
+            if (err?.name === 'AbortError' || err?.message?.includes('FedCM') || err?.message?.includes('aborted')) {
+              // 静默忽略，这些是正常的用户取消或浏览器不支持的情况
+              return;
+            }
+            // 只记录其他类型的错误
             console.warn('One Tap prompt failed:', err);
           });
         }, 1000);
-      } catch (error) {
+      } catch (error: any) {
+        // 忽略 AbortError 和 FedCM 相关的错误
+        if (error?.name === 'AbortError' || error?.message?.includes('FedCM') || error?.message?.includes('aborted')) {
+          return;
+        }
         // 静默失败，不影响页面显示
         console.warn('Failed to initialize One Tap:', error);
       }

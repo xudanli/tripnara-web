@@ -16,13 +16,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { MapPin, Calendar, Clock, Mountain, Utensils, Coffee, Car, Hotel, Sparkles, CheckCircle2 } from 'lucide-react';
+import { MapPin, Calendar, Clock, Mountain, Utensils, Coffee, Car, Hotel, Sparkles, CheckCircle2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time-validation';
+import { useItineraryValidation, getDefaultCostCategory } from '@/hooks';
+import { AlertTriangle, Info, AlertCircle, DollarSign } from 'lucide-react';
+import type { CostCategory } from '@/types/trip';
 
 interface CreateItineraryItemDialogProps {
   tripDayId: string;
@@ -50,6 +55,18 @@ export function CreateItineraryItemDialog({
 }: CreateItineraryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // 校验相关状态
+  const [validationResult, setValidationResult] = useState<{
+    errors: any[];
+    warnings: any[];
+    infos: any[];
+    travelInfo?: any;
+  } | null>(null);
+  const [forceCreate, setForceCreate] = useState(false);
+  
+  // 校验 Hook
+  const { validate, validating } = useItineraryValidation();
   const [formData, setFormData] = useState<CreateItineraryItemRequest>({
     tripDayId,
     type: 'ACTIVITY',
@@ -57,6 +74,23 @@ export function CreateItineraryItemDialog({
     endTime: '',
     note: '',
   });
+  
+  // 费用相关状态
+  const [showCostFields, setShowCostFields] = useState<boolean>(false);
+  const [estimatedCost, setEstimatedCost] = useState<string>('');
+  const [actualCost, setActualCost] = useState<string>('');
+  const [currency, setCurrency] = useState<string>('CNY');
+  const [costCategory, setCostCategory] = useState<CostCategory | ''>('');
+  const [costNote, setCostNote] = useState<string>('');
+  const [isPaid, setIsPaid] = useState<boolean>(false);
+  
+  // 当类型改变时，自动设置费用分类
+  useEffect(() => {
+    if (!costCategory && formData.type) {
+      const defaultCategory = getDefaultCostCategory(formData.type) as CostCategory;
+      setCostCategory(defaultCategory);
+    }
+  }, [formData.type, costCategory]);
 
   // ✅ 地点搜索相关状态
   const [placeSearchOpen, setPlaceSearchOpen] = useState(false);
@@ -184,17 +218,149 @@ export function CreateItineraryItemDialog({
     setError(null);
 
     try {
+      // 验证时间
+      if (!formData.startTime || !formData.endTime) {
+        setError('请设置开始和结束时间');
+        setLoading(false);
+        return;
+      }
+
+      const startDateTime = new Date(formData.startTime);
+      const endDateTime = new Date(formData.endTime);
+
+      if (endDateTime <= startDateTime) {
+        setError('结束时间必须晚于开始时间');
+        setLoading(false);
+        return;
+      }
+
+      // ✅ 前端基础校验：检查时间重叠（严格阻止，不允许边界重叠）
+      if (currentDay && currentDay.ItineraryItem) {
+        const existingItems = (currentDay.ItineraryItem || []).map(item => ({
+          id: item.id,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          note: item.note || undefined,
+          type: item.type,
+          Place: item.Place ? {
+            nameCN: item.Place.nameCN || undefined,
+            nameEN: item.Place.nameEN || undefined,
+          } : undefined,
+        }));
+        const overlaps = checkTimeOverlap(
+          { startTime: startDateTime, endTime: endDateTime },
+          existingItems,
+          false // 不允许边界重叠（严格模式）
+        );
+
+        if (overlaps.length > 0) {
+          setError(formatTimeOverlapError(overlaps));
+          setValidationResult(null);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // ✅ 后端预校验（包含交通时间、距离等智能校验）
+      try {
+        const validationData: CreateItineraryItemRequest = {
+          tripDayId: tripDayId,
+          type: formData.type,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+          note: formData.note?.trim() || undefined,
+          placeId: selectedPlace?.id,
+          trailId: selectedTrail?.id,
+        };
+
+        // 执行预校验
+        const validation = await validate(validationData);
+        
+        if (validation) {
+          // 检查是否有错误
+          if (validation.errors && validation.errors.length > 0) {
+            const errorMessages = validation.errors.map(e => e.message).join('\n');
+            setError(errorMessages);
+            setValidationResult({
+              errors: validation.errors,
+              warnings: validation.warnings || [],
+              infos: validation.infos || [],
+              travelInfo: validation.travelInfo,
+            });
+            setLoading(false);
+            return;
+          }
+
+          // 检查是否需要确认（有警告）
+          if (validation.requiresConfirmation && validation.warnings && validation.warnings.length > 0) {
+            if (!forceCreate) {
+              // 显示警告，等待用户确认
+              setValidationResult({
+                errors: [],
+                warnings: validation.warnings,
+                infos: validation.infos || [],
+                travelInfo: validation.travelInfo,
+              });
+              setLoading(false);
+              return;
+            }
+          }
+
+          // 保存校验结果（用于显示交通信息等）
+          setValidationResult({
+            errors: [],
+            warnings: validation.warnings || [],
+            infos: validation.infos || [],
+            travelInfo: validation.travelInfo,
+          });
+        }
+      } catch (validationError: any) {
+        // 校验失败，继续使用前端校验结果
+        console.warn('[CreateItineraryItemDialog] 预校验失败，使用前端校验:', validationError);
+      }
+
       const submitData: CreateItineraryItemRequest = {
         ...formData,
         tripDayId,
-        startTime: formData.startTime ? new Date(formData.startTime).toISOString() : '',
-        endTime: formData.endTime ? new Date(formData.endTime).toISOString() : '',
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
         placeId: selectedPlace?.id,
         trailId: selectedTrail?.id,
         note: formData.note || undefined,
+        forceCreate: forceCreate, // 如果用户确认，强制创建
       };
+      
+      // 添加费用字段（如果有填写）
+      if (showCostFields) {
+        if (estimatedCost) {
+          submitData.estimatedCost = parseFloat(estimatedCost);
+        }
+        if (actualCost) {
+          submitData.actualCost = parseFloat(actualCost);
+        }
+        if (currency) {
+          submitData.currency = currency;
+        }
+        if (costCategory) {
+          submitData.costCategory = costCategory as CostCategory;
+        }
+        if (costNote.trim()) {
+          submitData.costNote = costNote.trim();
+        }
+        submitData.isPaid = isPaid;
+      }
 
-      await itineraryItemsApi.create(submitData);
+      const result = await itineraryItemsApi.create(submitData);
+      
+      // 处理增强版响应（包含 warnings、travelInfo）
+      if (result && typeof result === 'object' && 'item' in result) {
+        // 如果有警告但已创建成功，显示提示
+        if (result.warnings && result.warnings.length > 0) {
+          toast.warning(`行程项已添加，但有 ${result.warnings.length} 个警告`, {
+            description: result.warnings[0].message,
+          });
+        }
+      }
       
       // ✅ 成功提示（带图标和类型信息）
       const typeLabel = typeConfig[formData.type].label;
@@ -224,15 +390,126 @@ export function CreateItineraryItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" onKeyDown={handleKeyDown}>
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-0 overflow-hidden [&>button]:hidden !grid-rows-[auto_1fr_auto]" onKeyDown={handleKeyDown}>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b flex-shrink-0">
           <DialogTitle>添加行程项</DialogTitle>
           <DialogDescription>填写行程项信息，系统会自动校验和优化</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-6 py-4">
-            {error && (
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
+            <div className="space-y-6">
+            {/* 校验结果：错误 */}
+            {validationResult && validationResult.errors.length > 0 && (
+              <div className="space-y-2">
+                {validationResult.errors.map((err, idx) => (
+                  <div key={idx} className="rounded-lg bg-red-50 border border-red-200 p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-red-800">{err.message}</p>
+                        {err.suggestions && err.suggestions.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {err.suggestions.map((suggestion: any, sIdx: number) => (
+                              <p key={sIdx} className="text-xs text-red-700">
+                                💡 {suggestion.description}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 校验结果：警告（需要确认） */}
+            {validationResult && validationResult.warnings.length > 0 && !forceCreate && (
+              <div className="space-y-2">
+                {validationResult.warnings.map((warning, idx) => (
+                  <div key={idx} className="rounded-lg bg-yellow-50 border border-yellow-200 p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-yellow-800">{warning.message}</p>
+                      {warning.suggestions && warning.suggestions.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {warning.suggestions.map((suggestion: any, sIdx: number) => (
+                            <p key={sIdx} className="text-xs text-yellow-700">
+                              💡 {suggestion.description}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                        {warning.details?.suggestedStartTime && (
+                          <p className="text-xs text-yellow-700 mt-1">
+                            建议开始时间: {new Date(warning.details.suggestedStartTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    id="force-create"
+                    checked={forceCreate}
+                    onChange={(e) => setForceCreate(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <label htmlFor="force-create" className="text-muted-foreground cursor-pointer">
+                    我已了解风险，仍要添加
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* 校验结果：信息提示 */}
+            {validationResult && validationResult.infos.length > 0 && (
+              <div className="space-y-2">
+                {validationResult.infos.map((info, idx) => (
+                  <div key={idx} className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-blue-800">{info.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 交通信息 */}
+            {validationResult?.travelInfo && (
+              <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="w-4 h-4 text-gray-600" />
+                  <p className="text-sm font-medium text-gray-800">交通信息</p>
+                </div>
+                <div className="space-y-1 text-xs text-gray-700">
+                  {validationResult.travelInfo.fromPlace && validationResult.travelInfo.toPlace && (
+                    <p>
+                      {validationResult.travelInfo.fromPlace} → {validationResult.travelInfo.toPlace}
+                    </p>
+                  )}
+                  <p>
+                    距离: {validationResult.travelInfo.straightDistance} km
+                    {validationResult.travelInfo.roadDistance && ` (道路 ${validationResult.travelInfo.roadDistance} km)`}
+                  </p>
+                  <p>
+                    预计时长: {validationResult.travelInfo.estimatedDuration} 分钟
+                    {validationResult.travelInfo.recommendedTransport && ` (${validationResult.travelInfo.recommendedTransport})`}
+                  </p>
+                  {validationResult.travelInfo.availableTime !== undefined && (
+                    <p>可用时间: {validationResult.travelInfo.availableTime} 分钟</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 错误提示（兼容旧代码） */}
+            {error && !validationResult && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                 {error}
               </div>
@@ -514,20 +791,136 @@ export function CreateItineraryItemDialog({
                   rows={3}
                 />
               </div>
+
+              {/* 费用信息（可选） */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    费用信息（可选）
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowCostFields(!showCostFields)}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {showCostFields ? '隐藏' : '添加费用'}
+                  </button>
+                </div>
+                
+                {showCostFields && (
+                  <div className="space-y-3 p-3 border rounded-lg bg-gray-50">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="estimatedCost" className="text-xs">预估费用</Label>
+                        <Input
+                          id="estimatedCost"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={estimatedCost}
+                          onChange={(e) => setEstimatedCost(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="actualCost" className="text-xs">实际费用</Label>
+                        <Input
+                          id="actualCost"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={actualCost}
+                          onChange={(e) => setActualCost(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="currency" className="text-xs">货币</Label>
+                        <Select value={currency} onValueChange={setCurrency}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="CNY">CNY (人民币)</SelectItem>
+                            <SelectItem value="USD">USD (美元)</SelectItem>
+                            <SelectItem value="EUR">EUR (欧元)</SelectItem>
+                            <SelectItem value="JPY">JPY (日元)</SelectItem>
+                            <SelectItem value="GBP">GBP (英镑)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="costCategory" className="text-xs">费用分类</Label>
+                        <Select value={costCategory} onValueChange={(v) => setCostCategory(v as CostCategory)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择分类" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ACCOMMODATION">住宿</SelectItem>
+                            <SelectItem value="TRANSPORTATION">交通</SelectItem>
+                            <SelectItem value="FOOD">餐饮</SelectItem>
+                            <SelectItem value="ACTIVITIES">活动/门票</SelectItem>
+                            <SelectItem value="SHOPPING">购物</SelectItem>
+                            <SelectItem value="OTHER">其他</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <Label htmlFor="costNote" className="text-xs">费用备注</Label>
+                      <Input
+                        id="costNote"
+                        placeholder="如：门票+缆车"
+                        value={costNote}
+                        onChange={(e) => setCostNote(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="isPaid"
+                        checked={isPaid}
+                        onChange={(e) => setIsPaid(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      <label htmlFor="isPaid" className="text-xs text-muted-foreground cursor-pointer">
+                        已支付
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t flex-shrink-0">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={loading}
+              disabled={loading || validating}
             >
               取消
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? '创建中...' : '创建行程项'}
+            <Button type="submit" disabled={loading || validating || (validationResult?.errors.length ?? 0) > 0}>
+              {loading || validating ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  {validating ? '校验中...' : '创建中...'}
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  创建行程项
+                </>
+              )}
             </Button>
           </DialogFooter>
         </form>
