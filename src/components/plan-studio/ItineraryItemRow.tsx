@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp } from 'lucide-react';
 import type { ItineraryItem } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
-import type { PlacePhoto } from '@/types/place-image';
-import { PlaceImageWithAttribution } from '@/components/common/UnsplashAttribution';
+import type { PlaceImageInfo } from '@/types/place-image';
 import Logo from '@/components/common/Logo';
 import {
   Tooltip,
@@ -33,8 +32,8 @@ interface ItineraryItemRowProps {
   dayIndex: number;
   itemIndex: number;
   personaMode: PersonaMode;
-  /** 地点图片（从 Unsplash API 获取，由父组件批量加载后传入） */
-  placePhoto?: PlacePhoto | null;
+  /** 地点图片列表（从上传 API 获取，由父组件批量加载后传入） */
+  placeImages?: PlaceImageInfo[] | null;
   onEdit?: (item: ItineraryItem) => void;
   onDelete?: (item: ItineraryItem) => void;
   onReplace?: (item: ItineraryItem) => void;
@@ -76,7 +75,7 @@ const categoryLabels: Record<string, string> = {
 export default function ItineraryItemRow({
   item,
   personaMode,
-  placePhoto,
+  placeImages,
   onEdit,
   onDelete,
   onReplace,
@@ -416,42 +415,55 @@ export default function ItineraryItemRow({
   };
 
   // 获取图片（从 metadata 或 images 字段）
-  const placeImages = (place as any)?.images || (place as any)?.metadata?.images || [];
-  const placeImage = placeImages && placeImages.length > 0 ? placeImages[0] : null;
+  const placeImagesFromMetadata = (place as any)?.images || (place as any)?.metadata?.images || [];
+  const placeImage = placeImagesFromMetadata && placeImagesFromMetadata.length > 0 ? placeImagesFromMetadata[0] : null;
 
   return (
     <div
       className={`p-3 border rounded-lg hover:border-primary transition-colors group ${abuFields ? getStatusColor(abuFields.status) : ''}`}
     >
       <div className="flex items-start gap-3">
-        {/* 左侧：图片（优先使用 Unsplash 图片，其次使用地点自带图片） */}
+        {/* 左侧：图片（优先使用上传的图片，其次使用地点自带图片） */}
         <div className="flex-shrink-0 w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-          {placePhoto && !imageLoadError ? (
-            <PlaceImageWithAttribution
-              src={placePhoto.urls.thumb}
-              alt={name}
-              color={placePhoto.color}
-              attribution={placePhoto.attribution}
-              className="w-full h-full"
-              onError={() => setImageLoadError(true)}
-            />
-          ) : placeImage && !imageLoadError ? (
-            <img 
-              src={placeImage} 
-              alt={name}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-                setImageLoadError(true);
-              }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-50">
-              <div className="text-gray-400 text-2xl text-center px-1">
-                {categoryIcons[category] || '📍'}
+          {(() => {
+            // 优先使用上传的图片（主图优先）
+            const primaryImage = placeImages?.find(img => img.isPrimary) || placeImages?.[0];
+            if (primaryImage && !imageLoadError) {
+              return (
+                <img 
+                  src={primaryImage.url} 
+                  alt={primaryImage.caption || name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    setImageLoadError(true);
+                  }}
+                />
+              );
+            }
+            // 其次使用地点自带的图片
+            if (placeImage && !imageLoadError) {
+              return (
+                <img 
+                  src={placeImage} 
+                  alt={name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    setImageLoadError(true);
+                  }}
+                />
+              );
+            }
+            // 最后显示默认图标
+            return (
+              <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                <div className="text-gray-400 text-2xl text-center px-1">
+                  {categoryIcons[category] || '📍'}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* 中间：时间、地点名称、类别、信息 */}

@@ -73,7 +73,7 @@ export default function AgentChatSidebar({
   // Initialize from localStorage
   const [isExpanded, setIsExpanded] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_STATE_KEY);
-    return saved !== null ? saved === 'true' : true; // Default to expanded
+    return saved !== null ? saved === 'true' : false; // Default to collapsed (不默认打开)
   });
 
   // Persist to localStorage when changed
@@ -182,20 +182,26 @@ export default function AgentChatSidebar({
           <>
             <div className="flex items-center gap-2.5">
               <div className="relative">
-                {useLogo ? (
-                  <Logo variant="icon" size={28} color="currentColor" className="text-slate-800" />
-                ) : IconComponent ? (
-                  <div className={cn('w-7 h-7 rounded-full flex items-center justify-center', config.iconBgClass)}>
-                    <IconComponent className={cn('w-4 h-4', config.iconTextClass)} />
-                  </div>
-                ) : (
-                  <NaraAgentChatting
-                    size={28}
-                    color="currentColor"
-                    highlightColor="currentColor"
-                    className="text-primary"
-                  />
-                )}
+                <button
+                  onClick={toggleExpanded}
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                  title="点击收起/展开助手"
+                >
+                  {useLogo ? (
+                    <Logo variant="icon" size={28} color="currentColor" className="text-slate-800" />
+                  ) : IconComponent ? (
+                    <div className={cn('w-7 h-7 rounded-full flex items-center justify-center', config.iconBgClass)}>
+                      <IconComponent className={cn('w-4 h-4', config.iconTextClass)} />
+                    </div>
+                  ) : (
+                    <NaraAgentChatting
+                      size={28}
+                      color="currentColor"
+                      highlightColor="currentColor"
+                      className="text-primary"
+                    />
+                  )}
+                </button>
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
               </div>
               <div className="flex flex-col">

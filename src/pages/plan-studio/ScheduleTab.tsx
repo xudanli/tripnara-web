@@ -116,6 +116,23 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const [addItemDay, setAddItemDay] = useState<TripDetail['TripDay'][0] | null>(null);
 
   // 收集所有地点信息用于批量加载图片（使用 useMemo 避免每次渲染都创建新数组）
+  // 使用稳定的依赖：基于 place IDs 的字符串，而不是整个 Map 对象
+  const placeIdsKey = useMemo(() => {
+    const ids: number[] = [];
+    const seenIds = new Set<number>();
+    
+    itineraryItemsMap.forEach(items => {
+      items.forEach(item => {
+        if (item.Place && item.Place.id && !seenIds.has(item.Place.id)) {
+          seenIds.add(item.Place.id);
+          ids.push(item.Place.id);
+        }
+      });
+    });
+    
+    return ids.sort((a, b) => a - b).join(',');
+  }, [itineraryItemsMap]);
+
   const allPlaces = useMemo(() => {
     const places: Array<{ id: number; nameCN?: string; nameEN?: string | null; category?: string }> = [];
     const seenIds = new Set<number>();
@@ -135,7 +152,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     });
     
     return places;
-  }, [itineraryItemsMap]);
+  }, [placeIdsKey]); // 使用稳定的 placeIdsKey 作为依赖
 
   // 批量加载地点图片
   const { images: placeImagesMap } = usePlaceImages(allPlaces, {
@@ -785,7 +802,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                             dayIndex={idx}
                             itemIndex={itemIdx}
                             personaMode="auto"
-                            placePhoto={item.Place?.id ? placeImagesMap.get(item.Place.id) : undefined}
+                            placeImages={item.Place?.id ? placeImagesMap.get(item.Place.id) : undefined}
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                             onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -855,7 +872,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                   dayIndex={idx}
                                   itemIndex={itemIdx}
                                   personaMode="auto"
-                                  placePhoto={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
+                                  placeImages={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                                   onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}

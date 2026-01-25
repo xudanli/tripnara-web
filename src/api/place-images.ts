@@ -1,8 +1,10 @@
 /**
- * 地点图片 API
+ * 地点图片 API（已废弃）
  * 
- * 提供地点图片批量获取和缓存管理功能
- * 数据来源：Unsplash API
+ * ⚠️ 此 API 已废弃，不再使用 Unsplash API
+ * 请使用新的上传 API：@/api/upload
+ * 
+ * @deprecated 使用 uploadApi.getPlaceImages() 替代
  * 
  * Base URL: /api/places/images
  */

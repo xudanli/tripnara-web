@@ -8,9 +8,6 @@ import ScheduleTab from './ScheduleTab';
 import BookingsTab from './BookingsTab';
 import PlanningWorkbenchTab from './PlanningWorkbenchTab';
 // PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
-import SpotlightTour from '@/components/onboarding/SpotlightTour';
-import type { TourStep } from '@/components/onboarding/SpotlightTour';
-import { useOnboarding } from '@/hooks/useOnboarding';
 // PlanStudioSidebar 已移除 - 策略概览功能已整合到 AI 助手侧边栏
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
 import { Button } from '@/components/ui/button';
@@ -62,8 +59,6 @@ function PlanStudioPageContent() {
   const [showIntentDialog, setShowIntentDialog] = useState(false);
   // personaMode 已移除 - 三人格由系统自动调用，不再需要用户切换视图
   
-  const { state: onboardingState, completeTour, completeStep, completeWelcome } = useOnboarding();
-  const [showTour, setShowTour] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasTrips, setHasTrips] = useState(false);
   const [tripExists, setTripExists] = useState(false);
@@ -107,15 +102,11 @@ function PlanStudioPageContent() {
     setSearchParams(newParams);
   };
 
-  const handleTabChange = (value: string) => {
+  const     handleTabChange = (value: string) => {
     setActiveTab(value);
     const newParams = new URLSearchParams(searchParams);
     newParams.set('tab', value);
     setSearchParams(newParams);
-    
-    // 完成对应步骤
-    if (value === 'intent') completeStep('style');
-    if (value === 'schedule') completeStep('schedule');
     
     // 不再需要切换 personaMode，三人格由系统自动调用
   };
@@ -248,73 +239,7 @@ function PlanStudioPageContent() {
     return () => clearInterval(interval);
   }, [tripId, tripExists]);
   
-  // 根据当前 Tab 显示对应的 Tour
-  useEffect(() => {
-    if (!onboardingState.toursCompleted.planStudio && tripId && tripExists) {
-      // 首次进入 Plan Studio，延迟显示 Tour
-      const timer = setTimeout(() => {
-        setShowTour(true);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [tripId, tripExists, onboardingState.toursCompleted.planStudio]);
-
-  // Intent Tab Tour
-  const intentTourSteps: TourStep[] = [
-    {
-      id: 'trip-dna',
-      target: '[data-tour="trip-dna"]',
-      title: 'Trip DNA',
-      description: "Pick a pace. We'll enforce it everywhere. 选择节奏，系统会在所有规划中强制执行。",
-      position: 'bottom',
-    },
-    {
-      id: 'hard-constraints',
-      target: '[data-tour="hard-constraints"]',
-      title: 'Hard Constraints',
-      description: "Hard constraints are non-negotiable. They power Abu's gate. 硬约束不可协商，它们驱动 Abu 的安全门控。",
-      position: 'bottom',
-    },
-  ];
-
-  // Schedule Tab Tour
-  const scheduleTourSteps: TourStep[] = [
-    {
-      id: 'timeline',
-      target: '[data-tour="schedule-timeline"]',
-      title: 'Day Timeline',
-      description: 'Drag to reorder. Time windows update live. 拖拽重新排序，时间窗实时更新。',
-      position: 'bottom',
-    },
-    {
-      id: 'conflicts',
-      target: '[data-tour="schedule-conflicts"]',
-      title: 'Conflict List',
-      description: "Conflicts are actionable. Click 'Fix' to auto-locate. 冲突是可操作的，点击 Fix 自动定位。",
-      position: 'left',
-    },
-    {
-      id: 'optimize-btn',
-      target: '[data-tour="schedule-optimize"]',
-      title: 'Run Optimize',
-      description: 'One click to turn a draft into an executable plan. 一键将草稿变为可执行计划。',
-      position: 'top',
-    },
-  ];
-
-  const getCurrentTourSteps = () => {
-    switch (activeTab) {
-      case 'intent':
-        return intentTourSteps;
-      case 'schedule':
-        return scheduleTourSteps;
-      default:
-        return [];
-    }
-  };
-
   const handleWelcomeComplete = (experienceType: 'steady' | 'balanced' | 'exploratory') => {
-    completeWelcome(experienceType);
     setShowWelcomeModal(false);
     navigate('/dashboard/trips/new?experience=' + experienceType);
   };
@@ -372,20 +297,6 @@ function PlanStudioPageContent() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Plan Studio Tour */}
-      <SpotlightTour
-        steps={getCurrentTourSteps()}
-        open={showTour && !onboardingState.toursCompleted.planStudio}
-        onClose={() => {
-          setShowTour(false);
-          completeTour('planStudio');
-        }}
-        onComplete={() => {
-          setShowTour(false);
-          completeTour('planStudio');
-        }}
-      />
-
       {/* 顶部：标题 + 行程切换 + 状态 */}
       <div className="border-b bg-white px-6 py-4">
         <div className="flex items-start justify-between gap-4">

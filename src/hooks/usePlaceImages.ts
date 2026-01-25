@@ -15,11 +15,13 @@
  * - 使用 loadedPlaceIds 避免重复请求相同地点
  * - 使用 placeIdsKey 作为稳定的依赖项，避免数组引用变化导致的重复调用
  * - 使用 AbortController 取消未完成的请求
+ * 
+ * 注意：已改为从上传 API 获取图片，不再使用 Unsplash API
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { placeImagesApi } from '@/api/place-images';
-import type { PlacePhoto, PlaceImageRequest } from '@/types/place-image';
+import { uploadApi } from '@/api/upload';
+import type { PlaceImageInfo } from '@/types/place-image';
 
 interface PlaceInfo {
   id: number;
@@ -29,8 +31,8 @@ interface PlaceInfo {
 }
 
 interface UsePlaceImagesResult {
-  /** 图片映射：placeId -> PlacePhoto */
-  images: Map<number, PlacePhoto>;
+  /** 图片映射：placeId -> PlaceImageInfo[]（图片列表） */
+  images: Map<number, PlaceImageInfo[]>;
   /** 是否正在加载 */
   loading: boolean;
   /** 错误信息 */
@@ -39,7 +41,6 @@ interface UsePlaceImagesResult {
   stats: {
     total: number;
     found: number;
-    cached: number;
     failed: number;
   } | null;
   /** 手动刷新 */
@@ -62,9 +63,9 @@ export function usePlaceImages(
     country?: string;
   } = {}
 ): UsePlaceImagesResult {
-  const { enabled = true, country } = options;
+  const { enabled = true } = options;
   
-  const [images, setImages] = useState<Map<number, PlacePhoto>>(new Map());
+  const [images, setImages] = useState<Map<number, PlaceImageInfo[]>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<UsePlaceImagesResult['stats']>(null);
@@ -77,14 +78,24 @@ export function usePlaceImages(
   const placesRef = useRef<PlaceInfo[]>(places);
   placesRef.current = places;
   
+  // 使用 ref 跟踪上一次的 key，避免不必要的重新计算
+  const prevKeyRef = useRef<string>('');
+  
   // 生成稳定的 key，只有当地点 ID 集合变化时才改变
+  // 通过比较实际的 ID 字符串来判断是否变化
+  const currentIdsString = places
+    .filter(p => p.id)
+    .map(p => p.id)
+    .sort((a, b) => a - b)
+    .join(',');
+  
   const placeIdsKey = useMemo(() => {
-    return places
-      .filter(p => p.id && p.nameCN)
-      .map(p => p.id)
-      .sort((a, b) => a - b)
-      .join(',');
-  }, [places]);
+    // 只有当 ID 字符串真正改变时才更新 key
+    if (currentIdsString !== prevKeyRef.current) {
+      prevKeyRef.current = currentIdsString;
+    }
+    return prevKeyRef.current;
+  }, [currentIdsString]);
 
   const loadImages = useCallback(async () => {
     const currentPlaces = placesRef.current;
@@ -95,7 +106,7 @@ export function usePlaceImages(
 
     // 过滤出未加载过的地点
     const newPlaces = currentPlaces.filter(
-      p => p.id && p.nameCN && !loadedPlaceIds.current.has(p.id)
+      p => p.id && !loadedPlaceIds.current.has(p.id)
     );
 
     if (newPlaces.length === 0) {
@@ -117,32 +128,48 @@ export function usePlaceImages(
         alreadyLoadedCount: loadedPlaceIds.current.size,
       });
       
-      const requests: PlaceImageRequest[] = newPlaces.map(p => ({
-        placeId: String(p.id),
-        placeName: p.nameCN || '',
-        placeNameEn: p.nameEN || undefined,
-        category: p.category,
-        country,
-      }));
+      // 并行获取所有地点的图片
+      const imagePromises = newPlaces.map(async (place) => {
+        try {
+          const data = await uploadApi.getPlaceImages(place.id);
+          return {
+            placeId: place.id,
+            images: data.images,
+            success: true,
+          };
+        } catch (err: any) {
+          // 如果获取失败，返回空数组（可能是该地点还没有上传图片）
+          console.warn(`[usePlaceImages] 获取地点 ${place.id} 的图片失败:`, err.message);
+          return {
+            placeId: place.id,
+            images: [] as PlaceImageInfo[],
+            success: false,
+          };
+        }
+      });
 
-      const response = await placeImagesApi.batchGetImages(requests);
+      const results = await Promise.all(imagePromises);
 
-      if (response.success) {
-        setImages(prev => {
-          const newMap = new Map(prev);
-          response.results.forEach(result => {
-            if (result.placeId && result.photo) {
-              const placeId = parseInt(result.placeId, 10);
-              newMap.set(placeId, result.photo);
-              loadedPlaceIds.current.add(placeId);
-            }
-          });
-          return newMap;
+      // 统计信息
+      const found = results.filter(r => r.success && r.images.length > 0).length;
+      const failed = results.filter(r => !r.success).length;
+
+      setImages(prev => {
+        const newMap = new Map(prev);
+        results.forEach(result => {
+          if (result.placeId) {
+            newMap.set(result.placeId, result.images);
+            loadedPlaceIds.current.add(result.placeId);
+          }
         });
-        setStats(response.stats);
-      } else {
-        setError('加载图片失败');
-      }
+        return newMap;
+      });
+
+      setStats({
+        total: newPlaces.length,
+        found,
+        failed,
+      });
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setError(err.message || '加载图片失败');
@@ -151,12 +178,14 @@ export function usePlaceImages(
     } finally {
       setLoading(false);
     }
-  }, [enabled, country]); // 移除 places 依赖，使用 placesRef 代替
+  }, [enabled]);
 
   // 当地点 ID 集合变化时加载新图片
+  // 使用 placeIdsKey 作为依赖，但不包括 loadImages，避免循环依赖
   useEffect(() => {
     loadImages();
-  }, [placeIdsKey, loadImages]); // 使用 placeIdsKey 作为稳定依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeIdsKey]); // 只依赖 placeIdsKey，loadImages 通过闭包访问
 
   // 清理
   useEffect(() => {

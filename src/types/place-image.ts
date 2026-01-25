@@ -1,7 +1,8 @@
 /**
  * 地点图片相关类型定义
  * 
- * 用于 Unsplash API 集成，提供地点高质量图片
+ * 包含上传图片和 Unsplash 图片的类型定义
+ * 注意：新功能应使用上传图片 API，Unsplash 相关类型保留用于兼容性
  */
 
 // ==================== 图片数据结构 ====================
@@ -36,6 +37,7 @@ export interface PlacePhotoUser {
 
 /**
  * 归属信息（Unsplash API 要求必须展示）
+ * @deprecated Unsplash 相关功能已废弃，保留用于兼容性
  */
 export interface PlacePhotoAttribution {
   /** 摄影师姓名 */
@@ -157,4 +159,70 @@ export interface PlaceImagesCacheStats {
   sizeBytes?: number;
   /** 最后更新时间 */
   lastUpdated?: string;
+}
+
+// ==================== 景点图片上传相关类型 ====================
+
+/**
+ * 景点图片信息
+ */
+export interface PlaceImageInfo {
+  /** 图片 URL */
+  url: string;
+  /** OSS 存储 key（仅上传的图片有） */
+  key?: string;
+  /** 图片说明 */
+  caption?: string;
+  /** 来源：upload（上传）、unsplash（Unsplash）、external（外部链接） */
+  source: 'upload' | 'unsplash' | 'external';
+  /** 是否为主图 */
+  isPrimary: boolean;
+  /** 上传时间（ISO 格式，仅上传的图片有） */
+  uploadedAt?: string;
+}
+
+/**
+ * 获取景点图片列表响应
+ */
+export interface GetPlaceImagesResponse {
+  /** 景点 ID */
+  placeId: number;
+  /** 景点名称 */
+  placeName: string;
+  /** 图片列表 */
+  images: PlaceImageInfo[];
+  /** 图片总数 */
+  count: number;
+}
+
+/**
+ * 上传图片响应中的新图片信息
+ */
+export interface UploadedImageInfo {
+  /** 图片 URL */
+  url: string;
+  /** OSS 存储 key */
+  key: string;
+  /** 图片说明 */
+  caption: string;
+  /** 来源（上传的图片固定为 'upload'） */
+  source: 'upload';
+  /** 是否为主图 */
+  isPrimary: boolean;
+  /** 上传时间（ISO 格式） */
+  uploadedAt: string;
+}
+
+/**
+ * 上传景点图片响应
+ */
+export interface UploadPlaceImagesResponse {
+  /** 景点 ID */
+  placeId: number;
+  /** 景点名称 */
+  placeName: string;
+  /** 新上传的图片列表 */
+  newImages: UploadedImageInfo[];
+  /** 总图片数（包括新上传的） */
+  totalImages: number;
 }

@@ -161,11 +161,42 @@ export const placesApi = {
    * GET /places/search
    */
   searchPlaces: async (params: SearchPlacesParams): Promise<SearchPlacesResponse['data']> => {
-    const response = await apiClient.get<ApiResponseWrapper<SearchPlacesResponse['data']>>(
-      '/places/search',
-      { params }
-    );
-    return handleResponse(response);
+    try {
+      const response = await apiClient.get<ApiResponseWrapper<SearchPlacesResponse['data']>>(
+        '/places/search',
+        { 
+          params,
+          timeout: 20000, // 搜索可能需要更长时间，设置为 20 秒
+        }
+      );
+      console.log('[Places API] searchPlaces 响应:', {
+        success: response.data?.success,
+        dataType: typeof response.data?.data,
+        isArray: Array.isArray(response.data?.data),
+        dataLength: Array.isArray(response.data?.data) ? response.data.data.length : 'N/A',
+        rawData: response.data,
+      });
+      const result = handleResponse(response);
+      console.log('[Places API] searchPlaces 处理后的结果:', {
+        isArray: Array.isArray(result),
+        length: Array.isArray(result) ? result.length : 'N/A',
+        result: result,
+      });
+      return result;
+    } catch (error: any) {
+      console.error('[Places API] searchPlaces 错误:', {
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        url: error.config?.url,
+      });
+      // 如果是超时或网络错误，返回空数组而不是抛出错误
+      if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        console.warn('[Places API] 搜索请求失败，返回空结果');
+        return [];
+      }
+      throw error;
+    }
   },
 
   /**

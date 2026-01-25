@@ -263,6 +263,11 @@ export function EnhancedAddItineraryItemDialog({
         };
         console.log('[EnhancedAddItineraryItemDialog] 搜索请求参数:', searchParams);
         results = await placesApi.searchPlaces(searchParams);
+        console.log('[EnhancedAddItineraryItemDialog] 搜索结果:', {
+          count: results?.length || 0,
+          results: results,
+          isArray: Array.isArray(results),
+        });
       } else if (mode === 'nearby') {
         results = await placesApi.getNearbyPlaces({
           lat: userLocation!.lat,
@@ -290,10 +295,37 @@ export function EnhancedAddItineraryItemDialog({
         })) as PlaceWithDistance[];
       }
 
-      setSearchResults(results);
+      console.log('[EnhancedAddItineraryItemDialog] 设置搜索结果:', {
+        count: results?.length || 0,
+        results: results,
+      });
+      // 确保 results 是数组
+      const validResults = Array.isArray(results) ? results : [];
+      setSearchResults(validResults);
+      
+      // 如果没有结果，显示提示
+      if (validResults.length === 0 && mode === 'search') {
+        console.log('[EnhancedAddItineraryItemDialog] 未找到匹配的地点');
+      }
     } catch (err: any) {
-      console.error('Search error:', err);
-      toast.error(err.message || t('planStudio.placesTab.searchFailed'));
+      console.error('[EnhancedAddItineraryItemDialog] 搜索错误:', err);
+      console.error('[EnhancedAddItineraryItemDialog] 错误详情:', {
+        message: err.message,
+        code: err.code,
+        response: err.response?.data,
+        url: err.config?.url,
+      });
+      
+      // 根据错误类型显示不同的提示
+      let errorMessage = err.message || t('planStudio.placesTab.searchFailed');
+      if (err.code === 'ECONNABORTED') {
+        errorMessage = '搜索超时，请稍后重试';
+      } else if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED') {
+        errorMessage = '无法连接到服务器，请检查网络连接';
+      }
+      
+      toast.error(errorMessage);
+      setSearchResults([]);
     } finally {
       setSearching(false);
     }

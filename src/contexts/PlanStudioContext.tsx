@@ -7,7 +7,7 @@
  * - 状态同步：行程变更实时通知助手
  */
 
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect, ReactNode } from 'react';
 
 // ==================== 类型定义 ====================
 
@@ -150,6 +150,12 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     itemType: null,
   });
   
+  // 使用 ref 存储最新的 selectedContext，避免 askAssistantAbout 依赖导致循环
+  const selectedContextRef = useRef<SelectedContext>(selectedContext);
+  useEffect(() => {
+    selectedContextRef.current = selectedContext;
+  }, [selectedContext]);
+  
   // 待处理建议
   const [pendingSuggestions, setPendingSuggestions] = useState<PendingSuggestion[]>([]);
   
@@ -160,6 +166,18 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
   const [onAskAssistant, setOnAskAssistantState] = useState<((question: string, context: SelectedContext) => void) | null>(null);
   const [onApplySuggestion, setOnApplySuggestionState] = useState<((suggestion: PendingSuggestion) => Promise<boolean>) | null>(null);
   const [onOpenAssistant, setOnOpenAssistantState] = useState<(() => void) | null>(null);
+  
+  // 使用 ref 存储回调处理器，避免依赖导致循环
+  const onAskAssistantRef = useRef<((question: string, context: SelectedContext) => void) | null>(null);
+  const onOpenAssistantRef = useRef<(() => void) | null>(null);
+  
+  useEffect(() => {
+    onAskAssistantRef.current = onAskAssistant;
+  }, [onAskAssistant]);
+  
+  useEffect(() => {
+    onOpenAssistantRef.current = onOpenAssistant;
+  }, [onOpenAssistant]);
 
   // ========== 左侧 → 右侧 ==========
   
@@ -229,14 +247,14 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
 
   const askAssistantAbout = useCallback((question: string, contextOverride?: SelectedContext) => {
     // 先打开助手抽屉
-    if (onOpenAssistant) {
-      onOpenAssistant();
+    if (onOpenAssistantRef.current) {
+      onOpenAssistantRef.current();
     }
     // 然后发送问题（优先使用传入的 context，解决异步状态更新问题）
-    if (onAskAssistant) {
-      onAskAssistant(question, contextOverride || selectedContext);
+    if (onAskAssistantRef.current) {
+      onAskAssistantRef.current(question, contextOverride || selectedContextRef.current);
     }
-  }, [onAskAssistant, onOpenAssistant, selectedContext]);
+  }, []); // 移除所有依赖，使用 ref 访问最新值
 
   // ========== 右侧 → 左侧 ==========
 
