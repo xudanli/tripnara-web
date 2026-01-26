@@ -63,6 +63,8 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { usePlanStudioAssistant, type SelectedContext, type PendingSuggestion } from '@/contexts/PlanStudioContext';
 import { tripsApi } from '@/api/trips';
+import { tripPlannerApi } from '@/api/trip-planner';
+import { toast } from 'sonner';
 
 /**
  * 安全使用 PlanStudio 上下文
@@ -485,10 +487,14 @@ function ComparisonContent({ content }: { content: ComparisonRichContent }) {
  * 清单渲染组件
  */
 function ChecklistContent({ content }: { content: ChecklistRichContent }) {
-  const [items, setItems] = useState(content.items);
+  const [items, setItems] = useState(content.items || []);
   
   const groupedItems = useMemo(() => {
     const groups: Record<string, typeof items> = {};
+    // 添加防护：确保 items 是数组
+    if (!Array.isArray(items)) {
+      return groups;
+    }
     items.forEach((item) => {
       const category = item.categoryCN || item.category;
       if (!groups[category]) {
@@ -500,14 +506,22 @@ function ChecklistContent({ content }: { content: ChecklistRichContent }) {
   }, [items]);
 
   const progress = useMemo(() => {
+    if (!Array.isArray(items) || items.length === 0) {
+      return 0;
+    }
     const checked = items.filter(i => i.checked).length;
     return Math.round((checked / items.length) * 100);
   }, [items]);
 
   const handleToggle = (itemId: string) => {
-    setItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, checked: !item.checked } : item
-    ));
+    setItems(prev => {
+      if (!Array.isArray(prev)) {
+        return prev;
+      }
+      return prev.map(item => 
+        item.id === itemId ? { ...item, checked: !item.checked } : item
+      );
+    });
   };
 
   return (
@@ -564,56 +578,222 @@ function ChecklistContent({ content }: { content: ChecklistRichContent }) {
 
 /**
  * POI 推荐列表组件
+ * 🆕 支持新格式：按时间段分组的推荐（填充空闲时间场景）
  */
-function POIListContent({ content }: { content: POIRichContent }) {
-  return (
-    <div className="mt-3">
-      <div className="text-sm font-medium mb-2 flex items-center gap-2">
-        <MapPin className="w-4 h-4" />
-        {content.titleCN || content.title}
-      </div>
-      <div className="space-y-2">
-        {content.items.map((poi) => (
-          <Card key={poi.id} className="overflow-hidden">
-            <CardContent className="p-3">
-              <div className="flex items-start gap-3">
-                {poi.imageUrl && (
-                  <img 
-                    src={poi.imageUrl} 
-                    alt={poi.nameCN || poi.name}
-                    className="w-16 h-16 rounded-md object-cover flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm truncate">
-                      {poi.nameCN || poi.name}
-                    </span>
-                    {poi.rating && (
-                      <div className="flex items-center gap-1 text-amber-500">
-                        <Star className="w-3 h-3 fill-current" />
-                        <span className="text-xs">{poi.rating}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                    <Badge variant="secondary" className="text-xs">
-                      {poi.type}
-                    </Badge>
-                    {poi.distance && <span>{poi.distance}</span>}
-                    {poi.priceLevel && <span>{poi.priceLevel}</span>}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {poi.reasonCN || poi.reason}
-                  </p>
+function POIListContent({ 
+  content, 
+  tripId, 
+  sessionId,
+  onAddToItinerary,
+}: { 
+  content: POIRichContent;
+  tripId?: string;
+  sessionId?: string | null;
+  onAddToItinerary?: () => void;
+}) {
+  const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
+  
+  // 🆕 处理一键添加
+  const handleAddToItinerary = async (
+    suggestion: { id: string; name: string; nameCN?: string; type: string },
+    recommendation: { day: number; timeSlot: { start: string; end: string } }
+  ) => {
+    if (!tripId || !sessionId) {
+      console.warn('[POIListContent] tripId 或 sessionId 缺失，无法添加');
+      return;
+    }
+    
+    setAddingIds(prev => new Set(prev).add(suggestion.id));
+    
+    try {
+      // 确定建议类型
+      const suggestionType = suggestion.type === 'RESTAURANT' ? 'add_meal' : 'add_place';
+      
+      const response = await tripPlannerApi.applySuggestion({
+        tripId,
+        sessionId,
+        suggestionId: suggestion.id,
+        targetDay: recommendation.day,
+        timeSlot: recommendation.timeSlot,
+        suggestionType,
+        place: {
+          name: suggestion.name,
+          nameCN: suggestion.nameCN,
+          category: suggestion.type,
+        },
+      });
+      
+      if (response.success) {
+        // 显示成功提示
+        toast.success(response.message || `已添加「${suggestion.nameCN || suggestion.name}」到第${recommendation.day}天`);
+        
+        // 触发行程更新回调
+        if (onAddToItinerary) {
+          onAddToItinerary();
+        }
+      } else {
+        toast.error(response.message || '添加失败');
+      }
+    } catch (error: any) {
+      console.error('[POIListContent] 添加失败:', error);
+      toast.error(error.message || '添加失败，请重试');
+    } finally {
+      setAddingIds(prev => {
+        const next = new Set(prev);
+        next.delete(suggestion.id);
+        return next;
+      });
+    }
+  };
+  
+  // 🆕 新格式：按时间段分组的推荐
+  if (content.data?.recommendations && content.data.recommendations.length > 0) {
+    return (
+      <div className="mt-3 space-y-4">
+        {content.titleCN || content.title ? (
+          <div className="text-sm font-medium mb-2 flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            {content.titleCN || content.title}
+          </div>
+        ) : null}
+        
+        {content.data.recommendations.map((rec, recIndex) => (
+          <Card key={recIndex} className="overflow-hidden">
+            <CardContent className="p-4">
+              <div className="mb-3">
+                <div className="text-sm font-medium text-foreground">
+                  第{rec.day}天 {rec.timeSlot.start} - {rec.timeSlot.end}
                 </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  空闲时间 {rec.duration} 分钟
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {rec.suggestions.map((suggestion) => {
+                  const isAdding = addingIds.has(suggestion.id);
+                  
+                  return (
+                    <Card key={suggestion.id} className="border">
+                      <CardContent className="p-3">
+                        <div className="flex items-start gap-3">
+                          {suggestion.imageUrl && (
+                            <img 
+                              src={suggestion.imageUrl} 
+                              alt={suggestion.nameCN || suggestion.name}
+                              className="w-16 h-16 rounded-md object-cover flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm truncate">
+                                {suggestion.nameCN || suggestion.name}
+                              </span>
+                              {suggestion.rating && (
+                                <div className="flex items-center gap-1 text-amber-500">
+                                  <Star className="w-3 h-3 fill-current" />
+                                  <span className="text-xs">{suggestion.rating}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                              <Badge variant="secondary" className="text-xs">
+                                {suggestion.type}
+                              </Badge>
+                              {suggestion.distance && <span>{suggestion.distance}</span>}
+                              {suggestion.priceLevel && <span>{suggestion.priceLevel}</span>}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {suggestion.reasonCN || suggestion.reason}
+                            </p>
+                            
+                            {/* 🆕 一键添加按钮 */}
+                            {suggestion.action === 'ADD_TO_ITINERARY' && (
+                              <Button
+                                size="sm"
+                                className="mt-2 w-full"
+                                onClick={() => handleAddToItinerary(suggestion, rec)}
+                                disabled={isAdding || !tripId || !sessionId}
+                              >
+                                {isAdding ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                                    添加中...
+                                  </>
+                                ) : (
+                                  '✨ 一键添加'
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
-    </div>
-  );
+    );
+  }
+  
+  // 旧格式：直接推荐列表（向后兼容）
+  if (content.items && content.items.length > 0) {
+    return (
+      <div className="mt-3">
+        {content.titleCN || content.title ? (
+          <div className="text-sm font-medium mb-2 flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            {content.titleCN || content.title}
+          </div>
+        ) : null}
+        <div className="space-y-2">
+          {content.items.map((poi) => (
+            <Card key={poi.id} className="overflow-hidden">
+              <CardContent className="p-3">
+                <div className="flex items-start gap-3">
+                  {poi.imageUrl && (
+                    <img 
+                      src={poi.imageUrl} 
+                      alt={poi.nameCN || poi.name}
+                      className="w-16 h-16 rounded-md object-cover flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm truncate">
+                        {poi.nameCN || poi.name}
+                      </span>
+                      {poi.rating && (
+                        <div className="flex items-center gap-1 text-amber-500">
+                          <Star className="w-3 h-3 fill-current" />
+                          <span className="text-xs">{poi.rating}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                      <Badge variant="secondary" className="text-xs">
+                        {poi.type}
+                      </Badge>
+                      {poi.distance && <span>{poi.distance}</span>}
+                      {poi.priceLevel && <span>{poi.priceLevel}</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {poi.reasonCN || poi.reason}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  return null;
 }
 
 /**
@@ -2030,6 +2210,9 @@ function MessageBubble({
   isNewMessage,
   loading,
   itemNameMap,
+  tripId,
+  sessionId,
+  onTripUpdate,
 }: {
   message: PlannerMessage;
   onFollowUpSelect?: (value: string) => void;
@@ -2047,6 +2230,10 @@ function MessageBubble({
   loading?: boolean;
   /** itemId -> 中文名称映射 */
   itemNameMap?: Map<string, string>;
+  /** 🆕 行程ID和会话ID，用于一键添加功能 */
+  tripId?: string;
+  sessionId?: string | null;
+  onTripUpdate?: () => void;
 }) {
   const isUser = message.role === 'user';
   
@@ -2139,7 +2326,12 @@ function MessageBubble({
         {/* 富文本内容（非缺口高亮时） */}
         {!isUser && message.richContent && !gapHighlight && !isTyping && (
           <div className="w-full">
-            <RichContentRenderer content={message.richContent} />
+            <RichContentRenderer 
+              content={message.richContent} 
+              tripId={tripId}
+              sessionId={sessionId}
+              onTripUpdate={onTripUpdate}
+            />
           </div>
         )}
 
@@ -2194,7 +2386,7 @@ function MessageBubble({
 
         {/* 时间戳 */}
         <span className="text-xs text-muted-foreground mt-1">
-          {format(message.timestamp, 'HH:mm')}
+          {message.timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}
         </span>
       </div>
     </div>
@@ -2225,6 +2417,10 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
     setOnAskAssistant,
   } = usePlanStudioSafe();
 
+  // 🆕 包装 onTripUpdate，在行程更新后自动触发 NARA 重新检查
+  const lastTripUpdateRef = useRef<number>(0);
+  const [tripUpdateCount, setTripUpdateCount] = useState<number>(0);
+  
   const {
     messages,
     currentPhase,
@@ -2241,8 +2437,31 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
   } = useTripPlannerAssistant({
     tripId,
     autoStart: true,
-    onTripUpdate: onTripUpdate ? () => onTripUpdate() : undefined,
+    onTripUpdate: (_tripUpdate) => {
+      // 调用原始的 onTripUpdate
+      if (onTripUpdate) {
+        onTripUpdate();
+      }
+      // 触发更新计数，用于触发 useEffect
+      setTripUpdateCount(prev => prev + 1);
+    },
   });
+
+  // 🆕 监听行程更新，自动触发 NARA 重新检查
+  useEffect(() => {
+    // 如果 NARA 已经初始化且有会话，自动发送消息让它重新检查行程
+    // 避免在初始化时触发，只在用户操作后触发
+    if (tripUpdateCount > 0 && isInitialized && sessionId && !loading && messages.length > 0) {
+      // 使用防抖，避免频繁触发
+      const now = Date.now();
+      if (now - lastTripUpdateRef.current > 2000) { // 2秒内只触发一次
+        lastTripUpdateRef.current = now;
+        console.log('[TripPlannerAssistant] 行程已更新，自动触发 NARA 重新检查');
+        // 发送一条消息让 NARA 重新评估行程
+        sendMessage('请重新检查一下行程，看看还有什么需要注意的地方');
+      }
+    }
+  }, [tripUpdateCount, isInitialized, sessionId, loading, messages.length, sendMessage]);
 
   // 获取行程数据并构建 itemId -> 中文名称映射
   useEffect(() => {
@@ -2609,6 +2828,9 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
                 isNewMessage={msg.id === newMessageId}
                 loading={loading}
                 itemNameMap={itemNameMap}
+                tripId={tripId}
+                sessionId={sessionId}
+                onTripUpdate={onTripUpdate}
               />
             ))}
           </div>

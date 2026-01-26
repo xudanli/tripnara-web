@@ -189,7 +189,7 @@ export interface ChecklistRichContent {
  * POI 推荐项
  */
 export interface POIRecommendation {
-  id: number;
+  id: number | string; // 🆕 支持字符串ID（新格式）
   name: string;
   nameCN?: string;
   type: string;
@@ -204,16 +204,56 @@ export interface POIRecommendation {
     lat: number;
     lng: number;
   };
+  /** 🆕 一键添加动作（新格式） */
+  action?: 'ADD_TO_ITINERARY' | string;
+}
+
+/**
+ * 🆕 填充空闲时间的推荐项（新格式）
+ */
+export interface FreeTimeRecommendation {
+  day: number;
+  timeSlot: {
+    start: string; // HH:mm
+    end: string;    // HH:mm
+  };
+  duration: number; // 分钟
+  suggestions: Array<{
+    id: string;
+    name: string;
+    nameCN?: string;
+    type: string;
+    reason: string;
+    reasonCN?: string;
+    action: 'ADD_TO_ITINERARY' | string;
+    rating?: number;
+    priceLevel?: string;
+    distance?: string;
+    imageUrl?: string;
+    location?: {
+      lat: number;
+      lng: number;
+    };
+  }>;
 }
 
 /**
  * 富文本内容 - POI 推荐类型
+ * 支持两种格式：
+ * 1. 旧格式：items 数组（向后兼容）
+ * 2. 新格式：recommendations 数组（填充空闲时间场景）
  */
 export interface POIRichContent {
   type: 'poi_list';
-  title: string;
+  title?: string;
   titleCN?: string;
-  items: POIRecommendation[];
+  /** 旧格式：直接推荐列表（向后兼容） */
+  items?: POIRecommendation[];
+  /** 🆕 新格式：按时间段分组的推荐（填充空闲时间场景） */
+  data?: {
+    recommendations?: FreeTimeRecommendation[];
+    actionType?: 'ADD_TO_ITINERARY' | string;
+  };
 }
 
 /**
@@ -600,6 +640,8 @@ export interface ApplySuggestionResponse {
   tripUpdate?: TripUpdateSummary;
   /** 后续建议 */
   followUpSuggestions?: string[];
+  /** 🆕 建议状态（可选，向后兼容） */
+  suggestionStatus?: 'RESOLVED' | 'PENDING' | 'FAILED';
 }
 
 /**

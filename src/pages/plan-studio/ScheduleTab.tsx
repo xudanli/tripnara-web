@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useContext } from 'react';
+import { useState, useEffect, useMemo, useCallback, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,14 +64,17 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   // 左右联动上下文 - 使用 useContext 直接访问（可能为 null）
   const planStudioContext = useContext(PlanStudioContext);
   
-  // 从 context 中解构需要的 actions
-  const planStudioActions = planStudioContext ? {
-    selectDay: planStudioContext.selectDay,
-    selectItem: planStudioContext.selectItem,
-    clearSelection: planStudioContext.clearSelection,
-    recordAction: planStudioContext.recordAction,
-    askAssistantAbout: planStudioContext.askAssistantAbout,
-  } : null;
+  // 从 context 中解构需要的 actions（使用 useMemo 稳定对象引用）
+  const planStudioActions = useMemo(() => {
+    if (!planStudioContext) return null;
+    return {
+      selectDay: planStudioContext.selectDay,
+      selectItem: planStudioContext.selectItem,
+      clearSelection: planStudioContext.clearSelection,
+      recordAction: planStudioContext.recordAction,
+      askAssistantAbout: planStudioContext.askAssistantAbout,
+    };
+  }, [planStudioContext]); // 直接依赖整个 context 对象
   
   // 审批相关状态（保留以备将来使用）
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
@@ -122,12 +125,15 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     const seenIds = new Set<number>();
     
     itineraryItemsMap.forEach(items => {
-      items.forEach(item => {
-        if (item.Place && item.Place.id && !seenIds.has(item.Place.id)) {
-          seenIds.add(item.Place.id);
-          ids.push(item.Place.id);
-        }
-      });
+      // 添加防护：确保 items 是数组
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          if (item.Place && item.Place.id && !seenIds.has(item.Place.id)) {
+            seenIds.add(item.Place.id);
+            ids.push(item.Place.id);
+          }
+        });
+      }
     });
     
     return ids.sort((a, b) => a - b).join(',');
@@ -138,17 +144,20 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     const seenIds = new Set<number>();
     
     itineraryItemsMap.forEach(items => {
-      items.forEach(item => {
-        if (item.Place && item.Place.id && !seenIds.has(item.Place.id)) {
-          seenIds.add(item.Place.id);
-          places.push({
-            id: item.Place.id,
-            nameCN: item.Place.nameCN,
-            nameEN: item.Place.nameEN,
-            category: item.Place.category,
-          });
-        }
-      });
+      // 添加防护：确保 items 是数组
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          if (item.Place && item.Place.id && !seenIds.has(item.Place.id)) {
+            seenIds.add(item.Place.id);
+            places.push({
+              id: item.Place.id,
+              nameCN: item.Place.nameCN,
+              nameEN: item.Place.nameEN,
+              category: item.Place.category,
+            });
+          }
+        });
+      }
     });
     
     return places;
@@ -160,11 +169,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     country: trip?.destination, // 使用目的地作为国家参数
   });
 
-  useEffect(() => {
-    loadTrip();
-  }, [tripId, refreshKey]); // 当 refreshKey 变化时也刷新
-
-  // 转换时间格式的辅助函数
+  // 转换时间格式的辅助函数（在组件外部使用，需要保留）
   const formatTime = (isoTime: string): string => {
     try {
       const date = new Date(isoTime);
@@ -176,29 +181,28 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     }
   };
 
-  // 从 ItineraryItem 转换为 ScheduleItem（保留 id 在 metadata 中）
-  const convertItineraryItemsToScheduleItems = (items: ItineraryItemDetail[]): ScheduleItem[] => {
-    return items
-      .filter(item => item.startTime && item.endTime)
-      .map((item) => ({
-        startTime: formatTime(item.startTime),
-        endTime: formatTime(item.endTime),
-        placeId: item.placeId || 0,
-        placeName: (item.Place?.nameCN && item.Place.nameCN.trim()) 
-          ? item.Place.nameCN 
-          : (item.Place?.nameEN && item.Place.nameEN.trim()) 
-            ? item.Place.nameEN 
-            : '未知地点',
-        type: item.type,
-        metadata: {
-          itemId: item.id, // 保存 ItineraryItem 的 id，用于删除操作
-        },
-      }))
-      .filter(item => item.startTime && item.endTime)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  };
-
-  const loadTrip = async () => {
+  const loadTrip = useCallback(async () => {
+    // 从 ItineraryItem 转换为 ScheduleItem（保留 id 在 metadata 中）
+    const convertItineraryItemsToScheduleItems = (items: ItineraryItemDetail[]): ScheduleItem[] => {
+      return items
+        .filter(item => item.startTime && item.endTime)
+        .map((item) => ({
+          startTime: formatTime(item.startTime),
+          endTime: formatTime(item.endTime),
+          placeId: item.placeId || 0,
+          placeName: (item.Place?.nameCN && item.Place.nameCN.trim()) 
+            ? item.Place.nameCN 
+            : (item.Place?.nameEN && item.Place.nameEN.trim()) 
+              ? item.Place.nameEN 
+              : '未知地点',
+          type: item.type,
+          metadata: {
+            itemId: item.id, // 保存 ItineraryItem 的 id，用于删除操作
+          },
+        }))
+        .filter(item => item.startTime && item.endTime)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    };
     try {
       setLoading(true);
       const data = await tripsApi.getById(tripId);
@@ -278,7 +282,12 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [tripId]);
+
+  // 在 loadTrip 定义后使用它
+  useEffect(() => {
+    loadTrip();
+  }, [tripId, refreshKey, loadTrip]); // 当 refreshKey 变化时也刷新
 
   const loadMetricsAndConflicts = async (tripId: string, tripData?: TripDetail) => {
     try {
@@ -291,9 +300,12 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
       if (currentTrip && currentTrip.TripDay && currentTrip.TripDay.length > 0) {
         const metricsData = await tripsApi.getMetrics(tripId);
         const metricsMap = new Map<string, DayMetricsResponse>();
-        metricsData.days.forEach(day => {
-          metricsMap.set(day.date, day);
-        });
+        // 添加防护：确保 days 是数组
+        if (metricsData && metricsData.days && Array.isArray(metricsData.days)) {
+          metricsData.days.forEach(day => {
+            metricsMap.set(day.date, day);
+          });
+        }
         setDayMetricsMap(metricsMap);
       }
     } catch (err) {
@@ -341,6 +353,14 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
           
           if (response.success) {
             toast.success(response.message || `已将"${suggestion.place.nameCN}"添加到第 ${suggestion.targetDay} 天`);
+            
+            // 🆕 处理建议状态
+            if (response.suggestionStatus === 'RESOLVED') {
+              // 建议已解决，可以更新UI状态或移除建议
+              console.log('[ScheduleTab] 建议已解决:', suggestion.id);
+              // TODO: 如果有建议列表，可以更新建议状态或移除
+            }
+            
             // 刷新行程数据
             await loadTrip();
             return true;
@@ -676,7 +696,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
       <div className="grid grid-cols-12 gap-6">
         {/* 左（8/12）：Day Timeline */}
         <div className="col-span-12 lg:col-span-8 space-y-6" data-tour="schedule-timeline">
-        {trip.TripDay.map((day, idx) => {
+        {trip && trip.TripDay && Array.isArray(trip.TripDay) ? trip.TripDay.map((day, idx) => {
           const schedule = schedules.get(day.date);
           const items = schedule?.schedule?.items || [];
           
@@ -1031,7 +1051,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
               </CardContent>
             </Card>
           );
-        })}
+        }) : null}
       </div>
 
       {/* 右（4/12）：指标面板 + 冲突列表 */}
@@ -1049,12 +1069,17 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
               let totalBuffer = 0;
               let dayCount = 0;
               
-              dayMetricsMap.forEach(dayMetrics => {
-                totalWalk += dayMetrics.metrics.walk;
-                totalDrive += dayMetrics.metrics.drive;
-                totalBuffer += dayMetrics.metrics.buffer;
-                dayCount++;
-              });
+              // 添加防护：确保 dayMetricsMap 存在且是 Map
+              if (dayMetricsMap && dayMetricsMap instanceof Map) {
+                dayMetricsMap.forEach(dayMetrics => {
+                  if (dayMetrics && dayMetrics.metrics) {
+                    totalWalk += dayMetrics.metrics.walk || 0;
+                    totalDrive += dayMetrics.metrics.drive || 0;
+                    totalBuffer += dayMetrics.metrics.buffer || 0;
+                    dayCount++;
+                  }
+                });
+              }
               
               const avgWalk = dayCount > 0 ? (totalWalk / dayCount).toFixed(1) : '0';
               const avgDrive = dayCount > 0 ? Math.round(totalDrive / dayCount) : 0;
