@@ -1499,16 +1499,77 @@
         "showTop3": "显示前3个",
         "viewAll": "查看全部 ({{count}})",
         "noPotentialRisks": "未发现潜在风险",
+        "noEvidenceAvailable": "暂无可用证据",
         "tabs": {
           "readinessBreakdown": "准备度分解",
           "capabilityPacks": "能力包",
           "evidenceChain": "证据链",
-          "coverageMap": "覆盖地图"
+          "coverageMap": "覆盖地图",
+          "packingList": "打包清单"
         },
         "scoreBreakdown": {
           "title": "分数分解",
           "description": "准备度各维度的详细分解"
         },
+        "dimensions": {
+          "evidenceCoverage": {
+            "label": "证据覆盖",
+            "description": "行程各环节的证据收集情况"
+          },
+          "scheduleFeasibility": {
+            "label": "排程可行",
+            "description": "行程时间安排的合理性"
+          },
+          "transportCertainty": {
+            "label": "交通确定性",
+            "description": "交通方式和预订的确认程度"
+          },
+          "safetyRisk": {
+            "label": "安全风险",
+            "description": "行程相关的安全风险评估"
+          },
+          "buffers": {
+            "label": "缓冲冗余",
+            "description": "行程中的时间缓冲和灵活度"
+          }
+        },
+        "showBlockers": "查看阻塞",
+        "currentScore": "当前分数",
+        "noFindingsForDimension": "该维度暂无发现项",
+        "dimensionPerfect": "该维度表现完美！",
+        "noDetailedFindings": "暂无详细发现项。分数基于行程整体情况计算。",
+        "scoreExplanation": "分数反映了该维度的整体健康程度，可能受多种因素影响。",
+        "recommended": "推荐",
+        "impact": {
+          "high": "高影响",
+          "medium": "中影响",
+          "low": "低影响"
+        },
+        "time": "时间",
+        "distance": "距离",
+        "elevation": "爬升",
+        "riskLevel": "风险",
+        "whyThisFix": "为什么选择此方案",
+        "reasonCode": "原因代码",
+        "viewEvidence": "查看证据",
+        "applyFix": "应用修复",
+        "preview": "预览",
+        "repairOptions": "修复选项",
+        "blockerToFix": "待解决问题",
+        "noRepairOptions": "暂无修复选项",
+        "fix": "修复",
+        "mitigation": "缓解措施",
+        "affectedDays": "影响天数",
+        "mitigation": "应对措施",
+        "findingsTitle": "发现项",
+        "findingType": {
+          "blocker": "阻塞",
+          "warning": "警告",
+          "suggestion": "建议"
+        },
+        "actionRequired": "建议操作",
+        "moreFindings": "还有 {{count}} 项...",
+        "calculatedAt": "计算时间",
         "bestWindow": "最佳时间窗口: {{start}}–{{end}}",
         "lastUpdated": "最后更新: {{date}}",
         "actions": {
@@ -1524,12 +1585,147 @@
         "topBlocker": "主要阻塞项: {{title}}",
         "fixNow": "立即修复",
         "systemCapabilityPacks": "系统能力包触发情况",
+        "capabilityPacksDescription": "根据行程特征自动触发的系统能力包，帮助您为特殊旅行场景做好准备",
         "packsTriggered": "{{triggered}} / {{total}} 个能力包已触发",
+        "noPacksTriggered": "当前行程未触发任何能力包",
+        "triggeredPacksTitle": "已触发的能力包",
         "triggered": "已触发",
+        "triggeredRules": "触发的规则",
+        "hazards": "风险警告",
+        "addRulesToChecklist": "添加到清单",
+        "viewInEvidenceChain": "查看证据",
+        "addToChecklistPending": "此功能需要后端支持，规则将被添加到准备清单",
+        "personaAnalysis": "三人格分析",
+        "basedOnCapabilityPacks": "基于能力包",
+        "abuRole": "安全与边界守护",
+        "dreRole": "节奏与能量设计",
+        "neptuneRole": "空间结构修复",
+        "highRiskWarnings": "高危风险",
+        "rhythmAdjustments": "节奏调整",
+        "alternatives": "替代方案",
+        "noSafetyIssues": "无安全问题",
+        "noRhythmIssues": "节奏正常",
+        "noAlternatives": "无替代建议",
+        "hasSuggestions": "有建议",
+        "triggerReason": "触发原因",
+        "geoEnhanced": "地理增强",
+        "evaluationContext": "评估上下文",
+        "adding": "添加中...",
+        "addToChecklistSuccess": "已成功添加 {{count}} 条规则到准备清单",
+        "addToChecklistFailed": "添加失败，请稍后重试",
+        "noSpecialPreparation": "您的行程无需特殊准备",
+        "noSpecialPreparationHint": "当前行程不涉及高海拔、偏远地区、季节性道路等特殊场景",
+        "evidenceList": "证据列表",
+        "totalEvidence": "共 {{count}} 条证据",
+        "source": "来源",
+        "viewSource": "查看来源",
+        "noEvidenceAvailable": "暂无可用证据",
+        "evidenceType": {
+          "openingHours": "营业时间",
+          "roadClosure": "道路封闭",
+          "weather": "天气",
+          "booking": "预订",
+          "other": "其他"
+        },
+        "ruleLevel": {
+          "blocker": "阻塞",
+          "must": "必须",
+          "should": "建议",
+          "optional": "可选"
+        },
+        "hazardType": {
+          "supply_shortage": "补给不足",
+          "road_closure": "道路封闭",
+          "weather_risk": "天气风险",
+          "altitude_sickness": "高原反应",
+          "communication_failure": "通讯中断",
+          "emergency_access": "紧急救援困难",
+          "permit_required": "需要许可证",
+          "checkpoint": "检查站",
+          "other": "其他风险"
+        },
+        "hazardSeverity": {
+          "high": "高危",
+          "medium": "中等",
+          "low": "低风险"
+        },
+        "capabilityPackName": {
+          "high_altitude": "高海拔旅行准备",
+          "sparse_supply": "补给稀疏地区准备",
+          "seasonal_road": "季节性道路准备",
+          "permit_checkpoint": "许可与检查站准备",
+          "emergency": "紧急救援准备"
+        },
+        "capabilityPackChecklist": "能力包准备清单",
+        "noCapabilityPackChecklist": "暂无能力包清单项，可在「能力包」标签页中添加",
+        "coverageMap": "覆盖地图",
+        "coverageRate": "覆盖率",
+        "coverageGap": "覆盖缺口",
+        "missingEvidence": "缺少",
+        "evidenceItems": "条证据",
+        "gapsList": "覆盖缺口",
+        "fullCoverage": "所有路段和 POI 都有证据覆盖",
+        "loadingMap": "加载地图数据...",
+        "noMapData": "暂无地图数据",
+        "mapTokenMissing": "Mapbox Access Token 未配置",
+        "mapTokenHint": "请在 .env 文件中设置 VITE_MAPBOX_ACCESS_TOKEN",
+        "mapDataPending": "后端接口开发中，敬请期待",
+        "coveredPois": "已覆盖 POI",
+        "partialPois": "部分覆盖",
+        "uncoveredPois": "未覆盖",
+        "totalGaps": "总缺口",
+        "poiType": {
+          "city": "城市",
+          "attraction": "景点",
+          "hotel": "酒店",
+          "restaurant": "餐厅",
+          "transport": "交通",
+          "other": "其他"
+        },
+        "coverageStatus": {
+          "covered": "已覆盖",
+          "partial": "部分覆盖",
+          "uncovered": "未覆盖"
+        },
+        "legend": {
+          "covered": "已覆盖",
+          "partial": "部分覆盖",
+          "uncovered": "未覆盖",
+          "warning": "有风险"
+        },
+        "severity": {
+          "high": "高危",
+          "medium": "中等",
+          "low": "低风险"
+        },
         "reason": "原因: {{reason}}",
         "allAvailablePacks": "所有可用能力包",
         "noCapabilityPacksAvailable": "暂无可用能力包",
         "evidenceChainDescription": "所有证据来源及其覆盖情况",
+        "packingList": {
+          "title": "打包清单",
+          "description": "共 {{total}} 项，已完成 {{checked}} 项",
+          "noList": "尚未生成打包清单",
+          "generate": "生成清单",
+          "generating": "生成中...",
+          "generateSuccess": "已生成打包清单，共 {{count}} 项",
+          "generateFailed": "生成打包清单失败",
+          "refresh": "刷新",
+          "lastGenerated": "最后生成时间：{{date}}",
+          "totalItems": "项",
+          "checked": "已完成",
+          "items": "项",
+          "allCategories": "全部分类",
+          "showChecked": "显示已勾选",
+          "pieces": "件",
+          "notePlaceholder": "添加备注...",
+          "save": "保存",
+          "cancel": "取消",
+          "empty": {
+            "title": "还没有打包清单",
+            "description": "点击下方按钮生成个性化的打包清单，系统会根据您的行程自动推断季节、路线类型等信息。"
+          }
+        },
         "risks": "风险信息",
         "checklists": "准备清单",
         "must": "必须",

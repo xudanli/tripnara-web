@@ -66,6 +66,32 @@ export interface PlaceRecommendationsParams {
   limit?: number;
 }
 
+// 推荐活动请求参数
+export interface RecommendedActivitiesParams {
+  countryCode: string; // 必填：国家代码（ISO 3166-1 alpha-2）
+  category?: 'ATTRACTION' | 'RESTAURANT' | 'SHOPPING' | 'HOTEL'; // 可选：地点类别
+  limit?: number; // 可选：返回数量限制，默认 20，最大 100
+}
+
+// 推荐活动响应项
+export interface RecommendedActivity {
+  id: number;
+  name: string; // 显示名称（优先英文名，无则中文名）
+  nameCN: string;
+  nameEN: string | null;
+  category: 'ATTRACTION' | 'RESTAURANT' | 'SHOPPING' | 'HOTEL';
+  distance: number; // 推荐接口固定为 0
+  isOpen: boolean;
+  tags: string[];
+  address: string;
+  rating: number; // 评分（>= 4.0）
+  status: {
+    isOpen: boolean;
+    text: string;
+    hoursToday: string;
+  };
+}
+
 export const placesApi = {
   getAll: async (params?: { page?: number; limit?: number }) => {
     const response = await apiClient.get<ApiResponse<PaginatedResponse<Place>>>(
@@ -162,13 +188,13 @@ export const placesApi = {
    */
   searchPlaces: async (params: SearchPlacesParams): Promise<SearchPlacesResponse['data']> => {
     try {
-      const response = await apiClient.get<ApiResponseWrapper<SearchPlacesResponse['data']>>(
-        '/places/search',
+    const response = await apiClient.get<ApiResponseWrapper<SearchPlacesResponse['data']>>(
+      '/places/search',
         { 
           params,
           timeout: 20000, // 搜索可能需要更长时间，设置为 20 秒
         }
-      );
+    );
       console.log('[Places API] searchPlaces 响应:', {
         success: response.data?.success,
         dataType: typeof response.data?.data,
@@ -269,6 +295,20 @@ export const placesApi = {
     const response = await apiClient.post<ApiResponseWrapper<RouteDifficultyResponse['data']>>(
       '/places/metrics/difficulty',
       data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取推荐活动（评分 4.0 以上的地点）
+   * GET /places/recommendations/activities
+   */
+  getRecommendedActivities: async (
+    params: RecommendedActivitiesParams
+  ): Promise<RecommendedActivity[]> => {
+    const response = await apiClient.get<ApiResponseWrapper<RecommendedActivity[]>>(
+      '/places/recommendations/activities',
+      { params }
     );
     return handleResponse(response);
   },

@@ -530,8 +530,8 @@ export default function IntentTab({ tripId }: IntentTabProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>货币单位</Label>
-                <Select value={budgetCurrency} onValueChange={setBudgetCurrency}>
-                  <SelectTrigger>
+                <Select value={budgetCurrency} disabled>
+                  <SelectTrigger className="bg-muted cursor-not-allowed">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -541,6 +541,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
                     <SelectItem value="JPY">JPY (日元)</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">货币单位在行程创建时确定，不可修改</p>
               </div>
               <div className="space-y-2">
                 <Label>日均预算（可选）</Label>

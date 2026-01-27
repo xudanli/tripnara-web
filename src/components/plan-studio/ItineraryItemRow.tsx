@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
+import { DateTime } from 'luxon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp } from 'lucide-react';
-import type { ItineraryItem } from '@/types/trip';
+import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import type { ItineraryItem, BookingStatus } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import type { PlaceImageInfo } from '@/types/place-image';
 import Logo from '@/components/common/Logo';
@@ -26,6 +27,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/format';
 
 interface ItineraryItemRowProps {
   item: ItineraryItem;
@@ -34,6 +36,10 @@ interface ItineraryItemRowProps {
   personaMode: PersonaMode;
   /** 地点图片列表（从上传 API 获取，由父组件批量加载后传入） */
   placeImages?: PlaceImageInfo[] | null;
+  /** 目的地时区（IANA 格式，如 "Atlantic/Reykjavik"），用于正确显示时间 */
+  timezone?: string;
+  /** 货币单位（如 "CNY", "USD"），用于正确显示费用 */
+  currency?: string;
   onEdit?: (item: ItineraryItem) => void;
   onDelete?: (item: ItineraryItem) => void;
   onReplace?: (item: ItineraryItem) => void;
@@ -72,10 +78,19 @@ const categoryLabels: Record<string, string> = {
   OTHER: '其他',
 };
 
+// 预订状态标签映射
+const bookingStatusLabels: Record<BookingStatus, { label: string; color: string; icon: string }> = {
+  BOOKED: { label: '已预订', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✅' },
+  NEED_BOOKING: { label: '待预订', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: '📅' },
+  NO_BOOKING: { label: '无需预订', color: 'bg-gray-50 text-gray-600 border-gray-200', icon: '✓' },
+};
+
 export default function ItineraryItemRow({
   item,
   personaMode,
   placeImages,
+  timezone = 'UTC',
+  currency = 'CNY',
   onEdit,
   onDelete,
   onReplace,
@@ -86,6 +101,13 @@ export default function ItineraryItemRow({
   const place = item.Place;
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
+  
+  // 辅助函数：将 UTC 时间转换为目的地本地时间显示
+  const formatTimeInTimezone = (utcString: string | undefined | null): string => {
+    if (!utcString) return '';
+    const dt = DateTime.fromISO(utcString, { zone: 'UTC' }).setZone(timezone);
+    return dt.isValid ? dt.toFormat('HH:mm') : '';
+  };
 
   // ==================== 基础字段提取 ====================
   // 优先显示中文名称，如果 nameCN 为空字符串或未定义，则使用 nameEN
@@ -95,19 +117,35 @@ export default function ItineraryItemRow({
       ? place.nameEN 
       : item.type || '未知地点';
   const category = (place?.category || item.type || '').toUpperCase();
-  const startTime = item.startTime ? format(new Date(item.startTime), 'HH:mm') : '';
-  const endTime = item.endTime ? format(new Date(item.endTime), 'HH:mm') : '';
+  // 使用目的地时区显示时间
+  const startTime = formatTimeInTimezone(item.startTime);
+  const endTime = formatTimeInTimezone(item.endTime);
 
-  // 预计时长（优先从 physicalMetadata，否则使用默认值）
-  // 注意：place 的类型可能不同，需要兼容处理
+  // 实际停留时长（基于 startTime 和 endTime 计算）
+  const actualDuration = (item.startTime && item.endTime) 
+    ? Math.round((new Date(item.endTime).getTime() - new Date(item.startTime).getTime()) / (1000 * 60))
+    : null;
+  
+  // 预计时长（从 physicalMetadata 获取，作为参考）
   const physicalMetadata = (place as any)?.physicalMetadata || {};
   const estimatedDuration = physicalMetadata.estimated_duration_min;
-  const durationDisplay = estimatedDuration 
-    ? `${estimatedDuration}分钟`
-    : category === 'ATTRACTION' ? '60-120分钟'
-    : category === 'RESTAURANT' ? '60-90分钟'
-    : category === 'SHOPPING' ? '30-60分钟'
-    : '60分钟';
+  
+  // 显示实际停留时长，如果没有则显示预估时长
+  const formatDurationDisplay = (minutes: number) => {
+    if (minutes < 60) return `${minutes}分钟`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`;
+  };
+  
+  const durationDisplay = actualDuration 
+    ? formatDurationDisplay(actualDuration)
+    : estimatedDuration 
+      ? `约${estimatedDuration}分钟`
+      : category === 'ATTRACTION' ? '约60-120分钟'
+      : category === 'RESTAURANT' ? '约60-90分钟'
+      : category === 'SHOPPING' ? '约30-60分钟'
+      : '约60分钟';
 
   // ==================== Abu 视图字段 ====================
   const getAbuFields = () => {
@@ -282,6 +320,7 @@ export default function ItineraryItemRow({
     if (!place) return null;
 
     const metadata = place.metadata || {};
+    const physicalMetadata = (place as any).physicalMetadata || {};
     
     // 地址
     const address = place.address || null;
@@ -289,11 +328,22 @@ export default function ItineraryItemRow({
     // 评分
     const rating = place.rating || null;
     
-    // 开放时间 - 支持新的结构化格式
-    const openingHours = metadata.openingHours || {};
+    // 开放时间 - 优先使用 physicalMetadata.openingHours，其次使用 metadata.openingHours
+    const rawOpeningHours = physicalMetadata.openingHours || metadata.openingHours;
     
     // 获取今日营业时间
     const getTodayHours = (): string | null => {
+      // 如果没有数据，返回 null
+      if (!rawOpeningHours) return null;
+      
+      // 如果是字符串格式，直接返回（如 "09:00-18:00" 或 "08:30-17:00（周一闭馆）"）
+      if (typeof rawOpeningHours === 'string') {
+        return rawOpeningHours;
+      }
+      
+      // 如果是对象格式
+      const openingHours = rawOpeningHours as Record<string, any>;
+      
       // 优先使用 text 字段（如 "08:30-17:00（周一闭馆）"）
       if (openingHours.text) {
         return openingHours.text;
@@ -422,7 +472,7 @@ export default function ItineraryItemRow({
     <div
       className={`p-3 border rounded-lg hover:border-primary transition-colors group ${abuFields ? getStatusColor(abuFields.status) : ''}`}
     >
-      <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3">
         {/* 左侧：图片（优先使用上传的图片，其次使用地点自带图片） */}
         <div className="flex-shrink-0 w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
           {(() => {
@@ -438,30 +488,30 @@ export default function ItineraryItemRow({
                     (e.target as HTMLImageElement).style.display = 'none';
                     setImageLoadError(true);
                   }}
-                />
+            />
               );
             }
             // 其次使用地点自带的图片
             if (placeImage && !imageLoadError) {
               return (
-                <img 
-                  src={placeImage} 
-                  alt={name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    setImageLoadError(true);
-                  }}
-                />
+            <img 
+              src={placeImage} 
+              alt={name}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+                setImageLoadError(true);
+              }}
+            />
               );
             }
             // 最后显示默认图标
             return (
-              <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                <div className="text-gray-400 text-2xl text-center px-1">
-                  {categoryIcons[category] || '📍'}
-                </div>
+            <div className="w-full h-full flex items-center justify-center bg-gray-50">
+              <div className="text-gray-400 text-2xl text-center px-1">
+                {categoryIcons[category] || '📍'}
               </div>
+            </div>
             );
           })()}
         </div>
@@ -528,11 +578,66 @@ export default function ItineraryItemRow({
               </Badge>
             )}
             
-            {/* 价格 */}
+            {/* 地点参考价格 */}
             {placeDetails?.price && (
               <Badge variant="outline" className="text-xs text-emerald-600">
                 {placeDetails.price}
               </Badge>
+            )}
+            
+            {/* 行程项费用信息 */}
+            {item.estimatedCost && item.estimatedCost > 0 && (
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                💰 预估 {formatCurrency(item.estimatedCost, currency)}
+              </Badge>
+            )}
+            {item.actualCost && item.actualCost > 0 && (
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  "text-xs",
+                  item.isPaid 
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                    : "bg-amber-50 text-amber-700 border-amber-200"
+                )}
+              >
+                {item.isPaid ? '✅' : '💳'} 实付 {formatCurrency(item.actualCost, currency)}
+                {!item.isPaid && ' · 待付'}
+              </Badge>
+            )}
+            
+            {/* 预订状态 */}
+            {item.bookingStatus && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      variant="outline" 
+                      className={cn("text-xs cursor-pointer", bookingStatusLabels[item.bookingStatus]?.color)}
+                    >
+                      {bookingStatusLabels[item.bookingStatus]?.icon} {bookingStatusLabels[item.bookingStatus]?.label}
+                      {item.bookingConfirmation && ` · ${item.bookingConfirmation}`}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    <div className="space-y-1 text-xs">
+                      <div>状态: {bookingStatusLabels[item.bookingStatus]?.label}</div>
+                      {item.bookingConfirmation && <div>确认号: {item.bookingConfirmation}</div>}
+                      {item.bookedAt && <div>预订时间: {format(new Date(item.bookedAt), 'yyyy-MM-dd HH:mm')}</div>}
+                      {item.bookingUrl && (
+                        <a 
+                          href={item.bookingUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3" /> 查看预订
+                        </a>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
 
@@ -541,7 +646,7 @@ export default function ItineraryItemRow({
             {/* 全局：预计时长 */}
             <Badge variant="outline" className="text-xs">
               <Clock className="h-3 w-3 mr-1" />
-              {durationDisplay} 未知
+              {durationDisplay}
             </Badge>
 
             {/* Abu 视图：开放状态 + 风险badge + 来源 */}

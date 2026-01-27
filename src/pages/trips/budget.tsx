@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { BudgetConstraint } from '@/api/planning-workbench';
+import { formatCurrency } from '@/utils/format';
 
 interface TripBudgetPageProps {
   tripId?: string;  // 可选：如果作为子组件传入，使用传入的 tripId
@@ -65,6 +66,9 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   const [statistics, setStatistics] = useState<BudgetStatisticsResponse | null>(null);
   const [monitor, setMonitor] = useState<BudgetMonitorResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // 获取货币单位
+  const currency = budget?.currency || 'CNY';
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [trendsLoading, setTrendsLoading] = useState(false);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
@@ -375,7 +379,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
       });
 
       toast.success(
-        `已应用 ${result.appliedOptimizations.filter((opt) => opt.status === 'success').length} 条优化建议，预计节省 ¥${result.totalSavings.toLocaleString()}`,
+        `已应用 ${result.appliedOptimizations.filter((opt) => opt.status === 'success').length} 条优化建议，预计节省 ${formatCurrency(result.totalSavings, currency)}`,
         {
           duration: 5000,
         }
@@ -487,7 +491,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
             <CardTitle className="text-sm font-medium">总预算</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">¥{((budget.totalBudget ?? 0) as number).toLocaleString()}</div>
+            <div className="text-2xl font-bold">{formatCurrency(budget.totalBudget ?? 0, currency)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -495,7 +499,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
             <CardTitle className="text-sm font-medium">已使用</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">¥{((budget.totalSpent ?? 0) as number).toLocaleString()}</div>
+            <div className="text-2xl font-bold">{formatCurrency(budget.totalSpent ?? 0, currency)}</div>
             <div className="text-sm text-muted-foreground mt-1">
               {usagePercent.toFixed(1)}% 已使用
             </div>
@@ -506,7 +510,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
             <CardTitle className="text-sm font-medium">剩余</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">¥{((budget.remaining ?? 0) as number).toLocaleString()}</div>
+            <div className="text-2xl font-bold">{formatCurrency(budget.remaining ?? 0, currency)}</div>
           </CardContent>
         </Card>
       </div>
@@ -565,7 +569,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                     <div key={category} className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="capitalize">{category}</span>
-                        <span>¥{((amount ?? 0) as number).toLocaleString()}</span>
+                        <span>{formatCurrency(amount ?? 0, currency)}</span>
                       </div>
                       <Progress value={percent} className="h-2" />
                     </div>
@@ -636,7 +640,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                           )}
                         </div>
                         <Badge variant="outline" className="ml-4">
-                          节省 ¥{((opt.estimatedSavings ?? 0) as number).toLocaleString()}
+                          节省 {formatCurrency(opt.estimatedSavings ?? 0, currency)}
                         </Badge>
                       </div>
                     );
@@ -689,7 +693,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-bold">¥{((item.amount ?? 0) as number).toLocaleString()}</div>
+                          <div className="font-bold">{formatCurrency(item.amount ?? 0, item.currency || currency)}</div>
                           <div className="text-xs text-muted-foreground">{item.currency}</div>
                         </div>
                       </div>
@@ -726,9 +730,9 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                         <div className="flex items-center justify-between text-sm">
                           <span>{format(new Date(day.date), 'yyyy-MM-dd')}</span>
                           <div className="flex items-center gap-4">
-                            <span className="text-muted-foreground">预算: ¥{((day.budget ?? 0) as number).toLocaleString()}</span>
+                            <span className="text-muted-foreground">预算: {formatCurrency(day.budget ?? 0, currency)}</span>
                             <span className={(day.spent ?? 0) > (day.budget ?? 0) ? 'text-red-600' : 'text-green-600'}>
-                              实际: ¥{((day.spent ?? 0) as number).toLocaleString()}
+                              实际: {formatCurrency(day.spent ?? 0, currency)}
                             </span>
                             <span className="text-muted-foreground">
                               {((day.ratio ?? 0) * 100).toFixed(1)}%
@@ -754,11 +758,11 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span>预计总支出</span>
-                        <span className="font-bold">¥{((trends.forecast.projectedTotal ?? 0) as number).toLocaleString()}</span>
+                        <span className="font-bold">{formatCurrency(trends.forecast.projectedTotal ?? 0, currency)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>预计剩余</span>
-                        <span className="font-bold">¥{((trends.forecast.projectedRemaining ?? 0) as number).toLocaleString()}</span>
+                        <span className="font-bold">{formatCurrency(trends.forecast.projectedRemaining ?? 0, currency)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span>预测置信度</span>
@@ -814,7 +818,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-bold">
-                      ¥{((statistics.dailyAverage ?? 0) as number).toLocaleString()}
+                      {formatCurrency(statistics.dailyAverage ?? 0, currency)}
                     </div>
                   </CardContent>
                 </Card>
@@ -880,13 +884,13 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                     <div>
                       <div className="text-sm text-muted-foreground">当前支出</div>
                       <div className="text-2xl font-bold mt-1">
-                        ¥{((monitor.currentSpent ?? 0) as number).toLocaleString()}
+                        {formatCurrency(monitor.currentSpent ?? 0, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">剩余预算</div>
                       <div className="text-2xl font-bold mt-1">
-                        ¥{((monitor.remaining ?? 0) as number).toLocaleString()}
+                        {formatCurrency(monitor.remaining ?? 0, currency)}
                       </div>
                     </div>
                   </div>
@@ -917,7 +921,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                     {Object.entries(monitor.dailySpent).map(([date, amount]) => (
                       <div key={date} className="flex items-center justify-between p-2 border rounded">
                         <span className="text-sm">{format(new Date(date), 'yyyy-MM-dd')}</span>
-                        <span className="font-medium">¥{((amount ?? 0) as number).toLocaleString()}</span>
+                        <span className="font-medium">{formatCurrency(amount ?? 0, currency)}</span>
                       </div>
                     ))}
                   </div>
@@ -1189,10 +1193,12 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
             <AlertDialogDescription>
               您即将应用 {selectedOptimizations.length} 条优化建议。这将生成一个新的规划方案，预计可节省{' '}
               <span className="font-semibold text-primary">
-                ¥
-                {((optimizations
-                  .filter((opt, i) => selectedOptimizations.includes(opt.itemId || `opt-${i}`))
-                  .reduce((sum, opt) => sum + (opt.estimatedSavings || 0), 0) ?? 0) as number).toLocaleString()}
+                {formatCurrency(
+                  optimizations
+                    .filter((opt, i) => selectedOptimizations.includes(opt.itemId || `opt-${i}`))
+                    .reduce((sum, opt) => sum + (opt.estimatedSavings || 0), 0) ?? 0,
+                  currency
+                )}
               </span>
               。应用后请前往规划工作台查看新方案。
             </AlertDialogDescription>

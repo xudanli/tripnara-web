@@ -21,6 +21,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -33,20 +40,35 @@ import {
   Calendar,
   MapPin,
   MoreVertical,
+  ListChecks,
+  ExternalLink,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import type { TripDetail } from '@/types/trip';
-import type { ReadinessData, RepairOption, EvidenceItem, Blocker } from '@/types/readiness';
-import type { ReadinessCheckResult, PersonalizedChecklistResponse, RiskWarningsResponse, CheckReadinessDto } from '@/api/readiness';
+import type { TripDetail, EvidenceItem as TripEvidenceItem } from '@/types/trip';
+import type { ReadinessData, Blocker } from '@/types/readiness';
+import type { 
+  ReadinessCheckResult, 
+  PersonalizedChecklistResponse, 
+  RiskWarningsResponse, 
+  CheckReadinessDto,
+  CapabilityPack,
+  CapabilityPackEvaluateDto,
+  CapabilityPackEvaluateResultItem,
+  CoverageMapResponse,
+  ScoreBreakdownResponse,
+} from '@/api/readiness';
+import { inferSeason, inferRouteType, extractActivitiesFromTrip } from '@/utils/packing-list-inference';
 import ReadinessStatusBadge from '@/components/readiness/ReadinessStatusBadge';
 import ScoreGauge from '@/components/readiness/ScoreGauge';
 import BlockerCard from '@/components/readiness/BlockerCard';
 import RepairOptionCard from '@/components/readiness/RepairOptionCard';
 import BreakdownBarList from '@/components/readiness/BreakdownBarList';
-import EvidenceListItem from '@/components/readiness/EvidenceListItem';
+// import EvidenceListItem from '@/components/readiness/EvidenceListItem'; // 暂时未使用
 import CoverageMiniMap from '@/components/readiness/CoverageMiniMap';
 import RiskCard from '@/components/readiness/RiskCard';
 import ChecklistSection from '@/components/readiness/ChecklistSection';
+import PackingListTab from '@/components/readiness/PackingListTab';
+// import CapabilityPackPersonaInsights from '@/components/readiness/CapabilityPackPersonaInsights'; // 暂时移除：信息重复
 
 export default function ReadinessPage() {
   const { t, i18n } = useTranslation();
@@ -68,9 +90,31 @@ export default function ReadinessPage() {
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [showAllBlockers, setShowAllBlockers] = useState(false);
   const [refreshingEvidence, setRefreshingEvidence] = useState(false);
-  const [capabilityPacks, setCapabilityPacks] = useState<any[]>([]);
-  const [evaluatedPacks, setEvaluatedPacks] = useState<any[]>([]);
+  const [capabilityPacks, setCapabilityPacks] = useState<CapabilityPack[]>([]);
+  const [evaluatedPacks, setEvaluatedPacks] = useState<CapabilityPackEvaluateResultItem[]>([]);
   const [loadingCapabilityPacks, setLoadingCapabilityPacks] = useState(false);
+  const [capabilityPacksError, setCapabilityPacksError] = useState<string | null>(null);
+  const [addingToChecklist, setAddingToChecklist] = useState<string | null>(null);  // 正在添加的 packType
+  const [activeTab, setActiveTab] = useState<string>('breakdown');  // 当前激活的标签页
+  const [evidenceData, setEvidenceData] = useState<TripEvidenceItem[]>([]);  // 证据列表
+  const [loadingEvidence, setLoadingEvidence] = useState(false);  // 证据加载状态
+  const [capabilityPackChecklistItems, setCapabilityPackChecklistItems] = useState<Array<{
+    id: string;
+    ruleId: string;
+    message: string;
+    level: 'blocker' | 'must' | 'should' | 'optional';
+    sourcePackType: string;
+    checked: boolean;
+    tasks?: string[];
+  }>>([]);  // 能力包清单项
+  const [loadingChecklistItems, setLoadingChecklistItems] = useState(false);  // 清单项加载状态
+  const [coverageMapData, setCoverageMapData] = useState<CoverageMapResponse | null>(null);  // 覆盖地图数据
+  const [loadingCoverageMap, setLoadingCoverageMap] = useState(false);  // 覆盖地图加载状态
+  const [coverageMapError, setCoverageMapError] = useState<string | null>(null);  // 覆盖地图错误
+  const [scoreBreakdown, setScoreBreakdown] = useState<ScoreBreakdownResponse | null>(null);  // 准备度分数分解
+  const [loadingScoreBreakdown, setLoadingScoreBreakdown] = useState(false);  // 分数加载状态
+  const [selectedDimension, setSelectedDimension] = useState<string | null>(null);  // 当前选中的维度（用于显示 findings）
+  const [selectedBlockerMessage, setSelectedBlockerMessage] = useState<string | null>(null);  // 当前选中的阻塞项描述
 
   useEffect(() => {
     if (tripId) {
@@ -119,6 +163,11 @@ export default function ReadinessPage() {
 
   // 从 trip 数据构建 CheckReadinessDto
   const buildCheckReadinessDto = (trip: TripDetail): CheckReadinessDto => {
+    // 自动推断参数
+    const season = inferSeason(trip.startDate, trip.destination);
+    const route = inferRouteType(trip);
+    const activities = extractActivitiesFromTrip(trip);
+    
     return {
       destinationId: trip.destination || '',
       trip: {
@@ -127,7 +176,136 @@ export default function ReadinessPage() {
       },
       itinerary: {
         countries: [trip.destination].filter(Boolean) as string[],
-        // TODO: 从 trip 数据中提取更多信息（activities, season, region 等）
+        season,           // 推断的季节
+        activities,       // 推断的活动列表
+        region: route,    // 推断的路线类型（作为 region）
+      },
+    };
+  };
+
+  // 从行程地点数据中提取 geo 信息
+  const extractGeoFromTrip = (trip: TripDetail) => {
+    const places: Array<{ lat?: number; lng?: number; elevation?: number }> = [];
+    
+    // 遍历所有行程日，收集地点信息
+    trip.TripDay?.forEach(day => {
+      day.ItineraryItem?.forEach(item => {
+        const place = item.Place as any;
+        if (place) {
+          places.push({
+            lat: place.lat,
+            lng: place.lng,
+            elevation: place.physicalMetadata?.elevation || place.metadata?.elevation,
+          });
+        }
+      });
+    });
+    
+    if (places.length === 0) {
+      return null;
+    }
+    
+    // 计算平均坐标和海拔
+    const validLats = places.filter(p => p.lat != null).map(p => p.lat!);
+    const validLngs = places.filter(p => p.lng != null).map(p => p.lng!);
+    const validElevations = places.filter(p => p.elevation != null).map(p => p.elevation!);
+    
+    const avgLat = validLats.length > 0 ? validLats.reduce((a, b) => a + b, 0) / validLats.length : undefined;
+    const avgLng = validLngs.length > 0 ? validLngs.reduce((a, b) => a + b, 0) / validLngs.length : undefined;
+    const avgElevation = validElevations.length > 0 ? validElevations.reduce((a, b) => a + b, 0) / validElevations.length : undefined;
+    const maxElevation = validElevations.length > 0 ? Math.max(...validElevations) : undefined;
+    
+    // 判断是否在山区（海拔 > 1500m 或最高点 > 2000m）
+    const inMountain = (avgElevation && avgElevation > 1500) || (maxElevation && maxElevation > 2000);
+    
+    // 判断是否有山口（最高点比平均高度高 500m 以上）
+    const hasMountainPass = avgElevation && maxElevation && (maxElevation - avgElevation > 500);
+    
+    return {
+      lat: avgLat,
+      lng: avgLng,
+      mountains: {
+        inMountain: inMountain || false,
+        mountainElevationAvg: avgElevation ? Math.round(avgElevation) : undefined,
+        hasMountainPass: hasMountainPass || false,
+      },
+    };
+  };
+
+  // 从 trip 数据构建能力包评估请求 DTO
+  const buildCapabilityPackEvaluateDto = (trip: TripDetail): CapabilityPackEvaluateDto => {
+    // 自动推断参数
+    const season = inferSeason(trip.startDate, trip.destination);
+    const activities = extractActivitiesFromTrip(trip);
+    
+    // 计算路线长度（如果有行程日数据）
+    let routeLength: number | undefined;
+    if (trip.TripDay && trip.TripDay.length > 0) {
+      // 简单估算：假设每天平均行驶 200km（可以根据实际数据调整）
+      routeLength = trip.TripDay.length * 200;
+    }
+    
+    // 从行程地点提取 geo 信息
+    const geoInfo = extractGeoFromTrip(trip);
+    
+    // 根据目的地推断一些 geo 参数（冰岛特定）
+    const isIceland = trip.destination?.toUpperCase() === 'IS' || 
+                      trip.destination?.toLowerCase().includes('iceland') ||
+                      trip.destination?.includes('冰岛');
+    
+    // 冰岛特定的 geo 参数推断
+    // 根据 API 文档触发条件：
+    // - sparse_supply: roadDensityScore < 0.3 + supplyDensity < 0.2 + routeLength > 100
+    // - seasonal_road: inMountain == true + season == "winter"
+    // - emergency: roadDensityScore < 0.2 + (no hospital OR route > 300km OR elevation >= 3000m)
+    const icelandGeoDefaults = isIceland ? {
+      mountains: {
+        inMountain: true,  // 冰岛大部分路线都在山区/高地
+        mountainElevationAvg: 800,  // 冰岛平均海拔约 500-1000m
+        hasMountainPass: season === 'winter',  // 冬季山口可能封闭
+      },
+      roads: {
+        roadDensityScore: 0.25,  // 冰岛道路密度很低（< 0.3 触发 sparse_supply）
+        hasMountainPass: season === 'winter',
+      },
+      pois: {
+        supplyDensity: 0.15,  // 冰岛补给点密度很低（< 0.2 触发 sparse_supply）
+        hasCheckpoint: false,
+        safety: {
+          hasHospital: false,  // 偏远地区无医院（触发 emergency）
+          hasPolice: true,
+        },
+        supply: {
+          hasFuel: true,  // 主要道路有加油站
+          hasSupermarket: false,  // 偏远地区无超市
+        },
+      },
+    } : {};
+    
+    // 合并 geo 信息：优先使用 icelandGeoDefaults，其次是从行程提取的 geoInfo
+    const mergedMountains = {
+      ...geoInfo?.mountains,
+      ...icelandGeoDefaults.mountains,
+    };
+    
+    return {
+      destinationId: trip.destination || '',
+      trip: {
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+      },
+      itinerary: {
+        countries: [trip.destination].filter(Boolean) as string[],
+        season: season as 'winter' | 'summer' | 'spring' | 'fall',
+        activities,
+        routeLength,
+      },
+      geo: {
+        lat: geoInfo?.lat,
+        lng: geoInfo?.lng,
+        mountains: Object.keys(mergedMountains).length > 0 ? mergedMountains : undefined,
+        roads: icelandGeoDefaults.roads,
+        pois: icelandGeoDefaults.pois,
       },
     };
   };
@@ -136,23 +314,238 @@ export default function ReadinessPage() {
   const loadCapabilityPacks = async (trip: TripDetail) => {
     try {
       setLoadingCapabilityPacks(true);
+      setCapabilityPacksError(null);
+      console.log('🔄 [Readiness] 开始加载能力包，trip:', trip?.destination, trip?.id);
+      
+      // 构建能力包评估请求 DTO
+      const evaluateDto = buildCapabilityPackEvaluateDto(trip);
+      console.log('📤 [Readiness] 能力包评估请求 DTO:', JSON.stringify(evaluateDto, null, 2));
+      
       // 并行加载能力包列表和评估结果
+      let packsError = false;
+      let evaluateError = false;
+      
       const [packsResponse, evaluateResponse] = await Promise.all([
-        readinessApi.getCapabilityPacks().catch(() => null),
-        readinessApi.evaluateCapabilityPacks(buildCheckReadinessDto(trip)).catch(() => null),
+        readinessApi.getCapabilityPacks().catch((err) => {
+          packsError = true;
+          console.error('❌ [Readiness] getCapabilityPacks API 调用失败:', {
+            error: err?.message || err,
+            response: err?.response?.data,
+            status: err?.response?.status,
+          });
+          return null;
+        }),
+        // 使用 autoEnhanceGeo 选项，让后端自动增强地理参数
+        readinessApi.evaluateCapabilityPacks(evaluateDto, { autoEnhanceGeo: true }).catch((err) => {
+          evaluateError = true;
+          console.error('❌ [Readiness] evaluateCapabilityPacks API 调用失败:', {
+            error: err?.message || err,
+            response: err?.response?.data,
+            status: err?.response?.status,
+            dto: evaluateDto,
+          });
+          return null;
+        }),
       ]);
 
       if (packsResponse) {
+        console.log('✅ [Readiness] 能力包列表加载成功:', packsResponse.packs?.length || 0, '个');
         setCapabilityPacks(packsResponse.packs || []);
+      } else if (packsError) {
+        console.warn('⚠️ [Readiness] 能力包列表 API 调用失败');
+        setCapabilityPacksError('能力包列表 API 调用失败，请检查后端服务');
       }
 
       if (evaluateResponse) {
+        console.log('✅ [Readiness] 能力包评估结果加载成功:', {
+          total: evaluateResponse.total,
+          triggered: evaluateResponse.triggered,
+          resultsCount: evaluateResponse.results?.length || 0,
+        });
+        console.log('📊 [Readiness] 能力包评估详情:', JSON.stringify(evaluateResponse.results, null, 2));
         setEvaluatedPacks(evaluateResponse.results || []);
+      } else if (evaluateError) {
+        console.warn('⚠️ [Readiness] 能力包评估 API 调用失败');
+        if (!capabilityPacksError) {
+          setCapabilityPacksError('能力包评估 API 调用失败，请检查后端服务');
+        }
       }
     } catch (err) {
-      console.error('Failed to load capability packs:', err);
+      console.error('❌ [Readiness] 加载能力包时发生异常:', err);
+      setCapabilityPacksError('加载能力包时发生错误');
     } finally {
       setLoadingCapabilityPacks(false);
+    }
+  };
+
+  /**
+   * 加载能力包清单项
+   * GET /readiness/trip/:tripId/checklist/capability-pack-items
+   */
+  const loadCapabilityPackChecklistItems = async (tripId: string) => {
+    try {
+      setLoadingChecklistItems(true);
+      console.log('🔄 [Readiness] 开始加载能力包清单项，tripId:', tripId);
+      
+      const response = await readinessApi.getCapabilityPackChecklistItems(tripId);
+      
+      console.log('✅ [Readiness] 能力包清单项加载成功:', {
+        total: response.summary?.total || 0,
+        checked: response.summary?.checked || 0,
+        itemsCount: response.items?.length || 0,
+      });
+      
+      setCapabilityPackChecklistItems(response.items || []);
+    } catch (err: any) {
+      console.error('❌ [Readiness] 加载能力包清单项失败:', {
+        error: err?.message || err,
+        response: err?.response?.data,
+        status: err?.response?.status,
+      });
+      // 不设置错误状态，静默失败（API 可能尚未实现）
+      setCapabilityPackChecklistItems([]);
+    } finally {
+      setLoadingChecklistItems(false);
+    }
+  };
+
+  /**
+   * 加载覆盖地图数据
+   * GET /readiness/trip/:tripId/coverage-map
+   */
+  const loadCoverageMapData = async (tripId: string) => {
+    try {
+      setLoadingCoverageMap(true);
+      setCoverageMapError(null);
+      console.log('🔄 [Readiness] 开始加载覆盖地图数据，tripId:', tripId);
+      
+      const response = await readinessApi.getCoverageMapData(tripId);
+      
+      console.log('✅ [Readiness] 覆盖地图数据加载成功:', {
+        totalPois: response.summary?.totalPois || 0,
+        totalSegments: response.summary?.totalSegments || 0,
+        totalGaps: response.summary?.totalGaps || 0,
+        coverageRate: response.summary?.coverageRate || 0,
+      });
+      
+      setCoverageMapData(response);
+    } catch (err: any) {
+      // 忽略 AbortError（组件卸载时的正常行为）
+      if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+        console.log('⏹️ [Readiness] 覆盖地图数据请求被取消（正常）');
+        return;
+      }
+      
+      console.error('❌ [Readiness] 加载覆盖地图数据失败:', {
+        error: err?.message || err,
+        response: err?.response?.data,
+        status: err?.response?.status,
+      });
+      
+      // 根据错误类型设置友好的错误信息
+      let errorMessage = '加载覆盖地图数据失败';
+      if (err?.response?.status === 404) {
+        errorMessage = '覆盖地图接口尚未实现';
+      } else if (err?.response?.status === 500) {
+        errorMessage = '服务器错误，请稍后重试';
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      setCoverageMapError(errorMessage);
+      setCoverageMapData(null);
+    } finally {
+      setLoadingCoverageMap(false);
+    }
+  };
+
+  /**
+   * 加载准备度分数分解
+   * GET /readiness/trip/:tripId/score
+   */
+  const loadScoreBreakdown = async (tripId: string) => {
+    try {
+      setLoadingScoreBreakdown(true);
+      console.log('🔄 [Readiness] 开始加载准备度分数分解，tripId:', tripId);
+      
+      const response = await readinessApi.getScoreBreakdown(tripId);
+      
+      console.log('✅ [Readiness] 准备度分数加载成功:', {
+        overall: response.score?.overall,
+        evidenceCoverage: response.score?.evidenceCoverage,
+        scheduleFeasibility: response.score?.scheduleFeasibility,
+        transportCertainty: response.score?.transportCertainty,
+        safetyRisk: response.score?.safetyRisk,
+        buffers: response.score?.buffers,
+        totalFindings: response.summary?.totalFindings,
+      });
+      
+      setScoreBreakdown(response);
+      
+      // 如果获取到分数数据，更新 readinessData 中的分数
+      if (response.score) {
+        setReadinessData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            score: {
+              ...prev.score,
+              overall: response.score.overall,
+              evidenceCoverage: response.score.evidenceCoverage,
+              scheduleFeasibility: response.score.scheduleFeasibility,
+              transportCertainty: response.score.transportCertainty,
+              safetyRisk: response.score.safetyRisk,
+              buffers: response.score.buffers,
+            },
+          };
+        });
+      }
+    } catch (err: any) {
+      // 忽略 AbortError
+      if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+        console.log('⏹️ [Readiness] 准备度分数请求被取消（正常）');
+        return;
+      }
+      
+      console.error('❌ [Readiness] 加载准备度分数失败:', {
+        error: err?.message || err,
+        response: err?.response?.data,
+        status: err?.response?.status,
+      });
+      // 不设置错误状态，静默失败（使用默认值）
+      setScoreBreakdown(null);
+    } finally {
+      setLoadingScoreBreakdown(false);
+    }
+  };
+
+  /**
+   * 加载证据列表
+   * GET /trips/:id/evidence
+   */
+  const loadEvidenceData = async (tripId: string) => {
+    try {
+      setLoadingEvidence(true);
+      console.log('🔄 [Readiness] 开始加载证据列表，tripId:', tripId);
+      
+      const response = await tripsApi.getEvidence(tripId, { limit: 100 });
+      
+      console.log('✅ [Readiness] 证据列表加载成功:', {
+        total: response.total,
+        itemsCount: response.items?.length || 0,
+      });
+      console.log('📊 [Readiness] 证据详情:', JSON.stringify(response.items, null, 2));
+      
+      setEvidenceData(response.items || []);
+    } catch (err: any) {
+      console.error('❌ [Readiness] 加载证据列表失败:', {
+        error: err?.message || err,
+        response: err?.response?.data,
+        status: err?.response?.status,
+      });
+      setEvidenceData([]);
+    } finally {
+      setLoadingEvidence(false);
     }
   };
 
@@ -160,73 +553,109 @@ export default function ReadinessPage() {
     if (!tripId) return;
     try {
       setLoading(true);
+      console.log('🔄 [Readiness] 开始加载数据，tripId:', tripId);
+      
       // 并行加载 trip 和 readiness 数据
       const [tripData, readinessData] = await Promise.all([
         tripsApi.getById(tripId),
         readinessApi.getTripReadiness(tripId, getLangCode()).catch((err) => {
           // 如果后端还没有实现 /readiness/trip/:tripId，则使用备用方案
-          console.warn('getTripReadiness failed, trying fallback:', err);
+          console.error('❌ [Readiness] getTripReadiness API 调用失败:', {
+            tripId,
+            error: err,
+            message: err?.message,
+            response: err?.response?.data,
+            status: err?.response?.status,
+            url: err?.config?.url,
+          });
           return null;
         }),
       ]);
       
       setTrip(tripData);
+      console.log('✅ [Readiness] Trip 数据加载成功:', tripData?.id, tripData?.destination);
       
       // 加载能力包信息（不阻塞主流程）
       loadCapabilityPacks(tripData);
+      
+      // 加载证据列表（不阻塞主流程）
+      loadEvidenceData(tripId);
+      
+      // 加载能力包清单项（不阻塞主流程）
+      loadCapabilityPackChecklistItems(tripId);
+      
+      // 加载覆盖地图数据（不阻塞主流程）
+      loadCoverageMapData(tripId);
+      
+      // 加载准备度分数分解（不阻塞主流程）
+      loadScoreBreakdown(tripId);
       
       let finalReadinessData: ReadinessData | null = null;
       
       if (readinessData) {
         // getTripReadiness 返回 ReadinessCheckResult，需要转换为 ReadinessData
-        console.log('Using getTripReadiness data for trip:', tripId, 'destination:', tripData.destination);
-        console.log('Raw readiness data from API:', JSON.stringify(readinessData, null, 2));
+        console.log('✅ [Readiness] 使用 getTripReadiness API 数据');
+        console.log('📊 [Readiness] 原始 API 响应:', JSON.stringify(readinessData, null, 2));
         setRawReadinessResult(readinessData); // 保存原始数据用于展示详细信息和清单
         const convertedData = convertCheckResultToReadinessData(readinessData, tripData);
-        console.log('Converted readiness data:', JSON.stringify(convertedData, null, 2));
+        console.log('🔄 [Readiness] 转换后的数据:', JSON.stringify(convertedData, null, 2));
         if (validateReadinessData(convertedData)) {
           finalReadinessData = convertedData;
-      } else {
-          console.warn('Converted readiness data validation failed, using fallback');
+          console.log('✅ [Readiness] 数据验证通过，使用 API 数据');
+        } else {
+          console.warn('⚠️ [Readiness] 数据验证失败，尝试备用方案');
         }
+      } else {
+        console.warn('⚠️ [Readiness] getTripReadiness 返回 null，尝试备用方案');
       }
       
       // 如果 getTripReadiness 失败或转换失败，使用备用方案
       if (!finalReadinessData) {
+        console.log('🔄 [Readiness] 尝试备用方案 1: check API');
         // 备用方案1：尝试使用 check 接口
         try {
           const checkDto = buildCheckReadinessDto(tripData);
-          console.log('Trying check API with DTO:', checkDto);
+          console.log('📤 [Readiness] 调用 check API，DTO:', JSON.stringify(checkDto, null, 2));
           const checkResult = await readinessApi.check(checkDto);
-          console.log('✅ Using check API result for trip:', tripId, 'destination:', tripData.destination, 'result:', checkResult);
+          console.log('✅ [Readiness] check API 调用成功');
+          console.log('📊 [Readiness] check API 响应:', JSON.stringify(checkResult, null, 2));
           setRawReadinessResult(checkResult); // 保存原始数据用于展示详细信息和清单
           // 将 check 结果转换为 ReadinessData
           finalReadinessData = convertCheckResultToReadinessData(checkResult, tripData);
+          console.log('✅ [Readiness] 使用 check API 数据');
         } catch (checkErr: any) {
-          console.warn('❌ check API failed, trying fallback 2:', {
+          console.error('❌ [Readiness] check API 调用失败:', {
             error: checkErr,
             message: checkErr?.message,
             response: checkErr?.response?.data,
             status: checkErr?.response?.status,
+            url: checkErr?.config?.url,
           });
+          
+          console.log('🔄 [Readiness] 尝试备用方案 2: checklist + riskWarnings API');
           // 备用方案2：使用个性化清单和风险预警构建 ReadinessData
           const [checklist, riskWarnings] = await Promise.all([
             readinessApi.getPersonalizedChecklist(tripId, getLangCode()).catch((err) => {
-              console.warn('getPersonalizedChecklist failed:', err);
+              console.error('❌ [Readiness] getPersonalizedChecklist 失败:', err);
               return null;
             }),
             readinessApi.getRiskWarnings(tripId, getLangCode()).catch((err) => {
-              console.warn('getRiskWarnings failed:', err);
+              console.error('❌ [Readiness] getRiskWarnings 失败:', err);
               return null;
             }),
           ]);
           
           if (checklist && riskWarnings) {
-            console.log('Using checklist/riskWarnings data for trip:', tripId, 'destination:', tripData.destination);
+            console.log('✅ [Readiness] 使用 checklist + riskWarnings API 数据');
+            console.log('📊 [Readiness] checklist:', JSON.stringify(checklist, null, 2));
+            console.log('📊 [Readiness] riskWarnings:', JSON.stringify(riskWarnings, null, 2));
             finalReadinessData = convertToReadinessData(checklist, riskWarnings, tripData);
           } else {
             // 如果所有 API 都失败，使用模拟数据
-            console.warn('All APIs failed, using mock data for trip:', tripId, 'destination:', tripData.destination);
+            console.error('❌ [Readiness] 所有 API 都失败，使用模拟数据（降级方案）');
+            console.error('❌ [Readiness] checklist:', checklist ? '成功' : '失败');
+            console.error('❌ [Readiness] riskWarnings:', riskWarnings ? '成功' : '失败');
+            console.warn('⚠️ [Readiness] 这是降级方案，请检查后端 API 是否正常运行');
             finalReadinessData = generateMockReadinessData();
           }
         }
@@ -234,19 +663,82 @@ export default function ReadinessPage() {
       
       // 设置最终的数据
       if (finalReadinessData) {
+        // 检查是否是模拟数据（通过检查特定的 mock 数据特征）
+        const isMockData = finalReadinessData.status === 'nearly' && 
+          finalReadinessData.blockers?.some(b => 
+            b.id === 'blocker-1' && 
+            b.title === 'Road closed on Segment 2' &&
+            b.impactScope === 'Day 1 / Segment 2'
+          );
+        
+        if (isMockData) {
+          console.error('❌ [Readiness] ⚠️⚠️⚠️ 警告：当前显示的是模拟数据（Mock Data）⚠️⚠️⚠️');
+          console.error('❌ [Readiness] 所有 API 调用都失败了，页面显示的是硬编码的模拟数据');
+          console.error('❌ [Readiness] 请检查后端 API 是否正常运行');
+          console.error('❌ [Readiness] 应该调用的 API:');
+          console.error('❌ [Readiness]   1. GET /readiness/trip/:tripId');
+          console.error('❌ [Readiness]   2. POST /readiness/check');
+          console.error('❌ [Readiness]   3. GET /readiness/personalized-checklist?tripId=xxx');
+          console.error('❌ [Readiness]   4. GET /readiness/risk-warnings?tripId=xxx');
+          console.error('❌ [Readiness] 请在浏览器控制台查看详细的 API 调用日志');
+          
+          // 在页面上显示警告（可选）
+          setTimeout(() => {
+            const warningEl = document.createElement('div');
+            warningEl.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fef3c7; border: 2px solid #f59e0b; padding: 16px; border-radius: 8px; z-index: 9999; max-width: 400px;';
+            warningEl.innerHTML = `
+              <div style="font-weight: bold; color: #92400e; margin-bottom: 8px;">⚠️ 警告：显示的是模拟数据</div>
+              <div style="font-size: 12px; color: #78350f;">所有 API 调用都失败了，页面显示的是硬编码的模拟数据。请检查后端 API 是否正常运行。</div>
+              <button onclick="this.parentElement.remove()" style="margin-top: 8px; padding: 4px 8px; background: #f59e0b; color: white; border: none; border-radius: 4px; cursor: pointer;">关闭</button>
+            `;
+            document.body.appendChild(warningEl);
+          }, 1000);
+        } else {
+          console.log('✅ [Readiness] 使用真实 API 数据');
+        }
+        
         setReadinessData(finalReadinessData);
       } else {
-        // 如果所有方案都失败，使用模拟数据
-            setReadinessData(generateMockReadinessData());
+        // 如果所有方案都失败，使用模拟数据（降级方案）
+        console.error('❌ [Readiness] 所有数据加载方法都失败，使用模拟数据（降级方案）');
+        console.warn('⚠️ [Readiness] 这是降级方案，请检查 API 可用性并修复问题');
+        setReadinessData(generateMockReadinessData());
       }
-    } catch (err) {
-      console.error('Failed to load readiness data:', err);
+    } catch (err: any) {
+      console.error('❌ [Readiness] 加载准备度数据失败:', err);
+      console.error('❌ [Readiness] 错误详情:', {
+        message: err?.message,
+        stack: err?.stack,
+        response: err?.response?.data,
+        status: err?.response?.status,
+      });
       // 出错时使用模拟数据作为降级方案
+      console.warn('⚠️ [Readiness] 使用模拟数据作为降级方案。这是临时解决方案');
       setReadinessData(generateMockReadinessData());
     } finally {
       setLoading(false);
+      console.log('✅ [Readiness] 数据加载流程完成');
     }
   };
+
+  // ==================== 分数计算配置 ====================
+  // 分数计算公式的权重（如果后端不返回分数，使用这些权重计算）
+  const SCORE_WEIGHTS = {
+    BLOCKER_PENALTY: 20,      // 每个 blocker 扣 20 分
+    HIGH_RISK_PENALTY: 10,    // 每个高风险扣 10 分
+    RISK_PENALTY: 5,          // 每个风险扣 5 分
+    HIGH_RISK_SAFETY_PENALTY: 20,  // 安全风险计算中，每个高风险扣 20 分
+  } as const;
+
+  // ⚠️ 默认分数值（降级方案 - 仅当无法从 API 获取或基于实际数据计算时使用）
+  // 注意：这些值应该从后端 API 返回，如果后端不返回，应该基于实际数据计算
+  // TODO: 当后端 API 支持返回这些分数时，移除这些硬编码值
+  const DEFAULT_SCORES = {
+    EVIDENCE_COVERAGE: 85,      // 证据覆盖率（应该基于 evidence 数量计算）
+    SCHEDULE_FEASIBILITY: 70,   // 行程可行性（应该基于行程项数量和质量计算）
+    TRANSPORT_CERTAINTY: 65,    // 交通确定性（应该基于交通方式计算）
+    BUFFERS: 60,                // 缓冲时间（应该基于行程密度计算）
+  } as const;
 
   // 将 check 接口结果转换为 ReadinessData 格式
   const convertCheckResultToReadinessData = (
@@ -261,19 +753,28 @@ export default function ReadinessPage() {
     // 从 findings 中提取 blockers
     const blockers: Blocker[] = [];
     checkResult?.findings?.forEach((finding, findingIndex) => {
-      const findingId = finding.destinationId || finding.packId || `finding-${findingIndex}`;
+      // 根据后端文档，finding 有 category 字段
+      const findingId = finding.destinationId || finding.packId || finding.category || `finding-${findingIndex}`;
       finding.blockers?.forEach((item, index: number) => {
-        // 从 item 的 category 或推断类别
-        const category = item.category === 'entry' ? 'ticket' : 
-                        item.category === 'safety' ? 'road' : 
+        // 从 finding 的 category 推断类别
+        const category = finding.category === 'entry' ? 'ticket' : 
+                        finding.category === 'safety' ? 'road' : 
+                        finding.category === 'health' ? 'lodging' :
                         'other' as const;
         
-        // 处理 evidence：可能是数组或字符串
-        const evidenceSource = Array.isArray(item.evidence) 
-          ? item.evidence[0]?.sourceId || 'system'
-          : typeof item.evidence === 'string' 
-          ? item.evidence 
-          : 'system';
+        // 处理 evidence：根据后端文档，evidence 是字符串
+        // 兼容旧格式（可能是对象数组）
+        let evidenceSource = 'system';
+        if (typeof item.evidence === 'string') {
+          evidenceSource = item.evidence;
+        } else if (item.evidence && typeof item.evidence === 'object' && 'length' in item.evidence) {
+          // 兼容旧格式：evidence 可能是数组
+          const evidenceArray = item.evidence as any[];
+          if (evidenceArray.length > 0) {
+            const firstEvidence = evidenceArray[0] as any;
+            evidenceSource = firstEvidence?.sourceId || 'system';
+          }
+        }
         
         blockers.push({
           id: `blocker-${findingId}-${index}`,
@@ -293,17 +794,38 @@ export default function ReadinessPage() {
     const watchlist: Blocker[] = [];
     checkResult?.findings?.forEach((finding, findingIndex: number) => {
       finding.should?.slice(0, 2).forEach((item, index: number) => {
-        const findingId = finding.destinationId || finding.packId || `finding-${findingIndex}`;
+        // 根据后端文档，finding 有 category 字段
+        const findingId = finding.destinationId || finding.packId || finding.category || `finding-${findingIndex}`;
+        // 处理 evidence：根据后端文档，evidence 是字符串
+        // 兼容旧格式（可能是对象数组）
+        let evidenceSource = 'system';
+        if (typeof item.evidence === 'string') {
+          evidenceSource = item.evidence;
+        } else if (item.evidence && typeof item.evidence === 'object' && 'length' in item.evidence) {
+          // 兼容旧格式：evidence 可能是数组
+          const evidenceArray = item.evidence as any[];
+          if (evidenceArray.length > 0) {
+            const firstEvidence = evidenceArray[0] as any;
+            evidenceSource = firstEvidence?.sourceId || 'system';
+          }
+        }
+        
+        // 从 finding 的 category 推断类别
+        const category = finding.category === 'entry' ? 'ticket' : 
+                        finding.category === 'safety' ? 'road' : 
+                        finding.category === 'health' ? 'lodging' :
+                        'other' as const;
+        
         watchlist.push({
           id: `watch-${findingId}-${index}`,
           title: item.message,
           severity: 'medium' as const,
           impactScope: trip.destination || t('dashboard.readiness.page.unknown'),
           evidenceSummary: {
-            source: item.evidence?.[0]?.sourceId || 'system',
+            source: evidenceSource,
             timestamp: new Date().toISOString(),
           },
-          category: 'other' as const,
+          category,
         });
       });
     });
@@ -311,17 +833,46 @@ export default function ReadinessPage() {
     // 计算分数
     const riskCount = checkResult?.risks?.length || 0;
     const highRiskCount = checkResult?.risks?.filter((r) => r.severity === 'high').length || 0;
-    const overallScore = Math.max(0, 100 - (totalBlockers * 20) - (highRiskCount * 10) - (riskCount * 5));
+    
+    // 使用配置的权重计算总分
+    const overallScore = Math.max(0, 
+      100 - 
+      (totalBlockers * SCORE_WEIGHTS.BLOCKER_PENALTY) - 
+      (highRiskCount * SCORE_WEIGHTS.HIGH_RISK_PENALTY) - 
+      (riskCount * SCORE_WEIGHTS.RISK_PENALTY)
+    );
+    
+    // 计算安全风险分数
+    const safetyRisk = Math.max(0, 100 - (highRiskCount * SCORE_WEIGHTS.HIGH_RISK_SAFETY_PENALTY));
+    
+    // TODO: 以下分数应该从后端 API 返回，或基于实际数据计算
+    // 当前使用默认值，但应该：
+    // - evidenceCoverage: 基于 evidence 数量/覆盖率计算
+    // - scheduleFeasibility: 基于行程项数量、时间冲突等计算
+    // - transportCertainty: 基于交通方式、预订状态等计算
+    // - buffers: 基于行程密度、休息时间等计算
+    const evidenceCount = checkResult?.findings?.reduce((sum, f) => 
+      sum + (f.blockers?.length || 0) + (f.must?.length || 0) + (f.should?.length || 0), 0
+    ) || 0;
+    const hasEvidence = evidenceCount > 0;
+    
+    // 基于实际数据计算 evidenceCoverage（如果有 evidence 则使用默认值，否则为 0）
+    const evidenceCoverage = hasEvidence ? DEFAULT_SCORES.EVIDENCE_COVERAGE : 0;
+    
+    // 基于行程数据计算 scheduleFeasibility
+    const tripDays = trip?.TripDay?.length || 0;
+    const hasSchedule = tripDays > 0;
+    const scheduleFeasibility = hasSchedule ? DEFAULT_SCORES.SCHEDULE_FEASIBILITY : 0;
 
     return {
       status,
       score: {
         overall: overallScore,
-        evidenceCoverage: 85,
-        scheduleFeasibility: 70,
-        transportCertainty: 65,
-        safetyRisk: Math.max(0, 100 - (highRiskCount * 20)),
-        buffers: 60,
+        evidenceCoverage,
+        scheduleFeasibility,
+        transportCertainty: DEFAULT_SCORES.TRANSPORT_CERTAINTY,  // TODO: 基于实际数据计算
+        safetyRisk,
+        buffers: DEFAULT_SCORES.BUFFERS,  // TODO: 基于实际数据计算
       },
       blockers,
       watchlist: status === 'ready' ? watchlist : undefined,
@@ -364,12 +915,19 @@ export default function ReadinessPage() {
 
     // 转换 watchlist（从 should/optional 中提取）
     const watchlist: Blocker[] = (checklist?.checklist?.should || []).slice(0, 3).map((item, index: number) => {
-      // 处理 evidence：可能是数组或字符串
-      const evidenceSource = Array.isArray(item.evidence) 
-        ? item.evidence[0]?.sourceId || 'system'
-        : typeof item.evidence === 'string' 
-        ? item.evidence 
-        : 'system';
+      // 处理 evidence：根据后端文档，evidence 是字符串
+      // 兼容旧格式（可能是对象数组）
+      let evidenceSource = 'system';
+      if (typeof item.evidence === 'string') {
+        evidenceSource = item.evidence;
+      } else if (item.evidence && typeof item.evidence === 'object' && 'length' in item.evidence) {
+        // 兼容旧格式：evidence 可能是数组
+        const evidenceArray = item.evidence as any[];
+        if (evidenceArray.length > 0) {
+          const firstEvidence = evidenceArray[0] as any;
+          evidenceSource = firstEvidence?.sourceId || 'system';
+        }
+      }
       
       return {
         id: `watch-${index}`,
@@ -387,39 +945,62 @@ export default function ReadinessPage() {
     // 计算分数（基于 blockers 和 risks）
     const riskCount = riskWarnings?.summary?.totalRisks || 0;
     const highRiskCount = riskWarnings?.summary?.highSeverity || 0;
-    const overallScore = Math.max(0, 100 - (totalBlockers * 20) - (highRiskCount * 10) - (riskCount * 5));
+    
+    // 使用配置的权重计算总分
+    const overallScore = Math.max(0, 
+      100 - 
+      (totalBlockers * SCORE_WEIGHTS.BLOCKER_PENALTY) - 
+      (highRiskCount * SCORE_WEIGHTS.HIGH_RISK_PENALTY) - 
+      (riskCount * SCORE_WEIGHTS.RISK_PENALTY)
+    );
+    
+    // 计算安全风险分数
+    const safetyRisk = Math.max(0, 100 - (highRiskCount * SCORE_WEIGHTS.HIGH_RISK_SAFETY_PENALTY));
+    
+    // TODO: 以下分数应该从后端 API 返回，或基于实际数据计算
+    const evidenceCoverage = checklist ? DEFAULT_SCORES.EVIDENCE_COVERAGE : 0;
+    const scheduleFeasibility = trip?.TripDay?.length > 0 ? DEFAULT_SCORES.SCHEDULE_FEASIBILITY : 0;
 
     return {
       status,
       score: {
         overall: overallScore,
-        evidenceCoverage: checklist ? 85 : 0,
-        scheduleFeasibility: 70,
-        transportCertainty: 65,
-        safetyRisk: Math.max(0, 100 - (highRiskCount * 20)),
-        buffers: 60,
+        evidenceCoverage,
+        scheduleFeasibility,
+        transportCertainty: DEFAULT_SCORES.TRANSPORT_CERTAINTY,  // TODO: 基于实际数据计算
+        safetyRisk,
+        buffers: DEFAULT_SCORES.BUFFERS,  // TODO: 基于实际数据计算
       },
       blockers,
       watchlist: status === 'ready' ? watchlist : undefined,
     };
   };
 
-  // 生成模拟数据（降级方案）
+  /**
+   * 生成模拟数据（降级方案）
+   * 
+   * ⚠️ 警告：这是降级方案，仅在所有 API 都失败时使用
+   * 应该尽快修复 API 问题，而不是依赖模拟数据
+   * 
+   * TODO: 考虑移除此函数，改为显示友好的错误提示
+   */
   const generateMockReadinessData = (): ReadinessData => {
     const status = 'nearly' as ReadinessData['status'];
     const isReady = (status as string) === 'ready';
+    
+    // 使用配置的默认分数，而不是硬编码
     return {
       status,
       score: {
-        overall: 72,
-        evidenceCoverage: 85,
-        scheduleFeasibility: 70,
-        transportCertainty: 65,
-        safetyRisk: 80,
-        buffers: 60,
+        overall: 72,  // 基于默认值计算的示例分数
+        evidenceCoverage: DEFAULT_SCORES.EVIDENCE_COVERAGE,
+        scheduleFeasibility: DEFAULT_SCORES.SCHEDULE_FEASIBILITY,
+        transportCertainty: DEFAULT_SCORES.TRANSPORT_CERTAINTY,
+        safetyRisk: 80,  // 示例值
+        buffers: DEFAULT_SCORES.BUFFERS,
       },
       executableWindow: {
-        start: '08:30',
+        start: '08:30',  // 示例时间窗口
         end: '18:00',
       },
       blockers: [
@@ -482,6 +1063,9 @@ export default function ReadinessPage() {
       const response = await readinessApi.getRepairOptions(tripId, blockerId);
       const repairOptions = response.options;
       
+      // 保存阻塞项描述
+      setSelectedBlockerMessage(response.blockerMessage || null);
+      
       setReadinessData((prev) => {
         if (!prev) return null;
         return {
@@ -497,58 +1081,22 @@ export default function ReadinessPage() {
       }
     } catch (err) {
       console.error('Failed to load repair options:', err);
-      // 降级方案：使用模拟数据
-      const mockRepairOptions: RepairOption[] = [
-      {
-        id: 'repair-1',
-        title: '替换 POI',
-        description: '使用附近的替代 POI，距离增加 30 分钟',
-        changes: {
-          time: '+30min',
-          distance: '+2km',
-          risk: '下降',
-        },
-        reasonCode: 'REPLACE_POI',
-        evidenceLink: '#',
-      },
-      {
-        id: 'repair-2',
-        title: '调整出发时间',
-        description: '避开风窗，提前 1 小时出发',
-        changes: {
-          time: '-60min',
-          risk: '下降',
-        },
-        reasonCode: 'ADJUST_TIME',
-        evidenceLink: '#',
-      },
-      {
-        id: 'repair-3',
-        title: '改走备用路线',
-        description: '使用备用路线，距离增加 12km',
-        changes: {
-          distance: '+12km',
-          time: '+45min',
-          risk: '下降',
-        },
-        reasonCode: 'ALTERNATIVE_ROUTE',
-        evidenceLink: '#',
-      },
-    ];
-    
-    setReadinessData((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        repairOptions: mockRepairOptions,
-        selectedBlockerId: blockerId,
-      };
-    });
-
-    // 移动端打开 sheet
-    if (window.innerWidth < 768) {
-      setMobileSheetOpen(true);
-    }
+      
+      // 显示错误信息，而不是使用模拟数据
+      console.error('Failed to load repair options, showing error instead of mock data');
+      
+      // 清除之前选中的 blocker，避免显示不相关的数据
+      setReadinessData((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          repairOptions: undefined,
+          selectedBlockerId: undefined,  // 使用 undefined 而不是 null，匹配类型定义
+        };
+      });
+      
+      // 不打开 sheet，因为获取失败
+      return;
     }
   };
 
@@ -609,7 +1157,8 @@ export default function ReadinessPage() {
     }
   };
 
-  const handleRefreshSingleEvidence = async (evidenceId: string) => {
+  // 刷新单条证据（暂时保留以供将来使用）
+  const _handleRefreshSingleEvidence = async (evidenceId: string) => {
     if (!tripId) return;
     
     try {
@@ -619,6 +1168,55 @@ export default function ReadinessPage() {
     } catch (err) {
       console.error('Failed to refresh evidence:', err);
       // TODO: 显示错误提示
+    }
+  };
+  void _handleRefreshSingleEvidence; // 抑制未使用警告
+
+  /**
+   * 将能力包规则添加到准备清单
+   * POST /readiness/trip/:tripId/checklist/add-from-capability-pack
+   */
+  const handleAddCapabilityPackRulesToChecklist = async (
+    packType: string,
+    rules: Array<{ id: string; level: string; message: string }>
+  ) => {
+    if (!tripId) return;
+    
+    try {
+      setAddingToChecklist(packType);
+      console.log('📤 [Readiness] 添加能力包规则到清单:', { packType, rulesCount: rules.length });
+      
+      const response = await readinessApi.addCapabilityPackRulesToChecklist(tripId, {
+        packType,
+        rules: rules.map(r => ({
+          id: r.id,
+          level: r.level as 'blocker' | 'must' | 'should' | 'optional',
+          message: r.message,
+        })),
+      });
+      
+      console.log('✅ [Readiness] 添加成功:', response);
+      
+      // 重新加载清单项
+      if (tripId) {
+        loadCapabilityPackChecklistItems(tripId);
+      }
+      
+      // 显示成功提示
+      alert(t('dashboard.readiness.page.addToChecklistSuccess', {
+        defaultValue: `已成功添加 ${response.addedCount} 条规则到准备清单`,
+        count: response.addedCount,
+      }));
+      
+    } catch (err: any) {
+      console.error('❌ [Readiness] 添加能力包规则失败:', err);
+      
+      // 显示错误提示
+      alert(t('dashboard.readiness.page.addToChecklistFailed', {
+        defaultValue: '添加失败，请稍后重试',
+      }));
+    } finally {
+      setAddingToChecklist(null);
     }
   };
 
@@ -805,16 +1403,88 @@ export default function ReadinessPage() {
                 )}
               </div>
 
-              {isReady && readinessData.watchlist ? (
+              {isReady ? (
                 <div className="space-y-3">
-                  {readinessData.watchlist.map((blocker) => (
-                    <BlockerCard
-                      key={blocker.id}
-                      blocker={blocker}
-                      onFix={handleFixBlocker}
-                    />
-                  ))}
-                  {readinessData.watchlist.length === 0 && (
+                  {/* 优先使用 scoreBreakdown 的 findings 和 risks */}
+                  {scoreBreakdown && (scoreBreakdown.findings?.length > 0 || scoreBreakdown.risks?.length > 0) ? (
+                    <>
+                      {/* 显示 warnings 和 suggestions */}
+                      {scoreBreakdown.findings?.filter(f => f.type !== 'blocker').map((finding) => (
+                        <Card key={finding.id} className="border-l-4 border-l-yellow-500">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant={finding.type === 'warning' ? 'secondary' : 'outline'} className="text-xs">
+                                    {t(`dashboard.readiness.page.findingType.${finding.type}`, finding.type)}
+                                  </Badge>
+                                  {finding.severity && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {t(`dashboard.readiness.page.severity.${finding.severity}`, finding.severity)}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm font-medium">{finding.message}</p>
+                                {finding.actionRequired && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {t('dashboard.readiness.page.actionRequired', { defaultValue: '建议操作' })}: {finding.actionRequired}
+                                  </p>
+                                )}
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleFixBlocker(finding.id)}
+                              >
+                                {t('dashboard.readiness.page.fix', { defaultValue: '修复' })}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      {/* 显示风险 */}
+                      {scoreBreakdown.risks?.map((risk) => (
+                        <Card key={risk.id} className="border-l-4 border-l-orange-500">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="destructive" className="text-xs">
+                                    {t(`dashboard.readiness.page.hazardType.${risk.type}`, risk.type)}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {t(`dashboard.readiness.page.severity.${risk.severity}`, risk.severity)}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm font-medium">{risk.message}</p>
+                                {risk.mitigation && risk.mitigation.length > 0 && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {t('dashboard.readiness.page.mitigation', { defaultValue: '缓解措施' })}: {risk.mitigation.join(', ')}
+                                  </p>
+                                )}
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleFixBlocker(risk.id)}
+                              >
+                                {t('dashboard.readiness.page.fix', { defaultValue: '修复' })}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </>
+                  ) : readinessData.watchlist && readinessData.watchlist.length > 0 ? (
+                    // 回退到旧的 watchlist 数据
+                    readinessData.watchlist.map((blocker) => (
+                      <BlockerCard
+                        key={blocker.id}
+                        blocker={blocker}
+                        onFix={handleFixBlocker}
+                      />
+                    ))
+                  ) : (
                     <Card>
                       <CardContent className="py-8 text-center">
                         <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-2" />
@@ -850,6 +1520,17 @@ export default function ReadinessPage() {
               <h2 className="text-lg font-semibold mb-4">{t('dashboard.readiness.page.repairPreview')}</h2>
               {readinessData.repairOptions && readinessData.repairOptions.length > 0 ? (
                 <div className="space-y-3">
+                  {/* 显示阻塞项描述 */}
+                  {selectedBlockerMessage && (
+                    <div className="p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+                      <p className="text-sm text-orange-800 dark:text-orange-200 font-medium">
+                        {t('dashboard.readiness.page.blockerToFix', { defaultValue: '待解决问题' })}:
+                      </p>
+                      <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                        {selectedBlockerMessage}
+                      </p>
+                    </div>
+                  )}
                   {readinessData.repairOptions.map((option) => (
                     <RepairOptionCard
                       key={option.id}
@@ -877,30 +1558,97 @@ export default function ReadinessPage() {
 
           {/* Details 区域：Tabs */}
           <div className="mt-8">
-            <Tabs defaultValue="breakdown" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="breakdown">{t('dashboard.readiness.page.tabs.readinessBreakdown')}</TabsTrigger>
                 <TabsTrigger value="capability">{t('dashboard.readiness.page.tabs.capabilityPacks')}</TabsTrigger>
                 <TabsTrigger value="evidence">{t('dashboard.readiness.page.tabs.evidenceChain')}</TabsTrigger>
                 <TabsTrigger value="coverage">{t('dashboard.readiness.page.tabs.coverageMap')}</TabsTrigger>
+                <TabsTrigger value="packing">{t('dashboard.readiness.page.tabs.packingList')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="breakdown" className="mt-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>{t('dashboard.readiness.page.scoreBreakdown.title')}</CardTitle>
-                    <CardDescription>
-                      {t('dashboard.readiness.page.scoreBreakdown.description')}
-                    </CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>{t('dashboard.readiness.page.scoreBreakdown.title')}</CardTitle>
+                        <CardDescription>
+                          {t('dashboard.readiness.page.scoreBreakdown.description')}
+                        </CardDescription>
+                      </div>
+                      {loadingScoreBreakdown && (
+                        <Spinner className="w-4 h-4" />
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <BreakdownBarList
                       score={readinessData.score}
                       onShowBlockers={(dimension) => {
-                        // TODO: 过滤并显示该维度的 blockers
-                        console.log('Show blockers for:', dimension);
+                        setSelectedDimension(dimension);
                       }}
                     />
+                    
+                    {/* 来自 API 的发现项 */}
+                    {scoreBreakdown?.findings && scoreBreakdown.findings.length > 0 && (
+                      <div className="mt-6 pt-6 border-t">
+                        <h4 className="text-sm font-medium mb-3">
+                          {t('dashboard.readiness.page.findingsTitle', { defaultValue: '发现项' })}
+                          <span className="text-muted-foreground font-normal ml-2">
+                            ({scoreBreakdown.findings.length})
+                          </span>
+                        </h4>
+                        <div className="space-y-2">
+                          {scoreBreakdown.findings.slice(0, 5).map((finding) => (
+                            <div
+                              key={finding.id}
+                              className={`p-3 rounded-lg border ${
+                                finding.type === 'blocker' ? 'bg-red-50 border-red-200' :
+                                finding.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                                'bg-blue-50 border-blue-200'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2">
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs ${
+                                    finding.severity === 'high' ? 'border-red-400 text-red-600' :
+                                    finding.severity === 'medium' ? 'border-yellow-400 text-yellow-600' :
+                                    'border-blue-400 text-blue-600'
+                                  }`}
+                                >
+                                  {t(`dashboard.readiness.page.findingType.${finding.type}`, finding.type)}
+                                </Badge>
+                                <div className="flex-1">
+                                  <p className="text-sm">{finding.message}</p>
+                                  {finding.actionRequired && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {t('dashboard.readiness.page.actionRequired', { defaultValue: '建议操作' })}: {finding.actionRequired}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {scoreBreakdown.findings.length > 5 && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              {t('dashboard.readiness.page.moreFindings', { 
+                                count: scoreBreakdown.findings.length - 5,
+                                defaultValue: `还有 ${scoreBreakdown.findings.length - 5} 项...`
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 计算时间 */}
+                    {scoreBreakdown?.calculatedAt && (
+                      <p className="text-xs text-muted-foreground mt-4 text-right">
+                        {t('dashboard.readiness.page.calculatedAt', { defaultValue: '计算时间' })}: {new Date(scoreBreakdown.calculatedAt).toLocaleString()}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -910,7 +1658,9 @@ export default function ReadinessPage() {
                   <CardHeader>
                     <CardTitle>{t('dashboard.readiness.page.tabs.capabilityPacks')}</CardTitle>
                     <CardDescription>
-                      System capability packs triggered for this trip
+                      {t('dashboard.readiness.page.capabilityPacksDescription', {
+                        defaultValue: '根据行程特征自动触发的系统能力包，帮助您为特殊旅行场景做好准备'
+                      })}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -918,73 +1668,251 @@ export default function ReadinessPage() {
                       <div className="flex items-center justify-center py-8">
                         <Spinner className="w-6 h-6" />
                       </div>
-                    ) : evaluatedPacks.length > 0 ? (
+                    ) : (evaluatedPacks.length > 0 || capabilityPacks.length > 0) ? (
                       <div className="space-y-4">
+                        {/* 触发统计 */}
                         <div className="text-sm text-muted-foreground mb-4">
-                          {t('dashboard.readiness.page.packsTriggered', {
-                            triggered: evaluatedPacks.filter((p) => p.triggered).length,
-                            total: evaluatedPacks.length,
-                          })}
+                          {evaluatedPacks.length > 0 ? (
+                            t('dashboard.readiness.page.packsTriggered', {
+                              triggered: evaluatedPacks.filter((p) => p.triggered).length,
+                              total: evaluatedPacks.length,
+                            })
+                          ) : (
+                            t('dashboard.readiness.page.noPacksTriggered', {
+                              defaultValue: '当前行程未触发任何能力包',
+                            })
+                          )}
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {evaluatedPacks.map((result, index) => {
-                            const pack = result.pack;
-                            const isTriggered = result.triggered;
-                            return (
-                              <Card
-                                key={index}
-                                className={isTriggered ? 'border-primary' : 'opacity-60'}
-                              >
-                                <CardContent className="p-4">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="font-semibold text-sm">{pack.displayName}</h3>
-                                        {isTriggered && (
-                                          <Badge className="bg-primary text-primary-foreground text-xs">
-                                            {t('dashboard.readiness.page.triggered')}
-                                          </Badge>
-                                        )}
+                        
+                        {/* 触发的能力包详情 */}
+                        {evaluatedPacks.filter(p => p.triggered).length > 0 && (
+                          <div className="space-y-4">
+                            <h4 className="text-sm font-medium">
+                              {t('dashboard.readiness.page.triggeredPacksTitle', { defaultValue: '已触发的能力包' })}
+                            </h4>
+                            {evaluatedPacks.filter(p => p.triggered).map((result, index) => {
+                              // 从能力包列表中查找详细信息
+                              const packInfo = capabilityPacks.find(p => p.type === result.packType);
+                              // 优先使用翻译，其次使用 API 返回的 displayName
+                              const displayName = t(`dashboard.readiness.page.capabilityPackName.${result.packType}`, { 
+                                defaultValue: packInfo?.displayName || result.packType 
+                              });
+                              const description = packInfo?.description || '';
+                              
+                              return (
+                                <Card key={index} className="border-primary">
+                                  <CardContent className="p-4">
+                                    <div className="space-y-3">
+                                      {/* 能力包标题和状态 */}
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="font-semibold text-sm">{displayName}</h3>
+                                            <Badge className="bg-primary text-primary-foreground text-xs">
+                                              {t('dashboard.readiness.page.triggered')}
+                                            </Badge>
+                                          </div>
+                                          {description && (
+                                            <p className="text-xs text-muted-foreground">
+                                              {description}
+                                            </p>
+                                          )}
+                                          {/* 触发原因（新增） */}
+                                          {result.triggerReason && (
+                                            <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                                              <span className="font-medium">
+                                                {t('dashboard.readiness.page.triggerReason', { defaultValue: '触发原因' })}:
+                                              </span>
+                                              <span>{result.triggerReason}</span>
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
-                                      <p className="text-xs text-muted-foreground mb-2">
-                                        {pack.description}
-                                      </p>
-                                      {isTriggered && result.reason && (
-                                        <p className="text-xs text-muted-foreground italic">
-                                          {t('dashboard.readiness.page.reason', { reason: result.reason })}
-                                        </p>
+                                      
+                                      {/* 触发的规则 */}
+                                      {result.rules && result.rules.length > 0 && (
+                                        <div className="space-y-2">
+                                          <h4 className="text-xs font-medium text-muted-foreground">
+                                            {t('dashboard.readiness.page.triggeredRules', { defaultValue: '触发的规则' })}
+                                          </h4>
+                                          <div className="space-y-1">
+                                            {result.rules.filter(r => r.triggered).map((rule, ruleIndex) => (
+                                              <div
+                                                key={ruleIndex}
+                                                className={`p-2 rounded text-xs ${
+                                                  rule.level === 'blocker' ? 'bg-red-50 border border-red-200' :
+                                                  rule.level === 'must' ? 'bg-orange-50 border border-orange-200' :
+                                                  rule.level === 'should' ? 'bg-yellow-50 border border-yellow-200' :
+                                                  'bg-gray-50 border border-gray-200'
+                                                }`}
+                                              >
+                                                <div className="flex items-start gap-2">
+                                                  <Badge
+                                                    variant="outline"
+                                                    className={`text-[10px] shrink-0 ${
+                                                      rule.level === 'blocker' ? 'border-red-500 text-red-700' :
+                                                      rule.level === 'must' ? 'border-orange-500 text-orange-700' :
+                                                      rule.level === 'should' ? 'border-yellow-600 text-yellow-700' :
+                                                      'border-gray-500 text-gray-700'
+                                                    }`}
+                                                  >
+                                                    {t(`dashboard.readiness.page.ruleLevel.${rule.level}`, { defaultValue: rule.level })}
+                                                  </Badge>
+                                                  <span className="flex-1">{rule.message}</span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
                                       )}
+                                      
+                                      {/* 危险/风险警告 */}
+                                      {result.hazards && result.hazards.length > 0 && (
+                                        <div className="space-y-2">
+                                          <h4 className="text-xs font-medium text-muted-foreground">
+                                            {t('dashboard.readiness.page.hazards', { defaultValue: '风险警告' })}
+                                          </h4>
+                                          <div className="space-y-1">
+                                            {result.hazards.map((hazard, hazardIndex) => (
+                                              <div
+                                                key={hazardIndex}
+                                                className={`p-2 rounded text-xs flex items-start gap-2 ${
+                                                  hazard.severity === 'high' ? 'bg-red-50 border border-red-200' :
+                                                  hazard.severity === 'medium' ? 'bg-yellow-50 border border-yellow-200' :
+                                                  'bg-blue-50 border border-blue-200'
+                                                }`}
+                                              >
+                                                <AlertTriangle className={`h-3 w-3 shrink-0 mt-0.5 ${
+                                                  hazard.severity === 'high' ? 'text-red-600' :
+                                                  hazard.severity === 'medium' ? 'text-yellow-600' :
+                                                  'text-blue-600'
+                                                }`} />
+                                                <div className="flex-1">
+                                                  <div className="flex items-center gap-1 mb-0.5">
+                                                    <span className="font-medium">
+                                                      {t(`dashboard.readiness.page.hazardType.${hazard.type}`, { defaultValue: hazard.type })}
+                                                    </span>
+                                                    <Badge
+                                                      variant="outline"
+                                                      className={`text-[10px] ${
+                                                        hazard.severity === 'high' ? 'border-red-500 text-red-700' :
+                                                        hazard.severity === 'medium' ? 'border-yellow-600 text-yellow-700' :
+                                                        'border-blue-500 text-blue-700'
+                                                      }`}
+                                                    >
+                                                      {t(`dashboard.readiness.page.hazardSeverity.${hazard.severity}`, { defaultValue: hazard.severity })}
+                                                    </Badge>
+                                                  </div>
+                                                  <p className="text-muted-foreground">{hazard.summary}</p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      
+                                      {/* 操作按钮 */}
+                                      <div className="flex items-center gap-2 pt-2 border-t">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-xs"
+                                          disabled={addingToChecklist === result.packType || !result.rules?.length}
+                                          onClick={() => {
+                                            if (result.rules && result.rules.length > 0) {
+                                              handleAddCapabilityPackRulesToChecklist(
+                                                result.packType,
+                                                result.rules.filter(r => r.triggered)
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          {addingToChecklist === result.packType ? (
+                                            <Spinner className="h-3 w-3 mr-1" />
+                                          ) : (
+                                            <ListChecks className="h-3 w-3 mr-1" />
+                                          )}
+                                          {addingToChecklist === result.packType
+                                            ? t('dashboard.readiness.page.adding', { defaultValue: '添加中...' })
+                                            : t('dashboard.readiness.page.addRulesToChecklist', { defaultValue: '添加到清单' })
+                                          }
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-xs"
+                                          onClick={() => setActiveTab('evidence')}
+                                        >
+                                          <ExternalLink className="h-3 w-3 mr-1" />
+                                          {t('dashboard.readiness.page.viewInEvidenceChain', { defaultValue: '查看证据' })}
+                                        </Button>
+                                      </div>
                                     </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                        {capabilityPacks.length > 0 && (
-                          <div className="mt-6 pt-4 border-t">
-                            <h4 className="text-sm font-medium mb-3">{t('dashboard.readiness.page.allAvailablePacks')}</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {capabilityPacks.map((pack, index) => (
-                                <div
-                                  key={index}
-                                  className="p-3 border rounded-lg text-sm"
-                                >
-                                  <div className="font-medium">{pack.displayName}</div>
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    {pack.description}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {/* 未触发任何能力包时的友好提示 */}
+                        {evaluatedPacks.filter(p => p.triggered).length === 0 && (
+                          <div className="text-center py-6 bg-green-50 rounded-lg border border-green-100">
+                            <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                            <p className="text-sm font-medium text-green-700">
+                              {t('dashboard.readiness.page.noSpecialPreparation', { 
+                                defaultValue: '您的行程无需特殊准备' 
+                              })}
+                            </p>
+                            <p className="text-xs text-green-600 mt-1">
+                              {t('dashboard.readiness.page.noSpecialPreparationHint', { 
+                                defaultValue: '当前行程不涉及高海拔、偏远地区、季节性道路等特殊场景' 
+                              })}
+                            </p>
                           </div>
                         )}
                       </div>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
-                        <p className="text-sm">{t('dashboard.readiness.page.noCapabilityPacksAvailable')}</p>
+                        {capabilityPacksError ? (
+                          <>
+                            <p className="text-sm text-red-600 mb-2">⚠️ {capabilityPacksError}</p>
+                            <p className="text-xs">请检查浏览器控制台查看详细错误信息</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm">{t('dashboard.readiness.page.noCapabilityPacksAvailable')}</p>
+                            <p className="text-xs mt-2">
+                              对于目的地 {trip?.destination || '未知'}，如果应该有能力包数据，请检查：
+                            </p>
+                            <ul className="text-xs mt-2 text-left max-w-md mx-auto space-y-1">
+                              <li>• 后端 API 是否正常运行</li>
+                              <li>• GET /readiness/capability-packs 接口是否实现</li>
+                              <li>• POST /readiness/capability-packs/evaluate 接口是否实现</li>
+                              <li>• 浏览器控制台的 API 调用日志</li>
+                            </ul>
+                          </>
+                        )}
                       </div>
                     )}
+                    
+                    {/* 
+                      三人格分析 - 已移除
+                      
+                      产品评估结论：
+                      1. 能力包卡片已经清晰展示了规则和风险
+                      2. 三人格分析在此场景下造成信息重复
+                      3. 三人格更适合在规划工作台中作为路线级决策辅助
+                      
+                      如需恢复，取消以下注释：
+                      {evaluatedPacks.filter(p => p.triggered).length > 0 && (
+                        <CapabilityPackPersonaInsights
+                          evaluatedPacks={evaluatedPacks}
+                          capabilityPacks={capabilityPacks}
+                          className="mt-6 pt-6 border-t"
+                        />
+                      )}
+                    */}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1023,6 +1951,94 @@ export default function ReadinessPage() {
                           </div>
                         </div>
                       )}
+
+                      {/* Capability Pack Checklist Items Section */}
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold">
+                          {t('dashboard.readiness.page.capabilityPackChecklist', { defaultValue: '能力包准备清单' })}
+                        </h3>
+                        {loadingChecklistItems ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Spinner className="w-5 h-5" />
+                          </div>
+                        ) : capabilityPackChecklistItems.length > 0 ? (
+                          <div className="space-y-2">
+                            {capabilityPackChecklistItems.map((item) => (
+                              <div 
+                                key={item.id}
+                                className={`p-3 border rounded-lg text-sm ${
+                                  item.checked ? 'bg-green-50 border-green-200' :
+                                  item.level === 'blocker' ? 'bg-red-50 border-red-200' :
+                                  item.level === 'must' ? 'bg-orange-50 border-orange-200' :
+                                  item.level === 'should' ? 'bg-yellow-50 border-yellow-200' :
+                                  'bg-gray-50 border-gray-200'
+                                }`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.checked}
+                                    onChange={async (e) => {
+                                      if (!tripId) return;
+                                      try {
+                                        await readinessApi.updateCapabilityPackChecklistItemStatus(
+                                          tripId,
+                                          item.id,
+                                          e.target.checked
+                                        );
+                                        // 重新加载清单项
+                                        loadCapabilityPackChecklistItems(tripId);
+                                      } catch (err) {
+                                        console.error('更新清单项状态失败:', err);
+                                      }
+                                    }}
+                                    className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-[10px] ${
+                                          item.level === 'blocker' ? 'border-red-500 text-red-700' :
+                                          item.level === 'must' ? 'border-orange-500 text-orange-700' :
+                                          item.level === 'should' ? 'border-yellow-600 text-yellow-700' :
+                                          'border-gray-500 text-gray-700'
+                                        }`}
+                                      >
+                                        {t(`dashboard.readiness.page.ruleLevel.${item.level}`, { defaultValue: item.level })}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">
+                                        {t(`dashboard.readiness.page.capabilityPackName.${item.sourcePackType}`, { 
+                                          defaultValue: item.sourcePackType 
+                                        })}
+                                      </span>
+                                    </div>
+                                    <p className={item.checked ? 'line-through text-muted-foreground' : ''}>
+                                      {item.message}
+                                    </p>
+                                    {item.tasks && item.tasks.length > 0 && (
+                                      <ul className="mt-2 text-xs text-muted-foreground space-y-1">
+                                        {item.tasks.map((task, taskIndex) => (
+                                          <li key={taskIndex} className="flex items-start gap-1">
+                                            <span>•</span>
+                                            <span>{task}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-4 text-muted-foreground text-sm border rounded-lg bg-muted/30">
+                            {t('dashboard.readiness.page.noCapabilityPackChecklist', { 
+                              defaultValue: '暂无能力包清单项，可在"能力包"标签页中添加' 
+                            })}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Checklists Section */}
                       {rawReadinessResult && rawReadinessResult.findings && rawReadinessResult.findings.length > 0 && (
@@ -1090,46 +2106,135 @@ export default function ReadinessPage() {
                         </div>
                       )}
 
-                      {/* Evidence Section */}
+                      {/* Evidence Section - 使用真实 API 数据 */}
                       <div className="space-y-3">
-                        <h3 className="text-sm font-semibold">证据链</h3>
-                      {/* 按类别分组显示证据 */}
-                      {(['road', 'weather', 'poi', 'ticket', 'lodging'] as const).map((category) => {
-                        const categoryEvidences: EvidenceItem[] = [
-                          {
-                            id: `evidence-${category}-1`,
-                            category,
-                            source: category === 'road' ? 'road.is' : category === 'weather' ? 'forecast.io' : 'google.places',
-                            timestamp: new Date().toISOString(),
-                            scope: 'Day 1',
-                            confidence: 'high',
-                          },
-                          {
-                            id: `evidence-${category}-2`,
-                            category,
-                            source: category === 'road' ? 'traffic.api' : category === 'weather' ? 'weather.gov' : 'tripadvisor',
-                            timestamp: new Date(Date.now() - 3600000).toISOString(),
-                            scope: 'Segment 2',
-                            confidence: 'medium',
-                          },
-                        ];
-                        return (
-                          <div key={category} className="space-y-2">
-                            <h3 className="text-sm font-medium capitalize">{category}</h3>
-                            {categoryEvidences.map((evidence) => (
-                              <EvidenceListItem
-                                key={evidence.id}
-                                evidence={evidence}
-                                onRefresh={handleRefreshSingleEvidence}
-                                onOpen={(id) => {
-                                  // TODO: 打开证据详情
-                                  console.log('Open evidence:', id);
-                                }}
-                              />
-                            ))}
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold">
+                            {t('dashboard.readiness.page.evidenceList', { defaultValue: '证据列表' })}
+                          </h3>
+                          <span className="text-xs text-muted-foreground">
+                            {t('dashboard.readiness.page.totalEvidence', { 
+                              count: evidenceData.length,
+                              defaultValue: '共 {{count}} 条证据' 
+                            })}
+                          </span>
+                        </div>
+                        
+                        {loadingEvidence ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Spinner className="w-6 h-6" />
                           </div>
-                        );
-                      })}
+                        ) : evidenceData.length > 0 ? (
+                          <div className="space-y-3">
+                            {/* 按类型分组显示证据 */}
+                            {(() => {
+                              // 按 type 分组
+                              const groupedEvidence = evidenceData.reduce((acc, item) => {
+                                const type = item.type || 'other';
+                                if (!acc[type]) {
+                                  acc[type] = [];
+                                }
+                                acc[type].push(item);
+                                return acc;
+                              }, {} as Record<string, TripEvidenceItem[]>);
+                              
+                              // 类型显示名称映射
+                              const typeLabels: Record<string, string> = {
+                                'opening_hours': t('dashboard.readiness.page.evidenceType.openingHours', { defaultValue: '营业时间' }),
+                                'road_closure': t('dashboard.readiness.page.evidenceType.roadClosure', { defaultValue: '道路封闭' }),
+                                'weather': t('dashboard.readiness.page.evidenceType.weather', { defaultValue: '天气' }),
+                                'booking': t('dashboard.readiness.page.evidenceType.booking', { defaultValue: '预订' }),
+                                'other': t('dashboard.readiness.page.evidenceType.other', { defaultValue: '其他' }),
+                              };
+                              
+                              // 严重程度颜色映射
+                              const severityColors: Record<string, string> = {
+                                'high': 'border-red-200 bg-red-50',
+                                'medium': 'border-yellow-200 bg-yellow-50',
+                                'low': 'border-green-200 bg-green-50',
+                              };
+                              
+                              return Object.entries(groupedEvidence).map(([type, items]) => (
+                                <div key={type} className="space-y-2">
+                                  <h4 className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-2">
+                                    {typeLabels[type] || type}
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {items.length}
+                                    </Badge>
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {items.map((item) => (
+                                      <div 
+                                        key={item.id} 
+                                        className={`p-3 border rounded-lg text-sm ${severityColors[item.severity || 'low'] || 'border-gray-200'}`}
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="flex-1">
+                                            <div className="font-medium">{item.title}</div>
+                                            <div className="text-xs text-muted-foreground mt-1">
+                                              {item.description}
+                                            </div>
+                                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                                              {item.source && (
+                                                <span className="flex items-center gap-1">
+                                                  <span className="font-medium">
+                                                    {t('dashboard.readiness.page.source', { defaultValue: '来源' })}:
+                                                  </span>
+                                                  {item.source}
+                                                </span>
+                                              )}
+                                              {item.day && (
+                                                <span className="flex items-center gap-1">
+                                                  <Calendar className="h-3 w-3" />
+                                                  Day {item.day}
+                                                </span>
+                                              )}
+                                              {item.timestamp && (
+                                                <span>
+                                                  {format(new Date(item.timestamp), 'yyyy-MM-dd HH:mm')}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {item.severity && (
+                                            <Badge 
+                                              variant="outline" 
+                                              className={`text-[10px] ${
+                                                item.severity === 'high' ? 'border-red-500 text-red-700' :
+                                                item.severity === 'medium' ? 'border-yellow-500 text-yellow-700' :
+                                                'border-green-500 text-green-700'
+                                              }`}
+                                            >
+                                              {item.severity}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        {item.link && (
+                                          <a 
+                                            href={item.link} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline"
+                                          >
+                                            <ExternalLink className="h-3 w-3" />
+                                            {t('dashboard.readiness.page.viewSource', { defaultValue: '查看来源' })}
+                                          </a>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <p className="text-sm">{t('dashboard.readiness.page.noEvidenceAvailable', { defaultValue: '暂无可用证据' })}</p>
+                            <p className="text-xs mt-2">
+                              {t('dashboard.readiness.page.evidenceChainDescription', { defaultValue: '所有证据来源及其覆盖情况' })}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -1138,55 +2243,222 @@ export default function ReadinessPage() {
 
               <TabsContent value="coverage" className="mt-6">
                 <CoverageMiniMap
-                  gaps={[
-                    {
-                      id: 'gap-1',
-                      type: 'road',
-                      location: 'Segment 2',
-                      description: 'Missing road status evidence',
-                    },
-                    {
-                      id: 'gap-2',
-                      type: 'poi',
-                      location: 'POI #3',
-                      description: 'Missing opening hours',
-                    },
-                  ]}
-                  onGapClick={(gapId) => {
-                    // 定位到对应的 blocker
-                    const blocker = readinessData.blockers.find(b => b.id === gapId);
-                    if (blocker) {
-                      handleFixBlocker(blocker.id);
+                  data={coverageMapData}
+                  loading={loadingCoverageMap}
+                  error={coverageMapError}
+                  height={450}
+                  onPoiClick={(poi) => {
+                    console.log('POI clicked:', poi);
+                    // 可以跳转到对应的 POI 详情或高亮显示
+                  }}
+                  onSegmentClick={(segment) => {
+                    console.log('Segment clicked:', segment);
+                    // 可以显示路段详情
+                  }}
+                  onGapClick={(gap) => {
+                    console.log('Gap clicked:', gap);
+                    // 可以导航到相关的 blocker 或建议修复
+                    if (gap.type === 'poi' && gap.relatedId) {
+                      // 如果是 POI 缺口，可以提示用户添加证据
+                    } else if (gap.type === 'segment' && gap.relatedId) {
+                      // 如果是路段缺口，可以显示风险详情
                     }
                   }}
                 />
+              </TabsContent>
+
+              <TabsContent value="packing" className="mt-6">
+                <PackingListTab tripId={tripId || ''} trip={trip} />
               </TabsContent>
             </Tabs>
           </div>
         </div>
       </div>
 
+      {/* 维度 Findings 对话框 */}
+      <Dialog open={!!selectedDimension} onOpenChange={(open) => !open && setSelectedDimension(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDimension && t(`dashboard.readiness.page.dimensions.${selectedDimension}.label`)}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedDimension && t(`dashboard.readiness.page.dimensions.${selectedDimension}.description`)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {(() => {
+              const categoryMap: Record<string, string> = {
+                evidenceCoverage: 'evidence',
+                scheduleFeasibility: 'schedule',
+                transportCertainty: 'transport',
+                safetyRisk: 'safety',
+                buffers: 'buffer',
+              };
+              const category = selectedDimension ? categoryMap[selectedDimension] : '';
+              const dimensionFindings = scoreBreakdown?.findings?.filter(f => f.category === category) || [];
+              const dimensionRisks = selectedDimension === 'safetyRisk' ? (scoreBreakdown?.risks || []) : [];
+              const dimensionScore = selectedDimension ? readinessData?.score?.[selectedDimension as keyof typeof readinessData.score] : 0;
+              
+              // 显示当前分数
+              const scoreDisplay = (
+                <div className="mb-4 p-3 bg-muted/50 rounded-lg flex items-center justify-between">
+                  <span className="text-sm">{t('dashboard.readiness.page.currentScore', { defaultValue: '当前分数' })}</span>
+                  <span className={`text-lg font-bold ${
+                    (dimensionScore || 0) >= 80 ? 'text-green-600' : 
+                    (dimensionScore || 0) >= 60 ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
+                    {dimensionScore || 0}%
+                  </span>
+                </div>
+              );
+              
+              if (dimensionFindings.length === 0 && dimensionRisks.length === 0) {
+                const isFullScore = (dimensionScore || 0) >= 100;
+                return (
+                  <>
+                    {scoreDisplay}
+                    <div className="text-center py-6">
+                      {isFullScore ? (
+                        <>
+                          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                          <p className="text-sm text-muted-foreground">
+                            {t('dashboard.readiness.page.dimensionPerfect', { defaultValue: '该维度表现完美！' })}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-3" />
+                          <p className="text-sm text-muted-foreground">
+                            {t('dashboard.readiness.page.noDetailedFindings', { 
+                              defaultValue: '暂无详细发现项。分数基于行程整体情况计算。' 
+                            })}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {t('dashboard.readiness.page.scoreExplanation', {
+                              defaultValue: '分数反映了该维度的整体健康程度，可能受多种因素影响。'
+                            })}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </>
+                );
+              }
+              
+              return (
+                <>
+                  {scoreDisplay}
+                  {dimensionFindings.map((finding) => (
+                    <div
+                      key={finding.id}
+                      className={`p-3 rounded-lg border ${
+                        finding.type === 'blocker' ? 'bg-red-50 border-red-200' :
+                        finding.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                        'bg-blue-50 border-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs shrink-0 ${
+                            finding.severity === 'high' ? 'border-red-400 text-red-600' :
+                            finding.severity === 'medium' ? 'border-yellow-400 text-yellow-600' :
+                            'border-blue-400 text-blue-600'
+                          }`}
+                        >
+                          {t(`dashboard.readiness.page.findingType.${finding.type}`, finding.type)}
+                        </Badge>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm">{finding.message}</p>
+                          {finding.actionRequired && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {t('dashboard.readiness.page.actionRequired')}: {finding.actionRequired}
+                            </p>
+                          )}
+                          {finding.affectedDays && finding.affectedDays.length > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {t('dashboard.readiness.page.affectedDays', { defaultValue: '影响天数' })}: Day {finding.affectedDays.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {dimensionRisks.map((risk) => (
+                    <div
+                      key={risk.id}
+                      className={`p-3 rounded-lg border ${
+                        risk.severity === 'high' ? 'bg-red-50 border-red-200' :
+                        risk.severity === 'medium' ? 'bg-yellow-50 border-yellow-200' :
+                        'bg-blue-50 border-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${
+                          risk.severity === 'high' ? 'text-red-500' :
+                          risk.severity === 'medium' ? 'text-yellow-500' :
+                          'text-blue-500'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm">{risk.message}</p>
+                          {risk.mitigation && risk.mitigation.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-xs text-muted-foreground">
+                                {t('dashboard.readiness.page.mitigation', { defaultValue: '应对措施' })}:
+                              </p>
+                              <ul className="text-xs text-muted-foreground list-disc list-inside mt-1">
+                                {risk.mitigation.map((m, i) => (
+                                  <li key={i}>{m}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* 移动端 Repair Preview Sheet */}
       <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
         <SheetContent side="bottom" className="h-[80vh]">
           <SheetHeader>
-            <SheetTitle>Repair Options</SheetTitle>
+            <SheetTitle>{t('dashboard.readiness.page.repairOptions', { defaultValue: '修复选项' })}</SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-3 overflow-y-auto">
             {readinessData.repairOptions && readinessData.repairOptions.length > 0 ? (
-              readinessData.repairOptions.map((option) => (
-                <RepairOptionCard
-                  key={option.id}
-                  option={option}
-                  isSelected={selectedRepairOptionId === option.id}
-                  onSelect={setSelectedRepairOptionId}
-                  onApply={handleApplyFix}
-                  onPreview={handlePreviewFix}
-                />
-              ))
+              <>
+                {/* 显示阻塞项描述 */}
+                {selectedBlockerMessage && (
+                  <div className="p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+                    <p className="text-sm text-orange-800 dark:text-orange-200 font-medium">
+                      {t('dashboard.readiness.page.blockerToFix', { defaultValue: '待解决问题' })}:
+                    </p>
+                    <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+                      {selectedBlockerMessage}
+                    </p>
+                  </div>
+                )}
+                {readinessData.repairOptions.map((option) => (
+                  <RepairOptionCard
+                    key={option.id}
+                    option={option}
+                    isSelected={selectedRepairOptionId === option.id}
+                    onSelect={setSelectedRepairOptionId}
+                    onApply={handleApplyFix}
+                    onPreview={handlePreviewFix}
+                  />
+                ))}
+              </>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                No repair options available
+                {t('dashboard.readiness.page.noRepairOptions', { defaultValue: '暂无修复选项' })}
               </div>
             )}
           </div>

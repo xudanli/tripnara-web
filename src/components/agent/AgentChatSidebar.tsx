@@ -21,6 +21,7 @@ interface AgentChatSidebarProps {
   onSystem2Response?: () => void;
   entryPoint?: EntryPoint;
   className?: string;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 // 根据入口点获取侧边栏配置
@@ -62,6 +63,7 @@ export default function AgentChatSidebar({
   onSystem2Response,
   entryPoint,
   className,
+  onExpandedChange,
 }: AgentChatSidebarProps) {
   const { user } = useAuth();
   const tripPlannerRef = useRef<TripPlannerAssistantRef>(null);
@@ -79,7 +81,8 @@ export default function AgentChatSidebar({
   // Persist to localStorage when changed
   useEffect(() => {
     localStorage.setItem(SIDEBAR_STATE_KEY, String(isExpanded));
-  }, [isExpanded]);
+    onExpandedChange?.(isExpanded);
+  }, [isExpanded, onExpandedChange]);
 
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded);
@@ -167,7 +170,7 @@ export default function AgentChatSidebar({
     <aside
       className={cn(
         'bg-white border-l border-gray-200 flex flex-col h-full transition-all duration-300 ease-in-out',
-        isExpanded ? 'w-[380px]' : 'w-14',
+        // 当使用 ResizablePanel 时，宽度由 Panel 控制，不需要设置固定宽度
         className
       )}
     >

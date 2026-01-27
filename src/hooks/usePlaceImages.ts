@@ -85,9 +85,9 @@ export function usePlaceImages(
   // 通过比较实际的 ID 字符串来判断是否变化
   const currentIdsString = places
     .filter(p => p.id)
-    .map(p => p.id)
-    .sort((a, b) => a - b)
-    .join(',');
+      .map(p => p.id)
+      .sort((a, b) => a - b)
+      .join(',');
   
   const placeIdsKey = useMemo(() => {
     // 只有当 ID 字符串真正改变时才更新 key
@@ -154,16 +154,16 @@ export function usePlaceImages(
       const found = results.filter(r => r.success && r.images.length > 0).length;
       const failed = results.filter(r => !r.success).length;
 
-      setImages(prev => {
-        const newMap = new Map(prev);
+        setImages(prev => {
+          const newMap = new Map(prev);
         results.forEach(result => {
           if (result.placeId) {
             newMap.set(result.placeId, result.images);
             loadedPlaceIds.current.add(result.placeId);
-          }
+            }
+          });
+          return newMap;
         });
-        return newMap;
-      });
 
       setStats({
         total: newPlaces.length,

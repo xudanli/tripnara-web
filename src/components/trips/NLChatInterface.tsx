@@ -33,6 +33,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/format';
 
 // ==================== 类型定义 ====================
 
@@ -320,7 +321,7 @@ function TripSummaryCard({
             <div className="flex items-center gap-2">
               <Wallet className="w-4 h-4 text-muted-foreground" />
               <span>
-                ¥{params.totalBudget.toLocaleString()}
+                {formatCurrency(params.totalBudget, 'CNY')}
                 {params.inferredFields?.includes('totalBudget') && (
                   <Badge variant="outline" className="ml-1 text-xs text-amber-600 border-amber-300">
                     推断

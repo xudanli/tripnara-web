@@ -9,11 +9,12 @@
  * - 设置时间并添加到行程
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { itineraryItemsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { CreateItineraryItemRequest, ItineraryItemType, TripDay } from '@/types/trip';
+import { getTimezoneByCountry, localTimeToUTC } from '@/utils/timezone';
 import type { PlaceWithDistance, PlaceCategory } from '@/types/places-routes';
 import {
   Dialog,
@@ -31,7 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea 已移除，使用原生 overflow-y-auto 实现滚动
 import { 
   Select,
   SelectContent,
@@ -161,7 +162,6 @@ export function EnhancedAddItineraryItemDialog({
   const [showCostFields, setShowCostFields] = useState<boolean>(false);
   const [estimatedCost, setEstimatedCost] = useState<string>('');
   const [actualCost, setActualCost] = useState<string>('');
-  const [currency, setCurrency] = useState<string>('CNY');
   const [costCategory, setCostCategory] = useState<CostCategory | ''>('');
   const [costNote, setCostNote] = useState<string>('');
   const [isPaid, setIsPaid] = useState<boolean>(false);
@@ -213,7 +213,6 @@ export function EnhancedAddItineraryItemDialog({
     // 重置费用字段
     setEstimatedCost('');
     setActualCost('');
-    setCurrency('CNY');
     setCostCategory('');
     setCostNote('');
     setIsPaid(false);
@@ -277,21 +276,42 @@ export function EnhancedAddItineraryItemDialog({
           countryCode,
         });
       } else if (mode === 'recommend') {
-        const recommendations = await placesApi.getRecommendations({
-          tripId,
+        // 使用新的推荐活动接口
+        if (!countryCode) {
+          toast.error('需要国家代码才能获取推荐活动，请先设置行程目的地');
+          setSearchResults([]);
+          return;
+        }
+        
+        // 转换 category，只支持推荐接口的类别
+        let recommendCategory: 'ATTRACTION' | 'RESTAURANT' | 'SHOPPING' | 'HOTEL' | undefined;
+        if (category !== 'all') {
+          // 只转换支持的类别，TRANSIT_HUB 不支持
+          if (category === 'ATTRACTION' || category === 'RESTAURANT' || category === 'SHOPPING' || category === 'HOTEL') {
+            recommendCategory = category;
+          }
+        }
+        
+        const recommendations = await placesApi.getRecommendedActivities({
+          countryCode: countryCode.toUpperCase(),
+          category: recommendCategory,
           limit: 20,
         });
-        results = recommendations.map((p: any) => ({
+        
+        // 转换数据格式为 PlaceWithDistance
+        results = recommendations.map((p) => ({
           id: p.id,
           nameCN: p.nameCN,
-          nameEN: p.nameEN,
+          nameEN: p.nameEN || undefined,
           category: p.category,
-          latitude: p.latitude,
-          longitude: p.longitude,
           address: p.address,
           rating: p.rating,
-          metadata: p.metadata,
-          distance: 0,
+          distance: p.distance, // 推荐接口固定为 0
+          metadata: {
+            isOpen: p.isOpen,
+            tags: p.tags,
+            status: p.status,
+          },
         })) as PlaceWithDistance[];
       }
 
@@ -392,9 +412,13 @@ export function EnhancedAddItineraryItemDialog({
     setError(null);
   };
 
+  // 获取目的地时区
+  const timezone = useMemo(() => getTimezoneByCountry(countryCode || ''), [countryCode]);
+
   // 提交
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[EnhancedAddItineraryItemDialog] handleSubmit called', { selectedPlace, startTime, endTime, timezone });
     
     if (!selectedPlace) {
       setError('请选择一个地点');
@@ -406,16 +430,16 @@ export function EnhancedAddItineraryItemDialog({
       return;
     }
 
-    // 构建完整的日期时间
-    const dayDate = new Date(tripDay.date);
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    const [endHour, endMin] = endTime.split(':').map(Number);
+    // 获取 TripDay 的日期（格式: 2026-01-26T00:00:00.000Z -> 2026-01-26）
+    const dayDateStr = tripDay.date.split('T')[0];
     
-    const startDateTime = new Date(dayDate);
-    startDateTime.setHours(startHour, startMin, 0, 0);
+    // 使用目的地时区构建正确的 UTC 时间
+    const startTimeUTC = localTimeToUTC(dayDateStr, startTime, timezone);
+    const endTimeUTC = localTimeToUTC(dayDateStr, endTime, timezone);
     
-    const endDateTime = new Date(dayDate);
-    endDateTime.setHours(endHour, endMin, 0, 0);
+    // 用于本地校验的 Date 对象
+    const startDateTime = new Date(startTimeUTC);
+    const endDateTime = new Date(endTimeUTC);
 
     if (endDateTime <= startDateTime) {
       setError('结束时间必须晚于开始时间');
@@ -453,8 +477,8 @@ export function EnhancedAddItineraryItemDialog({
         tripDayId: tripDay.id,
         type: itemType,
         placeId: selectedPlace.id,
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
+        startTime: startTimeUTC,  // 已经是正确的 UTC 时间
+        endTime: endTimeUTC,      // 已经是正确的 UTC 时间
         note: note.trim() || undefined,
       };
       
@@ -466,9 +490,6 @@ export function EnhancedAddItineraryItemDialog({
         if (actualCost) {
           data.actualCost = parseFloat(actualCost);
         }
-        if (currency) {
-          data.currency = currency;
-        }
         if (costCategory) {
           data.costCategory = costCategory as CostCategory;
         }
@@ -478,7 +499,9 @@ export function EnhancedAddItineraryItemDialog({
         data.isPaid = isPaid;
       }
 
+      console.log('[EnhancedAddItineraryItemDialog] 调用 API 创建行程项', data);
       await itineraryItemsApi.create(data);
+      console.log('[EnhancedAddItineraryItemDialog] API 调用成功');
       
       // 注意：不再自动调用 Orchestrator
       // 原因：添加行程项是用户的确定性操作，不需要 AI 实时检查
@@ -507,21 +530,23 @@ export function EnhancedAddItineraryItemDialog({
   // 手动添加提交
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[EnhancedAddItineraryItemDialog] handleManualSubmit called', { itemType, startTime, endTime, timezone });
 
     if (!startTime || !endTime) {
       setError('请设置开始和结束时间');
       return;
     }
 
-    const dayDate = new Date(tripDay.date);
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    const [endHour, endMin] = endTime.split(':').map(Number);
+    // 获取 TripDay 的日期（格式: 2026-01-26T00:00:00.000Z -> 2026-01-26）
+    const dayDateStr = tripDay.date.split('T')[0];
     
-    const startDateTime = new Date(dayDate);
-    startDateTime.setHours(startHour, startMin, 0, 0);
+    // 使用目的地时区构建正确的 UTC 时间
+    const startTimeUTC = localTimeToUTC(dayDateStr, startTime, timezone);
+    const endTimeUTC = localTimeToUTC(dayDateStr, endTime, timezone);
     
-    const endDateTime = new Date(dayDate);
-    endDateTime.setHours(endHour, endMin, 0, 0);
+    // 用于本地校验的 Date 对象
+    const startDateTime = new Date(startTimeUTC);
+    const endDateTime = new Date(endTimeUTC);
 
     if (endDateTime <= startDateTime) {
       setError('结束时间必须晚于开始时间');
@@ -558,8 +583,8 @@ export function EnhancedAddItineraryItemDialog({
       const data: CreateItineraryItemRequest = {
         tripDayId: tripDay.id,
         type: itemType,
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
+        startTime: startTimeUTC,  // 已经是正确的 UTC 时间
+        endTime: endTimeUTC,      // 已经是正确的 UTC 时间
         note: note.trim() || undefined,
       };
       
@@ -571,9 +596,6 @@ export function EnhancedAddItineraryItemDialog({
         if (actualCost) {
           data.actualCost = parseFloat(actualCost);
         }
-        if (currency) {
-          data.currency = currency;
-        }
         if (costCategory) {
           data.costCategory = costCategory as CostCategory;
         }
@@ -583,7 +605,9 @@ export function EnhancedAddItineraryItemDialog({
         data.isPaid = isPaid;
       }
 
+      console.log('[EnhancedAddItineraryItemDialog] 调用 API 创建手动行程项', data);
       await itineraryItemsApi.create(data);
+      console.log('[EnhancedAddItineraryItemDialog] API 调用成功');
       
       toast.success('行程项添加成功');
       onSuccess();
@@ -615,12 +639,12 @@ export function EnhancedAddItineraryItemDialog({
         </DialogHeader>
 
         {/* 主内容区 */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {viewMode === 'browse' ? (
             /* 浏览模式：找点 */
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full min-h-0">
               {/* 搜索模式切换 */}
-              <div className="px-6 pt-4">
+              <div className="px-6 pt-4 flex-shrink-0">
                 <Tabs value={searchMode} onValueChange={(v) => handleModeChange(v as SearchMode)}>
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="search" className="flex items-center gap-1.5">
@@ -641,7 +665,7 @@ export function EnhancedAddItineraryItemDialog({
 
               {/* 搜索框（仅搜索模式显示） */}
               {searchMode === 'search' && (
-                <div className="px-6 pt-3">
+                <div className="px-6 pt-3 flex-shrink-0">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -656,7 +680,7 @@ export function EnhancedAddItineraryItemDialog({
               )}
 
               {/* 类型筛选 */}
-              <div className="px-6 pt-3 pb-2">
+              <div className="px-6 pt-3 pb-2 flex-shrink-0">
                 <div className="flex flex-wrap gap-2">
                   {CATEGORY_OPTIONS.map(({ value, labelKey }) => (
                     <Button
@@ -672,8 +696,8 @@ export function EnhancedAddItineraryItemDialog({
                 </div>
               </div>
 
-              {/* 搜索结果 */}
-              <ScrollArea className="flex-1 px-6">
+              {/* 搜索结果 - 固定最大高度实现滚动 */}
+              <div className="max-h-[calc(85vh-280px)] overflow-y-auto px-6">
                 {searching ? (
                   <div className="flex items-center justify-center py-12">
                     <Spinner className="w-6 h-6" />
@@ -750,10 +774,10 @@ export function EnhancedAddItineraryItemDialog({
                     </p>
                   </div>
                 )}
-              </ScrollArea>
+              </div>
 
               {/* 手动添加区域 */}
-              <div className="px-6 py-4 border-t bg-gray-50">
+              <div className="px-6 py-4 border-t bg-gray-50 flex-shrink-0">
                 <p className="text-xs text-muted-foreground mb-2">或手动添加</p>
                 <div className="flex flex-wrap gap-2">
                   <Button 
@@ -789,7 +813,7 @@ export function EnhancedAddItineraryItemDialog({
           ) : (
             /* 配置模式：设置时间 */
             <form onSubmit={selectedPlace ? handleSubmit : handleManualSubmit} className="flex flex-col h-full">
-              <div className="flex-1 px-6 py-4 space-y-4 overflow-y-auto">
+              <div className="flex-1 px-6 py-4 space-y-4 overflow-y-auto max-h-[calc(85vh-200px)]">
                 {/* 返回按钮 */}
                 <Button
                   type="button"
@@ -947,38 +971,21 @@ export function EnhancedAddItineraryItemDialog({
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label htmlFor="currency" className="text-xs">货币</Label>
-                          <Select value={currency} onValueChange={setCurrency}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="CNY">CNY (人民币)</SelectItem>
-                              <SelectItem value="USD">USD (美元)</SelectItem>
-                              <SelectItem value="EUR">EUR (欧元)</SelectItem>
-                              <SelectItem value="JPY">JPY (日元)</SelectItem>
-                              <SelectItem value="GBP">GBP (英镑)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="costCategory" className="text-xs">费用分类</Label>
-                          <Select value={costCategory} onValueChange={(v) => setCostCategory(v as CostCategory)}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="选择分类" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="ACCOMMODATION">住宿</SelectItem>
-                              <SelectItem value="TRANSPORTATION">交通</SelectItem>
-                              <SelectItem value="FOOD">餐饮</SelectItem>
-                              <SelectItem value="ACTIVITIES">活动/门票</SelectItem>
-                              <SelectItem value="SHOPPING">购物</SelectItem>
-                              <SelectItem value="OTHER">其他</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="costCategory" className="text-xs">费用分类</Label>
+                        <Select value={costCategory} onValueChange={(v) => setCostCategory(v as CostCategory)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择分类" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ACCOMMODATION">住宿</SelectItem>
+                            <SelectItem value="TRANSPORTATION">交通</SelectItem>
+                            <SelectItem value="FOOD">餐饮</SelectItem>
+                            <SelectItem value="ACTIVITIES">活动/门票</SelectItem>
+                            <SelectItem value="SHOPPING">购物</SelectItem>
+                            <SelectItem value="OTHER">其他</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       
                       <div className="space-y-1">

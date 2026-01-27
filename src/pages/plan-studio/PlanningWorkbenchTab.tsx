@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/utils/format';
 import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles } from 'lucide-react';
 import {
   Collapsible,
@@ -60,6 +61,9 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
   const [result, setResult] = useState<ExecutePlanningWorkbenchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   
+  // 获取货币单位
+  const currency = trip?.budgetConfig?.currency || 'CNY';
+  
   // Context API Hook
   const {
     buildContextWithCompress,
@@ -100,7 +104,29 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
         await loadBudgetDecisionLog(evaluation.planId);
       }
     } catch (err: any) {
-      console.error('Failed to load budget evaluation:', err);
+      // 对于"未找到"类型的错误，静默处理（不记录错误日志）
+      // 因为预算评估是可选的，方案可能还没有进行预算评估
+      const errorMessage = err?.message || '';
+      const isNotFoundError = 
+        errorMessage.includes('未找到') || 
+        errorMessage.includes('not found') ||
+        errorMessage.includes('不存在') ||
+        err?.code === 'NOT_FOUND' ||
+        err?.response?.status === 404;
+      
+      if (!isNotFoundError) {
+        // 只有非"未找到"的错误才记录警告日志
+        console.warn('⚠️ [Planning Workbench] 加载预算评估失败（非资源不存在错误）:', {
+          planId,
+          error: errorMessage,
+          code: err?.code,
+        });
+      } else {
+        // "未找到"错误静默处理，只记录调试信息
+        console.log('ℹ️ [Planning Workbench] 预算评估结果不存在（方案可能尚未进行预算评估）:', planId);
+      }
+      // 清空预算评估状态
+      setBudgetEvaluation(null);
       // 不显示错误提示，因为预算评估是可选的
     } finally {
       setLoadingBudgetEvaluation(false);
@@ -798,6 +824,7 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
                     }
                   }}
                   budgetDecisionLog={budgetDecisionLog}
+                  currency={currency}
                 />
               </CardContent>
             </Card>
@@ -1099,6 +1126,7 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
                 }}
                 selectedPlanIds={selectedPlanIds}
                 compareResult={compareResult}
+                currency={currency}
               />
             ) : comparingPlans.length === 0 && !compareResult ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -1212,10 +1240,10 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-medium">
-                          预估成本: ¥{item.estimatedCost.toLocaleString()}
+                          预估成本: {formatCurrency(item.estimatedCost, currency)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          预算: ¥{item.budgetConstraint.total?.toLocaleString() || '-'}
+                          预算: {item.budgetConstraint.total ? formatCurrency(item.budgetConstraint.total, currency) : '-'}
                         </div>
                       </div>
                     </div>
@@ -1268,7 +1296,8 @@ function PlanPreviewContent({
   onLoadBudgetEvaluation,
   onLoadBudgetDecisionLog,
   onOpenBudgetLogDialog,
-  budgetDecisionLog
+  budgetDecisionLog,
+  currency = 'CNY'
 }: { 
   planState: any; 
   trip: TripDetail | null;
@@ -1279,6 +1308,7 @@ function PlanPreviewContent({
   onLoadBudgetDecisionLog?: (planId: string) => void;
   onOpenBudgetLogDialog?: () => void;
   budgetDecisionLog?: import('@/types/trip').BudgetDecisionLogResponse | null;
+  currency?: string;
 }) {
   // 解析方案数据
   const itinerary = planState.itinerary;
@@ -1339,7 +1369,7 @@ function PlanPreviewContent({
         </div>
         <div className="text-center p-3 bg-muted rounded-lg">
           <p className="text-2xl font-bold">
-            {planState.budget?.total ? `¥${planState.budget.total.toLocaleString()}` : '-'}
+            {planState.budget?.total ? formatCurrency(planState.budget.total, currency) : '-'}
           </p>
           <p className="text-xs text-muted-foreground mt-1">预算</p>
         </div>
@@ -1396,7 +1426,7 @@ function PlanPreviewContent({
                         });
 
                         toast.success(
-                          `已应用优化建议，预计节省 ¥${result.totalSavings.toLocaleString()}`,
+                          `已应用优化建议，预计节省 ${formatCurrency(result.totalSavings, currency)}`,
                           {
                             duration: 5000,
                           }
@@ -1450,13 +1480,13 @@ function PlanPreviewContent({
                     <div>
                       <div className="text-muted-foreground mb-1">总预算</div>
                       <div className="font-semibold">
-                        ¥{planState.budget.total.toLocaleString()}
+                        {formatCurrency(planState.budget.total, currency)}
                       </div>
                     </div>
                     <div>
                       <div className="text-muted-foreground mb-1">预计支出</div>
                       <div className="font-semibold">
-                        {estimatedCost ? `¥${estimatedCost.toLocaleString()}` : '-'}
+                        {estimatedCost ? formatCurrency(estimatedCost, currency) : '-'}
                       </div>
                     </div>
                     <div>
@@ -1472,7 +1502,7 @@ function PlanPreviewContent({
                           : 'text-green-600'
                       )}>
                         {estimatedCost
-                          ? `¥${Math.abs(estimatedCost - planState.budget.total).toLocaleString()}`
+                          ? formatCurrency(Math.abs(estimatedCost - planState.budget.total), currency)
                           : '-'}
                       </div>
                     </div>
@@ -1497,7 +1527,7 @@ function PlanPreviewContent({
                   <div key={i} className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
                     <div className="font-medium text-red-900 mb-1">{violation.category}</div>
                     <div className="text-red-700">
-                      超出 ¥{violation.exceeded.toLocaleString()} ({violation.percentage.toFixed(1)}%)
+                      超出 {formatCurrency(violation.exceeded, currency)} ({violation.percentage.toFixed(1)}%)
                     </div>
                   </div>
                 ))}
@@ -1516,7 +1546,7 @@ function PlanPreviewContent({
                     <div className="font-medium text-blue-900 mb-1">{rec.action}</div>
                     <div className="text-blue-700 mb-1">{rec.impact}</div>
                     <div className="text-blue-600 font-medium">
-                      预计节省: ¥{rec.estimatedSavings.toLocaleString()}
+                      预计节省: {formatCurrency(rec.estimatedSavings, currency)}
                     </div>
                   </div>
                 ))}
@@ -2079,12 +2109,14 @@ function PlanComparisonView({
   onSelectPlan,
   selectedPlanIds,
   compareResult,
+  currency = 'CNY',
 }: {
   plans: ExecutePlanningWorkbenchResponse[];
   currentTrip: TripDetail | null;
   onSelectPlan: (planId: string) => void;
   selectedPlanIds: string[];
   compareResult?: ComparePlansResponse | null;
+  currency?: string;
 }) {
   if (plans.length === 0) return null;
 
@@ -2175,7 +2207,7 @@ function PlanComparisonView({
                     selectedPlanIds.includes(metric.planId) && "bg-primary/5"
                   )}
                 >
-                  {metric.budget > 0 ? `¥${metric.budget.toLocaleString()}` : '-'}
+                  {metric.budget > 0 ? formatCurrency(metric.budget, currency) : '-'}
                 </td>
               ))}
             </tr>
@@ -2306,7 +2338,7 @@ function PlanComparisonView({
                 <div>
                   <p className="text-muted-foreground">预算</p>
                   <p className="font-semibold">
-                    {plan.planState.budget?.total ? `¥${plan.planState.budget.total.toLocaleString()}` : '-'}
+                    {plan.planState.budget?.total ? formatCurrency(plan.planState.budget.total, currency) : '-'}
                   </p>
                 </div>
                 <div>

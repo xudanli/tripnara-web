@@ -2,6 +2,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import type { ReadinessScore } from '@/types/readiness';
 
 interface BreakdownBarListProps {
@@ -9,26 +10,32 @@ interface BreakdownBarListProps {
   onShowBlockers?: (dimension: string) => void;
 }
 
-const dimensions = [
-  { key: 'evidenceCoverage', label: 'Evidence Coverage', description: '证据覆盖' },
-  { key: 'scheduleFeasibility', label: 'Schedule Feasibility', description: '排程可行' },
-  { key: 'transportCertainty', label: 'Transport Certainty', description: '交通确定性' },
-  { key: 'safetyRisk', label: 'Safety & Risk', description: '安全风险' },
-  { key: 'buffers', label: 'Buffers', description: '缓冲冗余' },
+const dimensionKeys = [
+  'evidenceCoverage',
+  'scheduleFeasibility',
+  'transportCertainty',
+  'safetyRisk',
+  'buffers',
 ] as const;
 
 export default function BreakdownBarList({ score, onShowBlockers }: BreakdownBarListProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
-      {dimensions.map((dim) => {
-        const value = score[dim.key];
+      {dimensionKeys.map((key) => {
+        const value = score[key];
 
         return (
-          <div key={dim.key} className="space-y-2">
+          <div key={key} className="space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-sm">{dim.label}</div>
-                <div className="text-xs text-muted-foreground">{dim.description}</div>
+                <div className="font-medium text-sm">
+                  {t(`dashboard.readiness.page.dimensions.${key}.label`)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {t(`dashboard.readiness.page.dimensions.${key}.description`)}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className={cn(
@@ -42,10 +49,10 @@ export default function BreakdownBarList({ score, onShowBlockers }: BreakdownBar
                     variant="ghost"
                     size="sm"
                     className="h-6 text-xs"
-                    onClick={() => onShowBlockers(dim.key)}
+                    onClick={() => onShowBlockers(key)}
                   >
                     <Eye className="h-3 w-3 mr-1" />
-                    Show blockers
+                    {t('dashboard.readiness.page.showBlockers')}
                   </Button>
                 )}
               </div>
@@ -57,5 +64,3 @@ export default function BreakdownBarList({ score, onShowBlockers }: BreakdownBar
     </div>
   );
 }
-
-

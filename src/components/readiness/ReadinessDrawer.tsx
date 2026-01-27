@@ -24,6 +24,10 @@ import { readinessApi } from '@/api/readiness';
 import type { TripDetail } from '@/types/trip';
 import type { ReadinessCheckResult, ReadinessFindingItem, Risk } from '@/api/readiness';
 import { toast } from 'sonner';
+import { 
+  inferPackingListParams, 
+  isTemplateSupported 
+} from '@/utils/packing-list-inference';
 
 interface ReadinessDrawerProps {
   open: boolean;
@@ -215,18 +219,36 @@ export default function ReadinessDrawer({
   };
 
   const handleGeneratePackingList = async () => {
-    if (!tripId) return;
+    if (!tripId || !trip) return;
     try {
+      // 自动推断参数
+      const destination = trip.destination || 'IS';
+      const useTemplate = isTemplateSupported(destination);
+      const inferredParams = inferPackingListParams(trip);
+      
+      console.log('🔄 [Readiness] 生成打包清单，推断参数:', {
+        useTemplate,
+        ...inferredParams,
+      });
+      
+      // 调用生成接口，传递推断的参数
       const packingList = await readinessApi.generatePackingList(tripId, {
         includeOptional: true,
+        // 模板模式参数
+        useTemplate,
+        season: inferredParams.season,
+        route: inferredParams.route,
+        userType: inferredParams.userType,
+        activities: inferredParams.activities,
       });
+      
       // TODO: 显示打包清单对话框或导航到打包清单页面
       toast.success(t('dashboard.readiness.page.drawer.actions.generatePackingListSuccess', { 
         count: packingList.items.length 
       }));
-      console.log('Generated packing list:', packingList);
-    } catch (err) {
-      console.error('Failed to generate packing list:', err);
+      console.log('✅ [Readiness] 打包清单生成成功:', packingList);
+    } catch (err: any) {
+      console.error('❌ [Readiness] 生成打包清单失败:', err);
       toast.error(t('dashboard.readiness.page.drawer.actions.generatePackingListFailed'));
     }
   };
@@ -388,22 +410,24 @@ export default function ReadinessDrawer({
     : 0;
 
   // 合并所有 findings 的数据
+  // 根据后端文档，finding 有 category 字段
   const allBlockers: ReadinessFindingItem[] = readinessResult?.findings?.flatMap(f => 
-    f.blockers.map(item => ({ ...item, findingId: f.destinationId || f.packId }))
+    f.blockers.map(item => ({ ...item, findingId: f.destinationId || f.packId || f.category }))
   ) || [];
   
   const allMust: ReadinessFindingItem[] = readinessResult?.findings?.flatMap(f => 
-    f.must.map(item => ({ ...item, findingId: f.destinationId || f.packId }))
+    f.must.map(item => ({ ...item, findingId: f.destinationId || f.packId || f.category }))
   ) || [];
   
   const allShould: ReadinessFindingItem[] = readinessResult?.findings?.flatMap(f => 
-    f.should.map(item => ({ ...item, findingId: f.destinationId || f.packId }))
+    f.should.map(item => ({ ...item, findingId: f.destinationId || f.packId || f.category }))
   ) || [];
   
   const allOptional: ReadinessFindingItem[] = readinessResult?.findings?.flatMap(f => 
-    f.optional.map(item => ({ ...item, findingId: f.destinationId || f.packId }))
+    f.optional.map(item => ({ ...item, findingId: f.destinationId || f.packId || f.category }))
   ) || [];
   
+  // 合并风险：从顶层 risks 和每个 finding 的 risks
   const allRisks: Risk[] = readinessResult?.risks || 
     readinessResult?.findings?.flatMap(f => f.risks || []) || [];
 
@@ -730,25 +754,46 @@ export default function ReadinessDrawer({
                                 )}
                                 
                                 {/* 任务列表 */}
-                                {item.tasks && item.tasks.length > 0 && trip && (
+                                {item.tasks && item.tasks.length > 0 && (
                                   <div className="mb-2">
                                     <div className="text-xs font-medium text-gray-700 mb-1">
                                       {t('dashboard.readiness.page.drawer.must.tasks')}:
                                     </div>
                                     <ul className="space-y-1">
-                                      {item.tasks.map((task, taskIndex) => {
-                                        const startDate = new Date(trip.startDate);
-                                        const deadline = new Date(startDate);
-                                        deadline.setDate(deadline.getDate() + task.dueOffsetDays);
-                                        return (
-                                          <li key={taskIndex} className="text-xs text-gray-600 flex items-center gap-2">
-                                            <span>•</span>
-                                            <span className="flex-1">{task.title}</span>
-                                            <span className="text-gray-500">
-                                              {t('dashboard.readiness.page.drawer.must.deadline')}: {deadline.toLocaleDateString()}
-                                            </span>
-                                          </li>
-                                        );
+                                      {/* 根据后端文档，tasks 是字符串数组 */}
+                                      {(Array.isArray(item.tasks) ? item.tasks : []).map((task, taskIndex) => {
+                                        // 兼容处理：如果是字符串，直接显示；如果是对象，显示 title 和 deadline
+                                        if (typeof task === 'string') {
+                                          return (
+                                            <li key={taskIndex} className="text-xs text-gray-600 flex items-center gap-2">
+                                              <span>•</span>
+                                              <span className="flex-1">{task}</span>
+                                            </li>
+                                          );
+                                        } else {
+                                          // 兼容旧格式（对象）
+                                          const taskObj = task as any;
+                                          const taskText = taskObj.title || String(task);
+                                          const deadline = trip && taskObj.dueOffsetDays !== undefined 
+                                            ? (() => {
+                                                const startDate = new Date(trip.startDate);
+                                                const deadlineDate = new Date(startDate);
+                                                deadlineDate.setDate(deadlineDate.getDate() + taskObj.dueOffsetDays);
+                                                return deadlineDate.toLocaleDateString();
+                                              })()
+                                            : null;
+                                          return (
+                                            <li key={taskIndex} className="text-xs text-gray-600 flex items-center gap-2">
+                                              <span>•</span>
+                                              <span className="flex-1">{taskText}</span>
+                                              {deadline && (
+                                                <span className="text-gray-500">
+                                                  {t('dashboard.readiness.page.drawer.must.deadline')}: {deadline}
+                                                </span>
+                                              )}
+                                            </li>
+                                          );
+                                        }
                                       })}
                                     </ul>
                                   </div>
@@ -863,12 +908,13 @@ export default function ReadinessDrawer({
                               </Badge>
                               <span className="font-medium text-sm">{risk.type}</span>
                             </div>
-                            <div className="text-sm text-gray-700 mb-1">{risk.summary}</div>
-                            {risk.mitigations && risk.mitigations.length > 0 && (
+                            {/* 根据后端文档，使用 message 和 mitigation（单数） */}
+                            <div className="text-sm text-gray-700 mb-1">{risk.message || risk.summary}</div>
+                            {(risk.mitigation || risk.mitigations) && (risk.mitigation || risk.mitigations || []).length > 0 && (
                               <div className="text-xs text-gray-600 mt-2">
                                 <strong>{t('dashboard.readiness.page.drawer.hazards.mitigations')}:</strong>
                                 <ul className="list-disc list-inside mt-1">
-                                  {risk.mitigations.map((mit, i) => (
+                                  {(risk.mitigation || risk.mitigations || []).map((mit, i) => (
                                     <li key={i}>{mit}</li>
                                   ))}
                                 </ul>

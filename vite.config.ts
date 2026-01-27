@@ -27,6 +27,13 @@ export default defineConfig(({ mode }) => {
           target: BACKEND_TARGET,
           changeOrigin: true,
           secure: false,
+          // 重要：确保 Cookie 正确转发（跨域 Cookie 问题修复）
+          cookieDomainRewrite: {
+            '*': '', // 将所有域的 Cookie 重写为当前域
+          },
+          cookiePathRewrite: {
+            '*': '/', // 将所有路径重写为根路径
+          },
           // 保留 /api 前缀，转发到后端
           // 如果后端不需要 /api 前缀，取消下面的注释：
           // rewrite: (path) => path.replace(/^\/api/, ''),

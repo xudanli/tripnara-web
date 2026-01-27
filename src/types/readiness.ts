@@ -31,15 +31,33 @@ export interface RepairOption {
   id: string;
   title: string;
   description: string;
-  changes: {
+  cost?: number;                                    // 预估费用（可选）
+  impact: 'high' | 'medium' | 'low';               // 影响程度
+  timeEstimate?: string;                           // 预估耗时
+  actionType?: RepairActionType;                   // 操作类型
+  // 旧字段（兼容）
+  changes?: {
     time?: string; // "+30min" / "-15min"
     distance?: string; // "+12km" / "-5km"
     elevation?: string; // "+200m" / "-100m"
     risk?: string; // "下降" / "上升"
   };
-  reasonCode: string;
+  reasonCode?: string;
   evidenceLink?: string;
 }
+
+/** 修复操作类型 */
+export type RepairActionType = 
+  | 'fetch_weather'     // 查询天气预报
+  | 'check_road'        // 查询道路状况
+  | 'check_hours'       // 确认营业时间
+  | 'manual_confirm'    // 手动标记已确认
+  | 'reorder_pois'      // 调整行程顺序
+  | 'move_to_day'       // 移动到其他天
+  | 'remove_pois'       // 减少景点数量
+  | 'book_transport'    // 预订交通
+  | 'change_hotel'      // 更换酒店
+  | 'buy_insurance';    // 购买旅行保险
 
 export interface EvidenceItem {
   id: string;

@@ -33,14 +33,47 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
 
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    // 支持的图片格式
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxImages = 5;
+
+    const imageFiles: File[] = [];
+    const errors: string[] = [];
+
+    Array.from(files).forEach((file, index) => {
+      // 检查格式
+      if (!allowedTypes.includes(file.type)) {
+        errors.push(`文件 ${index + 1} 格式不支持，仅支持 jpg, jpeg, png, gif, webp`);
+        return;
+      }
+      // 检查大小
+      if (file.size > maxSize) {
+        errors.push(`文件 ${index + 1} 大小超过 5MB 限制`);
+        return;
+      }
+      imageFiles.push(file);
+    });
+
+    if (errors.length > 0) {
+      setError(errors.join('；'));
+      return;
+    }
+
     if (imageFiles.length === 0) {
       setError(t('contactUs.invalidImageFormat', { defaultValue: '请选择图片文件' }));
       return;
     }
 
     // 限制最多上传5张图片
-    const newImages = [...images, ...imageFiles].slice(0, 5);
+    const currentCount = images.length;
+    const remainingSlots = maxImages - currentCount;
+    if (remainingSlots <= 0) {
+      setError(`最多只能上传 ${maxImages} 张图片`);
+      return;
+    }
+
+    const newImages = [...images, ...imageFiles.slice(0, remainingSlots)];
     setImages(newImages);
     setError(null);
   };
@@ -96,11 +129,13 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
       setUploading(true);
       setError(null);
 
-      await contactApi.sendMessage({
+      const result = await contactApi.sendMessage({
         message: message.trim() || undefined,
         images: images.length > 0 ? images : undefined,
       });
 
+      console.log('[ContactUsDialog] 消息发送成功:', result);
+      
       setSuccess(true);
       setMessage('');
       setImages([]);
@@ -169,7 +204,7 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                 multiple
                 onChange={handleFileInputChange}
                 className="hidden"

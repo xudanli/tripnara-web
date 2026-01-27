@@ -29,7 +29,9 @@ export default function RiskCard({ risk, className }: RiskCardProps) {
   };
 
   const { label, className: severityClassName, iconClassName } = severityConfig[risk.severity];
-  const mitigations = risk.mitigations || risk.mitigation || [];
+  // 根据后端文档，使用 message 和 mitigation（单数）
+  const riskMessage = risk.message || risk.summary || '';
+  const mitigations = risk.mitigation || risk.mitigations || [];
 
   return (
     <Card className={cn('border', className)}>
@@ -45,7 +47,7 @@ export default function RiskCard({ risk, className }: RiskCardProps) {
                     {label}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">{risk.summary || risk.message}</p>
+                <p className="text-sm text-muted-foreground">{riskMessage}</p>
               </div>
             </div>
           </div>

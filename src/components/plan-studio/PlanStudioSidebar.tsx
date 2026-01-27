@@ -168,9 +168,10 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     const segments: RoutePlanDraft['segments'] = [];
     
     // 从行程数据构建 segments
-    trip.TripDay.forEach((day, dayIndex) => {
-      if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-        day.ItineraryItem.forEach((item, index) => {
+    if (trip.TripDay && Array.isArray(trip.TripDay)) {
+      trip.TripDay.forEach((day, dayIndex) => {
+        if (day.ItineraryItem && Array.isArray(day.ItineraryItem) && day.ItineraryItem.length > 0) {
+          day.ItineraryItem.forEach((item, index) => {
           if (item.Place && index > 0) {
             const prevItem = day.ItineraryItem[index - 1];
             if (prevItem?.Place) {
@@ -207,6 +208,8 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
             }
           }
         });
+      }
+    }
       }
     });
 
@@ -598,13 +601,15 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     let replacePoints = 0;
     let moveTimeSlots = 0;
     
-    neptuneAlerts.forEach(alert => {
-      if (alert.metadata?.type === 'REPLACE_NODE') {
-        replacePoints++;
-      } else if (alert.metadata?.type === 'MOVE_TIME_SLOT') {
-        moveTimeSlots++;
-      }
-    });
+    if (Array.isArray(neptuneAlerts)) {
+      neptuneAlerts.forEach(alert => {
+        if (alert.metadata?.type === 'REPLACE_NODE') {
+          replacePoints++;
+        } else if (alert.metadata?.type === 'MOVE_TIME_SLOT') {
+          moveTimeSlots++;
+        }
+      });
+    }
     
     // 已应用的修复数量（如果有状态标记）
     const applied = neptuneAlerts.filter(alert => alert.metadata?.status === 'APPLIED').length;

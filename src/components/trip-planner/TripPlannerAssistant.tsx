@@ -1941,7 +1941,7 @@ function PendingChangesPanel({
       <CardHeader className="p-3 pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-600" />
-          待确认的修改 ({changes.length})
+          NARA 建议 ({changes.length})
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -1970,7 +1970,7 @@ function PendingChangesPanel({
             className="flex-1"
           >
             <X className="w-4 h-4 mr-1" />
-            取消
+            暂不应用
           </Button>
           <Button
             size="sm"
@@ -2358,8 +2358,10 @@ function MessageBubble({
           </div>
         )}
 
-        {/* 追问选项（非澄清响应时） */}
-        {!isUser && !isClarification && message.followUp && isLatest && !isTyping && onFollowUpSelect && (
+        {/* 追问选项（非澄清响应时，且没有待确认修改和 quickActions 时才显示，避免重复） */}
+        {!isUser && !isClarification && message.followUp && isLatest && !isTyping && onFollowUpSelect && 
+         !(message.pendingChanges && message.pendingChanges.length > 0) &&
+         !(message.quickActions && message.quickActions.length > 0) && (
           <FollowUpOptions 
             followUp={message.followUp}
             onSelect={onFollowUpSelect}
@@ -2371,15 +2373,15 @@ function MessageBubble({
           <DetectedGapsPanel gaps={message.meta.detectedGaps} />
         )}
 
-        {/* 🆕 澄清选项（意图消歧系统 - 包含 followUp） */}
-        {!isUser && isClarification && message.quickActions && message.quickActions.length > 0 && isLatest && !isTyping && onClarificationSelect && (
+        {/* 🆕 快捷操作按钮（当后端返回 quickActions 时显示，无论是否为澄清场景） */}
+        {!isUser && message.quickActions && message.quickActions.length > 0 && isLatest && !isTyping && onClarificationSelect && (
           <div className="mt-3 w-full">
             <ClarificationOptions
               actions={message.quickActions}
               onSelect={onClarificationSelect}
               disabled={loading}
-              followUp={message.followUp}
-              onFreeTextSubmit={onClarificationFreeText}
+              followUp={isClarification ? message.followUp : undefined}
+              onFreeTextSubmit={isClarification ? onClarificationFreeText : undefined}
             />
           </div>
         )}
@@ -2840,12 +2842,13 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
         {loading && <TypingIndicator />}
       </div>
 
-      {/* 待确认修改面板 */}
-      {pendingChanges.length > 0 && (
+      {/* 待确认修改面板 - 当有 quickActions 时隐藏，避免重复交互 */}
+      {pendingChanges.length > 0 && 
+       !(messages.length > 0 && (messages[messages.length - 1]?.quickActions?.length ?? 0) > 0) && (
         <div className="px-4 pb-2">
           <PendingChangesPanel
             changes={pendingChanges}
-            onConfirm={confirmChanges}
+            onConfirm={() => confirmChanges()}
             onReject={rejectChanges}
             loading={loading}
           />

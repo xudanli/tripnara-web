@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Clock, MapPin, Save, Undo2, Redo2, History } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatCurrency } from '@/utils/format';
 
 export default function TripSchedulePage() {
   const { id } = useParams<{ id: string }>();
@@ -227,7 +228,7 @@ export default function TripSchedulePage() {
                       </div>
                       {item.metadata?.cost && (
                         <div className="flex items-center gap-1">
-                          <span>¥{item.metadata.cost}</span>
+                          <span>{formatCurrency(item.metadata.cost, 'CNY')}</span>
                         </div>
                       )}
                     </div>
@@ -241,7 +242,7 @@ export default function TripSchedulePage() {
                 </div>
                 <div className="flex items-center justify-between text-sm mt-2">
                   <span className="text-muted-foreground">总费用</span>
-                  <span>¥{schedule.schedule.totalCost?.toLocaleString()}</span>
+                  <span>{formatCurrency(schedule.schedule.totalCost ?? 0, 'CNY')}</span>
                 </div>
               </div>
             </div>

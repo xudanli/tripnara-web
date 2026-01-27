@@ -54,9 +54,23 @@ apiClient.interceptors.request.use(
     const accessToken = sessionStorage.getItem('accessToken');
     
     // 构建完整的请求 URL（包括查询参数）
-    const fullUrl = config.baseURL 
-      ? `${config.baseURL}${config.url}${config.params ? '?' + new URLSearchParams(config.params).toString() : ''}`
-      : config.url;
+    let fullUrl = config.url || '';
+    if (config.baseURL) {
+      fullUrl = `${config.baseURL}${fullUrl}`;
+    }
+    if (config.params && Object.keys(config.params).length > 0) {
+      try {
+        const params = new URLSearchParams();
+        Object.entries(config.params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            params.append(key, String(value));
+          }
+        });
+        fullUrl += `?${params.toString()}`;
+      } catch (err) {
+        console.warn('[API Client] 构建查询参数失败:', err);
+      }
+    }
     
     // 调试日志（使用 console.log 确保在控制台可见）
     console.log('[API Client] 请求:', {
@@ -92,13 +106,28 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     // 构建完整的请求 URL（包括查询参数）
-    const fullUrl = response.config.baseURL 
-      ? `${response.config.baseURL}${response.config.url}${response.config.params ? '?' + new URLSearchParams(response.config.params).toString() : ''}`
-      : response.config.url;
+    let fullUrl = response.config.url || '';
+    if (response.config.baseURL) {
+      fullUrl = `${response.config.baseURL}${fullUrl}`;
+    }
+    if (response.config.params && Object.keys(response.config.params).length > 0) {
+      try {
+        const params = new URLSearchParams();
+        Object.entries(response.config.params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            params.append(key, String(value));
+          }
+        });
+        fullUrl += `?${params.toString()}`;
+      } catch (err) {
+        console.warn('[API Client] 构建查询参数失败:', err);
+      }
+    }
     
     // 🆕 检查响应体中的 success 字段
     // 即使 HTTP 状态码是 2xx，如果响应体 success: false，也应该当作错误处理
-    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+    // 防御性检查：确保 response.data 存在且是对象
+    if (response.data && typeof response.data === 'object' && response.data !== null && 'success' in response.data) {
       if (response.data.success === false) {
         const errorData = response.data.error;
         const errorCode = errorData?.code || 'UNKNOWN_ERROR';
@@ -128,12 +157,31 @@ apiClient.interceptors.response.use(
         }
         
         // 其他业务错误，也当作错误处理
-        console.error('[API Client] ⚠️ 响应体显示失败（状态码可能是 2xx）:', {
-          url: response.config.url,
-          status: response.status,
-          errorCode,
-          errorMessage,
-        });
+        // 区分不同类型的错误，使用不同的日志级别
+        const isNotFoundError = 
+          errorCode === 'NOT_FOUND' || 
+          errorCode === 'RESOURCE_NOT_FOUND' ||
+          errorMessage.includes('未找到') || 
+          errorMessage.includes('not found') ||
+          errorMessage.includes('不存在');
+        
+        if (isNotFoundError) {
+          // "未找到"类型的错误使用警告级别，因为可能是正常的业务场景（资源不存在）
+          console.warn('[API Client] ⚠️ 资源不存在（状态码可能是 2xx）:', {
+            url: response.config.url,
+            status: response.status,
+            errorCode,
+            errorMessage,
+          });
+        } else {
+          // 其他业务错误使用错误级别
+          console.error('[API Client] ❌ 响应体显示失败（状态码可能是 2xx）:', {
+            url: response.config.url,
+            status: response.status,
+            errorCode,
+            errorMessage,
+          });
+        }
         
         const businessError = new Error(errorMessage) as any;
         businessError.response = {
@@ -159,6 +207,12 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
+    // 防御性检查：确保 error.config 存在
+    if (!error || !error.config) {
+      console.error('[API Client] ❌ 错误对象无效，缺少 config:', error);
+      return Promise.reject(error || new Error('未知错误'));
+    }
+    
     const originalRequest = error.config;
 
     // Handle 401 Unauthorized - token 过期或缺失
@@ -223,6 +277,15 @@ apiClient.interceptors.response.use(
         }
         return Promise.reject(refreshError);
       }
+    }
+
+    // 忽略 AbortError（请求被取消是正常行为，如组件卸载）
+    if (error?.name === 'AbortError' || 
+        error?.code === 'ERR_CANCELED' || 
+        error?.message?.includes('aborted') ||
+        error?.message?.includes('canceled')) {
+      // 静默处理，不打印错误日志
+      return Promise.reject(error);
     }
 
     // 处理其他错误

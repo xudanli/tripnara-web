@@ -56,6 +56,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/format';
 
 interface PlanningAssistantChatProps {
   userId?: string;
@@ -365,7 +366,7 @@ function PlanCandidateCard({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">预算估算</span>
               <span className="text-sm font-semibold text-primary">
-                ¥{plan.estimatedBudget.total.toLocaleString()}
+                {formatCurrency(plan.estimatedBudget.total, 'CNY')}
               </span>
             </div>
             <div className="grid grid-cols-5 gap-1 text-xs">
@@ -374,7 +375,7 @@ function PlanCandidateCard({
                   <Icon className="w-3 h-3 mx-auto text-muted-foreground" />
                   <div className="text-muted-foreground mt-0.5">{label}</div>
                   <div className="font-medium">
-                    ¥{(plan.estimatedBudget.breakdown[key as keyof typeof plan.estimatedBudget.breakdown] || 0).toLocaleString()}
+                    {formatCurrency(plan.estimatedBudget.breakdown[key as keyof typeof plan.estimatedBudget.breakdown] || 0, 'CNY')}
                   </div>
                 </div>
               ))}

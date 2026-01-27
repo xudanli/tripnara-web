@@ -150,6 +150,13 @@ import type {
   AttentionQueueResponse,
   AttentionSeverity,
   AttentionItemType,
+  DayTravelInfoResponse,
+  UpdateTravelInfoRequest,
+  UpdateBookingRequest,
+  CalculateTravelRequest,
+  CalculateAllTravelResponse,
+  CalculateDayTravelResponse,
+  FixDatesResponse,
 } from '@/types/trip';
 import type {
   SuggestionListResponse,
@@ -1450,6 +1457,89 @@ export const itineraryItemsApi = {
   getUnpaidItems: async (tripId: string): Promise<UnpaidItem[]> => {
     const response = await apiClient.get<ApiResponseWrapper<UnpaidItem[]>>(
       `/itinerary-items/trip/${tripId}/unpaid`
+    );
+    return handleResponse(response);
+  },
+
+  // ==================== 交通信息接口 ====================
+
+  /**
+   * 获取某天所有行程项之间的交通信息
+   * GET /itinerary-items/trip/:tripId/days/:dayId/travel-info
+   */
+  getDayTravelInfo: async (tripId: string, dayId: string): Promise<DayTravelInfoResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<DayTravelInfoResponse>>(
+      `/itinerary-items/trip/${tripId}/days/${dayId}/travel-info`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 更新行程项从上一地点的交通信息
+   * PATCH /itinerary-items/:id/travel-info
+   */
+  updateTravelInfo: async (id: string, data: UpdateTravelInfoRequest): Promise<ItineraryItemDetail> => {
+    const response = await apiClient.patch<ApiResponseWrapper<{ item: ItineraryItemDetail; message: string }>>(
+      `/itinerary-items/${id}/travel-info`,
+      data
+    );
+    const result = handleResponse(response);
+    return result.item;
+  },
+
+  // ==================== 预订信息接口 ====================
+
+  /**
+   * 更新行程项的预订状态
+   * PATCH /itinerary-items/:id/booking
+   */
+  updateBooking: async (id: string, data: UpdateBookingRequest): Promise<ItineraryItemDetail> => {
+    const response = await apiClient.patch<ApiResponseWrapper<{ item: ItineraryItemDetail; message: string }>>(
+      `/itinerary-items/${id}/booking`,
+      data
+    );
+    const result = handleResponse(response);
+    return result.item;
+  },
+
+  /**
+   * 计算整个行程的交通信息（支持跨天）
+   * POST /itinerary-items/trip/:tripId/calculate-all-travel
+   */
+  calculateAllTravel: async (
+    tripId: string,
+    data?: CalculateTravelRequest
+  ): Promise<CalculateAllTravelResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<CalculateAllTravelResponse>>(
+      `/itinerary-items/trip/${tripId}/calculate-all-travel`,
+      data || {}
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 计算单天的交通信息
+   * POST /itinerary-items/trip/:tripId/days/:dayId/calculate-travel
+   */
+  calculateDayTravel: async (
+    tripId: string,
+    dayId: string,
+    data?: CalculateTravelRequest
+  ): Promise<CalculateDayTravelResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<CalculateDayTravelResponse>>(
+      `/itinerary-items/trip/${tripId}/days/${dayId}/calculate-travel`,
+      data || {}
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 修复行程项日期一致性问题
+   * POST /itinerary-items/trip/:tripId/fix-dates
+   */
+  fixDates: async (tripId: string): Promise<FixDatesResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<FixDatesResponse>>(
+      `/itinerary-items/trip/${tripId}/fix-dates`
     );
     return handleResponse(response);
   },

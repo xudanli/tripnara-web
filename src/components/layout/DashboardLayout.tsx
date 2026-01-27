@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/useAuth';
+import { cn } from '@/lib/utils';
 import type { EntryPoint } from '@/api/agent';
 
 // Context for drawer control
@@ -36,6 +37,11 @@ export default function DashboardLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'evidence' | 'risk' | 'decision'>('evidence');
   const [highlightItemId, setHighlightItemId] = useState<string | undefined>();
+  // 从 localStorage 读取初始状态，与 AgentChatSidebar 保持一致
+  const [sidebarExpanded, setSidebarExpanded] = useState(() => {
+    const saved = localStorage.getItem('agent-sidebar-expanded');
+    return saved !== null ? saved === 'true' : false;
+  });
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
@@ -120,13 +126,39 @@ export default function DashboardLayout() {
           </SheetContent>
         </Sheet>
 
-        {/* 主内容区 */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* 页面内容 */}
-          <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
-            <Outlet />
-          </main>
-        </div>
+        {/* 主内容区和 AI 助手侧边栏 */}
+        {entryPoint === 'planning_workbench' && activeTripId ? (
+          <div className="flex-1 hidden lg:flex h-full">
+            {/* 主内容区 */}
+            <div className="flex-1 h-full overflow-hidden">
+              <main className="h-full overflow-y-auto pb-16 lg:pb-0">
+                <Outlet />
+              </main>
+            </div>
+
+            {/* AI 助手侧边栏 */}
+            <div 
+              className={cn(
+                'h-full overflow-hidden border-l border-gray-200 transition-all duration-300 ease-in-out',
+                sidebarExpanded ? 'w-96' : 'w-16'
+              )}
+            >
+              <AgentChatSidebar 
+                activeTripId={activeTripId} 
+                entryPoint={entryPoint}
+                onExpandedChange={setSidebarExpanded}
+              />
+            </div>
+          </div>
+        ) : (
+          /* 主内容区（无 AI 助手时） */
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* 页面内容 */}
+            <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
+              <Outlet />
+            </main>
+          </div>
+        )}
 
         {/* 右侧抽屉（桌面端） */}
         <div className="hidden lg:block">
@@ -138,13 +170,6 @@ export default function DashboardLayout() {
             highlightItemId={highlightItemId}
           />
         </div>
-
-        {/* AI 助手侧边栏（仅桌面端 + 仅规划工作台详情页） */}
-        {entryPoint === 'planning_workbench' && activeTripId && (
-          <div className="hidden lg:block">
-            <AgentChatSidebar activeTripId={activeTripId} entryPoint={entryPoint} />
-          </div>
-        )}
 
         {/* 移动端底部导航 */}
         <MobileBottomNav />

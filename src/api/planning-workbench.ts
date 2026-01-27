@@ -1178,13 +1178,31 @@ export const planningWorkbenchApi = {
 
       return wrappedResponse;
     } catch (error: any) {
-      console.error('[Planning Workbench API] getPlanBudgetEvaluation 请求失败:', {
-        error,
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        planId,
-      });
+      // 区分不同类型的错误
+      const errorMessage = error?.message || '';
+      const isNotFoundError = 
+        errorMessage.includes('未找到') || 
+        errorMessage.includes('not found') ||
+        errorMessage.includes('不存在') ||
+        error?.code === 'NOT_FOUND' ||
+        error?.response?.status === 404;
+      
+      if (isNotFoundError) {
+        // "未找到"错误使用警告级别，因为预算评估是可选的
+        console.warn('[Planning Workbench API] ⚠️ 预算评估结果不存在（方案可能尚未进行预算评估）:', {
+          planId,
+          message: errorMessage,
+        });
+      } else {
+        // 其他错误使用错误级别
+        console.error('[Planning Workbench API] ❌ getPlanBudgetEvaluation 请求失败:', {
+          error,
+          message: errorMessage,
+          code: error.code,
+          response: error.response?.data,
+          planId,
+        });
+      }
 
       if (error.message) {
         throw error;

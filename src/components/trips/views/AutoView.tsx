@@ -28,6 +28,7 @@ import {
   Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/format';
 import { getPersonaIconColorClasses, getPersonaColorClasses, getPersonaBackgroundClasses } from '@/lib/persona-colors';
 import AbuView from './AbuView';
 import DrDreView from './DrDreView';
@@ -62,6 +63,9 @@ export default function AutoView({
   onAddItem
 }: AutoViewProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'abu' | 'dre' | 'neptune'>('overview');
+  
+  // 获取货币单位
+  const currency = trip?.budgetConfig?.currency || 'CNY';
 
   // 使用默认值，如果数据未加载完成
   const metrics = overallMetrics || {
@@ -491,7 +495,7 @@ export default function AutoView({
                         <div className="flex flex-col items-center p-4 bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
                           <DollarSign className="w-5 h-5 text-green-600 mb-2" />
                           <span className="text-xs text-muted-foreground mb-1">总预算</span>
-                          <span className="text-lg font-bold text-green-700">¥{keyMetrics.totalBudget.toLocaleString()}</span>
+                          <span className="text-lg font-bold text-green-700">{formatCurrency(keyMetrics.totalBudget, currency)}</span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -506,7 +510,7 @@ export default function AutoView({
                         <div className="flex flex-col items-center p-4 bg-gradient-to-br from-amber-50 to-white border border-amber-100 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
                           <DollarSign className="w-5 h-5 text-amber-600 mb-2" />
                           <span className="text-xs text-muted-foreground mb-1">预算使用情况</span>
-                          <span className="text-lg font-bold text-amber-700">¥{keyMetrics.budgetUsed.toLocaleString()}</span>
+                          <span className="text-lg font-bold text-amber-700">{formatCurrency(keyMetrics.budgetUsed, currency)}</span>
                           <span className="text-xs text-muted-foreground mt-0.5">
                             ({keyMetrics.totalBudget > 0 ? Math.round((keyMetrics.budgetUsed / keyMetrics.totalBudget) * 100) : 0}%)
                           </span>

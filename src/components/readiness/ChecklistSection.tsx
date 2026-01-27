@@ -76,49 +76,73 @@ export default function ChecklistSection({ title, items, level, className, tripS
                 <div className="space-y-1">
                   <h5 className="text-xs font-medium text-muted-foreground">任务:</h5>
                   <ul className="space-y-1">
-                    {item.tasks.map((task, taskIndex) => (
-                      <li key={taskIndex} className="text-xs text-muted-foreground flex items-start gap-2">
-                        <span className="text-muted-foreground/50 mt-1">•</span>
-                        <span className="flex-1">
-                          {task.title}
-                          {tripStartDate && task.dueOffsetDays !== undefined && (
-                            <span className="text-muted-foreground/70 ml-2">
-                              (截止: {calculateDeadline(task.dueOffsetDays, tripStartDate)})
+                    {/* 根据后端文档，tasks 是字符串数组 */}
+                    {(Array.isArray(item.tasks) ? item.tasks : []).map((task, taskIndex) => {
+                      // 兼容处理：如果是字符串，直接显示；如果是对象，显示 title 和 deadline
+                      if (typeof task === 'string') {
+                        return (
+                          <li key={taskIndex} className="text-xs text-muted-foreground flex items-start gap-2">
+                            <span className="text-muted-foreground/50 mt-1">•</span>
+                            <span className="flex-1">{task}</span>
+                          </li>
+                        );
+                      } else {
+                        // 兼容旧格式（对象）
+                        const taskObj = task as any;
+                        const taskText = taskObj.title || String(task);
+                        const deadline = tripStartDate && taskObj.dueOffsetDays !== undefined 
+                          ? calculateDeadline(taskObj.dueOffsetDays, tripStartDate)
+                          : null;
+                        return (
+                          <li key={taskIndex} className="text-xs text-muted-foreground flex items-start gap-2">
+                            <span className="text-muted-foreground/50 mt-1">•</span>
+                            <span className="flex-1">
+                              {taskText}
+                              {deadline && (
+                                <span className="text-muted-foreground/70 ml-2">
+                                  (截止: {deadline})
+                                </span>
+                              )}
+                              {taskObj.tags && taskObj.tags.length > 0 && (
+                                <span className="ml-2">
+                                  {taskObj.tags.map((tag: string, tagIdx: number) => (
+                                    <Badge key={tagIdx} variant="outline" className="text-xs mr-1">
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </span>
+                              )}
                             </span>
-                          )}
-                          {task.tags && task.tags.length > 0 && (
-                            <span className="ml-2">
-                              {task.tags.map((tag, tagIdx) => (
-                                <Badge key={tagIdx} variant="outline" className="text-xs mr-1">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
+                          </li>
+                        );
+                      }
+                    })}
                   </ul>
                 </div>
               )}
               
               {/* Evidence */}
-              {item.evidence && item.evidence.length > 0 && (
+              {/* 根据后端文档，evidence 是字符串 */}
+              {item.evidence && (
                 <div className="space-y-1">
                   <h5 className="text-xs font-medium text-muted-foreground">证据:</h5>
-                  <ul className="space-y-1">
-                    {item.evidence.map((ev, evIndex) => (
-                      <li key={evIndex} className="text-xs text-muted-foreground">
-                        {ev.sourceId}
-                        {ev.sectionId && ` > ${ev.sectionId}`}
-                        {ev.quote && (
-                          <span className="text-muted-foreground/70 italic">
-                            : "{ev.quote}"
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="text-xs text-muted-foreground">
+                    {typeof item.evidence === 'string' 
+                      ? item.evidence 
+                      : Array.isArray(item.evidence) 
+                      ? item.evidence.map((ev: any, evIndex: number) => (
+                          <div key={evIndex}>
+                            {ev.sourceId}
+                            {ev.sectionId && ` > ${ev.sectionId}`}
+                            {ev.quote && (
+                              <span className="text-muted-foreground/70 italic">
+                                : "{ev.quote}"
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      : String(item.evidence)}
+                  </div>
                 </div>
               )}
               

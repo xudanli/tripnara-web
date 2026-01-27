@@ -44,6 +44,7 @@ import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
 import { Settings2, Zap, Footprints, Wallet } from 'lucide-react';
 import { PlanStudioProvider } from '@/contexts/PlanStudioContext';
+import { formatCurrency } from '@/utils/format';
 
 function PlanStudioPageContent() {
   const { t } = useTranslation();
@@ -238,7 +239,7 @@ function PlanStudioPageContent() {
 
     return () => clearInterval(interval);
   }, [tripId, tripExists]);
-  
+
   const handleWelcomeComplete = (experienceType: 'steady' | 'balanced' | 'exploratory') => {
     setShowWelcomeModal(false);
     navigate('/dashboard/trips/new?experience=' + experienceType);
@@ -493,7 +494,8 @@ function TripSummaryBar({
 
   const pace = getPaceLabel();
   const budget = trip.totalBudget || trip.budgetConfig?.totalBudget;
-  const days = trip.days?.length || 0;
+  const currency = trip.budgetConfig?.currency || 'CNY';
+  const days = trip.TripDay?.length || 0;
   const startDate = trip.startDate ? new Date(trip.startDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
   const endDate = trip.endDate ? new Date(trip.endDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
 
@@ -527,18 +529,18 @@ function TripSummaryBar({
               <div className="h-4 w-px bg-slate-300" />
               <div className="flex items-center gap-1.5">
                 <Wallet className="w-4 h-4 text-emerald-500" />
-                <span className="text-slate-600">¥{budget.toLocaleString()}</span>
+                <span className="text-slate-600">{formatCurrency(budget, currency)}</span>
               </div>
             </>
           )}
           
           {/* 旅行者数量 */}
-          {trip.travelers && trip.travelers.length > 0 && (
+          {trip.pacingConfig?.travelers && trip.pacingConfig.travelers.length > 0 && (
             <>
               <div className="h-4 w-px bg-slate-300" />
               <div className="flex items-center gap-1.5">
                 <Footprints className="w-4 h-4 text-blue-500" />
-                <span className="text-slate-600">{trip.travelers.length}人</span>
+                <span className="text-slate-600">{trip.pacingConfig.travelers.length}人</span>
               </div>
             </>
           )}

@@ -1159,16 +1159,77 @@
         "showTop3": "Show Top 3",
         "viewAll": "View all ({{count}})",
         "noPotentialRisks": "No potential risks identified",
+        "noEvidenceAvailable": "No evidence available",
         "tabs": {
           "readinessBreakdown": "Readiness Breakdown",
           "capabilityPacks": "Capability Packs",
           "evidenceChain": "Evidence Chain",
-          "coverageMap": "Coverage Map"
+          "coverageMap": "Coverage Map",
+          "packingList": "Packing List"
         },
         "scoreBreakdown": {
           "title": "Score Breakdown",
           "description": "Detailed breakdown of readiness dimensions"
         },
+        "dimensions": {
+          "evidenceCoverage": {
+            "label": "Evidence Coverage",
+            "description": "Evidence collection status for trip segments"
+          },
+          "scheduleFeasibility": {
+            "label": "Schedule Feasibility",
+            "description": "Reasonableness of schedule arrangement"
+          },
+          "transportCertainty": {
+            "label": "Transport Certainty",
+            "description": "Confirmation level of transport and bookings"
+          },
+          "safetyRisk": {
+            "label": "Safety & Risk",
+            "description": "Safety risk assessment for the trip"
+          },
+          "buffers": {
+            "label": "Buffers",
+            "description": "Time buffers and flexibility in the trip"
+          }
+        },
+        "showBlockers": "Show blockers",
+        "currentScore": "Current Score",
+        "noFindingsForDimension": "No findings for this dimension",
+        "dimensionPerfect": "This dimension is perfect!",
+        "noDetailedFindings": "No detailed findings. Score is calculated based on overall trip status.",
+        "scoreExplanation": "The score reflects the overall health of this dimension and may be affected by various factors.",
+        "recommended": "Recommended",
+        "impact": {
+          "high": "High Impact",
+          "medium": "Medium Impact",
+          "low": "Low Impact"
+        },
+        "time": "Time",
+        "distance": "Distance",
+        "elevation": "Elevation",
+        "riskLevel": "Risk",
+        "whyThisFix": "Why this fix",
+        "reasonCode": "Reason Code",
+        "viewEvidence": "View Evidence",
+        "applyFix": "Apply Fix",
+        "preview": "Preview",
+        "repairOptions": "Repair Options",
+        "blockerToFix": "Issue to fix",
+        "noRepairOptions": "No repair options available",
+        "fix": "Fix",
+        "mitigation": "Mitigation",
+        "affectedDays": "Affected days",
+        "mitigation": "Mitigation",
+        "findingsTitle": "Findings",
+        "findingType": {
+          "blocker": "Blocker",
+          "warning": "Warning",
+          "suggestion": "Suggestion"
+        },
+        "actionRequired": "Action Required",
+        "moreFindings": "{{count}} more...",
+        "calculatedAt": "Calculated at",
         "bestWindow": "Best window: {{start}}–{{end}}",
         "lastUpdated": "Last updated: {{date}}",
         "actions": {
@@ -1184,12 +1245,147 @@
         "topBlocker": "Top Blocker: {{title}}",
         "fixNow": "Fix Now",
         "systemCapabilityPacks": "System capability packs triggered for this trip",
+        "capabilityPacksDescription": "System capability packs automatically triggered based on trip characteristics to help you prepare for special travel scenarios",
         "packsTriggered": "{{triggered}} of {{total}} packs triggered",
+        "noPacksTriggered": "No capability packs triggered for this trip",
+        "triggeredPacksTitle": "Triggered Capability Packs",
         "triggered": "Triggered",
+        "triggeredRules": "Triggered Rules",
+        "hazards": "Risk Warnings",
+        "addRulesToChecklist": "Add to Checklist",
+        "viewInEvidenceChain": "View Evidence",
+        "addToChecklistPending": "This feature requires backend support. Rules will be added to the preparation checklist.",
+        "personaAnalysis": "Three Persona Analysis",
+        "basedOnCapabilityPacks": "Based on Capability Packs",
+        "abuRole": "Safety & Boundary Guardian",
+        "dreRole": "Rhythm & Energy Design",
+        "neptuneRole": "Spatial Structure Repair",
+        "highRiskWarnings": "High Risk Warnings",
+        "rhythmAdjustments": "Rhythm Adjustments",
+        "alternatives": "Alternatives",
+        "noSafetyIssues": "No safety issues",
+        "noRhythmIssues": "Rhythm is normal",
+        "noAlternatives": "No alternatives",
+        "hasSuggestions": "Has Suggestions",
+        "triggerReason": "Trigger Reason",
+        "geoEnhanced": "Geo Enhanced",
+        "evaluationContext": "Evaluation Context",
+        "adding": "Adding...",
+        "addToChecklistSuccess": "Successfully added {{count}} rules to checklist",
+        "addToChecklistFailed": "Failed to add, please try again later",
+        "noSpecialPreparation": "No special preparation needed",
+        "noSpecialPreparationHint": "Your trip doesn't involve high altitude, remote areas, or seasonal roads",
+        "evidenceList": "Evidence List",
+        "totalEvidence": "{{count}} evidence items",
+        "source": "Source",
+        "viewSource": "View Source",
+        "noEvidenceAvailable": "No evidence available",
+        "evidenceType": {
+          "openingHours": "Opening Hours",
+          "roadClosure": "Road Closure",
+          "weather": "Weather",
+          "booking": "Booking",
+          "other": "Other"
+        },
+        "ruleLevel": {
+          "blocker": "Blocker",
+          "must": "Must",
+          "should": "Should",
+          "optional": "Optional"
+        },
+        "hazardType": {
+          "supply_shortage": "Supply Shortage",
+          "road_closure": "Road Closure",
+          "weather_risk": "Weather Risk",
+          "altitude_sickness": "Altitude Sickness",
+          "communication_failure": "Communication Failure",
+          "emergency_access": "Emergency Access Issue",
+          "permit_required": "Permit Required",
+          "checkpoint": "Checkpoint",
+          "other": "Other Risk"
+        },
+        "hazardSeverity": {
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        },
+        "capabilityPackName": {
+          "high_altitude": "High Altitude Travel Readiness",
+          "sparse_supply": "Sparse Supply Area Readiness",
+          "seasonal_road": "Seasonal Road Closure Readiness",
+          "permit_checkpoint": "Permit & Checkpoint Readiness",
+          "emergency": "Emergency Preparedness Readiness"
+        },
+        "capabilityPackChecklist": "Capability Pack Checklist",
+        "noCapabilityPackChecklist": "No checklist items yet. Add from the Capability Packs tab.",
+        "coverageMap": "Coverage Map",
+        "coverageRate": "Coverage",
+        "coverageGap": "Coverage Gap",
+        "missingEvidence": "Missing",
+        "evidenceItems": "evidence items",
+        "gapsList": "Coverage Gaps",
+        "fullCoverage": "All segments and POIs have evidence coverage",
+        "loadingMap": "Loading map data...",
+        "noMapData": "No map data available",
+        "mapTokenMissing": "Mapbox Access Token not configured",
+        "mapTokenHint": "Please set VITE_MAPBOX_ACCESS_TOKEN in your .env file",
+        "mapDataPending": "Backend API in development, stay tuned",
+        "coveredPois": "Covered POIs",
+        "partialPois": "Partial Coverage",
+        "uncoveredPois": "Uncovered",
+        "totalGaps": "Total Gaps",
+        "poiType": {
+          "city": "City",
+          "attraction": "Attraction",
+          "hotel": "Hotel",
+          "restaurant": "Restaurant",
+          "transport": "Transport",
+          "other": "Other"
+        },
+        "coverageStatus": {
+          "covered": "Covered",
+          "partial": "Partial",
+          "uncovered": "Uncovered"
+        },
+        "legend": {
+          "covered": "Covered",
+          "partial": "Partial",
+          "uncovered": "Uncovered",
+          "warning": "Warning"
+        },
+        "severity": {
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        },
         "reason": "Reason: {{reason}}",
         "allAvailablePacks": "All Available Packs",
         "noCapabilityPacksAvailable": "No capability packs available",
         "evidenceChainDescription": "All evidence sources and their coverage",
+        "packingList": {
+          "title": "Packing List",
+          "description": "{{total}} items total, {{checked}} completed",
+          "noList": "No packing list generated yet",
+          "generate": "Generate List",
+          "generating": "Generating...",
+          "generateSuccess": "Packing list generated with {{count}} items",
+          "generateFailed": "Failed to generate packing list",
+          "refresh": "Refresh",
+          "lastGenerated": "Last generated: {{date}}",
+          "totalItems": "items",
+          "checked": "completed",
+          "items": "items",
+          "allCategories": "All Categories",
+          "showChecked": "Show checked",
+          "pieces": "pieces",
+          "notePlaceholder": "Add a note...",
+          "save": "Save",
+          "cancel": "Cancel",
+          "empty": {
+            "title": "No Packing List Yet",
+            "description": "Click the button below to generate a personalized packing list. The system will automatically infer season, route type, and other information based on your trip."
+          }
+        },
         "risks": "Risks",
         "checklists": "Checklists",
         "must": "Must",

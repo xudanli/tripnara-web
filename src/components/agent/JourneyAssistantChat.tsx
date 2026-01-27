@@ -55,6 +55,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/format';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
@@ -142,7 +143,7 @@ function StatusOverview({ state }: { state: JourneyState }) {
           </div>
           <div className="flex items-center gap-1 text-muted-foreground">
             <Star className="w-3 h-3 text-amber-500" />
-            预算 ¥{state.stats.spentBudget.toLocaleString()}/¥{state.stats.totalBudget.toLocaleString()}
+            预算 {formatCurrency(state.stats.spentBudget, 'CNY')}/{formatCurrency(state.stats.totalBudget, 'CNY')}
           </div>
         </div>
       </CardContent>

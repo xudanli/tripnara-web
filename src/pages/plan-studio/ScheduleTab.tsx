@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { AlertTriangle, Clock, MapPin, GripVertical, MoreVertical, Plus } from 'lucide-react';
+import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info } from 'lucide-react';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { tripPlannerApi } from '@/api/trip-planner';
-import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict } from '@/types/trip';
+import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict, DayTravelInfoResponse, PersonaAlert } from '@/types/trip';
+import type { SuggestionStats } from '@/types/suggestion';
 import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
 import { format } from 'date-fns';
 import { useDrawer } from '@/components/layout/DashboardLayout';
@@ -21,6 +22,7 @@ import {
 import { EditItineraryItemDialog } from '@/components/trips/EditItineraryItemDialog';
 import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryItemDialog';
 import { EnhancedAddItineraryItemDialog } from '@/components/trips/EnhancedAddItineraryItemDialog';
+import { getTimezoneByCountry } from '@/utils/timezone';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +51,7 @@ import { Input } from '@/components/ui/input';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { toast } from 'sonner';
 import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
+import { TravelSegmentIndicator, TravelSummary } from '@/components/plan-studio/TravelSegmentIndicator';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { usePlaceImages } from '@/hooks/usePlaceImages';
 import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudioContext';
@@ -95,7 +98,10 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const [loading, setLoading] = useState(true);
   const [itineraryItemsMap, setItineraryItemsMap] = useState<Map<string, ItineraryItemDetail[]>>(new Map());
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
+  const [dayTravelInfoMap, setDayTravelInfoMap] = useState<Map<string, DayTravelInfoResponse>>(new Map());
   const [conflicts, setConflicts] = useState<PlanStudioConflict[]>([]);
+  const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
+  const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
   const { setDrawerOpen, setDrawerTab, setHighlightItemId } = useDrawer();
   
   // 对话框状态
@@ -295,6 +301,19 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
       const conflictsData = await tripsApi.getConflicts(tripId);
       setConflicts(conflictsData.conflicts);
       
+      // 加载三人格提醒和建议统计（用于健康度卡片）
+      try {
+        const [alerts, stats] = await Promise.all([
+          tripsApi.getPersonaAlerts(tripId),
+          tripsApi.getSuggestionStats(tripId),
+        ]);
+        setPersonaAlerts(alerts);
+        setSuggestionStats(stats);
+      } catch (alertErr) {
+        console.error('Failed to load persona alerts:', alertErr);
+        // 静默失败，健康度卡片将显示默认状态
+      }
+      
       // 加载所有日期的指标（使用传入的 tripData 或当前的 trip state）
       const currentTrip = tripData || trip;
       if (currentTrip && currentTrip.TripDay && currentTrip.TripDay.length > 0) {
@@ -307,10 +326,36 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
           });
         }
         setDayMetricsMap(metricsMap);
+        
+        // 加载每天的交通信息
+        await loadDayTravelInfo(tripId, currentTrip);
       }
     } catch (err) {
       console.error('Failed to load metrics and conflicts:', err);
       // 如果接口未实现，静默失败，不显示数据
+    }
+  };
+
+  // 加载每天的交通信息
+  const loadDayTravelInfo = async (tripId: string, tripData: TripDetail) => {
+    try {
+      const travelInfoMap = new Map<string, DayTravelInfoResponse>();
+      
+      for (const day of tripData.TripDay || []) {
+        try {
+          const travelInfo = await itineraryItemsApi.getDayTravelInfo(tripId, day.id);
+          if (travelInfo && travelInfo.segments && travelInfo.segments.length > 0) {
+            travelInfoMap.set(day.date, travelInfo);
+          }
+        } catch (err) {
+          // 静默失败，某天没有交通信息是正常的
+          console.debug(`[ScheduleTab] 获取 ${day.date} 交通信息失败:`, err);
+        }
+      }
+      
+      setDayTravelInfoMap(travelInfoMap);
+    } catch (err) {
+      console.error('Failed to load day travel info:', err);
     }
   };
 
@@ -700,11 +745,16 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
           const schedule = schedules.get(day.date);
           const items = schedule?.schedule?.items || [];
           
+          // 标准化日期格式（处理 ISO 和短格式的差异）
+          const normalizedDate = day.date.includes('T') ? day.date.split('T')[0] : day.date;
+          
           // 使用 API 返回的指标数据（不再使用硬编码的后备计算）
-          const apiMetrics = dayMetricsMap.get(day.date);
+          const apiMetrics = dayMetricsMap.get(normalizedDate) || dayMetricsMap.get(day.date);
           
           // 获取该日的冲突（从 API 返回的冲突列表中过滤）
-          const dayConflicts = conflicts.filter(c => c.affectedDays.includes(day.date));
+          const dayConflicts = conflicts.filter(c => 
+            c.affectedDays.includes(day.date) || c.affectedDays.includes(normalizedDate)
+          );
           
           // 每日指标（仅使用 API 数据，如果没有则显示默认值）
           const dailyMetrics = apiMetrics ? {
@@ -738,23 +788,17 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {/* 每日摘要 - 仅显示 API 数据 */}
-                  {apiMetrics ? (
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        <span>总步行: {dailyMetrics.walk} km</span>
-                      </div>
-                      <span>•</span>
-                      <span>车程: {dailyMetrics.drive} min</span>
-                      <span>•</span>
-                      <span>缓冲: {dailyMetrics.buffer} min</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span className="text-xs italic text-gray-400">指标数据加载中...</span>
-                    </div>
-                  )}
+                  {/* 交通信息摘要 */}
+                  {(() => {
+                    const travelSummary = dayTravelInfoMap.get(normalizedDate)?.summary || dayTravelInfoMap.get(day.date)?.summary;
+                    return travelSummary ? (
+                      <TravelSummary 
+                        totalDuration={travelSummary.totalDuration}
+                        totalDistance={travelSummary.totalDistance}
+                        segmentCount={travelSummary.segmentCount}
+                      />
+                    ) : null;
+                  })()}
 
                   {/* 冲突提示 - 优先显示 API 返回的冲突 */}
                   {(dayConflicts.length > 0 || dailyMetrics.conflicts.length > 0) && (
@@ -809,19 +853,51 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                   )}
 
                   {/* 时间轴卡片 - 使用新的 ItineraryItemRow 组件 */}
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-4 space-y-0">
                     {(() => {
                       // 优先使用 ItineraryItemDetail 数据（更完整）
-                      const dayItems = itineraryItemsMap.get(day.date) || [];
+                      const dayItems = itineraryItemsMap.get(day.date) || itineraryItemsMap.get(normalizedDate) || [];
+                      const travelInfo = dayTravelInfoMap.get(normalizedDate) || dayTravelInfoMap.get(day.date);
                       
                       if (dayItems.length > 0) {
-                        return dayItems.map((item, itemIdx) => (
-                          <ItineraryItemRow
+                        return dayItems.map((item, itemIdx) => {
+                          // 查找该行程项的交通段（从上一地点到这里）
+                          const apiSegment = travelInfo?.segments?.find(s => s.toItemId === item.id);
+                          const prevItem = itemIdx > 0 ? dayItems[itemIdx - 1] : null;
+                          
+                          // 检查 item 是否有手动设置的交通信息（使用 !== undefined && !== null 判断，避免 0 被误判）
+                          const hasManualTravelInfo = 
+                            (item.travelFromPreviousDuration !== undefined && item.travelFromPreviousDuration !== null) ||
+                            (item.travelFromPreviousDistance !== undefined && item.travelFromPreviousDistance !== null) ||
+                            (item.travelMode !== undefined && item.travelMode !== null);
+                          
+                          // 优先使用 item 自身的交通信息（用户手动设置的值），否则使用 API 返回的计算值
+                          const segment = hasManualTravelInfo
+                            ? {
+                                fromItemId: prevItem?.id || '',
+                                toItemId: item.id,
+                                fromPlace: prevItem?.Place?.nameCN || prevItem?.Place?.nameEN || '',
+                                toPlace: item.Place?.nameCN || item.Place?.nameEN || '',
+                                duration: item.travelFromPreviousDuration ?? apiSegment?.duration ?? null,
+                                distance: item.travelFromPreviousDistance ?? apiSegment?.distance ?? null,
+                                travelMode: item.travelMode ?? apiSegment?.travelMode ?? null,
+                              }
+                            : apiSegment;
+                          
+                          return (
+                            <div key={item.id}>
+                              {/* 交通段指示器（如果有的话） */}
+                              {segment && itemIdx > 0 && (
+                                <TravelSegmentIndicator segment={segment} />
+                              )}
+                              
+                              <ItineraryItemRow
                             key={item.id}
                             item={item}
                             dayIndex={idx}
                             itemIndex={itemIdx}
                             personaMode="auto"
+                            timezone={getTimezoneByCountry(trip?.destination || '')}
                             placeImages={item.Place?.id ? placeImagesMap.get(item.Place.id) : undefined}
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -874,8 +950,10 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                               // 触发助手提问（直接传递 context，避免异步状态问题）
                               planStudioActions.askAssistantAbout(question, context);
                             } : undefined}
-                          />
-                        ));
+                              />
+                            </div>
+                          );
+                        });
                       }
                       
                       // 如果没有 ItineraryItemDetail，回退到 ScheduleItem
@@ -892,6 +970,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                   dayIndex={idx}
                                   itemIndex={itemIdx}
                                   personaMode="auto"
+                                  timezone={getTimezoneByCountry(trip?.destination || '')}
                                   placeImages={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -1054,67 +1133,131 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
         }) : null}
       </div>
 
-      {/* 右（4/12）：指标面板 + 冲突列表 */}
+      {/* 右（4/12）：健康度卡片 + 冲突列表 */}
       <div className="col-span-12 lg:col-span-4 space-y-6">
-        {/* 指标面板 - 使用 API 数据 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>每日指标</CardTitle>
+        {/* 行程健康度摘要卡片 */}
+        <Card data-tour="schedule-health">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <span className="text-lg">🐻‍❄️</span>
+              行程健康度
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {(() => {
-              // 计算平均指标（从所有日期的指标中计算）
-              let totalWalk = 0;
-              let totalDrive = 0;
-              let totalBuffer = 0;
-              let dayCount = 0;
+          <CardContent className="space-y-4">
+            {/* 三人格评估状态 */}
+            <div className="space-y-3">
+              {/* Abu - 安全 */}
+              {(() => {
+                const abuWarnings = personaAlerts.filter(a => a.persona === 'ABU' && a.severity === 'warning').length;
+                const abuInfos = personaAlerts.filter(a => a.persona === 'ABU' && a.severity === 'info').length;
+                const abuStatus = abuWarnings > 0 ? 'warning' : abuInfos > 0 ? 'info' : 'success';
+                return (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Shield className={cn(
+                        "h-4 w-4",
+                        abuStatus === 'warning' ? 'text-red-500' : 
+                        abuStatus === 'info' ? 'text-amber-500' : 'text-green-500'
+                      )} />
+                      <span className="text-sm font-medium">Abu (安全)</span>
+                    </div>
+                    <Badge variant={abuStatus === 'warning' ? 'destructive' : abuStatus === 'info' ? 'secondary' : 'outline'} className={cn(
+                      "text-xs",
+                      abuStatus === 'success' && 'bg-green-50 text-green-700 border-green-200'
+                    )}>
+                      {abuStatus === 'warning' ? `${abuWarnings} 风险` : 
+                       abuStatus === 'info' ? `${abuInfos} 提醒` : '✓ 通过'}
+                    </Badge>
+                  </div>
+                );
+              })()}
               
-              // 添加防护：确保 dayMetricsMap 存在且是 Map
-              if (dayMetricsMap && dayMetricsMap instanceof Map) {
-                dayMetricsMap.forEach(dayMetrics => {
-                  if (dayMetrics && dayMetrics.metrics) {
-                    totalWalk += dayMetrics.metrics.walk || 0;
-                    totalDrive += dayMetrics.metrics.drive || 0;
-                    totalBuffer += dayMetrics.metrics.buffer || 0;
-                    dayCount++;
-                  }
-                });
-              }
+              {/* Dr.Dre - 节奏 */}
+              {(() => {
+                const drDreTotal = suggestionStats?.byPersona?.drdre?.total || 0;
+                const drDreBlockers = suggestionStats?.byPersona?.drdre?.bySeverity?.blocker || 0;
+                const drDreStatus = drDreBlockers > 0 ? 'warning' : drDreTotal > 0 ? 'info' : 'success';
+                return (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Activity className={cn(
+                        "h-4 w-4",
+                        drDreStatus === 'warning' ? 'text-red-500' : 
+                        drDreStatus === 'info' ? 'text-amber-500' : 'text-green-500'
+                      )} />
+                      <span className="text-sm font-medium">Dr.Dre (节奏)</span>
+                    </div>
+                    <Badge variant={drDreStatus === 'warning' ? 'destructive' : drDreStatus === 'info' ? 'secondary' : 'outline'} className={cn(
+                      "text-xs",
+                      drDreStatus === 'success' && 'bg-green-50 text-green-700 border-green-200'
+                    )}>
+                      {drDreStatus === 'warning' ? `${drDreBlockers} 阻塞` : 
+                       drDreStatus === 'info' ? `${drDreTotal} 建议` : '✓ 良好'}
+                    </Badge>
+                  </div>
+                );
+              })()}
               
-              const avgWalk = dayCount > 0 ? (totalWalk / dayCount).toFixed(1) : '0';
-              const avgDrive = dayCount > 0 ? Math.round(totalDrive / dayCount) : 0;
-              const avgBuffer = dayCount > 0 ? Math.round(totalBuffer / dayCount) : 0;
-              
-              return (
-                <>
-            <div className="p-3 border rounded-lg">
-              <div className="text-sm text-muted-foreground mb-1">平均步行</div>
-                    <div className="text-2xl font-bold">{avgWalk} km</div>
+              {/* Neptune - 完整 */}
+              {(() => {
+                const neptuneTotal = suggestionStats?.byPersona?.neptune?.total || 0;
+                const neptuneBlockers = suggestionStats?.byPersona?.neptune?.bySeverity?.blocker || 0;
+                const neptuneStatus = neptuneBlockers > 0 ? 'warning' : neptuneTotal > 0 ? 'info' : 'success';
+                return (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wrench className={cn(
+                        "h-4 w-4",
+                        neptuneStatus === 'warning' ? 'text-red-500' : 
+                        neptuneStatus === 'info' ? 'text-amber-500' : 'text-green-500'
+                      )} />
+                      <span className="text-sm font-medium">Neptune (完整)</span>
+                    </div>
+                    <Badge variant={neptuneStatus === 'warning' ? 'destructive' : neptuneStatus === 'info' ? 'secondary' : 'outline'} className={cn(
+                      "text-xs",
+                      neptuneStatus === 'success' && 'bg-green-50 text-green-700 border-green-200'
+                    )}>
+                      {neptuneStatus === 'warning' ? `${neptuneBlockers} 问题` : 
+                       neptuneStatus === 'info' ? `${neptuneTotal} 优化` : '✓ 完整'}
+                    </Badge>
+                  </div>
+                );
+              })()}
             </div>
-            <div className="p-3 border rounded-lg">
-              <div className="text-sm text-muted-foreground mb-1">平均车程</div>
-                    <div className="text-2xl font-bold">{avgDrive} min</div>
-            </div>
-            <div className="p-3 border rounded-lg">
-              <div className="text-sm text-muted-foreground mb-1">平均缓冲</div>
-                    <div className="text-2xl font-bold">{avgBuffer} min</div>
-            </div>
-                </>
-              );
-            })()}
+            
+            {/* 最新提醒 */}
+            {personaAlerts.length > 0 && (
+              <div className="pt-3 border-t">
+                <div className="flex items-start gap-2 text-sm">
+                  <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div className="text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {personaAlerts[0].name}：
+                    </span>
+                    {personaAlerts[0].message.length > 50 
+                      ? personaAlerts[0].message.slice(0, 50) + '...' 
+                      : personaAlerts[0].message}
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* 冲突列表 - 使用 API 数据 */}
-        <Card data-tour="schedule-conflicts">
-          <CardHeader>
-            <CardTitle>冲突列表</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {conflicts.length > 0 ? (
-            <div className="space-y-2">
+        {/* 冲突列表 - 仅在有冲突时显示 */}
+        {conflicts.length > 0 && (
+          <Card data-tour="schedule-conflicts">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                冲突列表
+                <Badge variant="destructive" className="ml-auto">{conflicts.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
                 {conflicts.map((conflict) => (
-              <div
+                  <div
                     key={conflict.id}
                     className={cn(
                       'p-2 border rounded cursor-pointer hover:bg-gray-50',
@@ -1125,58 +1268,56 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                         : getGateStatusClasses('NEED_CONFIRM')
                     )}
                     onClick={() => handleFixConflict(conflict.id, conflict.affectedDays[0] || '')}
-              >
+                  >
                     <div className="text-sm font-medium">{conflict.title}</div>
                     <div className="text-xs text-muted-foreground">
                       {conflict.affectedDays.map((d: string) => {
                         const dayIndex = trip?.TripDay?.findIndex(day => day.date === d) ?? -1;
                         return dayIndex >= 0 ? `Day ${dayIndex + 1}` : d;
                       }).join(', ')}
-              </div>
-              </div>
+                    </div>
+                  </div>
                 ))}
               </div>
-            ) : (
-              <div className="text-center py-4 text-sm text-muted-foreground">
-                暂无冲突
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* CTA */}
-        <div className="space-y-2">
-          <Button 
-            className="w-full" 
-            data-tour="schedule-optimize" 
-            onClick={handleRunOptimize}
-            disabled={optimizing}
-          >
-            {optimizing ? (
-              <>
-                <Spinner className="w-4 h-4 mr-2" />
-                {t('planStudio.scheduleTab.optimizing')}
-              </>
-            ) : (
-              t('planStudio.scheduleTab.runOptimize')
-            )}
-          </Button>
-          <Button 
-            variant="outline" 
-            className="w-full" 
-            onClick={handleAutoAddBuffers}
-            disabled={addingBuffers}
-          >
-            {addingBuffers ? (
-              <>
-                <Spinner className="w-4 h-4 mr-2" />
-                {t('planStudio.scheduleTab.addingBuffers')}
-              </>
-            ) : (
-              t('planStudio.scheduleTab.autoAddBuffers')
-            )}
-          </Button>
-        </div>
+        {/* CTA - 仅在有冲突时显示 */}
+        {conflicts.length > 0 && (
+          <div className="space-y-2">
+            <Button 
+              className="w-full" 
+              data-tour="schedule-optimize" 
+              onClick={handleRunOptimize}
+              disabled={optimizing}
+            >
+              {optimizing ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  {t('planStudio.scheduleTab.optimizing')}
+                </>
+              ) : (
+                t('planStudio.scheduleTab.runOptimize')
+              )}
+            </Button>
+            <Button 
+              variant="outline" 
+              className="w-full" 
+              onClick={handleAutoAddBuffers}
+              disabled={addingBuffers}
+            >
+              {addingBuffers ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  {t('planStudio.scheduleTab.addingBuffers')}
+                </>
+              ) : (
+                t('planStudio.scheduleTab.autoAddBuffers')
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
       {/* 编辑对话框 */}
@@ -1191,6 +1332,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
             }
           }}
           onSuccess={loadTrip}
+          timezone={getTimezoneByCountry(trip?.destination || '')}
         />
       )}
 

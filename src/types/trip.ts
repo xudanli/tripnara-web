@@ -135,6 +135,12 @@ export interface Place {
 
 // ==================== 行程项 ====================
 
+// 交通方式
+export type TravelMode = 'DRIVING' | 'WALKING' | 'TRANSIT' | 'TRAIN' | 'FLIGHT' | 'FERRY' | 'BICYCLE' | 'TAXI';
+
+// 预订状态
+export type BookingStatus = 'BOOKED' | 'NEED_BOOKING' | 'NO_BOOKING';
+
 export interface ItineraryItem {
   id: string;
   type: ItineraryItemType;
@@ -154,6 +160,15 @@ export interface ItineraryItem {
   costNote?: string | null;
   isPaid?: boolean | null;
   paidBy?: string | null;
+  // 交通信息字段
+  travelFromPreviousDuration?: number | null;  // 从上一地点的时间（分钟）
+  travelFromPreviousDistance?: number | null;  // 从上一地点的距离（米）
+  travelMode?: TravelMode | null;              // 交通方式
+  // 预订信息字段
+  bookingStatus?: BookingStatus | null;        // 预订状态
+  bookingConfirmation?: string | null;         // 预订确认号
+  bookingUrl?: string | null;                  // 预订链接
+  bookedAt?: string | null;                    // 预订时间
 }
 
 export interface ItineraryItemDetail extends ItineraryItem {
@@ -1010,6 +1025,128 @@ export interface UpdateItineraryItemRequest {
   costNote?: string;
   isPaid?: boolean;
   paidBy?: string;
+}
+
+// ==================== 交通信息 ====================
+
+/**
+ * 交通段信息
+ */
+export interface TravelSegment {
+  fromItemId: string;
+  toItemId: string;
+  fromPlace: string;
+  toPlace: string;
+  duration: number | null;      // 分钟
+  distance: number | null;      // 米
+  travelMode: TravelMode | null;
+}
+
+/**
+ * 一天的交通信息响应
+ */
+export interface DayTravelInfoResponse {
+  dayId: string;
+  date: string;
+  itemCount: number;
+  segments: TravelSegment[];
+  summary: {
+    totalDuration: number;
+    totalDistance: number;
+    segmentCount: number;
+  };
+}
+
+/**
+ * 更新行程项交通信息请求
+ */
+export interface UpdateTravelInfoRequest {
+  travelFromPreviousDuration?: number;
+  travelFromPreviousDistance?: number;
+  travelMode?: TravelMode;
+}
+
+/**
+ * 计算交通信息请求
+ */
+export interface CalculateTravelRequest {
+  defaultTravelMode?: TravelMode;
+}
+
+/**
+ * 计算交通结果项
+ */
+export interface CalculateTravelResultItem {
+  itemId: string;
+  fromPlace: string;
+  toPlace: string;
+  duration: number | null;
+  distance: number | null;
+  travelMode: TravelMode;
+  crossDay?: boolean;
+  calculated: boolean;
+}
+
+/**
+ * 计算整个行程交通信息响应
+ * POST /itinerary-items/trip/:tripId/calculate-all-travel
+ */
+export interface CalculateAllTravelResponse {
+  tripId: string;
+  totalDays: number;
+  totalItems: number;
+  calculatedCount: number;
+  crossDaySegments: number;
+  results: CalculateTravelResultItem[];
+  summary: {
+    totalDuration: number;
+    totalDistance: number;
+    successRate: number;
+  };
+}
+
+/**
+ * 计算单天交通信息响应
+ * POST /itinerary-items/trip/:tripId/days/:dayId/calculate-travel
+ */
+export interface CalculateDayTravelResponse {
+  dayId: string;
+  date: string;
+  itemCount: number;
+  calculatedCount: number;
+  results: CalculateTravelResultItem[];
+  summary: {
+    totalDuration: number;
+    totalDistance: number;
+    successRate: number;
+  };
+}
+
+/**
+ * 修复日期响应
+ * POST /itinerary-items/trip/:tripId/fix-dates
+ */
+export interface FixDatesResponse {
+  tripId: string;
+  fixedCount: number;
+  items: Array<{
+    itemId: string;
+    placeName: string;
+    oldDate: string;
+    newDate: string;
+  }>;
+}
+
+// ==================== 预订信息 ====================
+
+/**
+ * 更新预订状态请求
+ */
+export interface UpdateBookingRequest {
+  bookingStatus?: BookingStatus;
+  bookingConfirmation?: string;
+  bookingUrl?: string;
+  bookedAt?: string;
 }
 
 // ==================== 行程项校验 ====================

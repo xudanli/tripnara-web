@@ -15,11 +15,13 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
+  MessageCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Logo from '@/components/common/Logo';
 import { useAuth } from '@/hooks/useAuth';
+import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -133,6 +135,7 @@ export default function SidebarNavigation({
   const { user, logout, isAuthenticated } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [contactUsOpen, setContactUsOpen] = useState(false);
   
   // Map nav items with translated labels
   const translatedNavItems = navItems.map(item => ({
@@ -385,6 +388,18 @@ export default function SidebarNavigation({
                 <Settings className="mr-2 h-4 w-4" />
                 <span>{t('header.preferences')}</span>
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setContactUsOpen(true);
+                  if (isMobile && onMobileClose) {
+                    onMobileClose();
+                  }
+                }}
+                className="cursor-pointer"
+              >
+                <MessageCircle className="mr-2 h-4 w-4" />
+                <span>{t('header.contact', { defaultValue: '联系我们' })}</span>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleLogout}
@@ -397,6 +412,9 @@ export default function SidebarNavigation({
           </DropdownMenu>
         </div>
       )}
+
+      {/* 联系对话框 */}
+      <ContactUsDialog open={contactUsOpen} onOpenChange={setContactUsOpen} />
     </aside>
   );
 }
