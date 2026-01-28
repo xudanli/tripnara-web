@@ -1192,11 +1192,16 @@ export const itineraryItemsApi = {
    * 获取所有行程项
    * GET /itinerary-items
    */
-  getAll: async (tripDayId?: string): Promise<ItineraryItemDetail[]> => {
+  getAll: async (tripDayId?: string, forceRefresh?: boolean): Promise<ItineraryItemDetail[]> => {
+    const params: any = tripDayId ? { tripDayId } : {};
+    // 如果需要强制刷新，添加时间戳避免缓存
+    if (forceRefresh) {
+      params._t = Date.now();
+    }
     const response = await apiClient.get<ApiResponseWrapper<ItineraryItemDetail[]>>(
       '/itinerary-items',
       {
-        params: tripDayId ? { tripDayId } : undefined,
+        params: Object.keys(params).length > 0 ? params : undefined,
       }
     );
     return handleResponse(response);

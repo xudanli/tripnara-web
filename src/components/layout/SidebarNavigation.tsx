@@ -16,11 +16,14 @@ import {
   ChevronRight,
   LogOut,
   MessageCircle,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import Logo from '@/components/common/Logo';
 import { useAuth } from '@/hooks/useAuth';
+import { useReadinessBadge } from '@/hooks/useReadinessBadge';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 import {
   DropdownMenu,
@@ -99,6 +102,12 @@ const navItems: NavItem[] = [
     path: '/dashboard/execute',
   },
   {
+    key: 'readiness',
+    label: '', // Will be set in component
+    icon: ClipboardCheck,
+    path: '/dashboard/readiness',
+  },
+  {
     key: 'trails',
     label: '', // Will be set in component
     icon: Mountain,
@@ -137,10 +146,15 @@ export default function SidebarNavigation({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [contactUsOpen, setContactUsOpen] = useState(false);
   
-  // Map nav items with translated labels
+  // 获取准备度阻塞数量（用于徽章显示）
+  const { blockers: readinessBlockers } = useReadinessBadge();
+  
+  // Map nav items with translated labels and badges
   const translatedNavItems = navItems.map(item => ({
     ...item,
     label: t(`sidebar.${item.key}`),
+    // 为准备度项添加阻塞数量徽章
+    badge: item.key === 'readiness' && readinessBlockers > 0 ? readinessBlockers : item.badge,
     subItems: item.subItems?.map(subItem => ({
       ...subItem,
       label: t(`sidebar.${subItem.key}`),
@@ -293,9 +307,15 @@ export default function SidebarNavigation({
                         </span>
                       )}
                       {item.badge && (
-                        <span className="bg-primary/20 text-primary text-xs px-2 py-0.5 rounded-full">
+                        <Badge 
+                          variant={item.key === 'readiness' ? 'destructive' : 'secondary'}
+                          className={cn(
+                            'text-xs h-5 min-w-[20px] flex items-center justify-center',
+                            item.key === 'readiness' && 'bg-red-500 hover:bg-red-500'
+                          )}
+                        >
                           {item.badge}
-                        </span>
+                        </Badge>
                       )}
                     </>
                   )}

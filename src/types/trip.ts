@@ -1,4 +1,5 @@
 import type { BaseEntity } from './common';
+import type { PlaceCategory } from './places-routes';
 
 // ==================== 基础类型 ====================
 
@@ -48,17 +49,15 @@ export interface BudgetConfig {
 
 // ==================== 地点类别 ====================
 
-export type PlaceCategory = 
-  | 'RESTAURANT'   // 餐厅
-  | 'CAFE'         // 咖啡厅
-  | 'BAR'          // 酒吧
-  | 'HOTEL'        // 酒店
-  | 'ATTRACTION'   // 景点
-  | 'MUSEUM'       // 博物馆
-  | 'PARK'         // 公园
-  | 'SHOPPING'     // 购物
-  | 'TRANSPORT'    // 交通枢纽
-  | 'OTHER';       // 其他
+/**
+ * 地点类别类型定义
+ * 
+ * 注意：此类型已统一到 @/types/places-routes.ts
+ * 为了保持向后兼容，这里重新导出统一的类型
+ * 
+ * @deprecated 请使用 @/types/places-routes 中的 PlaceCategory
+ */
+export type { PlaceCategory };
 
 export type PlaceBusinessStatus = 
   | 'OPERATIONAL'          // 正常营业
@@ -141,6 +140,21 @@ export type TravelMode = 'DRIVING' | 'WALKING' | 'TRANSIT' | 'TRAIN' | 'FLIGHT' 
 // 预订状态
 export type BookingStatus = 'BOOKED' | 'NEED_BOOKING' | 'NO_BOOKING';
 
+// 跨天显示模式
+export type CrossDayDisplayMode = 'checkin' | 'checkout' | 'normal';
+
+// 跨天信息
+export interface CrossDayInfo {
+  isCrossDay: boolean;           // 是否跨天
+  crossDays: number;             // 跨越天数
+  isCheckoutItem: boolean;       // 是否为退房项（入住日为 false，退房日为 true）
+  displayMode: CrossDayDisplayMode; // 显示模式
+  timeLabels: {
+    start: string;               // 开始时间标签（如 "入住时间"）
+    end: string;                 // 结束时间标签（如 "退房时间"）
+  };
+}
+
 export interface ItineraryItem {
   id: string;
   type: ItineraryItemType;
@@ -169,6 +183,8 @@ export interface ItineraryItem {
   bookingConfirmation?: string | null;         // 预订确认号
   bookingUrl?: string | null;                  // 预订链接
   bookedAt?: string | null;                    // 预订时间
+  // 跨天信息（后端返回）
+  crossDayInfo?: CrossDayInfo | null;          // 跨天显示信息
 }
 
 export interface ItineraryItemDetail extends ItineraryItem {
@@ -1017,6 +1033,12 @@ export interface UpdateItineraryItemRequest {
   // 校验相关字段
   forceCreate?: boolean;       // 强制更新，忽略 WARNING 级别校验
   ignoreWarnings?: string[];  // 忽略的警告类型列表
+  /**
+   * 级联调整模式
+   * - 'auto': 自动调整后续行程项的时间（默认行为）
+   * - 'none': 只调整当前项，不影响后续行程项
+   */
+  cascadeMode?: 'auto' | 'none';
   // 费用相关字段
   estimatedCost?: number;
   actualCost?: number;

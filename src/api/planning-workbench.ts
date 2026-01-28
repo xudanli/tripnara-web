@@ -434,6 +434,144 @@ interface ErrorResponse {
 
 type ApiResponseWrapper<T> = SuccessResponse<T> | ErrorResponse;
 
+// ==================== 准备度入口类型定义 ====================
+
+/**
+ * 准备度发现项
+ */
+export interface ReadinessFindingItem {
+  id?: string;
+  message: string;
+  category?: string;
+  tasks?: string[];
+  evidence?: string;
+}
+
+/**
+ * 准备度发现
+ */
+export interface ReadinessFinding {
+  destinationId: string;
+  packId: string;
+  blockers: ReadinessFindingItem[];
+  must: ReadinessFindingItem[];
+  should: ReadinessFindingItem[];
+  optional: ReadinessFindingItem[];
+}
+
+/**
+ * 准备度汇总
+ */
+export interface ReadinessSummary {
+  totalBlockers: number;
+  totalMust: number;
+  totalShould: number;
+  totalOptional: number;
+}
+
+/**
+ * 准备度快捷链接
+ */
+export interface ReadinessQuickLinks {
+  personalizedChecklist: string;
+  riskWarnings: string;
+  readinessScore: string;
+  coverageMap: string;
+}
+
+/**
+ * 行程准备度响应
+ */
+export interface TripReadinessResponse {
+  findings: ReadinessFinding[];
+  summary: ReadinessSummary;
+  readinessUrl: string;
+  quickLinks: ReadinessQuickLinks;
+}
+
+/**
+ * 行程准备度分数链接响应
+ */
+export interface TripReadinessScoreLinksResponse {
+  message: string;
+  readinessScoreUrl: string;
+  readinessChecklistUrl: string;
+  readinessRiskWarningsUrl: string;
+  readinessCoverageMapUrl: string;
+}
+
+/**
+ * 天气数据获取结果项
+ */
+export interface WeatherFetchResultItem {
+  placeId: number;
+  placeName: string;
+  status: 'success' | 'failed' | 'skipped';
+  error?: string;
+  weatherData?: {
+    temperature: number;
+    condition: string;
+    source: string;
+  };
+}
+
+/**
+ * 天气数据获取响应
+ */
+export interface FetchWeatherResponse {
+  totalPlaces: number;
+  processedPlaces: number;
+  successCount: number;
+  failedCount: number;
+  results: WeatherFetchResultItem[];
+}
+
+/**
+ * 证据类型
+ */
+export type EvidenceType = 'weather' | 'road_closure' | 'opening_hours';
+
+/**
+ * 证据数据获取结果项
+ */
+export interface EvidenceFetchResultItem {
+  placeId: number;
+  placeName: string;
+  evidenceTypes: EvidenceType[];
+  status: 'success' | 'partial' | 'failed';
+  errors?: Record<string, string>; // 错误信息，key 为证据类型
+  fetched?: {
+    weather?: {
+      temperature: number;
+      condition: string;
+      source: string;
+    };
+    road_closure?: {
+      isOpen: boolean;
+      riskLevel: number;
+      source: string;
+    };
+    opening_hours?: {
+      hours: string;
+      isOpen: boolean;
+      source: string;
+    };
+  };
+}
+
+/**
+ * 证据数据获取响应
+ */
+export interface FetchEvidenceResponse {
+  totalPlaces: number;
+  processedPlaces: number;
+  successCount: number;
+  partialCount: number;
+  failedCount: number;
+  requestedEvidenceTypes: EvidenceType[];
+  results: EvidenceFetchResultItem[];
+}
+
 /**
  * 处理API响应
  */
@@ -1214,6 +1352,184 @@ export const planningWorkbenchApi = {
       } else {
         throw new Error(error.message || '获取预算评估结果失败，请稍后重试');
       }
+    }
+  },
+
+  // ==================== 准备度入口 API ====================
+
+  /**
+   * 获取行程准备度检查结果
+   * GET /api/planning-workbench/trips/:tripId/readiness
+   * 
+   * 从规划工作台获取指定行程的准备度检查结果
+   */
+  getTripReadiness: async (tripId: string, lang?: 'en' | 'zh'): Promise<TripReadinessResponse> => {
+    try {
+      const params = lang ? { lang } : {};
+      const response = await apiClient.get<ApiResponseWrapper<TripReadinessResponse>>(
+        `/planning-workbench/trips/${tripId}/readiness`,
+        { params }
+      );
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('[Planning Workbench API] ❌ getTripReadiness 请求失败:', {
+        error,
+        tripId,
+        lang,
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * 获取行程准备度分数链接
+   * GET /api/planning-workbench/trips/:tripId/readiness/score
+   * 
+   * 获取准备度分数相关的 API 链接
+   */
+  getTripReadinessScoreLinks: async (tripId: string): Promise<TripReadinessScoreLinksResponse> => {
+    try {
+      const response = await apiClient.get<ApiResponseWrapper<TripReadinessScoreLinksResponse>>(
+        `/planning-workbench/trips/${tripId}/readiness/score`
+      );
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('[Planning Workbench API] ❌ getTripReadinessScoreLinks 请求失败:', {
+        error,
+        tripId,
+      });
+      throw error;
+    }
+  },
+
+  // ==================== 证据数据获取 API ====================
+
+  /**
+   * 批量获取行程地点的所有类型证据数据（推荐）
+   * POST /api/planning-workbench/trips/:tripId/fetch-evidence
+   * 
+   * 为指定行程的地点批量获取所有类型的证据数据（天气、道路封闭、开放时间），
+   * 证据数据会自动更新到 Place 的 metadata 中
+   * 
+   * @param tripId 行程 ID
+   * @param options 选项
+   * @param options.placeIds 指定要获取证据的地点 ID 列表，不提供则处理所有缺少证据的地点
+   * @param options.evidenceTypes 要获取的证据类型，不提供则获取所有类型
+   * @param options.forceRefresh 是否强制刷新已有证据数据，默认为 false
+   */
+  fetchEvidence: async (
+    tripId: string,
+    options?: {
+      placeIds?: number[];
+      evidenceTypes?: EvidenceType[];
+      forceRefresh?: boolean;
+    }
+  ): Promise<FetchEvidenceResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 fetchEvidence 请求:', {
+        tripId,
+        options,
+      });
+
+      const params: Record<string, string> = {};
+      if (options?.placeIds && options.placeIds.length > 0) {
+        params.placeIds = options.placeIds.join(',');
+      }
+      if (options?.evidenceTypes && options.evidenceTypes.length > 0) {
+        params.evidenceTypes = options.evidenceTypes.join(',');
+      }
+      if (options?.forceRefresh) {
+        params.forceRefresh = 'true';
+      }
+      
+      const response = await apiClient.post<ApiResponseWrapper<FetchEvidenceResponse>>(
+        `/planning-workbench/trips/${tripId}/fetch-evidence`,
+        {},
+        { 
+          params,
+          timeout: 60000, // 60 秒超时（批量获取可能需要较长时间）
+        }
+      );
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] ✅ fetchEvidence 成功:', {
+        totalPlaces: wrappedResponse.totalPlaces,
+        processedPlaces: wrappedResponse.processedPlaces,
+        successCount: wrappedResponse.successCount,
+        partialCount: wrappedResponse.partialCount,
+        failedCount: wrappedResponse.failedCount,
+        requestedEvidenceTypes: wrappedResponse.requestedEvidenceTypes,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] ❌ fetchEvidence 请求失败:', {
+        error,
+        tripId,
+        options,
+        message: error.message,
+        response: error.response?.data,
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * 批量获取行程地点的天气数据
+   * POST /api/planning-workbench/trips/:tripId/fetch-weather
+   * 
+   * 为指定行程的地点批量获取天气数据，天气数据会自动更新到 Place 的 metadata 中
+   * 
+   * @deprecated 推荐使用 fetchEvidence 接口，可以一次性获取所有类型的证据数据
+   */
+  fetchWeather: async (
+    tripId: string,
+    options?: {
+      placeIds?: number[];
+      forceRefresh?: boolean;
+    }
+  ): Promise<FetchWeatherResponse> => {
+    try {
+      console.log('[Planning Workbench API] 发送 fetchWeather 请求:', {
+        tripId,
+        options,
+      });
+
+      const params: Record<string, string> = {};
+      if (options?.placeIds && options.placeIds.length > 0) {
+        params.placeIds = options.placeIds.join(',');
+      }
+      if (options?.forceRefresh) {
+        params.forceRefresh = 'true';
+      }
+      
+      const response = await apiClient.post<ApiResponseWrapper<FetchWeatherResponse>>(
+        `/planning-workbench/trips/${tripId}/fetch-weather`,
+        {},
+        { 
+          params,
+          timeout: 60000, // 60 秒超时
+        }
+      );
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] ✅ fetchWeather 成功:', {
+        totalPlaces: wrappedResponse.totalPlaces,
+        processedPlaces: wrappedResponse.processedPlaces,
+        successCount: wrappedResponse.successCount,
+        failedCount: wrappedResponse.failedCount,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] ❌ fetchWeather 请求失败:', {
+        error,
+        tripId,
+        options,
+        message: error.message,
+        response: error.response?.data,
+      });
+      throw error;
     }
   },
 };

@@ -27,8 +27,12 @@ import { toast } from 'sonner';
 import { useContextApi } from '@/hooks';
 import type { ContextPackage } from '@/api/context';
 import PersonaCard from '@/components/planning-workbench/PersonaCard';
+import BudgetProgress from '@/components/planning-workbench/BudgetProgress';
+import BudgetBreakdownChart from '@/components/planning-workbench/BudgetBreakdownChart';
+import DecisionTimeline, { type DecisionLogEntry } from '@/components/planning-workbench/DecisionTimeline';
 import ComplianceRulesCard from '@/components/trips/ComplianceRulesCard';
 import EvidenceDrawer from '@/components/layout/EvidenceDrawer';
+import type { RecommendationItem } from '@/api/planning-workbench';
 import { cn } from '@/lib/utils';
 import {
   getGateStatusIcon,
@@ -839,7 +843,43 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <PersonaCard persona={result.uiOutput.personas.abu} />
             <PersonaCard persona={result.uiOutput.personas.drdre} />
-            <PersonaCard persona={result.uiOutput.personas.neptune} />
+            <PersonaCard 
+              persona={result.uiOutput.personas.neptune}
+              showApplyButton={true}
+              onApplyRecommendation={async (rec: RecommendationItem) => {
+                try {
+                  // 调用调整方案 API 应用 Neptune 的建议
+                  // 使用 modify_constraint 类型，在 data 中传递 Neptune 建议详情
+                  const adjustResult = await planningWorkbenchApi.adjustPlan(
+                    result.planState.plan_id,
+                    {
+                      adjustments: [{
+                        type: 'modify_constraint',
+                        data: {
+                          source: 'neptune_recommendation',
+                          action: rec.action,
+                          reason: rec.reason,
+                          impact: rec.impact,
+                        },
+                      }],
+                      regenerate: true,
+                    }
+                  );
+                  
+                  toast.success('替代方案已应用，正在重新生成规划...');
+                  
+                  // 刷新方案数据
+                  if (adjustResult.newPlanId) {
+                    await loadAvailablePlans();
+                    loadBudgetEvaluation(adjustResult.newPlanId);
+                  }
+                } catch (err: any) {
+                  console.error('Failed to apply Neptune recommendation:', err);
+                  toast.error(err.message || '应用替代方案失败，请稍后重试');
+                  throw err;
+                }
+              }}
+            />
           </div>
 
           {/* 第三层：技术信息（可折叠） */}
@@ -1194,13 +1234,13 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
         activeTab={evidenceDrawerTab}
       />
 
-      {/* 预算决策日志对话框 */}
+      {/* 预算决策日志对话框 - 使用时间线组件 */}
       <Dialog open={budgetLogDialogOpen} onOpenChange={setBudgetLogDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>预算决策日志</DialogTitle>
             <DialogDescription>
-              查看预算评估的完整决策历史记录
+              查看预算评估的完整决策演进历史
             </DialogDescription>
           </DialogHeader>
           {loadingBudgetLog ? (
@@ -1208,67 +1248,22 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
               <Spinner className="w-8 h-8" />
             </div>
           ) : budgetDecisionLog && budgetDecisionLog.items.length > 0 ? (
-            <div className="space-y-4">
-              {budgetDecisionLog.items.map((item) => (
-                <Card key={item.id} className="border-l-4 border-l-blue-500">
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              item.verdict === 'ALLOW'
-                                ? 'default'
-                                : item.verdict === 'NEED_ADJUST'
-                                ? 'secondary'
-                                : 'destructive'
-                            }
-                          >
-                            {item.verdict === 'ALLOW'
-                              ? '通过'
-                              : item.verdict === 'NEED_ADJUST'
-                              ? '需调整'
-                              : '拒绝'}
-                          </Badge>
-                          {item.persona && (
-                            <Badge variant="outline">{item.persona}</Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(item.timestamp), 'yyyy-MM-dd HH:mm:ss')}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium">
-                          预估成本: {formatCurrency(item.estimatedCost, currency)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          预算: {item.budgetConstraint.total ? formatCurrency(item.budgetConstraint.total, currency) : '-'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-sm mt-3">{item.reason}</div>
-                    {item.evidenceRefs && item.evidenceRefs.length > 0 && (
-                      <div className="mt-2">
-                        <div className="text-xs text-muted-foreground mb-1">证据引用:</div>
-                        <div className="flex flex-wrap gap-1">
-                          {item.evidenceRefs.map((ref, i) => (
-                            <Badge key={i} variant="outline" className="text-xs">
-                              {ref}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-              {budgetDecisionLog.total > budgetDecisionLog.items.length && (
-                <div className="text-center text-sm text-muted-foreground py-2">
-                  显示 {budgetDecisionLog.items.length} / {budgetDecisionLog.total} 条记录
-                </div>
-              )}
-            </div>
+            <DecisionTimeline
+              entries={budgetDecisionLog.items.map((item): DecisionLogEntry => ({
+                id: item.id,
+                timestamp: item.timestamp,
+                persona: item.persona || 'ABU',
+                action: `预算评估 - ${item.verdict === 'ALLOW' ? '通过' : item.verdict === 'NEED_ADJUST' ? '需调整' : '拒绝'}`,
+                verdict: item.verdict,
+                reason: `${item.reason} (预估: ${formatCurrency(item.estimatedCost, currency)} / 预算: ${item.budgetConstraint.total ? formatCurrency(item.budgetConstraint.total, currency) : '-'})`,
+                evidenceRefs: item.evidenceRefs,
+              }))}
+              defaultVisibleCount={10}
+              onEvidenceClick={(ref) => {
+                // 可以在这里打开证据抽屉
+                console.log('Evidence clicked:', ref);
+              }}
+            />
           ) : (
             <div className="text-center py-8 text-muted-foreground">
               <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
@@ -1469,44 +1464,46 @@ function PlanPreviewContent({
               </Badge>
             </div>
 
-            {/* 预算对比 */}
+            {/* 预算进度（使用新组件） */}
             {planState.budget?.total && (() => {
               // 从预算决策日志中获取预计成本，如果没有则从 planState 中获取
-              const estimatedCost = budgetDecisionLog?.items?.[0]?.estimatedCost || planState.budget?.estimatedCost;
+              const estimatedCost = budgetDecisionLog?.items?.[0]?.estimatedCost || planState.budget?.estimatedCost || 0;
+              const alertThreshold = planState.budget?.alertThreshold || 0.8;
+              
               return (
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  <h5 className="text-sm font-semibold">预算对比</h5>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <div className="text-muted-foreground mb-1">总预算</div>
-                      <div className="font-semibold">
-                        {formatCurrency(planState.budget.total, currency)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground mb-1">预计支出</div>
-                      <div className="font-semibold">
-                        {estimatedCost ? formatCurrency(estimatedCost, currency) : '-'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground mb-1">
-                        {estimatedCost && estimatedCost > planState.budget.total
-                          ? '超支'
-                          : '节省'}
-                      </div>
-                      <div className={cn(
-                        'font-semibold',
-                        estimatedCost && estimatedCost > planState.budget.total
-                          ? 'text-red-600'
-                          : 'text-green-600'
-                      )}>
-                        {estimatedCost
-                          ? formatCurrency(Math.abs(estimatedCost - planState.budget.total), currency)
-                          : '-'}
-                      </div>
-                    </div>
-                  </div>
+                <div className="p-4 bg-muted rounded-lg">
+                  <BudgetProgress
+                    spent={estimatedCost}
+                    total={planState.budget.total}
+                    alertThreshold={alertThreshold}
+                    currency={currency}
+                    showDetails={true}
+                  />
+                </div>
+              );
+            })()}
+            
+            {/* 预算分类占比图表 */}
+            {planState.budget?.categoryLimits && (() => {
+              const categories = [
+                { name: '住宿', key: 'accommodation' as const, value: planState.budget.categoryLimits?.accommodation || 0 },
+                { name: '交通', key: 'transportation' as const, value: planState.budget.categoryLimits?.transportation || 0 },
+                { name: '餐饮', key: 'food' as const, value: planState.budget.categoryLimits?.food || 0 },
+                { name: '活动', key: 'activities' as const, value: planState.budget.categoryLimits?.activities || 0 },
+                { name: '其他', key: 'other' as const, value: planState.budget.categoryLimits?.other || 0 },
+              ].filter(c => c.value > 0);
+              
+              if (categories.length === 0) return null;
+              
+              return (
+                <div className="p-4 bg-muted rounded-lg">
+                  <h5 className="text-sm font-semibold mb-3">预算分配</h5>
+                  <BudgetBreakdownChart
+                    categories={categories}
+                    totalBudget={planState.budget.total || 0}
+                    currency={currency}
+                    size="sm"
+                  />
                 </div>
               );
             })()}

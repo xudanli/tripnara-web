@@ -24,9 +24,15 @@ import { DiscoverBoxIllustration } from '@/components/illustrations';
 const PLACE_CATEGORIES: { value: PlaceCategory; label: string }[] = [
   { value: 'ATTRACTION', label: '景点' },
   { value: 'RESTAURANT', label: '餐厅' },
+  { value: 'CAFE', label: '咖啡厅' },
+  { value: 'BAR', label: '酒吧' },
   { value: 'SHOPPING', label: '购物' },
   { value: 'HOTEL', label: '酒店' },
+  { value: 'MUSEUM', label: '博物馆' },
+  { value: 'PARK', label: '公园' },
+  { value: 'TRANSPORT', label: '交通枢纽' },
   { value: 'TRANSIT_HUB', label: '交通枢纽' },
+  { value: 'OTHER', label: '其他' },
 ];
 
 export default function PlacesPage() {

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyMedia } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight } from 'lucide-react';
+import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight, CloudSun } from 'lucide-react';
 import { format } from 'date-fns';
 import { TripPlanning } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/format';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { getPersonaIconColorClasses } from '@/lib/persona-colors';
+import { TripCardWeather } from '@/components/weather/WeatherCard';
 
 type StatusFilter = 'all' | string;
 
@@ -346,6 +347,16 @@ export default function TripsPage() {
                           {trip.endDate ? format(new Date(trip.endDate), 'yyyy-MM-dd') : 'N/A'}
                         </span>
                       </div>
+                      {/* 即将出发的行程显示目的地天气 */}
+                      {trip.destination && trip.startDate && trip.status !== 'CANCELLED' && (
+                        <div className="mt-2">
+                          <TripCardWeather 
+                            countryCode={trip.destination} 
+                            startDate={trip.startDate}
+                            showOnlyUpcoming={true}
+                          />
+                        </div>
+                      )}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">

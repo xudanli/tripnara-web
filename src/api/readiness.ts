@@ -1170,6 +1170,9 @@ export interface CoverageMapSegment {
   hazards: SegmentHazard[];
 }
 
+/** 证据状态 */
+export type EvidenceStatus = 'fetched' | 'missing' | 'fetching' | 'failed';
+
 /** 覆盖缺口 */
 export interface CoverageGap {
   id: string;
@@ -1180,6 +1183,12 @@ export interface CoverageGap {
   message: string;
   missingEvidence?: EvidenceType[];
   hazards?: string[];
+  // 优化后的新字段
+  affectedDays?: number[];        // 受影响的天数列表
+  affectedPois?: string[];       // 受影响的 POI ID 列表
+  evidenceStatus?: EvidenceStatus; // 证据获取状态
+  lastUpdated?: string;          // 最后更新时间
+  dataSource?: string;           // 数据来源
 }
 
 /** 覆盖统计 */
@@ -1196,6 +1205,29 @@ export interface CoverageSummary {
   coverageRate: number;
 }
 
+/** 证据状态摘要 */
+export interface EvidenceStatusSummary {
+  total: number;
+  fetched: number;
+  missing: number;
+  fetching: number;
+  failed: number;
+}
+
+/** 数据新鲜度 */
+export interface DataFreshness {
+  weather?: string;        // ISO 时间戳
+  roadClosure?: string;   // ISO 时间戳
+  openingHours?: string;  // ISO 时间戳
+}
+
+/** 按严重程度分组的警告 */
+export interface WarningsBySeverity {
+  high: CoverageGap[];
+  medium: CoverageGap[];
+  low: CoverageGap[];
+}
+
 /** 覆盖地图响应 */
 export interface CoverageMapResponse {
   tripId: string;
@@ -1206,6 +1238,12 @@ export interface CoverageMapResponse {
   segments: CoverageMapSegment[];
   gaps: CoverageGap[];
   summary: CoverageSummary;
+  // 优化后的新字段
+  deduplicatedWarnings?: CoverageGap[];      // 去重后的警告列表
+  warningsBySeverity?: WarningsBySeverity;   // 按严重程度分组的警告
+  evidenceStatusSummary?: EvidenceStatusSummary; // 证据状态摘要
+  calculatedAt?: string;                     // 计算时间戳
+  dataFreshness?: DataFreshness;             // 数据新鲜度
 }
 
 // ==================== 准备度分数类型定义 ====================

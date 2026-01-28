@@ -29,6 +29,9 @@ import type {
   GapSeverity,
   PlannerResponseMeta,
   DetectedGap,
+  ResponseItineraryGap,
+  GapDisplayPreferences,
+  GapType,
 } from '@/api/trip-planner';
 import { IntentUncertainty } from '@/api/trip-planner';
 import { GuardianPanel, DisclaimerBanner } from './guardian';
@@ -65,6 +68,8 @@ import { usePlanStudioAssistant, type SelectedContext, type PendingSuggestion } 
 import { tripsApi } from '@/api/trips';
 import { tripPlannerApi } from '@/api/trip-planner';
 import { toast } from 'sonner';
+import { GapDisplayControl } from './GapDisplayControl';
+import { GapList } from './GapList';
 
 /**
  * 安全使用 PlanStudio 上下文
@@ -1712,8 +1717,11 @@ function GapHighlightCard({
 }
 
 /**
- * 澄清选项按钮组
- * 用于显示意图澄清选项
+ * 快捷操作按钮组
+ * 视觉设计原则：
+ * - Clarity over Charm：统一风格，不误导用户
+ * - Quiet confidence：克制配色，网格布局保持秩序
+ * - Decision is a UI primitive：所有选项平等呈现
  */
 function ClarificationOptions({ 
   actions, 
@@ -1730,10 +1738,6 @@ function ClarificationOptions({
 }) {
   const [freeText, setFreeText] = useState('');
   
-  // 分离主要和次要选项
-  const primaryActions = actions.filter(a => a.style === 'primary');
-  const secondaryActions = actions.filter(a => a.style !== 'primary');
-  
   const handleFreeTextSubmit = () => {
     if (freeText.trim() && onFreeTextSubmit) {
       onFreeTextSubmit(freeText.trim());
@@ -1743,51 +1747,34 @@ function ClarificationOptions({
 
   return (
     <div className="mt-3 space-y-3">
-      {/* 选项按钮 */}
-    <div className="flex flex-wrap gap-2">
-        {/* 主要选项 */}
-        {primaryActions.map((action) => (
-          <button
-          key={action.id}
-            onClick={() => onSelect(action)}
-          disabled={disabled}
-            className={cn(
-              "flex-1 min-w-[140px] px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
-              "bg-primary text-primary-foreground hover:bg-primary/90",
-              "border-2 border-primary",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
-            )}
-          >
-            <span className="block">{action.label}</span>
-            {action.description && (
-              <span className="block text-[11px] opacity-80 mt-0.5">
-                {action.description}
-              </span>
-            )}
-          </button>
-        ))}
-        
-        {/* 次要选项 */}
-        {secondaryActions.map((action) => (
+      {/* 选项按钮 - 使用 grid 网格布局保持整齐 */}
+      <div className="grid grid-cols-2 gap-2">
+        {actions.map((action) => (
           <button
             key={action.id}
             onClick={() => onSelect(action)}
             disabled={disabled}
             className={cn(
-              "flex-1 min-w-[120px] px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
-              "bg-slate-100 text-slate-700 hover:bg-slate-200",
-              "border border-slate-200",
-              "disabled:opacity-50 disabled:cursor-not-allowed"
+              // 基础样式
+              "px-3 py-2.5 rounded-xl text-sm transition-all text-left",
+              // 统一 outline 风格 - 所有选项平等呈现
+              "bg-white hover:bg-slate-50 active:bg-slate-100",
+              "border border-slate-200 hover:border-slate-300",
+              "text-slate-700",
+              // 主要选项通过细微差异区分（更深的边框）
+              action.style === 'primary' && "border-slate-300 font-medium",
+              // 禁用状态
+              "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
             )}
           >
-            <span className="block">{action.label}</span>
+            <span className="block leading-snug">{action.label}</span>
             {action.description && (
-              <span className="block text-[11px] text-slate-500 mt-0.5">
+              <span className="block text-[11px] text-slate-500 mt-0.5 leading-tight">
                 {action.description}
               </span>
             )}
           </button>
-      ))}
+        ))}
       </div>
       
       {/* 自由输入框（当 followUp.type 为 text 时） */}
@@ -2368,9 +2355,27 @@ function MessageBubble({
           />
         )}
 
-        {/* 🆕 缺口检测面板 */}
-        {!isUser && message.meta?.detectedGaps && message.meta.detectedGaps.length > 0 && !isTyping && (
-          <DetectedGapsPanel gaps={message.meta.detectedGaps} />
+        {/* 🆕 缺口检测面板 - 增强版（带偏好控制） */}
+        {!isUser && message.meta?.detectedGaps && message.meta.detectedGaps.length > 0 && !isTyping && gapPreferences && (
+          <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <GapDisplayControl
+              preferences={gapPreferences}
+              onPreferencesChange={handlePreferencesChange}
+              tripId={tripId}
+              sessionId={sessionId}
+            />
+            <GapList
+              gaps={message.meta.detectedGaps as ResponseItineraryGap[]}
+              preferences={gapPreferences}
+              selectedGaps={selectedGaps}
+              onSelectGaps={setSelectedGaps}
+              onIgnoreGap={handleIgnoreGap}
+              onIgnoreGapsBatch={handleIgnoreGapsBatch}
+              onUnignoreGap={handleUnignoreGap}
+              onUnignoreGapsBatch={handleUnignoreGapsBatch}
+              tripId={tripId}
+            />
+          </div>
         )}
 
         {/* 🆕 快捷操作按钮（当后端返回 quickActions 时显示，无论是否为澄清场景） */}
@@ -2409,6 +2414,11 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
   const [newMessageId, setNewMessageId] = useState<string | null>(null);
   // itemId -> 中文名称映射
   const [itemNameMap, setItemNameMap] = useState<Map<string, string>>(new Map());
+  
+  // 缺口偏好状态
+  const [gapPreferences, setGapPreferences] = useState<GapDisplayPreferences | null>(null);
+  const [selectedGaps, setSelectedGaps] = useState<string[]>([]);
+  const [loadingPreferences, setLoadingPreferences] = useState(false);
 
   // 左右联动上下文
   const { 
@@ -2448,6 +2458,90 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
       setTripUpdateCount(prev => prev + 1);
     },
   });
+
+  // 🆕 加载缺口偏好
+  useEffect(() => {
+    const loadGapPreferences = async () => {
+      if (!tripId || !sessionId) return;
+      try {
+        setLoadingPreferences(true);
+        const preferences = await tripPlannerApi.getGapPreferences({ tripId, sessionId });
+        setGapPreferences(preferences);
+      } catch (error: any) {
+        console.error('[TripPlannerAssistant] 加载缺口偏好失败:', error);
+        // 使用默认偏好
+        setGapPreferences({
+          collapsed: false,
+          showOnlyCritical: false,
+          filterTypes: [],
+          ignoredPatterns: [],
+        });
+      } finally {
+        setLoadingPreferences(false);
+      }
+    };
+    
+    if (tripId && sessionId) {
+      loadGapPreferences();
+    }
+  }, [tripId, sessionId]);
+
+  // 🆕 更新缺口偏好
+  const handlePreferencesChange = async (updates: Partial<GapDisplayPreferences>) => {
+    if (!gapPreferences) return;
+    
+    const newPreferences = { ...gapPreferences, ...updates };
+    setGapPreferences(newPreferences);
+    
+    try {
+      await tripPlannerApi.updateGapPreferences({
+        ...updates,
+        tripId,
+        sessionId,
+      });
+    } catch (error: any) {
+      console.error('[TripPlannerAssistant] 更新缺口偏好失败:', error);
+      toast.error('更新偏好失败');
+      // 回滚
+      setGapPreferences(gapPreferences);
+    }
+  };
+
+  // 🆕 忽略缺口
+  const handleIgnoreGap = async (gapId: string, gapType: GapType) => {
+    try {
+      await tripPlannerApi.ignoreGap({ gapId, gapType, tripId });
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  // 🆕 批量忽略缺口
+  const handleIgnoreGapsBatch = async (gapIds: string[]) => {
+    try {
+      await tripPlannerApi.ignoreGapsBatch({ gapIds, tripId });
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  // 🆕 取消忽略缺口
+  const handleUnignoreGap = async (gapId: string) => {
+    try {
+      await tripPlannerApi.unignoreGap(gapId, { tripId });
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  // 🆕 批量取消忽略缺口
+  const handleUnignoreGapsBatch = async (gapIds: string[]) => {
+    try {
+      await tripPlannerApi.unignoreGapsBatch({ gapIds, tripId });
+    } catch (error: any) {
+      throw error;
+    }
+  };
 
   // 🆕 监听行程更新，自动触发 NARA 重新检查
   useEffect(() => {
@@ -2886,11 +2980,12 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
           onAskAbout={handleSendCommand}
         />
 
-        {/* 快捷命令条 - 输入框上方（智能切换：有上下文时显示上下文命令，无上下文时显示通用命令） */}
+        {/* 快捷命令条 - 输入框上方（智能切换：有上下文时显示上下文命令，无上下文时显示通用命令）
+            当最新消息有 quickActions 时隐藏，避免与消息中的动态按钮重复 */}
         <QuickCommandsBar
           onCommandClick={handleSendCommand}
           disabled={loading || !isInitialized}
-          visible={messages.length > 0}
+          visible={messages.length > 0 && !((messages[messages.length - 1]?.quickActions?.length ?? 0) > 0)}
           context={selectedContext}
         />
         

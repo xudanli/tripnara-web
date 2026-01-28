@@ -10,6 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle, Info, DollarSign, MapPin, Utensils, Coffee, Car, Navigation, CalendarCheck, Link2 } from 'lucide-react';
+import { AlertCircle, Info, DollarSign, MapPin, Utensils, Coffee, Car, Navigation, CalendarCheck, Link2, AlertTriangle } from 'lucide-react';
 
 // 行程类型选项
 const ITEM_TYPE_OPTIONS: { value: ItineraryItemType; label: string; icon: typeof MapPin }[] = [
@@ -51,6 +61,11 @@ const BOOKING_STATUS_OPTIONS: { value: BookingStatus; label: string; icon: strin
   { value: 'NO_BOOKING', label: '无需预订', icon: '✓' },
 ];
 
+interface TripDayInfo {
+  id: string;
+  date: string; // YYYY-MM-DD 格式
+}
+
 interface EditItineraryItemDialogProps {
   item: ItineraryItem;
   open: boolean;
@@ -58,6 +73,10 @@ interface EditItineraryItemDialogProps {
   onSuccess: () => void;
   /** 目的地时区（IANA 格式，如 "Atlantic/Reykjavik"），用于正确转换时间 */
   timezone?: string;
+  /** @deprecated 后端已自动处理跨天 tripDayId 更新，此参数不再需要 */
+  tripDays?: TripDayInfo[];
+  /** @deprecated 后端已自动处理跨天 tripDayId 更新，此参数不再需要 */
+  currentTripDayId?: string;
 }
 
 export function EditItineraryItemDialog({
@@ -66,6 +85,10 @@ export function EditItineraryItemDialog({
   onOpenChange,
   onSuccess,
   timezone = 'UTC',
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  tripDays: _tripDays,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  currentTripDayId: _currentTripDayId,
 }: EditItineraryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +97,10 @@ export function EditItineraryItemDialog({
   const [showCostFields, setShowCostFields] = useState(false);
   const [showTravelFields, setShowTravelFields] = useState(false);
   const [showBookingFields, setShowBookingFields] = useState(false);
+  // 级联影响确认弹窗
+  const [showCascadeConfirm, setShowCascadeConfirm] = useState(false);
+  const [cascadeCount, setCascadeCount] = useState(0);
+  const [cascadeMessage, setCascadeMessage] = useState('');
   const [formData, setFormData] = useState<UpdateItineraryItemRequest & {
     travelFromPreviousDuration?: number;
     travelFromPreviousDistance?: number;
@@ -142,19 +169,28 @@ export function EditItineraryItemDialog({
   // 检测开始时间是否改变（用于显示智能调整提示）
   const startTimeChanged = formData.startTime !== originalStartTime;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 执行更新（支持强制更新和级联模式选择）
+  const doUpdate = async (forceCreate: boolean = false, cascadeMode?: 'auto' | 'none') => {
     setLoading(true);
     setError(null);
 
     try {
+      // 后端会自动检测跨日期调整并更新 tripDayId，前端无需手动计算
+      // 只需发送 startTime 和 cascadeMode，后端会处理 tripDayId 的更新
+
       // 1. 更新基本信息（使用目的地时区转换时间为 UTC）
       const updateData: UpdateItineraryItemRequest = {
         type: formData.type,
         startTime: formData.startTime ? datetimeLocalToUTC(formData.startTime, timezone) : undefined,
         endTime: formData.endTime ? datetimeLocalToUTC(formData.endTime, timezone) : undefined,
         note: formData.note || undefined,
+        forceCreate, // 强制更新标志
+        // 级联调整模式：'auto' 调整后续（默认） | 'none' 只调整当前项
+        // 只有在用户明确选择时才发送，否则使用后端默认值 'auto'
+        cascadeMode: cascadeMode || undefined,
       };
+      
+      console.log('[EditItineraryItemDialog] 发送更新请求:', updateData);
 
       // 添加费用字段（如果有填写）
       if (showCostFields) {
@@ -194,14 +230,33 @@ export function EditItineraryItemDialog({
         });
       }
       
-      // 更新成功，调用成功回调（会重新加载当天的行程项以获取最新时间）
+      // 更新成功，调用成功回调（会重新加载所有天的行程项以获取最新数据）
+      // loadTrip 会先清除所有天的数据，然后重新加载，确保跨天移动后数据正确
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
       const errorMessage = err.message || '更新行程项失败';
       
-      // 检查是否是时间不合理的警告（包含"时间可能不合理"或"建议开始时间"等关键词）
-      if (errorMessage.includes('时间可能不合理') || errorMessage.includes('建议开始时间') || errorMessage.includes('预计需要')) {
+      // 检查是否是级联影响警告（需要确认弹窗）
+      // 匹配多种格式：
+      // - "影响后续 1 个行程项"
+      // - "修改时间将影响后续行程：3个活动将顺延"
+      // - "此修改将影响后续 1 个行程项"
+      // - "「钻石沙滩」将顺延+21小时15分钟"
+      const isCascadeWarning = errorMessage.includes('影响后续') || errorMessage.includes('将顺延');
+      
+      if (isCascadeWarning && !forceCreate) {
+        // 尝试解析影响的行程项数量
+        const cascadeMatch = errorMessage.match(/(\d+)\s*个(行程项|活动)/);
+        const count = cascadeMatch ? parseInt(cascadeMatch[1], 10) : 1;
+        setCascadeCount(count);
+        setCascadeMessage(errorMessage); // 保存完整的警告消息
+        setShowCascadeConfirm(true);
+        setError(null);
+        setWarning(null);
+      }
+      // 检查是否是时间不合理的警告
+      else if (errorMessage.includes('时间可能不合理') || errorMessage.includes('建议开始时间') || errorMessage.includes('预计需要')) {
         setWarning(errorMessage);
         setError(null);
       } else {
@@ -211,6 +266,23 @@ export function EditItineraryItemDialog({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doUpdate(false);
+  };
+
+  // 确认级联更新（调整后续行程项）
+  const handleConfirmCascadeAuto = async () => {
+    setShowCascadeConfirm(false);
+    await doUpdate(true, 'auto');
+  };
+
+  // 只调整当前项（不影响后续）
+  const handleConfirmCascadeNone = async () => {
+    setShowCascadeConfirm(false);
+    await doUpdate(true, 'none');
   };
 
   return (
@@ -579,6 +651,44 @@ export function EditItineraryItemDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+
+      {/* 级联影响确认弹窗 */}
+      <AlertDialog open={showCascadeConfirm} onOpenChange={setShowCascadeConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              确认时间调整
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-left space-y-3">
+                <p>
+                  此修改将影响后续 <span className="font-semibold text-foreground">{cascadeCount}</span> 个行程项。
+                </p>
+                {cascadeMessage && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                    {cascadeMessage.replace(/确认继续[？?]?/, '').trim()}
+                  </div>
+                )}
+                <p className="text-muted-foreground">请选择处理方式：</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="mt-0">取消</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={handleConfirmCascadeNone}
+              className="border-blue-200 text-blue-700 hover:bg-blue-50"
+            >
+              只调整当前项
+            </Button>
+            <AlertDialogAction onClick={handleConfirmCascadeAuto}>
+              级联调整后续
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

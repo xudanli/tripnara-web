@@ -96,7 +96,28 @@ export function checkTimeOverlap(
       continue; // 跳过无效的时间段
     }
 
-    if (isTimeOverlap(newStart, newEnd, itemStart, itemEnd, allowBoundary)) {
+    // 调试日志：检查时间比较
+    const isOverlapping = isTimeOverlap(newStart, newEnd, itemStart, itemEnd, allowBoundary);
+    
+    if (isOverlapping) {
+      console.log('[checkTimeOverlap] 检测到重叠:', {
+        newItem: {
+          start: newStart.toISOString(),
+          end: newEnd.toISOString(),
+        },
+        existingItem: {
+          id: item.id,
+          start: itemStart.toISOString(),
+          end: itemEnd.toISOString(),
+          startTime: item.startTime,
+          endTime: item.endTime,
+        },
+        comparison: {
+          condition1: `${newStart.toISOString()} < ${itemEnd.toISOString()} = ${newStart < itemEnd}`,
+          condition2: `${itemStart.toISOString()} < ${newEnd.toISOString()} = ${itemStart < newEnd}`,
+          allowBoundary,
+        },
+      });
       overlaps.push(item);
     }
   }
@@ -125,8 +146,10 @@ export function formatTimeOverlapError<T extends {
 
   const formatTime = (timeStr: string): string => {
     const date = new Date(timeStr);
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
+    // 使用 UTC 时间显示，避免时区转换导致的显示错误
+    // 因为行程项的时间都是 UTC 格式存储的
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
   };
 

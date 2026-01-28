@@ -222,7 +222,21 @@ apiClient.interceptors.response.use(
       error.code === 'UNAUTHORIZED' ||
       (error.response?.data?.error?.code === 'UNAUTHORIZED');
     
-    if (isUnauthorized && !originalRequest._retry) {
+    // 排除 /auth/refresh 请求本身，避免无限循环
+    const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
+    
+    // 如果是 refresh 请求本身返回 401，说明 refresh token 也过期了，直接跳转登录
+    if (isUnauthorized && isRefreshRequest) {
+      console.error('[API Client] ❌ Refresh token 已过期，跳转登录页');
+      sessionStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(new Error('会话已过期，请重新登录'));
+    }
+    
+    if (isUnauthorized && !originalRequest._retry && !isRefreshRequest) {
       originalRequest._retry = true;
 
       // 调试日志

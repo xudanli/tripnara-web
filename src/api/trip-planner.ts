@@ -437,6 +437,37 @@ export type GapSeverity = 'CRITICAL' | 'SUGGESTED' | 'OPTIONAL';
 export type GapType = 'MEAL' | 'HOTEL' | 'TRANSPORT' | 'ACTIVITY' | 'FREE_TIME';
 
 /**
+ * 缺口类型别名（用于兼容）
+ */
+export type ItineraryGapType = GapType;
+
+/**
+ * 响应中的缺口（已应用用户偏好过滤）
+ */
+export interface ResponseItineraryGap extends DetectedGap {
+  // 继承 DetectedGap 的所有字段
+}
+
+/**
+ * 缺口显示偏好
+ */
+export interface GapDisplayPreferences {
+  collapsed: boolean;
+  showOnlyCritical: boolean;
+  filterTypes: GapType[];
+  ignoredPatterns: IgnorePattern[];
+}
+
+/**
+ * 忽略模式
+ */
+export interface IgnorePattern {
+  type: GapType;
+  timeSlot?: { start: string; end: string };
+  severity?: GapSeverity;
+}
+
+/**
  * 缺口高亮数据
  */
 export interface GapHighlightData {
@@ -919,6 +950,102 @@ export const tripPlannerApi = {
       if (error.code === 'ECONNABORTED') {
         throw new Error('撤销操作超时，请稍后重试');
       }
+      throw error;
+    }
+  },
+
+  // ==================== 缺口偏好 API ====================
+
+  /**
+   * 获取用户缺口偏好
+   */
+  getGapPreferences: async (params?: { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
+    try {
+      const response = await apiClient.get<ApiResponseWrapper<GapDisplayPreferences>>(
+        '/trip-planner/gap-preferences',
+        { params }
+      );
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('[Trip Planner API] 获取缺口偏好失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 更新用户缺口偏好
+   */
+  updateGapPreferences: async (data: Partial<GapDisplayPreferences> & { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
+    try {
+      const response = await apiClient.put<ApiResponseWrapper<GapDisplayPreferences>>(
+        '/trip-planner/gap-preferences',
+        data
+      );
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('[Trip Planner API] 更新缺口偏好失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 忽略单个缺口
+   */
+  ignoreGap: async (data: { gapId: string; gapType: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<void> => {
+    try {
+      await apiClient.post<ApiResponseWrapper<{ message: string }>>(
+        '/trip-planner/ignore-gap',
+        data
+      );
+    } catch (error: any) {
+      console.error('[Trip Planner API] 忽略缺口失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 批量忽略缺口
+   */
+  ignoreGapsBatch: async (data: { gapIds: string[]; gapType?: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<{ ignoredCount: number; totalCount: number }> => {
+    try {
+      const response = await apiClient.post<ApiResponseWrapper<{ ignoredCount: number; totalCount: number }>>(
+        '/trip-planner/ignore-gaps-batch',
+        data
+      );
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('[Trip Planner API] 批量忽略缺口失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 取消忽略单个缺口
+   */
+  unignoreGap: async (gapId: string, params?: { tripId?: string }): Promise<void> => {
+    try {
+      await apiClient.delete<ApiResponseWrapper<{ message: string }>>(
+        `/trip-planner/ignore-gap/${gapId}`,
+        { params }
+      );
+    } catch (error: any) {
+      console.error('[Trip Planner API] 取消忽略缺口失败:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 批量取消忽略缺口
+   */
+  unignoreGapsBatch: async (data: { gapIds: string[]; tripId?: string }): Promise<{ unignoredCount: number; totalCount: number }> => {
+    try {
+      const response = await apiClient.post<ApiResponseWrapper<{ unignoredCount: number; totalCount: number }>>(
+        '/trip-planner/unignore-gaps-batch',
+        data
+      );
+      return handleResponse(response);
+    } catch (error: any) {
+      console.error('[Trip Planner API] 批量取消忽略缺口失败:', error);
       throw error;
     }
   },

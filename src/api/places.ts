@@ -22,6 +22,7 @@ import type {
   HotelOptionsResponse,
   RouteDifficultyRequest,
   RouteDifficultyResponse,
+  PlaceCategory,
 } from '@/types/places-routes';
 
 // 文档中的响应格式是 { success: true, data: T }
@@ -69,7 +70,7 @@ export interface PlaceRecommendationsParams {
 // 推荐活动请求参数
 export interface RecommendedActivitiesParams {
   countryCode: string; // 必填：国家代码（ISO 3166-1 alpha-2）
-  category?: 'ATTRACTION' | 'RESTAURANT' | 'SHOPPING' | 'HOTEL'; // 可选：地点类别
+  category?: PlaceCategory; // 可选：地点类别（支持所有 PlaceCategory 类型）
   limit?: number; // 可选：返回数量限制，默认 20，最大 100
 }
 
@@ -79,7 +80,7 @@ export interface RecommendedActivity {
   name: string; // 显示名称（优先英文名，无则中文名）
   nameCN: string;
   nameEN: string | null;
-  category: 'ATTRACTION' | 'RESTAURANT' | 'SHOPPING' | 'HOTEL';
+  category: PlaceCategory; // 支持所有 PlaceCategory 类型
   distance: number; // 推荐接口固定为 0
   isOpen: boolean;
   tags: string[];

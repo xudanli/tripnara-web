@@ -54,7 +54,7 @@ import {
   X,
   ChevronLeft,
 } from 'lucide-react';
-// cn 已移除 - 未使用
+import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
 import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time-validation';
@@ -121,10 +121,84 @@ const CATEGORY_OPTIONS: { value: PlaceCategory | 'all'; labelKey: string }[] = [
   { value: 'all', labelKey: 'all' },
   { value: 'ATTRACTION', labelKey: 'attraction' },
   { value: 'RESTAURANT', labelKey: 'restaurant' },
+  { value: 'CAFE', labelKey: 'cafe' },
+  { value: 'BAR', labelKey: 'bar' },
   { value: 'SHOPPING', labelKey: 'shopping' },
   { value: 'HOTEL', labelKey: 'hotel' },
+  { value: 'MUSEUM', labelKey: 'museum' },
+  { value: 'PARK', labelKey: 'park' },
+  { value: 'TRANSPORT', labelKey: 'transport' },
   { value: 'TRANSIT_HUB', labelKey: 'transitHub' },
+  { value: 'OTHER', labelKey: 'other' },
 ];
+
+// ==================== 工具函数 ====================
+
+// 根据日期判断季节（北半球）
+const getSeason = (date: Date): 'spring' | 'summer' | 'autumn' | 'winter' => {
+  const month = date.getMonth() + 1; // 1-12
+  if (month >= 3 && month <= 5) return 'spring';
+  if (month >= 6 && month <= 8) return 'summer';
+  if (month >= 9 && month <= 11) return 'autumn';
+  return 'winter'; // 12, 1, 2
+};
+
+// 解析包含季节信息的开放时间字符串
+const parseSeasonalHours = (text: string, targetDate: Date): string | null => {
+  // 匹配格式：全年24小时开放 (游客中心开放时间: 夏季9:00-18:00, 冬季10:00-16:00)
+  const seasonalMatch = text.match(/(夏季|春天|春季|summer|spring)[：:]\s*(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/i);
+  const winterMatch = text.match(/(冬季|冬天|winter)[：:]\s*(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/i);
+  
+  const season = getSeason(targetDate);
+  
+  // 提取前面的描述（如 "全年24小时开放"）
+  const prefixMatch = text.match(/^([^(（]+)/);
+  const prefix = prefixMatch ? prefixMatch[1].trim() : '';
+  
+  // 根据季节返回对应时间
+  if (season === 'winter' && winterMatch) {
+    const hours = `${winterMatch[2]}-${winterMatch[3]}`;
+    // 如果有前缀描述，保留它
+    return prefix ? `${prefix} (${hours})` : hours;
+  }
+  if ((season === 'spring' || season === 'summer') && seasonalMatch) {
+    const hours = `${seasonalMatch[2]}-${seasonalMatch[3]}`;
+    // 如果有前缀描述，保留它
+    return prefix ? `${prefix} (${hours})` : hours;
+  }
+  
+  // 如果没有匹配到季节信息，返回原文本
+  return text;
+};
+
+// 格式化开放时间（根据行程日期应用季节过滤）
+const formatOpeningHours = (openingHours: any, tripDate: string): string | null => {
+  if (!openingHours) return null;
+  
+  const targetDate = tripDate ? new Date(tripDate) : new Date();
+  
+  // 如果是字符串格式
+  if (typeof openingHours === 'string') {
+    // 检查是否包含季节信息
+    if (openingHours.includes('夏季') || openingHours.includes('冬季') || 
+        openingHours.includes('summer') || openingHours.includes('winter')) {
+      return parseSeasonalHours(openingHours, targetDate);
+    }
+    return openingHours;
+  }
+  
+  // 如果是对象格式，优先使用 text 字段
+  if (typeof openingHours === 'object' && openingHours.text) {
+    const text = openingHours.text;
+    if (typeof text === 'string' && (text.includes('夏季') || text.includes('冬季') || 
+        text.includes('summer') || text.includes('winter'))) {
+      return parseSeasonalHours(text, targetDate);
+    }
+    return text;
+  }
+  
+  return null;
+};
 
 // ==================== 组件 ====================
 
@@ -148,6 +222,10 @@ export function EnhancedAddItineraryItemDialog({
   const [searchResults, setSearchResults] = useState<PlaceWithDistance[]>([]);
   const [searching, setSearching] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  // 搜索范围：'current' 当前位置 | 'destination' 行程目的地
+  const [searchScope, setSearchScope] = useState<'current' | 'destination'>('current');
+  // 搜索结果警告（当选择行程目的地但结果距离很远时）
+  const [searchWarning, setSearchWarning] = useState<string | null>(null);
   
   // 选中的地点
   const [selectedPlace, setSelectedPlace] = useState<PlaceWithDistance | null>(null);
@@ -217,7 +295,10 @@ export function EnhancedAddItineraryItemDialog({
     setCostNote('');
     setIsPaid(false);
     setShowCostFields(false);
-  }, []);
+    // 重置搜索范围（默认使用当前位置，如果有的话）
+    setSearchScope(userLocation ? 'current' : 'destination');
+    setSearchWarning(null);
+  }, [userLocation]);
 
   // 打开时重置表单
   useEffect(() => {
@@ -252,15 +333,30 @@ export function EnhancedAddItineraryItemDialog({
       let results: PlaceWithDistance[] = [];
 
       if (mode === 'search') {
-        const searchParams = {
+        const searchParams: any = {
           q: query,
-          lat: userLocation?.lat,
-          lng: userLocation?.lng,
           limit: 20,
           type: category !== 'all' ? category : undefined,
-          countryCode,
         };
-        console.log('[EnhancedAddItineraryItemDialog] 搜索请求参数:', searchParams);
+        
+        // 根据搜索范围决定使用哪个位置
+        if (searchScope === 'current' && userLocation) {
+          // 当前位置：使用用户位置，不限制国家
+          searchParams.lat = userLocation.lat;
+          searchParams.lng = userLocation.lng;
+          // 不传递 countryCode，让后端根据位置智能搜索
+        } else if (searchScope === 'destination' && countryCode) {
+          // 行程目的地：不传递位置，只传递国家代码
+          searchParams.countryCode = countryCode;
+          // 明确不传递 lat/lng，避免后端使用用户位置计算距离
+        }
+        
+        console.log('[EnhancedAddItineraryItemDialog] 搜索请求参数:', {
+          ...searchParams,
+          searchScope,
+          hasUserLocation: !!userLocation,
+          countryCode,
+        });
         results = await placesApi.searchPlaces(searchParams);
         console.log('[EnhancedAddItineraryItemDialog] 搜索结果:', {
           count: results?.length || 0,
@@ -318,7 +414,47 @@ export function EnhancedAddItineraryItemDialog({
       console.log('[EnhancedAddItineraryItemDialog] 设置搜索结果:', {
         count: results?.length || 0,
         results: results,
+        searchScope,
+        countryCode,
       });
+      
+      // 验证：如果选择"行程目的地"，检查结果地址中的国家信息
+      if (mode === 'search' && searchScope === 'destination' && countryCode && results.length > 0) {
+        // 国家代码到国家名称的映射（用于检查地址）
+        const countryNameMap: Record<string, string[]> = {
+          'IS': ['冰岛', 'Iceland', '冰島'],
+          'JP': ['日本', 'Japan'],
+          'CN': ['中国', 'China'],
+          'US': ['美国', 'United States', 'USA'],
+          'GB': ['英国', 'United Kingdom', 'UK'],
+        };
+        
+        const countryNames = countryNameMap[countryCode] || [countryCode];
+        const suspiciousResults = results.filter(r => {
+          const address = (r.address || '').toLowerCase();
+          // 如果地址中不包含目标国家的任何名称，可能是错误的结果
+          return !countryNames.some(name => address.includes(name.toLowerCase()));
+        });
+        
+        // 只有当大部分结果都不匹配时才显示警告
+        if (suspiciousResults.length > results.length * 0.5) {
+          console.warn('[EnhancedAddItineraryItemDialog] ⚠️ 检测到可能不匹配的结果:', {
+            countryCode,
+            suspiciousCount: suspiciousResults.length,
+            totalCount: results.length,
+            results: suspiciousResults.map(r => ({
+              name: r.nameCN || r.nameEN,
+              address: r.address,
+            })),
+          });
+          setSearchWarning(`⚠️ 部分搜索结果可能不在 ${countryCode}，请检查后端 API 是否正确使用了国家代码过滤`);
+        } else {
+          setSearchWarning(null);
+        }
+      } else {
+        setSearchWarning(null);
+      }
+      
       // 确保 results 是数组
       const validResults = Array.isArray(results) ? results : [];
       setSearchResults(validResults);
@@ -349,12 +485,27 @@ export function EnhancedAddItineraryItemDialog({
     } finally {
       setSearching(false);
     }
-  }, [userLocation, countryCode, tripId, t]);
+  }, [userLocation, countryCode, tripId, t, searchScope]);
 
   // 监听搜索词变化（仅搜索模式）
   useEffect(() => {
-    if (searchMode === 'search' && debouncedQuery.length >= 2) {
-      handleSearch(debouncedQuery, searchMode, selectedCategory);
+    console.log('[EnhancedAddItineraryItemDialog] 搜索词变化:', {
+      searchMode,
+      searchQuery,
+      debouncedQuery,
+      debouncedLength: debouncedQuery.length,
+      selectedCategory,
+    });
+    
+    if (searchMode === 'search') {
+      if (debouncedQuery.length >= 2) {
+        console.log('[EnhancedAddItineraryItemDialog] 触发搜索:', debouncedQuery);
+        handleSearch(debouncedQuery, searchMode, selectedCategory);
+      } else {
+        // 搜索词少于2个字符时，清空搜索结果
+        console.log('[EnhancedAddItineraryItemDialog] 搜索词太短，清空结果');
+        setSearchResults([]);
+      }
     }
   }, [debouncedQuery, searchMode, selectedCategory, handleSearch]);
 
@@ -441,6 +592,17 @@ export function EnhancedAddItineraryItemDialog({
     const startDateTime = new Date(startTimeUTC);
     const endDateTime = new Date(endTimeUTC);
 
+    console.log('[EnhancedAddItineraryItemDialog] 时间转换:', {
+      dayDateStr,
+      startTime,
+      endTime,
+      timezone,
+      startTimeUTC,
+      endTimeUTC,
+      startDateTime: startDateTime.toISOString(),
+      endDateTime: endDateTime.toISOString(),
+    });
+
     if (endDateTime <= startDateTime) {
       setError('结束时间必须晚于开始时间');
       return;
@@ -458,6 +620,22 @@ export function EnhancedAddItineraryItemDialog({
         nameEN: item.Place.nameEN || undefined,
       } : undefined,
     }));
+    
+    console.log('[EnhancedAddItineraryItemDialog] 检查时间重叠:', {
+      newItem: {
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+      },
+      existingItems: existingItems.map(item => ({
+        id: item.id,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        startDate: new Date(item.startTime).toISOString(),
+        endDate: new Date(item.endTime).toISOString(),
+        name: item.Place?.nameCN || item.Place?.nameEN || '未知',
+      })),
+    });
+    
     const overlaps = checkTimeOverlap(
       { startTime: startDateTime, endTime: endDateTime },
       existingItems,
@@ -465,6 +643,7 @@ export function EnhancedAddItineraryItemDialog({
     );
 
     if (overlaps.length > 0) {
+      console.warn('[EnhancedAddItineraryItemDialog] ⚠️ 检测到时间重叠:', overlaps);
       setError(formatTimeOverlapError(overlaps));
       return;
     }
@@ -548,6 +727,17 @@ export function EnhancedAddItineraryItemDialog({
     const startDateTime = new Date(startTimeUTC);
     const endDateTime = new Date(endTimeUTC);
 
+    console.log('[EnhancedAddItineraryItemDialog] 时间转换 (手动添加):', {
+      dayDateStr,
+      startTime,
+      endTime,
+      timezone,
+      startTimeUTC,
+      endTimeUTC,
+      startDateTime: startDateTime.toISOString(),
+      endDateTime: endDateTime.toISOString(),
+    });
+
     if (endDateTime <= startDateTime) {
       setError('结束时间必须晚于开始时间');
       return;
@@ -565,6 +755,22 @@ export function EnhancedAddItineraryItemDialog({
         nameEN: item.Place.nameEN || undefined,
       } : undefined,
     }));
+    
+    console.log('[EnhancedAddItineraryItemDialog] 检查时间重叠 (手动添加):', {
+      newItem: {
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+      },
+      existingItems: existingItems.map(item => ({
+        id: item.id,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        startDate: new Date(item.startTime).toISOString(),
+        endDate: new Date(item.endTime).toISOString(),
+        name: item.Place?.nameCN || item.Place?.nameEN || '未知',
+      })),
+    });
+    
     const overlaps = checkTimeOverlap(
       { startTime: startDateTime, endTime: endDateTime },
       existingItems,
@@ -572,6 +778,7 @@ export function EnhancedAddItineraryItemDialog({
     );
 
     if (overlaps.length > 0) {
+      console.warn('[EnhancedAddItineraryItemDialog] ⚠️ 检测到时间重叠 (手动添加):', overlaps);
       setError(formatTimeOverlapError(overlaps));
       return;
     }
@@ -665,17 +872,65 @@ export function EnhancedAddItineraryItemDialog({
 
               {/* 搜索框（仅搜索模式显示） */}
               {searchMode === 'search' && (
-                <div className="px-6 pt-3 flex-shrink-0">
+                <div className="px-6 pt-3 flex-shrink-0 space-y-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('[EnhancedAddItineraryItemDialog] 输入框变化:', value);
+                        setSearchQuery(value);
+                      }}
                       placeholder="搜索地点名称..."
                       className="pl-10"
                       autoFocus
                     />
                   </div>
+                  {/* 搜索范围切换 */}
+                  {userLocation && countryCode && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground">搜索范围：</span>
+                      <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchScope('current');
+                            // 如果当前有搜索词，重新搜索
+                            if (searchQuery.length >= 2) {
+                              handleSearch(searchQuery, searchMode, selectedCategory);
+                            }
+                          }}
+                          className={cn(
+                            "px-2 py-1 rounded text-xs transition-colors",
+                            searchScope === 'current'
+                              ? "bg-white text-gray-900 shadow-sm font-medium"
+                              : "text-gray-600 hover:text-gray-900"
+                          )}
+                        >
+                          当前位置
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchScope('destination');
+                            // 如果当前有搜索词，重新搜索
+                            if (searchQuery.length >= 2) {
+                              handleSearch(searchQuery, searchMode, selectedCategory);
+                            }
+                          }}
+                          className={cn(
+                            "px-2 py-1 rounded text-xs transition-colors",
+                            searchScope === 'destination'
+                              ? "bg-white text-gray-900 shadow-sm font-medium"
+                              : "text-gray-600 hover:text-gray-900"
+                          )}
+                        >
+                          行程目的地
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -705,6 +960,15 @@ export function EnhancedAddItineraryItemDialog({
                   </div>
                 ) : searchResults.length > 0 ? (
                   <div className="space-y-2 pb-4">
+                    {/* 搜索结果警告 */}
+                    {searchWarning && (
+                      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 mb-2">
+                        <div className="flex items-start gap-2">
+                          <span>⚠️</span>
+                          <span>{searchWarning}</span>
+                        </div>
+                      </div>
+                    )}
                     {searchResults.map((place) => (
                       <Card 
                         key={place.id} 
@@ -732,6 +996,17 @@ export function EnhancedAddItineraryItemDialog({
                                     {place.category}
                                   </Badge>
                                 )}
+                                {(() => {
+                                  // 格式化开放时间（根据行程日期应用季节过滤）
+                                  const openingHours = place.metadata?.openingHours || (place as any).openingHours;
+                                  const formattedHours = formatOpeningHours(openingHours, tripDay.date);
+                                  return formattedHours ? (
+                                    <span className="flex items-center gap-1 text-emerald-600">
+                                      <Clock className="w-3 h-3" />
+                                      {formattedHours}
+                                    </span>
+                                  ) : null;
+                                })()}
                                 {((place as any).typicalDuration || place.metadata?.typicalDuration) && (
                                   <span className="flex items-center gap-1">
                                     <Clock className="w-3 h-3" />

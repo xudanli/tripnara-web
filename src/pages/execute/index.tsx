@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { executionApi } from '@/api/execution';
@@ -38,6 +38,7 @@ import SpotlightTour from '@/components/onboarding/SpotlightTour';
 import type { TourStep } from '@/components/onboarding/SpotlightTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useAuth } from '@/hooks/useAuth';
+import { WeatherCard } from '@/components/weather/WeatherCard';
 
 export default function ExecutePage() {
   const [searchParams] = useSearchParams();
@@ -55,8 +56,81 @@ export default function ExecutePage() {
   // 执行阶段相关状态
   const [reminders, setReminders] = useState<Reminder[]>([]);
   
+  // 位置相关状态
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  
   const { state: onboardingState, completeTour, completeStep } = useOnboarding();
   const [showExecuteTour, setShowExecuteTour] = useState(false);
+
+  // ⚠️ 重要：所有 useMemo 必须在任何条件返回之前调用
+  // 获取天气位置：优先使用用户当前位置，其次使用行程项坐标，最后使用目的地国家默认坐标
+  const weatherLocation = useMemo(() => {
+    // 常见国家首都坐标
+    const COORDS: Record<string, { lat: number; lng: number; name: string }> = {
+      'IS': { lat: 64.1466, lng: -21.9426, name: '冰岛·雷克雅未克' },
+      'JP': { lat: 35.6762, lng: 139.6503, name: '日本·东京' },
+      'TH': { lat: 13.7563, lng: 100.5018, name: '泰国·曼谷' },
+      'KR': { lat: 37.5665, lng: 126.9780, name: '韩国·首尔' },
+      'US': { lat: 40.7128, lng: -74.0060, name: '美国·纽约' },
+      'GB': { lat: 51.5074, lng: -0.1278, name: '英国·伦敦' },
+      'FR': { lat: 48.8566, lng: 2.3522, name: '法国·巴黎' },
+      'CN': { lat: 39.9042, lng: 116.4074, name: '中国·北京' },
+      'SG': { lat: 1.3521, lng: 103.8198, name: '新加坡' },
+      'AU': { lat: -33.8688, lng: 151.2093, name: '澳大利亚·悉尼' },
+    };
+
+    // 1. 优先使用用户当前位置（GPS）
+    if (userLocation) {
+      return { location: userLocation, name: '当前位置' };
+    }
+
+    // 2. 如果没有 trip 数据，返回 null
+    if (!trip) {
+      return null;
+    }
+
+    // 3. 使用目的地平均位置（计算所有行程项的平均坐标）
+    if (trip.TripDay) {
+      const places: Array<{ lat: number; lng: number }> = [];
+      for (const day of trip.TripDay) {
+        for (const item of day.ItineraryItem || []) {
+          if (item.Place) {
+            const place = item.Place as any;
+            const lat = place.latitude || place.metadata?.location?.lat || place.lat;
+            const lng = place.longitude || place.metadata?.location?.lng || place.lng;
+            if (lat && lng && typeof lat === 'number' && typeof lng === 'number') {
+              places.push({ lat, lng });
+            }
+          }
+        }
+      }
+      if (places.length > 0) {
+        const avgLat = places.reduce((sum, p) => sum + p.lat, 0) / places.length;
+        const avgLng = places.reduce((sum, p) => sum + p.lng, 0) / places.length;
+        return { 
+          location: { lat: avgLat, lng: avgLng }, 
+          name: trip.destination || '目的地' 
+        };
+      }
+    }
+
+    // 4. 如果没有行程项坐标，使用目的地国家的默认坐标
+    if (trip.destination) {
+      const code = trip.destination.split(',')[0]?.trim().toUpperCase();
+      if (code && COORDS[code]) {
+        return { location: { lat: COORDS[code].lat, lng: COORDS[code].lng }, name: COORDS[code].name };
+      }
+    }
+
+    return null;
+  }, [userLocation, trip]);
+
+  // 判断是否是冰岛（用于显示详细风速信息）
+  const isIceland = useMemo(() => {
+    if (!trip?.destination) return false;
+    const countryCode = trip.destination.split(',')[0]?.trim().toUpperCase();
+    return countryCode === 'IS';
+  }, [trip?.destination]);
 
   useEffect(() => {
     if (tripId) {
@@ -80,6 +154,24 @@ export default function ExecutePage() {
       return () => clearInterval(interval);
     }
   }, [tripId, onboardingState.toursCompleted.execute]);
+
+  // 获取用户当前位置
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn('获取位置失败:', error);
+          // 如果获取位置失败，不设置 userLocation，将使用行程位置
+        }
+      );
+    }
+  }, []);
 
   const loadData = async () => {
     if (!tripId) return;
@@ -260,8 +352,6 @@ export default function ExecutePage() {
   const currentDay = trip?.TripDay?.find(d => d.id === tripState?.currentDayId);
   const status = tripState?.currentItemId ? 'On track' : 'Needs repair';
 
-  // 获取当前日期（已移除未使用的 currentDate 变量）
-
   return (
     <div className="h-full flex flex-col">
       {/* Execute Tour */}
@@ -303,6 +393,16 @@ export default function ExecutePage() {
             <Wifi className="h-4 w-4" />
             <span>在线</span>
           </div>
+          {/* 天气卡片 */}
+          {weatherLocation && (
+            <WeatherCard
+              location={weatherLocation.location}
+              includeWindDetails={isIceland}
+              compact={true}
+              refreshInterval={5 * 60 * 1000} // 5分钟刷新一次
+              locationName={weatherLocation.name}
+            />
+          )}
           <PersonaModeToggle value={personaMode} onChange={setPersonaMode} />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -45,6 +45,7 @@ import type { Country } from '@/types/country';
 import { Settings2, Zap, Footprints, Wallet } from 'lucide-react';
 import { PlanStudioProvider } from '@/contexts/PlanStudioContext';
 import { formatCurrency } from '@/utils/format';
+import { WeatherCard } from '@/components/weather/WeatherCard';
 
 function PlanStudioPageContent() {
   const { t } = useTranslation();
@@ -240,6 +241,112 @@ function PlanStudioPageContent() {
     return () => clearInterval(interval);
   }, [tripId, tripExists]);
 
+  // ⚠️ 重要：所有 useMemo 必须在早期返回之前调用
+  // 常见国家首都/主要城市坐标（用于没有行程项时的天气查询）
+  const COUNTRY_COORDINATES: Record<string, { lat: number; lng: number; name: string }> = {
+    'IS': { lat: 64.1466, lng: -21.9426, name: '冰岛·雷克雅未克' },
+    'JP': { lat: 35.6762, lng: 139.6503, name: '日本·东京' },
+    'TH': { lat: 13.7563, lng: 100.5018, name: '泰国·曼谷' },
+    'KR': { lat: 37.5665, lng: 126.9780, name: '韩国·首尔' },
+    'US': { lat: 40.7128, lng: -74.0060, name: '美国·纽约' },
+    'GB': { lat: 51.5074, lng: -0.1278, name: '英国·伦敦' },
+    'FR': { lat: 48.8566, lng: 2.3522, name: '法国·巴黎' },
+    'DE': { lat: 52.5200, lng: 13.4050, name: '德国·柏林' },
+    'IT': { lat: 41.9028, lng: 12.4964, name: '意大利·罗马' },
+    'ES': { lat: 40.4168, lng: -3.7038, name: '西班牙·马德里' },
+    'AU': { lat: -33.8688, lng: 151.2093, name: '澳大利亚·悉尼' },
+    'NZ': { lat: -36.8485, lng: 174.7633, name: '新西兰·奥克兰' },
+    'SG': { lat: 1.3521, lng: 103.8198, name: '新加坡' },
+    'MY': { lat: 3.1390, lng: 101.6869, name: '马来西亚·吉隆坡' },
+    'VN': { lat: 21.0285, lng: 105.8542, name: '越南·河内' },
+    'ID': { lat: -6.2088, lng: 106.8456, name: '印度尼西亚·雅加达' },
+    'CN': { lat: 39.9042, lng: 116.4074, name: '中国·北京' },
+    'HK': { lat: 22.3193, lng: 114.1694, name: '香港' },
+    'TW': { lat: 25.0330, lng: 121.5654, name: '台湾·台北' },
+    'AE': { lat: 25.2048, lng: 55.2708, name: '阿联酋·迪拜' },
+    'EG': { lat: 30.0444, lng: 31.2357, name: '埃及·开罗' },
+    'GR': { lat: 37.9838, lng: 23.7275, name: '希腊·雅典' },
+    'TR': { lat: 41.0082, lng: 28.9784, name: '土耳其·伊斯坦布尔' },
+    'PT': { lat: 38.7223, lng: -9.1393, name: '葡萄牙·里斯本' },
+    'NL': { lat: 52.3676, lng: 4.9041, name: '荷兰·阿姆斯特丹' },
+    'CH': { lat: 46.9480, lng: 7.4474, name: '瑞士·伯尔尼' },
+    'AT': { lat: 48.2082, lng: 16.3738, name: '奥地利·维也纳' },
+    'CZ': { lat: 50.0755, lng: 14.4378, name: '捷克·布拉格' },
+    'NO': { lat: 59.9139, lng: 10.7522, name: '挪威·奥斯陆' },
+    'SE': { lat: 59.3293, lng: 18.0686, name: '瑞典·斯德哥尔摩' },
+    'FI': { lat: 60.1699, lng: 24.9384, name: '芬兰·赫尔辛基' },
+    'DK': { lat: 55.6761, lng: 12.5683, name: '丹麦·哥本哈根' },
+    'CA': { lat: 45.4215, lng: -75.6972, name: '加拿大·渥太华' },
+    'MX': { lat: 19.4326, lng: -99.1332, name: '墨西哥·墨西哥城' },
+    'BR': { lat: -23.5505, lng: -46.6333, name: '巴西·圣保罗' },
+    'AR': { lat: -34.6037, lng: -58.3816, name: '阿根廷·布宜诺斯艾利斯' },
+    'CL': { lat: -33.4489, lng: -70.6693, name: '智利·圣地亚哥' },
+    'PE': { lat: -12.0464, lng: -77.0428, name: '秘鲁·利马' },
+    'IN': { lat: 28.6139, lng: 77.2090, name: '印度·新德里' },
+    'RU': { lat: 55.7558, lng: 37.6173, name: '俄罗斯·莫斯科' },
+    'ZA': { lat: -33.9249, lng: 18.4241, name: '南非·开普敦' },
+    'MA': { lat: 33.9716, lng: -6.8498, name: '摩洛哥·拉巴特' },
+    'PH': { lat: 14.5995, lng: 120.9842, name: '菲律宾·马尼拉' },
+    'HR': { lat: 45.8150, lng: 15.9819, name: '克罗地亚·萨格勒布' },
+    'PL': { lat: 52.2297, lng: 21.0122, name: '波兰·华沙' },
+    'HU': { lat: 47.4979, lng: 19.0402, name: '匈牙利·布达佩斯' },
+    'IE': { lat: 53.3498, lng: -6.2603, name: '爱尔兰·都柏林' },
+  };
+
+  // 获取天气位置：优先使用行程项坐标，否则使用目的地国家默认坐标
+  const weatherLocation = useMemo(() => {
+    if (!currentTrip) {
+      return null;
+    }
+
+    // 1. 尝试从行程项中获取坐标
+    const places: Array<{ lat: number; lng: number }> = [];
+    if (currentTrip.TripDay && currentTrip.TripDay.length > 0) {
+      for (const day of currentTrip.TripDay) {
+        for (const item of day.ItineraryItem || []) {
+          if (item.Place) {
+            const place = item.Place as any;
+            const lat = place.latitude || place.metadata?.location?.lat || place.lat;
+            const lng = place.longitude || place.metadata?.location?.lng || place.lng;
+            if (lat && lng && typeof lat === 'number' && typeof lng === 'number') {
+              places.push({ lat, lng });
+            }
+          }
+        }
+      }
+    }
+
+    if (places.length > 0) {
+      const avgLat = places.reduce((sum, p) => sum + p.lat, 0) / places.length;
+      const avgLng = places.reduce((sum, p) => sum + p.lng, 0) / places.length;
+      return { 
+        location: { lat: avgLat, lng: avgLng }, 
+        name: currentTrip.destination || '目的地' 
+      };
+    }
+
+    // 2. 如果没有行程项坐标，使用目的地国家的默认坐标
+    if (currentTrip.destination) {
+      const countryCode = currentTrip.destination.split(',')[0]?.trim().toUpperCase();
+      const countryCoord = COUNTRY_COORDINATES[countryCode];
+      if (countryCoord) {
+        return {
+          location: { lat: countryCoord.lat, lng: countryCoord.lng },
+          name: countryCoord.name
+        };
+      }
+    }
+
+    return null;
+  }, [currentTrip]);
+
+  // 判断是否是冰岛（用于显示详细风速信息）
+  const isIceland = useMemo(() => {
+    if (!currentTrip?.destination) return false;
+    const countryCode = currentTrip.destination.split(',')[0]?.trim().toUpperCase();
+    return countryCode === 'IS';
+  }, [currentTrip?.destination]);
+
   const handleWelcomeComplete = (experienceType: 'steady' | 'balanced' | 'exploratory') => {
     setShowWelcomeModal(false);
     navigate('/dashboard/trips/new?experience=' + experienceType);
@@ -352,6 +459,17 @@ function PlanStudioPageContent() {
             </div>
           )}
           
+          {/* 天气卡片 */}
+          {tripId && tripExists && weatherLocation && (
+            <WeatherCard
+              location={weatherLocation.location}
+              includeWindDetails={isIceland}
+              compact={true}
+              refreshInterval={10 * 60 * 1000} // 10分钟刷新一次
+              locationName={weatherLocation.name}
+            />
+          )}
+
           {/* Pipeline 状态指示器 */}
           {tripId && tripExists && (
             <div className="flex items-center gap-2">
@@ -404,6 +522,10 @@ function PlanStudioPageContent() {
                   <ScheduleTab 
                     tripId={tripId} 
                     refreshKey={refreshKey}
+                    onOpenReadinessDrawer={(findingId?: string) => {
+                      setHighlightFindingId(findingId);
+                      setReadinessDrawerOpen(true);
+                    }}
                   />
                 </TabsContent>
                 <TabsContent value="workbench" className="mt-0">

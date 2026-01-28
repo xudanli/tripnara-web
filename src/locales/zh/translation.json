@@ -313,9 +313,15 @@
         "all": "全部",
         "attraction": "景点",
         "restaurant": "餐厅",
+        "cafe": "咖啡厅",
+        "bar": "酒吧",
         "shopping": "购物",
         "hotel": "酒店",
-        "transitHub": "交通枢纽"
+        "museum": "博物馆",
+        "park": "公园",
+        "transport": "交通枢纽",
+        "transitHub": "交通枢纽",
+        "other": "其他"
       }
     },
     "optimizeTab": {

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import type {
   AbuPersonaOutput,
   DrDrePersonaOutput,
@@ -25,12 +27,37 @@ type PersonaOutput = AbuPersonaOutput | DrDrePersonaOutput | NeptunePersonaOutpu
 interface PersonaCardProps {
   persona: PersonaOutput | null;
   className?: string;
+  /** 应用建议的回调（仅 Neptune） */
+  onApplyRecommendation?: (recommendation: RecommendationItem, index: number) => Promise<void>;
+  /** 是否显示应用按钮（默认 true） */
+  showApplyButton?: boolean;
 }
 
-export default function PersonaCard({ persona, className }: PersonaCardProps) {
+export default function PersonaCard({ 
+  persona, 
+  className,
+  onApplyRecommendation,
+  showApplyButton = true,
+}: PersonaCardProps) {
+  const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
+  const [appliedIndices, setAppliedIndices] = useState<Set<number>>(new Set());
+
   if (!persona) {
     return null;
   }
+
+  // 处理应用建议
+  const handleApplyRecommendation = async (rec: RecommendationItem, index: number) => {
+    if (!onApplyRecommendation || applyingIndex !== null) return;
+    
+    setApplyingIndex(index);
+    try {
+      await onApplyRecommendation(rec, index);
+      setAppliedIndices(prev => new Set(prev).add(index));
+    } finally {
+      setApplyingIndex(null);
+    }
+  };
 
   // 标准化状态（支持旧状态映射：ADJUST/REPLACE -> SUGGEST_REPLACE）
   const normalizedStatus = normalizeGateStatus(persona.verdict);
@@ -39,6 +66,10 @@ export default function PersonaCard({ persona, className }: PersonaCardProps) {
   const StatusIcon = getGateStatusIcon(normalizedStatus);
   const statusLabel = getGateStatusLabel(normalizedStatus);
   const statusClasses = getGateStatusClasses(normalizedStatus);
+  
+  // 是否是 Neptune（Neptune 的建议可以一键应用）
+  const isNeptune = persona.persona === 'NEPTUNE';
+  const canApply = isNeptune && showApplyButton && onApplyRecommendation;
 
   // 获取三人格图标（使用符号系统而非 Emoji）
   const PersonaIcon = getPersonaIcon(persona.persona);
@@ -106,25 +137,93 @@ export default function PersonaCard({ persona, className }: PersonaCardProps) {
         {/* 推荐建议 */}
         {persona.recommendations && persona.recommendations.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-semibold text-gray-900">建议</h4>
+            <h4 className="text-sm font-semibold text-gray-900">
+              {isNeptune ? '替代方案' : '建议'}
+            </h4>
             <div className="space-y-2">
-              {persona.recommendations.map((rec: RecommendationItem, index: number) => (
-                <div
-                  key={index}
-                  className="p-3 bg-blue-50 rounded-lg border border-blue-200"
-                >
-                  <div className="flex items-start gap-2">
-                    <ArrowRight className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-blue-900">{rec.action}</p>
-                      <p className="text-xs text-blue-700 mt-1">{rec.reason}</p>
-                      {rec.impact && (
-                        <p className="text-xs text-blue-600 mt-1 italic">影响：{rec.impact}</p>
-                      )}
+              {persona.recommendations.map((rec: RecommendationItem, index: number) => {
+                const isApplying = applyingIndex === index;
+                const isApplied = appliedIndices.has(index);
+                const isDisabled = applyingIndex !== null || isApplied;
+                
+                return (
+                  <div
+                    key={index}
+                    className={cn(
+                      'p-3 rounded-lg border transition-colors',
+                      isNeptune 
+                        ? 'bg-purple-50 border-purple-200 hover:border-purple-300'
+                        : 'bg-blue-50 border-blue-200',
+                      isApplied && 'bg-green-50 border-green-200'
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      <ArrowRight className={cn(
+                        'w-4 h-4 mt-0.5 flex-shrink-0',
+                        isNeptune ? 'text-purple-600' : 'text-blue-600',
+                        isApplied && 'text-green-600'
+                      )} />
+                      <div className="flex-1">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          isNeptune ? 'text-purple-900' : 'text-blue-900',
+                          isApplied && 'text-green-900'
+                        )}>
+                          {rec.action}
+                        </p>
+                        <p className={cn(
+                          'text-xs mt-1',
+                          isNeptune ? 'text-purple-700' : 'text-blue-700',
+                          isApplied && 'text-green-700'
+                        )}>
+                          {rec.reason}
+                        </p>
+                        {rec.impact && (
+                          <p className={cn(
+                            'text-xs mt-1 italic',
+                            isNeptune ? 'text-purple-600' : 'text-blue-600',
+                            isApplied && 'text-green-600'
+                          )}>
+                            影响：{rec.impact}
+                          </p>
+                        )}
+                        
+                        {/* 应用按钮（仅 Neptune） */}
+                        {canApply && (
+                          <div className="mt-2 flex justify-end">
+                            {isApplied ? (
+                              <span className="text-xs text-green-600 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                已应用
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className={cn(
+                                  'h-7 text-xs',
+                                  'border-purple-300 text-purple-700 hover:bg-purple-100'
+                                )}
+                                disabled={isDisabled}
+                                onClick={() => handleApplyRecommendation(rec, index)}
+                              >
+                                {isApplying ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    应用中...
+                                  </>
+                                ) : (
+                                  '应用此建议'
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

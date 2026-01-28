@@ -90,6 +90,7 @@ import { useMemo } from 'react';
 import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/persona-colors';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { getGateStatusClasses } from '@/lib/gate-status';
+import { WeatherCard, WeatherAlertBanner } from '@/components/weather/WeatherCard';
 
 // 决策记录标签页组件
 function DecisionLogTab({ tripId }: { tripId: string }) {
@@ -323,6 +324,71 @@ export default function TripDetailPage() {
     if (decisionLogs.length === 0 && personaAlerts.length === 0 && !suggestionStats) return null;
     return calculateOverallMetrics(decisionLogs, personaAlerts, suggestionStats, suggestions);
   }, [decisionLogs, personaAlerts, suggestionStats, suggestions, trip]);
+
+  // ⚠️ 重要：所有 hooks（包括 useMemo）必须在任何条件返回之前调用
+  // 获取天气位置：优先使用行程项坐标，否则使用目的地国家默认坐标
+  const weatherLocation = useMemo(() => {
+    if (!trip) {
+      return null;
+    }
+
+    // 常见国家首都坐标
+    const COORDS: Record<string, { lat: number; lng: number; name: string }> = {
+      'IS': { lat: 64.1466, lng: -21.9426, name: '冰岛·雷克雅未克' },
+      'JP': { lat: 35.6762, lng: 139.6503, name: '日本·东京' },
+      'TH': { lat: 13.7563, lng: 100.5018, name: '泰国·曼谷' },
+      'KR': { lat: 37.5665, lng: 126.9780, name: '韩国·首尔' },
+      'US': { lat: 40.7128, lng: -74.0060, name: '美国·纽约' },
+      'GB': { lat: 51.5074, lng: -0.1278, name: '英国·伦敦' },
+      'FR': { lat: 48.8566, lng: 2.3522, name: '法国·巴黎' },
+      'CN': { lat: 39.9042, lng: 116.4074, name: '中国·北京' },
+      'SG': { lat: 1.3521, lng: 103.8198, name: '新加坡' },
+      'AU': { lat: -33.8688, lng: 151.2093, name: '澳大利亚·悉尼' },
+    };
+
+    // 1. 尝试从行程项中获取坐标
+    const places: Array<{ lat: number; lng: number }> = [];
+    if (trip.TripDay && trip.TripDay.length > 0) {
+      for (const day of trip.TripDay) {
+        for (const item of day.ItineraryItem || []) {
+          if (item.Place) {
+            const place = item.Place as any;
+            const lat = place.latitude || place.metadata?.location?.lat || place.lat;
+            const lng = place.longitude || place.metadata?.location?.lng || place.lng;
+            if (lat && lng && typeof lat === 'number' && typeof lng === 'number') {
+              places.push({ lat, lng });
+            }
+          }
+        }
+      }
+    }
+
+    if (places.length > 0) {
+      const avgLat = places.reduce((sum, p) => sum + p.lat, 0) / places.length;
+      const avgLng = places.reduce((sum, p) => sum + p.lng, 0) / places.length;
+      return { 
+        location: { lat: avgLat, lng: avgLng }, 
+        name: trip.destination || '目的地' 
+      };
+    }
+
+    // 2. 如果没有行程项坐标，使用目的地国家的默认坐标
+    if (trip.destination) {
+      const code = extractCountryCodes(trip.destination)[0];
+      if (code && COORDS[code]) {
+        return { location: { lat: COORDS[code].lat, lng: COORDS[code].lng }, name: COORDS[code].name };
+      }
+    }
+
+    return null;
+  }, [trip]);
+
+  // 判断是否是冰岛（用于显示详细风速信息）
+  const isIceland = useMemo(() => {
+    if (!trip?.destination) return false;
+    const countryCodes = extractCountryCodes(trip.destination);
+    return countryCodes.includes('IS');
+  }, [trip?.destination]);
 
   useEffect(() => {
     if (id) {
@@ -1059,6 +1125,7 @@ export default function TripDetailPage() {
     }
   };
 
+  // ⚠️ 以下是早期返回，所有 hooks 必须在这之前调用
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -1199,6 +1266,16 @@ export default function TripDetailPage() {
             </div>
               <Badge variant="secondary">标准节奏</Badge>
               <Badge variant="secondary">自驾</Badge>
+              {/* 天气卡片 */}
+              {weatherLocation && (
+                <WeatherCard
+                  location={weatherLocation.location}
+                  includeWindDetails={isIceland}
+                  compact={true}
+                  refreshInterval={10 * 60 * 1000} // 10分钟刷新一次（规划阶段不需要太频繁）
+                  locationName={weatherLocation.name}
+                />
+              )}
             </div>
           </div>
 
@@ -1533,6 +1610,17 @@ export default function TripDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 天气预警横幅 - 当目的地有极端天气时显示 */}
+      {weatherLocation && trip.startDate && (
+        <div className="px-6 py-2">
+          <WeatherAlertBanner
+            location={weatherLocation.location}
+            locationName={weatherLocation.name}
+            startDate={trip.startDate}
+          />
+        </div>
+      )}
 
       {/* 主体分区（顶部 Tab 4 个） */}
       <div className="flex-1 overflow-hidden flex flex-col">
@@ -2502,6 +2590,8 @@ export default function TripDetailPage() {
             }
           }}
           onSuccess={loadTrip}
+          tripDays={trip?.TripDay?.map(d => ({ id: d.id, date: d.date })) || []}
+          currentTripDayId={editingItem?.tripDayId}
         />
       )}
 

@@ -426,6 +426,16 @@ export default function ReadinessPage() {
         totalSegments: response.summary?.totalSegments || 0,
         totalGaps: response.summary?.totalGaps || 0,
         coverageRate: response.summary?.coverageRate || 0,
+        // 优化后的新字段
+        deduplicatedWarnings: response.deduplicatedWarnings?.length || 0,
+        warningsBySeverity: response.warningsBySeverity ? {
+          high: response.warningsBySeverity.high?.length || 0,
+          medium: response.warningsBySeverity.medium?.length || 0,
+          low: response.warningsBySeverity.low?.length || 0,
+        } : null,
+        evidenceStatusSummary: response.evidenceStatusSummary,
+        dataFreshness: response.dataFreshness,
+        calculatedAt: response.calculatedAt,
       });
       
       setCoverageMapData(response);
@@ -2241,7 +2251,90 @@ export default function ReadinessPage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="coverage" className="mt-6">
+              <TabsContent value="coverage" className="mt-6 space-y-4">
+                {/* 按严重程度分组的警告 */}
+                {coverageMapData?.warningsBySeverity && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">警告列表（按严重程度）</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* 高严重程度警告 */}
+                      {coverageMapData.warningsBySeverity.high && coverageMapData.warningsBySeverity.high.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="destructive">高</Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {coverageMapData.warningsBySeverity.high.length} 个警告
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            {coverageMapData.warningsBySeverity.high.slice(0, 5).map((gap) => (
+                              <div key={gap.id} className="text-sm p-2 bg-red-50 rounded">
+                                <div className="font-medium">{gap.message}</div>
+                                {gap.affectedDays && gap.affectedDays.length > 0 && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    受影响天数: {gap.affectedDays.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {coverageMapData.warningsBySeverity.high.length > 5 && (
+                              <div className="text-xs text-muted-foreground">
+                                还有 {coverageMapData.warningsBySeverity.high.length - 5} 个警告...
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 中等严重程度警告 */}
+                      {coverageMapData.warningsBySeverity.medium && coverageMapData.warningsBySeverity.medium.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="default" className="bg-yellow-500">中</Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {coverageMapData.warningsBySeverity.medium.length} 个警告
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            {coverageMapData.warningsBySeverity.medium.slice(0, 3).map((gap) => (
+                              <div key={gap.id} className="text-sm p-2 bg-yellow-50 rounded">
+                                <div className="font-medium">{gap.message}</div>
+                                {gap.affectedDays && gap.affectedDays.length > 0 && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    受影响天数: {gap.affectedDays.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {coverageMapData.warningsBySeverity.medium.length > 3 && (
+                              <div className="text-xs text-muted-foreground">
+                                还有 {coverageMapData.warningsBySeverity.medium.length - 3} 个警告...
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 低严重程度警告 */}
+                      {coverageMapData.warningsBySeverity.low && coverageMapData.warningsBySeverity.low.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="secondary">低</Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {coverageMapData.warningsBySeverity.low.length} 个警告
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            共 {coverageMapData.warningsBySeverity.low.length} 个低优先级警告（已折叠）
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 <CoverageMiniMap
                   data={coverageMapData}
                   loading={loadingCoverageMap}

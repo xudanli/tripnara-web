@@ -4,7 +4,30 @@
 
 // ==================== 基础类型 ====================
 
-export type PlaceCategory = 'ATTRACTION' | 'RESTAURANT' | 'SHOPPING' | 'HOTEL' | 'TRANSIT_HUB';
+/**
+ * 地点类别类型定义
+ * 
+ * 统一的地点类别枚举，用于：
+ * - 地点搜索和推荐接口（places API）
+ * - 行程项中的地点（trip API）
+ * - 前端组件显示和筛选
+ * 
+ * 注意：
+ * - TRANSPORT 和 TRANSIT_HUB 是同义词，后端可能返回任意一个
+ * - 前端组件需要同时支持两者以确保兼容性
+ */
+export type PlaceCategory = 
+  | 'ATTRACTION'    // 景点
+  | 'RESTAURANT'    // 餐厅
+  | 'CAFE'          // 咖啡厅
+  | 'BAR'           // 酒吧
+  | 'HOTEL'         // 酒店
+  | 'MUSEUM'        // 博物馆
+  | 'PARK'          // 公园
+  | 'SHOPPING'      // 购物
+  | 'TRANSPORT'     // 交通枢纽（与 TRANSIT_HUB 同义）
+  | 'TRANSIT_HUB'   // 交通枢纽（与 TRANSPORT 同义）
+  | 'OTHER';         // 其他
 
 export type RouteDifficulty = 'EASY' | 'MODERATE' | 'HARD' | 'EXTREME';
 

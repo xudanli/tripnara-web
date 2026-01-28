@@ -298,9 +298,15 @@
         "all": "All",
         "attraction": "Attraction",
         "restaurant": "Restaurant",
+        "cafe": "Cafe",
+        "bar": "Bar",
         "shopping": "Shopping",
         "hotel": "Hotel",
-        "transitHub": "Transit Hub"
+        "museum": "Museum",
+        "park": "Park",
+        "transport": "Transport Hub",
+        "transitHub": "Transit Hub",
+        "other": "Other"
       }
     },
     "optimizeTab": {

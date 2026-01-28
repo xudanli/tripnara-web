@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Shield, Activity, RefreshCw, CheckCircle2, FileText, ClipboardCheck } from 'lucide-react';
@@ -81,9 +82,11 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     if (!tripId) return;
     try {
       setLoadingReadiness(true);
-      const result = await readinessApi.getTripReadiness(tripId, getLangCode()).catch(() => null);
+      // 使用规划工作台的准备度入口 API
+      const result = await planningWorkbenchApi.getTripReadiness(tripId, getLangCode()).catch(() => null);
       if (result) {
-        const risks = result.risks?.length || result.findings?.flatMap(f => f.risks || []).length || 0;
+        // 计算风险数量：从 findings 中提取 blockers 数量作为风险指标
+        const risks = result.findings?.reduce((total, f) => total + (f.blockers?.length || 0), 0) || 0;
         setReadinessSummary({
           totalBlockers: result.summary.totalBlockers,
           totalMust: result.summary.totalMust,
@@ -1134,15 +1137,44 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
         : 'PASS'
       : null;
     
+    // 根据状态设置卡片边框颜色
+    const borderColorClass = gateStatus === 'BLOCK' 
+      ? 'border-l-4 border-l-red-500'
+      : gateStatus === 'WARN'
+      ? 'border-l-4 border-l-amber-500'
+      : gateStatus === 'PASS'
+      ? 'border-l-4 border-l-green-500'
+      : '';
+    
     return (
-      <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onOpenReadinessDrawer()}>
+      <Card 
+        className={cn(
+          'cursor-pointer hover:shadow-md transition-all',
+          borderColorClass
+        )} 
+        onClick={() => onOpenReadinessDrawer()}
+      >
         <CardHeader className="pb-3 border-b">
-          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-            <ClipboardCheck className="w-5 h-5 text-blue-600" />
-            {t('planStudio.sidebar.readiness.title')}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+              <ClipboardCheck className={cn(
+                'w-5 h-5',
+                gateStatus === 'BLOCK' ? 'text-red-600' :
+                gateStatus === 'WARN' ? 'text-amber-600' :
+                gateStatus === 'PASS' ? 'text-green-600' :
+                'text-blue-600'
+              )} />
+              {t('planStudio.sidebar.readiness.title')}
+            </CardTitle>
+            {/* 阻塞数量徽章 */}
+            {readinessSummary && readinessSummary.totalBlockers > 0 && (
+              <Badge variant="destructive" className="text-xs">
+                {readinessSummary.totalBlockers}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-3">
           {loadingReadiness ? (
             <div className="flex items-center justify-center py-4">
               <Spinner className="w-4 h-4" />
@@ -1167,27 +1199,61 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
                 />
               )}
               
-              {/* 数量统计 */}
-              <div className="text-xs text-gray-600 space-y-1">
-                <div className="flex justify-between">
-                  <span>{t('dashboard.readiness.page.drawer.stats.blockers', { count: readinessSummary.totalBlockers })}</span>
-                  <span>{t('dashboard.readiness.page.drawer.stats.must', { count: readinessSummary.totalMust })}</span>
+              {/* 数量统计 - 使用更紧凑的布局 */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className={cn(
+                  'flex items-center gap-1.5 px-2 py-1.5 rounded',
+                  readinessSummary.totalBlockers > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+                )}>
+                  <span className="font-medium">{readinessSummary.totalBlockers}</span>
+                  <span>阻塞</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>{t('dashboard.readiness.page.drawer.stats.suggestions', { 
-                    count: readinessSummary.totalShould + readinessSummary.totalOptional 
-                  })}</span>
-                  <span>{t('dashboard.readiness.page.drawer.stats.risks', { count: readinessSummary.risks })}</span>
+                <div className={cn(
+                  'flex items-center gap-1.5 px-2 py-1.5 rounded',
+                  readinessSummary.totalMust > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'
+                )}>
+                  <span className="font-medium">{readinessSummary.totalMust}</span>
+                  <span>必须</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-gray-50 text-gray-600">
+                  <span className="font-medium">{readinessSummary.totalShould + readinessSummary.totalOptional}</span>
+                  <span>建议</span>
+                </div>
+                <div className={cn(
+                  'flex items-center gap-1.5 px-2 py-1.5 rounded',
+                  readinessSummary.risks > 0 ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-600'
+                )}>
+                  <span className="font-medium">{readinessSummary.risks}</span>
+                  <span>风险</span>
                 </div>
               </div>
               
-              <Button 
-                variant="outline" 
-                className="w-full bg-white border-gray-300 hover:bg-gray-50" 
-                size="sm"
-              >
-                {t('planStudio.sidebar.readiness.viewDetails')}
-              </Button>
+              {/* 操作按钮 */}
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 bg-white border-gray-300 hover:bg-gray-50" 
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenReadinessDrawer();
+                  }}
+                >
+                  快速检查
+                </Button>
+                <Button 
+                  variant="default" 
+                  className="flex-1" 
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // 跳转到准备度页面
+                    window.location.href = `/dashboard/readiness?tripId=${tripId}`;
+                  }}
+                >
+                  详细页面
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="text-sm text-muted-foreground text-center py-4">

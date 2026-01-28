@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info } from 'lucide-react';
+import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info, ClipboardCheck, ExternalLink } from 'lucide-react';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { tripPlannerApi } from '@/api/trip-planner';
+import { readinessApi, type ScoreBreakdownResponse } from '@/api/readiness';
 import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict, DayTravelInfoResponse, PersonaAlert } from '@/types/trip';
 import type { SuggestionStats } from '@/types/suggestion';
 import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
@@ -59,10 +60,11 @@ import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudio
 interface ScheduleTabProps {
   tripId: string;
   refreshKey?: number; // 用于触发刷新
+  onOpenReadinessDrawer?: (findingId?: string) => void;
 }
 
-export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
-  const { t } = useTranslation();
+export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer }: ScheduleTabProps) {
+  const { t, i18n } = useTranslation();
   
   // 左右联动上下文 - 使用 useContext 直接访问（可能为 null）
   const planStudioContext = useContext(PlanStudioContext);
@@ -103,6 +105,10 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
   const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
   const { setDrawerOpen, setDrawerTab, setHighlightItemId } = useDrawer();
+  
+  // 准备度相关状态
+  const [readinessData, setReadinessData] = useState<ScoreBreakdownResponse | null>(null);
+  const [loadingReadiness, setLoadingReadiness] = useState(false);
   
   // 对话框状态
   const [editingItem, setEditingItem] = useState<ItineraryItem | null>(null);
@@ -175,6 +181,31 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     country: trip?.destination, // 使用目的地作为国家参数
   });
 
+  // 默认天气位置（用于行程项天气显示，当 Place 没有坐标时使用）
+  const defaultWeatherLocation = useMemo(() => {
+    // 常见国家首都坐标
+    const COORDS: Record<string, { lat: number; lng: number }> = {
+      'IS': { lat: 64.1466, lng: -21.9426 }, // 冰岛
+      'JP': { lat: 35.6762, lng: 139.6503 }, // 日本
+      'TH': { lat: 13.7563, lng: 100.5018 }, // 泰国
+      'KR': { lat: 37.5665, lng: 126.9780 }, // 韩国
+      'US': { lat: 40.7128, lng: -74.0060 }, // 美国
+      'GB': { lat: 51.5074, lng: -0.1278 },  // 英国
+      'FR': { lat: 48.8566, lng: 2.3522 },   // 法国
+      'CN': { lat: 39.9042, lng: 116.4074 }, // 中国
+      'SG': { lat: 1.3521, lng: 103.8198 },  // 新加坡
+      'AU': { lat: -33.8688, lng: 151.2093 }, // 澳大利亚
+      'NZ': { lat: -36.8485, lng: 174.7633 }, // 新西兰
+      'DE': { lat: 52.5200, lng: 13.4050 },  // 德国
+      'IT': { lat: 41.9028, lng: 12.4964 },  // 意大利
+      'ES': { lat: 40.4168, lng: -3.7038 },  // 西班牙
+    };
+    
+    if (!trip?.destination) return null;
+    const countryCode = trip.destination.split(',')[0]?.trim().toUpperCase();
+    return COORDS[countryCode] || null;
+  }, [trip?.destination]);
+
   // 转换时间格式的辅助函数（在组件外部使用，需要保留）
   const formatTime = (isoTime: string): string => {
     try {
@@ -211,6 +242,9 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
     };
     try {
       setLoading(true);
+      // 先清除所有天的数据，避免显示旧数据
+      setItineraryItemsMap(new Map());
+      
       const data = await tripsApi.getById(tripId);
       console.log('[ScheduleTab] 加载的行程数据:', {
         tripId: data.id,
@@ -224,11 +258,29 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
         const scheduleMap = new Map<string, ScheduleResponse>();
         
         for (const day of data.TripDay) {
-          // 优先使用 trip 数据中的 ItineraryItem（包含完整的 Place 信息）
-          if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-            const items = day.ItineraryItem as ItineraryItemDetail[];
-            // 保存完整的 ItineraryItem 数据用于显示
-            setItineraryItemsMap(prev => new Map(prev).set(day.date, items));
+          // 使用 itineraryItemsApi.getAll(tripDayId) 获取每天的行程项
+          // 这个 API 会返回包含退房项和 crossDayInfo 的完整数据
+          try {
+            // 强制刷新，避免使用缓存数据（特别是跨天移动后）
+            const dayItems = await itineraryItemsApi.getAll(day.id, true);
+            if (dayItems && dayItems.length > 0) {
+              // 按开始时间排序
+              const sortedItems = [...dayItems].sort((a, b) => 
+                (a.startTime || '').localeCompare(b.startTime || '')
+              );
+              setItineraryItemsMap(prev => new Map(prev).set(day.date, sortedItems));
+            } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+              // 回退：使用 trip 数据中的 ItineraryItem
+              const items = day.ItineraryItem as ItineraryItemDetail[];
+              setItineraryItemsMap(prev => new Map(prev).set(day.date, items));
+            }
+          } catch (itemsErr) {
+            console.error(`Failed to load items for day ${day.date}:`, itemsErr);
+            // 回退：使用 trip 数据中的 ItineraryItem
+            if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+              const items = day.ItineraryItem as ItineraryItemDetail[];
+              setItineraryItemsMap(prev => new Map(prev).set(day.date, items));
+            }
           }
           
           try {
@@ -312,6 +364,19 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
       } catch (alertErr) {
         console.error('Failed to load persona alerts:', alertErr);
         // 静默失败，健康度卡片将显示默认状态
+      }
+      
+      // 加载准备度数据（用于准备度入口卡片）
+      // 使用 getScoreBreakdown API，它返回更完整的数据（分数、findings、risks）
+      try {
+        setLoadingReadiness(true);
+        const readiness = await readinessApi.getScoreBreakdown(tripId);
+        setReadinessData(readiness);
+      } catch (readinessErr) {
+        console.error('Failed to load readiness data:', readinessErr);
+        // 静默失败，准备度卡片将显示默认状态
+      } finally {
+        setLoadingReadiness(false);
       }
       
       // 加载所有日期的指标（使用传入的 tripData 或当前的 trip state）
@@ -899,6 +964,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                             personaMode="auto"
                             timezone={getTimezoneByCountry(trip?.destination || '')}
                             placeImages={item.Place?.id ? placeImagesMap.get(item.Place.id) : undefined}
+                            defaultWeatherLocation={defaultWeatherLocation}
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                             onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -972,6 +1038,7 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
                                   personaMode="auto"
                                   timezone={getTimezoneByCountry(trip?.destination || '')}
                                   placeImages={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
+                                  defaultWeatherLocation={defaultWeatherLocation}
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                                   onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -1244,6 +1311,149 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
           </CardContent>
         </Card>
 
+        {/* 准备度入口卡片 */}
+        {(() => {
+          // 计算状态：分数 < 60 为红色，60-80 为琥珀色，>= 80 为绿色
+          const score = readinessData?.score?.overall ?? 0;
+          const blockers = readinessData?.summary?.blockers ?? 0;
+          const warnings = readinessData?.summary?.warnings ?? 0;
+          const suggestions = readinessData?.summary?.suggestions ?? 0;
+          const totalRisks = (readinessData?.summary?.highRisks ?? 0) + 
+                            (readinessData?.summary?.mediumRisks ?? 0) + 
+                            (readinessData?.summary?.lowRisks ?? 0);
+          
+          const isBlocked = blockers > 0 || score < 60;
+          const hasWarnings = warnings > 0 || (score >= 60 && score < 80);
+          
+          return (
+            <Card 
+              className={cn(
+                'cursor-pointer hover:shadow-md transition-all',
+                isBlocked 
+                  ? 'border-l-4 border-l-red-500'
+                  : hasWarnings
+                  ? 'border-l-4 border-l-amber-500'
+                  : readinessData 
+                  ? 'border-l-4 border-l-green-500'
+                  : ''
+              )}
+              onClick={() => onOpenReadinessDrawer?.()}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ClipboardCheck className={cn(
+                      'h-4 w-4',
+                      isBlocked 
+                        ? 'text-red-600'
+                        : hasWarnings
+                        ? 'text-amber-600'
+                        : readinessData 
+                        ? 'text-green-600'
+                        : 'text-blue-600'
+                    )} />
+                    准备度检查
+                  </CardTitle>
+                  {/* 显示分数 */}
+                  {readinessData && (
+                    <div className={cn(
+                      'text-lg font-bold',
+                      score < 60 ? 'text-red-600' : score < 80 ? 'text-amber-600' : 'text-green-600'
+                    )}>
+                      {score}<span className="text-xs font-normal text-gray-400">/100</span>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {loadingReadiness ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Spinner className="h-4 w-4" />
+                  </div>
+                ) : readinessData ? (
+                  <div className="space-y-3">
+                    {/* 状态指示 */}
+                    <div className={cn(
+                      'text-sm px-3 py-2 rounded-md text-center font-medium',
+                      isBlocked 
+                        ? 'bg-red-50 text-red-700'
+                        : hasWarnings
+                        ? 'bg-amber-50 text-amber-700'
+                        : 'bg-green-50 text-green-700'
+                    )}>
+                      {isBlocked 
+                        ? '需要解决问题才能出发'
+                        : hasWarnings
+                        ? '有待处理的事项'
+                        : '✓ 准备就绪'}
+                    </div>
+                    
+                    {/* 数量统计 */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className={cn(
+                        'flex items-center gap-1.5 px-2 py-1.5 rounded',
+                        blockers > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+                      )}>
+                        <span className="font-medium">{blockers}</span>
+                        <span>阻塞</span>
+                      </div>
+                      <div className={cn(
+                        'flex items-center gap-1.5 px-2 py-1.5 rounded',
+                        warnings > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'
+                      )}>
+                        <span className="font-medium">{warnings}</span>
+                        <span>警告</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-gray-50 text-gray-600">
+                        <span className="font-medium">{suggestions}</span>
+                        <span>建议</span>
+                      </div>
+                      <div className={cn(
+                        'flex items-center gap-1.5 px-2 py-1.5 rounded',
+                        totalRisks > 0 ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-600'
+                      )}>
+                        <span className="font-medium">{totalRisks}</span>
+                        <span>风险</span>
+                      </div>
+                    </div>
+                    
+                    {/* 操作按钮 */}
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        className="flex-1" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenReadinessDrawer?.();
+                        }}
+                      >
+                        快速检查
+                      </Button>
+                      <Button 
+                        variant="default" 
+                        className="flex-1" 
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = `/dashboard/readiness?tripId=${tripId}`;
+                        }}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        详细页面
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    暂无准备度数据
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* 冲突列表 - 仅在有冲突时显示 */}
         {conflicts.length > 0 && (
           <Card data-tour="schedule-conflicts">
@@ -1333,6 +1543,8 @@ export default function ScheduleTab({ tripId, refreshKey }: ScheduleTabProps) {
           }}
           onSuccess={loadTrip}
           timezone={getTimezoneByCountry(trip?.destination || '')}
+          tripDays={trip?.TripDay?.map(d => ({ id: d.id, date: d.date })) || []}
+          currentTripDayId={editingItem?.tripDayId || (editingItem as any)?.TripDay?.id}
         />
       )}
 
