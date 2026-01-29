@@ -63,20 +63,21 @@ interface PackingListTabProps {
   trip: TripDetail | null;
 }
 
+// 🎨 统一颜色 Token（符合 TripNARA 克制原则）
 const CATEGORY_COLORS: Record<string, string> = {
-  'clothing': 'bg-blue-100 text-blue-800',
-  'electronics': 'bg-purple-100 text-purple-800',
-  'toiletries': 'bg-pink-100 text-pink-800',
-  'documents': 'bg-red-100 text-red-800',
-  'food': 'bg-orange-100 text-orange-800',
-  'safety': 'bg-yellow-100 text-yellow-800',
-  'other': 'bg-gray-100 text-gray-800',
+  'clothing': 'bg-blue-50 text-blue-700', // ✅ 修复：使用 bg-blue-50 而不是 bg-blue-100
+  'electronics': 'bg-purple-50 text-purple-700', // ✅ 修复：使用 bg-purple-50 而不是 bg-purple-100
+  'toiletries': 'bg-pink-50 text-pink-700', // ✅ 修复：使用 bg-pink-50 而不是 bg-pink-100
+  'documents': 'bg-red-50 text-red-700', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
+  'food': 'bg-amber-50 text-amber-700', // ✅ 修复：使用 bg-amber-50 而不是 bg-orange-100
+  'safety': 'bg-amber-50 text-amber-700', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
+  'other': 'bg-gray-50 text-gray-700', // ✅ 修复：使用 bg-gray-50 而不是 bg-gray-100
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  'must': 'bg-red-100 text-red-800 border-red-200',
-  'should': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  'optional': 'bg-gray-100 text-gray-800 border-gray-200',
+  'must': 'bg-red-50 text-red-700 border-red-200', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
+  'should': 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
+  'optional': 'bg-gray-50 text-gray-700 border-gray-200', // ✅ 修复：使用 bg-gray-50 而不是 bg-gray-100
 };
 
 export default function PackingListTab({ tripId, trip }: PackingListTabProps) {

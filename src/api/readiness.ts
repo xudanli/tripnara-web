@@ -70,19 +70,56 @@ export interface CheckReadinessDto {
 
 /**
  * ReadinessFindingItem 接口
- * 根据后端 API 文档定义
+ * 根据后端 API 文档定义（v2.0.0）
  */
 export interface ReadinessFindingItem {
-  message: string;              // 消息描述（必填）
-  tasks?: string[];             // 任务列表（可选，字符串数组）
-  evidence?: string;            // 证据引用（可选，字符串）
-  // 以下字段为兼容旧版本保留，但后端可能不返回
-  id?: string;                  // 规则ID（兼容字段）
-  category?: string;            // 分类（兼容字段）
-  severity?: string;            // 严重程度（兼容字段）
-  level?: 'blocker' | 'must' | 'should' | 'optional';  // 级别（兼容字段）
-  askUser?: string[];          // 需要询问用户的问题（兼容字段）
+  id: string;                          // 规则ID
+  category: ReadinessCategory;         // 分类
+  severity: RuleSeverity;              // 严重程度（low, medium, high）
+  level: ActionLevel;                  // 优先级级别（blocker, must, should, optional）
+  message: string;                     // 消息描述
+  tasks?: Array<{                      // 任务列表
+    title: string;
+    dueOffsetDays?: number;            // 相对出发日期的偏移天数（负数表示提前）
+    tags?: string[];
+  }>;
+  askUser?: string[];                  // 需要用户提供的信息
+  evidence?: Array<{                   // 证据引用
+    sourceId: string;
+    sectionId?: string;
+    quote?: string;
+  }>;
+  /**
+   * 约束类型，用于区分blocker和must
+   * - 'legal_blocker': 法律/法规硬性要求（blocker级别，entry_transit/health_insurance类别）
+   * - 'safety_blocker': 安全硬性要求（blocker级别，其他类别）
+   * - 'strong_recommendation': 强烈建议（must级别）
+   * - 'recommendation': 建议（should级别）
+   * - 'optional': 可选（optional级别）
+   */
+  constraintType?: 'legal_blocker' | 'safety_blocker' | 'strong_recommendation' | 'recommendation' | 'optional';
 }
+
+/**
+ * 准备度分类
+ */
+export type ReadinessCategory = 
+  | 'entry_transit'      // 入境/过境
+  | 'health_insurance'    // 健康/保险
+  | 'safety'             // 安全
+  | 'logistics'          // 物流
+  | 'equipment'          // 装备
+  | 'other';             // 其他
+
+/**
+ * 规则严重程度
+ */
+export type RuleSeverity = 'low' | 'medium' | 'high';
+
+/**
+ * 行动级别
+ */
+export type ActionLevel = 'blocker' | 'must' | 'should' | 'optional';
 
 /**
  * ReadinessFinding 接口
@@ -116,11 +153,97 @@ export interface Risk {
   mitigations?: string[];              // 兼容旧字段（等同于 mitigation）
 }
 
-export interface Constraint {
-  type: string;
-  message: string;
+/**
+ * 受影响的POI信息
+ */
+export interface AffectedPoi {
+  id: string;
+  name: string;
+  nameCN?: string;
+  day?: number;  // 影响的天数（1-based）
 }
 
+/**
+ * 风险来源信息（官方来源）
+ */
+export interface RiskSource {
+  sourceId: string;                    // 来源ID（如 "src.safetravel.is"）
+  authority: string;                   // 权威机构名称（如 "SafeTravel Iceland"）
+  title?: string;                      // 来源标题（如 "冰岛旅行安全信息"）
+  canonicalUrl?: string;               // 规范URL（如 "https://www.safetravel.is/"）
+}
+
+/**
+ * 缓解建议详情
+ */
+export interface MitigationDetail {
+  action: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+/**
+ * 风险分类类型
+ */
+export type RiskCategory = 'weather' | 'terrain' | 'safety' | 'logistics' | 'other';
+
+/**
+ * ReadinessDisclaimer 接口
+ * 免责声明和责任边界（v2.0.0 新增）
+ */
+export interface ReadinessDisclaimer {
+  /**
+   * 免责声明消息
+   * 告知用户本检查结果仅供参考，实际要求以官方机构为准
+   */
+  message: string;
+  
+  /**
+   * 数据最后更新时间
+   * 格式：ISO 8601 datetime
+   */
+  lastUpdated?: string;
+  
+  /**
+   * 数据来源列表
+   * 例如：['pack.is.iceland', 'facts.NZ']
+   */
+  dataSources?: string[];
+  
+  /**
+   * 用户必须自行验证的事项
+   * 例如：['签证要求', '保险覆盖范围']
+   */
+  userActionRequired?: string[];
+}
+
+/**
+ * ReadinessConstraint 接口
+ * 约束编译结果（v2.0.0 更新）
+ */
+export interface ReadinessConstraint {
+  id: string;
+  type: 'hard' | 'soft';
+  severity: 'error' | 'warning' | 'info';
+  /**
+   * 约束类型，用于区分blocker和must
+   * - 'legal_blocker': 法律/法规硬性要求（blocker级别，entry_transit/health_insurance类别）
+   * - 'safety_blocker': 安全硬性要求（blocker级别，其他类别）
+   * - 'strong_recommendation': 强烈建议（must级别）
+   * - 'recommendation': 建议（should级别）
+   * - 'optional': 可选（optional级别）
+   */
+  constraintType?: 'legal_blocker' | 'safety_blocker' | 'strong_recommendation' | 'recommendation' | 'optional';
+  message: string;
+  evidence?: Array<{ sourceId: string; sectionId?: string; quote?: string }>;
+  tasks?: Array<{ title: string; dueOffsetDays?: number; tags?: string[] }>;
+  askUser?: string[];
+  penalty?: (state: any) => number;     // 软约束的惩罚函数（仅soft类型）
+}
+
+/**
+ * ReadinessCheckResult 接口
+ * 准备度检查结果（v2.0.0 更新）
+ */
 export interface ReadinessCheckResult {
   findings: ReadinessFinding[];
   summary: {
@@ -128,9 +251,15 @@ export interface ReadinessCheckResult {
     totalMust: number;
     totalShould: number;
     totalOptional: number;
+    totalRisks?: number;  // 风险总数（可选）
   };
   risks: Risk[];
-  constraints: Constraint[];
+  constraints: ReadinessConstraint[];
+  /**
+   * 免责声明和责任边界
+   * 必须包含在API响应中，前端必须显示给用户
+   */
+  disclaimer?: ReadinessDisclaimer;
 }
 
 // ==================== 能力包相关类型 ====================
@@ -309,11 +438,24 @@ export interface PersonalizedChecklistResponse {
 }
 
 /**
- * 风险项（扩展版，支持能力包来源）
+ * 风险项（扩展版，支持能力包来源和增强字段）
+ * 根据风险预警增强版 API 文档定义
  */
 export interface EnhancedRisk extends Risk {
+  id?: string;                          // 🆕 风险ID
+  typeLabel?: string;                   // 🆕 风险类型中文显示名称（如 `极端天气`）
+  typeLabelEn?: string;                 // 🆕 风险类型英文显示名称
+  typeIcon?: string;                    // 🆕 风险类型图标（emoji）
+  category?: RiskCategory;              // 🆕 风险分类（`weather`/`terrain`/`safety`/`logistics`/`other`）
+  severityLabel?: string;                // 🆕 严重程度中文显示（`高`/`中`/`低`）
+  severityLabelEn?: string;             // 🆕 严重程度英文显示
+  description?: string;                 // 🆕 详细说明（当前与message相同）
+  impact?: string;                      // 🆕 影响说明
+  mitigationDetails?: MitigationDetail[]; // 🆕 详细缓解建议（包含优先级）
+  affectedPois?: AffectedPoi[];         // 🆕 影响的POI列表（包含名称、天数）
   sourceType?: 'readiness' | 'capability_pack';  // 来源类型
   sourcePackType?: CapabilityPackType | string;  // 能力包类型（当 sourceType='capability_pack' 时）
+  originalSeverity?: 'low' | 'medium' | 'high';   // 🆕 原始严重程度（AI增强前）
 }
 
 /**
@@ -322,12 +464,25 @@ export interface EnhancedRisk extends Risk {
 export interface RiskWarningsParams {
   tripId: string;
   lang?: string;
+  userId?: string;  // 🆕 用户ID（可选，用于个性化）
   includeCapabilityPackHazards?: boolean;  // 是否包含能力包的 hazards
 }
 
+/**
+ * 风险预警响应（增强版）
+ * 根据风险预警增强版 API 文档定义
+ */
 export interface RiskWarningsResponse {
   tripId: string;
   risks: EnhancedRisk[];
+  risksByCategory?: Record<RiskCategory, Array<{
+    id: string;
+    type: string;
+    typeLabel?: string;
+    severity: 'low' | 'medium' | 'high';
+    message: string;
+  }>>;                                  // 🆕 按分类分组的风险
+  packSources?: RiskSource[];           // 🆕 所有风险的官方来源列表（去重后）
   summary: {
     totalRisks: number;
     highSeverity: number;
@@ -338,7 +493,16 @@ export interface RiskWarningsResponse {
       readiness: number;
       capabilityPack: number;
     };
+    // 🆕 按分类统计的风险数量
+    byCategory?: {
+      weather?: number;
+      terrain?: number;
+      safety?: number;
+      logistics?: number;
+      other?: number;
+    };
   };
+  aiEnhanced?: boolean;                 // 🆕 是否启用AI增强
 }
 
 // ==================== API 接口 ====================
@@ -512,10 +676,23 @@ export const readinessApi = {
    * @param options 可选参数
    *   - includeCapabilityPackHazards: 是否包含能力包的 hazards（默认 false）
    */
+  /**
+   * 获取行程潜在风险（增强版）
+   * GET /readiness/risk-warnings?tripId=xxx&lang=zh&userId=xxx&includeCapabilityPackHazards=true
+   * 
+   * @param tripId 行程ID（必填）
+   * @param options 可选参数
+   *   - lang: 语言代码，可选：'zh' | 'en'，默认为 'en'
+   *   - userId: 用户ID（可选，用于个性化）
+   *   - includeCapabilityPackHazards: 是否包含能力包危害（默认 false）
+   */
   getRiskWarnings: async (
     tripId: string, 
-    lang?: string,
-    options?: { includeCapabilityPackHazards?: boolean }
+    options?: { 
+      lang?: string;
+      userId?: string;
+      includeCapabilityPackHazards?: boolean;
+    }
   ): Promise<RiskWarningsResponse> => {
     // 防御性检查：确保 tripId 存在
     if (!tripId) {
@@ -525,8 +702,12 @@ export const readinessApi = {
     // 安全地构建查询参数
     const params = new URLSearchParams();
     params.append('tripId', tripId);
-    if (lang) {
-      params.append('lang', lang);
+    if (options?.lang) {
+      params.append('lang', options.lang);
+    }
+    // ✅ 只有当 userId 存在且不为空时才传递
+    if (options?.userId && options.userId.trim() !== '') {
+      params.append('userId', options.userId);
     }
     if (options?.includeCapabilityPackHazards) {
       params.append('includeCapabilityPackHazards', 'true');
@@ -569,17 +750,71 @@ export const readinessApi = {
         console.log(`🔄 [Readiness] 风险预警包含 ${capPackRisks.length} 个能力包 hazards`);
       }
       
+      // ✅ 确保新字段存在（向后兼容）
+      if (!result.risksByCategory) {
+        // 如果没有按分类分组的数据，根据 risks 数组自动生成
+        const risksByCategory: Record<RiskCategory, EnhancedRisk[]> = {
+          weather: [],
+          terrain: [],
+          safety: [],
+          logistics: [],
+          other: [],
+        };
+        result.risks.forEach(risk => {
+          const category = risk.category || 'other';
+          if (category in risksByCategory) {
+            risksByCategory[category as RiskCategory].push(risk);
+          } else {
+            risksByCategory.other.push(risk);
+          }
+        });
+        result.risksByCategory = risksByCategory as any;
+      }
+      
+      // ✅ 确保 summary.byCategory 存在
+      if (!result.summary.byCategory) {
+        const risks = result.risks || [];
+        result.summary.byCategory = {
+          weather: risks.filter(r => r.category === 'weather').length,
+          terrain: risks.filter(r => r.category === 'terrain').length,
+          safety: risks.filter(r => r.category === 'safety').length,
+          logistics: risks.filter(r => r.category === 'logistics').length,
+          other: risks.filter(r => !r.category || r.category === 'other').length,
+        };
+      }
+      
       return result;
     } catch (error: any) {
       // 提供更详细的错误信息
-      console.error('[Readiness] getRiskWarnings API 调用失败:', {
+      // ✅ 提供更详细的错误信息，包括请求参数
+      const errorDetails = {
         tripId,
-        lang,
+        lang: options?.lang,
+        userId: options?.userId || '(未提供)',
         includeCapabilityPackHazards: options?.includeCapabilityPackHazards,
+        url: `/readiness/risk-warnings?${params.toString()}`,
         error: error?.message || error,
         response: error?.response?.data,
         status: error?.response?.status,
-      });
+      };
+      console.error('[Readiness] getRiskWarnings API 调用失败:', errorDetails);
+      
+      // ✅ 如果是 500 错误，可能是后端尚未实现增强版接口，记录警告但不抛出错误
+      if (error?.response?.status === 500) {
+        console.warn('⚠️ [Readiness] 后端返回 500 错误，可能是增强版风险预警接口尚未实现，将使用旧格式风险数据');
+        // 返回空数据，让调用方使用降级方案
+        return {
+          tripId,
+          risks: [],
+          summary: {
+            totalRisks: 0,
+            highSeverity: 0,
+            mediumSeverity: 0,
+            lowSeverity: 0,
+          },
+        };
+      }
+      
       throw error;
     }
   },
@@ -1261,7 +1496,8 @@ export interface ScoreData {
 /** 准备度发现项 */
 export interface ScoreFinding {
   id: string;
-  type: 'blocker' | 'warning' | 'suggestion';
+  /** ✅ v1.7.0统一：使用标准类型 must 和 should，同时兼容 warning 和 suggestion */
+  type: 'blocker' | 'must' | 'should' | 'optional' | 'warning' | 'suggestion';
   category: 'evidence' | 'schedule' | 'transport' | 'safety' | 'buffer';
   message: string;
   severity: 'high' | 'medium' | 'low';
@@ -1283,8 +1519,16 @@ export interface ScoreRisk {
 export interface ScoreSummary {
   totalFindings: number;
   blockers: number;
-  warnings: number;
-  suggestions: number;
+  /** @deprecated 使用 must 替代 */
+  warnings?: number;  // ⚠️ 向后兼容：应映射到 must
+  /** @deprecated 使用 should 替代 */
+  suggestions?: number;  // ⚠️ 向后兼容：应映射到 should
+  /** ✅ 标准字段：必须项 */
+  must?: number;
+  /** ✅ 标准字段：建议项 */
+  should?: number;
+  /** ✅ 标准字段：可选项 */
+  optional?: number;
   highRisks: number;
   mediumRisks: number;
   lowRisks: number;

@@ -1411,11 +1411,16 @@ export const planningWorkbenchApi = {
    * 为指定行程的地点批量获取所有类型的证据数据（天气、道路封闭、开放时间），
    * 证据数据会自动更新到 Place 的 metadata 中
    * 
+   * 🆕 P1功能：支持异步模式（async=true）
+   * - 同步模式：直接返回结果（默认）
+   * - 异步模式：返回任务ID，需要通过 getTaskProgress 查询进度
+   * 
    * @param tripId 行程 ID
    * @param options 选项
    * @param options.placeIds 指定要获取证据的地点 ID 列表，不提供则处理所有缺少证据的地点
    * @param options.evidenceTypes 要获取的证据类型，不提供则获取所有类型
    * @param options.forceRefresh 是否强制刷新已有证据数据，默认为 false
+   * @param options.async 是否异步执行，默认为 false
    */
   fetchEvidence: async (
     tripId: string,
@@ -1423,8 +1428,9 @@ export const planningWorkbenchApi = {
       placeIds?: number[];
       evidenceTypes?: EvidenceType[];
       forceRefresh?: boolean;
+      async?: boolean; // 🆕 异步模式
     }
-  ): Promise<FetchEvidenceResponse> => {
+  ): Promise<FetchEvidenceResponse | { taskId: string }> => {
     try {
       console.log('[Planning Workbench API] 发送 fetchEvidence 请求:', {
         tripId,
@@ -1441,27 +1447,42 @@ export const planningWorkbenchApi = {
       if (options?.forceRefresh) {
         params.forceRefresh = 'true';
       }
+      // 🆕 异步模式
+      if (options?.async) {
+        params.async = 'true';
+      }
       
-      const response = await apiClient.post<ApiResponseWrapper<FetchEvidenceResponse>>(
+      const response = await apiClient.post<ApiResponseWrapper<FetchEvidenceResponse | { taskId: string }>>(
         `/planning-workbench/trips/${tripId}/fetch-evidence`,
         {},
         { 
           params,
-          timeout: 60000, // 60 秒超时（批量获取可能需要较长时间）
+          timeout: options?.async ? 10000 : 60000, // 异步模式10秒超时，同步模式60秒
         }
       );
 
       const wrappedResponse = handleResponse(response);
+      
+      // 🆕 如果是异步模式，返回任务ID
+      if (options?.async && 'taskId' in wrappedResponse) {
+        console.log('[Planning Workbench API] ✅ fetchEvidence 异步任务已创建:', {
+          taskId: wrappedResponse.taskId,
+        });
+        return wrappedResponse;
+      }
+      
+      // 同步模式，返回完整结果
+      const syncResponse = wrappedResponse as FetchEvidenceResponse;
       console.log('[Planning Workbench API] ✅ fetchEvidence 成功:', {
-        totalPlaces: wrappedResponse.totalPlaces,
-        processedPlaces: wrappedResponse.processedPlaces,
-        successCount: wrappedResponse.successCount,
-        partialCount: wrappedResponse.partialCount,
-        failedCount: wrappedResponse.failedCount,
-        requestedEvidenceTypes: wrappedResponse.requestedEvidenceTypes,
+        totalPlaces: syncResponse.totalPlaces,
+        processedPlaces: syncResponse.processedPlaces,
+        successCount: syncResponse.successCount,
+        partialCount: syncResponse.partialCount,
+        failedCount: syncResponse.failedCount,
+        requestedEvidenceTypes: syncResponse.requestedEvidenceTypes,
       });
 
-      return wrappedResponse;
+      return syncResponse;
     } catch (error: any) {
       console.error('[Planning Workbench API] ❌ fetchEvidence 请求失败:', {
         error,
@@ -1531,5 +1552,69 @@ export const planningWorkbenchApi = {
       });
       throw error;
     }
+  },
+
+  /**
+   * 🆕 查询任务进度
+   * GET /api/planning-workbench/tasks/:taskId/progress
+   * 
+   * P1功能：查询异步任务的执行进度
+   */
+  getTaskProgress: async (
+    taskId: string
+  ): Promise<{
+    taskId: string;
+    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+    progress: {
+      total: number; // 总任务数
+      processed: number; // 已处理数量
+      current?: string; // 当前处理的POI ID或描述
+      estimatedRemainingTime?: number; // 预计剩余时间（秒）
+    };
+    result?: FetchEvidenceResponse; // 任务完成后的结果
+    error?: string; // 任务失败时的错误信息
+    createdAt: string; // 任务创建时间
+    updatedAt: string; // 最后更新时间
+  }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{
+      taskId: string;
+      status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+      progress: {
+        total: number;
+        processed: number;
+        current?: string;
+        estimatedRemainingTime?: number;
+      };
+      result?: FetchEvidenceResponse;
+      error?: string;
+      createdAt: string;
+      updatedAt: string;
+    }>>(
+      `/planning-workbench/tasks/${taskId}/progress`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 🆕 取消任务
+   * POST /api/planning-workbench/tasks/:taskId/cancel
+   * 
+   * P1功能：取消正在执行的异步任务
+   */
+  cancelTask: async (
+    taskId: string
+  ): Promise<{
+    taskId: string;
+    status: 'CANCELLED';
+    message: string;
+  }> => {
+    const response = await apiClient.post<ApiResponseWrapper<{
+      taskId: string;
+      status: 'CANCELLED';
+      message: string;
+    }>>(
+      `/planning-workbench/tasks/${taskId}/cancel`
+    );
+    return handleResponse(response);
   },
 };

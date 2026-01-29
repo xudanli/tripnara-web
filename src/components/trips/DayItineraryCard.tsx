@@ -147,6 +147,12 @@ export default function DayItineraryCard({
                 {format(new Date(day.date), 'yyyy.MM.dd')}
               </div>
             </div>
+            {/* ✅ 显示当天主题（如果存在） */}
+            {day.theme && (
+              <div className="text-sm font-medium text-muted-foreground mb-2">
+                {day.theme}
+              </div>
+            )}
             
             {/* 行程项数量 Badge */}
             <div className="flex items-center gap-2 mb-2">

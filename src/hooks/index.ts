@@ -61,3 +61,21 @@ export { formatValidationError, getValidationSuggestionsSummary } from './useIti
 export { useItineraryCost } from './useItineraryCost';
 export type { UseItineraryCostReturn } from './useItineraryCost';
 export { getDefaultCostCategory, formatCost, formatCostCategory } from './useItineraryCost';
+
+// 冰岛信息源
+export { useIcelandInfo, useIsIcelandTrip } from './useIcelandInfo';
+export type { UseIcelandInfoReturn } from './useIcelandInfo';
+
+// 路线模板
+export { useRouteTemplates, useRouteTemplate } from './useRouteTemplates';
+export type { UseRouteTemplatesReturn, UseRouteTemplateReturn } from './useRouteTemplates';
+
+// 证据状态和自动获取
+export { useEvidenceStatus } from './useEvidenceStatus';
+export type { UseEvidenceStatusReturn, EvidenceStatus } from './useEvidenceStatus';
+export { useAutoFetchEvidence } from './useAutoFetchEvidence';
+export type { UseAutoFetchEvidenceReturn, UseAutoFetchEvidenceOptions } from './useAutoFetchEvidence';
+
+// 行程权限
+export { useTripPermissions } from './useTripPermissions';
+export type { UseTripPermissionsReturn } from './useTripPermissions';

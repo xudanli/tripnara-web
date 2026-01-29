@@ -13,18 +13,19 @@ interface BlockerCardProps {
 }
 
 export default function BlockerCard({ blocker, onFix, className }: BlockerCardProps) {
+  // 🎨 统一颜色 Token（符合 TripNARA 克制原则）
   const severityConfig = {
     critical: {
       label: 'Critical',
-      className: 'bg-red-100 text-red-800 border-red-200',
+      className: 'bg-red-50 text-red-700 border-red-200', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
     },
     high: {
       label: 'High',
-      className: 'bg-orange-100 text-orange-800 border-orange-200',
+      className: 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-orange-100
     },
     medium: {
       label: 'Medium',
-      className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      className: 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
     },
   };
 
@@ -34,8 +35,8 @@ export default function BlockerCard({ blocker, onFix, className }: BlockerCardPr
     <Card
       className={cn(
         'cursor-pointer transition-all hover:shadow-md',
-        blocker.severity === 'critical' && 'border-red-300',
-        blocker.severity === 'high' && 'border-orange-300',
+        blocker.severity === 'critical' && 'border-red-200', // ✅ 修复：统一使用 border-red-200
+        blocker.severity === 'high' && 'border-amber-200', // ✅ 修复：统一使用 border-amber-200
         className
       )}
       onClick={() => onFix(blocker.id)}
@@ -48,8 +49,8 @@ export default function BlockerCard({ blocker, onFix, className }: BlockerCardPr
                 className={cn(
                   'h-4 w-4',
                   blocker.severity === 'critical' && 'text-red-600',
-                  blocker.severity === 'high' && 'text-orange-600',
-                  blocker.severity === 'medium' && 'text-yellow-600'
+                  blocker.severity === 'high' && 'text-amber-600', // ✅ 修复：统一使用 amber-600
+                  blocker.severity === 'medium' && 'text-amber-600' // ✅ 修复：统一使用 amber-600
                 )}
               />
               <h3 className="font-semibold text-sm">{blocker.title}</h3>

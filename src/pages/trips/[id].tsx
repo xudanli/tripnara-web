@@ -417,6 +417,49 @@ export default function TripDetailPage() {
       setLoading(true);
       setError(null);
       const data = await tripsApi.getById(id);
+      
+      // 🔍 详细检查行程数据中的POI信息
+      console.log('📋 [TripDetailPage] 加载的行程数据:', {
+        tripId: data.id,
+        destination: data.destination,
+        totalDays: data.TripDay?.length || 0,
+        daysWithItems: data.TripDay?.filter((day: any) => day.ItineraryItem && day.ItineraryItem.length > 0).length || 0,
+        totalItems: data.TripDay?.reduce((sum: number, day: any) => sum + (day.ItineraryItem?.length || 0), 0) || 0,
+        days: data.TripDay?.map((day: any) => ({
+          day: day.date,
+          theme: day.theme,
+          itemsCount: day.ItineraryItem?.length || 0,
+          items: day.ItineraryItem?.map((item: any) => ({
+            id: item.id,
+            type: item.type,
+            placeId: item.placeId,
+            placeName: item.Place?.nameCN || item.Place?.nameEN || '未知地点',
+            hasPlace: !!item.Place,
+            isRequired: item.isRequired,
+            note: item.note,
+          })) || [],
+        })) || [],
+      });
+      
+      // ⚠️ 检查是否有行程项缺少Place信息
+      const itemsWithoutPlace = data.TripDay?.flatMap((day: any) => 
+        (day.ItineraryItem || [])
+          .filter((item: any) => item.placeId && !item.Place)
+          .map((item: any) => ({
+            day: day.date,
+            itemId: item.id,
+            placeId: item.placeId,
+            note: item.note,
+          }))
+      ) || [];
+      
+      if (itemsWithoutPlace.length > 0) {
+        console.warn('⚠️ [TripDetailPage] 发现缺少Place信息的行程项:', {
+          count: itemsWithoutPlace.length,
+          items: itemsWithoutPlace,
+        });
+      }
+      
       if (data) {
         // 确保所有数值字段都有默认值
         setTrip({
@@ -475,8 +518,35 @@ export default function TripDetailPage() {
         setError('行程数据为空');
       }
     } catch (err: any) {
-      setError(err.message || '加载行程详情失败');
-      console.error('Failed to load trip:', err);
+      console.error('❌ [TripDetail] 加载行程失败:', {
+        tripId: id,
+        error: err.message,
+        code: err.code,
+        status: err.response?.status,
+        response: err.response?.data,
+      });
+      
+      // 提取更详细的错误信息
+      let errorMessage = err.message || '加载行程详情失败';
+      
+      // 如果是权限错误
+      if (err.code === 'UNAUTHORIZED' || err.response?.status === 401) {
+        errorMessage = `行程 ID ${id} 不存在或您没有权限访问`;
+      }
+      // 如果是资源不存在
+      else if (err.code === 'NOT_FOUND' || err.response?.status === 404) {
+        errorMessage = `行程 ID ${id} 不存在或已被删除`;
+      }
+      // 如果是服务器错误
+      else if (err.response?.status >= 500) {
+        errorMessage = '服务器错误，请稍后重试';
+      }
+      // 如果是业务错误（从响应体中获取）
+      else if (err.response?.data?.error?.message) {
+        errorMessage = err.response.data.error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1138,10 +1208,40 @@ export default function TripDetailPage() {
     return (
       <div className="p-6">
         <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-800">{error || '行程不存在'}</p>
-          <Button onClick={() => navigate('/dashboard/trips')} className="mt-4" variant="outline">
-            返回列表
-          </Button>
+          <p className="text-red-800 font-semibold mb-2">{error || '行程不存在'}</p>
+          {id && (
+            <p className="text-sm text-red-600 mb-4">
+              行程ID: <code className="bg-red-100 px-2 py-1 rounded">{id}</code>
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={() => navigate('/dashboard/trips')} variant="outline">
+              返回列表
+            </Button>
+            {id && (
+              <Button 
+                onClick={async () => {
+                  // 重试加载
+                  try {
+                    setLoading(true);
+                    setError(null);
+                    const data = await tripsApi.getById(id);
+                    if (data) {
+                      setTrip(data);
+                      setLoading(false);
+                    }
+                  } catch (retryErr: any) {
+                    console.error('重试加载失败:', retryErr);
+                    setError(retryErr.message || '加载失败');
+                    setLoading(false);
+                  }
+                }}
+                variant="outline"
+              >
+                重试加载
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );

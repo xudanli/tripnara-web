@@ -350,15 +350,52 @@ export default function RouteTemplateDetailPage() {
                               <span>最大海拔: {dayPlan.maxElevationM}m</span>
                             </div>
                           )}
-                          {dayPlan.requiredNodes && dayPlan.requiredNodes.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              <span className="text-sm text-muted-foreground">必需节点:</span>
-                              {dayPlan.requiredNodes.map((node, nodeIdx) => (
-                                <Badge key={nodeIdx} variant="outline" className="text-xs">
-                                  {node}
+                          {/* ✅ 优先显示 pois 格式（新格式） */}
+                          {dayPlan.pois && dayPlan.pois.length > 0 ? (
+                            <div className="space-y-2 mt-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-muted-foreground">POI列表:</span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {dayPlan.pois.length} 个
                                 </Badge>
-                              ))}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {dayPlan.pois
+                                  .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                  .map((poi, poiIdx) => (
+                                    <Badge
+                                      key={poi.id || poiIdx}
+                                      variant={poi.required ? 'default' : 'outline'}
+                                      className="text-xs"
+                                    >
+                                      {poi.nameCN || poi.nameEN || `POI ${poi.id}`}
+                                      {poi.required && (
+                                        <span className="ml-1 text-[10px]">★</span>
+                                      )}
+                                      {poi.durationMinutes && (
+                                        <span className="ml-1 text-[10px] opacity-70">
+                                          ({Math.round(poi.durationMinutes / 60)}h)
+                                        </span>
+                                      )}
+                                    </Badge>
+                                  ))}
+                              </div>
                             </div>
+                          ) : (
+                            /* ⚠️ 向后兼容：如果没有 pois，显示 requiredNodes（已废弃） */
+                            dayPlan.requiredNodes && dayPlan.requiredNodes.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                <span className="text-sm text-muted-foreground">必需节点:</span>
+                                <Badge variant="outline" className="text-xs bg-yellow-50 border-yellow-200">
+                                  旧格式（已废弃）
+                                </Badge>
+                                {dayPlan.requiredNodes.map((node, nodeIdx) => (
+                                  <Badge key={nodeIdx} variant="outline" className="text-xs">
+                                    {node}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )
                           )}
                         </div>
                       </CardContent>

@@ -18,10 +18,11 @@ interface RepairOptionCardProps {
   onPreview: (optionId: string) => void;
 }
 
+// 🎨 统一颜色 Token（符合 TripNARA 克制原则）
 const impactColors = {
-  high: 'bg-red-100 text-red-700 border-red-200',
-  medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  low: 'bg-green-100 text-green-700 border-green-200',
+  high: 'bg-red-50 text-red-700 border-red-200', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
+  medium: 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
+  low: 'bg-green-50 text-green-700 border-green-200', // ✅ 修复：使用 bg-green-50 而不是 bg-green-100
 };
 
 export default function RepairOptionCard({

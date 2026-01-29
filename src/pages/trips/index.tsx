@@ -57,13 +57,62 @@ export default function TripsPage() {
     }
   }, []);
 
+  // 监听路径变化，如果是从其他页面导航到行程库，也刷新一次
+  useEffect(() => {
+    // 当路径是 /dashboard/trips 时，检查是否需要刷新
+    if (location.pathname === '/dashboard/trips') {
+      // 检查是否有刷新标记（通过 sessionStorage）
+      const shouldRefresh = sessionStorage.getItem('trips-page-should-refresh');
+      if (shouldRefresh === 'true') {
+        console.log('🔄 [TripsPage] 检测到刷新标记，刷新行程列表');
+        sessionStorage.removeItem('trips-page-should-refresh');
+        // 延迟刷新，确保页面已渲染
+        setTimeout(() => {
+          loadTrips();
+        }, 500);
+      }
+    }
+  }, [location.pathname]);
+
   // 当从创建页面返回时，刷新行程列表
   useEffect(() => {
     // 检查是否从创建页面返回（通过 location.state 判断）
     if (location.state?.from === 'create') {
-      loadTrips();
+      const tripId = location.state?.tripId;
+      console.log('🔄 [TripsPage] 检测到从创建页面返回，刷新行程列表', {
+        tripId,
+        locationState: location.state,
+        pathname: location.pathname,
+      });
+      
+      // 设置刷新标记，用于显示成功提示
+      sessionStorage.setItem('trips-page-was-refreshing', 'true');
+      
+      // 显示成功提示
+      if (tripId) {
+        toast.success('行程创建成功！正在刷新列表...', {
+          description: `行程ID: ${tripId.substring(0, 8)}...`,
+          duration: 3000,
+        });
+      } else {
+        toast.success('行程创建成功！正在刷新列表...', {
+          duration: 3000,
+        });
+      }
+      
+      // 延迟一小段时间后刷新，确保导航已完成
+      const timer = setTimeout(() => {
+        console.log('🔄 [TripsPage] 延迟刷新触发，开始调用 loadTrips()');
+        loadTrips();
+      }, 800); // 增加到800ms，给后端更多时间完成创建
+      
       // 清除 state，避免重复刷新
       window.history.replaceState({}, document.title);
+      
+      return () => {
+        console.log('🔄 [TripsPage] 清理刷新定时器');
+        clearTimeout(timer);
+      };
     }
   }, [location]);
 
@@ -111,12 +160,90 @@ export default function TripsPage() {
   };
 
   const loadTrips = async () => {
+    const loadId = Date.now(); // 用于追踪本次加载
     try {
       setLoading(true);
       setError(null);
-      const data = await tripsApi.getAll();
+      console.log(`🔄 [TripsPage] [${loadId}] 开始加载行程列表...`);
+      
+      // 添加超时保护
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('加载行程列表超时（30秒）'));
+        }, 30000);
+      });
+      
+      const apiPromise = tripsApi.getAll();
+      
+      console.log(`🔄 [TripsPage] [${loadId}] 等待API响应...`);
+      const data = await Promise.race([apiPromise, timeoutPromise]) as TripListItem[];
+      
+      console.log(`✅ [TripsPage] [${loadId}] API调用成功，handleResponse处理后的数据:`, {
+        data,
+        type: typeof data,
+        isArray: Array.isArray(data),
+        length: Array.isArray(data) ? data.length : 'N/A',
+        // 详细检查数据结构（如果返回的不是数组）
+        dataKeys: data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : [],
+        // 检查是否是包装格式（不应该出现，因为 handleResponse 已经处理过了）
+        hasSuccess: data && typeof data === 'object' && !Array.isArray(data) && 'success' in data,
+        hasData: data && typeof data === 'object' && !Array.isArray(data) && 'data' in data,
+        hasItems: data && typeof data === 'object' && !Array.isArray(data) && 'items' in data,
+        // 打印所有行程ID
+        allTripIds: Array.isArray(data) ? data.map(t => t.id) : 'N/A',
+      });
+      
+      // 🔧 防御性处理：如果 handleResponse 返回的不是数组，尝试提取
+      let tripsData = data;
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        console.warn(`⚠️ [TripsPage] [${loadId}] handleResponse 返回的不是数组，尝试提取数据:`, data);
+        // 检查是否是包装格式
+        if ('success' in data && 'data' in data) {
+          const wrapped = data as any;
+          if (wrapped.success && wrapped.data) {
+            // 检查是否是 items 格式（/api/trips/admin）
+            if (Array.isArray(wrapped.data.items)) {
+              console.log(`⚠️ [TripsPage] [${loadId}] 检测到 items 格式，使用 result.data.items`);
+              tripsData = wrapped.data.items;
+            } else if (Array.isArray(wrapped.data)) {
+              // 标准格式（/api/trips）
+              console.log(`✅ [TripsPage] [${loadId}] 检测到标准格式，使用 result.data`);
+              tripsData = wrapped.data;
+            }
+          }
+        }
+        // 检查是否直接有 items 字段
+        if ('items' in data && Array.isArray((data as any).items)) {
+          console.log(`⚠️ [TripsPage] [${loadId}] 检测到直接 items 字段，使用 data.items`);
+          tripsData = (data as any).items;
+        }
+      }
+      
       // 确保数据是数组，并添加默认值
-      const tripsList = Array.isArray(data) ? data : [];
+      const tripsList = Array.isArray(tripsData) ? tripsData : [];
+      console.log(`✅ [TripsPage] [${loadId}] 处理后的行程列表，数量:`, tripsList.length);
+      
+      // 打印所有行程的详细信息，便于调试
+      if (tripsList.length > 0) {
+        console.log(`✅ [TripsPage] [${loadId}] 所有行程详情:`, tripsList.map(t => ({
+          id: t.id,
+          destination: t.destination,
+          status: t.status,
+          startDate: t.startDate,
+          endDate: t.endDate,
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        })));
+        
+        // 按状态分组统计
+        const statusCounts: Record<string, number> = {};
+        tripsList.forEach(trip => {
+          const status = trip.status || 'UNKNOWN';
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        console.log(`✅ [TripsPage] [${loadId}] 行程状态统计:`, statusCounts);
+      }
+      
       setTrips(tripsList);
       
       // 从实际数据中提取所有存在的状态值
@@ -127,13 +254,51 @@ export default function TripsPage() {
         }
       });
       setAvailableStatuses(Array.from(statusSet));
+      
+      // 如果列表为空，记录警告
+      if (tripsList.length === 0) {
+        console.warn(`⚠️ [TripsPage] [${loadId}] 行程列表为空，可能的原因：1) 确实没有行程 2) API返回格式不正确 3) 权限问题`);
+        toast.warning('行程列表为空', {
+          description: '如果您刚创建了行程，请稍等片刻后刷新页面',
+          duration: 5000,
+        });
+      } else {
+        console.log(`✅ [TripsPage] [${loadId}] 行程列表加载完成，共 ${tripsList.length} 个行程`);
+        // 如果之前有刷新标记，显示成功提示
+        const wasRefreshing = sessionStorage.getItem('trips-page-was-refreshing');
+        if (wasRefreshing === 'true') {
+          sessionStorage.removeItem('trips-page-was-refreshing');
+          toast.success(`行程列表已更新，共 ${tripsList.length} 个行程`, {
+            duration: 3000,
+          });
+        }
+      }
     } catch (err: any) {
-      setError(err.message || '加载行程列表失败');
-      console.error('Failed to load trips:', err);
+      const errorMessage = err.message || '加载行程列表失败';
+      console.error(`❌ [TripsPage] [${loadId}] 加载行程列表失败:`, {
+        error: err,
+        message: err.message,
+        code: err.code,
+        response: err.response,
+        responseData: err.response?.data,
+        responseStatus: err.response?.status,
+        stack: err.stack,
+      });
+      
+      setError(errorMessage);
+      toast.error('加载行程列表失败', {
+        description: errorMessage,
+        duration: 5000,
+        action: {
+          label: '重试',
+          onClick: () => loadTrips(),
+        },
+      });
       setTrips([]); // 出错时设置为空数组
       setAvailableStatuses([]);
     } finally {
       setLoading(false);
+      console.log(`✅ [TripsPage] [${loadId}] loadTrips 函数执行完成，loading状态已设置为false`);
     }
   };
 
@@ -249,6 +414,27 @@ export default function TripsPage() {
   const filteredTrips = statusFilter === 'all' 
     ? sortedTrips 
     : sortedTrips.filter(trip => trip.status === statusFilter);
+  
+  // 调试日志：记录过滤前后的数量（直接在渲染时记录，避免 useEffect 依赖问题）
+  if (trips.length > 0 && process.env.NODE_ENV === 'development') {
+    const filteredOut = statusFilter !== 'all' 
+      ? sortedTrips.filter(trip => trip.status !== statusFilter)
+      : [];
+    if (filteredOut.length > 0 || filteredTrips.length !== trips.length) {
+      console.log('🔍 [TripsPage] 行程过滤统计:', {
+        总数量: trips.length,
+        排序后数量: sortedTrips.length,
+        当前过滤状态: statusFilter,
+        过滤后数量: filteredTrips.length,
+        可用状态列表: availableStatuses,
+        过滤掉的行程: filteredOut.map(t => ({
+          id: t.id,
+          status: t.status,
+          destination: t.destination,
+        })),
+      });
+    }
+  }
 
   if (loading) {
     return (
@@ -318,8 +504,29 @@ export default function TripsPage() {
 
           {/* 行程卡片列表 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTrips.map((trip) => {
-              if (!trip || !trip.id) return null;
+            {filteredTrips.length === 0 && trips.length > 0 ? (
+              <div className="col-span-full">
+                <Card>
+                  <CardContent className="py-8 text-center">
+                    <p className="text-muted-foreground mb-2">
+                      当前筛选条件下没有行程
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      总共有 {trips.length} 个行程，但当前筛选状态 "{getTripStatusLabel(statusFilter as any)}" 下没有匹配的行程
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setStatusFilter('all')}
+                    >
+                      显示全部行程
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <>
+                {filteredTrips.map((trip) => {
+                  if (!trip || !trip.id) return null;
               
               return (
                 <Card
@@ -453,6 +660,8 @@ export default function TripsPage() {
                 </Card>
               );
             })}
+              </>
+            )}
           </div>
         </>
       )}

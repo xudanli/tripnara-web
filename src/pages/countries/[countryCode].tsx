@@ -598,11 +598,14 @@ export default function CountryDetailPage() {
                   <div className="space-y-1">
                     <div className="text-sm text-muted-foreground">插座类型</div>
                     <div className="flex gap-1">
-                      {countryProfile.powerInfo.plugTypes.map((type, idx) => (
-                        <Badge key={idx} variant="outline" className="font-mono">
-                          {type}
-                        </Badge>
-                      ))}
+                      {countryProfile.powerInfo.plugTypes && Array.isArray(countryProfile.powerInfo.plugTypes) 
+                        ? countryProfile.powerInfo.plugTypes.map((type, idx) => (
+                            <Badge key={idx} variant="outline" className="font-mono">
+                              {type}
+                            </Badge>
+                          ))
+                        : <span className="text-sm text-muted-foreground">暂无数据</span>
+                      }
                     </div>
                   </div>
                 </div>
@@ -679,7 +682,10 @@ export default function CountryDetailPage() {
                   <div className="space-y-1">
                     <div className="text-sm font-medium">签证政策</div>
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {countryProfile.complianceInfo.visaPolicy}
+                      {typeof countryProfile.complianceInfo.visaPolicy === 'string' 
+                        ? countryProfile.complianceInfo.visaPolicy
+                        : JSON.stringify(countryProfile.complianceInfo.visaPolicy, null, 2)
+                      }
                     </div>
                   </div>
                 )}
@@ -687,7 +693,10 @@ export default function CountryDetailPage() {
                   <div className="space-y-1 pt-2 border-t">
                     <div className="text-sm font-medium">驾驶规则</div>
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {countryProfile.complianceInfo.drivingRules}
+                      {typeof countryProfile.complianceInfo.drivingRules === 'string' 
+                        ? countryProfile.complianceInfo.drivingRules
+                        : JSON.stringify(countryProfile.complianceInfo.drivingRules, null, 2)
+                      }
                     </div>
                   </div>
                 )}
@@ -695,7 +704,10 @@ export default function CountryDetailPage() {
                   <div className="space-y-1 pt-2 border-t">
                     <div className="text-sm font-medium">无人机规则</div>
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {countryProfile.complianceInfo.droneRules}
+                      {typeof countryProfile.complianceInfo.droneRules === 'string' 
+                        ? countryProfile.complianceInfo.droneRules
+                        : JSON.stringify(countryProfile.complianceInfo.droneRules, null, 2)
+                      }
                     </div>
                   </div>
                 )}
@@ -703,7 +715,26 @@ export default function CountryDetailPage() {
                   <div className="space-y-1 pt-2 border-t">
                     <div className="text-sm font-medium">酒精政策</div>
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {countryProfile.complianceInfo.alcoholPolicy}
+                      {typeof countryProfile.complianceInfo.alcoholPolicy === 'string' 
+                        ? countryProfile.complianceInfo.alcoholPolicy
+                        : (() => {
+                            const policy = countryProfile.complianceInfo.alcoholPolicy as any;
+                            const parts: string[] = [];
+                            if (policy.legalAge) parts.push(`法定饮酒年龄: ${policy.legalAge}岁`);
+                            if (policy.bacLimit) parts.push(`血液酒精浓度限制: ${policy.bacLimit}`);
+                            if (policy.publicDrinking !== undefined) {
+                              parts.push(`公共场所饮酒: ${policy.publicDrinking ? '允许' : '禁止'}`);
+                            }
+                            if (policy.specialRules) {
+                              if (typeof policy.specialRules === 'string') {
+                                parts.push(`特殊规定: ${policy.specialRules}`);
+                              } else if (Array.isArray(policy.specialRules)) {
+                                parts.push(`特殊规定: ${policy.specialRules.join('；')}`);
+                              }
+                            }
+                            return parts.length > 0 ? parts.join('\n') : JSON.stringify(policy, null, 2);
+                          })()
+                      }
                     </div>
                   </div>
                 )}
@@ -711,7 +742,10 @@ export default function CountryDetailPage() {
                   <div className="space-y-1 pt-2 border-t">
                     <div className="text-sm font-medium text-destructive">旅行警告</div>
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {countryProfile.complianceInfo.travelWarnings}
+                      {typeof countryProfile.complianceInfo.travelWarnings === 'string' 
+                        ? countryProfile.complianceInfo.travelWarnings
+                        : JSON.stringify(countryProfile.complianceInfo.travelWarnings, null, 2)
+                      }
                     </div>
                   </div>
                 )}
@@ -719,7 +753,10 @@ export default function CountryDetailPage() {
                   <div className="space-y-1 pt-2 border-t">
                     <div className="text-sm font-medium">海关规定</div>
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {countryProfile.complianceInfo.customs}
+                      {typeof countryProfile.complianceInfo.customs === 'string' 
+                        ? countryProfile.complianceInfo.customs
+                        : JSON.stringify(countryProfile.complianceInfo.customs, null, 2)
+                      }
                     </div>
                   </div>
                 )}
@@ -892,22 +929,28 @@ export default function CountryDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* 从 RouteDirection 获取交通信息 */}
-              {routeDirections.length > 0 ? (
+              {routeDirections && Array.isArray(routeDirections) && routeDirections.length > 0 ? (
                 <div className="space-y-4">
                   <div>
                     <h4 className="font-medium mb-2">交通枢纽</h4>
                     <div className="flex flex-wrap gap-2">
-                      {routeDirections[0].entryHubs?.map((hub, idx) => (
-                        <Badge key={idx} variant="outline">{hub}</Badge>
-                      ))}
+                      {routeDirections[0]?.entryHubs && Array.isArray(routeDirections[0].entryHubs)
+                        ? routeDirections[0].entryHubs.map((hub, idx) => (
+                            <Badge key={idx} variant="outline">{hub}</Badge>
+                          ))
+                        : <span className="text-sm text-muted-foreground">暂无数据</span>
+                      }
                     </div>
                   </div>
                   <div>
                     <h4 className="font-medium mb-2">推荐交通方式</h4>
                     <div className="flex flex-wrap gap-2">
-                      {routeDirections[0].constraints?.transportMode?.map((mode, idx) => (
-                        <Badge key={idx} variant="secondary">{mode}</Badge>
-                      ))}
+                      {routeDirections[0]?.constraints?.transportMode && Array.isArray(routeDirections[0].constraints.transportMode)
+                        ? routeDirections[0].constraints.transportMode.map((mode, idx) => (
+                            <Badge key={idx} variant="secondary">{mode}</Badge>
+                          ))
+                        : <span className="text-sm text-muted-foreground">暂无数据</span>
+                      }
                     </div>
                   </div>
                 </div>
@@ -1061,7 +1104,7 @@ export default function CountryDetailPage() {
               <CardDescription>选择模版快速生成可执行行程</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {templates.length > 0 ? (
+              {templates && Array.isArray(templates) && templates.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {templates.slice(0, 6).map((template) => (
@@ -1200,12 +1243,15 @@ export default function CountryDetailPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {currencyStrategy.quickTable.map((row, idx) => (
-                              <tr key={idx} className="border-t">
-                                <td className="px-4 py-2">{row.local.toLocaleString()}</td>
-                                <td className="px-4 py-2 font-medium">≈ {row.home} 元</td>
-                              </tr>
-                            ))}
+                            {currencyStrategy.quickTable && Array.isArray(currencyStrategy.quickTable)
+                              ? currencyStrategy.quickTable.map((row, idx) => (
+                                  <tr key={idx} className="border-t">
+                                    <td className="px-4 py-2">{row.local.toLocaleString()}</td>
+                                    <td className="px-4 py-2 font-medium">≈ {row.home} 元</td>
+                                  </tr>
+                                ))
+                              : <tr><td colSpan={2} className="px-4 py-2 text-sm text-muted-foreground text-center">暂无数据</td></tr>
+                            }
                           </tbody>
                         </table>
                       </div>
@@ -1252,11 +1298,14 @@ export default function CountryDetailPage() {
                             <span>推荐钱包 App</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {currencyStrategy.paymentAdvice.wallet_apps.map((app, idx) => (
-                              <Badge key={idx} variant="secondary">
-                                {app}
-                              </Badge>
-                            ))}
+                            {currencyStrategy.paymentAdvice.wallet_apps && Array.isArray(currencyStrategy.paymentAdvice.wallet_apps)
+                              ? currencyStrategy.paymentAdvice.wallet_apps.map((app, idx) => (
+                                  <Badge key={idx} variant="secondary">
+                                    {app}
+                                  </Badge>
+                                ))
+                              : <span className="text-sm text-muted-foreground">暂无数据</span>
+                            }
                           </div>
                         </div>
                       )}
@@ -1366,12 +1415,15 @@ export default function CountryDetailPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {paymentInfo.currency.quickTable.map((row, idx) => (
-                              <tr key={idx} className="border-t">
-                                <td className="px-4 py-2">{row.local.toLocaleString()}</td>
-                                <td className="px-4 py-2 font-medium">≈ {row.home} 元</td>
-                              </tr>
-                            ))}
+                            {paymentInfo.currency.quickTable && Array.isArray(paymentInfo.currency.quickTable)
+                              ? paymentInfo.currency.quickTable.map((row, idx) => (
+                                  <tr key={idx} className="border-t">
+                                    <td className="px-4 py-2">{row.local.toLocaleString()}</td>
+                                    <td className="px-4 py-2 font-medium">≈ {row.home} 元</td>
+                                  </tr>
+                                ))
+                              : <tr><td colSpan={2} className="px-4 py-2 text-sm text-muted-foreground text-center">暂无数据</td></tr>
+                            }
                           </tbody>
                         </table>
                       </div>
@@ -1728,7 +1780,7 @@ export default function CountryDetailPage() {
                 </Card>
               )}
 
-              {terrainAdvice.adaptationStrategies && (
+              {terrainAdvice.adaptationStrategies && typeof terrainAdvice.adaptationStrategies === 'object' && (
                 <Card>
                   <CardHeader>
                     <CardTitle>适应策略</CardTitle>
@@ -1747,7 +1799,7 @@ export default function CountryDetailPage() {
                 </Card>
               )}
 
-              {terrainAdvice.equipmentRecommendations && (
+              {terrainAdvice.equipmentRecommendations && typeof terrainAdvice.equipmentRecommendations === 'object' && (
                 <Card>
                   <CardHeader>
                     <CardTitle>装备建议</CardTitle>
@@ -1768,7 +1820,7 @@ export default function CountryDetailPage() {
                 </Card>
               )}
 
-              {terrainAdvice.seasonalConstraints && (
+              {terrainAdvice.seasonalConstraints && typeof terrainAdvice.seasonalConstraints === 'object' && (
                 <Card>
                   <CardHeader>
                     <CardTitle>季节性约束</CardTitle>

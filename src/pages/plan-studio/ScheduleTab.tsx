@@ -843,9 +843,17 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
             <Card key={day.id}>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">
-                    Day {idx + 1} - {format(dayDate, 'yyyy-MM-dd')}
-                  </CardTitle>
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">
+                      Day {idx + 1} - {format(dayDate, 'yyyy-MM-dd')}
+                    </CardTitle>
+                    {/* ✅ 显示当天主题（如果存在） */}
+                    {day.theme && (
+                      <p className="text-sm text-muted-foreground font-medium mt-1">
+                        {day.theme}
+                      </p>
+                    )}
+                  </div>
                   <Badge variant="outline" className="text-xs">
                     {weekday}
                   </Badge>
@@ -937,6 +945,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                             (item.travelMode !== undefined && item.travelMode !== null);
                           
                           // 优先使用 item 自身的交通信息（用户手动设置的值），否则使用 API 返回的计算值
+                          // ✅ 确保 segment 不会是空对象，必须至少有一个有效字段
                           const segment = hasManualTravelInfo
                             ? {
                                 fromItemId: prevItem?.id || '',
@@ -947,13 +956,29 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                                 distance: item.travelFromPreviousDistance ?? apiSegment?.distance ?? null,
                                 travelMode: item.travelMode ?? apiSegment?.travelMode ?? null,
                               }
-                            : apiSegment;
+                            : (apiSegment && 
+                                typeof apiSegment === 'object' && 
+                                'toItemId' in apiSegment &&
+                                (apiSegment.duration !== null && apiSegment.duration !== undefined ||
+                                 apiSegment.distance !== null && apiSegment.distance !== undefined ||
+                                 apiSegment.travelMode !== null && apiSegment.travelMode !== undefined)
+                                ? apiSegment 
+                                : null);
                           
                           return (
                             <div key={item.id}>
                               {/* 交通段指示器（如果有的话） */}
-                              {segment && itemIdx > 0 && (
-                                <TravelSegmentIndicator segment={segment} />
+                              {itemIdx > 0 && (
+                                segment ? (
+                                  <TravelSegmentIndicator segment={segment} />
+                                ) : (
+                                  // ✅ 如果没有交通段数据，显示占位符提示
+                                  <div className="flex items-center justify-center py-1">
+                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs text-slate-400 bg-slate-50 border-slate-200">
+                                      <span className="opacity-50">缺少交通信息</span>
+                                    </div>
+                                  </div>
+                                )
                               )}
                               
                               <ItineraryItemRow
@@ -1315,15 +1340,18 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         {(() => {
           // 计算状态：分数 < 60 为红色，60-80 为琥珀色，>= 80 为绿色
           const score = readinessData?.score?.overall ?? 0;
+          // ✅ 统一状态映射：blocker, must, should, optional, risks
           const blockers = readinessData?.summary?.blockers ?? 0;
-          const warnings = readinessData?.summary?.warnings ?? 0;
-          const suggestions = readinessData?.summary?.suggestions ?? 0;
+          // ⚠️ 兼容旧字段：warnings → must, suggestions → should
+          const must = readinessData?.summary?.must ?? readinessData?.summary?.warnings ?? 0;
+          const should = readinessData?.summary?.should ?? readinessData?.summary?.suggestions ?? 0;
+          const optional = readinessData?.summary?.optional ?? 0;
           const totalRisks = (readinessData?.summary?.highRisks ?? 0) + 
                             (readinessData?.summary?.mediumRisks ?? 0) + 
                             (readinessData?.summary?.lowRisks ?? 0);
           
           const isBlocked = blockers > 0 || score < 60;
-          const hasWarnings = warnings > 0 || (score >= 60 && score < 80);
+          const hasWarnings = must > 0 || (score >= 60 && score < 80);
           
           return (
             <Card 
@@ -1388,8 +1416,9 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                         : '✓ 准备就绪'}
                     </div>
                     
-                    {/* 数量统计 */}
+                    {/* 数量统计 - ✅ 统一状态显示：阻塞、必须、建议、风险 */}
                     <div className="grid grid-cols-2 gap-2 text-xs">
+                      {/* 阻塞项 */}
                       <div className={cn(
                         'flex items-center gap-1.5 px-2 py-1.5 rounded',
                         blockers > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
@@ -1397,17 +1426,20 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                         <span className="font-medium">{blockers}</span>
                         <span>阻塞</span>
                       </div>
+                      {/* 必须项 */}
                       <div className={cn(
                         'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                        warnings > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'
+                        must > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'
                       )}>
-                        <span className="font-medium">{warnings}</span>
-                        <span>警告</span>
+                        <span className="font-medium">{must}</span>
+                        <span>必须</span>
                       </div>
+                      {/* 建议项 */}
                       <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-gray-50 text-gray-600">
-                        <span className="font-medium">{suggestions}</span>
+                        <span className="font-medium">{should}</span>
                         <span>建议</span>
                       </div>
+                      {/* 风险项 */}
                       <div className={cn(
                         'flex items-center gap-1.5 px-2 py-1.5 rounded',
                         totalRisks > 0 ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-600'

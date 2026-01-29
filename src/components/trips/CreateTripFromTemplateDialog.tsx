@@ -21,7 +21,7 @@ interface CreateTripFromTemplateDialogProps {
   templateId: number;
   templateName?: string;
   defaultDurationDays?: number;
-  defaultPacePreference?: 'RELAXED' | 'BALANCED' | 'CHALLENGE';
+  defaultPacePreference?: 'RELAXED' | 'BALANCED' | 'INTENSE' | 'CHALLENGE';
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (tripId: string) => void;
@@ -102,6 +102,8 @@ export function CreateTripFromTemplateDialog({
     setError(null);
 
     try {
+      console.log('🔄 [CreateTripFromTemplate] 开始创建行程，模板ID:', templateId);
+      
       const result = await routeDirectionsApi.createTripFromTemplate(templateId, {
         ...formData,
         // 清理空值
@@ -113,11 +115,122 @@ export function CreateTripFromTemplateDialog({
         constraints: Object.keys(formData.constraints || {}).length > 0 ? formData.constraints : undefined,
       });
 
-      onSuccess(result.trip.id);
+      console.log('✅ [CreateTripFromTemplate] API响应完整数据:', {
+        fullResult: result,
+        trip: result.trip,
+        tripId: result.trip?.id,
+        tripIdType: typeof result.trip?.id,
+        tripIdLength: result.trip?.id?.length,
+        destination: result.trip?.destination,
+        startDate: result.trip?.startDate,
+        endDate: result.trip?.endDate,
+        stats: result.stats,
+        warnings: result.warnings,
+        generatedItems: result.generatedItems,
+      });
+      
+      // 🔍 详细检查生成的行程项数据
+      if (result.generatedItems && result.generatedItems.length > 0) {
+        console.log('📋 [CreateTripFromTemplate] 生成的行程项详情:', {
+          totalDays: result.generatedItems.length,
+          itemsByDay: result.generatedItems.map((day: any) => ({
+            day: day.day,
+            date: day.date,
+            itemsCount: day.items?.length || 0,
+            items: day.items?.map((item: any) => ({
+              placeId: item.placeId,
+              type: item.type,
+              note: item.note,
+              reason: item.reason,
+              startTime: item.startTime,
+              endTime: item.endTime,
+            })) || [],
+          })),
+        });
+      }
+      
+      // 🔍 检查统计信息
+      if (result.stats) {
+        console.log('📊 [CreateTripFromTemplate] 生成统计:', {
+          totalDays: result.stats.totalDays,
+          totalItems: result.stats.totalItems,
+          placesMatched: result.stats.placesMatched,
+          placesMissing: result.stats.placesMissing,
+          matchRate: result.stats.placesMatched > 0 
+            ? `${((result.stats.placesMatched / (result.stats.placesMatched + result.stats.placesMissing)) * 100).toFixed(1)}%`
+            : '0%',
+        });
+        
+        // ⚠️ 如果有缺失的POI，显示警告
+        if (result.stats.placesMissing > 0) {
+          console.warn('⚠️ [CreateTripFromTemplate] 有POI未匹配:', {
+            missingCount: result.stats.placesMissing,
+            matchedCount: result.stats.placesMatched,
+            warnings: result.warnings || [],
+          });
+        }
+      }
+
+      // 验证返回的 trip.id 是否存在
+      if (!result.trip?.id) {
+        console.error('❌ [CreateTripFromTemplate] 创建成功但未返回行程ID:', {
+          result,
+          trip: result.trip,
+        });
+        throw new Error('创建成功但未返回行程ID，请检查后端响应格式');
+      }
+
+      // 验证 trip.id 格式（应该是UUID格式的字符串）
+      const tripId = String(result.trip.id).trim();
+      if (!tripId || tripId.length < 10) {
+        console.error('❌ [CreateTripFromTemplate] 行程ID格式异常:', {
+          tripId,
+          originalId: result.trip.id,
+          type: typeof result.trip.id,
+        });
+        throw new Error(`行程ID格式异常: ${tripId}`);
+      }
+
+      console.log('✅ [CreateTripFromTemplate] 准备调用成功回调，tripId:', tripId);
+      console.log('✅ [CreateTripFromTemplate] onSuccess 回调函数:', typeof onSuccess);
+
+      // 调用成功回调（会处理导航）
+      try {
+        onSuccess(tripId);
+        console.log('✅ [CreateTripFromTemplate] 成功回调已调用');
+      } catch (callbackErr: any) {
+        console.error('❌ [CreateTripFromTemplate] 调用成功回调失败:', callbackErr);
+        setError('调用成功回调失败: ' + callbackErr.message);
+        return;
+      }
+      
       onOpenChange(false);
     } catch (err: any) {
-      setError(err.message || t('dialogs.createTripFromTemplate.createFailed'));
-      console.error('Failed to create trip from template:', err);
+      console.error('❌ [CreateTripFromTemplate] 创建行程失败:', {
+        templateId,
+        error: err.message,
+        code: err.code,
+        response: err.response?.data,
+        fullError: err,
+      });
+      
+      // 提取更详细的错误信息
+      let errorMessage = err.message || t('dialogs.createTripFromTemplate.createFailed');
+      
+      // 如果是权限错误
+      if (err.code === 'UNAUTHORIZED' || err.response?.status === 401) {
+        errorMessage = '没有权限创建行程，请检查登录状态';
+      }
+      // 如果是资源不存在
+      else if (err.code === 'NOT_FOUND' || err.response?.status === 404) {
+        errorMessage = '模板不存在或已被删除';
+      }
+      // 如果是服务器错误
+      else if (err.response?.status >= 500) {
+        errorMessage = '服务器错误，请稍后重试';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

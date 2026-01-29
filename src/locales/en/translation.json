@@ -1226,7 +1226,6 @@
         "fix": "Fix",
         "mitigation": "Mitigation",
         "affectedDays": "Affected days",
-        "mitigation": "Mitigation",
         "findingsTitle": "Findings",
         "findingType": {
           "blocker": "Blocker",
@@ -1475,6 +1474,15 @@
             "optional": "Optional Items",
             "tasks": "Tasks",
             "deadline": "Deadline"
+          },
+          "constraintType": {
+            "legal_blocker": "Legal Requirement",
+            "safety_blocker": "Safety Requirement",
+            "strong_recommendation": "Strong Recommendation",
+            "recommendation": "Recommendation",
+            "optional": "Optional",
+            "blocker": "Blocker",
+            "must": "Must"
           },
           "hazards": {
             "title": "⚠️ Trip Risk Warnings (Always Active)",

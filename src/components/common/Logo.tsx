@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import logoImage from '@/assets/images/logo.png';
 
 interface LogoProps {
   className?: string;
@@ -21,30 +22,26 @@ export default function Logo({
     );
   }
 
-  const iconSvg = (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 100 100" 
-      fill="none" 
-      xmlns="http://www.w3.org/2000/svg"
-      className={cn('flex-shrink-0', variant === 'icon' && className)}
-    >
-      <path d="M50 20V80" stroke={color} strokeWidth="1.5" strokeLinecap="square"/>
-      <path d="M35 35L50 20L65 35" stroke={color} strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter"/>
-      <path d="M50 45H65V60L50 75L35 60V45H50" stroke={color} strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" opacity="0.8"/>
-      <circle cx="50" cy="20" r="1.5" fill={color}/>
-    </svg>
+  // 🆕 使用图片 logo
+  const logoIcon = (
+    <img 
+      src={logoImage}
+      alt="TripNARA Logo"
+      width={size}
+      height={size}
+      className={cn('flex-shrink-0 object-contain', variant === 'icon' && className)}
+      style={{ width: size, height: size }}
+    />
   );
 
   if (variant === 'icon') {
-    return iconSvg;
+    return logoIcon;
   }
 
   // variant === 'full' (icon + text)
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      {iconSvg}
+      {logoIcon}
       <span className="text-xl font-brand font-bold uppercase">TRIPNARA</span>
     </div>
   );

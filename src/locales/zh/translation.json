@@ -1505,7 +1505,6 @@
         "showTop3": "显示前3个",
         "viewAll": "查看全部 ({{count}})",
         "noPotentialRisks": "未发现潜在风险",
-        "noEvidenceAvailable": "暂无可用证据",
         "tabs": {
           "readinessBreakdown": "准备度分解",
           "capabilityPacks": "能力包",
@@ -1815,6 +1814,15 @@
             "optional": "可选项",
             "tasks": "任务",
             "deadline": "截止"
+          },
+          "constraintType": {
+            "legal_blocker": "法律要求",
+            "safety_blocker": "安全要求",
+            "strong_recommendation": "强烈建议",
+            "recommendation": "建议",
+            "optional": "可选",
+            "blocker": "阻塞项",
+            "must": "必须项"
           },
           "hazards": {
             "title": "⚠️ 行程风险预警（始终有效）",

@@ -132,16 +132,30 @@ export default function TripOptimizePage() {
       let endDateTime = config.endTime;
 
       // 如果时间格式不完整，补充完整
-      if (!startDateTime.includes('T') || !startDateTime.endsWith('Z')) {
-        const timePart = startDateTime.includes('T')
-          ? startDateTime.split('T')[1]?.slice(0, 5) || defaultStartTime
+      // ✅ 安全地处理 startDateTime
+      const startDateTimeStr = typeof startDateTime === 'string' 
+        ? startDateTime 
+        : startDateTime instanceof Date 
+          ? startDateTime.toISOString()
+          : String(startDateTime);
+      
+      if (!startDateTimeStr.includes('T') || !startDateTimeStr.endsWith('Z')) {
+        const timePart = startDateTimeStr.includes('T')
+          ? startDateTimeStr.split('T')[1]?.slice(0, 5) || defaultStartTime
           : defaultStartTime;
         startDateTime = `${dateStr}T${timePart}:${TIME_FORMAT.ISO_SUFFIX}`;
       }
 
-      if (!endDateTime.includes('T') || !endDateTime.endsWith('Z')) {
-        const timePart = endDateTime.includes('T')
-          ? endDateTime.split('T')[1]?.slice(0, 5) || defaultEndTime
+      // ✅ 安全地处理 endDateTime
+      const endDateTimeStr = typeof endDateTime === 'string' 
+        ? endDateTime 
+        : endDateTime instanceof Date 
+          ? endDateTime.toISOString()
+          : String(endDateTime);
+      
+      if (!endDateTimeStr.includes('T') || !endDateTimeStr.endsWith('Z')) {
+        const timePart = endDateTimeStr.includes('T')
+          ? endDateTimeStr.split('T')[1]?.slice(0, 5) || defaultEndTime
           : defaultEndTime;
         endDateTime = `${dateStr}T${timePart}:${TIME_FORMAT.ISO_SUFFIX}`;
       }
@@ -299,9 +313,17 @@ export default function TripOptimizePage() {
                   id="startTime"
                   type="time"
                   value={
-                    config.startTime.includes('T')
-                      ? config.startTime.split('T')[1]?.slice(0, 5) || defaultStartTime
-                      : defaultStartTime
+                    (() => {
+                      // ✅ 安全地处理 config.startTime
+                      const startTimeStr = typeof config.startTime === 'string' 
+                        ? config.startTime 
+                        : config.startTime instanceof Date 
+                          ? config.startTime.toISOString()
+                          : String(config.startTime || '');
+                      return startTimeStr.includes('T')
+                        ? startTimeStr.split('T')[1]?.slice(0, 5) || defaultStartTime
+                        : defaultStartTime;
+                    })()
                   }
                   onChange={(e) => {
                     const timeStr = e.target.value;
@@ -318,9 +340,17 @@ export default function TripOptimizePage() {
                   id="endTime"
                   type="time"
                   value={
-                    config.endTime.includes('T')
-                      ? config.endTime.split('T')[1]?.slice(0, 5) || defaultEndTime
-                      : defaultEndTime
+                    (() => {
+                      // ✅ 安全地处理 config.endTime
+                      const endTimeStr = typeof config.endTime === 'string' 
+                        ? config.endTime 
+                        : config.endTime instanceof Date 
+                          ? config.endTime.toISOString()
+                          : String(config.endTime || '');
+                      return endTimeStr.includes('T')
+                        ? endTimeStr.split('T')[1]?.slice(0, 5) || defaultEndTime
+                        : defaultEndTime;
+                    })()
                   }
                   onChange={(e) => {
                     const timeStr = e.target.value;

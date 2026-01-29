@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { tripsApi } from '@/api/trips';
@@ -42,9 +42,14 @@ import {
   MoreVertical,
   ListChecks,
   ExternalLink,
+  Cloud,
+  Shield,
+  Route,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import type { TripDetail, EvidenceItem as TripEvidenceItem } from '@/types/trip';
+import { toast } from 'sonner';
+import type { TripDetail, EvidenceItem as TripEvidenceItem, EvidenceType } from '@/types/trip';
+import type { FetchEvidenceResponse } from '@/api/planning-workbench';
 import type { ReadinessData, Blocker } from '@/types/readiness';
 import type { 
   ReadinessCheckResult, 
@@ -56,22 +61,35 @@ import type {
   CapabilityPackEvaluateResultItem,
   CoverageMapResponse,
   ScoreBreakdownResponse,
+  EnhancedRisk,
 } from '@/api/readiness';
 import { inferSeason, inferRouteType, extractActivitiesFromTrip } from '@/utils/packing-list-inference';
+import { adaptTripEvidenceListToReadiness } from '@/utils/evidence-adapter'; // 🆕 证据类型适配器
+import { useTripPermissions, useAuth } from '@/hooks'; // 🆕 权限 Hook 和用户认证
 import ReadinessStatusBadge from '@/components/readiness/ReadinessStatusBadge';
 import ScoreGauge from '@/components/readiness/ScoreGauge';
 import BlockerCard from '@/components/readiness/BlockerCard';
 import RepairOptionCard from '@/components/readiness/RepairOptionCard';
 import BreakdownBarList from '@/components/readiness/BreakdownBarList';
-// import EvidenceListItem from '@/components/readiness/EvidenceListItem'; // 暂时未使用
+import EvidenceListItem from '@/components/readiness/EvidenceListItem'; // 🆕 启用证据列表项组件
+import EvidenceBatchActions from '@/components/readiness/EvidenceBatchActions'; // 🆕 批量操作组件
+import EvidenceCompletenessCard from '@/components/readiness/EvidenceCompletenessCard'; // 🆕 证据完整性检查组件
+import EvidenceSuggestionsCard from '@/components/readiness/EvidenceSuggestionsCard'; // 🆕 证据获取建议组件
+import TaskProgressDialog from '@/components/readiness/TaskProgressDialog'; // 🆕 异步任务进度对话框
+import EvidenceFilters, { type EvidenceFiltersState } from '@/components/readiness/EvidenceFilters'; // 🆕 证据过滤和排序组件
 import CoverageMiniMap from '@/components/readiness/CoverageMiniMap';
 import RiskCard from '@/components/readiness/RiskCard';
 import ChecklistSection from '@/components/readiness/ChecklistSection';
 import PackingListTab from '@/components/readiness/PackingListTab';
+import ReadinessDisclaimerComponent from '@/components/readiness/ReadinessDisclaimer'; // 🆕 免责声明组件
+import { planningWorkbenchApi } from '@/api/planning-workbench'; // 🆕 规划工作台 API
+import { useIcelandInfo, useIsIcelandTrip } from '@/hooks'; // 🆕 冰岛信息源 Hook
+import { inferIcelandInfoParams } from '@/utils/iceland-info-inference'; // 🆕 冰岛信息源参数推断
 // import CapabilityPackPersonaInsights from '@/components/readiness/CapabilityPackPersonaInsights'; // 暂时移除：信息重复
 
 export default function ReadinessPage() {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth(); // 🆕 获取当前用户信息
   
   // 获取当前语言代码（'zh' 或 'en'）
   const getLangCode = () => {
@@ -81,10 +99,16 @@ export default function ReadinessPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
+  const tabParam = searchParams.get('tab'); // 🆕 从 URL 参数读取标签页
+  
+  // 🆕 获取用户权限
+  const { role: userRole } = useTripPermissions({ tripId });
+  
   const [loading, setLoading] = useState(true);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [readinessData, setReadinessData] = useState<ReadinessData | null>(null);
   const [rawReadinessResult, setRawReadinessResult] = useState<ReadinessCheckResult | null>(null);
+  const [riskWarnings, setRiskWarnings] = useState<RiskWarningsResponse | null>(null); // 🆕 增强版风险预警数据
   const [selectedBlockerId, setSelectedBlockerId] = useState<string | null>(null);
   const [selectedRepairOptionId, setSelectedRepairOptionId] = useState<string | null>(null);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -95,9 +119,90 @@ export default function ReadinessPage() {
   const [loadingCapabilityPacks, setLoadingCapabilityPacks] = useState(false);
   const [capabilityPacksError, setCapabilityPacksError] = useState<string | null>(null);
   const [addingToChecklist, setAddingToChecklist] = useState<string | null>(null);  // 正在添加的 packType
-  const [activeTab, setActiveTab] = useState<string>('breakdown');  // 当前激活的标签页
+  const [activeTab, setActiveTab] = useState<string>(tabParam || 'breakdown');  // 🆕 从 URL 参数读取，默认 breakdown
   const [evidenceData, setEvidenceData] = useState<TripEvidenceItem[]>([]);  // 证据列表
   const [loadingEvidence, setLoadingEvidence] = useState(false);  // 证据加载状态
+  // 🆕 证据完整性检查状态
+  const [completenessData, setCompletenessData] = useState<{
+    completenessScore: number;
+    missingEvidence: Array<{
+      poiId: number;
+      poiName: string;
+      missingTypes: EvidenceType[];
+      impact: 'LOW' | 'MEDIUM' | 'HIGH';
+      reason: string;
+    }>;
+    recommendations: Array<{
+      action: string;
+      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+      estimatedTime: number;
+      evidenceTypes: EvidenceType[];
+      affectedPois: number[];
+    }>;
+  } | null>(null);
+  const [loadingCompleteness, setLoadingCompleteness] = useState(false);
+  // 🆕 证据获取建议状态
+  const [suggestionsData, setSuggestionsData] = useState<{
+    hasMissingEvidence: boolean;
+    completenessScore: number;
+    suggestions: Array<{
+      id: string;
+      description: string;
+      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+      evidenceTypes: EvidenceType[];
+      affectedPoiIds: number[];
+      estimatedTime: number;
+      reason: string;
+      canBatchFetch: boolean;
+    }>;
+    bulkFetchSuggestion?: {
+      evidenceTypes: EvidenceType[];
+      affectedPoiIds: number[];
+      estimatedTime: number;
+      description: string;
+    };
+  } | null>(null);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  // 🆕 证据过滤和排序状态
+  const [evidenceFilters, setEvidenceFilters] = useState<EvidenceFiltersState>({});
+  // 🆕 异步任务进度状态
+  const [taskProgress, setTaskProgress] = useState<{
+    taskId: string | null;
+    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | null;
+    progress: {
+      total: number;
+      processed: number;
+      current?: string;
+      estimatedRemainingTime?: number;
+    } | null;
+    result?: FetchEvidenceResponse;
+    error?: string;
+  }>({
+    taskId: null,
+    status: null,
+    progress: null,
+  });
+  const [taskProgressDialogOpen, setTaskProgressDialogOpen] = useState(false);
+  const taskProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 🆕 冰岛信息源集成
+  const isIceland = useIsIcelandTrip(trip?.destination);
+  const icelandInfoParams = inferIcelandInfoParams(trip);
+  const icelandInfo = useIcelandInfo({
+    autoFetch: false, // 不自动获取，手动触发
+    refreshInterval: 0,
+  });
+  
+  // 🆕 自动获取冰岛信息（延迟执行）
+  useEffect(() => {
+    if (isIceland && trip && icelandInfoParams) {
+      const timer = setTimeout(() => {
+        icelandInfo.fetchAll(icelandInfoParams);
+      }, 2000); // 延迟2秒，让行程数据先加载
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isIceland, trip?.id]);
   const [capabilityPackChecklistItems, setCapabilityPackChecklistItems] = useState<Array<{
     id: string;
     ruleId: string;
@@ -532,13 +637,17 @@ export default function ReadinessPage() {
   /**
    * 加载证据列表
    * GET /trips/:id/evidence
+   * 🆕 支持过滤和排序参数
    */
-  const loadEvidenceData = async (tripId: string) => {
+  const loadEvidenceData = async (tripId: string, filters?: typeof evidenceFilters) => {
     try {
       setLoadingEvidence(true);
-      console.log('🔄 [Readiness] 开始加载证据列表，tripId:', tripId);
+      console.log('🔄 [Readiness] 开始加载证据列表，tripId:', tripId, 'filters:', filters);
       
-      const response = await tripsApi.getEvidence(tripId, { limit: 100 });
+      const response = await tripsApi.getEvidence(tripId, {
+        limit: 100,
+        ...filters,
+      });
       
       console.log('✅ [Readiness] 证据列表加载成功:', {
         total: response.total,
@@ -558,6 +667,184 @@ export default function ReadinessPage() {
       setLoadingEvidence(false);
     }
   };
+
+  /**
+   * 🆕 加载证据完整性检查
+   * GET /trips/:id/evidence/completeness
+   */
+  const loadEvidenceCompleteness = async (tripId: string) => {
+    try {
+      setLoadingCompleteness(true);
+      const data = await tripsApi.getEvidenceCompleteness(tripId);
+      setCompletenessData(data);
+    } catch (err: any) {
+      console.error('❌ [Readiness] 加载证据完整性检查失败:', err);
+      setCompletenessData(null);
+    } finally {
+      setLoadingCompleteness(false);
+    }
+  };
+
+  /**
+   * 🆕 加载证据获取建议
+   * GET /trips/:id/evidence/suggestions
+   */
+  const loadEvidenceSuggestions = async (tripId: string) => {
+    try {
+      setLoadingSuggestions(true);
+      const data = await tripsApi.getEvidenceSuggestions(tripId);
+      setSuggestionsData(data);
+    } catch (err: any) {
+      console.error('❌ [Readiness] 加载证据获取建议失败:', err);
+      setSuggestionsData(null);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  /**
+   * 🆕 获取证据（支持异步模式）
+   */
+  const handleFetchEvidence = async (
+    evidenceTypes: EvidenceType[],
+    affectedPoiIds: number[],
+    useAsync: boolean = false
+  ) => {
+    if (!tripId) return;
+
+    try {
+      if (useAsync) {
+        // 异步模式：创建任务并开始轮询
+        // 过滤掉 planning-workbench API 不支持的证据类型
+        const supportedTypes = evidenceTypes.filter(
+          (type) => ['weather', 'road_closure', 'opening_hours'].includes(type)
+        ) as Array<'weather' | 'road_closure' | 'opening_hours'>;
+        
+        if (supportedTypes.length === 0) {
+          toast.error('没有可获取的证据类型');
+          return;
+        }
+        
+        const result = await planningWorkbenchApi.fetchEvidence(tripId, {
+          evidenceTypes: supportedTypes,
+          placeIds: affectedPoiIds,
+          async: true,
+        });
+
+        if ('taskId' in result) {
+          setTaskProgress({
+            taskId: result.taskId,
+            status: 'PENDING',
+            progress: { total: 0, processed: 0 },
+          });
+          setTaskProgressDialogOpen(true);
+          startTaskProgressPolling(result.taskId);
+        }
+      } else {
+        // 同步模式：直接获取
+        // 过滤掉 planning-workbench API 不支持的证据类型
+        const supportedTypes = evidenceTypes.filter(
+          (type) => ['weather', 'road_closure', 'opening_hours'].includes(type)
+        ) as Array<'weather' | 'road_closure' | 'opening_hours'>;
+        
+        if (supportedTypes.length === 0) {
+          toast.error('没有可获取的证据类型');
+          return;
+        }
+        
+        await planningWorkbenchApi.fetchEvidence(tripId, {
+          evidenceTypes: supportedTypes,
+          placeIds: affectedPoiIds,
+          async: false,
+        });
+        // 刷新证据列表和完整性检查
+        loadEvidenceData(tripId, evidenceFilters);
+        loadEvidenceCompleteness(tripId);
+        loadEvidenceSuggestions(tripId);
+      }
+    } catch (err: any) {
+      console.error('❌ [Readiness] 获取证据失败:', err);
+      toast.error(err?.message || '获取证据失败');
+    }
+  };
+
+  /**
+   * 🆕 开始轮询任务进度
+   */
+  const startTaskProgressPolling = (taskId: string) => {
+    // 清除之前的轮询
+    if (taskProgressIntervalRef.current) {
+      clearInterval(taskProgressIntervalRef.current);
+    }
+
+    // 开始轮询
+    taskProgressIntervalRef.current = setInterval(async () => {
+      try {
+        const progress = await planningWorkbenchApi.getTaskProgress(taskId);
+        setTaskProgress({
+          taskId: progress.taskId,
+          status: progress.status,
+          progress: progress.progress,
+          result: progress.result,
+          error: progress.error,
+        } as any); // 类型兼容性处理
+
+        // 如果任务完成或失败，停止轮询
+        if (progress.status === 'COMPLETED' || progress.status === 'FAILED' || progress.status === 'CANCELLED') {
+          if (taskProgressIntervalRef.current) {
+            clearInterval(taskProgressIntervalRef.current);
+            taskProgressIntervalRef.current = null;
+          }
+          // 刷新证据列表和完整性检查
+          if (progress.status === 'COMPLETED' && tripId) {
+            loadEvidenceData(tripId, evidenceFilters);
+            loadEvidenceCompleteness(tripId);
+            loadEvidenceSuggestions(tripId);
+          }
+        }
+      } catch (err: any) {
+        console.error('❌ [Readiness] 查询任务进度失败:', err);
+        // 停止轮询
+        if (taskProgressIntervalRef.current) {
+          clearInterval(taskProgressIntervalRef.current);
+          taskProgressIntervalRef.current = null;
+        }
+      }
+    }, 2000); // 每2秒查询一次
+  };
+
+  /**
+   * 🆕 取消任务
+   */
+  const handleCancelTask = async (taskId: string) => {
+    try {
+      await planningWorkbenchApi.cancelTask(taskId);
+      // 停止轮询
+      if (taskProgressIntervalRef.current) {
+        clearInterval(taskProgressIntervalRef.current);
+        taskProgressIntervalRef.current = null;
+      }
+      // 更新任务状态
+      if (taskProgress) {
+        setTaskProgress({
+          ...taskProgress,
+          status: 'CANCELLED',
+        });
+      }
+    } catch (err: any) {
+      console.error('❌ [Readiness] 取消任务失败:', err);
+      toast.error(err?.message || '取消任务失败');
+    }
+  };
+
+  // 🆕 清理轮询
+  useEffect(() => {
+    return () => {
+      if (taskProgressIntervalRef.current) {
+        clearInterval(taskProgressIntervalRef.current);
+      }
+    };
+  }, []);
 
   const loadData = async () => {
     if (!tripId) return;
@@ -589,7 +876,10 @@ export default function ReadinessPage() {
       loadCapabilityPacks(tripData);
       
       // 加载证据列表（不阻塞主流程）
-      loadEvidenceData(tripId);
+      loadEvidenceData(tripId, evidenceFilters);
+      // 🆕 加载证据完整性检查和获取建议
+      loadEvidenceCompleteness(tripId);
+      loadEvidenceSuggestions(tripId);
       
       // 加载能力包清单项（不阻塞主流程）
       loadCapabilityPackChecklistItems(tripId);
@@ -649,7 +939,11 @@ export default function ReadinessPage() {
               console.error('❌ [Readiness] getPersonalizedChecklist 失败:', err);
               return null;
             }),
-            readinessApi.getRiskWarnings(tripId, getLangCode()).catch((err) => {
+            readinessApi.getRiskWarnings(tripId, { 
+              lang: getLangCode(),
+              userId: user?.id, // 🆕 传递用户ID用于个性化
+              includeCapabilityPackHazards: true 
+            }).catch((err) => {
               console.error('❌ [Readiness] getRiskWarnings 失败:', err);
               return null;
             }),
@@ -1418,72 +1712,114 @@ export default function ReadinessPage() {
                   {/* 优先使用 scoreBreakdown 的 findings 和 risks */}
                   {scoreBreakdown && (scoreBreakdown.findings?.length > 0 || scoreBreakdown.risks?.length > 0) ? (
                     <>
-                      {/* 显示 warnings 和 suggestions */}
-                      {scoreBreakdown.findings?.filter(f => f.type !== 'blocker').map((finding) => (
-                        <Card key={finding.id} className="border-l-4 border-l-yellow-500">
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge variant={finding.type === 'warning' ? 'secondary' : 'outline'} className="text-xs">
-                                    {t(`dashboard.readiness.page.findingType.${finding.type}`, finding.type)}
-                                  </Badge>
-                                  {finding.severity && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {t(`dashboard.readiness.page.severity.${finding.severity}`, finding.severity)}
+                      {/* 显示 must, should, optional（兼容 warning, suggestion） */}
+                      {scoreBreakdown.findings?.filter(f => f.type !== 'blocker').map((finding) => {
+                        // ✅ 统一类型映射：warning → must, suggestion → should
+                        const normalizedType = finding.type === 'warning' ? 'must' : 
+                                              finding.type === 'suggestion' ? 'should' : 
+                                              finding.type;
+                        return (
+                          <Card key={finding.id} className="border-l-4 border-l-yellow-500">
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge variant={normalizedType === 'must' ? 'secondary' : 'outline'} className="text-xs">
+                                      {t(`dashboard.readiness.page.findingType.${normalizedType}`, normalizedType)}
                                     </Badge>
+                                    {finding.severity && (
+                                      <Badge variant="outline" className="text-xs">
+                                        {t(`dashboard.readiness.page.severity.${finding.severity}`, finding.severity)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-sm font-medium">{finding.message}</p>
+                                  {finding.actionRequired && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {t('dashboard.readiness.page.actionRequired', { defaultValue: '建议操作' })}: {finding.actionRequired}
+                                    </p>
                                   )}
                                 </div>
-                                <p className="text-sm font-medium">{finding.message}</p>
-                                {finding.actionRequired && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {t('dashboard.readiness.page.actionRequired', { defaultValue: '建议操作' })}: {finding.actionRequired}
-                                  </p>
-                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleFixBlocker(finding.id)}
+                                >
+                                  {t('dashboard.readiness.page.fix', { defaultValue: '修复' })}
+                                </Button>
                               </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleFixBlocker(finding.id)}
-                              >
-                                {t('dashboard.readiness.page.fix', { defaultValue: '修复' })}
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                      {/* 显示风险 */}
-                      {scoreBreakdown.risks?.map((risk) => (
-                        <Card key={risk.id} className="border-l-4 border-l-orange-500">
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Badge variant="destructive" className="text-xs">
-                                    {t(`dashboard.readiness.page.hazardType.${risk.type}`, risk.type)}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs">
-                                    {t(`dashboard.readiness.page.severity.${risk.severity}`, risk.severity)}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm font-medium">{risk.message}</p>
-                                {risk.mitigation && risk.mitigation.length > 0 && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {t('dashboard.readiness.page.mitigation', { defaultValue: '缓解措施' })}: {risk.mitigation.join(', ')}
-                                  </p>
-                                )}
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleFixBlocker(risk.id)}
-                              >
-                                {t('dashboard.readiness.page.fix', { defaultValue: '修复' })}
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                      {/* 显示风险 - 🆕 使用 RiskCard 组件以支持增强字段 */}
+                      {(() => {
+                        // 🆕 优先使用增强版风险预警数据
+                        const risksToDisplay = riskWarnings?.risks && riskWarnings.risks.length > 0
+                          ? riskWarnings.risks
+                          : (scoreBreakdown?.risks || []).map(risk => ({
+                              ...risk,
+                              // 将 ScoreRisk 转换为 EnhancedRisk 格式
+                              affectedPois: Array.isArray(risk.affectedPois) && typeof risk.affectedPois[0] === 'string'
+                                ? risk.affectedPois.map((id, idx) => ({ id, name: id }))
+                                : risk.affectedPois,
+                            })) as EnhancedRisk[];
+                        
+                        if (risksToDisplay.length === 0) return null;
+                        
+                        return (
+                          <>
+                            {risksToDisplay.map((risk) => (
+                              <RiskCard key={risk.id || risk.type} risk={risk} />
+                            ))}
+                            {/* 🆕 显示所有官方来源汇总 */}
+                            {riskWarnings?.packSources && riskWarnings.packSources.length > 0 && (
+                              <Card className="border-blue-200 bg-blue-50/50">
+                                <CardContent className="p-4">
+                                  <div className="space-y-2">
+                                    <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                      <span>📚</span>
+                                      <span>{t('dashboard.readiness.page.allOfficialSources', { defaultValue: '所有官方来源' })}</span>
+                                    </h4>
+                                    <ul className="space-y-2">
+                                      {riskWarnings.packSources.map((source, index) => (
+                                        <li key={source.sourceId || index} className="text-xs text-muted-foreground">
+                                          <div className="flex items-start gap-2">
+                                            <span className="text-muted-foreground/50 mt-1">•</span>
+                                            <div className="flex-1">
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-medium text-foreground">
+                                                  {source.authority}
+                                                </span>
+                                                {source.title && (
+                                                  <span className="text-muted-foreground">
+                                                    - {source.title}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {source.canonicalUrl && (
+                                                <a
+                                                  href={source.canonicalUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline mt-0.5"
+                                                >
+                                                  <ExternalLink className="w-3 h-3" />
+                                                  <span className="truncate max-w-[200px]">{source.canonicalUrl}</span>
+                                                </a>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+                          </>
+                        );
+                      })()}
                     </>
                   ) : readinessData.watchlist && readinessData.watchlist.length > 0 ? (
                     // 回退到旧的 watchlist 数据
@@ -1568,7 +1904,17 @@ export default function ReadinessPage() {
 
           {/* Details 区域：Tabs */}
           <div className="mt-8">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs 
+              value={activeTab} 
+              onValueChange={(value) => {
+                setActiveTab(value);
+                // 🆕 更新 URL 参数
+                const newSearchParams = new URLSearchParams(searchParams);
+                newSearchParams.set('tab', value);
+                navigate(`?${newSearchParams.toString()}`, { replace: true });
+              }} 
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="breakdown">{t('dashboard.readiness.page.tabs.readinessBreakdown')}</TabsTrigger>
                 <TabsTrigger value="capability">{t('dashboard.readiness.page.tabs.capabilityPacks')}</TabsTrigger>
@@ -1610,12 +1956,18 @@ export default function ReadinessPage() {
                           </span>
                         </h4>
                         <div className="space-y-2">
-                          {scoreBreakdown.findings.slice(0, 5).map((finding) => (
+                          {scoreBreakdown.findings.slice(0, 5).map((finding) => {
+                            // ✅ 统一类型映射：warning → must, suggestion → should
+                            const findingType = finding.type === 'warning' ? 'must' : 
+                                               finding.type === 'suggestion' ? 'should' : 
+                                               finding.type;
+                            return (
                             <div
                               key={finding.id}
                               className={`p-3 rounded-lg border ${
-                                finding.type === 'blocker' ? 'bg-red-50 border-red-200' :
-                                finding.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                                findingType === 'blocker' ? 'bg-red-50 border-red-200' :
+                                findingType === 'must' ? 'bg-amber-50 border-amber-200' :
+                                (findingType === 'should' || findingType === 'optional') ? 'bg-gray-50 border-gray-200' :
                                 'bg-blue-50 border-blue-200'
                               }`}
                             >
@@ -1628,7 +1980,7 @@ export default function ReadinessPage() {
                                     'border-blue-400 text-blue-600'
                                   }`}
                                 >
-                                  {t(`dashboard.readiness.page.findingType.${finding.type}`, finding.type)}
+                                  {t(`dashboard.readiness.page.findingType.${findingType}`, findingType)}
                                 </Badge>
                                 <div className="flex-1">
                                   <p className="text-sm">{finding.message}</p>
@@ -1640,7 +1992,8 @@ export default function ReadinessPage() {
                                 </div>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                           {scoreBreakdown.findings.length > 5 && (
                             <p className="text-xs text-muted-foreground text-center">
                               {t('dashboard.readiness.page.moreFindings', { 
@@ -1950,6 +2303,11 @@ export default function ReadinessPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-6">
+                      {/* 🆕 免责声明（必须显示） */}
+                      {rawReadinessResult && rawReadinessResult.disclaimer && (
+                        <ReadinessDisclaimerComponent disclaimer={rawReadinessResult.disclaimer} />
+                      )}
+
                       {/* Risks Section */}
                       {rawReadinessResult && rawReadinessResult.risks && rawReadinessResult.risks.length > 0 && (
                     <div className="space-y-3">
@@ -1959,6 +2317,51 @@ export default function ReadinessPage() {
                               <RiskCard key={index} risk={risk} />
                             ))}
                           </div>
+                          {/* 🆕 显示所有官方来源汇总 */}
+                          {riskWarnings?.packSources && riskWarnings.packSources.length > 0 && (
+                            <Card className="border-blue-200 bg-blue-50/50 mt-4">
+                              <CardContent className="p-4">
+                                <div className="space-y-2">
+                                  <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                    <span>📚</span>
+                                    <span>{t('dashboard.readiness.page.allOfficialSources', { defaultValue: '所有官方来源' })}</span>
+                                  </h4>
+                                  <ul className="space-y-2">
+                                    {riskWarnings.packSources.map((source, index) => (
+                                      <li key={source.sourceId || index} className="text-xs text-muted-foreground">
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-muted-foreground/50 mt-1">•</span>
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="font-medium text-foreground">
+                                                {source.authority}
+                                              </span>
+                                              {source.title && (
+                                                <span className="text-muted-foreground">
+                                                  - {source.title}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {source.canonicalUrl && (
+                                              <a
+                                                href={source.canonicalUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline mt-0.5"
+                                              >
+                                                <ExternalLink className="w-3 h-3" />
+                                                <span className="truncate max-w-[200px]">{source.canonicalUrl}</span>
+                                              </a>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
                         </div>
                       )}
 
@@ -2116,6 +2519,232 @@ export default function ReadinessPage() {
                         </div>
                       )}
 
+                      {/* 🆕 证据完整性检查卡片 */}
+                      {completenessData && (
+                        <EvidenceCompletenessCard
+                          completenessScore={completenessData.completenessScore}
+                          missingEvidence={completenessData.missingEvidence}
+                          recommendations={completenessData.recommendations}
+                          onFetchEvidence={(evidenceTypes, affectedPois) =>
+                            handleFetchEvidence(evidenceTypes, affectedPois, false)
+                          }
+                          loading={loadingCompleteness}
+                        />
+                      )}
+
+                      {/* 🆕 证据获取建议卡片 */}
+                      {suggestionsData && (
+                        <EvidenceSuggestionsCard
+                          hasMissingEvidence={suggestionsData.hasMissingEvidence}
+                          completenessScore={suggestionsData.completenessScore}
+                          suggestions={suggestionsData.suggestions}
+                          bulkFetchSuggestion={suggestionsData.bulkFetchSuggestion}
+                          onFetchEvidence={(evidenceTypes, affectedPoiIds) =>
+                            handleFetchEvidence(evidenceTypes, affectedPoiIds, false)
+                          }
+                          onBulkFetch={(evidenceTypes, affectedPoiIds) =>
+                            handleFetchEvidence(evidenceTypes, affectedPoiIds, true)
+                          }
+                          loading={loadingSuggestions}
+                        />
+                      )}
+
+                      {/* 🆕 冰岛官方信息源（仅冰岛行程） */}
+                      {isIceland && trip && (
+                        <Card>
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-base">冰岛官方信息源</CardTitle>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const params = inferIcelandInfoParams(trip);
+                                  icelandInfo.fetchAll(params);
+                                }}
+                                disabled={
+                                  icelandInfo.weather.loading ||
+                                  icelandInfo.safety.loading ||
+                                  icelandInfo.roadConditions.loading
+                                }
+                                className="h-8 text-xs"
+                              >
+                                {(icelandInfo.weather.loading ||
+                                  icelandInfo.safety.loading ||
+                                  icelandInfo.roadConditions.loading) ? (
+                                  <>
+                                    <Spinner className="mr-2 h-3 w-3" />
+                                    刷新中...
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw className="mr-2 h-3 w-3" />
+                                    刷新
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            <CardDescription className="text-xs">
+                              实时获取冰岛官方天气、安全和路况信息
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {/* 天气信息 */}
+                            {icelandInfo.weather.loading && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Spinner className="h-4 w-4" />
+                                <span>加载天气数据...</span>
+                              </div>
+                            )}
+                            {icelandInfo.weather.error && (
+                              <div className="text-sm text-red-500">
+                                天气数据加载失败: {icelandInfo.weather.error}
+                              </div>
+                            )}
+                            {icelandInfo.weather.data && (
+                              <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg">
+                                <Cloud className="h-4 w-4 text-blue-600 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="text-xs font-semibold text-gray-700 mb-1">高地天气预报</div>
+                                  <div className="text-xs text-gray-600">
+                                    {icelandInfo.weather.data.station.name}: {Math.round(icelandInfo.weather.data.current.temperature)}°C
+                                    {icelandInfo.weather.data.current.windSpeedKmh && (
+                                      <span className="ml-2">
+                                        ，风速 {Math.round(icelandInfo.weather.data.current.windSpeedKmh)} km/h
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 安全警报 */}
+                            {icelandInfo.safety.loading && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Spinner className="h-4 w-4" />
+                                <span>加载安全信息...</span>
+                              </div>
+                            )}
+                            {icelandInfo.safety.error && (
+                              <div className="text-sm text-red-500">
+                                安全信息加载失败: {icelandInfo.safety.error}
+                              </div>
+                            )}
+                            {icelandInfo.safety.data && icelandInfo.safety.data.alerts.length > 0 && (
+                              <div className="flex items-start gap-2 p-2 bg-yellow-50 rounded-lg">
+                                <Shield className="h-4 w-4 text-yellow-600 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="text-xs font-semibold text-gray-700 mb-1">安全警报</div>
+                                  <div className="space-y-1">
+                                    {icelandInfo.safety.data.alerts.slice(0, 3).map((alert) => (
+                                      <div key={alert.id} className="text-xs">
+                                        <Badge
+                                          variant={
+                                            alert.severity === 'critical' || alert.severity === 'high'
+                                              ? 'destructive'
+                                              : 'secondary'
+                                          }
+                                          className="text-xs mr-1"
+                                        >
+                                          {alert.severity === 'critical'
+                                            ? '严重'
+                                            : alert.severity === 'high'
+                                            ? '高'
+                                            : '中'}
+                                        </Badge>
+                                        {alert.title}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* F路路况 */}
+                            {icelandInfo.roadConditions.loading && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Spinner className="h-4 w-4" />
+                                <span>加载路况信息...</span>
+                              </div>
+                            )}
+                            {icelandInfo.roadConditions.error && (
+                              <div className="text-sm text-red-500">
+                                路况信息加载失败: {icelandInfo.roadConditions.error}
+                              </div>
+                            )}
+                            {icelandInfo.roadConditions.data && icelandInfo.roadConditions.data.fRoads && icelandInfo.roadConditions.data.fRoads.length > 0 && (
+                              <div className="flex items-start gap-2 p-2 bg-amber-50 rounded-lg">
+                                <Route className="h-4 w-4 text-amber-600 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="text-xs font-semibold text-gray-700 mb-1">F路路况</div>
+                                  <div className="space-y-1">
+                                    {icelandInfo.roadConditions.data.fRoads.slice(0, 3).map((road) => (
+                                      <div key={road.fRoadNumber} className="text-xs">
+                                        <Badge
+                                          variant={
+                                            road.status === 'closed' || road.status === 'impassable'
+                                              ? 'destructive'
+                                              : road.status === 'caution'
+                                              ? 'secondary'
+                                              : 'outline'
+                                          }
+                                          className="text-xs mr-1"
+                                        >
+                                          {road.status === 'closed'
+                                            ? '封闭'
+                                            : road.status === 'impassable'
+                                            ? '不可通行'
+                                            : road.status === 'caution'
+                                            ? '谨慎'
+                                            : '开放'}
+                                        </Badge>
+                                        {road.fRoadNumber}: {road.name}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* 🆕 证据完整性检查卡片 */}
+                      {completenessData && (
+                        <EvidenceCompletenessCard
+                          completenessScore={completenessData.completenessScore}
+                          missingEvidence={completenessData.missingEvidence}
+                          recommendations={completenessData.recommendations}
+                          onFetchEvidence={(evidenceTypes, affectedPois) => {
+                            if (tripId) {
+                              handleFetchEvidence(evidenceTypes, affectedPois, false);
+                            }
+                          }}
+                          loading={loadingCompleteness}
+                        />
+                      )}
+
+                      {/* 🆕 证据获取建议卡片 */}
+                      {suggestionsData && (
+                        <EvidenceSuggestionsCard
+                          hasMissingEvidence={suggestionsData.hasMissingEvidence}
+                          completenessScore={suggestionsData.completenessScore}
+                          suggestions={suggestionsData.suggestions}
+                          bulkFetchSuggestion={suggestionsData.bulkFetchSuggestion}
+                          onFetchEvidence={(evidenceTypes, affectedPoiIds) => {
+                            if (tripId) {
+                              handleFetchEvidence(evidenceTypes, affectedPoiIds, false);
+                            }
+                          }}
+                          onBulkFetch={(evidenceTypes, affectedPoiIds) => {
+                            if (tripId) {
+                              handleFetchEvidence(evidenceTypes, affectedPoiIds, true); // 使用异步模式
+                            }
+                          }}
+                          loading={loadingSuggestions}
+                        />
+                      )}
+
                       {/* Evidence Section - 使用真实 API 数据 */}
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -2129,6 +2758,18 @@ export default function ReadinessPage() {
                             })}
                           </span>
                         </div>
+
+                        {/* 🆕 证据过滤和排序控件 */}
+                        {tripId && (
+                          <EvidenceFilters
+                            filters={evidenceFilters}
+                            onFiltersChange={(newFilters) => {
+                              setEvidenceFilters(newFilters);
+                              loadEvidenceData(tripId, newFilters);
+                            }}
+                            availableDays={Array.from(new Set(evidenceData.map((item) => item.day).filter((d): d is number => d !== undefined)))}
+                          />
+                        )}
                         
                         {loadingEvidence ? (
                           <div className="flex items-center justify-center py-8">
@@ -2136,106 +2777,50 @@ export default function ReadinessPage() {
                           </div>
                         ) : evidenceData.length > 0 ? (
                           <div className="space-y-3">
-                            {/* 按类型分组显示证据 */}
-                            {(() => {
-                              // 按 type 分组
-                              const groupedEvidence = evidenceData.reduce((acc, item) => {
-                                const type = item.type || 'other';
-                                if (!acc[type]) {
-                                  acc[type] = [];
-                                }
-                                acc[type].push(item);
-                                return acc;
-                              }, {} as Record<string, TripEvidenceItem[]>);
-                              
-                              // 类型显示名称映射
-                              const typeLabels: Record<string, string> = {
-                                'opening_hours': t('dashboard.readiness.page.evidenceType.openingHours', { defaultValue: '营业时间' }),
-                                'road_closure': t('dashboard.readiness.page.evidenceType.roadClosure', { defaultValue: '道路封闭' }),
-                                'weather': t('dashboard.readiness.page.evidenceType.weather', { defaultValue: '天气' }),
-                                'booking': t('dashboard.readiness.page.evidenceType.booking', { defaultValue: '预订' }),
-                                'other': t('dashboard.readiness.page.evidenceType.other', { defaultValue: '其他' }),
-                              };
-                              
-                              // 严重程度颜色映射
-                              const severityColors: Record<string, string> = {
-                                'high': 'border-red-200 bg-red-50',
-                                'medium': 'border-yellow-200 bg-yellow-50',
-                                'low': 'border-green-200 bg-green-50',
-                              };
-                              
-                              return Object.entries(groupedEvidence).map(([type, items]) => (
-                                <div key={type} className="space-y-2">
-                                  <h4 className="text-xs font-medium text-muted-foreground uppercase flex items-center gap-2">
-                                    {typeLabels[type] || type}
-                                    <Badge variant="outline" className="text-[10px]">
-                                      {items.length}
-                                    </Badge>
-                                  </h4>
-                                  <div className="space-y-2">
-                                    {items.map((item) => (
-                                      <div 
-                                        key={item.id} 
-                                        className={`p-3 border rounded-lg text-sm ${severityColors[item.severity || 'low'] || 'border-gray-200'}`}
-                                      >
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="flex-1">
-                                            <div className="font-medium">{item.title}</div>
-                                            <div className="text-xs text-muted-foreground mt-1">
-                                              {item.description}
-                                            </div>
-                                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                                              {item.source && (
-                                                <span className="flex items-center gap-1">
-                                                  <span className="font-medium">
-                                                    {t('dashboard.readiness.page.source', { defaultValue: '来源' })}:
-                                                  </span>
-                                                  {item.source}
-                                                </span>
-                                              )}
-                                              {item.day && (
-                                                <span className="flex items-center gap-1">
-                                                  <Calendar className="h-3 w-3" />
-                                                  Day {item.day}
-                                                </span>
-                                              )}
-                                              {item.timestamp && (
-                                                <span>
-                                                  {format(new Date(item.timestamp), 'yyyy-MM-dd HH:mm')}
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          {item.severity && (
-                                            <Badge 
-                                              variant="outline" 
-                                              className={`text-[10px] ${
-                                                item.severity === 'high' ? 'border-red-500 text-red-700' :
-                                                item.severity === 'medium' ? 'border-yellow-500 text-yellow-700' :
-                                                'border-green-500 text-green-700'
-                                              }`}
-                                            >
-                                              {item.severity}
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        {item.link && (
-                                          <a 
-                                            href={item.link} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1 mt-2 text-xs text-primary hover:underline"
-                                          >
-                                            <ExternalLink className="h-3 w-3" />
-                                            {t('dashboard.readiness.page.viewSource', { defaultValue: '查看来源' })}
-                                          </a>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ));
-                            })()}
+                            {/* 🆕 批量操作组件 */}
+                            {tripId && (
+                              <EvidenceBatchActions
+                                evidenceList={adaptTripEvidenceListToReadiness(evidenceData)}
+                                tripId={tripId}
+                                userRole={userRole}
+                                onUpdate={() => {
+                                  // 刷新证据列表
+                                  if (tripId) {
+                                    loadEvidenceData(tripId, evidenceFilters);
+                                  }
+                                }}
+                              />
+                            )}
+                            
+                            {/* 🆕 使用 EvidenceListItem 组件显示证据 */}
+                            <div className="space-y-2">
+                              {tripId && evidenceData.map((item) => {
+                                // 转换为 ReadinessEvidenceItem 格式
+                                const readinessEvidence = adaptTripEvidenceListToReadiness([item])[0];
+                                return (
+                                  <EvidenceListItem
+                                    key={item.id}
+                                    evidence={readinessEvidence}
+                                    tripId={tripId}
+                                    userRole={userRole || undefined}
+                                    onStatusChange={(evidenceId, status, userNote) => {
+                                      // 状态更新后的回调
+                                      console.log('证据状态已更新:', evidenceId, status, userNote);
+                                      // 刷新证据列表
+                                      if (tripId) {
+                                        loadEvidenceData(tripId, evidenceFilters);
+                                      }
+                                    }}
+                                    onOpen={() => {
+                                      // 打开证据详情（可选）
+                                      if (item.link) {
+                                        window.open(item.link, '_blank');
+                                      }
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
                           </div>
                         ) : (
                           <div className="text-center py-8 text-muted-foreground">
@@ -2246,6 +2831,26 @@ export default function ReadinessPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* 🆕 异步任务进度对话框 */}
+                      <TaskProgressDialog
+                        open={taskProgressDialogOpen}
+                        onOpenChange={setTaskProgressDialogOpen}
+                        taskId={taskProgress.taskId}
+                        status={taskProgress.status}
+                        progress={taskProgress.progress}
+                        result={taskProgress.result}
+                        error={taskProgress.error}
+                        onCancel={handleCancelTask}
+                        onClose={() => {
+                          setTaskProgressDialogOpen(false);
+                          setTaskProgress({
+                            taskId: null,
+                            status: null,
+                            progress: null,
+                          });
+                        }}
+                      />
                     </div>
                   </CardContent>
                 </Card>
@@ -2442,12 +3047,18 @@ export default function ReadinessPage() {
               return (
                 <>
                   {scoreDisplay}
-                  {dimensionFindings.map((finding) => (
-                    <div
+                  {dimensionFindings.map((finding) => {
+                    // ✅ 统一类型映射：warning → must, suggestion → should
+                    const findingType = finding.type === 'warning' ? 'must' : 
+                                       finding.type === 'suggestion' ? 'should' : 
+                                       finding.type;
+                    return (
+                      <div
                       key={finding.id}
                       className={`p-3 rounded-lg border ${
-                        finding.type === 'blocker' ? 'bg-red-50 border-red-200' :
-                        finding.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                        findingType === 'blocker' ? 'bg-red-50 border-red-200' :
+                        findingType === 'must' ? 'bg-amber-50 border-amber-200' :
+                        (findingType === 'should' || findingType === 'optional') ? 'bg-gray-50 border-gray-200' :
                         'bg-blue-50 border-blue-200'
                       }`}
                     >
@@ -2460,7 +3071,7 @@ export default function ReadinessPage() {
                             'border-blue-400 text-blue-600'
                           }`}
                         >
-                          {t(`dashboard.readiness.page.findingType.${finding.type}`, finding.type)}
+                          {t(`dashboard.readiness.page.findingType.${findingType}`, findingType)}
                         </Badge>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm">{finding.message}</p>
@@ -2477,7 +3088,8 @@ export default function ReadinessPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {dimensionRisks.map((risk) => (
                     <div
                       key={risk.id}

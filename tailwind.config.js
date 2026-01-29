@@ -19,7 +19,38 @@ export default {
         brand: '0.4em',
       },
       colors: {
-        // 决策状态颜色
+        // GateStatus 颜色（统一规范）
+        gate: {
+          block: {
+            border: '#dc2626',    // red-600
+            text: '#b91c1c',      // red-700
+            bg: '#fef2f2',        // red-50
+            icon: '#dc2626',      // red-600
+          },
+          warn: {
+            border: '#d97706',    // amber-600
+            text: '#b45309',      // amber-700
+            bg: '#fffbeb',        // amber-50
+            icon: '#d97706',      // amber-600
+          },
+          pass: {
+            border: '#16a34a',    // green-600
+            text: '#15803d',      // green-700
+            bg: '#f0fdf4',        // green-50
+            icon: '#16a34a',      // green-600
+          },
+        },
+        // 信息性颜色（蓝色）
+        info: {
+          date: '#2563eb',        // blue-600
+          link: '#2563eb',        // blue-600
+          transport: {
+            bg: '#eff6ff',        // blue-50
+            text: '#1e40af',      // blue-800
+            border: '#bfdbfe',    // blue-200
+          },
+        },
+        // 决策状态颜色（保留原有，用于兼容）
         'gate-allow': 'var(--gate-allow)',
         'gate-allow-foreground': 'var(--gate-allow-foreground)',
         'gate-allow-border': 'var(--gate-allow-border)',

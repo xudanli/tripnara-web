@@ -165,6 +165,12 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
               <CardTitle>
                 {format(new Date(day.date), 'yyyy年MM月dd日')} ({day.date})
               </CardTitle>
+              {/* ✅ 显示当天主题（如果存在） */}
+              {day.theme && (
+                <p className="text-sm text-muted-foreground font-medium mt-1">
+                  {day.theme}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               {day.ItineraryItem.length === 0 ? (
@@ -177,6 +183,17 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
                     const isReplaceable = itemAlternatives.length > 0;
                     const isSkippable = true; // 实际应该从后端判断
                     const isLocked = false; // 实际应该从后端判断
+
+                    // 🔍 诊断：检查Place信息是否存在
+                    if (item.placeId && !item.Place) {
+                      console.warn('⚠️ [NeptuneView] 行程项缺少Place信息:', {
+                        itemId: item.id,
+                        placeId: item.placeId,
+                        type: item.type,
+                        note: item.note,
+                        day: day.date,
+                      });
+                    }
 
                     return (
                       <div
@@ -201,7 +218,15 @@ export default function NeptuneView({ trip, neptuneData, onItemClick }: NeptuneV
                           )}
                         </div>
                         <div className="flex-1">
-                          <div className="font-medium">{item.Place?.nameCN || item.type}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{item.Place?.nameCN || item.Place?.nameEN || (item.placeId ? `POI ${item.placeId}` : item.type)}</span>
+                            {/* ✅ 显示必游标记（如果存在） */}
+                            {(item.isRequired || item.note?.includes('[必游]')) && (
+                              <Badge variant="default" className="text-xs">
+                                必游
+                              </Badge>
+                            )}
+                          </div>
                           {item.note && (
                             <div className="text-sm text-muted-foreground">{item.note}</div>
                           )}

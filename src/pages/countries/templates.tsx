@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { routeDirectionsApi } from '@/api/route-directions';
 import { countriesApi } from '@/api/countries';
+import { tripsApi } from '@/api/trips';
 import type { RouteTemplate } from '@/types/places-routes';
 import type { Country } from '@/types/country';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -242,6 +244,45 @@ export default function CountryTemplatesPage() {
 
   const handlePreview = (templateId: number) => {
     navigate(`/dashboard/route-directions/templates/${templateId}`);
+  };
+
+  const handleCreateSuccess = async (tripId: string) => {
+    console.log('🔄 [CountryTemplates] handleCreateSuccess 被调用，tripId:', tripId);
+    
+    // 显示成功提示
+    toast.success('行程创建成功！', {
+      description: '正在跳转到行程库...',
+      duration: 3000,
+    });
+    
+    // 延迟导航，给后端时间完成创建和权限设置
+    try {
+      // 等待一小段时间，让后端完成创建（增加到1.5秒）
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // 尝试验证行程是否存在（可选，如果失败也不阻止导航）
+      try {
+        await tripsApi.getById(tripId);
+        console.log('✅ [CountryTemplates] 行程创建成功，已验证可访问:', tripId);
+      } catch (verifyErr: any) {
+        console.warn('⚠️ [CountryTemplates] 行程创建后验证失败，但继续导航:', {
+          tripId,
+          error: verifyErr.message,
+        });
+        // 不阻止导航，可能只是暂时的权限问题
+      }
+      
+      // 导航到行程库（显示新创建的行程）
+      console.log('🔄 [CountryTemplates] 导航到行程库');
+      // 设置刷新标记（备用机制）
+      sessionStorage.setItem('trips-page-should-refresh', 'true');
+      navigate('/dashboard/trips', { state: { from: 'create', tripId } });
+    } catch (err: any) {
+      console.error('❌ [CountryTemplates] 创建行程后导航失败:', err);
+      toast.error('行程创建成功，但跳转失败，请手动访问行程库');
+      // 仍然尝试导航到行程库，即使验证失败
+      navigate('/dashboard/trips', { state: { from: 'create', tripId } });
+    }
   };
 
   const getIntensityLabel = (pace?: string) => {
@@ -517,8 +558,20 @@ export default function CountryTemplatesPage() {
           templateName={selectedTemplate.nameCN}
           defaultDurationDays={selectedTemplate.durationDays}
           defaultPacePreference={selectedTemplate.defaultPacePreference}
-          onSuccess={(tripId) => {
-            navigate(`/dashboard/plan-studio?tripId=${tripId}`);
+          onSuccess={async (tripId) => {
+            // 显示成功提示
+            toast.success('行程创建成功，正在跳转到行程库...');
+            
+            // 延迟导航，给后端时间完成创建和权限设置
+            try {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              // 导航到行程库（显示新创建的行程）
+              navigate('/dashboard/trips');
+            } catch (err: any) {
+              console.error('导航失败:', err);
+              toast.error('行程创建成功，但跳转失败，请手动访问行程库');
+              navigate('/dashboard/trips');
+            }
           }}
         />
       )}

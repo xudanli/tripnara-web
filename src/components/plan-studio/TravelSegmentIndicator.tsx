@@ -39,6 +39,11 @@ function formatDuration(minutes: number | null): string {
  * 显示在两个行程项之间，展示交通信息
  */
 export function TravelSegmentIndicator({ segment, className }: TravelSegmentIndicatorProps) {
+  // ✅ 防御性检查：确保 segment 是有效对象
+  if (!segment || typeof segment !== 'object') {
+    return null;
+  }
+  
   const mode = segment.travelMode as TravelMode | null;
   const config = mode ? travelModeConfig[mode] : null;
   

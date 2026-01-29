@@ -897,6 +897,8 @@ export const tripsApi = {
   /**
    * 获取行程证据列表
    * GET /trips/:id/evidence
+   * 
+   * 🆕 P1功能增强：支持优先级过滤、分组、排序
    */
   getEvidence: async (
     tripId: string,
@@ -905,11 +907,117 @@ export const tripsApi = {
       offset?: number;
       day?: number;
       type?: EvidenceType;
+      // 🆕 P1功能：优先级过滤
+      priority?: 'all' | 'high' | 'medium_and_high';
+      // 🆕 P1功能：分组方式
+      groupBy?: 'none' | 'importance' | 'type' | 'day';
+      // 🆕 P1功能：排序方式
+      sortBy?: 'time' | 'importance' | 'relevance' | 'freshness' | 'quality';
     }
   ): Promise<EvidenceListResponse> => {
     const response = await apiClient.get<ApiResponseWrapper<EvidenceListResponse>>(
       `/trips/${tripId}/evidence`,
       { params }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 🆕 检查证据完整性
+   * GET /trips/:id/evidence/completeness
+   * 
+   * P1功能：检查行程中所有POI的期望证据类型，识别缺失的证据
+   */
+  getEvidenceCompleteness: async (
+    tripId: string
+  ): Promise<{
+    completenessScore: number; // 完整性评分（0-1）
+    missingEvidence: Array<{
+      poiId: number;
+      poiName: string;
+      missingTypes: EvidenceType[];
+      impact: 'LOW' | 'MEDIUM' | 'HIGH';
+      reason: string;
+    }>;
+    recommendations: Array<{
+      action: string;
+      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+      estimatedTime: number; // 秒
+      evidenceTypes: EvidenceType[];
+      affectedPois: number[];
+    }>;
+  }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{
+      completenessScore: number;
+      missingEvidence: Array<{
+        poiId: number;
+        poiName: string;
+        missingTypes: EvidenceType[];
+        impact: 'LOW' | 'MEDIUM' | 'HIGH';
+        reason: string;
+      }>;
+      recommendations: Array<{
+        action: string;
+        priority: 'HIGH' | 'MEDIUM' | 'LOW';
+        estimatedTime: number;
+        evidenceTypes: EvidenceType[];
+        affectedPois: number[];
+      }>;
+    }>>(
+      `/trips/${tripId}/evidence/completeness`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 🆕 获取证据获取建议
+   * GET /trips/:id/evidence/suggestions
+   * 
+   * P1功能：自动检测缺失证据并生成获取建议，支持一键批量获取
+   */
+  getEvidenceSuggestions: async (
+    tripId: string
+  ): Promise<{
+    hasMissingEvidence: boolean;
+    completenessScore: number;
+    suggestions: Array<{
+      id: string;
+      description: string;
+      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+      evidenceTypes: EvidenceType[];
+      affectedPoiIds: number[];
+      estimatedTime: number; // 秒
+      reason: string;
+      canBatchFetch: boolean;
+    }>;
+    bulkFetchSuggestion?: {
+      evidenceTypes: EvidenceType[];
+      affectedPoiIds: number[];
+      estimatedTime: number;
+      description: string;
+    };
+  }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{
+      hasMissingEvidence: boolean;
+      completenessScore: number;
+      suggestions: Array<{
+        id: string;
+        description: string;
+        priority: 'HIGH' | 'MEDIUM' | 'LOW';
+        evidenceTypes: EvidenceType[];
+        affectedPoiIds: number[];
+        estimatedTime: number;
+        reason: string;
+        canBatchFetch: boolean;
+      }>;
+      bulkFetchSuggestion?: {
+        evidenceTypes: EvidenceType[];
+        affectedPoiIds: number[];
+        estimatedTime: number;
+        description: string;
+      };
+    }>>(
+      `/trips/${tripId}/evidence/suggestions`
     );
     return handleResponse(response);
   },
@@ -1545,6 +1653,73 @@ export const itineraryItemsApi = {
   fixDates: async (tripId: string): Promise<FixDatesResponse> => {
     const response = await apiClient.post<ApiResponseWrapper<FixDatesResponse>>(
       `/itinerary-items/trip/${tripId}/fix-dates`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 更新单个证据项状态
+   * PATCH /trips/:id/evidence/:evidenceId
+   */
+  updateEvidence: async (
+    tripId: string,
+    evidenceId: string,
+    data: {
+      status?: 'new' | 'acknowledged' | 'resolved' | 'dismissed';
+      userNote?: string;
+    }
+  ): Promise<{
+    evidenceId: string;
+    status: string;
+    updatedAt: string;
+    userNote?: string;
+  }> => {
+    const response = await apiClient.patch<ApiResponseWrapper<{
+      evidenceId: string;
+      status: string;
+      updatedAt: string;
+      userNote?: string;
+    }>>(
+      `/trips/${tripId}/evidence/${evidenceId}`,
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 批量更新证据项状态
+   * PUT /trips/:id/evidence/batch-update
+   */
+  batchUpdateEvidence: async (
+    tripId: string,
+    updates: Array<{
+      evidenceId: string;
+      status?: 'new' | 'acknowledged' | 'resolved' | 'dismissed';
+      userNote?: string;
+    }>
+  ): Promise<{
+    updated: number;
+    failed: number;
+    errors?: Array<{
+      evidenceId: string;
+      error: string;
+    }>;
+  }> => {
+    // 验证批量限制
+    if (updates.length > 100) {
+      throw new Error('批量更新最多支持100个证据项');
+    }
+
+    const response = await apiClient.put<ApiResponseWrapper<{
+      updated: number;
+      failed: number;
+      errors?: Array<{
+        evidenceId: string;
+        error: string;
+      }>;
+    }>>(
+      `/trips/${tripId}/evidence/batch-update`,
+      { updates }
     );
     return handleResponse(response);
   },

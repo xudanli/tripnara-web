@@ -138,19 +138,44 @@ export default function WhatIfPage() {
     };
   };
 
-  const parseTimeToMinutes = (timeStr: string): number => {
+  const parseTimeToMinutes = (timeStr: string | null | undefined | Date): number => {
     try {
+      // ✅ 防御性检查：确保 timeStr 是有效值
+      if (!timeStr) return 0;
+      
+      // ✅ 如果是 Date 对象，转换为字符串
+      let timeString: string;
+      if (timeStr instanceof Date) {
+        timeString = timeStr.toISOString();
+      } else if (typeof timeStr === 'string') {
+        timeString = timeStr;
+      } else {
+        // 其他类型，尝试转换为字符串
+        timeString = String(timeStr);
+      }
+      
+      // ✅ 确保 timeString 是字符串且不为空
+      if (typeof timeString !== 'string' || !timeString.trim()) {
+        return 0;
+      }
+      
       // 支持多种时间格式
       let date: Date;
-      if (timeStr.includes('T') || timeStr.includes(' ')) {
-        date = parseISO(timeStr);
-      } else if (timeStr.includes(':')) {
+      if (timeString.includes('T') || timeString.includes(' ')) {
+        date = parseISO(timeString);
+      } else if (timeString.includes(':')) {
         // HH:mm 格式
-        const [hours, minutes] = timeStr.split(':').map(Number);
+        const [hours, minutes] = timeString.split(':').map(Number);
         return hours * 60 + (minutes || 0);
       } else {
         return 0;
       }
+      
+      // ✅ 确保 date 是有效的 Date 对象
+      if (!date || isNaN(date.getTime())) {
+        return 0;
+      }
+      
       return date.getHours() * 60 + date.getMinutes();
     } catch {
       return 0;

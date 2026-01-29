@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/utils/format';
-import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles } from 'lucide-react';
+import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles, Cloud, Shield, Route } from 'lucide-react';
 import {
   Collapsible,
   CollapsibleContent,
@@ -24,7 +24,8 @@ import type {
 import { tripsApi } from '@/api/trips';
 import type { TripDetail, PlanBudgetEvaluationResponse } from '@/types/trip';
 import { toast } from 'sonner';
-import { useContextApi } from '@/hooks';
+import { useContextApi, useIcelandInfo, useIsIcelandTrip } from '@/hooks';
+import { inferIcelandInfoParams } from '@/utils/iceland-info-inference';
 import type { ContextPackage } from '@/api/context';
 import PersonaCard from '@/components/planning-workbench/PersonaCard';
 import BudgetProgress from '@/components/planning-workbench/BudgetProgress';
@@ -95,6 +96,30 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
   useEffect(() => {
     loadTrip();
   }, [tripId]);
+
+  // 🆕 冰岛信息源集成
+  const isIceland = useIsIcelandTrip(trip?.destination);
+  
+  // 🆕 动态推断冰岛信息源查询参数（避免硬编码）
+  const icelandInfoParams = inferIcelandInfoParams(trip);
+  
+  const icelandInfo = useIcelandInfo({
+    autoFetch: false, // 不自动获取，手动触发
+    refreshInterval: 0,
+  });
+  
+  // 🆕 自动获取冰岛信息（使用推断的参数）
+  useEffect(() => {
+    if (isIceland && trip && icelandInfoParams) {
+      // 延迟执行，避免阻塞页面加载
+      const timer = setTimeout(() => {
+        icelandInfo.fetchAll(icelandInfoParams);
+      }, 2000); // 延迟2秒，让行程数据先加载
+      
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isIceland, trip?.id]);
 
   // 加载预算评估结果
   const loadBudgetEvaluation = async (planId: string) => {
@@ -658,6 +683,175 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
           })()}
           ruleTypes={['VISA', 'TRANSPORT', 'ENTRY']}
         />
+      )}
+
+      {/* 🆕 冰岛官方信息源（仅冰岛行程） */}
+      {isIceland && trip && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">冰岛官方信息源</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const params = inferIcelandInfoParams(trip);
+                  icelandInfo.fetchAll(params);
+                }}
+                disabled={
+                  icelandInfo.weather.loading ||
+                  icelandInfo.safety.loading ||
+                  icelandInfo.roadConditions.loading
+                }
+                className="h-8 text-xs"
+              >
+                {(icelandInfo.weather.loading ||
+                  icelandInfo.safety.loading ||
+                  icelandInfo.roadConditions.loading) ? (
+                  <>
+                    <Spinner className="mr-2 h-3 w-3" />
+                    刷新中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-3 w-3" />
+                    刷新
+                  </>
+                )}
+              </Button>
+            </div>
+            <CardDescription className="text-xs">
+              实时获取冰岛官方天气、安全和路况信息
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* 天气信息 */}
+            {icelandInfo.weather.loading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="h-4 w-4" />
+                <span>加载天气数据...</span>
+              </div>
+            )}
+            {icelandInfo.weather.error && (
+              <div className="text-sm text-red-500">
+                天气数据加载失败: {icelandInfo.weather.error}
+              </div>
+            )}
+            {icelandInfo.weather.data && (
+              <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg">
+                <Cloud className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-xs font-semibold text-gray-700 mb-1">高地天气预报</div>
+                  <div className="text-xs text-gray-600">
+                    {icelandInfo.weather.data.station.name}: {Math.round(icelandInfo.weather.data.current.temperature)}°C
+                    {icelandInfo.weather.data.current.windSpeedKmh && (
+                      <span className="ml-2">
+                        ，风速 {Math.round(icelandInfo.weather.data.current.windSpeedKmh)} km/h
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 安全警报 */}
+            {icelandInfo.safety.loading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="h-4 w-4" />
+                <span>加载安全信息...</span>
+              </div>
+            )}
+            {icelandInfo.safety.error && (
+              <div className="text-sm text-red-500">
+                安全信息加载失败: {icelandInfo.safety.error}
+              </div>
+            )}
+            {icelandInfo.safety.data && icelandInfo.safety.data.alerts.length > 0 && (
+              <div className="flex items-start gap-2 p-2 bg-yellow-50 rounded-lg">
+                <Shield className="h-4 w-4 text-yellow-600 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-xs font-semibold text-gray-700 mb-1">安全警报</div>
+                  <div className="space-y-1">
+                    {icelandInfo.safety.data.alerts.slice(0, 3).map((alert) => (
+                      <div key={alert.id} className="text-xs flex items-center gap-1">
+                        <Badge
+                          variant={
+                            alert.severity === 'critical' || alert.severity === 'high'
+                              ? 'destructive'
+                              : 'secondary'
+                          }
+                          className="text-xs"
+                        >
+                          {alert.severity === 'critical'
+                            ? '严重'
+                            : alert.severity === 'high'
+                            ? '高'
+                            : alert.severity === 'medium'
+                            ? '中'
+                            : '低'}
+                        </Badge>
+                        <span className="text-gray-700">{alert.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* F路路况 */}
+            {icelandInfo.roadConditions.loading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="h-4 w-4" />
+                <span>加载路况信息...</span>
+              </div>
+            )}
+            {icelandInfo.roadConditions.error && (
+              <div className="text-sm text-red-500">
+                路况信息加载失败: {icelandInfo.roadConditions.error}
+              </div>
+            )}
+            {icelandInfo.roadConditions.data &&
+              icelandInfo.roadConditions.data.fRoads.length > 0 && (
+                <div className="flex items-start gap-2 p-2 bg-orange-50 rounded-lg">
+                  <Route className="h-4 w-4 text-orange-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-xs font-semibold text-gray-700 mb-1">F路路况</div>
+                    <div className="space-y-1">
+                      {icelandInfo.roadConditions.data.fRoads.slice(0, 3).map((road) => (
+                        <div key={road.id} className="text-xs flex items-center gap-1">
+                          <Badge
+                            variant={
+                              road.status === 'closed'
+                                ? 'destructive'
+                                : road.status === 'caution'
+                                ? 'secondary'
+                                : 'default'
+                            }
+                            className="text-xs"
+                          >
+                            {road.fRoadNumber}
+                          </Badge>
+                          <span
+                            className={cn(
+                              'text-gray-700',
+                              road.status === 'closed' && 'text-red-600',
+                              road.status === 'caution' && 'text-yellow-600'
+                            )}
+                          >
+                            {road.status === 'closed'
+                              ? '封闭'
+                              : road.status === 'caution'
+                              ? '谨慎'
+                              : '开放'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+          </CardContent>
+        </Card>
       )}
 
       {/* 操作区域 - 仅在生成后显示 */}
@@ -1656,16 +1850,29 @@ function PlanPreviewContent({
                       {item.startTime && (
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {typeof item.startTime === 'string' 
-                            ? item.startTime.includes('T') 
-                              ? format(new Date(item.startTime), 'HH:mm')
-                              : item.startTime
-                            : item.startTime}
-                          {item.endTime && ` - ${typeof item.endTime === 'string' 
-                            ? item.endTime.includes('T') 
-                              ? format(new Date(item.endTime), 'HH:mm')
-                              : item.endTime
-                            : item.endTime}`}
+                          {(() => {
+                            // ✅ 安全地处理 startTime
+                            if (!item.startTime) return '-';
+                            const startTimeStr = typeof item.startTime === 'string' 
+                              ? item.startTime 
+                              : item.startTime instanceof Date 
+                                ? item.startTime.toISOString()
+                                : String(item.startTime);
+                            return startTimeStr.includes('T') 
+                              ? format(new Date(startTimeStr), 'HH:mm')
+                              : startTimeStr;
+                          })()}
+                          {item.endTime && ` - ${(() => {
+                            // ✅ 安全地处理 endTime
+                            const endTimeStr = typeof item.endTime === 'string' 
+                              ? item.endTime 
+                              : item.endTime instanceof Date 
+                                ? item.endTime.toISOString()
+                                : String(item.endTime);
+                            return endTimeStr.includes('T') 
+                              ? format(new Date(endTimeStr), 'HH:mm')
+                              : endTimeStr;
+                          })()}`}
                         </span>
                       )}
                       {item.location && (

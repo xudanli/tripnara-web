@@ -188,16 +188,22 @@ export default function ItineraryItemRow({
   
   // 预计时长（从 physicalMetadata 获取，作为参考）
   const physicalMetadata = (place as any)?.physicalMetadata || {};
-  const estimatedDuration = physicalMetadata.estimated_duration_min;
+  // ✅ 确保 estimatedDuration 是数字类型，避免对象被传递
+  const estimatedDuration = typeof physicalMetadata.estimated_duration_min === 'number' 
+    ? physicalMetadata.estimated_duration_min 
+    : null;
   
   // 显示实际停留时长，如果没有则显示预估时长
   const formatDurationDisplay = (minutes: number) => {
+    // ✅ 防御性检查：确保输入是数字
+    if (typeof minutes !== 'number' || isNaN(minutes)) return '约60分钟';
     if (minutes < 60) return `${minutes}分钟`;
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`;
   };
   
+  // ✅ 确保 durationDisplay 始终是字符串
   const durationDisplay = actualDuration 
     ? formatDurationDisplay(actualDuration)
     : estimatedDuration 
@@ -731,7 +737,15 @@ export default function ItineraryItemRow({
 
           {/* 地点名称 */}
           <div className="font-medium text-base mb-1">
-            <span className="truncate block">{name}</span>
+            <div className="flex items-center gap-2">
+              <span className="truncate block">{name}</span>
+              {/* ✅ 显示必游标记（如果存在） */}
+              {(item.isRequired || item.note?.includes('[必游]')) && (
+                <Badge variant="default" className="text-xs shrink-0">
+                  必游
+                </Badge>
+              )}
+            </div>
           </div>
 
           {/* 第二行：地址 */}
@@ -770,7 +784,7 @@ export default function ItineraryItemRow({
                   placeDetails.isOpen === false && "bg-red-50 text-red-700 border-red-200"
                 )}
               >
-                🕐 {placeDetails.todayHours}
+                🕐 {typeof placeDetails.todayHours === 'string' ? placeDetails.todayHours : String(placeDetails.todayHours || '')}
                 {placeDetails.isOpen === true && ' · 营业中'}
                 {placeDetails.isOpen === false && ' · 已关闭'}
               </Badge>
@@ -779,7 +793,8 @@ export default function ItineraryItemRow({
             {/* 地点参考价格 */}
             {placeDetails?.price && (
               <Badge variant="outline" className="text-xs text-emerald-600">
-                {placeDetails.price}
+                {/* ✅ 确保 price 是字符串 */}
+                {typeof placeDetails.price === 'string' ? placeDetails.price : String(placeDetails.price || '')}
               </Badge>
             )}
             
@@ -813,8 +828,9 @@ export default function ItineraryItemRow({
                       variant="outline" 
                       className={cn("text-xs cursor-pointer", bookingStatusLabels[item.bookingStatus]?.color)}
                     >
-                      {bookingStatusLabels[item.bookingStatus]?.icon} {bookingStatusLabels[item.bookingStatus]?.label}
-                      {item.bookingConfirmation && ` · ${item.bookingConfirmation}`}
+                      {/* ✅ 确保所有值都是字符串，避免渲染对象 */}
+                      {bookingStatusLabels[item.bookingStatus]?.icon || ''} {bookingStatusLabels[item.bookingStatus]?.label || String(item.bookingStatus || '')}
+                      {item.bookingConfirmation && typeof item.bookingConfirmation === 'string' ? ` · ${item.bookingConfirmation}` : ''}
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs">
@@ -854,7 +870,8 @@ export default function ItineraryItemRow({
                   variant={abuFields.openingStatus === '休息' ? 'destructive' : abuFields.openingStatus === '未知' ? 'secondary' : 'outline'}
                   className="text-xs"
                 >
-                  {abuFields.openingStatus}
+                  {/* ✅ 确保 openingStatus 是字符串 */}
+                  {typeof abuFields.openingStatus === 'string' ? abuFields.openingStatus : String(abuFields.openingStatus || '')}
                 </Badge>
                 {abuFields.risks.map((risk, idx) => (
                   <Badge
@@ -862,7 +879,8 @@ export default function ItineraryItemRow({
                     variant={risk.severity === 'high' ? 'destructive' : 'secondary'}
                     className="text-xs"
                   >
-                    {risk.label}
+                    {/* ✅ 确保 label 是字符串 */}
+                    {typeof risk.label === 'string' ? risk.label : String(risk.label || '')}
                   </Badge>
                 ))}
                 <TooltipProvider>
@@ -901,12 +919,14 @@ export default function ItineraryItemRow({
               <>
                 {neptuneFields.problems.map((problem, idx) => (
                   <Badge key={idx} variant="destructive" className="text-xs">
-                    {problem.label}
+                    {/* ✅ 确保 label 是字符串 */}
+                    {typeof problem.label === 'string' ? problem.label : String(problem.label || '')}
                   </Badge>
                 ))}
                 {neptuneFields.suggestions.map((suggestion, idx) => (
                   <Badge key={idx} variant="secondary" className="text-xs">
-                    {suggestion}
+                    {/* ✅ 确保 suggestion 是字符串 */}
+                    {typeof suggestion === 'string' ? suggestion : String(suggestion || '')}
                   </Badge>
                 ))}
               </>
@@ -1036,7 +1056,8 @@ export default function ItineraryItemRow({
                 <div className="flex items-center gap-1 flex-wrap">
                   {placeDetails.tags.map((tag: string, idx: number) => (
                     <Badge key={idx} variant="secondary" className="text-xs px-1.5 py-0">
-                      {tag}
+                      {/* ✅ 确保 tag 是字符串 */}
+                      {typeof tag === 'string' ? tag : String(tag || '')}
                     </Badge>
                   ))}
                 </div>
@@ -1101,11 +1122,14 @@ export default function ItineraryItemRow({
                 </div>
               )}
               {placeDetails?.price && (
-                <span className="text-muted-foreground">{placeDetails.price}</span>
+                <span className="text-muted-foreground">
+                  {/* ✅ 确保 price 是字符串 */}
+                  {typeof placeDetails.price === 'string' ? placeDetails.price : String(placeDetails.price || '')}
+                </span>
               )}
               {placeDetails?.todayHours && (
                 <span className="text-muted-foreground">
-                  🕐 {placeDetails.todayHours}
+                  🕐 {typeof placeDetails.todayHours === 'string' ? placeDetails.todayHours : String(placeDetails.todayHours || '')}
                   {placeDetails.isOpen === true && ' · 营业中'}
                   {placeDetails.isOpen === false && ' · 已关闭'}
                 </span>

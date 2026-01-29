@@ -48,12 +48,37 @@ const dayOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 /**
  * 解析时间范围字符串，例如 "09:00–17:00"
  */
-function parseTimeRange(timeStr: string): { start: string; end: string } | null {
+function parseTimeRange(timeStr: string | null | undefined | number | any): { start: string; end: string } | null {
+  // ✅ 防御性检查：确保 timeStr 是有效值
+  if (!timeStr) return null;
+  
+  // ✅ 转换为字符串
+  let timeString: string;
+  if (typeof timeStr === 'string') {
+    timeString = timeStr;
+  } else if (typeof timeStr === 'number') {
+    // 如果是数字，可能是时间戳，转换为时间字符串
+    const date = new Date(timeStr);
+    if (!isNaN(date.getTime())) {
+      timeString = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    } else {
+      return null;
+    }
+  } else {
+    // 其他类型，尝试转换为字符串
+    timeString = String(timeStr);
+  }
+  
+  // ✅ 确保 timeString 是字符串且不为空
+  if (typeof timeString !== 'string' || !timeString.trim()) {
+    return null;
+  }
+  
   // 支持多种分隔符：–、-、~、到
   const separators = ['–', '-', '~', '到', '至'];
   for (const sep of separators) {
-    if (timeStr.includes(sep)) {
-      const [start, end] = timeStr.split(sep).map(s => s.trim());
+    if (timeString.includes(sep)) {
+      const [start, end] = timeString.split(sep).map(s => s.trim());
       return { start, end };
     }
   }
@@ -63,13 +88,19 @@ function parseTimeRange(timeStr: string): { start: string; end: string } | null 
 /**
  * 检查当前时间是否在营业时间范围内
  */
-function isCurrentlyOpen(hours: string): boolean {
+function isCurrentlyOpen(hours: string | null | undefined | number | any): boolean {
+  // ✅ 防御性检查
+  if (!hours) return false;
+  
+  // ✅ 转换为字符串进行比较
+  const hoursStr = typeof hours === 'string' ? hours : String(hours);
+  
   // 如果是 24 小时营业
-  if (hours === '24小时' || hours === '24 Hours' || hours === '24/7') {
+  if (hoursStr === '24小时' || hoursStr === '24 Hours' || hoursStr === '24/7') {
     return true;
   }
 
-  const range = parseTimeRange(hours);
+  const range = parseTimeRange(hoursStr);
   if (!range) return false;
 
   const now = new Date();
@@ -169,12 +200,16 @@ export default function BusinessHoursCard({
 
     // 优先使用 weekday/weekend
     if (hoursData.weekday && hoursData.weekend) {
+      // ✅ 确保 weekday 和 weekend 是字符串
+      const weekdayStr = typeof hoursData.weekday === 'string' ? hoursData.weekday : String(hoursData.weekday || '');
+      const weekendStr = typeof hoursData.weekend === 'string' ? hoursData.weekend : String(hoursData.weekend || '');
+      
       // 工作日
       ['mon', 'tue', 'wed', 'thu', 'fri'].forEach(dayKey => {
         allDayHours.push({
           day: dayKey,
           label: dayLabels[dayKey].zh,
-          hours: hoursData.weekday!,
+          hours: weekdayStr,
           isToday: dayKey === getTodayDay(),
         });
       });
@@ -183,17 +218,20 @@ export default function BusinessHoursCard({
         allDayHours.push({
           day: dayKey,
           label: dayLabels[dayKey].zh,
-          hours: hoursData.weekend!,
+          hours: weekendStr,
           isToday: dayKey === getTodayDay(),
         });
       });
     } else if (hoursData.weekday) {
+      // ✅ 确保 weekday 是字符串
+      const weekdayStr = typeof hoursData.weekday === 'string' ? hoursData.weekday : String(hoursData.weekday || '');
+      
       // 只有工作日数据，应用到所有工作日
       ['mon', 'tue', 'wed', 'thu', 'fri'].forEach(dayKey => {
         allDayHours.push({
           day: dayKey,
           label: dayLabels[dayKey].zh,
-          hours: hoursData.weekday!,
+          hours: weekdayStr,
           isToday: dayKey === getTodayDay(),
         });
       });

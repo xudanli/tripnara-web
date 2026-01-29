@@ -166,6 +166,9 @@ export interface ItineraryItem {
   tripDayId?: string;
   Place?: Place | null;
   Trail?: any | null;
+  // ✅ 新增字段（2026-01-29）
+  /** 是否为必游POI（从模板的 dayPlans[].pois[].required 获取，或从 note 字段解析 [必游] 标记） */
+  isRequired?: boolean | null;
   // 费用相关字段
   estimatedCost?: number | null;
   actualCost?: number | null;
@@ -210,6 +213,8 @@ export interface ItineraryItemDetail extends ItineraryItem {
 export interface TripDay {
   id: string;
   date: string;
+  /** ✅ 新增字段（2026-01-29）：当天的主题（从模板的 dayPlans[].theme 获取，或从 trip.metadata.dayThemes[dayNumber] 获取） */
+  theme?: string | null;
   ItineraryItem: ItineraryItem[];
 }
 
@@ -246,6 +251,8 @@ export interface TripDetail extends BaseEntity {
   pendingTasksCount?: number;
   metadata?: {
     generationProgress?: GenerationProgress;
+    /** ✅ 新增字段（2026-01-29）：每日主题映射，key 为天数（1, 2, 3...），value 为主题字符串 */
+    dayThemes?: Record<string, string>;
     [key: string]: any;
   };
 }
@@ -1996,6 +2003,30 @@ export interface EvidenceItem {
   day?: number; // 1-based
   severity?: EvidenceSeverity;
   metadata?: Record<string, any>;
+  
+  // 🆕 P0修复：证据增强字段（v1.2.0）
+  freshness?: {
+    fetchedAt: string; // 获取时间（ISO 8601 格式）
+    expiresAt?: string; // 过期时间（ISO 8601 格式）
+    freshnessStatus: 'FRESH' | 'STALE' | 'EXPIRED'; // 时效性状态
+    recommendedRefreshAt?: string; // 建议刷新时间（ISO 8601 格式）
+  };
+  confidence?: {
+    score: number; // 置信度分数（0-1）
+    level: 'HIGH' | 'MEDIUM' | 'LOW'; // 置信度等级
+    factors: string[]; // 影响置信度的因素列表
+  };
+  qualityScore?: {
+    overallScore: number; // 综合质量评分（0-1）
+    components: {
+      sourceReliability: number; // 数据源可靠性（0-1）
+      timeliness: number; // 时效性（0-1）
+      completeness: number; // 完整性（0-1）
+      multiSourceVerification: number; // 多源验证（0-1）
+    };
+    level: 'HIGH' | 'MEDIUM' | 'LOW'; // 质量等级
+    explanation: string; // 质量说明
+  };
 }
 
 // 证据列表响应

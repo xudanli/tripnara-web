@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
@@ -228,8 +229,85 @@ export default function DashboardPage() {
     setCreateDialogOpen(true);
   };
 
-  const handleCreateSuccess = (tripId: string) => {
-    navigate(`/dashboard/trips/${tripId}`);
+  const handleCreateSuccess = async (tripId: string) => {
+    console.log('🔄 [Dashboard] handleCreateSuccess 被调用，tripId:', {
+      tripId,
+      type: typeof tripId,
+      length: tripId?.length,
+    });
+
+    // 验证 tripId 格式
+    if (!tripId || typeof tripId !== 'string' || tripId.trim().length === 0) {
+      console.error('❌ [Dashboard] 无效的 tripId:', tripId);
+      toast.error('行程创建成功，但行程ID无效，请检查后端响应');
+      return;
+    }
+
+    const validTripId = tripId.trim();
+    
+    // 显示成功提示
+    toast.success('行程创建成功！', {
+      description: '正在跳转到行程库...',
+      duration: 3000,
+    });
+    
+    // 延迟导航，给后端时间完成创建和权限设置
+    // 同时尝试验证行程是否可以访问
+    try {
+      // 等待一小段时间，让后端完成创建（增加到1.5秒，给后端更多时间）
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // 尝试验证行程是否存在（最多重试3次）
+      let verified = false;
+      let lastError: any = null;
+      
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`🔄 [Dashboard] 验证行程访问权限，尝试 ${attempt}/3...`);
+          await tripsApi.getById(validTripId);
+          verified = true;
+          console.log('✅ [Dashboard] 行程创建成功，已验证可访问:', validTripId);
+          break;
+        } catch (verifyErr: any) {
+          lastError = verifyErr;
+          console.warn(`⚠️ [Dashboard] 验证失败 (${attempt}/3):`, {
+            tripId: validTripId,
+            error: verifyErr.message,
+            code: verifyErr.code,
+            status: verifyErr.response?.status,
+          });
+          
+          // 如果不是最后一次尝试，等待后重试
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+      
+      if (!verified && lastError) {
+        console.warn('⚠️ [Dashboard] 所有验证尝试都失败，但继续导航:', {
+          tripId: validTripId,
+          lastError: lastError.message,
+        });
+        // 不阻止导航，可能只是暂时的权限问题或后端延迟
+        toast.warning('行程已创建，但验证访问权限时遇到问题，正在跳转...');
+      }
+      
+      // 导航到行程库（显示新创建的行程）
+      console.log('🔄 [Dashboard] 导航到行程库，tripId:', validTripId);
+      // 设置刷新标记（备用机制）
+      sessionStorage.setItem('trips-page-should-refresh', 'true');
+      navigate('/dashboard/trips', { state: { from: 'create', tripId: validTripId } });
+    } catch (err: any) {
+      console.error('❌ [Dashboard] 创建行程后导航失败:', {
+        tripId: validTripId,
+        error: err.message,
+        fullError: err,
+      });
+      toast.error('行程创建成功，但跳转失败，请手动访问行程库');
+      // 仍然尝试导航到行程库，即使验证失败
+      navigate('/dashboard/trips', { state: { from: 'create', tripId: validTripId } });
+    }
   };
 
   const loadAttentionQueue = async () => {
@@ -840,7 +918,7 @@ export default function DashboardPage() {
           templateId={selectedTemplate.id}
           templateName={selectedTemplate.nameCN}
           defaultDurationDays={selectedTemplate.durationDays}
-          defaultPacePreference={selectedTemplate.defaultPacePreference}
+          defaultPacePreference={selectedTemplate.defaultPacePreference as 'RELAXED' | 'BALANCED' | 'INTENSE' | 'CHALLENGE' | undefined}
           open={createDialogOpen}
           onOpenChange={(open) => {
             setCreateDialogOpen(open);

@@ -585,34 +585,77 @@ export interface TransportPlanResponse {
 // ==================== 路线模板相关类型 ====================
 
 export type IntensityLevel = 'LIGHT' | 'MODERATE' | 'CHALLENGE' | 'EXTREME';
-export type PacePreferenceEnum = 'RELAXED' | 'BALANCED' | 'CHALLENGE';
+export type PacePreferenceEnum = 'RELAXED' | 'BALANCED' | 'INTENSE' | 'CHALLENGE';
 
+/**
+ * 每日计划中的POI信息
+ * 
+ * ⚠️ 重要：这是唯一支持的POI数据格式
+ * - ✅ 使用 `pois` 数组存储POI信息
+ * - ❌ 不再使用 `requiredNodes`（已废弃）
+ */
+export interface DayPlanPoi {
+  id: number;                      // POI ID（必填）
+  uuid?: string;                   // POI UUID（推荐）
+  nameCN: string;                  // POI中文名称（必填）
+  nameEN?: string;                 // POI英文名称（可选）
+  category?: string;               // POI类别（可选）
+  address?: string;                // POI地址（可选）
+  rating?: number;                 // POI评分（0-5，可选）
+  description?: string;            // POI描述（可选）
+  required?: boolean;              // 是否为必游POI（默认false）
+  order?: number;                  // POI顺序（可选，用于排序）
+  durationMinutes?: number;        // 预计停留时间（分钟，可选）
+  metadata?: Record<string, any>;  // 其他元数据（可选）
+}
+
+/**
+ * 每日计划
+ * 
+ * 数据格式说明（2026-01-29更新）：
+ * - ✅ 统一返回对象数组格式: [{day, theme, pois}, ...]
+ * - ✅ 旧格式（嵌套数组 [[], [], []]）已由后端自动转换为新格式
+ * - ✅ theme 字段可能为空（旧数据转换时），需要前端做条件渲染
+ * - ✅ 前端无需做格式转换，直接使用返回的数据即可
+ * 
+ * ⚠️ 重要变更（2026-01-29）：
+ * - ❌ `requiredNodes` 字段已废弃，后端已移除回退支持
+ * - ✅ 全部使用 `pois` 格式（完整POI信息）
+ * - ✅ `pois` 字段包含完整的POI信息，包括必游标记、顺序、停留时间等
+ * 
+ * @see https://docs/route-template-api-latest.md
+ */
 export interface DayPlan {
-  day: number;
-  theme?: string;
-  maxIntensity?: IntensityLevel;
-  maxElevationM?: number;
-  requiredNodes?: string[]; // UUIDs of required nodes (e.g., lodges)
+  day: number;                     // 第几天（从1开始，必填）
+  theme?: string;                   // 主题/描述（可选，旧数据可能为空，需要条件渲染）
+  maxIntensity?: IntensityLevel | 'LIGHT' | 'MODERATE' | 'INTENSE';  // 强度上限
+  maxElevationM?: number;           // 最大海拔（米）
+  /** @deprecated 已废弃，请使用 `pois` 字段。后端已移除回退支持。 */
+  requiredNodes?: string[];        // POI ID数组（字符串格式，已废弃）
+  optionalActivities?: string[];    // 可选活动类型
+  pois?: DayPlanPoi[];             // 具体的POI列表（完整信息，必填）
+  [key: string]: any;              // 其他扩展字段
 }
 
 export interface RouteTemplate {
-  id: number;
-  uuid: string;
-  routeDirectionId: number;
-  durationDays: number;
-  nameCN: string;
-  nameEN?: string;
-  dayPlans: DayPlan[];
-  defaultPacePreference: PacePreferenceEnum;
-  metadata?: Record<string, any>;
-  isActive: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  routeDirection?: {
+  id: number;                      // 路线模板ID
+  uuid: string;                    // 唯一标识符
+  routeDirectionId: number;       // 关联的路线方向ID
+  durationDays: number;            // 行程天数
+  name?: string;                   // 模板名称（英文，兼容字段）
+  nameCN?: string;                 // 模板中文名称
+  nameEN?: string;                 // 模板英文名称
+  dayPlans: DayPlan[];            // 每日计划数组
+  defaultPacePreference?: PacePreferenceEnum;  // 默认节奏偏好
+  metadata?: Record<string, any>;  // 元数据
+  isActive: boolean;               // 是否激活
+  createdAt: string;               // 创建时间（ISO 8601）
+  updatedAt: string;                // 更新时间（ISO 8601）
+  routeDirection?: {                // 关联的路线方向信息
     id: number;
     nameCN: string;
     nameEN?: string;
-    countryCode?: string;
+    countryCode: string;
     tags?: string[];
   };
 }
@@ -663,6 +706,17 @@ export interface UpdateRouteTemplateResponse {
 
 // ==================== 接口: 使用模板创建行程 ====================
 
+/**
+ * 从路线模板创建行程的请求参数
+ * 
+ * 注意：
+ * - 后端会从模板中读取 dayPlans 数据
+ * - 后端使用模板中的 `pois` 字段（完整POI信息）
+ * - ⚠️ `requiredNodes` 已废弃，后端不再支持回退
+ * - 前端不需要传递 dayPlans，后端会自动处理
+ * 
+ * @see POST /api/route-directions/templates/:id/create-trip
+ */
 export interface CreateTripFromTemplateRequest {
   // 必选：行程基本信息
   destination: string;        // 国家代码，如 "IS", "JP"
