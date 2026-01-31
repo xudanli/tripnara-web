@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/utils/format';
-import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles, Cloud, Shield, Route } from 'lucide-react';
+import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles, Cloud, Shield, Route, HelpCircle, ChevronUp } from 'lucide-react';
 import {
   Collapsible,
   CollapsibleContent,
@@ -55,12 +55,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { format } from 'date-fns';
+import { DecisionCardsGrid } from '@/components/decision-draft';
 
 interface PlanningWorkbenchTabProps {
   tripId: string;
+  onSwitchToDecisionDraft?: () => void;
 }
 
-export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabProps) {
+export default function PlanningWorkbenchTab({ tripId, onSwitchToDecisionDraft }: PlanningWorkbenchTabProps) {
   const [loading, setLoading] = useState(false);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [result, setResult] = useState<ExecutePlanningWorkbenchResponse | null>(null);
@@ -1033,6 +1035,37 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
             <DEMTerrainAndFatigueView planState={result.planState} trip={trip} />
           )}
 
+          {/* 决策过程入口提示 */}
+          {result.planState && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">想了解详细的决策过程？</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        查看决策节点、证据链和详细解释
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      onSwitchToDecisionDraft?.();
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    查看决策过程
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* 三人格输出 */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <PersonaCard persona={result.uiOutput.personas.abu} />
@@ -1499,6 +1532,47 @@ function PlanPreviewContent({
   budgetDecisionLog?: import('@/types/trip').BudgetDecisionLogResponse | null;
   currency?: string;
 }) {
+  const [decisionVisualizationOpen, setDecisionVisualizationOpen] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+
+  // 获取决策草案ID
+  useEffect(() => {
+    const loadDraftId = async () => {
+      try {
+        // 尝试从 planState 中获取 decision_draft_id
+        const draftIdFromState = (planState as any).decision_draft_id;
+        if (draftIdFromState) {
+          setDraftId(draftIdFromState);
+          return;
+        }
+
+        // 如果没有，尝试使用 plan_id
+        const planId = (planState as any).plan_id;
+        if (planId) {
+          // 尝试获取方案状态
+          try {
+            const planStateData = await planningWorkbenchApi.getState(planId);
+            const draftIdFromPlanState = (planStateData as any).decision_draft_id;
+            if (draftIdFromPlanState) {
+              setDraftId(draftIdFromPlanState);
+            } else {
+              // 使用 plan_id 作为 draftId（假设后端支持）
+              setDraftId(planId);
+            }
+          } catch {
+            // 如果获取失败，使用 plan_id
+            setDraftId(planId);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load draft ID:', err);
+      }
+    };
+
+    if (planState) {
+      loadDraftId();
+    }
+  }, [planState]);
   // 解析方案数据
   const itinerary = planState.itinerary;
   
@@ -1921,6 +1995,42 @@ function PlanPreviewContent({
       {currentTrip && (
         <PlanComparison planState={planState} currentTrip={currentTrip} />
       )}
+
+          {/* 决策可视化入口 - 仅对自然语言创建的行程显示 */}
+          {/* 注意：决策草案只在自然语言创建流程中生成，因此只有自然语言创建的行程才有决策可视化 */}
+          {draftId && (
+            <Collapsible open={decisionVisualizationOpen} onOpenChange={setDecisionVisualizationOpen}>
+              <Card className="border-t">
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <HelpCircle className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">为什么这样安排？</CardTitle>
+                          <CardDescription className="text-xs mt-0.5">
+                            点击查看系统如何做出决策
+                          </CardDescription>
+                        </div>
+                      </div>
+                      {decisionVisualizationOpen ? (
+                        <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                      )}
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <DecisionCardsGrid draftId={draftId} userMode="toc" />
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          )}
     </div>
   );
 }

@@ -6,9 +6,6 @@ import {
   MapPin,
   Compass,
   Play,
-  Mountain,
-  BarChart3,
-  Settings,
   Menu,
   X,
   Globe,
@@ -17,6 +14,7 @@ import {
   LogOut,
   MessageCircle,
   ClipboardCheck,
+  Settings,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -51,6 +49,7 @@ interface NavItem {
 }
 
 // Note: Labels are now translated in the component using useTranslation
+// 极简导航菜单：只保留核心入口，其他功能通过对话界面访问
 const navItems: NavItem[] = [
   {
     key: 'home',
@@ -63,31 +62,6 @@ const navItems: NavItem[] = [
     label: '', // Will be set in component
     icon: MapPin,
     path: '/dashboard/trips',
-    subItems: [
-      {
-        key: 'trips-all',
-        label: '', // Will be set in component
-        path: '/dashboard/trips',
-      },
-    ],
-  },
-  {
-    key: 'countries',
-    label: '', // Will be set in component
-    icon: Globe,
-    path: '/dashboard/countries',
-    subItems: [
-      {
-        key: 'countries-archive',
-        label: '', // Will be set in component
-        path: '/dashboard/countries',
-      },
-      {
-        key: 'countries-templates',
-        label: '', // Will be set in component
-        path: '/dashboard/countries/templates',
-      },
-    ],
   },
   {
     key: 'plan-studio',
@@ -95,36 +69,9 @@ const navItems: NavItem[] = [
     icon: Compass,
     path: '/dashboard/plan-studio',
   },
-  {
-    key: 'execute',
-    label: '', // Will be set in component
-    icon: Play,
-    path: '/dashboard/execute',
-  },
-  {
-    key: 'readiness',
-    label: '', // Will be set in component
-    icon: ClipboardCheck,
-    path: '/dashboard/readiness',
-  },
-  {
-    key: 'trails',
-    label: '', // Will be set in component
-    icon: Mountain,
-    path: '/dashboard/trails',
-  },
-  {
-    key: 'insights',
-    label: '', // Will be set in component
-    icon: BarChart3,
-    path: '/dashboard/insights',
-  },
-  {
-    key: 'settings',
-    label: '', // Will be set in component
-    icon: Settings,
-    path: '/dashboard/settings',
-  },
+  // 其他功能（国家数据库、执行、准备度）通过对话界面访问
+  // 徒步和复盘模块已删除
+  // 设置已迁移到用户头像下拉菜单
 ];
 
 interface SidebarNavigationProps {

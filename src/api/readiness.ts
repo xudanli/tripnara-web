@@ -83,7 +83,7 @@ export interface ReadinessFindingItem {
     dueOffsetDays?: number;            // 相对出发日期的偏移天数（负数表示提前）
     tags?: string[];
   }>;
-  askUser?: string[];                  // 需要用户提供的信息
+  askUser?: string[] | UserQuestion[]; // 🆕 需要用户提供的信息（支持字符串数组或结构化问题对象）
   evidence?: Array<{                   // 证据引用
     sourceId: string;
     sectionId?: string;
@@ -171,6 +171,32 @@ export interface RiskSource {
   authority: string;                   // 权威机构名称（如 "SafeTravel Iceland"）
   title?: string;                      // 来源标题（如 "冰岛旅行安全信息"）
   canonicalUrl?: string;               // 规范URL（如 "https://www.safetravel.is/"）
+}
+
+/**
+ * 🆕 用户问题（标准化格式）
+ * 
+ * 支持两种格式：
+ * 1. 字符串格式（向后兼容）："questionId: 问题文本 (选项1|选项2|选项3) [required] [single|multiple]"
+ * 2. 结构化格式（推荐）：UserQuestion 对象
+ * 
+ * 后端配合要求：
+ * - 优先返回结构化格式（UserQuestion[]）
+ * - 支持向后兼容字符串格式（string[]）
+ * - 问题ID在同一 findingItem 内必须唯一
+ */
+export interface UserQuestion {
+  id: string;                          // 问题ID（必填，建议格式：{ruleId}.{questionId}）
+  text: string | { zh: string; en: string }; // 问题文本（必填，支持国际化）
+  type: 'single' | 'multiple' | 'text'; // 问题类型：单选、多选、文本输入
+  required?: boolean;                   // 是否必填（默认 true）
+  options?: Array<string | { zh: string; en: string }>; // 选项列表（单选/多选时必填，支持国际化）
+  placeholder?: string | { zh: string; en: string }; // 文本输入时的占位符（支持国际化）
+  validation?: {                        // 验证规则（可选）
+    minLength?: number;                  // 最小长度
+    maxLength?: number;                  // 最大长度
+    pattern?: string;                    // 正则表达式
+  };
 }
 
 /**
@@ -1339,6 +1365,32 @@ export const readinessApi = {
   getScoreBreakdown: async (tripId: string): Promise<ScoreBreakdownResponse> => {
     const response = await apiClient.get<ApiResponseWrapper<ScoreBreakdownResponse>>(
       `/readiness/trip/${tripId}/score`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 🆕 回答用户决策问题
+   * POST /api/readiness/trips/:tripId/decisions/:ruleId/answer
+   * 
+   * 提交用户对准备度检查中决策问题的回答
+   * 
+   * @param tripId 行程ID
+   * @param ruleId 规则ID（findingItem.id）
+   * @param answers 用户回答（键值对，键为问题ID，值为答案）
+   */
+  answerDecision: async (
+    tripId: string,
+    ruleId: string,
+    answers: Record<string, any>
+  ): Promise<{
+    updatedFinding: ReadinessFindingItem;
+  }> => {
+    const response = await apiClient.post<ApiResponseWrapper<{
+      updatedFinding: ReadinessFindingItem;
+    }>>(
+      `/api/readiness/trips/${tripId}/decisions/${ruleId}/answer`,
+      { answers }
     );
     return handleResponse(response);
   },

@@ -9,7 +9,8 @@ export const CONFIG = {
     MAX_LIMIT: 100,
   },
   API: {
-    TIMEOUT: 10000, // API 请求超时时间（毫秒）
+    TIMEOUT: 60000, // API 请求超时时间（毫秒）- 默认 60 秒
+    TIMEOUT_LONG: 120000, // 长时间操作的超时时间（毫秒）- 120 秒，用于自然语言创建行程等耗时操作
   },
 } as const;
 

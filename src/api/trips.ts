@@ -229,13 +229,114 @@ export const tripsApi = {
   /**
    * 自然语言创建行程
    * POST /trips/from-natural-language
+   * 注意：此操作可能需要较长时间（LLM 调用、方案生成等），使用更长的超时时间
+   * 支持会话上下文：如果提供 sessionId，会恢复之前的对话上下文
+   * 
+   * 🆕 字段名映射：自动将后端返回的澄清问题格式转换为前端格式
+   * 兼容新旧两种字段名（question/text, type/inputType）
    */
   createFromNL: async (data: CreateTripFromNLRequest): Promise<CreateTripFromNLResponse> => {
     const response = await apiClient.post<ApiResponseWrapper<CreateTripFromNLResponse>>(
       '/trips/from-natural-language',
-      data
+      data,
+      {
+        timeout: 120000, // 120 秒超时，用于自然语言创建行程等耗时操作
+      }
+    );
+    const result = handleResponse(response);
+    
+    // 🆕 字段名映射：转换澄清问题格式
+    if (result.clarificationQuestions && Array.isArray(result.clarificationQuestions)) {
+      // 检查是否是结构化问题（对象数组）还是字符串数组（向后兼容）
+      if (result.clarificationQuestions.length > 0 && typeof result.clarificationQuestions[0] === 'object') {
+        const { normalizeClarificationQuestions } = await import('@/utils/nl-conversation-adapter');
+        result.clarificationQuestions = normalizeClarificationQuestions(result.clarificationQuestions as any[]);
+      }
+    }
+    
+    return result;
+  },
+
+  /**
+   * 获取对话上下文
+   * GET /trips/nl-conversation/:sessionId
+   */
+  getNLConversation: async (sessionId: string): Promise<NLConversation> => {
+    const response = await apiClient.get<ApiResponseWrapper<NLConversation>>(
+      `/trips/nl-conversation/${sessionId}`
     );
     return handleResponse(response);
+  },
+
+  /**
+   * 获取用户的所有会话
+   * GET /trips/nl-conversation
+   */
+  getAllNLConversations: async (): Promise<{ sessions: NLConversation[] }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{ sessions: NLConversation[] }>>(
+      '/trips/nl-conversation'
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 更新对话上下文
+   * PUT /trips/nl-conversation/:sessionId
+   */
+  updateNLConversation: async (
+    sessionId: string,
+    data: {
+      conversationContext?: Record<string, any>;
+      partialParams?: ParsedTripParams;
+    }
+  ): Promise<NLConversation> => {
+    const response = await apiClient.put<ApiResponseWrapper<NLConversation>>(
+      `/trips/nl-conversation/${sessionId}`,
+      {
+        sessionId,
+        ...data,
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 🆕 更新消息的问题答案
+   * PUT /trips/nl-conversation/:sessionId/messages/:messageId
+   * 如果后端不支持此接口，将回退到更新整个会话
+   */
+  updateMessageQuestionAnswers: async (
+    sessionId: string,
+    messageId: string,
+    questionAnswers: Record<string, string | string[] | number | boolean | null>
+  ): Promise<NLConversation> => {
+    try {
+      // 尝试使用专门的消息更新接口
+      const response = await apiClient.put<ApiResponseWrapper<NLConversation>>(
+        `/trips/nl-conversation/${sessionId}/messages/${messageId}`,
+        {
+          questionAnswers,
+        }
+      );
+      return handleResponse(response);
+    } catch (err: any) {
+      // 如果接口不存在，记录警告但不抛出错误
+      // 前端会继续工作，答案会在下次请求时通过 clarificationAnswers 传递
+      if (err.response?.status === 404 || err.code === 'NOT_FOUND') {
+        console.warn('[tripsApi] 消息更新接口不存在，答案将在下次请求时传递');
+        // 返回当前会话（不更新）
+        return await tripsApi.getNLConversation(sessionId);
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * 删除对话会话
+   * DELETE /trips/nl-conversation/:sessionId
+   */
+  deleteNLConversation: async (sessionId: string): Promise<void> => {
+    await apiClient.delete(`/trips/nl-conversation/${sessionId}`);
   },
 
   /**

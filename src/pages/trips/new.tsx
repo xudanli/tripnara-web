@@ -44,17 +44,23 @@ export default function NewTripPage() {
 
   // 检查登录状态，如果未登录则跳转
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (!authLoading) {
       const token = sessionStorage.getItem('accessToken');
-      if (!token) {
-        console.warn('[NewTripPage] 未登录，跳转到登录页');
-        navigate('/login', { replace: true });
-      } else {
-        // 有 token 但 isAuthenticated 为 false，可能是 token 过期，尝试刷新
-        console.log('[NewTripPage] Token 存在但认证状态为 false，尝试刷新 token');
+      const userStr = localStorage.getItem('user');
+      
+      // 如果有 token 和 user，但 isAuthenticated 为 false，可能是状态未同步
+      if (token && userStr && !isAuthenticated) {
+        console.log('[NewTripPage] Token 和用户信息存在但认证状态为 false，尝试刷新 token');
         refreshToken().catch(() => {
+          // 刷新失败，清除无效数据并跳转登录
+          sessionStorage.removeItem('accessToken');
+          localStorage.removeItem('user');
           navigate('/login', { replace: true });
         });
+      } else if (!token && !isAuthenticated) {
+        // 完全没有 token，跳转登录
+        console.warn('[NewTripPage] 未登录，跳转到登录页');
+        navigate('/login', { replace: true });
       }
     }
   }, [isAuthenticated, authLoading, navigate, refreshToken]);

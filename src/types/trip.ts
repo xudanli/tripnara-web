@@ -335,9 +335,75 @@ export interface CreateTripResponse extends BaseEntity {
 
 // ==================== 自然语言创建行程 ====================
 
+/**
+ * 对话消息
+ */
+export interface ConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * 自然语言对话会话
+ */
+export interface NLConversation {
+  sessionId: string;
+  userId: string;
+  messages: ConversationMessage[];
+  conversationContext?: ConversationContext;
+  partialParams?: ParsedTripParams;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
+/**
+ * 澄清问题答案
+ */
+export interface ClarificationAnswer {
+  questionId: string;
+  value: string | string[] | number | boolean | null;
+}
+
 export interface CreateTripFromNLRequest {
   text: string;
   llmProvider?: LLMProvider;
+  /**
+   * 会话ID（可选）
+   * 如果提供，会恢复之前的对话上下文，实现多轮对话
+   * 如果不提供，会创建新会话
+   */
+  sessionId?: string;
+  /** 
+   * 上下文包ID（可选）
+   * 如果提供，后端将使用该上下文包来增强理解用户意图
+   * 上下文包可以通过 Context API 预先构建
+   * 注意：后端也会自动构建 Context Package，此字段主要用于前端预先构建的场景
+   */
+  contextPackageId?: string;
+  /**
+   * 上下文信息（可选）
+   * 如果未提供 contextPackageId，可以直接传递上下文信息
+   * 后端会根据这些信息构建上下文
+   * 注意：后端会自动检测目的地并构建 Context Package，此字段主要用于补充信息
+   */
+  context?: {
+    /** 目的地国家代码（用于获取目的地相关信息） */
+    destinationCountry?: string;
+    /** 用户偏好主题（如 VISA, ROAD_RULES, SAFETY 等） */
+    requiredTopics?: string[];
+    /** 是否包含用户历史偏好 */
+    includeUserProfile?: boolean;
+  };
+  /**
+   * 🆕 澄清问题答案（可选）
+   * 用户在回答澄清问题后，可以在发送消息时一并提交答案
+   * 后端会根据这些答案更新对话上下文
+   */
+  clarificationAnswers?: ClarificationAnswer[];
 }
 
 // 下一步操作建议
@@ -417,6 +483,107 @@ export interface ConversationContext {
   specialNeeds?: string[];       // 特殊需求，如 ['亲子', '儿童友好', '无障碍']
 }
 
+/**
+ * 规划师回复内容块类型
+ */
+export type PlannerResponseBlockType =
+  | 'paragraph'        // 普通段落文本
+  | 'heading'          // 标题
+  | 'list'             // 列表（有序/无序）
+  | 'summary_card'     // 摘要卡片（目的地、天数、预算等）
+  | 'question_card'    // 澄清问题卡片（独立组件）
+  | 'highlight'        // 高亮信息（重要提示）
+  | 'budget_summary'   // 预算摘要
+  | 'itinerary_overview'; // 行程概览
+
+/**
+ * 规划师回复内容块
+ */
+export interface PlannerResponseBlock {
+  type: PlannerResponseBlockType;
+  id?: string;  // 可选，用于前端渲染 key
+  
+  // paragraph 类型
+  content?: string;  // 段落文本内容
+  
+  // heading 类型
+  level?: 1 | 2 | 3;  // 标题级别
+  text?: string;  // 标题文本
+  
+  // list 类型
+  title?: string;  // 列表标题（如"核心思路"）
+  items?: string[];  // 列表项
+  ordered?: boolean;  // 是否有序列表
+  
+  // summary_card 类型
+  summary?: {
+    destination?: string;
+    duration?: string;  // "10天"
+    travelers?: string;  // "双人"
+    budget?: {
+      amount: number;
+      currency: string;
+      details?: string[];  // ["租用四驱车", "住宿", "特色活动", "餐饮"]
+    };
+  };
+  
+  // question_card 类型（与 clarificationQuestions 关联）
+  questionId?: string;  // 关联到 clarificationQuestions 中的 id
+  
+  // highlight 类型
+  highlightText?: string;
+  highlightType?: 'info' | 'warning' | 'success';
+  
+  // budget_summary 类型
+  budget?: {
+    estimatedAmount: number;
+    currency: string;
+    duration: string;
+    travelers: string;
+    breakdown?: Array<{
+      category: string;
+      amount: number;
+      percentage?: number;
+    }>;
+  };
+  
+  // itinerary_overview 类型
+  itinerary?: {
+    theme?: string;  // "自驾探索冰岛南岸"
+    route?: string;  // "以雷克雅未克为起点和终点..."
+    dailyStructure?: string;  // "每天的驾驶时间会控制在2-3小时以内..."
+  };
+}
+
+/**
+ * 澄清问题（结构化）- 用于自然语言对话
+ * 注意：与 src/types/clarification.ts 中的 ClarificationQuestion 不同，
+ * 这个版本更简化，专门用于 NL 对话场景
+ */
+export interface NLClarificationQuestion {
+  id: string;  // 唯一标识，用于关联到 responseBlocks
+  text: string;  // 问题文本
+  inputType: 'boolean' | 'text' | 'single_choice' | 'multiple_choice' | 'number' | 'date';
+  options?: string[];  // 选项（用于 single_choice / multiple_choice）
+  required?: boolean;  // 是否必填
+  hint?: string;  // 提示信息
+  metadata?: {
+    category?: string;  // 'activities' | 'budget' | 'dates' | 'preferences'
+    priority?: 'high' | 'medium' | 'low';
+    /**
+     * 🆕 Critical 字段标识
+     * 如果为 true，表示这是关键字段（通常是安全相关的）
+     * Critical 字段未回答时，不能创建行程
+     */
+    isCritical?: boolean;
+    /**
+     * 🆕 字段名（用于存储）
+     * 例如：'experienceLevel', 'riskTolerance'
+     */
+    fieldName?: string;
+  };
+}
+
 // 解析出的参数（部分或完整）
 export interface ParsedTripParams {
   destination?: string;
@@ -433,11 +600,216 @@ export interface ParsedTripParams {
   inferredFields?: string[];     // 推断的字段列表，如 ['startDate', 'totalBudget']
 }
 
+/**
+ * 规划师回复内容块类型
+ */
+export type PlannerResponseBlockType =
+  | 'paragraph'        // 普通段落文本
+  | 'heading'          // 标题
+  | 'list'             // 列表（有序/无序）
+  | 'summary_card'     // 摘要卡片（目的地、天数、预算等）
+  | 'question_card'    // 澄清问题卡片（独立组件）
+  | 'highlight'        // 高亮信息（重要提示）
+  | 'budget_summary'   // 预算摘要
+  | 'itinerary_overview'; // 行程概览
+
+/**
+ * 规划师回复内容块
+ */
+export interface PlannerResponseBlock {
+  type: PlannerResponseBlockType;
+  id?: string;  // 可选，用于前端渲染 key
+  
+  // paragraph 类型
+  content?: string;  // 段落文本内容
+  
+  // heading 类型
+  level?: 1 | 2 | 3;  // 标题级别
+  text?: string;  // 标题文本
+  
+  // list 类型
+  title?: string;  // 列表标题（如"核心思路"）
+  items?: string[];  // 列表项
+  ordered?: boolean;  // 是否有序列表
+  
+  // summary_card 类型
+  summary?: {
+    destination?: string;
+    duration?: string;  // "10天"
+    travelers?: string;  // "双人"
+    budget?: {
+      amount: number;
+      currency: string;
+      details?: string[];  // ["租用四驱车", "住宿", "特色活动", "餐饮"]
+    };
+  };
+  
+  // question_card 类型（与 clarificationQuestions 关联）
+  questionId?: string;  // 关联到 clarificationQuestions 中的 id
+  
+  // highlight 类型
+  highlightText?: string;
+  highlightType?: 'info' | 'warning' | 'success';
+  
+  // budget_summary 类型
+  budget?: {
+    estimatedAmount: number;
+    currency: string;
+    duration: string;
+    travelers: string;
+    breakdown?: Array<{
+      category: string;
+      amount: number;
+      percentage?: number;
+    }>;
+  };
+  
+  // itinerary_overview 类型
+  itinerary?: {
+    theme?: string;  // "自驾探索冰岛南岸"
+    route?: string;  // "以雷克雅未克为起点和终点..."
+    dailyStructure?: string;  // "每天的驾驶时间会控制在2-3小时以内..."
+  };
+}
+
+/**
+ * 澄清问题（结构化）
+ */
+export interface ClarificationQuestion {
+  id: string;  // 唯一标识，用于关联到 responseBlocks
+  text: string;  // 问题文本
+  inputType: 'boolean' | 'text' | 'single_choice' | 'multiple_choice' | 'number' | 'date';
+  options?: string[];  // 选项（用于 single_choice / multiple_choice）
+  required?: boolean;  // 是否必填
+  hint?: string;  // 提示信息
+  metadata?: {
+    category?: string;  // 'activities' | 'budget' | 'dates' | 'preferences'
+    priority?: 'high' | 'medium' | 'low';
+  };
+}
+
+/**
+ * 🆕 用户画像信息
+ */
+export interface PersonaInfo {
+  personaId: string;           // 画像ID，如 "sj_persona_001"
+  personaName: string;          // 画像名称（中文），如 "极地朝圣者"
+  personaNameEn?: string;       // 画像名称（英文），如 "Arctic Pilgrim"
+  confidence: number;           // 匹配置信度（0-1），如 0.85
+  matchReasons: string[];        // 匹配原因列表，如 ["经验水平匹配: 无经验", "风险承受度匹配: 低"]
+}
+
+/**
+ * 🆕 推荐路线
+ */
+export interface RecommendedRoute {
+  route: string;                // 路线名称，如 "朗伊尔城温和活动"
+  reason: string;               // 推荐原因，如 "安全，适合家庭"
+  difficultyMatch: string;      // 难度匹配度，如 "完美"、"良好"
+  season?: string;               // 适合季节，如 "全年"、"6-8月"
+  prerequisites?: string[];     // 前置条件，如 ["多次极地经验", "专业向导"]
+}
+
+/**
+ * 🆕 决策矩阵结果
+ */
+export type DecisionType = 
+  | 'GO_FULLY_SUPPORTED'        // 完全支持
+  | 'GO_WITH_STRONG_CAUTION'    // 需要特别指导
+  | 'GO_ALTERNATIVE_PLAN'       // 推荐替代方案
+  | 'STRONGLY_RECONSIDER'       // 强烈建议重新考虑
+  | 'NOT_RECOMMENDED';          // 不推荐
+
+export interface DecisionResult {
+  decision: DecisionType;
+  reason: string;               // 决策原因
+  recommendations: string[];   // 建议列表
+}
+
 export interface CreateTripFromNLResponse {
+  // ========== 会话管理 ==========
+  /**
+   * 会话ID
+   * 首次请求时创建，后续请求使用相同的 sessionId 可以恢复对话上下文
+   */
+  sessionId?: string;
+  
+  /**
+   * 🆕 最后一条消息的ID
+   * 后端保存消息后返回的真实消息ID（UUID格式）
+   * 前端应使用此ID来更新问题答案，而不是自己生成ID
+   */
+  lastMessageId?: string;
+  
   // ========== 场景1: 需要澄清（旅行规划师对话）==========
   needsClarification?: boolean;
   
-  // 旅行规划师的自然语言回复
+  /**
+   * 🆕 Gate 预检查阻止标记
+   * 如果为 true，表示被 Gate 预检查阻止，需要用户选择替代方案
+   */
+  gateBlocked?: boolean;
+  
+  /**
+   * 🆕 Critical 字段阻止标记
+   * 如果为 true，表示被 Critical 字段阻止，需要用户回答关键问题
+   */
+  blockedByCriticalFields?: boolean;
+  
+  /**
+   * 🆕 Gate 预检查替代方案列表
+   * 当 gateBlocked 为 true 时，提供替代方案供用户选择
+   */
+  alternatives?: Array<{
+    id: string;
+    label: string;
+    description: string;
+    action?: string;
+    actionParams?: Record<string, any>;
+    buttonText?: string;
+  }>;
+  
+  /**
+   * 🆕 用户画像信息
+   * 根据用户回答识别出的用户画像
+   */
+  personaInfo?: PersonaInfo;
+  
+  /**
+   * 🆕 推荐路线列表
+   * 根据用户画像推荐的路线
+   */
+  recommendedRoutes?: RecommendedRoute[];
+  
+  /**
+   * 🆕 是否被安全第一原则阻止
+   * 如果为 true，表示被安全第一原则阻止，需要用户重新考虑
+   */
+  blockedBySafetyPrinciple?: boolean;
+  
+  /**
+   * 🆕 决策矩阵结果（所有轮次完成后）
+   * 显示最终的决策结果和建议
+   */
+  decisionResult?: DecisionResult;
+  
+  /**
+   * 🆕 是否被决策矩阵阻止
+   * 如果为 true，表示被决策矩阵阻止，不能创建行程
+   */
+  blockedByDecisionMatrix?: boolean;
+  
+  /**
+   * 🆕 结构化回复内容（优先使用）
+   * 如果提供，前端将使用结构化渲染，提供更好的可读性
+   * 如果未提供，使用 plannerReply 作为降级方案
+   */
+  plannerResponseBlocks?: PlannerResponseBlock[];
+  
+  /**
+   * 旅行规划师的自然语言回复（向后兼容）
+   * 如果未提供 plannerResponseBlocks，使用此字段
+   */
   plannerReply?: string;
   
   // 建议的快捷回复选项
@@ -446,8 +818,12 @@ export interface CreateTripFromNLResponse {
   // 对话上下文（用于多轮对话）
   conversationContext?: ConversationContext;
   
-  // 澄清问题列表（简化版）
-  clarificationQuestions?: string[];
+  /**
+   * 🆕 澄清问题列表（结构化）
+   * 如果提供，前端将渲染为独立的问题卡片
+   * 如果未提供，使用字符串数组 clarificationQuestions（向后兼容）
+   */
+  clarificationQuestions?: NLClarificationQuestion[] | string[];
   
   // 部分解析的参数
   partialParams?: ParsedTripParams;

@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { Home, MapPin, Play, BarChart3, Plus } from 'lucide-react';
+import { Home, MapPin, Play, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface NavItem {
@@ -30,12 +30,6 @@ const navItems: NavItem[] = [
     label: '', // Will be set in component
     icon: Play,
     path: '/dashboard/execute',
-  },
-  {
-    key: 'insights',
-    label: '', // Will be set in component
-    icon: BarChart3,
-    path: '/dashboard/insights',
   },
 ];
 

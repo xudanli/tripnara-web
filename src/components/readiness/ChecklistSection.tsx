@@ -1,9 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertCircle, AlertTriangle, Info, Scale, Shield, Star } from 'lucide-react'; // 🎯 添加更多图标用于区分 constraintType
+import { Button } from '@/components/ui/button';
+import { CheckCircle2, AlertCircle, AlertTriangle, Info, Scale, Shield, Star, MessageSquare } from 'lucide-react'; // 🎯 添加更多图标用于区分 constraintType
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next'; // 🆕 添加 i18n 支持
+import { useState } from 'react';
 import type { ReadinessFindingItem } from '@/api/readiness';
+import UserDecisionDialog from './UserDecisionDialog';
 
 interface ChecklistSectionProps {
   title: string;
@@ -12,6 +15,8 @@ interface ChecklistSectionProps {
   className?: string;
   tripStartDate?: string | Date; // 用于计算任务截止日期
   trip?: { TripDay?: Array<{ date: string; ItineraryItem?: Array<{ id: string; Place?: { name?: string } | null }> }> } | null; // 行程数据，用于关联活动
+  tripId?: string; // 🆕 行程ID，用于用户决策对话框
+  onFindingUpdated?: (findingId: string, updatedFinding: any) => void; // 🆕 当用户回答问题后更新finding的回调
 }
 
 // 计算截止日期
@@ -26,8 +31,10 @@ function calculateDeadline(offsetDays: number, tripStartDate: string | Date): st
   });
 }
 
-export default function ChecklistSection({ title, items, level, className, tripStartDate, trip }: ChecklistSectionProps) {
-  const { t } = useTranslation(); // 🆕 添加 i18n hook
+export default function ChecklistSection({ title, items, level, className, tripStartDate, trip, tripId, onFindingUpdated }: ChecklistSectionProps) {
+  const { t, i18n } = useTranslation(); // 🆕 添加 i18n hook
+  const isZh = i18n.language === 'zh' || i18n.language.startsWith('zh');
+  const [selectedDecisionItem, setSelectedDecisionItem] = useState<ReadinessFindingItem | null>(null);
   
   if (!items || items.length === 0) {
     return null;
@@ -343,8 +350,23 @@ export default function ChecklistSection({ title, items, level, className, tripS
                 
                 {/* Ask User - 需要询问用户的问题 */}
                 {item.askUser && item.askUser.length > 0 && (
-                  <div className="space-y-1">
-                    <h5 className="text-xs font-medium text-muted-foreground">需要确认:</h5>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>{isZh ? '需要确认' : 'Requires Confirmation'}:</span>
+                      </h5>
+                      {tripId && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setSelectedDecisionItem(item)}
+                        >
+                          {isZh ? '回答' : 'Answer'}
+                        </Button>
+                      )}
+                    </div>
                     <ul className="space-y-1">
                       {item.askUser.map((question, qIndex) => (
                         <li key={qIndex} className="text-xs text-muted-foreground flex items-start gap-2">
@@ -360,6 +382,22 @@ export default function ChecklistSection({ title, items, level, className, tripS
           })}
         </div>
       </CardContent>
+      
+      {/* 🆕 用户决策对话框 */}
+      {tripId && selectedDecisionItem && (
+        <UserDecisionDialog
+          open={!!selectedDecisionItem}
+          onClose={() => setSelectedDecisionItem(null)}
+          tripId={tripId}
+          findingItem={selectedDecisionItem}
+          onAnswered={(updatedFinding) => {
+            if (onFindingUpdated && selectedDecisionItem.id) {
+              onFindingUpdated(selectedDecisionItem.id, updatedFinding);
+            }
+            setSelectedDecisionItem(null);
+          }}
+        />
+      )}
     </Card>
   );
 }

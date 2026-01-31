@@ -2494,6 +2494,11 @@ export default function ReadinessPage() {
                                       items={allMust}
                                       level="must"
                                       tripStartDate={tripStartDate}
+                                      tripId={tripId || undefined}
+                                      onFindingUpdated={async (findingId, updatedFinding) => {
+                                        // 重新加载数据以反映更新
+                                        await loadData();
+                                      }}
                                     />
                                   )}
                                   {allShould.length > 0 && (
@@ -2510,6 +2515,11 @@ export default function ReadinessPage() {
                                       items={allOptional}
                                       level="optional"
                                       tripStartDate={tripStartDate}
+                                      tripId={tripId || undefined}
+                                      onFindingUpdated={async (findingId, updatedFinding) => {
+                                        // 重新加载数据以反映更新
+                                        await loadData();
+                                      }}
                                     />
                                   )}
                                 </div>

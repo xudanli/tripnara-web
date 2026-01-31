@@ -7,6 +7,7 @@ import IntentTab from './IntentTab';
 import ScheduleTab from './ScheduleTab';
 import BookingsTab from './BookingsTab';
 import PlanningWorkbenchTab from './PlanningWorkbenchTab';
+import DecisionDraftTabWrapper from './DecisionDraftTabWrapper';
 // PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
 // PlanStudioSidebar 已移除 - 策略概览功能已整合到 AI 助手侧边栏
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
@@ -104,7 +105,7 @@ function PlanStudioPageContent() {
     setSearchParams(newParams);
   };
 
-  const     handleTabChange = (value: string) => {
+  const handleTabChange = (value: string) => {
     setActiveTab(value);
     const newParams = new URLSearchParams(searchParams);
     newParams.set('tab', value);
@@ -112,6 +113,7 @@ function PlanStudioPageContent() {
     
     // 不再需要切换 personaMode，三人格由系统自动调用
   };
+
 
   // 加载国家信息
   useEffect(() => {
@@ -512,6 +514,8 @@ function PlanStudioPageContent() {
                 <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
                 <TabsTrigger value="workbench">{t('planStudio.tabs.workbench')}</TabsTrigger>
                 <TabsTrigger value="bookings">{t('planStudio.tabs.bookings')}</TabsTrigger>
+                {/* 决策过程标签 - 仅对自然语言创建的行程有意义 */}
+                <TabsTrigger value="decision-draft">决策过程</TabsTrigger>
               </TabsList>
             </div>
 
@@ -529,10 +533,16 @@ function PlanStudioPageContent() {
                   />
                 </TabsContent>
                 <TabsContent value="workbench" className="mt-0">
-                  <PlanningWorkbenchTab tripId={tripId!} />
+                  <PlanningWorkbenchTab 
+                    tripId={tripId!} 
+                    onSwitchToDecisionDraft={() => handleTabChange('decision-draft')}
+                  />
                 </TabsContent>
                 <TabsContent value="bookings" className="mt-0">
                   <BookingsTab tripId={tripId} />
+                </TabsContent>
+                <TabsContent value="decision-draft" className="mt-0">
+                  <DecisionDraftTabWrapper tripId={tripId!} />
                 </TabsContent>
               </div>
             </div>

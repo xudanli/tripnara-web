@@ -621,12 +621,14 @@ export const planningWorkbenchApi = {
         userAction: data.userAction,
       });
 
-      // 规划工作台 API 可能需要更长的处理时间，设置 60 秒超时
+      // 规划工作台 API 可能需要更长的处理时间（LLM 调用、方案生成等）
+      // 根据操作类型设置不同的超时时间
+      const timeout = data.userAction === 'generate' ? 120000 : 60000; // 生成方案 120 秒，其他操作 60 秒
       const response = await apiClient.post<ApiResponseWrapper<ExecutePlanningWorkbenchResponse>>(
         '/planning-workbench/execute',
         data,
         {
-          timeout: 60000, // 60 秒超时
+          timeout,
         }
       );
 

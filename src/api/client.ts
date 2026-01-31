@@ -312,12 +312,20 @@ apiClient.interceptors.response.use(
       // 请求已发送但没有收到响应
       if (error.code === 'ECONNABORTED') {
         // 超时错误
+        const timeoutSeconds = error.config?.timeout ? Math.round(error.config.timeout / 1000) : '未知';
         console.error('[API Client] ❌ 请求超时:', {
           url: error.config?.url,
           timeout: error.config?.timeout,
+          timeoutSeconds: `${timeoutSeconds}秒`,
           message: '请求超时，可能是后端服务响应太慢或未运行',
         });
-        error.message = '请求超时，请检查后端服务是否正常运行';
+        
+        // 根据超时时间提供不同的错误提示
+        if (error.config?.timeout && error.config.timeout >= 120000) {
+          error.message = `请求超时（已等待 ${timeoutSeconds} 秒）。此操作需要较长时间，请稍后重试或检查后端服务状态。`;
+        } else {
+          error.message = `请求超时（已等待 ${timeoutSeconds} 秒），请检查后端服务是否正常运行`;
+        }
       } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
         // 网络连接错误
         console.error('[API Client] ❌ 网络连接错误:', {

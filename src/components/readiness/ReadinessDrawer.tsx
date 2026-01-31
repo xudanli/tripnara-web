@@ -821,6 +821,11 @@ export default function ReadinessDrawer({
                             level="blocker"
                             tripStartDate={tripStartDate}
                             trip={trip as any} // 类型兼容性处理
+                            tripId={tripId || undefined}
+                            onFindingUpdated={async (findingId, updatedFinding) => {
+                              // 重新加载数据以反映更新
+                              await loadData();
+                            }}
                           />
                         </div>
                       )}
@@ -864,6 +869,11 @@ export default function ReadinessDrawer({
                                   level="optional"
                                   tripStartDate={tripStartDate}
                                   trip={trip as any} // 类型兼容性处理
+                                  tripId={tripId || undefined}
+                                  onFindingUpdated={async (findingId, updatedFinding) => {
+                                    // 重新加载数据以反映更新
+                                    await loadData();
+                                  }}
                                 />
                               )}
                             </div>

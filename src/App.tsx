@@ -31,12 +31,6 @@ import FeaturedTripsPage from './pages/trips/featured';
 import PlacesPage from './pages/places';
 import PlaceDetailPage from './pages/places/[id]';
 import HotelsRecommendPage from './pages/places/hotels';
-import TrailsPage from './pages/trails';
-import TrailsExplorePage from './pages/trails/explore';
-import TrailDetailPage from './pages/trails/[id]';
-import PrepCenterPage from './pages/trails/prep/[hikePlanId]';
-import OnTrailLivePage from './pages/trails/on-trail/[hikePlanId]';
-import HikeReviewPage from './pages/trails/review/[hikePlanId]';
 // PreferencesPage has been moved to Settings page, old route redirects to /dashboard/settings?tab=preferences
 import CountriesPage from './pages/countries';
 import CountryDetailPage from './pages/countries/[countryCode]';
@@ -47,9 +41,9 @@ import RouteTemplateDetailPage from './pages/route-directions/templates/[id]';
 import PlanStudioPage from './pages/plan-studio';
 import ExecutePage from './pages/execute';
 import ReadinessPage from './pages/readiness';
-import InsightsPage from './pages/insights';
 import SettingsPage from './pages/settings';
 import AgentPage from './pages/agent';
+import DecisionDraftPage from './pages/decision-draft';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -115,18 +109,12 @@ function App() {
           <Route path="plan-studio" element={<PlanStudioPage />} />
           <Route path="execute" element={<ExecutePage />} />
           <Route path="readiness" element={<ReadinessPage />} />
-          <Route path="insights" element={<InsightsPage />} />
           <Route path="agent" element={<AgentPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="decision-draft" element={<DecisionDraftPage />} />
           <Route path="places" element={<PlacesPage />} />
           <Route path="places/:id" element={<PlaceDetailPage />} />
           <Route path="hotels" element={<HotelsRecommendPage />} />
-          <Route path="trails" element={<TrailsPage />} />
-          <Route path="trails/explore" element={<TrailsExplorePage />} />
-          <Route path="trails/:id" element={<TrailDetailPage />} />
-          <Route path="trails/prep/:hikePlanId" element={<PrepCenterPage />} />
-          <Route path="trails/on-trail/:hikePlanId" element={<OnTrailLivePage />} />
-          <Route path="trails/review/:hikePlanId" element={<HikeReviewPage />} />
           <Route path="preferences" element={<Navigate to="/dashboard/settings?tab=preferences" replace />} />
           <Route path="countries" element={<CountriesPage />} />
           <Route path="countries/templates" element={<CountryTemplatesPage />} />
@@ -140,7 +128,6 @@ function App() {
         <Route path="/trips" element={<Navigate to="/dashboard/trips" replace />} />
         <Route path="/places" element={<Navigate to="/dashboard/places" replace />} />
         <Route path="/hotels" element={<Navigate to="/dashboard/hotels" replace />} />
-        <Route path="/trails" element={<Navigate to="/dashboard/trails" replace />} />
         </Routes>
       </Router>
     </ErrorBoundary>
