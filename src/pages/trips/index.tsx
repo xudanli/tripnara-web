@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyMedia } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight, CloudSun } from 'lucide-react';
+import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight, CloudSun, MessageSquare, FileText, Maximize2, Minimize2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { TripPlanning } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,24 @@ import { formatCurrency } from '@/utils/format';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { getPersonaIconColorClasses } from '@/lib/persona-colors';
 import { TripCardWeather } from '@/components/weather/WeatherCard';
+import NLChatInterface from '@/components/trips/NLChatInterface';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type StatusFilter = 'all' | string;
 
@@ -41,6 +59,13 @@ export default function TripsPage() {
   const [shareTripId, setShareTripId] = useState<string | null>(null);
   const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
   const [collaboratorsTripId, setCollaboratorsTripId] = useState<string | null>(null);
+  
+  // 创建行程弹窗状态
+  const [nlDialogOpen, setNlDialogOpen] = useState(false);
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [chatKey, setChatKey] = useState(0);
 
   useEffect(() => {
     loadCountries();
@@ -370,6 +395,124 @@ export default function TripsPage() {
     navigate('/dashboard/trips/new');
   };
 
+  const handleNaturalLanguageCreate = async () => {
+    // 🆕 每次打开弹窗时，先清空之前的会话
+    const currentSessionId = localStorage.getItem('nl_conversation_session');
+    
+    // 如果有旧的会话，先删除后端会话
+    if (currentSessionId) {
+      try {
+        await tripsApi.deleteNLConversation(currentSessionId);
+        console.log('[TripsPage] ✅ 打开弹窗前已删除旧会话:', currentSessionId);
+      } catch (err: any) {
+        // 静默处理错误，不影响打开弹窗
+        console.warn('[TripsPage] ⚠️ 删除旧会话时出现异常（继续打开弹窗）:', {
+          sessionId: currentSessionId,
+          error: err?.message || err,
+        });
+      }
+    }
+    
+    // 清空本地会话数据
+    localStorage.removeItem('nl_conversation_session');
+    
+    // 重置 chatKey，确保每次打开都是全新的对话
+    setChatKey(prev => prev + 1);
+    
+    // 打开弹窗
+    setNlDialogOpen(true);
+  };
+
+  const handleFormCreate = () => {
+    setFormDialogOpen(true);
+  };
+
+  const handleNlTripCreated = (tripId: string) => {
+    setNlDialogOpen(false);
+    setIsFullscreen(false);
+    loadTrips();
+    navigate(`/dashboard/trips/${tripId}`);
+  };
+
+  const handleFormTripCreated = (tripId: string) => {
+    setFormDialogOpen(false);
+    loadTrips();
+    navigate(`/dashboard/trips/${tripId}`);
+  };
+
+  const handleToggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
+  const handleNlDialogOpenChange = async (open: boolean) => {
+    if (open) {
+      // 🆕 打开弹窗时，先清空之前的会话
+      const currentSessionId = localStorage.getItem('nl_conversation_session');
+      
+      // 如果有旧的会话，先删除后端会话
+      if (currentSessionId) {
+        try {
+          await tripsApi.deleteNLConversation(currentSessionId);
+          console.log('[TripsPage] ✅ 打开弹窗前已删除旧会话:', currentSessionId);
+        } catch (err: any) {
+          // 静默处理错误，不影响打开弹窗
+          console.warn('[TripsPage] ⚠️ 删除旧会话时出现异常（继续打开弹窗）:', {
+            sessionId: currentSessionId,
+            error: err?.message || err,
+          });
+        }
+      }
+      
+      // 清空本地会话数据
+      localStorage.removeItem('nl_conversation_session');
+      
+      // 重置 chatKey，确保每次打开都是全新的对话
+      setChatKey(prev => prev + 1);
+      
+      // 打开弹窗
+      setNlDialogOpen(true);
+    } else {
+      const hasConversation = localStorage.getItem('nl_conversation_session');
+      if (hasConversation) {
+        setShowCloseConfirm(true);
+        setNlDialogOpen(true);
+      } else {
+        handleConfirmCloseNl();
+      }
+    }
+  };
+
+  const handleConfirmCloseNl = async () => {
+    // 从 localStorage 获取会话ID
+    const currentSessionId = localStorage.getItem('nl_conversation_session');
+    
+    // 如果有会话ID，通知后端删除会话
+    if (currentSessionId) {
+      try {
+        await tripsApi.deleteNLConversation(currentSessionId);
+        console.log('[TripsPage] ✅ 后端会话已删除:', currentSessionId);
+      } catch (err: any) {
+        // 后端可能返回成功但记录警告日志，或者会话不存在也返回成功
+        // 无论后端是否成功，都继续清空本地数据
+        console.warn('[TripsPage] ⚠️ 删除后端会话时出现异常（可能已静默处理）:', {
+          sessionId: currentSessionId,
+          error: err?.message || err,
+        });
+      }
+    }
+    
+    // 无论后端是否成功，都清空本地会话数据
+    localStorage.removeItem('nl_conversation_session');
+    setChatKey(prev => prev + 1);
+    setNlDialogOpen(false);
+    setIsFullscreen(false);
+    setShowCloseConfirm(false);
+  };
+
+  const handleCancelCloseNl = () => {
+    setShowCloseConfirm(false);
+  };
+
   const handleTripClick = (tripId: string) => {
     navigate(`/dashboard/trips/${tripId}`);
   };
@@ -464,10 +607,6 @@ export default function TripsPage() {
           <h1 className="text-3xl font-bold">我的旅行计划</h1>
           <p className="text-muted-foreground mt-1">管理和查看您的所有行程</p>
         </div>
-        <Button onClick={handleCreateTrip}>
-          <Plus className="w-4 h-4 mr-2" />
-          创建新旅程
-        </Button>
       </div>
 
       {trips.length === 0 ? (
@@ -481,10 +620,43 @@ export default function TripsPage() {
                 <EmptyTitle>还没有行程</EmptyTitle>
                 <EmptyDescription>创建您的第一个行程，开始规划您的旅行</EmptyDescription>
               </EmptyHeader>
-              <Button onClick={handleCreateTrip} className="mt-4">
-                <Plus className="w-4 h-4 mr-2" />
-                创建新行程
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full max-w-md mx-auto justify-center">
+                <Button 
+                  onClick={handleNaturalLanguageCreate} 
+                  className={cn(
+                    "h-auto flex-col gap-2.5 p-5",
+                    "bg-slate-900 hover:bg-slate-800",
+                    "text-white border-0",
+                    "transition-all duration-200 hover:scale-[1.02]"
+                  )}
+                >
+                  <MessageSquare className="w-6 h-6" />
+                  <div className="flex flex-col gap-1 text-center">
+                    <span className="font-semibold text-sm">自然语言创建</span>
+                    <span className="text-xs opacity-90">
+                      通过对话创建行程
+                    </span>
+                  </div>
+                </Button>
+                <Button 
+                  onClick={handleFormCreate}
+                  variant="outline"
+                  className={cn(
+                    "h-auto flex-col gap-2.5 p-5",
+                    "bg-white border border-slate-300",
+                    "hover:bg-slate-50 hover:border-slate-400",
+                    "transition-all duration-200 hover:scale-[1.02]"
+                  )}
+                >
+                  <FileText className="w-6 h-6 text-gray-700" />
+                  <div className="flex flex-col gap-1 text-center">
+                    <span className="font-semibold text-sm text-gray-900">标准表单创建</span>
+                    <span className="text-xs text-gray-600">
+                      使用表单创建行程
+                    </span>
+                  </div>
+                </Button>
+              </div>
             </Empty>
           </CardContent>
         </Card>
@@ -693,6 +865,134 @@ export default function TripsPage() {
           }}
         />
       )}
+
+      {/* 自然语言创建弹窗 */}
+      <Dialog open={nlDialogOpen} onOpenChange={handleNlDialogOpenChange}>
+        <DialogContent 
+          className={cn(
+            "flex flex-col p-0 transition-all duration-200",
+            "[&>button]:hidden",
+            isFullscreen 
+              ? "max-w-full w-full h-full max-h-full m-0 rounded-none translate-x-0 translate-y-0 left-0 top-0" 
+              : "max-w-4xl h-[80vh]"
+          )}
+        >
+          <DialogHeader className="px-6 pt-4 pb-3 border-b flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base">对话创建行程</DialogTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleToggleFullscreen}
+                  aria-label={isFullscreen ? "退出全屏" : "全屏"}
+                >
+                  {isFullscreen ? (
+                    <Minimize2 className="h-4 w-4" />
+                  ) : (
+                    <Maximize2 className="h-4 w-4" />
+                  )}
+                </Button>
+                <DialogClose asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="关闭"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </DialogClose>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            <NLChatInterface
+              key={chatKey}
+              onTripCreated={handleNlTripCreated}
+              className="h-full"
+              showHeader={false}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 表单创建弹窗 */}
+      <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
+        <DialogContent 
+          className={cn(
+            "flex flex-col p-0 transition-all duration-200",
+            "[&>button]:hidden",
+            "max-w-4xl h-[90vh]"
+          )}
+        >
+          <DialogHeader className="px-6 pt-4 pb-3 border-b flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-base">表单创建行程</DialogTitle>
+              <DialogClose asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="关闭"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {/* 使用路由嵌入表单页面内容 */}
+            <div className="p-6">
+              <div className="text-center py-8">
+                <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">表单创建行程</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  表单创建功能需要更多空间来填写详细信息，建议在新页面打开。
+                </p>
+                <Button 
+                  onClick={() => {
+                    setFormDialogOpen(false);
+                    navigate('/dashboard/trips/new?mode=form');
+                  }}
+                  className="w-full max-w-xs"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  打开表单创建页面
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 关闭确认对话框 */}
+      <AlertDialog 
+        open={showCloseConfirm} 
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCancelCloseNl();
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认关闭</AlertDialogTitle>
+            <AlertDialogDescription>
+              关闭对话框将清空当前对话内容，您确定要继续吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelCloseNl}>
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmCloseNl}>
+              确认关闭
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

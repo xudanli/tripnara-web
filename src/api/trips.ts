@@ -334,6 +334,9 @@ export const tripsApi = {
   /**
    * 删除对话会话
    * DELETE /trips/nl-conversation/:sessionId
+   * 响应格式：{ "success": true, "data": null }
+   * 会话不存在：返回成功（静默处理）
+   * 删除失败：返回成功并记录警告日志
    */
   deleteNLConversation: async (sessionId: string): Promise<void> => {
     await apiClient.delete(`/trips/nl-conversation/${sessionId}`);
