@@ -45,6 +45,10 @@ export default function UserDecisionDialog({
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [questionsFromApi, setQuestionsFromApi] = useState<Array<UserQuestion & { parsed: boolean }> | null>(null);
+  const [questionGroups, setQuestionGroups] = useState<Array<{ id: string; title: string; questionIds: string[] }>>([]);
+  const [progress, setProgress] = useState<{ answered: number; total: number } | null>(null);
 
   /**
    * 🆕 获取问题文本（支持国际化）
@@ -129,7 +133,48 @@ export default function UserDecisionDialog({
     });
   };
 
-  const questions = parseQuestions();
+  // 🆕 加载问题列表（优先使用 API）
+  useEffect(() => {
+    if (!open || !tripId || !findingItem.id) return;
+    
+    const loadQuestions = async () => {
+      setLoadingQuestions(true);
+      try {
+        // 尝试从 API 获取问题列表
+        const result = await readinessApi.getDecisionQuestions(tripId, findingItem.id);
+        if (result.questions && result.questions.length > 0) {
+          const parsedQuestions = result.questions.map(q => ({
+            ...q,
+            parsed: true,
+            required: q.required !== undefined ? q.required : true,
+          }));
+          setQuestionsFromApi(parsedQuestions);
+          if (result.groups) {
+            setQuestionGroups(result.groups);
+          }
+          if (result.progress) {
+            setProgress(result.progress);
+          }
+        } else {
+          // API 返回空，降级到从 findingItem 解析
+          setQuestionsFromApi(null);
+        }
+      } catch (err) {
+        console.warn('[UserDecisionDialog] 无法从 API 获取问题列表，使用降级方案:', err);
+        // API 失败，降级到从 findingItem 解析
+        setQuestionsFromApi(null);
+      } finally {
+        setLoadingQuestions(false);
+      }
+    };
+    
+    loadQuestions();
+  }, [open, tripId, findingItem.id]);
+
+  // 使用 API 返回的问题，如果没有则使用解析的问题
+  const questions = questionsFromApi !== null 
+    ? questionsFromApi 
+    : parseQuestions();
 
   // 重置表单
   useEffect(() => {
@@ -235,10 +280,34 @@ export default function UserDecisionDialog({
     setError(null);
 
     try {
+      // 🆕 根据文档，answerDecision 需要逐个提交问题答案
+      // 但为了兼容性，如果只有一个问题，直接提交；如果有多个问题，提交第一个未回答的问题
+      const unansweredQuestion = questions.find(q => !answers[q.id] && q.required);
+      
+      if (unansweredQuestion && questions.length > 1) {
+        // 如果有未回答的必填问题，提示用户
+        setError(
+          isZh 
+            ? `请先回答问题：${getQuestionText(unansweredQuestion)}`
+            : `Please answer the question: ${getQuestionText(unansweredQuestion)}`
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      // 提交所有答案（如果有多个问题，提交最后一个；如果只有一个，提交它）
+      const questionToAnswer = questions[questions.length - 1];
+      if (!questionToAnswer) {
+        throw new Error(isZh ? '没有可回答的问题' : 'No questions to answer');
+      }
+
       const result = await readinessApi.answerDecision(
         tripId,
         findingItem.id,
-        answers
+        {
+          questionId: questionToAnswer.id,
+          answer: answers[questionToAnswer.id] || answers[Object.keys(answers)[0]],
+        }
       );
 
       toast.success(
@@ -252,8 +321,12 @@ export default function UserDecisionDialog({
         onAnswered(result.updatedFinding);
       }
 
-      // 如果还有后续问题，保持对话框打开
-      if (result.updatedFinding.nextQuestions && result.updatedFinding.nextQuestions.length > 0) {
+      // 检查是否还有后续问题（通过 askUser 字段）
+      const hasMoreQuestions = result.updatedFinding.askUser && 
+        Array.isArray(result.updatedFinding.askUser) && 
+        result.updatedFinding.askUser.length > 0;
+      
+      if (hasMoreQuestions) {
         // 更新 findingItem 以显示新问题
         // 这里需要父组件更新数据
         toast.info(
@@ -344,11 +417,11 @@ export default function UserDecisionDialog({
                       value={answers[question.id] || ''}
                       onValueChange={(value) => handleAnswerChange(question.id, value)}
                     >
-                      {question.options.map((option) => {
-                        const optionValue = typeof option === 'string' ? option : option;
+                      {question.options.map((option, optIndex) => {
+                        // 对于单选，使用选项值作为 value（字符串化以确保类型安全）
+                        const optionValue: string = typeof option === 'string' ? option : JSON.stringify(option);
                         const optionText = getOptionText(option);
-                        // 对于单选，使用选项值作为 value（可能是字符串或对象）
-                        const optionKey = typeof option === 'string' ? option : JSON.stringify(option);
+                        const optionKey = typeof option === 'string' ? option : `opt_${optIndex}`;
                         
                         return (
                           <div key={optionKey} className="flex items-center space-x-2">

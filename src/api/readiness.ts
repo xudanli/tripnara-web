@@ -461,6 +461,8 @@ export interface PersonalizedChecklistResponse {
     totalShould: number;
     totalOptional: number;
   };
+  aiEnhanced?: boolean;  // 是否启用AI增强
+  failedFeatures?: string[];  // 失败的AI增强功能列表
 }
 
 /**
@@ -934,28 +936,40 @@ export const readinessApi = {
   },
 
   /**
-   * 更新勾选状态
+   * 批量保存勾选状态
    * PUT /readiness/trip/:tripId/checklist/status
+   * 
+   * 保存用户勾选的 must 项状态到后端，支持跨设备同步
+   * 
+   * @param tripId 行程ID
+   * @param data 勾选状态数据
+   *   - checkedItems: 已勾选的项ID列表
+   *   - uncheckedItems: 取消勾选的项ID列表（可选）
    */
   updateChecklistStatus: async (
     tripId: string,
-    checkedItems: string[]
-  ): Promise<{ updated: number; checkedItems: string[] }> => {
-    const response = await apiClient.put<ApiResponseWrapper<{ updated: number; checkedItems: string[] }>>(
+    data: {
+      checkedItems: string[];
+      uncheckedItems?: string[];
+    }
+  ): Promise<{ tripId: string; checkedItems: string[]; lastUpdatedAt: string }> => {
+    const response = await apiClient.put<ApiResponseWrapper<{ tripId: string; checkedItems: string[]; lastUpdatedAt: string }>>(
       `/readiness/trip/${tripId}/checklist/status`,
-      { checkedItems }
+      data
     );
     return handleResponse(response);
   },
 
   /**
-   * 获取勾选状态
+   * 获取检查清单勾选状态
    * GET /readiness/trip/:tripId/checklist/status
+   * 
+   * 获取行程的检查清单勾选状态
    */
   getChecklistStatus: async (
     tripId: string
-  ): Promise<{ checkedItems: string[]; lastUpdated: string }> => {
-    const response = await apiClient.get<ApiResponseWrapper<{ checkedItems: string[]; lastUpdated: string }>>(
+  ): Promise<{ tripId: string; checkedItems: string[]; lastUpdatedAt: string }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{ tripId: string; checkedItems: string[]; lastUpdatedAt: string }>>(
       `/readiness/trip/${tripId}/checklist/status`
     );
     return handleResponse(response);
@@ -1108,6 +1122,8 @@ export const readinessApi = {
   /**
    * 更新打包清单项状态
    * PUT /readiness/trip/:tripId/packing-list/items/:itemId
+   * 
+   * 更新打包清单项的勾选状态、数量或备注
    */
   updatePackingListItem: async (
     tripId: string,
@@ -1115,13 +1131,63 @@ export const readinessApi = {
     updates: {
       checked?: boolean;
       quantity?: number;
-      note?: string;
+      notes?: string;
     }
   ): Promise<{ itemId: string; updated: boolean }> => {
     const response = await apiClient.put<ApiResponseWrapper<{ itemId: string; updated: boolean }>>(
       `/readiness/trip/${tripId}/packing-list/items/${itemId}`,
       updates
     );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取打包顺序步骤
+   * GET /readiness/packing-order-steps
+   * 
+   * 获取推荐的打包顺序步骤，帮助用户有序打包
+   */
+  getPackingOrderSteps: async (): Promise<{
+    steps: Array<{
+      order: number;
+      title: string;
+      description: string;
+      items: string[];
+    }>;
+  }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{
+      steps: Array<{
+        order: number;
+        title: string;
+        description: string;
+        items: string[];
+      }>;
+    }>>('/readiness/packing-order-steps');
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取出发前检查清单
+   * GET /readiness/pre-departure-checklist
+   * 
+   * 获取出发前24小时的最终检查清单
+   */
+  getPreDepartureChecklist: async (): Promise<{
+    checklist: Array<{
+      id: string;
+      category: string;
+      title: string;
+      checked: boolean;
+    }>;
+  }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{
+      checklist: Array<{
+        id: string;
+        category: string;
+        title: string;
+        checked: boolean;
+      }>;
+    }>>('/readiness/pre-departure-checklist');
     return handleResponse(response);
   },
 
@@ -1370,19 +1436,91 @@ export const readinessApi = {
   },
 
   /**
-   * 🆕 回答用户决策问题
-   * POST /api/readiness/trips/:tripId/decisions/:ruleId/answer
+   * 获取规则的用户决策问题列表
+   * GET /api/readiness/trips/:tripId/decisions/:ruleId/questions
    * 
-   * 提交用户对准备度检查中决策问题的回答
+   * 获取规则的用户决策问题列表（包含分组和进度信息）
    * 
    * @param tripId 行程ID
-   * @param ruleId 规则ID（findingItem.id）
-   * @param answers 用户回答（键值对，键为问题ID，值为答案）
+   * @param ruleId 规则ID
+   */
+  getDecisionQuestions: async (
+    tripId: string,
+    ruleId: string
+  ): Promise<{
+    ruleId: string;
+    questions: Array<{
+      id: string;
+      text: string | { zh: string; en: string };
+      type: 'single' | 'multiple' | 'text';
+      required?: boolean;
+      options?: Array<string | { zh: string; en: string }>;
+      placeholder?: string | { zh: string; en: string };
+      validation?: {
+        minLength?: number;
+        maxLength?: number;
+        pattern?: string;
+      };
+    }>;
+    groups?: Array<{
+      id: string;
+      title: string;
+      questionIds: string[];
+    }>;
+    progress?: {
+      answered: number;
+      total: number;
+    };
+  }> => {
+    const response = await apiClient.get<ApiResponseWrapper<{
+      ruleId: string;
+      questions: Array<{
+        id: string;
+        text: string | { zh: string; en: string };
+        type: 'single' | 'multiple' | 'text';
+        required?: boolean;
+        options?: Array<string | { zh: string; en: string }>;
+        placeholder?: string | { zh: string; en: string };
+        validation?: {
+          minLength?: number;
+          maxLength?: number;
+          pattern?: string;
+        };
+      }>;
+      groups?: Array<{
+        id: string;
+        title: string;
+        questionIds: string[];
+      }>;
+      progress?: {
+        answered: number;
+        total: number;
+      };
+    }>>(
+      `/api/readiness/trips/${tripId}/decisions/${ruleId}/questions`
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 回答用户决策问题
+   * POST /api/readiness/trips/:tripId/decisions/:ruleId/answer
+   * 
+   * 用户回答准备度规则中的决策问题，系统根据回答评估决策分支并返回更新后的准备度检查结果
+   * 
+   * @param tripId 行程ID
+   * @param ruleId 规则ID
+   * @param data 回答数据
+   *   - questionId: 问题ID
+   *   - answer: 答案（根据问题类型，可能是字符串、字符串数组等）
    */
   answerDecision: async (
     tripId: string,
     ruleId: string,
-    answers: Record<string, any>
+    data: {
+      questionId: string;
+      answer: string | string[] | any;
+    }
   ): Promise<{
     updatedFinding: ReadinessFindingItem;
   }> => {
@@ -1390,7 +1528,7 @@ export const readinessApi = {
       updatedFinding: ReadinessFindingItem;
     }>>(
       `/api/readiness/trips/${tripId}/decisions/${ruleId}/answer`,
-      { answers }
+      data
     );
     return handleResponse(response);
   },

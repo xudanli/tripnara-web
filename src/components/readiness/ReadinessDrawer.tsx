@@ -489,7 +489,9 @@ export default function ReadinessDrawer({
     if (tripId) {
       try {
         setSavingCheckedStatus(true);
-        await readinessApi.updateChecklistStatus(tripId, Array.from(newChecked));
+        await readinessApi.updateChecklistStatus(tripId, {
+          checkedItems: Array.from(newChecked),
+        });
         // 同时保存到 localStorage 作为备份
         localStorage.setItem(`readiness_checked_${tripId}`, JSON.stringify(Array.from(newChecked)));
         // 显示提示

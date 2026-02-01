@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -23,6 +24,7 @@ import {
   Plus,
   Download,
   Filter,
+  ListChecks,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { readinessApi } from '@/api/readiness';
@@ -90,6 +92,22 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
   const [editNote, setEditNote] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showChecked, setShowChecked] = useState(true);
+  const [packingOrderSteps, setPackingOrderSteps] = useState<Array<{
+    order: number;
+    title: string;
+    description: string;
+    items: string[];
+  }> | null>(null);
+  const [preDepartureChecklist, setPreDepartureChecklist] = useState<Array<{
+    id: string;
+    category: string;
+    title: string;
+    checked: boolean;
+  }> | null>(null);
+  const [loadingPackingOrder, setLoadingPackingOrder] = useState(false);
+  const [loadingPreDeparture, setLoadingPreDeparture] = useState(false);
+  const [showPackingOrder, setShowPackingOrder] = useState(false);
+  const [showPreDeparture, setShowPreDeparture] = useState(false);
 
   // 加载打包清单
   const loadPackingList = async () => {
@@ -208,6 +226,34 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
     setEditNote('');
   };
 
+  // 🆕 加载打包顺序步骤
+  const loadPackingOrderSteps = async () => {
+    try {
+      setLoadingPackingOrder(true);
+      const result = await readinessApi.getPackingOrderSteps();
+      setPackingOrderSteps(result.steps);
+    } catch (err) {
+      console.error('Failed to load packing order steps:', err);
+      toast.error('加载打包顺序失败');
+    } finally {
+      setLoadingPackingOrder(false);
+    }
+  };
+
+  // 🆕 加载出发前检查清单
+  const loadPreDepartureChecklist = async () => {
+    try {
+      setLoadingPreDeparture(true);
+      const result = await readinessApi.getPreDepartureChecklist();
+      setPreDepartureChecklist(result.checklist);
+    } catch (err) {
+      console.error('Failed to load pre-departure checklist:', err);
+      toast.error('加载出发前检查清单失败');
+    } finally {
+      setLoadingPreDeparture(false);
+    }
+  };
+
   useEffect(() => {
     if (tripId) {
       loadPackingList();
@@ -269,15 +315,53 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
             </div>
             <div className="flex items-center gap-2">
               {packingList && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={loadPackingList}
-                  disabled={loading}
-                >
-                  <RefreshCw className={cn('h-4 w-4 mr-2', loading && 'animate-spin')} />
-                  {t('dashboard.readiness.page.packingList.refresh')}
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowPackingOrder(!showPackingOrder);
+                      if (!showPackingOrder && !packingOrderSteps) {
+                        loadPackingOrderSteps();
+                      }
+                    }}
+                    disabled={loadingPackingOrder}
+                  >
+                    {loadingPackingOrder ? (
+                      <Spinner className="h-4 w-4 mr-2" />
+                    ) : (
+                      <ListChecks className="h-4 w-4 mr-2" />
+                    )}
+                    {t('dashboard.readiness.page.packingList.packingOrder') || '打包顺序'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowPreDeparture(!showPreDeparture);
+                      if (!showPreDeparture && !preDepartureChecklist) {
+                        loadPreDepartureChecklist();
+                      }
+                    }}
+                    disabled={loadingPreDeparture}
+                  >
+                    {loadingPreDeparture ? (
+                      <Spinner className="h-4 w-4 mr-2" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                    )}
+                    {t('dashboard.readiness.page.packingList.preDeparture') || '出发前检查'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadPackingList}
+                    disabled={loading}
+                  >
+                    <RefreshCw className={cn('h-4 w-4 mr-2', loading && 'animate-spin')} />
+                    {t('dashboard.readiness.page.packingList.refresh')}
+                  </Button>
+                </>
               )}
               <Button
                 size="sm"
@@ -309,6 +393,81 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
           </CardContent>
         )}
       </Card>
+
+      {/* 🆕 打包顺序步骤 */}
+      {showPackingOrder && packingOrderSteps && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5" />
+              {t('dashboard.readiness.page.packingList.packingOrderTitle') || '推荐打包顺序'}
+            </CardTitle>
+            <CardDescription>
+              {t('dashboard.readiness.page.packingList.packingOrderDescription') || '按照以下顺序打包，让您的旅行更有序'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {packingOrderSteps.map((step) => (
+                <div key={step.order} className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
+                    {step.order}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold mb-1">{step.title}</h4>
+                    <p className="text-sm text-muted-foreground mb-2">{step.description}</p>
+                    {step.items.length > 0 && (
+                      <ul className="text-sm text-muted-foreground list-disc list-inside">
+                        {step.items.map((item, idx) => (
+                          <li key={idx}>{item}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 🆕 出发前检查清单 */}
+      {showPreDeparture && preDepartureChecklist && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              {t('dashboard.readiness.page.packingList.preDepartureTitle') || '出发前24小时检查清单'}
+            </CardTitle>
+            <CardDescription>
+              {t('dashboard.readiness.page.packingList.preDepartureDescription') || '出发前最后确认，确保万无一失'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {preDepartureChecklist.map((item) => (
+                <div key={item.id} className="flex items-center gap-3">
+                  <Checkbox
+                    checked={item.checked}
+                    onCheckedChange={(checked) => {
+                      // 这里可以添加更新逻辑
+                      console.log('Toggle pre-departure item:', item.id, checked);
+                    }}
+                  />
+                  <div className="flex-1">
+                    <Label className="font-medium">{item.title}</Label>
+                    {item.category && (
+                      <Badge variant="outline" className="ml-2">
+                        {item.category}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {!packingList ? (
         // 空状态

@@ -3,15 +3,11 @@ import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 // SidebarNavigation 已删除 - 所有功能通过对话界面访问
 import MobileBottomNav from './MobileBottomNav';
 import EvidenceDrawer from './EvidenceDrawer';
-import ContextSidebar from './ContextSidebar';
-import ConversationHistorySidebar from './ConversationHistorySidebar';
+// ConversationHistorySidebar 已移除 - Dashboard 页面不再显示对话历史
 import DashboardTopBar from './DashboardTopBar';
 import AgentChatFab from '@/components/agent/AgentChatFab';
 import AgentChatSidebar from '@/components/agent/AgentChatSidebar';
 import { NLConversationProvider, useNLConversation } from '@/contexts/NLConversationContext';
-import { Button } from '@/components/ui/button';
-import { ChevronUp } from 'lucide-react';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { tripsApi } from '@/api/trips';
@@ -212,8 +208,6 @@ function DashboardLayoutInner({
   isDashboardPage: boolean;
 }) {
   const { currentSessionId, onSessionSelect, onNewSession } = useNLConversation();
-  const isMobile = useIsMobile();
-  const [contextDrawerOpen, setContextDrawerOpen] = useState(false);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
@@ -224,25 +218,15 @@ function DashboardLayoutInner({
 
         {/* 主内容区域 */}
         <div className="flex flex-1 overflow-hidden">
-          {/* 对话历史侧边栏（Dashboard 页面显示） */}
-          {isDashboardPage && (
-            <ConversationHistorySidebar
-              currentSessionId={currentSessionId}
-              onSessionSelect={onSessionSelect}
-              onNewSession={onNewSession}
-            />
-          )}
+          {/* 🆕 移除对话历史侧边栏 - Dashboard 页面不再显示对话历史 */}
+          {/* 对话历史侧边栏已移除，Dashboard 页面显示继续编辑卡片和快捷入口 */}
 
           {/* 左侧导航菜单已完全删除 - 所有功能通过对话界面访问 */}
 
           {/* 主内容区和侧边栏 */}
           <div className="flex-1 flex h-full">
             {/* 主内容区 */}
-            <div className={cn(
-              'flex-1 h-full overflow-hidden transition-all duration-300',
-              // Dashboard 页面且有行程时，为上下文侧边栏留出空间（增加主内容区宽度）
-              isDashboardPage && activeTrip ? 'lg:w-[75%]' : 'lg:w-full'
-            )}>
+            <div className="flex-1 h-full overflow-hidden transition-all duration-300">
               {/* 规划工作台的 AI 助手侧边栏 */}
               {entryPoint === 'planning_workbench' && activeTripId ? (
                 <div className="flex h-full">
@@ -273,48 +257,7 @@ function DashboardLayoutInner({
               )}
             </div>
             
-            {/* 上下文侧边栏（Dashboard 页面且有行程时显示） */}
-            {isDashboardPage && activeTrip && (
-              <>
-                {/* 桌面端：右侧侧边栏（减少宽度以给对话框更多空间） */}
-                <div className="hidden lg:block w-[25%] border-l border-gray-200">
-                  <ContextSidebar 
-                    tripId={activeTrip.id}
-                    conversationContext={null} // TODO: 从 NLChatInterface 获取对话上下文
-                  />
-                </div>
-                
-                {/* 移动端：底部抽屉 */}
-                {isMobile && (
-                  <>
-                    {/* 底部抽屉触发按钮 - 调整位置避免与底部导航栏重叠 */}
-                    <div className="lg:hidden fixed bottom-24 right-4 z-40">
-                      <Button
-                        size="icon"
-                        className="h-12 w-12 rounded-full shadow-lg"
-                        onClick={() => setContextDrawerOpen(true)}
-                        aria-label="打开行程详情"
-                      >
-                        <ChevronUp className="h-5 w-5" />
-                      </Button>
-                    </div>
-                    
-                    {/* 底部抽屉 */}
-                    <Sheet open={contextDrawerOpen} onOpenChange={setContextDrawerOpen}>
-                      <SheetContent side="bottom" className="h-[60vh] p-0">
-                        <div className="h-full overflow-y-auto">
-                          <ContextSidebar 
-                            tripId={activeTrip.id}
-                            conversationContext={null}
-                            onClose={() => setContextDrawerOpen(false)}
-                          />
-                        </div>
-                      </SheetContent>
-                    </Sheet>
-                  </>
-                )}
-              </>
-            )}
+            {/* 🆕 移除上下文侧边栏 - Dashboard 页面不再显示右侧"当前行程"区域 */}
           </div>
         </div>
 

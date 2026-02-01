@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { citiesApi } from '@/api/cities';
@@ -37,10 +37,25 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
 
 export default function NewTripPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, loading: authLoading, refreshToken } = useAuth(); // 获取认证状态
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'form' | 'nl'>('form');
+  
+  // 从 URL 参数读取模式，默认为 'form'
+  const modeFromUrl = searchParams.get('mode');
+  const [activeTab, setActiveTab] = useState<'form' | 'nl'>(
+    modeFromUrl === 'nl' ? 'nl' : 'form'
+  );
+  
+  // 当 URL 参数变化时，更新 activeTab
+  useEffect(() => {
+    if (modeFromUrl === 'nl') {
+      setActiveTab('nl');
+    } else if (modeFromUrl === 'form' || !modeFromUrl) {
+      setActiveTab('form');
+    }
+  }, [modeFromUrl]);
 
   // 检查登录状态，如果未登录则跳转
   useEffect(() => {
@@ -816,7 +831,6 @@ export default function NewTripPage() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold">创建新行程</h1>
-          <p className="text-muted-foreground mt-1">使用表单或自然语言描述创建您的行程</p>
         </div>
       </div>
 
@@ -841,11 +855,6 @@ export default function NewTripPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'form' | 'nl')}>
-        <TabsList>
-          <TabsTrigger value="form">标准表单</TabsTrigger>
-          <TabsTrigger value="nl">自然语言</TabsTrigger>
-        </TabsList>
-
         <TabsContent value="form">
           <Card>
             <CardHeader>

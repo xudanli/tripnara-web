@@ -35,7 +35,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { 
-  Circle, 
   User, 
   MapPin, 
   Calendar, 
@@ -46,7 +45,6 @@ import {
   CheckCircle2,
   Edit3,
   Loader2,
-  MessageCircle,
   ArrowRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -54,6 +52,8 @@ import { formatCurrency } from '@/utils/format';
 import { useAuth } from '@/hooks/useAuth';
 import { useContextApi } from '@/hooks/useContextApi';
 import type { ContextPackage } from '@/api/context';
+import { toast } from 'sonner';
+import Logo from '@/components/common/Logo';
 
 // ==================== 辅助函数 ====================
 // 注意：normalizeClarificationQuestions 已移至 @/utils/nl-conversation-adapter
@@ -164,6 +164,7 @@ interface ChatMessage {
 interface NLChatInterfaceProps {
   onTripCreated?: (tripId: string) => void;
   className?: string;
+  showHeader?: boolean; // 是否显示内部头部（Dialog 中已有时设为 false）
 }
 
 // ==================== 子组件 ====================
@@ -303,7 +304,7 @@ function MessageBubble({
         {isUser ? (
           <User className="w-4 h-4 text-slate-600" />
         ) : (
-          <Circle className="w-3 h-3 text-white fill-white" />
+          <Logo variant="icon" size={32} className="text-white" />
         )}
       </div>
 
@@ -975,20 +976,25 @@ function MessageBubble({
         {/* 🐛 如果有澄清问题卡片，不显示快捷回复按钮（避免混淆） */}
         {!isUser && message.suggestedQuestions && message.suggestedQuestions.length > 0 && isLatest && !isTyping && 
          (!message.clarificationQuestions || message.clarificationQuestions.length === 0) && (
-          <div className="flex flex-wrap gap-2 mt-3 animate-in fade-in duration-300">
+          <div className="flex flex-wrap gap-1.5 mt-2.5 animate-in fade-in duration-300">
             {message.suggestedQuestions.map((question, idx) => (
               <Button
                 key={idx}
                 variant="outline"
                 size="sm"
                 className={cn(
-                  "rounded-full text-xs h-8 px-3 hover:bg-slate-100 hover:border-slate-300",
-                  "animate-in fade-in slide-in-from-bottom-1 duration-300"
+                  "rounded-full text-xs h-7 px-3 min-w-fit whitespace-nowrap hover:bg-slate-100 hover:border-slate-300",
+                  "animate-in fade-in slide-in-from-bottom-1 duration-300",
+                  "flex-shrink-0" // 防止按钮被压缩
                 )}
-                style={{ animationDelay: `${idx * 80}ms` }}
+                style={{ 
+                  animationDelay: `${idx * 80}ms`,
+                  whiteSpace: 'nowrap', // 强制不换行
+                  wordBreak: 'keep-all', // 防止中文字符被拆分
+                }}
                 onClick={() => onQuickReply?.(question)}
               >
-                {question}
+                <span className="whitespace-nowrap">{question}</span>
               </Button>
             ))}
           </div>
@@ -1164,6 +1170,7 @@ function TripSummaryCard({
 export default function NLChatInterface({
   onTripCreated,
   className,
+  showHeader = true, // 默认显示头部（向后兼容）
 }: NLChatInterfaceProps) {
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1195,6 +1202,7 @@ export default function NLChatInterface({
     setIsFirstTime(false);
     localStorage.setItem('nl-chat-first-time', 'false');
   };
+
 
 
   // 监听会话切换事件
@@ -1853,7 +1861,8 @@ export default function NLChatInterface({
             
             // 尝试提取问题（格式：问题文本？）
             // 改进的正则表达式：匹配包含"？"或"?"的句子，且长度合理
-            const questionPattern = /([^？?。！!，,；;]+[？?])/g;
+            // 支持匹配更长的句子，包括包含逗号的句子
+            const questionPattern = /([^。！!；;]+[？?])/g;
             const matches = response.plannerReply.match(questionPattern);
             
             if (matches && matches.length > 0) {
@@ -1863,21 +1872,52 @@ export default function NLChatInterface({
                   const questionText = match.replace(/[？?]$/, '').trim();
                   
                   // 过滤掉太短、不是问题、或包含太多标点的文本
+                  // 放宽条件：只要包含"您"、"我们"、"需要"、"确认"等关键词，或者长度合理，就认为是问题
+                  const hasQuestionKeywords = questionText.includes('您') || 
+                    questionText.includes('我们') || 
+                    questionText.includes('需要') || 
+                    questionText.includes('确认') ||
+                    questionText.includes('是否') ||
+                    questionText.includes('能否') ||
+                    questionText.includes('倾向于') ||
+                    questionText.includes('还是');
+                  
                   if (
-                    questionText.length < 5 || 
-                    questionText.length > 100 ||
-                    (!questionText.includes('您') && !questionText.includes('？') && !questionText.includes('?')) ||
-                    questionText.split(/[，,。！!]/).length > 3 // 过滤掉包含太多标点的文本
+                    questionText.length < 3 || 
+                    questionText.length > 150 ||
+                    (!hasQuestionKeywords && questionText.length < 10) ||
+                    questionText.split(/[。！!]/).length > 2 // 过滤掉包含太多句号的文本
                   ) {
                     return null;
                   }
                   
                   // 检测问题类型（简单启发式）
                   let inputType: 'text' | 'number' | 'single_choice' | 'multiple_choice' | 'date' = 'text';
-                  if (questionText.includes('几人') || questionText.includes('多少')) {
+                  let options: string[] | undefined = undefined;
+                  
+                  if (questionText.includes('几人') || questionText.includes('多少') || questionText.includes('人数')) {
                     inputType = 'number';
-                  } else if (questionText.includes('能否') || questionText.includes('是否') || questionText.includes('可以')) {
+                  } else if (questionText.includes('倾向于') || questionText.includes('还是') || questionText.includes('或者')) {
+                    // "倾向于...还是" 格式的问题，应该是单选
                     inputType = 'single_choice';
+                    // 尝试提取选项
+                    const optionsMatch = questionText.match(/(?:倾向于|还是|或者)([^，,。！!？?]+)/g);
+                    if (optionsMatch && optionsMatch.length > 0) {
+                      // 提取选项文本
+                      const extractedOptions = optionsMatch.map(opt => opt.replace(/^(?:倾向于|还是|或者)/, '').trim()).filter(Boolean);
+                      if (extractedOptions.length > 0) {
+                        options = extractedOptions;
+                      }
+                    }
+                    // 如果没有提取到选项，使用默认选项
+                    if (!options) {
+                      options = ['深度探索自然奇观', '结合户外冒险', '其他'];
+                    }
+                  } else if (questionText.includes('能否') || questionText.includes('是否') || questionText.includes('可以') || questionText.includes('合适')) {
+                    inputType = 'single_choice';
+                    options = questionText.includes('能否') || questionText.includes('是否') 
+                      ? ['是', '否'] 
+                      : ['合适', '不合适'];
                   } else if (questionText.includes('时间') || questionText.includes('日期')) {
                     inputType = 'date';
                   }
@@ -1894,11 +1934,7 @@ export default function NLChatInterface({
                     text: questionText,
                     inputType,
                     required: true,
-                    ...(inputType === 'single_choice' && {
-                      options: questionText.includes('能否') || questionText.includes('是否') 
-                        ? ['是', '否'] 
-                        : ['可以', '不可以'],
-                    }),
+                    ...(inputType === 'single_choice' && options && { options }),
                     metadata: {
                       isCritical: isCritical || false,
                       fieldName: `extracted_field_${index}`,
@@ -2090,16 +2126,36 @@ export default function NLChatInterface({
         setMessages(prev => [...prev, successMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
         
-        // 🆕 后台生成状态提示
+        // 🆕 后台生成状态提示（改进版：更友好的提示和等待时间说明）
         if (response.generatingItems) {
           const generatingMessageId = `ai-generating-${Date.now()}`;
           const generatingMessage: ChatMessage = {
             id: generatingMessageId,
             role: 'assistant',
-            content: '行程已创建，正在后台生成行程规划点，请稍后刷新查看',
+            content: '✅ 行程已成功创建！\n\n系统正在后台为您生成详细的行程规划点，这通常需要 **2-5 分钟**。\n\n您可以先查看行程基本信息，规划完成后会自动更新。',
             timestamp: new Date(),
           };
           setMessages(prev => [...prev, generatingMessage]);
+          setNewMessageId(generatingMessageId);  // 触发打字机效果
+          
+          // 🆕 显示 Toast 提示，让用户明确知道需要等待
+          // 使用 info 类型，因为这是信息性提示而非成功提示
+          toast.info('行程创建成功', {
+            description: '正在后台生成行程规划点，预计需要 2-5 分钟，请稍候',
+            duration: 6000, // 延长显示时间，让用户有足够时间阅读
+            action: {
+              label: '查看行程',
+              onClick: () => {
+                navigate(`/dashboard/plan-studio?tripId=${response.trip!.id}`);
+              },
+            },
+          });
+        } else {
+          // 如果没有后台生成，显示成功提示
+          toast.success('行程创建成功', {
+            description: '正在跳转到规划工作台...',
+            duration: 2000,
+          });
         }
         
         // 通知父组件
@@ -2111,10 +2167,11 @@ export default function NLChatInterface({
         // 这里保留会话，以便用户后续可以继续对话
         // 如果需要删除会话，可以调用：tripsApi.deleteNLConversation(sessionId!)
         
-        // 延迟跳转
+        // 延迟跳转（如果有后台生成，延迟更长时间让用户看到提示）
+        const delay = response.generatingItems ? 3000 : 1500;
         setTimeout(() => {
           navigate(`/dashboard/plan-studio?tripId=${response.trip!.id}`);
-        }, 1500);
+        }, delay);
       } else if (response.parsedParams && !response.parsedParams.needsClarification) {
         // 🆕 Critical 字段检查：如果被 Critical 字段阻止，不显示确认卡片
         if (response.blockedByCriticalFields) {
@@ -2557,16 +2614,18 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
 
   return (
     <div className={cn("flex flex-col h-full bg-white", className)}>
-      {/* 头部 */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b bg-slate-50">
-        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
-          <MessageCircle className="w-5 h-5 text-white" />
+      {/* 头部 - 仅在 showHeader 为 true 时显示（避免与 Dialog 标题重复） */}
+      {showHeader && (
+        <div className="flex items-center gap-3 px-4 py-3 border-b bg-slate-50">
+          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
+            <Logo variant="icon" size={32} className="text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-800">智能行程规划</h3>
+            <p className="text-xs text-muted-foreground">用自然语言描述，AI 帮你规划</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-semibold text-slate-800">智能行程规划</h3>
-          <p className="text-xs text-muted-foreground">用自然语言描述，AI 帮你规划</p>
-        </div>
-      </div>
+      )}
 
       {/* 消息区域 */}
       <ScrollArea ref={scrollRef} className="flex-1 p-4">
@@ -2724,10 +2783,10 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
           )}
           
           {/* 🆕 后台生成状态 */}
-          {messages.some(msg => msg.content.includes('正在后台生成行程规划点')) && (
+          {messages.some(msg => msg.content.includes('正在后台生成行程规划点') || msg.content.includes('预计需要')) && (
             <div className="flex items-center gap-2 text-sm text-blue-600 px-4 py-2 bg-blue-50 rounded-lg mx-4 mb-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>正在后台生成行程规划点，请稍后刷新查看</span>
+              <span>正在后台生成行程规划点，预计需要 2-5 分钟，请稍候</span>
               <Button
                 size="sm"
                 variant="outline"
