@@ -5,9 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import IntentTab from './IntentTab';
 import ScheduleTab from './ScheduleTab';
-import BookingsTab from './BookingsTab';
 import PlanningWorkbenchTab from './PlanningWorkbenchTab';
-import DecisionDraftTabWrapper from './DecisionDraftTabWrapper';
+import BudgetTab from './BudgetTab';
 // PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
 // PlanStudioSidebar 已移除 - 策略概览功能已整合到 AI 助手侧边栏
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
@@ -43,10 +42,21 @@ import {
 } from '@/components/ui/select';
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
-import { Settings2, Zap, Footprints, Wallet } from 'lucide-react';
+import { Settings2, Zap, Footprints, Wallet, Sparkles } from 'lucide-react';
 import { PlanStudioProvider } from '@/contexts/PlanStudioContext';
 import { formatCurrency } from '@/utils/format';
 import { WeatherCard } from '@/components/weather/WeatherCard';
+import { planningWorkbenchApi } from '@/api/planning-workbench';
+import { useContextApi } from '@/hooks';
+import type { ContextPackage } from '@/api/context';
+import { toast } from 'sonner';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Progress } from '@/components/ui/progress';
 
 function PlanStudioPageContent() {
   const { t } = useTranslation();
@@ -55,7 +65,7 @@ function PlanStudioPageContent() {
   const tripId = searchParams.get('tripId');
   const defaultTab = searchParams.get('tab') || 'schedule';
   // 如果访问已移除的 tab，重定向到 schedule
-  const normalizedTab = (defaultTab === 'optimize' || defaultTab === 'what-if') ? 'schedule' : defaultTab;
+  const normalizedTab = (defaultTab === 'optimize' || defaultTab === 'what-if' || defaultTab === 'decision-draft' || defaultTab === 'bookings') ? 'schedule' : defaultTab;
   const [activeTab, setActiveTab] = useState(normalizedTab === 'intent' || normalizedTab === 'places' ? 'schedule' : normalizedTab);
   
   // 意图与约束弹窗
@@ -83,6 +93,12 @@ function PlanStudioPageContent() {
   
   // 当前行程详情（用于摘要条显示）
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
+  
+  // 生成方案相关状态
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState(0);
+  const [generatingStage, setGeneratingStage] = useState('');
+  const { buildContextWithCompress } = useContextApi();
 
   // 根据国家代码获取国家名称
   const getCountryName = (countryCode: string): string => {
@@ -242,6 +258,165 @@ function PlanStudioPageContent() {
 
     return () => clearInterval(interval);
   }, [tripId, tripExists]);
+
+  // 构建规划上下文
+  const buildPlanningContext = () => {
+    if (!currentTrip) return null;
+
+    const destinationParts = currentTrip.destination?.split(',') || [];
+    const country = destinationParts[0]?.trim().toUpperCase() || '';
+    const city = destinationParts.length > 1 ? destinationParts.slice(1).join(',').trim() : undefined;
+
+    const days = currentTrip.TripDay?.length || 0;
+    if (days === 0) {
+      toast.error('行程天数不能为0，请先设置行程日期');
+      return null;
+    }
+
+    const constraints: any = {};
+    if (currentTrip.totalBudget) {
+      constraints.budget = {
+        total: currentTrip.totalBudget,
+        currency: currentTrip.budgetConfig?.currency || 'CNY',
+      };
+    }
+
+    return {
+      destination: {
+        country,
+        city,
+      },
+      days,
+      travelMode: 'mixed' as const,
+      constraints: Object.keys(constraints).length > 0 ? constraints : undefined,
+    };
+  };
+
+  // 构建 Context Package
+  const buildContextPackage = async (userQuery: string): Promise<ContextPackage | null> => {
+    if (!currentTrip || !tripId) return null;
+
+    try {
+      const phase = 'planning';
+      const agent = 'PLANNER';
+
+      const contextPkg = await buildContextWithCompress(
+        {
+          tripId,
+          phase,
+          agent,
+          userQuery,
+          tokenBudget: 3600,
+          requiredTopics: ['VISA', 'ROAD_RULES', 'SAFETY'],
+          useCache: true,
+        },
+        {
+          strategy: 'balanced',
+          preserveKeys: [],
+        }
+      );
+
+      return contextPkg;
+    } catch (err: any) {
+      console.error('[Plan Studio] Context Package 构建失败:', err);
+      return null;
+    }
+  };
+
+  // 加载行程数据
+  const loadTrip = async () => {
+    if (!tripId) return;
+    try {
+      const trip = await tripsApi.getById(tripId);
+      if (trip.status === 'PLANNING') {
+        setCurrentTrip(trip);
+        setTripExists(true);
+      }
+    } catch (err: any) {
+      console.error('Failed to load trip:', err);
+    }
+  };
+
+  // 生成方案
+  const handleGeneratePlan = async () => {
+    if (!tripId || !currentTrip) {
+      toast.error('请先选择行程');
+      return;
+    }
+
+    const context = buildPlanningContext();
+    if (!context) return;
+
+    setGeneratingPlan(true);
+    setGeneratingProgress(0);
+    setGeneratingStage('准备中...');
+    
+    try {
+      const userQuery = `帮我规划${currentTrip.destination || ''}的${currentTrip.TripDay?.length || 0}天行程`;
+      
+      // 模拟进度更新
+      const progressInterval = setInterval(() => {
+        setGeneratingProgress((prev) => {
+          if (prev >= 90) return prev;
+          return prev + Math.random() * 10;
+        });
+      }, 500);
+
+      // 构建 Context Package（可选，不阻塞流程）
+      setGeneratingStage('构建上下文...');
+      setGeneratingProgress(20);
+      buildContextPackage(userQuery).catch(err => {
+        console.warn('Context Package 构建失败，继续执行:', err);
+      });
+
+      setGeneratingProgress(40);
+      setGeneratingStage('执行规划操作...');
+
+      // 调用规划工作台 API
+      await planningWorkbenchApi.execute({
+        context,
+        tripId,
+        userAction: 'generate',
+      });
+
+      clearInterval(progressInterval);
+      setGeneratingProgress(100);
+      setGeneratingStage('完成');
+
+      toast.success('方案生成成功！3秒后切换到决策评估...', {
+        duration: 3000,
+        action: {
+          label: '立即查看',
+          onClick: () => {
+            setActiveTab('workbench');
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('tab', 'workbench');
+            setSearchParams(newParams);
+          },
+        },
+      });
+      
+      // 延迟切换到决策评估 Tab，给用户选择时间
+      setTimeout(() => {
+        setActiveTab('workbench');
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('tab', 'workbench');
+        setSearchParams(newParams);
+        setGeneratingProgress(0);
+        setGeneratingStage('');
+      }, 3000);
+      
+      // 刷新页面数据
+      await loadTrip();
+    } catch (err: any) {
+      console.error('生成方案失败:', err);
+      toast.error(err.message || '生成方案失败，请稍后重试');
+      setGeneratingProgress(0);
+      setGeneratingStage('');
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
 
   // ⚠️ 重要：所有 useMemo 必须在早期返回之前调用
   // 常见国家首都/主要城市坐标（用于没有行程项时的天气查询）
@@ -408,32 +583,102 @@ function PlanStudioPageContent() {
   return (
     <div className="h-full flex flex-col">
       {/* 顶部：标题 + 行程切换 + 状态 */}
-      <div className="border-b bg-white px-6 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">{t('planStudio.title')}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+      <div className="border-b bg-white px-4 sm:px-6 py-3 sm:py-4">
+        {/* 第一行：标题和主要操作 */}
+        <div className="flex items-start justify-between gap-3 sm:gap-4 mb-3 sm:mb-0">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{t('planStudio.title')}</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
               {t('planStudio.subtitle')}
             </p>
           </div>
           
-          {/* 行程切换下拉菜单 */}
-          {hasTrips && allTrips.length > 0 && (
-            <div className="flex items-center gap-3">
-              <div className="w-64">
+          {/* 右侧操作区：生成方案按钮 + Pipeline状态 */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {/* 生成方案按钮 */}
+            {tripId && tripExists && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex flex-col items-end gap-1">
+                      <Button
+                        onClick={handleGeneratePlan}
+                        disabled={generatingPlan || !currentTrip}
+                        size="sm"
+                        className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
+                      >
+                        {generatingPlan ? (
+                          <>
+                            <Spinner className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden xs:inline sm:hidden">{generatingStage || '生成中'}</span>
+                            <span className="hidden sm:inline">{generatingStage || '生成中...'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                            <span className="hidden xs:inline sm:hidden">生成</span>
+                            <span className="hidden sm:inline">重新生成方案</span>
+                          </>
+                        )}
+                      </Button>
+                      {generatingPlan && generatingProgress > 0 && (
+                        <div className="w-full max-w-[80px] sm:max-w-[120px]">
+                          <Progress value={generatingProgress} className="h-1" />
+                        </div>
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <p className="text-sm">
+                      基于您在时间轴的修改，生成新的行程方案。生成后可在决策评估中查看和提交。
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* Pipeline 状态指示器 */}
+            {tripId && tripExists && (
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {loadingStatus ? (
+                  <Spinner className="w-3 h-3 sm:w-4 sm:h-4" />
+                ) : pipelineStatus ? (
+                  <button
+                    onClick={() => setShowStatusDialog(true)}
+                    className="hover:opacity-80 transition-opacity"
+                    title="点击查看详细状态"
+                  >
+                    <PipelineStatusIndicator status={pipelineStatus} />
+                  </button>
+                ) : statusError ? (
+                  <div className="text-xs text-muted-foreground">
+                    状态加载失败
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 第二行：行程切换和天气卡片（移动端堆叠，桌面端横向） */}
+        {(hasTrips && allTrips.length > 0) || (tripId && tripExists && weatherLocation) ? (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 pt-2 sm:pt-0 border-t sm:border-t-0">
+            {/* 行程切换下拉菜单 */}
+            {hasTrips && allTrips.length > 0 && (
+              <div className="w-full sm:w-64">
                 <Select
                   value={tripId || ''}
                   onValueChange={handleTripChange}
                   disabled={loadingTrips}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full text-sm">
                     <SelectValue placeholder="选择行程">
                       {tripId && allTrips.find(t => t.id === tripId) ? (
                         <span className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {getCountryName(allTrips.find(t => t.id === tripId)!.destination)}
+                          <span className="font-medium truncate">
+                            {allTrips.find(t => t.id === tripId)!.name || getCountryName(allTrips.find(t => t.id === tripId)!.destination)}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground hidden sm:inline">
                             ({allTrips.find(t => t.id === tripId)!.destination})
                           </span>
                         </span>
@@ -447,7 +692,7 @@ function PlanStudioPageContent() {
                       <SelectItem key={trip.id} value={trip.id}>
                         <div className="flex flex-col">
                           <span className="font-medium">
-                            {getCountryName(trip.destination)}
+                            {trip.name || getCountryName(trip.destination)}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {trip.destination} • {trip.days?.length || 0} 天
@@ -458,41 +703,22 @@ function PlanStudioPageContent() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-          )}
-          
-          {/* 天气卡片 */}
-          {tripId && tripExists && weatherLocation && (
-            <WeatherCard
-              location={weatherLocation.location}
-              includeWindDetails={isIceland}
-              compact={true}
-              refreshInterval={10 * 60 * 1000} // 10分钟刷新一次
-              locationName={weatherLocation.name}
-            />
-          )}
-
-          {/* Pipeline 状态指示器 */}
-          {tripId && tripExists && (
-            <div className="flex items-center gap-2">
-              {loadingStatus ? (
-                <Spinner className="w-4 h-4" />
-              ) : pipelineStatus ? (
-                <button
-                  onClick={() => setShowStatusDialog(true)}
-                  className="hover:opacity-80 transition-opacity"
-                  title="点击查看详细状态"
-                >
-                  <PipelineStatusIndicator status={pipelineStatus} />
-                </button>
-              ) : statusError ? (
-                <div className="text-xs text-muted-foreground">
-                  状态加载失败
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
+            )}
+            
+            {/* 天气卡片 */}
+            {tripId && tripExists && weatherLocation && (
+              <div className="flex-shrink-0">
+                <WeatherCard
+                  location={weatherLocation.location}
+                  includeWindDetails={isIceland}
+                  compact={true}
+                  refreshInterval={10 * 60 * 1000} // 10分钟刷新一次
+                  locationName={weatherLocation.name}
+                />
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* 摘要条 - 显示当前行程核心设置 */}
@@ -513,9 +739,7 @@ function PlanStudioPageContent() {
               <TabsList className="justify-start">
                 <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
                 <TabsTrigger value="workbench">{t('planStudio.tabs.workbench')}</TabsTrigger>
-                <TabsTrigger value="bookings">{t('planStudio.tabs.bookings')}</TabsTrigger>
-                {/* 决策过程标签 - 仅对自然语言创建的行程有意义 */}
-                <TabsTrigger value="decision-draft">决策过程</TabsTrigger>
+                <TabsTrigger value="budget">预算管理</TabsTrigger>
               </TabsList>
             </div>
 
@@ -535,14 +759,10 @@ function PlanStudioPageContent() {
                 <TabsContent value="workbench" className="mt-0">
                   <PlanningWorkbenchTab 
                     tripId={tripId!} 
-                    onSwitchToDecisionDraft={() => handleTabChange('decision-draft')}
                   />
                 </TabsContent>
-                <TabsContent value="bookings" className="mt-0">
-                  <BookingsTab tripId={tripId} />
-                </TabsContent>
-                <TabsContent value="decision-draft" className="mt-0">
-                  <DecisionDraftTabWrapper tripId={tripId!} />
+                <TabsContent value="budget" className="mt-0">
+                  <BudgetTab tripId={tripId!} />
                 </TabsContent>
               </div>
             </div>

@@ -61,6 +61,7 @@ import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time
 import { getDefaultCostCategory } from '@/hooks';
 import { DollarSign } from 'lucide-react';
 import type { CostCategory } from '@/types/trip';
+import { EmptyStateCard } from '@/components/ui/empty-state-images';
 
 // ==================== 类型定义 ====================
 
@@ -1036,18 +1037,19 @@ export function EnhancedAddItineraryItemDialog({
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                      <Search className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {searchMode === 'search' 
+                  <EmptyStateCard
+                    type={searchMode === 'recommend' ? 'no-recommended-places' : 'no-recommended-places'}
+                    title={
+                      searchMode === 'search' 
                         ? '输入关键词搜索地点'
                         : searchMode === 'nearby'
                         ? userLocation ? '暂无附近地点' : '无法获取位置信息'
-                        : '暂无推荐地点'}
-                    </p>
-                  </div>
+                        : '暂无推荐地点'
+                    }
+                    imageWidth={120}
+                    imageHeight={120}
+                    className="py-8"
+                  />
                 )}
               </div>
 

@@ -146,12 +146,40 @@ export default function CoverageMiniMap({
     const segmentSourceId = 'segments-source';
     const segmentLayerId = 'segments-layer';
 
-    // 移除旧图层和数据源
-    if (map.current.getLayer(segmentLayerId)) {
-      map.current.removeLayer(segmentLayerId);
-    }
-    if (map.current.getSource(segmentSourceId)) {
-      map.current.removeSource(segmentSourceId);
+    // 移除旧图层和数据源（确保完全清理）
+    try {
+      // 先移除所有相关的图层
+      ['covered', 'warning', 'blocked'].forEach((status) => {
+        const layerId = `${segmentLayerId}-${status}`;
+        if (map.current.getLayer(layerId)) {
+          try {
+            map.current.removeLayer(layerId);
+          } catch (e) {
+            // 忽略图层不存在的错误
+          }
+        }
+      });
+      
+      // 移除主图层
+      if (map.current.getLayer(segmentLayerId)) {
+        try {
+          map.current.removeLayer(segmentLayerId);
+        } catch (e) {
+          // 忽略图层不存在的错误
+        }
+      }
+      
+      // 最后移除数据源
+      if (map.current.getSource(segmentSourceId)) {
+        try {
+          map.current.removeSource(segmentSourceId);
+        } catch (e) {
+          // 忽略数据源不存在的错误
+          console.warn('Failed to remove segment source:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('Error cleaning up segment layers:', e);
     }
 
     // 添加路段
@@ -195,13 +223,25 @@ export default function CoverageMiniMap({
         };
       });
 
-      map.current.addSource(segmentSourceId, {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: segmentFeatures,
-        },
-      });
+      // 确保数据源不存在后再添加
+      if (!map.current.getSource(segmentSourceId)) {
+        map.current.addSource(segmentSourceId, {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: segmentFeatures,
+          },
+        });
+      } else {
+        // 如果数据源已存在，更新数据
+        const source = map.current.getSource(segmentSourceId) as mapboxgl.GeoJSONSource;
+        if (source && source.setData) {
+          source.setData({
+            type: 'FeatureCollection',
+            features: segmentFeatures,
+          });
+        }
+      }
 
       // 为每个状态添加图层
       ['covered', 'warning', 'blocked'].forEach((status) => {

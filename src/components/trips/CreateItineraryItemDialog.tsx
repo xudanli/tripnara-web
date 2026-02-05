@@ -372,7 +372,10 @@ export function CreateItineraryItemDialog({
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      setError(err.message || '创建行程项失败');
+      const errorMessage = err.message || '创建行程项失败';
+      setError(errorMessage);
+      // 移除 Toast 错误通知，避免与内联错误消息重复
+      // 模态框内的操作错误应该只使用内联错误消息
     } finally {
       setLoading(false);
     }

@@ -7,7 +7,9 @@
  * - 快捷操作
  * - 确认修改
  * 
- * Base URL: /api/trip-planner
+ * 🆕 已更新为新接口：
+ * - Base URL: /api/agent/planning-assistant
+ * - 旧接口已移除，不再使用 /api/trip-planner
  */
 
 import apiClient from './client';
@@ -496,9 +498,11 @@ export interface GapHighlightRichContent {
 
 /**
  * 开始规划会话请求
+ * 🆕 已更新为新接口格式
  */
 export interface StartPlanningRequest {
-  tripId: string;
+  tripId?: string; // 🆕 可选，如果提供会在初始消息中包含
+  userId?: string; // 🆕 可选，用户ID
 }
 
 /**
@@ -515,15 +519,23 @@ export interface StartPlanningResponse {
 
 /**
  * 对话交互请求
+ * 🆕 已更新为新接口格式：POST /api/agent/planning-assistant/chat
  */
 export interface PlannerChatRequest {
-  tripId: string;
-  message: string;
-  sessionId?: string;
-  targetDay?: number;
-  targetItemId?: string;
+  sessionId: string; // 必填，会话ID（通过创建会话接口获取）
+  message: string; // 必填，用户消息
+  userId?: string; // 可选，用户ID
+  language?: 'en' | 'zh'; // 可选，语言偏好，默认为 'zh'
   context?: {
-    /** 🆕 用户当前选中的上下文 */
+    currentLocation?: {
+      lat: number;
+      lng: number;
+    };
+    timezone?: string;
+    // 🆕 扩展字段（如果后端支持）
+    tripId?: string;
+    targetDay?: number;
+    targetItemId?: string;
     selectedContext?: {
       dayIndex?: number;
       date?: string;
@@ -531,33 +543,24 @@ export interface PlannerChatRequest {
       placeName?: string;
       itemType?: string;
     };
-    /** 🆕 前后衔接信息 */
     adjacentItems?: {
       prevItem?: { name: string; endTime: string; type?: string };
       nextItem?: { name: string; startTime: string; type?: string };
     };
-    /** 🆕 当天统计 */
     dayStats?: {
       totalItems: number;
       hasMeal: boolean;
       hasTransit: boolean;
       freeSlots?: Array<{ start: string; end: string }>;
     };
-    currentLocation?: {
-      lat: number;
-      lng: number;
-    };
-    timezone?: string;
-    language?: 'zh' | 'en';
-  };
-  /** 🆕 澄清选择数据 */
-  clarificationData?: {
-    selectedAction?: ClarificationAction;
-    params?: {
-      dayNumber?: number;
-      timeSlot?: { start: string; end: string };
-      targetItemId?: string;
-      gapId?: string;
+    clarificationData?: {
+      selectedAction?: ClarificationAction;
+      params?: {
+        dayNumber?: number;
+        timeSlot?: { start: string; end: string };
+        targetItemId?: string;
+        gapId?: string;
+      };
     };
   };
 }
@@ -740,314 +743,100 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> | T }): T {
 export const tripPlannerApi = {
   /**
    * 开始规划会话
-   * POST /api/trip-planner/start
-   * 
-   * 初始化一个新的规划会话，返回助手欢迎消息和行程概览
+   * ⚠️ 接口已删除，等待重新规划
    */
   start: async (data: StartPlanningRequest): Promise<StartPlanningResponse> => {
-    try {
-      console.log('[Trip Planner API] 发送 start 请求:', data);
-      
-      const response = await apiClient.post<ApiResponseWrapper<StartPlanningResponse>>(
-        '/trip-planner/start',
-        data,
-        { timeout: 30000 }
-      );
-      
-      const result = handleResponse(response);
-      console.log('[Trip Planner API] start 响应:', {
-        sessionId: result.sessionId,
-        phase: result.phase,
-        intent: result.intent,
-      });
-      
-      return result;
-    } catch (error: any) {
-      console.error('[Trip Planner API] start 请求失败:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('请求超时，请稍后重试');
-      }
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 对话交互
-   * POST /api/trip-planner/chat
-   * 
-   * 发送用户消息，获取助手回复
+   * ⚠️ 接口已删除，等待重新规划
    */
   chat: async (data: PlannerChatRequest): Promise<PlannerChatResponse> => {
-    try {
-      console.log('[Trip Planner API] 发送 chat 请求:', {
-        tripId: data.tripId,
-        message: data.message.slice(0, 50) + (data.message.length > 50 ? '...' : ''),
-        sessionId: data.sessionId,
-        targetDay: data.targetDay,
-        clarificationData: data.clarificationData, // 🔧 添加调试
-      });
-      
-      const response = await apiClient.post<ApiResponseWrapper<PlannerChatResponse>>(
-        '/trip-planner/chat',
-        data,
-        { timeout: 60000 } // 对话可能需要更长时间
-      );
-      
-      const result = handleResponse(response);
-      console.log('[Trip Planner API] chat 响应:', {
-        sessionId: result.sessionId,
-        phase: result.phase,
-        intent: result.intent,
-        hasRichContent: !!result.richContent,
-        quickActionsCount: result.quickActions?.length || 0,
-        pendingChangesCount: result.pendingChanges?.length || 0,
-      });
-      
-      return result;
-    } catch (error: any) {
-      console.error('[Trip Planner API] chat 请求失败:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('请求超时，AI 响应时间较长，请稍后重试');
-      }
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 快捷操作
-   * POST /api/trip-planner/action
-   * 
-   * 执行快捷操作按钮对应的功能
+   * ⚠️ 接口已删除，等待重新规划
    */
   action: async (data: PlannerActionRequest): Promise<PlannerActionResponse> => {
-    try {
-      console.log('[Trip Planner API] 发送 action 请求:', {
-        tripId: data.tripId,
-        action: data.action,
-        sessionId: data.sessionId,
-      });
-      
-      const response = await apiClient.post<ApiResponseWrapper<PlannerActionResponse>>(
-        '/trip-planner/action',
-        data,
-        { timeout: 60000 }
-      );
-      
-      const result = handleResponse(response);
-      console.log('[Trip Planner API] action 响应:', {
-        sessionId: result.sessionId,
-        phase: result.phase,
-        intent: result.intent,
-      });
-      
-      return result;
-    } catch (error: any) {
-      console.error('[Trip Planner API] action 请求失败:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('操作超时，请稍后重试');
-      }
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 确认修改
-   * POST /api/trip-planner/confirm
-   * 
-   * 确认并应用待确认的修改
+   * ⚠️ 接口已删除，等待重新规划
    */
   confirm: async (data: ConfirmChangesRequest): Promise<ConfirmChangesResponse> => {
-    try {
-      console.log('[Trip Planner API] 发送 confirm 请求:', {
-        tripId: data.tripId,
-        sessionId: data.sessionId,
-        changeIds: data.changeIds,
-      });
-      
-      const response = await apiClient.post<ApiResponseWrapper<ConfirmChangesResponse>>(
-        '/trip-planner/confirm',
-        data,
-        { timeout: 30000 }
-      );
-      
-      const result = handleResponse(response);
-      console.log('[Trip Planner API] confirm 响应:', {
-        success: result.success,
-        appliedChanges: result.appliedChanges.length,
-      });
-      
-      return result;
-    } catch (error: any) {
-      console.error('[Trip Planner API] confirm 请求失败:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('确认超时，请稍后重试');
-      }
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 应用建议
-   * POST /api/trip-planner/apply-suggestion
-   * 
-   * 将 AI 建议应用到行程（一键添加）
+   * ⚠️ 接口已删除，等待重新规划
    */
   applySuggestion: async (data: ApplySuggestionRequest): Promise<ApplySuggestionResponse> => {
-    try {
-      console.log('[Trip Planner API] 发送 apply-suggestion 请求:', {
-        tripId: data.tripId,
-        sessionId: data.sessionId,
-        suggestionId: data.suggestionId,
-        suggestionType: data.suggestionType,
-        targetDay: data.targetDay,
-      });
-      
-      const response = await apiClient.post<ApiResponseWrapper<ApplySuggestionResponse>>(
-        '/trip-planner/apply-suggestion',
-        data,
-        { timeout: 30000 }
-      );
-      
-      const result = handleResponse(response);
-      console.log('[Trip Planner API] apply-suggestion 响应:', {
-        success: result.success,
-        itemId: result.item?.id,
-      });
-      
-      return result;
-    } catch (error: any) {
-      console.error('[Trip Planner API] apply-suggestion 请求失败:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('应用建议超时，请稍后重试');
-      }
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 撤销上一次修改
-   * POST /api/trip-planner/undo
+   * ⚠️ 接口已删除，等待重新规划
    */
   undo: async (data: { tripId: string; sessionId: string }): Promise<UndoResponse> => {
-    try {
-      console.log('[Trip Planner API] 发送 undo 请求:', data);
-      
-      const response = await apiClient.post<ApiResponseWrapper<UndoResponse>>(
-        '/trip-planner/undo',
-        data,
-        { timeout: 15000 }
-      );
-      
-      const result = handleResponse(response);
-      console.log('[Trip Planner API] undo 响应:', {
-        success: result.success,
-        restoredVersion: result.restoredVersion,
-      });
-      
-      return result;
-    } catch (error: any) {
-      console.error('[Trip Planner API] undo 请求失败:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('撤销操作超时，请稍后重试');
-      }
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   // ==================== 缺口偏好 API ====================
 
   /**
    * 获取用户缺口偏好
+   * ⚠️ 接口已删除，等待重新规划
    */
   getGapPreferences: async (params?: { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
-    try {
-      const response = await apiClient.get<ApiResponseWrapper<GapDisplayPreferences>>(
-        '/trip-planner/gap-preferences',
-        { params }
-      );
-      return handleResponse(response);
-    } catch (error: any) {
-      console.error('[Trip Planner API] 获取缺口偏好失败:', error);
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 更新用户缺口偏好
+   * ⚠️ 接口已删除，等待重新规划
    */
   updateGapPreferences: async (data: Partial<GapDisplayPreferences> & { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
-    try {
-      const response = await apiClient.put<ApiResponseWrapper<GapDisplayPreferences>>(
-        '/trip-planner/gap-preferences',
-        data
-      );
-      return handleResponse(response);
-    } catch (error: any) {
-      console.error('[Trip Planner API] 更新缺口偏好失败:', error);
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 忽略单个缺口
+   * ⚠️ 接口已删除，等待重新规划
    */
   ignoreGap: async (data: { gapId: string; gapType: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<void> => {
-    try {
-      await apiClient.post<ApiResponseWrapper<{ message: string }>>(
-        '/trip-planner/ignore-gap',
-        data
-      );
-    } catch (error: any) {
-      console.error('[Trip Planner API] 忽略缺口失败:', error);
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 批量忽略缺口
+   * ⚠️ 接口已删除，等待重新规划
    */
   ignoreGapsBatch: async (data: { gapIds: string[]; gapType?: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<{ ignoredCount: number; totalCount: number }> => {
-    try {
-      const response = await apiClient.post<ApiResponseWrapper<{ ignoredCount: number; totalCount: number }>>(
-        '/trip-planner/ignore-gaps-batch',
-        data
-      );
-      return handleResponse(response);
-    } catch (error: any) {
-      console.error('[Trip Planner API] 批量忽略缺口失败:', error);
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 取消忽略单个缺口
+   * ⚠️ 接口已删除，等待重新规划
    */
   unignoreGap: async (gapId: string, params?: { tripId?: string }): Promise<void> => {
-    try {
-      await apiClient.delete<ApiResponseWrapper<{ message: string }>>(
-        `/trip-planner/ignore-gap/${gapId}`,
-        { params }
-      );
-    } catch (error: any) {
-      console.error('[Trip Planner API] 取消忽略缺口失败:', error);
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 
   /**
    * 批量取消忽略缺口
+   * ⚠️ 接口已删除，等待重新规划
    */
   unignoreGapsBatch: async (data: { gapIds: string[]; tripId?: string }): Promise<{ unignoredCount: number; totalCount: number }> => {
-    try {
-      const response = await apiClient.post<ApiResponseWrapper<{ unignoredCount: number; totalCount: number }>>(
-        '/trip-planner/unignore-gaps-batch',
-        data
-      );
-      return handleResponse(response);
-    } catch (error: any) {
-      console.error('[Trip Planner API] 批量取消忽略缺口失败:', error);
-      throw error;
-    }
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   },
 };
 

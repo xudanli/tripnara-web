@@ -7,6 +7,26 @@ import type {
   ReplaceNodesRequest,
   ReplaceNodesResponse,
 } from '@/types/strategy';
+import type {
+  DetectConflictsRequest,
+  DetectConflictsResponse,
+  CheckConstraintsRequest,
+  CheckConstraintsResponse,
+  GenerateMultiplePlansRequest,
+  GenerateMultiplePlansResponse,
+} from '@/types/constraints';
+import type {
+  PlanVariantFeedbackRequest,
+  PlanVariantFeedbackResponse,
+  ConflictFeedbackRequest,
+  ConflictFeedbackResponse,
+  DecisionQualityFeedbackRequest,
+  DecisionQualityFeedbackResponse,
+  BatchFeedbackRequest,
+  BatchFeedbackResponse,
+  FeedbackStatsQuery,
+  FeedbackStatsResponse,
+} from '@/types/feedback';
 
 // 文档中的响应格式是 { success: true, data: T }
 interface SuccessResponse<T> {
@@ -72,6 +92,124 @@ export const decisionApi = {
     const response = await apiClient.post<ApiResponseWrapper<ReplaceNodesResponse['data']>>(
       '/decision/replace-nodes',
       data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 检测约束冲突
+   * POST /decision/detect-conflicts
+   */
+  detectConflicts: async (
+    data: DetectConflictsRequest
+  ): Promise<DetectConflictsResponse['data']> => {
+    const response = await apiClient.post<ApiResponseWrapper<DetectConflictsResponse['data']>>(
+      '/decision/detect-conflicts',
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 检查约束并获取不可行性解释
+   * POST /decision/check-constraints-with-explanation
+   */
+  checkConstraintsWithExplanation: async (
+    data: CheckConstraintsRequest
+  ): Promise<CheckConstraintsResponse['data']> => {
+    const response = await apiClient.post<ApiResponseWrapper<CheckConstraintsResponse['data']>>(
+      '/decision/check-constraints-with-explanation',
+      data,
+      {
+        timeout: 60000, // 60秒超时
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 生成多个方案变体
+   * POST /decision/generate-multiple-plans
+   */
+  generateMultiplePlans: async (
+    data: GenerateMultiplePlansRequest
+  ): Promise<GenerateMultiplePlansResponse['data']> => {
+    const response = await apiClient.post<ApiResponseWrapper<GenerateMultiplePlansResponse['data']>>(
+      '/decision/generate-multiple-plans',
+      data,
+      {
+        timeout: 120000, // 120秒超时（方案生成可能需要较长时间）
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 提交计划变体反馈
+   * POST /decision/feedback/plan-variant
+   */
+  submitPlanVariantFeedback: async (
+    data: PlanVariantFeedbackRequest
+  ): Promise<PlanVariantFeedbackResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<PlanVariantFeedbackResponse>>(
+      '/decision/feedback/plan-variant',
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 提交约束冲突反馈
+   * POST /decision/feedback/conflict
+   */
+  submitConflictFeedback: async (
+    data: ConflictFeedbackRequest
+  ): Promise<ConflictFeedbackResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<ConflictFeedbackResponse>>(
+      '/decision/feedback/conflict',
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 提交决策质量反馈
+   * POST /decision/feedback/decision-quality
+   */
+  submitDecisionQualityFeedback: async (
+    data: DecisionQualityFeedbackRequest
+  ): Promise<DecisionQualityFeedbackResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<DecisionQualityFeedbackResponse>>(
+      '/decision/feedback/decision-quality',
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 批量提交反馈
+   * POST /decision/feedback/batch
+   */
+  submitBatchFeedback: async (
+    data: BatchFeedbackRequest
+  ): Promise<BatchFeedbackResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<BatchFeedbackResponse>>(
+      '/decision/feedback/batch',
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取反馈统计
+   * GET /decision/feedback/stats
+   */
+  getFeedbackStats: async (
+    params?: FeedbackStatsQuery
+  ): Promise<FeedbackStatsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<FeedbackStatsResponse>>(
+      '/decision/feedback/stats',
+      { params }
     );
     return handleResponse(response);
   },

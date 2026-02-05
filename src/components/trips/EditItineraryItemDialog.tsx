@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { itineraryItemsApi } from '@/api/trips';
 import type { ItineraryItem, UpdateItineraryItemRequest, ItineraryItemType, CostCategory, TravelMode, BookingStatus } from '@/types/trip';
 import { utcToDatetimeLocal, datetimeLocalToUTC } from '@/utils/timezone';
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Spinner } from '@/components/ui/spinner';
 import {
   Select,
   SelectContent,
@@ -232,10 +234,18 @@ export function EditItineraryItemDialog({
       
       // 更新成功，调用成功回调（会重新加载所有天的行程项以获取最新数据）
       // loadTrip 会先清除所有天的数据，然后重新加载，确保跨天移动后数据正确
+      toast.success('行程项已更新', {
+        description: '您的行程项信息已成功保存',
+        duration: 3000,
+      });
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
       const errorMessage = err.message || '更新行程项失败';
+      
+      // 移除 Toast 错误通知，避免与内联错误消息重复
+      // 模态框内的操作错误应该只使用内联错误消息
+      // 级联警告和时间警告会通过 UI 显示（setWarning），不需要 Toast
       
       // 检查是否是级联影响警告（需要确认弹窗）
       // 匹配多种格式：
@@ -244,6 +254,7 @@ export function EditItineraryItemDialog({
       // - "此修改将影响后续 1 个行程项"
       // - "「钻石沙滩」将顺延+21小时15分钟"
       const isCascadeWarning = errorMessage.includes('影响后续') || errorMessage.includes('将顺延');
+      const isTimeWarning = errorMessage.includes('时间可能不合理') || errorMessage.includes('建议开始时间') || errorMessage.includes('预计需要');
       
       if (isCascadeWarning && !forceCreate) {
         // 尝试解析影响的行程项数量
@@ -256,7 +267,7 @@ export function EditItineraryItemDialog({
         setWarning(null);
       }
       // 检查是否是时间不合理的警告
-      else if (errorMessage.includes('时间可能不合理') || errorMessage.includes('建议开始时间') || errorMessage.includes('预计需要')) {
+      else if (isTimeWarning) {
         setWarning(errorMessage);
         setError(null);
       } else {
@@ -646,7 +657,14 @@ export function EditItineraryItemDialog({
               取消
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? '保存中...' : '保存'}
+              {loading ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  保存中...
+                </>
+              ) : (
+                '保存'
+              )}
             </Button>
           </DialogFooter>
         </form>

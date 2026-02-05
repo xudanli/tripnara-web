@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info, ClipboardCheck, ExternalLink } from 'lucide-react';
+import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info, ClipboardCheck, ExternalLink, Calendar } from 'lucide-react';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
-import { tripPlannerApi } from '@/api/trip-planner';
+// 🆕 tripPlannerApi 已移除，规划工作台的智能体对话窗口相关接口已删除，后续重新规划
+// import { tripPlannerApi } from '@/api/trip-planner';
 import { readinessApi, type ScoreBreakdownResponse } from '@/api/readiness';
 import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict, DayTravelInfoResponse, PersonaAlert } from '@/types/trip';
 import type { SuggestionStats } from '@/types/suggestion';
@@ -98,6 +99,18 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [schedules, setSchedules] = useState<Map<string, ScheduleResponse>>(new Map());
   const [loading, setLoading] = useState(true);
+  
+  // 🆕 检测未保存的时间轴改动
+  useEffect(() => {
+    if (!planStudioContext) return;
+    
+    // 检查 schedules Map 中是否有任何 persisted: false 的项
+    const hasUnsaved = Array.from(schedules.values()).some(
+      schedule => schedule.persisted === false
+    );
+    
+    planStudioContext.setHasUnsavedScheduleChanges(hasUnsaved);
+  }, [schedules, planStudioContext]);
   const [itineraryItemsMap, setItineraryItemsMap] = useState<Map<string, ItineraryItemDetail[]>>(new Map());
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
   const [dayTravelInfoMap, setDayTravelInfoMap] = useState<Map<string, DayTravelInfoResponse>>(new Map());
@@ -221,8 +234,10 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const loadTrip = useCallback(async () => {
     // 从 ItineraryItem 转换为 ScheduleItem（保留 id 在 metadata 中）
     const convertItineraryItemsToScheduleItems = (items: ItineraryItemDetail[]): ScheduleItem[] => {
+      // 后端已经按 startTime 排序返回，前端也做一次排序以确保一致性
       return items
         .filter(item => item.startTime && item.endTime)
+        .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
         .map((item) => ({
           startTime: formatTime(item.startTime),
           endTime: formatTime(item.endTime),
@@ -237,8 +252,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
             itemId: item.id, // 保存 ItineraryItem 的 id，用于删除操作
           },
         }))
-        .filter(item => item.startTime && item.endTime)
-        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+        .filter(item => item.startTime && item.endTime);
     };
     try {
       setLoading(true);
@@ -264,10 +278,53 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
             // 强制刷新，避免使用缓存数据（特别是跨天移动后）
             const dayItems = await itineraryItemsApi.getAll(day.id, true);
             if (dayItems && dayItems.length > 0) {
-              // 按开始时间排序
-              const sortedItems = [...dayItems].sort((a, b) => 
-                (a.startTime || '').localeCompare(b.startTime || '')
+              // 🔍 调试：检查所有行程项，特别是酒店相关的
+              const hotelItems = dayItems.filter(item => 
+                item.Place?.category === 'HOTEL' || item.type === 'ACTIVITY' && item.Place?.category === 'HOTEL'
               );
+              const checkoutItems = dayItems.filter(item => 
+                item.crossDayInfo?.displayMode === 'checkout' || item.crossDayInfo?.isCheckoutItem
+              );
+              const checkinItems = dayItems.filter(item => 
+                item.crossDayInfo?.displayMode === 'checkin'
+              );
+              
+              console.log(`[ScheduleTab] Day ${day.date} 行程项统计:`, {
+                total: dayItems.length,
+                hotelItems: hotelItems.length,
+                checkinItems: checkinItems.length,
+                checkoutItems: checkoutItems.length,
+                allItems: dayItems.map(item => ({
+                  id: item.id,
+                  type: item.type,
+                  placeName: item.Place?.nameCN || item.Place?.nameEN,
+                  placeCategory: item.Place?.category,
+                  crossDayInfo: item.crossDayInfo,
+                  startTime: item.startTime,
+                  endTime: item.endTime,
+                })),
+              });
+              
+              // 后端已经按 startTime 排序返回，前端也做一次排序以确保一致性
+              // 🆕 对于退房项，使用 endTime 进行排序（因为退房项显示的是退房时间）
+              const sortedItems = [...dayItems].sort((a, b) => {
+                // 如果都是退房项，按 endTime 排序
+                const aIsCheckout = a.crossDayInfo?.displayMode === 'checkout' || a.crossDayInfo?.isCheckoutItem;
+                const bIsCheckout = b.crossDayInfo?.displayMode === 'checkout' || b.crossDayInfo?.isCheckoutItem;
+                
+                if (aIsCheckout && bIsCheckout) {
+                  return (a.endTime || '').localeCompare(b.endTime || '');
+                }
+                // 如果只有一个是退房项，退房项排在后面（因为退房时间通常较晚）
+                if (aIsCheckout && !bIsCheckout) {
+                  return 1;
+                }
+                if (!aIsCheckout && bIsCheckout) {
+                  return -1;
+                }
+                // 都不是退房项，按 startTime 排序
+                return (a.startTime || '').localeCompare(b.startTime || '');
+              });
               setItineraryItemsMap(prev => new Map(prev).set(day.date, sortedItems));
             } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
               // 回退：使用 trip 数据中的 ItineraryItem
@@ -331,6 +388,14 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
           }
         }
         setSchedules(scheduleMap);
+        
+        // 🆕 检测未保存的时间轴改动
+        if (planStudioContext) {
+          const hasUnsaved = Array.from(scheduleMap.values()).some(
+            schedule => schedule.persisted === false
+          );
+          planStudioContext.setHasUnsavedScheduleChanges(hasUnsaved);
+        }
         
         // 加载每日指标和冲突（传入 trip 数据，避免异步 state 问题）
         await loadMetricsAndConflicts(data.id, data);
@@ -441,43 +506,9 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
             return false;
           }
           
-          // 🆕 调用后端 API 应用建议
-          const response = await tripPlannerApi.applySuggestion({
-            tripId,
-            sessionId: '', // TODO: 从 context 获取 sessionId
-            suggestionId: suggestion.id,
-            targetDay: suggestion.targetDay,
-            timeSlot: suggestion.suggestedTime ? {
-              start: suggestion.suggestedTime.split('-')[0]?.trim() || '12:00',
-              end: suggestion.suggestedTime.split('-')[1]?.trim() || '13:00',
-            } : undefined,
-            suggestionType: suggestion.type,
-            place: suggestion.place ? {
-              name: suggestion.place.name,
-              nameCN: suggestion.place.nameCN,
-              category: suggestion.place.category,
-              address: suggestion.place.address,
-              location: suggestion.place.location,
-            } : undefined,
-          });
-          
-          if (response.success) {
-            toast.success(response.message || `已将"${suggestion.place.nameCN}"添加到第 ${suggestion.targetDay} 天`);
-            
-            // 🆕 处理建议状态
-            if (response.suggestionStatus === 'RESOLVED') {
-              // 建议已解决，可以更新UI状态或移除建议
-              console.log('[ScheduleTab] 建议已解决:', suggestion.id);
-              // TODO: 如果有建议列表，可以更新建议状态或移除
-            }
-            
-            // 刷新行程数据
-            await loadTrip();
-            return true;
-          } else {
-            toast.error(response.message || '添加失败');
-            return false;
-          }
+          // ⚠️ 接口已删除，等待重新规划
+          toast.error('规划工作台智能体对话接口已删除，等待重新规划');
+          return false;
         }
         return false;
       } catch (err) {
@@ -1497,29 +1528,104 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {conflicts.map((conflict) => (
-                  <div
-                    key={conflict.id}
-                    className={cn(
-                      'p-2 border rounded cursor-pointer hover:bg-gray-50',
-                      conflict.severity === 'HIGH'
-                        ? getGateStatusClasses('REJECT')
-                        : conflict.severity === 'MEDIUM'
-                        ? getGateStatusClasses('SUGGEST_REPLACE')
-                        : getGateStatusClasses('NEED_CONFIRM')
-                    )}
-                    onClick={() => handleFixConflict(conflict.id, conflict.affectedDays[0] || '')}
-                  >
-                    <div className="text-sm font-medium">{conflict.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {conflict.affectedDays.map((d: string) => {
-                        const dayIndex = trip?.TripDay?.findIndex(day => day.date === d) ?? -1;
-                        return dayIndex >= 0 ? `Day ${dayIndex + 1}` : d;
-                      }).join(', ')}
+              <div className="space-y-3">
+                {conflicts.map((conflict) => {
+                  // 获取受影响的行程项名称
+                  const affectedItems: string[] = [];
+                  conflict.affectedItemIds.forEach(itemId => {
+                    // 在所有日期的行程项中查找
+                    itineraryItemsMap.forEach((items) => {
+                      const item = items.find(i => i.id === itemId);
+                      if (item) {
+                        const placeName = item.Place?.nameCN || item.Place?.nameEN || item.note || '未知地点';
+                        if (!affectedItems.includes(placeName)) {
+                          affectedItems.push(placeName);
+                        }
+                      }
+                    });
+                  });
+
+                  // 格式化日期显示
+                  const formattedDays = conflict.affectedDays.map((d: string) => {
+                    const dayIndex = trip?.TripDay?.findIndex(day => day.date === d) ?? -1;
+                    if (dayIndex >= 0) {
+                      const dateStr = new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+                      return `第${dayIndex + 1}天 (${dateStr})`;
+                    }
+                    return d;
+                  });
+
+                  return (
+                    <div
+                      key={conflict.id}
+                      className={cn(
+                        'p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors',
+                        conflict.severity === 'HIGH'
+                          ? 'border-red-200 bg-red-50/50'
+                          : conflict.severity === 'MEDIUM'
+                          ? 'border-amber-200 bg-amber-50/50'
+                          : 'border-blue-200 bg-blue-50/50'
+                      )}
+                      onClick={() => handleFixConflict(conflict.id, conflict.affectedDays[0] || '')}
+                    >
+                      {/* 标题和严重程度 */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2 flex-1">
+                          {conflict.type === 'SEASONAL_CONFLICT' && (
+                            <Calendar className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                          )}
+                          <div className="text-sm font-semibold text-gray-900">{conflict.title}</div>
+                        </div>
+                        <Badge 
+                          variant={conflict.severity === 'HIGH' ? 'destructive' : conflict.severity === 'MEDIUM' ? 'default' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {conflict.severity === 'HIGH' ? '严重' : conflict.severity === 'MEDIUM' ? '中等' : '轻微'}
+                        </Badge>
+                      </div>
+
+                      {/* 描述 */}
+                      {conflict.description && (
+                        <div className="text-xs text-gray-600 mb-2 leading-relaxed">
+                          {conflict.description}
+                        </div>
+                      )}
+
+                      {/* 受影响的日期 */}
+                      <div className="text-xs text-gray-500 mb-2">
+                        <span className="font-medium">受影响日期：</span>
+                        {formattedDays.join(', ')}
+                      </div>
+
+                      {/* 受影响的行程项 */}
+                      {affectedItems.length > 0 && (
+                        <div className="text-xs text-gray-500 mb-2">
+                          <span className="font-medium">涉及活动：</span>
+                          <span className="ml-1">{affectedItems.slice(0, 3).join('、')}</span>
+                          {affectedItems.length > 3 && <span className="text-gray-400"> 等{affectedItems.length}项</span>}
+                        </div>
+                      )}
+
+                      {/* 建议 */}
+                      {conflict.suggestions && conflict.suggestions.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <div className="text-xs font-medium text-gray-700 mb-1">建议：</div>
+                          <ul className="text-xs text-gray-600 space-y-0.5">
+                            {conflict.suggestions.slice(0, 2).map((suggestion, idx) => (
+                              <li key={idx} className="flex items-start gap-1">
+                                <span className="text-gray-400">•</span>
+                                <span>{suggestion.action}</span>
+                              </li>
+                            ))}
+                            {conflict.suggestions.length > 2 && (
+                              <li className="text-gray-400 text-xs">还有 {conflict.suggestions.length - 2} 条建议...</li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -1665,9 +1771,9 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('planStudio.scheduleTab.actions.delete')}</AlertDialogTitle>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
             <AlertDialogDescription>
-              {deletingItem && t('planStudio.scheduleTab.confirmDelete', { placeName: deletingItem.placeName })}
+              {deletingItem && `确定要删除「${deletingItem.placeName}」吗？此操作不可撤销。`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1681,7 +1787,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
               onClick={confirmDeleteItem}
               className={cn('hover:opacity-90 focus:ring-2', getGateStatusClasses('REJECT').split(' ').find(cls => cls.startsWith('bg-')) || 'bg-destructive')}
             >
-              {t('planStudio.scheduleTab.actions.delete')}
+              删除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

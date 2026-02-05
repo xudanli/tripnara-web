@@ -276,6 +276,7 @@ export default function CreateTripSection({
               onTripCreated={handleTripCreated}
               className="h-full"
               showHeader={false}
+              resetOnMount={true}
             />
           </div>
         </DialogContent>

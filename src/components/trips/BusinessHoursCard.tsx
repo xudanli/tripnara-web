@@ -66,7 +66,11 @@ function parseTimeRange(timeStr: string | null | undefined | number | any): { st
     }
   } else {
     // 其他类型，尝试转换为字符串
-    timeString = String(timeStr);
+    try {
+      timeString = String(timeStr);
+    } catch {
+      return null;
+    }
   }
   
   // ✅ 确保 timeString 是字符串且不为空
@@ -78,8 +82,20 @@ function parseTimeRange(timeStr: string | null | undefined | number | any): { st
   const separators = ['–', '-', '~', '到', '至'];
   for (const sep of separators) {
     if (timeString.includes(sep)) {
-      const [start, end] = timeString.split(sep).map(s => s.trim());
-      return { start, end };
+      try {
+        const parts = timeString.split(sep);
+        // ✅ 确保 split 返回的是数组
+        if (!Array.isArray(parts) || parts.length < 2) {
+          continue;
+        }
+        const [start, end] = parts.map(s => s.trim());
+        if (start && end) {
+          return { start, end };
+        }
+      } catch {
+        // split 失败，继续尝试下一个分隔符
+        continue;
+      }
     }
   }
   return null;
@@ -93,7 +109,16 @@ function isCurrentlyOpen(hours: string | null | undefined | number | any): boole
   if (!hours) return false;
   
   // ✅ 转换为字符串进行比较
-  const hoursStr = typeof hours === 'string' ? hours : String(hours);
+  let hoursStr: string;
+  try {
+    hoursStr = typeof hours === 'string' ? hours : String(hours);
+    // ✅ 确保转换后的值是字符串
+    if (typeof hoursStr !== 'string') {
+      return false;
+    }
+  } catch {
+    return false;
+  }
   
   // 如果是 24 小时营业
   if (hoursStr === '24小时' || hoursStr === '24 Hours' || hoursStr === '24/7') {
@@ -238,8 +263,10 @@ export default function BusinessHoursCard({
     } else {
       // 按天解析
       for (const dayKey of dayOrder) {
-        const hoursStr = hoursData[dayKey];
-        if (hoursStr) {
+        const hoursValue = hoursData[dayKey];
+        if (hoursValue) {
+          // ✅ 确保转换为字符串
+          const hoursStr = typeof hoursValue === 'string' ? hoursValue : String(hoursValue || '');
           // 处理 "24 Hours" 格式
           const displayHours = hoursStr === '24 Hours' ? '24小时' : hoursStr;
           allDayHours.push({

@@ -52,11 +52,19 @@ export function CreateTripFromTemplateDialog({
     transport: 'walk',
     travelers: [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }],
     constraints: {},
+    name: templateName || '', // 🆕 默认使用模版名称
   });
 
   useEffect(() => {
     if (open) {
       loadCountries();
+      // 🆕 当对话框打开时，如果模版名称存在，自动设置为行程名称
+      if (templateName) {
+        setFormData(prev => ({
+          ...prev,
+          name: templateName,
+        }));
+      }
       // 计算默认结束日期
       if (formData.startDate && defaultDurationDays) {
         const start = new Date(formData.startDate);
@@ -68,7 +76,7 @@ export function CreateTripFromTemplateDialog({
         }));
       }
     }
-  }, [open, defaultDurationDays]);
+  }, [open, defaultDurationDays, templateName]);
 
   useEffect(() => {
     // 当开始日期改变时，自动计算结束日期
@@ -113,6 +121,8 @@ export function CreateTripFromTemplateDialog({
         transport: formData.transport || undefined,
         travelers: formData.travelers && formData.travelers.length > 0 ? formData.travelers : undefined,
         constraints: Object.keys(formData.constraints || {}).length > 0 ? formData.constraints : undefined,
+        // 🆕 如果用户填写了名称，则包含在请求中（优先使用模版名称）
+        name: formData.name?.trim() || templateName || undefined,
       });
 
       console.log('✅ [CreateTripFromTemplate] API响应完整数据:', {
@@ -312,6 +322,23 @@ export function CreateTripFromTemplateDialog({
                 placeholder={t('dialogs.createTripFromTemplate.enterCountryCode')}
               />
             )}
+          </div>
+
+          {/* 🆕 行程名称字段 */}
+          <div className="space-y-2">
+            <Label htmlFor="tripName">行程名称（可选）</Label>
+            <Input
+              id="tripName"
+              value={formData.name || ''}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder={templateName || '例如：冰岛环岛游'}
+              maxLength={200}
+            />
+            <p className="text-xs text-muted-foreground">
+              {templateName 
+                ? `默认使用模版名称"${templateName}"，您可以修改`
+                : '为你的行程起个名字吧（可选，如不填写将自动生成）'}
+            </p>
           </div>
 
           {/* 日期 */}

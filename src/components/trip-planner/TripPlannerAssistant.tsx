@@ -20,6 +20,7 @@ import type {
   ComparisonRichContent,
   ChecklistRichContent,
   POIRichContent,
+  POIRecommendation,
   PendingChange,
   FollowUp,
   // 三人格守护者系统
@@ -42,6 +43,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataCard } from '@/components/ui/data-card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Send,
   Sparkles,
@@ -597,6 +605,9 @@ function POIListContent({
   onAddToItinerary?: () => void;
 }) {
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
+  // 🆕 POI 详情弹窗状态
+  const [selectedPoi, setSelectedPoi] = useState<POIRecommendation | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   
   // 🆕 处理一键添加
   const handleAddToItinerary = async (
@@ -611,34 +622,9 @@ function POIListContent({
     setAddingIds(prev => new Set(prev).add(suggestion.id));
     
     try {
-      // 确定建议类型
-      const suggestionType = suggestion.type === 'RESTAURANT' ? 'add_meal' : 'add_place';
-      
-      const response = await tripPlannerApi.applySuggestion({
-        tripId,
-        sessionId,
-        suggestionId: suggestion.id,
-        targetDay: recommendation.day,
-        timeSlot: recommendation.timeSlot,
-        suggestionType,
-        place: {
-          name: suggestion.name,
-          nameCN: suggestion.nameCN,
-          category: suggestion.type,
-        },
-      });
-      
-      if (response.success) {
-        // 显示成功提示
-        toast.success(response.message || `已添加「${suggestion.nameCN || suggestion.name}」到第${recommendation.day}天`);
-        
-        // 触发行程更新回调
-        if (onAddToItinerary) {
-          onAddToItinerary();
-        }
-      } else {
-        toast.error(response.message || '添加失败');
-      }
+      // ⚠️ 接口已删除，等待重新规划
+      toast.error('规划工作台智能体对话接口已删除，等待重新规划');
+      return;
     } catch (error: any) {
       console.error('[POIListContent] 添加失败:', error);
       toast.error(error.message || '添加失败，请重试');
@@ -679,7 +665,18 @@ function POIListContent({
                   const isAdding = addingIds.has(suggestion.id);
                   
                   return (
-                    <Card key={suggestion.id} className="border">
+                    <Card 
+                      key={suggestion.id} 
+                      className="border cursor-pointer hover:bg-slate-50 transition-colors"
+                      onClick={(e) => {
+                        // 如果点击的是按钮，不触发弹窗
+                        if ((e.target as HTMLElement).closest('button')) {
+                          return;
+                        }
+                        setSelectedPoi(suggestion as any);
+                        setDetailDialogOpen(true);
+                      }}
+                    >
                       <CardContent className="p-3">
                         <div className="flex items-start gap-3">
                           {suggestion.imageUrl && (
@@ -717,7 +714,10 @@ function POIListContent({
                               <Button
                                 size="sm"
                                 className="mt-2 w-full"
-                                onClick={() => handleAddToItinerary(suggestion, rec)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddToItinerary(suggestion, rec);
+                                }}
                                 disabled={isAdding || !tripId || !sessionId}
                               >
                                 {isAdding ? (
@@ -756,7 +756,14 @@ function POIListContent({
         ) : null}
         <div className="space-y-2">
           {content.items.map((poi) => (
-            <Card key={poi.id} className="overflow-hidden">
+            <Card 
+              key={poi.id} 
+              className="overflow-hidden cursor-pointer hover:bg-slate-50 transition-colors"
+              onClick={() => {
+                setSelectedPoi(poi);
+                setDetailDialogOpen(true);
+              }}
+            >
               <CardContent className="p-3">
                 <div className="flex items-start gap-3">
                   {poi.imageUrl && (
@@ -794,6 +801,81 @@ function POIListContent({
             </Card>
           ))}
         </div>
+        
+        {/* 🆕 POI 详情弹窗 */}
+        <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-blue-500" />
+                {selectedPoi?.nameCN || selectedPoi?.name}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedPoi?.type && (
+                  <Badge variant="secondary" className="mr-2">
+                    {selectedPoi.type}
+                  </Badge>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-y-auto space-y-4">
+              {/* 图片 */}
+              {selectedPoi?.imageUrl && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span>图片</span>
+                  </div>
+                  <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                    <img
+                      src={selectedPoi.imageUrl}
+                      alt={selectedPoi.nameCN || selectedPoi.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 基本信息 */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  {selectedPoi?.rating && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">评分</div>
+                      <div className="flex items-center gap-1 text-amber-500">
+                        <Star className="w-4 h-4 fill-current" />
+                        <span className="font-medium">{selectedPoi.rating}</span>
+                      </div>
+                    </div>
+                  )}
+                  {selectedPoi?.distance && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">距离</div>
+                      <div className="text-sm font-medium">{selectedPoi.distance}</div>
+                    </div>
+                  )}
+                  {selectedPoi?.priceLevel && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">价格水平</div>
+                      <div className="text-sm font-medium">{selectedPoi.priceLevel}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 推荐理由 */}
+                {(selectedPoi?.reasonCN || selectedPoi?.reason) && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-2">推荐理由</div>
+                    <p className="text-sm text-foreground">
+                      {selectedPoi.reasonCN || selectedPoi.reason}
+                    </p>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -2200,6 +2282,14 @@ function MessageBubble({
   tripId,
   sessionId,
   onTripUpdate,
+  gapPreferences,
+  selectedGaps = [],
+  onSelectGaps,
+  onPreferencesChange,
+  onIgnoreGap,
+  onIgnoreGapsBatch,
+  onUnignoreGap,
+  onUnignoreGapsBatch,
 }: {
   message: PlannerMessage;
   onFollowUpSelect?: (value: string) => void;
@@ -2221,6 +2311,15 @@ function MessageBubble({
   tripId?: string;
   sessionId?: string | null;
   onTripUpdate?: () => void;
+  /** 🆕 缺口偏好和选择状态 */
+  gapPreferences?: GapDisplayPreferences | null;
+  selectedGaps?: string[];
+  onSelectGaps?: (gaps: string[]) => void;
+  onPreferencesChange?: (updates: Partial<GapDisplayPreferences>) => void;
+  onIgnoreGap?: (gapId: string, gapType: GapType) => void;
+  onIgnoreGapsBatch?: (gapIds: string[]) => void;
+  onUnignoreGap?: (gapId: string) => void;
+  onUnignoreGapsBatch?: (gapIds: string[]) => void;
 }) {
   const isUser = message.role === 'user';
   
@@ -2315,9 +2414,6 @@ function MessageBubble({
           <div className="w-full">
             <RichContentRenderer 
               content={message.richContent} 
-              tripId={tripId}
-              sessionId={sessionId}
-              onTripUpdate={onTripUpdate}
             />
           </div>
         )}
@@ -2356,23 +2452,23 @@ function MessageBubble({
         )}
 
         {/* 🆕 缺口检测面板 - 增强版（带偏好控制） */}
-        {!isUser && message.meta?.detectedGaps && message.meta.detectedGaps.length > 0 && !isTyping && gapPreferences && (
+        {!isUser && message.meta?.detectedGaps && message.meta.detectedGaps.length > 0 && !isTyping && gapPreferences && onPreferencesChange && onSelectGaps && onIgnoreGap && onIgnoreGapsBatch && onUnignoreGap && onUnignoreGapsBatch && (
           <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <GapDisplayControl
               preferences={gapPreferences}
-              onPreferencesChange={handlePreferencesChange}
+              onPreferencesChange={onPreferencesChange}
               tripId={tripId}
-              sessionId={sessionId}
+              sessionId={sessionId || undefined}
             />
             <GapList
               gaps={message.meta.detectedGaps as ResponseItineraryGap[]}
               preferences={gapPreferences}
-              selectedGaps={selectedGaps}
-              onSelectGaps={setSelectedGaps}
-              onIgnoreGap={handleIgnoreGap}
-              onIgnoreGapsBatch={handleIgnoreGapsBatch}
-              onUnignoreGap={handleUnignoreGap}
-              onUnignoreGapsBatch={handleUnignoreGapsBatch}
+              selectedGaps={selectedGaps || []}
+              onSelectGaps={onSelectGaps}
+              onIgnoreGap={onIgnoreGap}
+              onIgnoreGapsBatch={onIgnoreGapsBatch}
+              onUnignoreGap={onUnignoreGap}
+              onUnignoreGapsBatch={onUnignoreGapsBatch}
               tripId={tripId}
             />
           </div>
@@ -2460,30 +2556,16 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
   });
 
   // 🆕 加载缺口偏好
+  // ⚠️ 接口已删除，等待重新规划 - 使用默认偏好
   useEffect(() => {
-    const loadGapPreferences = async () => {
-      if (!tripId || !sessionId) return;
-      try {
-        setLoadingPreferences(true);
-        const preferences = await tripPlannerApi.getGapPreferences({ tripId, sessionId });
-        setGapPreferences(preferences);
-      } catch (error: any) {
-        console.error('[TripPlannerAssistant] 加载缺口偏好失败:', error);
-        // 使用默认偏好
-        setGapPreferences({
-          collapsed: false,
-          showOnlyCritical: false,
-          filterTypes: [],
-          ignoredPatterns: [],
-        });
-      } finally {
-        setLoadingPreferences(false);
-      }
-    };
-    
-    if (tripId && sessionId) {
-      loadGapPreferences();
-    }
+    if (!tripId || !sessionId) return;
+    // 使用默认偏好
+    setGapPreferences({
+      collapsed: false,
+      showOnlyCritical: false,
+      filterTypes: [],
+      ignoredPatterns: [],
+    });
   }, [tripId, sessionId]);
 
   // 🆕 更新缺口偏好
@@ -2493,54 +2575,38 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
     const newPreferences = { ...gapPreferences, ...updates };
     setGapPreferences(newPreferences);
     
-    try {
-      await tripPlannerApi.updateGapPreferences({
-        ...updates,
-        tripId,
-        sessionId,
-      });
-    } catch (error: any) {
-      console.error('[TripPlannerAssistant] 更新缺口偏好失败:', error);
-      toast.error('更新偏好失败');
-      // 回滚
-      setGapPreferences(gapPreferences);
-    }
+    // ⚠️ 接口已删除，等待重新规划
+    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
+    // 回滚
+    setGapPreferences(gapPreferences);
   };
 
   // 🆕 忽略缺口
+  // ⚠️ 接口已删除，等待重新规划
   const handleIgnoreGap = async (gapId: string, gapType: GapType) => {
-    try {
-      await tripPlannerApi.ignoreGap({ gapId, gapType, tripId });
-    } catch (error: any) {
-      throw error;
-    }
+    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   };
 
   // 🆕 批量忽略缺口
+  // ⚠️ 接口已删除，等待重新规划
   const handleIgnoreGapsBatch = async (gapIds: string[]) => {
-    try {
-      await tripPlannerApi.ignoreGapsBatch({ gapIds, tripId });
-    } catch (error: any) {
-      throw error;
-    }
+    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   };
 
   // 🆕 取消忽略缺口
+  // ⚠️ 接口已删除，等待重新规划
   const handleUnignoreGap = async (gapId: string) => {
-    try {
-      await tripPlannerApi.unignoreGap(gapId, { tripId });
-    } catch (error: any) {
-      throw error;
-    }
+    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   };
 
   // 🆕 批量取消忽略缺口
+  // ⚠️ 接口已删除，等待重新规划
   const handleUnignoreGapsBatch = async (gapIds: string[]) => {
-    try {
-      await tripPlannerApi.unignoreGapsBatch({ gapIds, tripId });
-    } catch (error: any) {
-      throw error;
-    }
+    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
+    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
   };
 
   // 🆕 监听行程更新，自动触发 NARA 重新检查
@@ -2899,6 +2965,17 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
                       isNewMessage={msg.id === newMessageId}
                       loading={loading}
                       itemNameMap={itemNameMap}
+                      tripId={tripId}
+                      sessionId={sessionId}
+                      onTripUpdate={onTripUpdate}
+                      gapPreferences={gapPreferences}
+                      selectedGaps={selectedGaps}
+                      onSelectGaps={setSelectedGaps}
+                      onPreferencesChange={handlePreferencesChange}
+                      onIgnoreGap={handleIgnoreGap}
+                      onIgnoreGapsBatch={handleIgnoreGapsBatch}
+                      onUnignoreGap={handleUnignoreGap}
+                      onUnignoreGapsBatch={handleUnignoreGapsBatch}
                     />
                   </MeasuredMessageWrapper>
                 ))}
@@ -2927,6 +3004,14 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
                 tripId={tripId}
                 sessionId={sessionId}
                 onTripUpdate={onTripUpdate}
+                gapPreferences={gapPreferences}
+                selectedGaps={selectedGaps}
+                onSelectGaps={setSelectedGaps}
+                onPreferencesChange={handlePreferencesChange}
+                onIgnoreGap={handleIgnoreGap}
+                onIgnoreGapsBatch={handleIgnoreGapsBatch}
+                onUnignoreGap={handleUnignoreGap}
+                onUnignoreGapsBatch={handleUnignoreGapsBatch}
               />
             ))}
           </div>

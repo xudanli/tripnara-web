@@ -46,6 +46,7 @@ import {
   Edit3,
   Loader2,
   ArrowRight,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
@@ -54,6 +55,17 @@ import { useContextApi } from '@/hooks/useContextApi';
 import type { ContextPackage } from '@/api/context';
 import { toast } from 'sonner';
 import Logo from '@/components/common/Logo';
+import { decisionApi } from '@/api/decision';
+import ConflictDetectionCard from '@/components/constraints/ConflictDetectionCard';
+import type { ConstraintDSL, Conflict } from '@/types/constraints';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 // ==================== 辅助函数 ====================
 // 注意：normalizeClarificationQuestions 已移至 @/utils/nl-conversation-adapter
@@ -135,6 +147,8 @@ interface ChatMessage {
   suggestedQuestions?: string[];
   parsedParams?: ParsedTripParams;
   showConfirmCard?: boolean;
+  // 🆕 需要用户确认创建行程
+  needsConfirmation?: boolean;
   // 🆕 结构化内容块（优先使用）
   responseBlocks?: PlannerResponseBlock[];
   // 🆕 结构化澄清问题
@@ -159,12 +173,16 @@ interface ChatMessage {
   blockedBySafetyPrinciple?: boolean;
   decisionResult?: import('@/types/trip').DecisionResult;
   blockedByDecisionMatrix?: boolean;
+  // 🆕 约束冲突检测
+  conflicts?: Conflict[];
+  conflictRunId?: string; // 冲突检测的 runId，用于反馈
 }
 
 interface NLChatInterfaceProps {
   onTripCreated?: (tripId: string) => void;
   className?: string;
   showHeader?: boolean; // 是否显示内部头部（Dialog 中已有时设为 false）
+  resetOnMount?: boolean; // 🆕 是否在挂载时重置会话（用于弹窗场景，每次打开都是新会话）
 }
 
 // ==================== 子组件 ====================
@@ -240,6 +258,7 @@ function MessageBubble({
   isNewMessage,
   onQuestionAnswer,
   onSendMessage,
+  onOpenConflictDialog, // 🆕 打开冲突检测弹窗的回调
 }: { 
   message: ChatMessage;
   onQuickReply?: (text: string) => void;
@@ -249,6 +268,7 @@ function MessageBubble({
   isNewMessage?: boolean;  // 是否是刚收到的新消息（用于打字机效果）
   onQuestionAnswer?: (questionId: string, value: string | string[] | number | boolean | null) => void;
   onSendMessage?: (text: string) => void;  // 🆕 用于发送消息（替代方案选择）
+  onOpenConflictDialog?: (conflicts: Conflict[], runId?: string) => void; // 🆕 打开冲突检测弹窗
 }) {
   const isUser = message.role === 'user';
   
@@ -491,11 +511,11 @@ function MessageBubble({
         {/* 🆕 结构化澄清问题卡片（独立渲染在消息气泡下方） */}
         {/* 注意：问题卡片在打字机效果完成后显示（通过 !isTyping 控制） */}
         {/* 🆕 Gate 警告 UI（在澄清问题之前显示） */}
-        {!isUser && isLatest && !isTyping && message.gateBlocked && message.gateWarningMessage && (
+        {!isUser && isLatest && !isTyping && message.gateBlocked && (
           <div className="mt-5 w-full max-w-[95%]">
             <GateWarningCard
-              warningMessage={message.gateWarningMessage}
-              alternatives={message.alternatives}
+              warningMessage={message.gateWarningMessage || '为了您的安全，请选择替代方案'}
+              alternatives={message.alternatives || []}
               onSelectAlternative={(alternative) => {
                 // 🆕 用户选择替代方案后，构建消息并发送
                 // 如果替代方案有 action 和 actionParams，可以构建更精确的消息
@@ -520,272 +540,141 @@ function MessageBubble({
           </div>
         )}
 
+        {/* 🆕 约束冲突检测提示（仅显示摘要，详情在弹窗中） */}
+        {/* 🆕 优化：统一冲突展示方式，避免信息重复（符合渐进式披露原则） */}
+        {/* 注意：冲突弹窗通过 handleDetectConflicts 函数自动打开，这里仅显示提示 */}
+        {!isUser && message.conflicts && message.conflicts.length > 0 && isLatest && (
+          <div className="mt-5 w-full max-w-[95%]">
+            <Card className="border-yellow-200 bg-yellow-50/30">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-yellow-900 mb-1">
+                      检测到 {message.conflicts.length} 个约束冲突
+                    </p>
+                    <p className="text-xs text-yellow-700 mb-3">
+                      您的预算、日期、偏好等约束之间存在冲突，请查看弹窗中的冲突详情和权衡选项。
+                    </p>
+                    <p className="text-xs text-yellow-600 italic">
+                      💡 冲突详情已在弹窗中显示，如未看到请刷新页面
+                    </p>
+                    {onOpenConflictDialog && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // 🆕 打开冲突检测弹窗
+                          onOpenConflictDialog(message.conflicts || [], (message as any).conflictRunId);
+                        }}
+                        className="text-yellow-900 border-yellow-300 hover:bg-yellow-100 mt-2"
+                      >
+                        重新打开冲突详情
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* 🐛 修复：优先使用 clarificationQuestions，避免与 responseBlocks 中的 question_card 重复渲染 */}
         {!isUser && isLatest && !isTyping && (
           (() => {
             // 优先使用 clarificationQuestions 数组
             if (message.clarificationQuestions && message.clarificationQuestions.length > 0) {
-              // 🆕 Critical 字段进度计算
-              const criticalQuestions = message.clarificationQuestions.filter(
-                q => q.metadata?.isCritical === true
-              );
               return (
                 <div className="mt-5 w-full max-w-[95%]">
-                  {/* 🆕 P1: 问题分组展示 - 如果问题超过5个，按类别分组 */}
+                  {/* 🆕 P0: 问题分组展示 - 使用 group 字段进行分组（符合 Miller's Law） */}
                   {(() => {
                     const filteredQuestions = (message.clarificationQuestions || []).filter(
                       question => question.text && question.text.trim().length > 0
                     );
                     
-                    // 如果问题超过5个，进行分组
-                    if (filteredQuestions.length > 5) {
-                      // 按 Critical 字段和类别分组
-                      const criticalQuestions = filteredQuestions.filter(q => q.metadata?.isCritical === true);
-                      const requiredQuestions = filteredQuestions.filter(q => q.required && !q.metadata?.isCritical);
-                      const optionalQuestions = filteredQuestions.filter(q => !q.required);
-                      
+                    // 🆕 P0: 使用 group 字段分组（向后兼容：如果 group 不存在，使用 required 和 isCritical）
+                    const getQuestionGroup = (q: NLClarificationQuestion): 'required' | 'optional' => {
+                      if (q.group) {
+                        return q.group;
+                      }
+                      // 向后兼容：根据 required 和 isCritical 推断
+                      if (q.metadata?.isCritical === true || q.required === true) {
+                        return 'required';
+                      }
+                      return 'optional';
+                    };
+                    
+                    // 🆕 P0: 按 group 字段分组
+                    const requiredQuestions = filteredQuestions
+                      .filter(q => getQuestionGroup(q) === 'required')
+                      .sort((a, b) => {
+                        // 🆕 P1: 按优先级排序（high > medium > low）
+                        const priorityOrder = { high: 3, medium: 2, low: 1 };
+                        const aPriority = priorityOrder[a.metadata?.priority || 'medium'] || 2;
+                        const bPriority = priorityOrder[b.metadata?.priority || 'medium'] || 2;
+                        return bPriority - aPriority;
+                      })
+                      .slice(0, 5); // 🆕 P1: 限制必需问题组不超过5个
+                    
+                    const optionalQuestions = filteredQuestions
+                      .filter(q => getQuestionGroup(q) === 'optional')
+                      .sort((a, b) => {
+                        // 🆕 P1: 按优先级排序
+                        const priorityOrder = { high: 3, medium: 2, low: 1 };
+                        const aPriority = priorityOrder[a.metadata?.priority || 'medium'] || 2;
+                        const bPriority = priorityOrder[b.metadata?.priority || 'medium'] || 2;
+                        return bPriority - aPriority;
+                      })
+                      .slice(0, 3); // 🆕 P1: 限制补充问题组不超过3个
+                    
+                    // 🆕 Critical 字段（安全相关）单独显示进度
+                    const criticalQuestions = requiredQuestions.filter(q => q.metadata?.isCritical === true);
+                    
+                    // 🆕 如果问题数量较少，不分组显示
+                    if (filteredQuestions.length <= 5 && requiredQuestions.length === filteredQuestions.length) {
+                      // 直接显示所有问题，不分组
                       return (
-                        <div className="space-y-4">
-                          {/* 🆕 Critical 字段进度指示器 */}
-                          {criticalQuestions.length > 0 && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                                  <span className="text-sm font-medium text-red-900">
-                                    关键问题进度
-                                  </span>
-                                </div>
-                                <span className="text-sm text-red-700">
-                                  {criticalQuestions.filter(q => {
-                                    // 🆕 使用 fieldName 或 questionId（向后兼容）
-                                    const fieldKey = q.metadata?.fieldName || q.id;
-                                    const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
-                                    return answer !== null && answer !== undefined && answer !== '' && 
-                                      (q.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
-                                  }).length} / {criticalQuestions.length}
-                                </span>
-                              </div>
-                              <div className="w-full bg-red-200 rounded-full h-2 mb-2">
-                                <div
-                                  className="bg-red-600 h-2 rounded-full transition-all duration-300"
-                                  style={{
-                                    width: `${(criticalQuestions.filter(q => {
-                                      // 🆕 使用 fieldName 或 questionId（向后兼容）
-                                      const fieldKey = q.metadata?.fieldName || q.id;
-                                      const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
-                                      return answer !== null && answer !== undefined && answer !== '' && 
-                                        (q.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
-                                    }).length / criticalQuestions.length) * 100}%`,
+                        <div className="space-y-3">
+                          {filteredQuestions.map((question) => {
+                            const fieldKey = question.metadata?.fieldName || question.id;
+                            const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[question.id] ?? null;
+                            const isAnswered = answer !== null && answer !== undefined && answer !== '' && 
+                              (question.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
+                            return (
+                              <div key={question.id} className="relative">
+                                <NLClarificationQuestionCard
+                                  question={question}
+                                  value={answer}
+                                  onChange={(value) => {
+                                    onQuestionAnswer?.(fieldKey, value);
                                   }}
+                                  disabled={false}
                                 />
-                              </div>
-                              {criticalQuestions.some(q => {
-                                // 🆕 使用 fieldName 或 questionId（向后兼容）
-                                const fieldKey = q.metadata?.fieldName || q.id;
-                                const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
-                                return answer === null || answer === undefined || answer === '' || 
-                                  (q.inputType === 'multiple_choice' && (!Array.isArray(answer) || answer.length === 0));
-                              }) && (
-                                <p className="text-xs text-red-700">
-                                  请先回答所有必填（安全相关）问题才能创建行程
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          
-                          {/* 🆕 问题区域标题 */}
-                          <div className="mb-3">
-                            <p className="text-xs font-medium text-slate-600 mb-1">
-                              需要确认以下信息
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              这些信息将帮助我们为您规划更精准的行程
-                            </p>
-                          </div>
-                          {/* Critical 字段组（必须显示） */}
-                          {criticalQuestions.length > 0 && (
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="w-4 h-4 text-red-600" />
-                                <h4 className="text-sm font-semibold text-red-900">
-                                  必填（安全相关）问题 ({criticalQuestions.length})
-                                </h4>
-                              </div>
-                              {criticalQuestions.map((question) => {
-                                // 🆕 使用 fieldName 或 questionId（向后兼容）
-                                const fieldKey = question.metadata?.fieldName || question.id;
-                                const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[question.id] ?? null;
-                                const isAnswered = answer !== null && answer !== undefined && answer !== '' && 
-                                  (question.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
-                                return (
-                                  <div key={question.id} className="relative">
-                                    <NLClarificationQuestionCard
-                                      question={question}
-                                      value={answer}
-                                      onChange={(value) => {
-                                        // 🆕 传递 fieldName 而不是 questionId
-                                        onQuestionAnswer?.(fieldKey, value);
-                                      }}
-                                      disabled={false}
-                                    />
-                                    {isAnswered && (
-                                      <>
-                                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
-                                          <CheckCircle2 className="w-3 h-3 text-white" />
-                                        </div>
-                                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
-                                          <div className="flex items-center gap-1">
-                                            <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
-                                            <span className="font-medium">已识别：</span>
-                                            <span className="flex-1">
-                                              {formatAnswerValue(answer)}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          
-                          {/* 必填问题组 */}
-                          {requiredQuestions.length > 0 && (
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-semibold text-slate-800">
-                                  必填问题 ({requiredQuestions.length})
-                                </span>
-                              </div>
-                              {requiredQuestions.map((question) => {
-                                const answer = message.questionAnswers?.[question.id] ?? null;
-                                const isAnswered = answer !== null && answer !== undefined && answer !== '' && 
-                                  (question.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
-                                return (
-                                  <div key={question.id} className="relative">
-                                    <NLClarificationQuestionCard
-                                      question={question}
-                                      value={answer}
-                                      onChange={(value) => {
-                                        onQuestionAnswer?.(question.id, value);
-                                      }}
-                                      disabled={false}
-                                    />
-                                    {isAnswered && (
-                                      <>
-                                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
-                                          <CheckCircle2 className="w-3 h-3 text-white" />
-                                        </div>
-                                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
-                                          <div className="flex items-center gap-1">
-                                            <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
-                                            <span className="font-medium">已识别：</span>
-                                            <span className="flex-1">
-                                              {formatAnswerValue(answer)}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                          
-                          {/* 可选问题组（可折叠） */}
-                          {optionalQuestions.length > 0 && (
-                            <details className="space-y-3">
-                              <summary className="cursor-pointer text-sm font-semibold text-slate-600 hover:text-slate-800 mb-2 flex items-center gap-2 list-none">
-                                <span>可选问题 ({optionalQuestions.length})</span>
-                                <span className="text-xs text-muted-foreground">（可跳过）</span>
-                              </summary>
-                              <div className="space-y-3 mt-2">
-                              {optionalQuestions.map((question) => {
-                                // 🆕 使用 fieldName 或 questionId（向后兼容）
-                                const fieldKey = question.metadata?.fieldName || question.id;
-                                const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[question.id] ?? null;
-                                const isAnswered = answer !== null && answer !== undefined && answer !== '' && 
-                                  (question.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
-                                return (
-                                  <div key={question.id} className="relative">
-                                    <NLClarificationQuestionCard
-                                      question={question}
-                                      value={answer}
-                                      onChange={(value) => {
-                                        // 🆕 传递 fieldName 而不是 questionId
-                                        onQuestionAnswer?.(fieldKey, value);
-                                      }}
-                                      disabled={false}
-                                    />
-                                      {isAnswered && (
-                                        <>
-                                          <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
-                                            <CheckCircle2 className="w-3 h-3 text-white" />
-                                          </div>
-                                          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
-                                            <div className="flex items-center gap-1">
-                                              <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
-                                              <span className="font-medium">已识别：</span>
-                                              <span className="flex-1">
-                                                {Array.isArray(answer) 
-                                                  ? answer.join('、') 
-                                                  : typeof answer === 'number' 
-                                                    ? answer.toString() 
-                                                    : String(answer)}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        </>
-                                      )}
+                                {isAnswered && (
+                                  <>
+                                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
+                                      <CheckCircle2 className="w-3 h-3 text-white" />
                                     </div>
-                                  );
-                                })}
+                                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
+                                      <div className="flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
+                                        <span className="font-medium">已识别：</span>
+                                        <span className="flex-1">{formatAnswerValue(answer)}</span>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
                               </div>
-                            </details>
-                          )}
-                          
-                          {/* 🆕 P1: 跳过非必填问题按钮 */}
-                          {optionalQuestions.length > 0 && (
-                            <div className="pt-2 border-t">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  // 跳过非必填问题，只提交必填问题的答案
-                                  const requiredAnswers: Record<string, string | string[] | number | boolean | null> = {};
-                                  [...criticalQuestions, ...requiredQuestions].forEach(q => {
-                                    // 🆕 使用 fieldName 或 questionId（向后兼容）
-                                    const fieldKey = q.metadata?.fieldName || q.id;
-                                    const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
-                                    if (answer !== null && answer !== undefined && answer !== '') {
-                                      requiredAnswers[fieldKey] = answer;
-                                    }
-                                  });
-                                  
-                                  // 生成确认消息并发送
-                                  const confirmText = generateConfirmationMessage(
-                                    [...criticalQuestions, ...requiredQuestions],
-                                    requiredAnswers
-                                  );
-                                  onSendMessage?.(confirmText);
-                                }}
-                                className="w-full text-xs"
-                              >
-                                跳过可选问题，仅提交必填答案
-                              </Button>
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
                       );
                     }
                     
-                    // 如果问题不超过5个，正常显示
+                    // 🆕 如果问题需要分组，使用分组显示
                     return (
-                      <>
-                        {/* 🆕 Critical 字段进度指示器 */}
+                      <div className="space-y-4">
+                        {/* 🆕 P0: Critical 字段进度指示器（安全相关问题） */}
                         {criticalQuestions.length > 0 && (
                           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                             <div className="flex items-center justify-between mb-2">
@@ -797,7 +686,6 @@ function MessageBubble({
                               </div>
                               <span className="text-sm text-red-700">
                                 {criticalQuestions.filter(q => {
-                                  // 🆕 使用 fieldName 或 questionId（向后兼容）
                                   const fieldKey = q.metadata?.fieldName || q.id;
                                   const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
                                   return answer !== null && answer !== undefined && answer !== '' && 
@@ -810,7 +698,6 @@ function MessageBubble({
                                 className="bg-red-600 h-2 rounded-full transition-all duration-300"
                                 style={{
                                   width: `${(criticalQuestions.filter(q => {
-                                    // 🆕 使用 fieldName 或 questionId（向后兼容）
                                     const fieldKey = q.metadata?.fieldName || q.id;
                                     const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
                                     return answer !== null && answer !== undefined && answer !== '' && 
@@ -820,7 +707,6 @@ function MessageBubble({
                               />
                             </div>
                             {criticalQuestions.some(q => {
-                              // 🆕 使用 fieldName 或 questionId（向后兼容）
                               const fieldKey = q.metadata?.fieldName || q.id;
                               const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
                               return answer === null || answer === undefined || answer === '' || 
@@ -833,7 +719,7 @@ function MessageBubble({
                           </div>
                         )}
                         
-                        {/* 🆕 问题区域标题 */}
+                        {/* 🆕 P0: 问题区域标题 */}
                         <div className="mb-3">
                           <p className="text-xs font-medium text-slate-600 mb-1">
                             需要确认以下信息
@@ -843,53 +729,166 @@ function MessageBubble({
                           </p>
                         </div>
                         
-                        {/* 问题卡片列表 */}
-                        <div className="space-y-3">
-                          {filteredQuestions.map((question) => {
-                            // 🆕 使用 fieldName 或 questionId（向后兼容）
-                            const fieldKey = question.metadata?.fieldName || question.id;
-                            const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[question.id] ?? null;
-                            const isAnswered = answer !== null && answer !== undefined && answer !== '' && 
-                              (question.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
-                            return (
-                              <div key={question.id} className="relative">
-                                <NLClarificationQuestionCard
-                                  question={question}
-                                  value={answer}
-                                  onChange={(value) => {
-                                    // 🆕 传递 fieldName 而不是 questionId
-                                    onQuestionAnswer?.(fieldKey, value);
-                                  }}
-                                  disabled={false}
-                                />
-                                {/* 已回答状态指示 */}
-                                {isAnswered && (
-                                  <>
-                                    <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
-                                      <CheckCircle2 className="w-3 h-3 text-white" />
-                                    </div>
-                                    {/* 🆕 P0: 答案识别反馈 - 显示答案预览 */}
-                                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
-                                      <div className="flex items-center gap-1">
-                                        <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
-                                        <span className="font-medium">已识别：</span>
-                                        <span className="flex-1">
-                                          {formatAnswerValue(answer)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
+                        {/* 🆕 P0: 必需问题组（required group）- 最多5个 */}
+                        {requiredQuestions.length > 0 && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                              <h4 className="text-sm font-semibold text-slate-800">
+                                必需问题 ({requiredQuestions.length})
+                              </h4>
+                              <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
+                                必填
+                              </Badge>
+                            </div>
+                            {/* 🆕 P0: 必需问题组进度指示器 */}
+                            <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-blue-700">完成进度</span>
+                                <span className="text-xs font-medium text-blue-900">
+                                  {requiredQuestions.filter(q => {
+                                    const fieldKey = q.metadata?.fieldName || q.id;
+                                    const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
+                                    return answer !== null && answer !== undefined && answer !== '' && 
+                                      (q.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
+                                  }).length} / {requiredQuestions.length}
+                                </span>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </>
+                              <div className="w-full bg-blue-200 rounded-full h-1.5">
+                                <div
+                                  className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                                  style={{
+                                    width: `${(requiredQuestions.filter(q => {
+                                      const fieldKey = q.metadata?.fieldName || q.id;
+                                      const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
+                                      return answer !== null && answer !== undefined && answer !== '' && 
+                                        (q.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
+                                    }).length / requiredQuestions.length) * 100}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            {requiredQuestions.map((question) => {
+                              const fieldKey = question.metadata?.fieldName || question.id;
+                              const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[question.id] ?? null;
+                              const isAnswered = answer !== null && answer !== undefined && answer !== '' && 
+                                (question.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
+                              return (
+                                <div key={question.id} className="relative">
+                                  <NLClarificationQuestionCard
+                                    question={question}
+                                    value={answer}
+                                    onChange={(value) => {
+                                      onQuestionAnswer?.(fieldKey, value);
+                                    }}
+                                    disabled={false}
+                                  />
+                                  {isAnswered && (
+                                    <>
+                                      <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
+                                        <CheckCircle2 className="w-3 h-3 text-white" />
+                                      </div>
+                                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
+                                        <div className="flex items-center gap-1">
+                                          <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
+                                          <span className="font-medium">已识别：</span>
+                                          <span className="flex-1">{formatAnswerValue(answer)}</span>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {/* 🆕 P0: 补充问题组（optional group）- 最多3个，可折叠 */}
+                        {optionalQuestions.length > 0 && (
+                          <details className="space-y-3">
+                            <summary className="cursor-pointer text-sm font-semibold text-slate-600 hover:text-slate-800 mb-2 flex items-center gap-2 list-none">
+                              <Plus className="w-4 h-4" />
+                              <span>补充问题 ({optionalQuestions.length})</span>
+                              <Badge variant="outline" className="text-xs text-slate-500 border-slate-300">
+                                可选
+                              </Badge>
+                              <span className="text-xs text-muted-foreground ml-auto">（可跳过）</span>
+                            </summary>
+                            <div className="space-y-3 mt-2">
+                              {optionalQuestions.map((question) => {
+                                const fieldKey = question.metadata?.fieldName || question.id;
+                                const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[question.id] ?? null;
+                                const isAnswered = answer !== null && answer !== undefined && answer !== '' && 
+                                  (question.inputType !== 'multiple_choice' || (Array.isArray(answer) && answer.length > 0));
+                                return (
+                                  <div key={question.id} className="relative">
+                                    <NLClarificationQuestionCard
+                                      question={question}
+                                      value={answer}
+                                      onChange={(value) => {
+                                        onQuestionAnswer?.(fieldKey, value);
+                                      }}
+                                      disabled={false}
+                                    />
+                                    {isAnswered && (
+                                      <>
+                                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
+                                          <CheckCircle2 className="w-3 h-3 text-white" />
+                                        </div>
+                                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
+                                          <div className="flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
+                                            <span className="font-medium">已识别：</span>
+                                            <span className="flex-1">{formatAnswerValue(answer)}</span>
+                                          </div>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        )}
+                        
+                        {/* 🆕 P0: 跳过补充问题按钮 */}
+                        {optionalQuestions.length > 0 && (
+                          <div className="pt-2 border-t">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                // 跳过补充问题，只提交必需问题的答案
+                                const requiredAnswers: Record<string, string | string[] | number | boolean | null> = {};
+                                requiredQuestions.forEach(q => {
+                                  const fieldKey = q.metadata?.fieldName || q.id;
+                                  const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
+                                  if (answer !== null && answer !== undefined && answer !== '') {
+                                    requiredAnswers[fieldKey] = answer;
+                                  }
+                                });
+                                
+                                // 生成确认消息并发送
+                                const confirmText = generateConfirmationMessage(
+                                  requiredQuestions,
+                                  requiredAnswers
+                                );
+                                onSendMessage?.(confirmText);
+                              }}
+                              className="w-full text-xs"
+                            >
+                              跳过补充问题，仅提交必需答案
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     );
                   })()}
                 </div>
               );
             }
+            
+            // 如果没有 clarificationQuestions，尝试从 responseBlocks 中提取 question_card
             
             // 如果没有 clarificationQuestions，尝试从 responseBlocks 中提取 question_card
             const questionCardBlocks = message.responseBlocks?.filter(block => block.type === 'question_card' && block.questionId) || [];
@@ -974,10 +973,12 @@ function MessageBubble({
 
         {/* 快捷回复选项 - 仅 AI 消息且是最新消息且打字完成时显示 */}
         {/* 🐛 如果有澄清问题卡片，不显示快捷回复按钮（避免混淆） */}
+        {/* 🆕 优化：限制快捷回复按钮数量（符合 Miller's Law 和 Hick's Law） */}
         {!isUser && message.suggestedQuestions && message.suggestedQuestions.length > 0 && isLatest && !isTyping && 
          (!message.clarificationQuestions || message.clarificationQuestions.length === 0) && (
           <div className="flex flex-wrap gap-1.5 mt-2.5 animate-in fade-in duration-300">
-            {message.suggestedQuestions.map((question, idx) => (
+            {/* 🆕 最多显示4个快捷回复按钮，超过时折叠 */}
+            {message.suggestedQuestions.slice(0, 4).map((question, idx) => (
               <Button
                 key={idx}
                 variant="outline"
@@ -997,8 +998,36 @@ function MessageBubble({
                 <span className="whitespace-nowrap">{question}</span>
               </Button>
             ))}
+            {/* 🆕 如果超过4个，显示"查看更多"按钮 */}
+            {message.suggestedQuestions.length > 4 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "rounded-full text-xs h-7 px-3 min-w-fit whitespace-nowrap hover:bg-slate-100 hover:border-slate-300",
+                  "animate-in fade-in slide-in-from-bottom-1 duration-300",
+                  "flex-shrink-0 text-muted-foreground"
+                )}
+                style={{ 
+                  animationDelay: `${4 * 80}ms`,
+                }}
+                onClick={() => {
+                  // 🆕 展开所有快捷回复（可以通过状态控制，或直接发送所有问题）
+                  // 这里简化处理：显示剩余的问题
+                  const remainingQuestions = message.suggestedQuestions!.slice(4);
+                  // 可以显示一个下拉菜单或弹窗，让用户选择
+                  // 或者直接发送第一个剩余问题
+                  if (remainingQuestions.length > 0) {
+                    onQuickReply?.(remainingQuestions[0]);
+                  }
+                }}
+              >
+                <span className="whitespace-nowrap">查看更多 ({message.suggestedQuestions.length - 4})</span>
+              </Button>
+            )}
           </div>
         )}
+
 
         {/* 信息确认卡片 - 打字完成后显示 */}
         {!isUser && message.showConfirmCard && message.parsedParams && isLatest && !isTyping && (
@@ -1171,6 +1200,7 @@ export default function NLChatInterface({
   onTripCreated,
   className,
   showHeader = true, // 默认显示头部（向后兼容）
+  resetOnMount = false, // 🆕 是否在挂载时重置会话（用于弹窗场景）
 }: NLChatInterfaceProps) {
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1191,6 +1221,22 @@ export default function NLChatInterface({
   const [sessionId, setSessionId] = useState<string | null>(null);  // 会话ID，用于多轮对话
   // 🆕 问题答案保存状态追踪（用于批量保存检查）
   const [savedQuestionAnswers, setSavedQuestionAnswers] = useState<Map<string, Set<string>>>(new Map());  // messageId -> Set<questionId>
+  // 🆕 是否是新对话的第一条消息（当 resetOnMount 为 true 时，第一条消息需要传递 isNewConversation）
+  const [isFirstMessageAfterReset, setIsFirstMessageAfterReset] = useState(resetOnMount);
+  
+  // 🆕 冲突检测弹窗状态
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
+  const [detectedConflicts, setDetectedConflicts] = useState<Conflict[]>([]);
+  const [conflictRunId, setConflictRunId] = useState<string | null>(null);
+  
+  // 🆕 自动提交倒计时状态（符合反馈原则）
+  const [autoSubmitCountdown, setAutoSubmitCountdown] = useState<number | null>(null);
+  const [autoSubmitTimerId, setAutoSubmitTimerId] = useState<NodeJS.Timeout | null>(null);
+  const [autoSubmitCancelId, setAutoSubmitCancelId] = useState<string | null>(null);
+  // 🆕 防重复提交：记录正在自动提交的消息ID，避免重复触发
+  const [autoSubmittingMessageId, setAutoSubmittingMessageId] = useState<string | null>(null);
+  // 🆕 防重复提交：记录最近提交的消息ID，避免重复提交
+  const [lastSubmittedMessageId, setLastSubmittedMessageId] = useState<string | null>(null);
   
   // 首次使用状态（简化版）
   const [isFirstTime, setIsFirstTime] = useState(() => {
@@ -1203,7 +1249,177 @@ export default function NLChatInterface({
     localStorage.setItem('nl-chat-first-time', 'false');
   };
 
+  // 🆕 冲突检测函数
+  const handleDetectConflicts = useCallback(async (params: ParsedTripParams) => {
+    // 构建约束DSL
+    const constraints: ConstraintDSL = {
+      hard_constraints: {},
+      soft_constraints: {},
+    };
 
+    // 添加预算约束
+    if (params.totalBudget) {
+      constraints.hard_constraints.budget = {
+        max: params.totalBudget,
+        currency: 'CNY',
+        flexible: false,
+      };
+    }
+
+    // 添加日期窗口约束
+    if (params.startDate && params.endDate) {
+      constraints.hard_constraints.date_window = {
+        start: params.startDate,
+        end: params.endDate,
+        flexible: false,
+      };
+    }
+
+    // 添加节奏偏好
+    if (params.preferences?.style) {
+      const paceMap: Record<string, 'relaxed' | 'moderate' | 'intense'> = {
+        'relaxed': 'relaxed',
+        'moderate': 'moderate',
+        'intense': 'intense',
+        '轻松': 'relaxed',
+        '中等': 'moderate',
+        '紧凑': 'intense',
+      };
+      const pacePreference = paceMap[params.preferences.style.toLowerCase()] || 'moderate';
+      constraints.soft_constraints.pace = {
+        preference: pacePreference,
+        weight: 0.8,
+      };
+    }
+
+    // 添加舒适度偏好（如果有住宿品质信息）
+    if (params.preferences?.accommodation) {
+      const qualityMap: Record<string, 'low' | 'medium' | 'high'> = {
+        'low': 'low',
+        'medium': 'medium',
+        'high': 'high',
+        '经济': 'low',
+        '舒适': 'medium',
+        '豪华': 'high',
+      };
+      const hotelQuality = qualityMap[params.preferences.accommodation.toLowerCase()] || 'medium';
+      constraints.soft_constraints.comfort_level = {
+        hotel_quality: hotelQuality,
+        weight: 0.9,
+      };
+    }
+
+    // 如果没有足够的约束信息，不进行冲突检测
+    const hasHardConstraints = Object.keys(constraints.hard_constraints).length > 0;
+    const hasSoftConstraints = Object.keys(constraints.soft_constraints).length > 0;
+    
+    console.log('[NLChatInterface] 冲突检测 - 约束信息:', {
+      hasHardConstraints,
+      hasSoftConstraints,
+      constraints,
+      params,
+    });
+    
+    if (!hasHardConstraints && !hasSoftConstraints) {
+      console.log('[NLChatInterface] 冲突检测跳过：没有足够的约束信息');
+      return;
+    }
+
+    try {
+      console.log('[NLChatInterface] 开始调用冲突检测API...');
+      const result = await decisionApi.detectConflicts({
+        constraints,
+        state: conversationContext,
+      });
+
+      console.log('[NLChatInterface] 冲突检测API响应:', {
+        has_conflicts: result.has_conflicts,
+        conflictsCount: result.conflicts.length,
+        conflicts: result.conflicts,
+      });
+
+      if (result.has_conflicts && result.conflicts.length > 0) {
+        // 生成 runId（如果没有从 API 返回）
+        const runId = `run_${Date.now()}`;
+
+        console.log('[NLChatInterface] 检测到冲突，显示弹窗:', {
+          conflictsCount: result.conflicts.length,
+          runId,
+        });
+
+        // 🆕 显示冲突检测弹窗
+        setDetectedConflicts(result.conflicts);
+        setConflictRunId(runId);
+        setConflictDialogOpen(true);
+
+        // 同时在消息流中插入冲突警告卡片
+        const conflictMessageId = `conflict-${Date.now()}`;
+        const conflictMessage: ChatMessage = {
+          id: conflictMessageId,
+          role: 'assistant',
+          content: '检测到约束冲突，请查看下方的冲突详情和权衡选项。',
+          timestamp: new Date(),
+          // 🆕 使用自定义字段存储冲突信息
+          conflicts: result.conflicts,
+          // 🆕 存储 runId 用于反馈
+          conflictRunId: runId,
+        } as any;
+
+        setMessages(prev => [...prev, conflictMessage]);
+        setNewMessageId(conflictMessageId);
+        
+        // 滚动到底部，确保用户能看到冲突消息
+        setTimeout(() => {
+          scrollRef.current?.scrollTo({
+            top: scrollRef.current.scrollHeight,
+            behavior: 'smooth',
+          });
+        }, 100);
+      } else {
+        console.log('[NLChatInterface] 未检测到冲突');
+      }
+    } catch (error: any) {
+      console.error('[NLChatInterface] 冲突检测失败:', error);
+      // 显示错误提示，但不阻止流程
+      toast.error('冲突检测失败，请稍后重试', {
+        description: error.message || '无法检测约束冲突',
+      });
+    }
+  }, [conversationContext]);
+
+
+
+  // 🆕 新建对话处理函数（暴露给外部调用）
+  const handleNewConversation = useCallback(() => {
+    // 清空当前会话
+    setSessionId(null);
+    setMessages([]);
+    setConversationContext(null);
+    setLatestParams(null);
+    setSavedQuestionAnswers(new Map());
+    localStorage.removeItem('nl_conversation_session');
+    
+    // 🆕 设置标记，下次发送消息时不传递 sessionId，后端会自动清空旧会话
+    setIsFirstMessageAfterReset(true);
+    
+    // 🆕 显示欢迎消息
+    const welcomeMessage: ChatMessage = {
+      id: 'welcome',
+      role: 'assistant',
+      content: '你好！我是你的旅行规划助手 ✨\n\n告诉我你的旅行想法，比如想去哪里、什么时候、和谁一起，我来帮你规划完美行程！',
+      timestamp: new Date(),
+      suggestedQuestions: [
+        '想带家人去日本看樱花',
+        '计划蜜月旅行',
+        '想去冰岛看极光',
+        '带孩子去东京迪士尼',
+      ],
+    };
+    setMessages([welcomeMessage]);
+    setNewMessageId('welcome');  // 触发打字机效果
+    
+    console.log('[NLChatInterface] ✅ 新建对话，已设置 isFirstMessageAfterReset=true（下次发送消息时不传递 sessionId）');
+  }, []);
 
   // 监听会话切换事件
   useEffect(() => {
@@ -1299,23 +1515,19 @@ export default function NLChatInterface({
       loadSession();
     };
 
-    const handleNewSession = () => {
-      // 清空当前会话
-      setSessionId(null);
-      setMessages([]);
-      setConversationContext(null);
-      setLatestParams(null);
-      localStorage.removeItem('nl_conversation_session');
+    // 🆕 监听新建对话事件，调用 handleNewConversation
+    const handleNewSessionEvent = () => {
+      handleNewConversation();
     };
 
     window.addEventListener('nl-conversation-switch', handleSessionSwitch as EventListener);
-    window.addEventListener('nl-conversation-new', handleNewSession);
+    window.addEventListener('nl-conversation-new', handleNewSessionEvent);
 
     return () => {
       window.removeEventListener('nl-conversation-switch', handleSessionSwitch as EventListener);
-      window.removeEventListener('nl-conversation-new', handleNewSession);
+      window.removeEventListener('nl-conversation-new', handleNewSessionEvent);
     };
-  }, []);
+  }, [handleNewConversation]);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -1327,6 +1539,33 @@ export default function NLChatInterface({
   // 恢复会话（页面加载时）
   useEffect(() => {
     const loadSession = async () => {
+      // 🆕 如果设置了 resetOnMount，不恢复会话，直接显示欢迎消息
+      if (resetOnMount) {
+        // 确保清空所有状态
+        setSessionId(null);
+        setMessages([]);
+        setConversationContext(null);
+        setLatestParams(null);
+        setSavedQuestionAnswers(new Map());
+        
+        // 显示欢迎消息
+        const welcomeMessage: ChatMessage = {
+          id: 'welcome',
+          role: 'assistant',
+          content: '你好！我是你的旅行规划助手 ✨\n\n告诉我你的旅行想法，比如想去哪里、什么时候、和谁一起，我来帮你规划完美行程！',
+          timestamp: new Date(),
+          suggestedQuestions: [
+            '想带家人去日本看樱花',
+            '计划蜜月旅行',
+            '想去冰岛看极光',
+            '带孩子去东京迪士尼',
+          ],
+        };
+        setMessages([welcomeMessage]);
+        setNewMessageId('welcome');  // 触发打字机效果
+        return;
+      }
+      
       // 尝试从 localStorage 恢复会话ID
       const savedSessionId = localStorage.getItem('nl_conversation_session');
       if (savedSessionId) {
@@ -1464,7 +1703,6 @@ export default function NLChatInterface({
             
             // 🐛 消除 linter 警告：使用 conversationContext（虽然主要用于存储，但在恢复时记录）
             // 注意：conversationContext 主要用于存储后端返回的上下文，前端通过 sessionId 管理上下文
-            const _ = conversationContext; // 读取 state 以消除警告
             console.log('[NLChatInterface] 会话已恢复:', {
               sessionId: conversation.sessionId,
               hasContext: !!conversation.conversationContext,
@@ -1511,7 +1749,7 @@ export default function NLChatInterface({
     };
 
     loadSession();
-  }, []); // 只在组件挂载时执行一次
+  }, [resetOnMount]); // 依赖 resetOnMount，当它变化时重新执行
 
   // 构建上下文包（用于增强自然语言理解）
   const buildContextForNL = useCallback(async (userText: string, destinationCountry?: string): Promise<string | undefined> => {
@@ -1629,6 +1867,23 @@ export default function NLChatInterface({
   ) => {
     if (!text.trim() || isLoading) return;
 
+    // 🆕 防重复提交：检查是否刚刚提交过相同的消息
+    const messageId = `user-${Date.now()}`;
+    const messageContent = text.trim();
+    
+    // 如果最近2秒内提交过相同内容的消息，忽略本次提交
+    if (lastSubmittedMessageId && messageContent === lastSubmittedMessageId) {
+      console.warn('[NLChatInterface] 检测到重复提交，已忽略:', messageContent);
+      return;
+    }
+    
+    // 🆕 记录本次提交的消息内容，用于防重复检查
+    setLastSubmittedMessageId(messageContent);
+    // 2秒后清除记录，允许用户再次提交相同内容
+    setTimeout(() => {
+      setLastSubmittedMessageId(prev => prev === messageContent ? null : prev);
+    }, 2000);
+
     // 🆕 批量保存检查：发送消息前确保所有答案已保存
     const latestMessage = messages[messages.length - 1];
     if (latestMessage && latestMessage.role === 'assistant' && latestMessage.id && latestMessage.questionAnswers) {
@@ -1636,9 +1891,9 @@ export default function NLChatInterface({
     }
 
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: messageId,
       role: 'user',
-      content: text.trim(),
+      content: messageContent,
       timestamp: new Date(),
     };
 
@@ -1746,7 +2001,9 @@ export default function NLChatInterface({
       // 构建请求参数
       const requestData: import('@/types/trip').CreateTripFromNLRequest = {
         text: text.trim(),
-        ...(sessionId && { sessionId }), // 🆕 传递会话ID，恢复对话上下文
+        // 🆕 创建新对话：不传递 sessionId，后端会自动清空旧会话
+        // 🆕 继续对话：传递 sessionId，继续对话
+        ...(isFirstMessageAfterReset ? {} : (sessionId && { sessionId })), // 如果是新对话的第一条消息，不传递 sessionId
         ...(contextPackageId && { contextPackageId }),
         ...(!contextPackageId && destinationCountry && {
           context: {
@@ -1794,24 +2051,41 @@ export default function NLChatInterface({
       // 🐛 调试：打印后端返回的完整响应
       console.log('[NLChatInterface] 后端返回的完整响应:', {
         needsClarification: response.needsClarification,
+        gateBlocked: response.gateBlocked,
+        alternatives: response.alternatives,
+        plannerResponseBlocks: response.plannerResponseBlocks,
         clarificationQuestions: response.clarificationQuestions,
         clarificationQuestionsType: Array.isArray(response.clarificationQuestions) 
           ? (response.clarificationQuestions.length > 0 ? typeof response.clarificationQuestions[0] : 'empty array')
           : typeof response.clarificationQuestions,
-        plannerResponseBlocks: response.plannerResponseBlocks,
         questionCardBlocks: response.plannerResponseBlocks?.filter(block => block.type === 'question_card'),
         suggestedQuestions: response.suggestedQuestions,
       });
       
       // 🆕 保存会话ID（如果返回了新的会话ID）
-      if (response.sessionId && response.sessionId !== sessionId) {
-        setSessionId(response.sessionId);
-        localStorage.setItem('nl_conversation_session', response.sessionId);
+      if (response.sessionId) {
+        // 如果是新对话的第一条消息，保存新的 sessionId
+        if (isFirstMessageAfterReset) {
+          setSessionId(response.sessionId);
+          localStorage.setItem('nl_conversation_session', response.sessionId);
+          console.log('[NLChatInterface] ✅ 新对话会话ID已保存:', response.sessionId);
+        } else if (response.sessionId !== sessionId) {
+          // 继续对话时，如果 sessionId 变化了，也更新
+          setSessionId(response.sessionId);
+          localStorage.setItem('nl_conversation_session', response.sessionId);
+          console.log('[NLChatInterface] ✅ 会话ID已更新:', response.sessionId);
+        }
+        
         // 通知 Context 更新当前会话ID
         window.dispatchEvent(new CustomEvent('nl-conversation-session-updated', { 
           detail: { sessionId: response.sessionId } 
         }));
-        console.log('[NLChatInterface] 会话ID已保存:', response.sessionId);
+      }
+      
+      // 🆕 第一条消息发送后，重置标记（后续消息传递 sessionId 继续对话）
+      if (isFirstMessageAfterReset) {
+        setIsFirstMessageAfterReset(false);
+        console.log('[NLChatInterface] ✅ 新对话第一条消息已发送，后续消息将传递 sessionId 继续对话');
       }
       
       // 🐛 产品决策：无论 needsClarification 状态，只要返回了 responseBlocks，就显示结构化内容
@@ -1829,6 +2103,17 @@ export default function NLChatInterface({
         // 🆕 结构化澄清问题
         let clarificationQuestions: NLClarificationQuestion[] | undefined;
         
+        // 🐛 调试：打印后端返回的 clarificationQuestions 原始数据
+        console.log('[NLChatInterface] 🔍 后端返回的 clarificationQuestions 原始数据:', {
+          type: typeof response.clarificationQuestions,
+          isArray: Array.isArray(response.clarificationQuestions),
+          length: Array.isArray(response.clarificationQuestions) ? response.clarificationQuestions.length : 0,
+          firstItem: Array.isArray(response.clarificationQuestions) && response.clarificationQuestions.length > 0 
+            ? response.clarificationQuestions[0] 
+            : null,
+          raw: response.clarificationQuestions,
+        });
+        
         // 优先使用直接返回的 clarificationQuestions
         if (Array.isArray(response.clarificationQuestions) && response.clarificationQuestions.length > 0) {
           if (typeof response.clarificationQuestions[0] === 'string') {
@@ -1837,128 +2122,47 @@ export default function NLChatInterface({
             clarificationQuestions = undefined;
           } else {
             // 🐛 转换后端返回的数据格式（适配字段名差异）
-            clarificationQuestions = normalizeClarificationQuestions(response.clarificationQuestions as any[]);
-            console.log('[NLChatInterface] ✅ 使用直接返回的结构化澄清问题（已转换）:', clarificationQuestions);
+            try {
+              clarificationQuestions = normalizeClarificationQuestions(response.clarificationQuestions as any[]);
+              console.log('[NLChatInterface] ✅ 使用直接返回的结构化澄清问题（已转换）:', {
+                count: clarificationQuestions.length,
+                questions: clarificationQuestions.map(q => ({ id: q.id, text: q.text, inputType: q.inputType })),
+              });
+            } catch (err) {
+              console.error('[NLChatInterface] ❌ 转换 clarificationQuestions 失败:', err);
+              clarificationQuestions = undefined;
+            }
           }
         } else if (questionCardBlocks.length > 0) {
           // 🐛 如果 responseBlocks 中有 question_card，但 clarificationQuestions 未返回或为空
           console.warn('[NLChatInterface] ⚠️ 检测到 question_card 块，但 clarificationQuestions 未返回或为空');
           console.warn('[NLChatInterface] question_card 块需要 clarificationQuestions 数组才能显示问题');
           console.warn('[NLChatInterface] 请检查后端是否正确返回了 clarificationQuestions 字段');
+        } else {
+          console.warn('[NLChatInterface] ⚠️ clarificationQuestions 为空或未返回');
         }
         
-        // 🐛 最终检查：如果 clarificationQuestions 为空，尝试从 plannerReply 中提取问题（降级处理）
+        // 🐛 最终检查：如果 clarificationQuestions 为空，不应该尝试从 plannerReply 中提取问题
+        // 原因：后端返回空数组通常意味着问题被过滤或依赖规则阻止，应该让用户通过自然语言回答
         if (!clarificationQuestions || clarificationQuestions.length === 0) {
           if (questionCardBlocks.length > 0) {
             console.error('[NLChatInterface] ❌ 无法显示澄清问题：responseBlocks 中有 question_card，但 clarificationQuestions 为空');
             console.error('[NLChatInterface] 后端需要同时返回 clarificationQuestions 数组和 question_card 块');
-          } else if (response.plannerReply) {
-            // 🆕 降级处理：尝试从 plannerReply 中提取问题（临时方案）
-            console.warn('[NLChatInterface] ⚠️ clarificationQuestions 为空，尝试从 plannerReply 中提取问题（降级处理）');
+          } else {
+            // 🆕 产品决策：当 clarificationQuestions 为空时，不尝试提取问题
+            // 原因：
+            // 1. 后端返回空数组通常意味着问题被过滤或依赖规则阻止
+            // 2. 从文本中提取的问题结构不完整，无法正确收集答案
+            // 3. 用户应该通过自然语言回答 plannerReply 中的问题
+            console.warn('[NLChatInterface] ⚠️ clarificationQuestions 为空，但 needsClarification=true');
             console.warn('[NLChatInterface] ⚠️ 后端问题：needsClarification=true 但 clarificationQuestions=[]');
             console.warn('[NLChatInterface] ⚠️ 可能原因：问题过滤逻辑过于严格，或依赖规则导致所有问题被过滤');
             console.warn('[NLChatInterface] ⚠️ 建议：检查后端 DestinationClarificationConfigService 的问题配置和依赖规则');
+            console.warn('[NLChatInterface] ⚠️ 前端处理：仅显示 plannerReply 文本，用户通过自然语言回答');
             
-            // 尝试提取问题（格式：问题文本？）
-            // 改进的正则表达式：匹配包含"？"或"?"的句子，且长度合理
-            // 支持匹配更长的句子，包括包含逗号的句子
-            const questionPattern = /([^。！!；;]+[？?])/g;
-            const matches = response.plannerReply.match(questionPattern);
-            
-            if (matches && matches.length > 0) {
-              const extractedQuestions: NLClarificationQuestion[] = matches
-                .map((match, index): NLClarificationQuestion | null => {
-                  // 提取问题文本（去掉问号）
-                  const questionText = match.replace(/[？?]$/, '').trim();
-                  
-                  // 过滤掉太短、不是问题、或包含太多标点的文本
-                  // 放宽条件：只要包含"您"、"我们"、"需要"、"确认"等关键词，或者长度合理，就认为是问题
-                  const hasQuestionKeywords = questionText.includes('您') || 
-                    questionText.includes('我们') || 
-                    questionText.includes('需要') || 
-                    questionText.includes('确认') ||
-                    questionText.includes('是否') ||
-                    questionText.includes('能否') ||
-                    questionText.includes('倾向于') ||
-                    questionText.includes('还是');
-                  
-                  if (
-                    questionText.length < 3 || 
-                    questionText.length > 150 ||
-                    (!hasQuestionKeywords && questionText.length < 10) ||
-                    questionText.split(/[。！!]/).length > 2 // 过滤掉包含太多句号的文本
-                  ) {
-                    return null;
-                  }
-                  
-                  // 检测问题类型（简单启发式）
-                  let inputType: 'text' | 'number' | 'single_choice' | 'multiple_choice' | 'date' = 'text';
-                  let options: string[] | undefined = undefined;
-                  
-                  if (questionText.includes('几人') || questionText.includes('多少') || questionText.includes('人数')) {
-                    inputType = 'number';
-                  } else if (questionText.includes('倾向于') || questionText.includes('还是') || questionText.includes('或者')) {
-                    // "倾向于...还是" 格式的问题，应该是单选
-                    inputType = 'single_choice';
-                    // 尝试提取选项
-                    const optionsMatch = questionText.match(/(?:倾向于|还是|或者)([^，,。！!？?]+)/g);
-                    if (optionsMatch && optionsMatch.length > 0) {
-                      // 提取选项文本
-                      const extractedOptions = optionsMatch.map(opt => opt.replace(/^(?:倾向于|还是|或者)/, '').trim()).filter(Boolean);
-                      if (extractedOptions.length > 0) {
-                        options = extractedOptions;
-                      }
-                    }
-                    // 如果没有提取到选项，使用默认选项
-                    if (!options) {
-                      options = ['深度探索自然奇观', '结合户外冒险', '其他'];
-                    }
-                  } else if (questionText.includes('能否') || questionText.includes('是否') || questionText.includes('可以') || questionText.includes('合适')) {
-                    inputType = 'single_choice';
-                    options = questionText.includes('能否') || questionText.includes('是否') 
-                      ? ['是', '否'] 
-                      : ['合适', '不合适'];
-                  } else if (questionText.includes('时间') || questionText.includes('日期')) {
-                    inputType = 'date';
-                  }
-                  
-                  // 检测是否是 Critical 字段（简单启发式）
-                  const isCritical = questionText.includes('关键') || 
-                                    questionText.includes('必须') || 
-                                    questionText.includes('重要') ||
-                                    questionText.includes('安全');
-                  
-                  // 生成临时问题卡片
-                  return {
-                    id: `extracted_q_${Date.now()}_${index}`,
-                    text: questionText,
-                    inputType,
-                    required: true,
-                    ...(inputType === 'single_choice' && options && { options }),
-                    metadata: {
-                      isCritical: isCritical || false,
-                      fieldName: `extracted_field_${index}`,
-                    },
-                  };
-                })
-                .filter((q): q is NLClarificationQuestion => q !== null);
-              
-              if (extractedQuestions.length > 0) {
-                clarificationQuestions = extractedQuestions;
-                console.warn('[NLChatInterface] ⚠️ 从 plannerReply 中提取了问题（临时方案）:', extractedQuestions);
-                console.warn('[NLChatInterface] ⚠️ 建议后端返回结构化的 clarificationQuestions 数组');
-                console.warn('[NLChatInterface] ⚠️ 提取的问题可能不完整，建议用户通过自然语言回答');
-              } else {
-                console.warn('[NLChatInterface] ⚠️ 无法从 plannerReply 中提取有效问题');
-                console.warn('[NLChatInterface] ⚠️ 用户需要通过自然语言回答，答案可能无法被正确识别');
-              }
-            } else {
-              console.warn('[NLChatInterface] ⚠️ plannerReply 中未找到问题模式');
-              console.warn('[NLChatInterface] ⚠️ 用户需要通过自然语言回答，答案可能无法被正确识别');
-            }
-          } else {
-            console.warn('[NLChatInterface] ⚠️ clarificationQuestions 为空，且 plannerReply 也为空');
-            console.warn('[NLChatInterface] ⚠️ 无法显示澄清问题，用户可能需要重新输入');
+            // 保持 clarificationQuestions 为空数组，不尝试提取
+            // 这样 UI 不会显示问题卡片结构，只会显示 plannerReply 文本
+            clarificationQuestions = [];
           }
         } else {
           console.log('[NLChatInterface] ✅ 澄清问题已准备就绪，数量:', clarificationQuestions.length);
@@ -1974,10 +2178,31 @@ export default function NLChatInterface({
         // 🆕 检测 Gate 警告和 Critical 字段阻止
         const gateBlocked = response.gateBlocked === true;
         const blockedByCriticalFields = response.blockedByCriticalFields === true;
-        const gateWarningMessage = gateBlocked 
-          ? (extractGateWarningMessage(response.plannerResponseBlocks || []) || '为了您的安全，请选择替代方案')
-          : null;
+        
+        // 🐛 提取 Gate 警告消息：优先从 responseBlocks 中提取，如果没有则使用默认消息
+        let gateWarningMessage: string | null = null;
+        if (gateBlocked) {
+          gateWarningMessage = extractGateWarningMessage(response.plannerResponseBlocks || []);
+          // 如果提取不到，使用默认消息
+          if (!gateWarningMessage) {
+            gateWarningMessage = '为了您的安全，请选择替代方案';
+          }
+        }
+        
         const alternatives = response.alternatives || [];
+        
+        // 🐛 调试：Gate 预检查相关数据
+        if (gateBlocked) {
+          console.log('[NLChatInterface] ⚠️ Gate 预检查阻止:', {
+            gateBlocked,
+            gateWarningMessage,
+            alternativesCount: alternatives.length,
+            alternatives,
+            plannerResponseBlocks: response.plannerResponseBlocks,
+            extractedMessage: extractGateWarningMessage(response.plannerResponseBlocks || []),
+            plannerReply: response.plannerReply?.substring(0, 200), // 只显示前200字符
+          });
+        }
         
         // 需要澄清 - 显示规划师回复
         // 🆕 使用后端返回的真实消息ID，如果没有则从会话中获取
@@ -1985,20 +2210,34 @@ export default function NLChatInterface({
         if (response.lastMessageId) {
           // ✅ 使用后端返回的真实ID
           messageId = response.lastMessageId;
+          console.log('[NLChatInterface] ✅ 使用后端返回的 lastMessageId:', messageId);
         } else if (response.sessionId) {
           // 🆕 降级方案：从会话中获取最后一条AI消息的ID
           try {
+            console.log('[NLChatInterface] 🔍 尝试从会话获取消息ID，sessionId:', response.sessionId);
             const conversation = await tripsApi.getNLConversation(response.sessionId);
+            console.log('[NLChatInterface] 🔍 会话消息数量:', conversation.messages.length);
+            
+            // 查找最后一条AI消息（优先查找有 clarificationQuestions 或 responseBlocks 的）
             const lastAIMessage = [...conversation.messages].reverse().find(m => 
               m.role === 'assistant' && 
               (m.metadata?.clarificationQuestions?.length > 0 || m.metadata?.responseBlocks?.length > 0)
             );
+            
             if (lastAIMessage) {
               messageId = lastAIMessage.id;
+              console.log('[NLChatInterface] ✅ 从会话中找到AI消息ID:', messageId);
             } else {
-              // 如果找不到，使用临时ID（向后兼容）
-              messageId = `ai-${Date.now()}`;
-              console.warn('[NLChatInterface] ⚠️ 未找到最后一条AI消息，使用临时ID:', messageId);
+              // 如果找不到有问题的消息，查找最后一条AI消息
+              const anyLastAIMessage = [...conversation.messages].reverse().find(m => m.role === 'assistant');
+              if (anyLastAIMessage) {
+                messageId = anyLastAIMessage.id;
+                console.log('[NLChatInterface] ⚠️ 使用最后一条AI消息ID（可能没有问题）:', messageId);
+              } else {
+                // 如果找不到，使用临时ID（向后兼容）
+                messageId = `ai-${Date.now()}`;
+                console.warn('[NLChatInterface] ⚠️ 未找到最后一条AI消息，使用临时ID:', messageId);
+              }
             }
           } catch (err) {
             // 如果获取会话失败，使用临时ID（向后兼容）
@@ -2109,6 +2348,20 @@ export default function NLChatInterface({
           if (response.partialParams.destination && !currentContextPackage) {
             // 下次发送消息时会自动构建上下文
           }
+          
+          // 🆕 检测约束冲突（当用户输入了预算或偏好信息时）
+          const params = response.partialParams;
+          console.log('[NLChatInterface] 检查是否需要冲突检测:', {
+            hasTotalBudget: !!params.totalBudget,
+            hasPreferences: !!params.preferences,
+            params,
+          });
+          if (params.totalBudget || params.preferences) {
+            console.log('[NLChatInterface] 触发冲突检测（needsClarification分支）');
+            handleDetectConflicts(params).catch(err => {
+              console.error('[NLChatInterface] 冲突检测失败:', err);
+            });
+          }
         }
       } else if (response.trip) {
         // 行程创建成功
@@ -2125,6 +2378,22 @@ export default function NLChatInterface({
         };
         setMessages(prev => [...prev, successMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
+
+        // 🆕 行程创建成功后，也检测约束冲突（如果有约束信息）
+        if (response.parsedParams) {
+          const params = response.parsedParams;
+          console.log('[NLChatInterface] 行程创建成功，检查是否需要冲突检测:', {
+            hasTotalBudget: !!params.totalBudget,
+            hasPreferences: !!params.preferences,
+            params,
+          });
+          if (params.totalBudget || params.preferences) {
+            console.log('[NLChatInterface] 触发冲突检测（行程创建成功分支）');
+            handleDetectConflicts(params).catch(err => {
+              console.error('[NLChatInterface] 冲突检测失败:', err);
+            });
+          }
+        }
         
         // 🆕 后台生成状态提示（改进版：更友好的提示和等待时间说明）
         if (response.generatingItems) {
@@ -2172,7 +2441,9 @@ export default function NLChatInterface({
         setTimeout(() => {
           navigate(`/dashboard/plan-studio?tripId=${response.trip!.id}`);
         }, delay);
-      } else if (response.parsedParams && !response.parsedParams.needsClarification) {
+      } else if (response.needsConfirmation || (response.parsedParams && !response.parsedParams.needsClarification && !response.needsClarification)) {
+        // 🆕 需要用户确认创建行程（needsConfirmation: true）
+        // 或者信息完整但没有明确标记需要澄清
         // 🆕 Critical 字段检查：如果被 Critical 字段阻止，不显示确认卡片
         if (response.blockedByCriticalFields) {
           // 被 Critical 字段阻止，继续澄清流程
@@ -2189,12 +2460,15 @@ export default function NLChatInterface({
             // 🐛 如果有 responseBlocks，也显示结构化内容
             responseBlocks: response.plannerResponseBlocks,
             parsedParams: response.parsedParams,
-            showConfirmCard: true,
+            showConfirmCard: response.showConfirmCard !== false, // 🆕 使用后端返回的 showConfirmCard，默认为 true
+            needsConfirmation: response.needsConfirmation, // 🆕 保存 needsConfirmation 标记
             blockedByCriticalFields: false, // 明确标记未阻止
           };
           setMessages(prev => [...prev, confirmMessage]);
           setNewMessageId(messageId);  // 触发打字机效果
-          setLatestParams(response.parsedParams);
+          if (response.parsedParams) {
+            setLatestParams(response.parsedParams);
+          }
         }
       } else if (response.plannerResponseBlocks && response.plannerResponseBlocks.length > 0) {
         // 🐛 如果返回了 responseBlocks 但没有进入上述分支，也显示结构化内容
@@ -2389,6 +2663,12 @@ export default function NLChatInterface({
   const handleConfirmCreate = useCallback(async () => {
     if (!latestParams || isCreating) return;
 
+    // 🆕 检查是否有 sessionId（必需）
+    if (!sessionId) {
+      setError('会话ID不存在，请刷新页面后重试');
+      return;
+    }
+
     // 🆕 决策矩阵阻止检查
     const latestMessage = messages[messages.length - 1];
     if (latestMessage?.blockedByDecisionMatrix) {
@@ -2415,57 +2695,106 @@ export default function NLChatInterface({
     setIsCreating(true);
     setError(null);
 
-    // 构建确认消息，包含所有已解析的参数（在 try 块外部定义，以便在 catch 中使用）
-    const confirmText = `确认创建行程：
-目的地：${latestParams.destination}
-日期：${latestParams.startDate} 至 ${latestParams.endDate}
-预算：${latestParams.totalBudget}
-${latestParams.hasChildren ? '有儿童同行' : ''}
-${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
-
     try {
-      // 🆕 使用已有的上下文包或构建新的上下文包
-      const destinationCountry = latestParams.destination?.split(',')[0]?.trim().toUpperCase();
-      let contextPackageId = currentContextPackage?.id;
-      
-      // 如果没有上下文包，尝试构建一个
-      if (!contextPackageId && destinationCountry) {
-        contextPackageId = await buildContextForNL(confirmText, destinationCountry);
+      // 🆕 收集 additionalParams（从补充问题中）
+      const additionalParams: {
+        preferences?: Record<string, any>;
+        [key: string]: any;
+      } = {};
+
+      // 如果有补充问题的答案，收集到 additionalParams 中
+      if (latestMessage?.questionAnswers) {
+        const questionAnswers = latestMessage.questionAnswers;
+        const preferences: Record<string, any> = {};
+        
+        // 遍历问题答案，提取偏好信息
+        Object.entries(questionAnswers).forEach(([questionId, answer]) => {
+          const question = latestMessage.clarificationQuestions?.find(
+            q => (typeof q === 'object' ? q.id : undefined) === questionId
+          );
+          
+          if (question && typeof question === 'object') {
+            // 根据问题类型提取偏好信息
+            if (question.metadata?.category === 'preferences') {
+              // 例如：style, interests, pace 等
+              if (question.id.includes('style') || question.text.includes('风格')) {
+                preferences.style = answer;
+              } else if (question.id.includes('interests') || question.text.includes('兴趣')) {
+                preferences.interests = Array.isArray(answer) ? answer : [answer];
+              } else if (question.id.includes('pace') || question.text.includes('节奏')) {
+                preferences.pace = answer;
+              }
+            }
+          }
+        });
+
+        if (Object.keys(preferences).length > 0) {
+          additionalParams.preferences = preferences;
+        }
       }
 
-      // 构建请求参数
-      const requestData: import('@/types/trip').CreateTripFromNLRequest = {
-        text: confirmText,
-        ...(contextPackageId && { contextPackageId }),
-        ...(!contextPackageId && destinationCountry && {
-          context: {
-            destinationCountry,
-            requiredTopics: ['VISA', 'ROAD_RULES', 'SAFETY', 'WEATHER'],
-            includeUserProfile: true,
-          },
-        }),
-      };
+      // 🆕 调用确认创建API
+      console.log('[NLChatInterface] 调用确认创建API:', {
+        sessionId,
+        confirm: true,
+        additionalParams,
+      });
 
-      const response = await tripsApi.createFromNL(requestData);
+      const response = await tripsApi.confirmCreateTrip(sessionId, {
+        confirm: true,
+        ...(Object.keys(additionalParams).length > 0 && { additionalParams }),
+      });
+
+      console.log('[NLChatInterface] 确认创建API响应:', response);
 
       if (response.trip) {
         const messageId = `ai-${Date.now()}`;
         const successMessage: ChatMessage = {
           id: messageId,
           role: 'assistant',
-          content: '🎉 行程创建成功！正在为您跳转到规划工作台...',
+          content: response.message || '🎉 行程创建成功！正在为您跳转到规划工作台...',
           timestamp: new Date(),
+          responseBlocks: response.plannerResponseBlocks,
+          parsedParams: response.parsedParams,
         };
         setMessages(prev => [...prev, successMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
+
+        // 🆕 行程创建成功后，也检测约束冲突（如果有约束信息）
+        if (response.parsedParams) {
+          const params = response.parsedParams;
+          if (params.totalBudget || params.preferences) {
+            handleDetectConflicts(params).catch(err => {
+              console.error('[NLChatInterface] 冲突检测失败:', err);
+            });
+          }
+        }
 
         if (onTripCreated) {
           onTripCreated(response.trip.id);
         }
 
+        // 🆕 后台生成状态提示
+        if (response.generatingItems) {
+          const generatingMessageId = `ai-generating-${Date.now()}`;
+          const generatingMessage: ChatMessage = {
+            id: generatingMessageId,
+            role: 'assistant',
+            content: '正在后台生成行程规划点，预计需要 2-5 分钟，请稍后刷新查看',
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, generatingMessage]);
+        }
+
+        // 延迟跳转，让用户看到成功消息
+        const delay = response.generatingItems ? 3000 : 1500;
         setTimeout(() => {
           navigate(`/dashboard/plan-studio?tripId=${response.trip!.id}`);
-        }, 1500);
+        }, delay);
+      } else {
+        // 如果没有返回 trip，可能是错误或需要进一步澄清
+        console.warn('[NLChatInterface] 确认创建API未返回行程，响应:', response);
+        setError('行程创建失败，请重试或联系客服');
       }
       
       // 🆕 更新对话上下文（如果返回了新的上下文或参数）
@@ -2514,52 +2843,76 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
         // 尝试刷新 token
         try {
           await refreshToken();
-          console.log('[NLChatInterface] Token 刷新成功，重试创建行程...');
+          console.log('[NLChatInterface] Token 刷新成功，重试确认创建行程...');
           
-          // 重试创建行程（使用相同的上下文）
+          // 🆕 重试确认创建行程（使用 confirm-create API）
           try {
-            const destinationCountry = latestParams.destination?.split(',')[0]?.trim().toUpperCase();
-            const contextPackageId = currentContextPackage?.id;
-            
-            const retryRequestData: import('@/types/trip').CreateTripFromNLRequest = {
-              text: confirmText,
-              ...(sessionId && { sessionId }), // 🆕 传递会话ID
-              ...(contextPackageId && { contextPackageId }),
-              ...(!contextPackageId && destinationCountry && {
-                context: {
-                  destinationCountry,
-                  requiredTopics: ['VISA', 'ROAD_RULES', 'SAFETY', 'WEATHER'],
-                  includeUserProfile: true,
-                },
-              }),
-            };
-            
-            const retryResponse = await tripsApi.createFromNL(retryRequestData);
-            
-            // 🆕 保存会话ID
-            if (retryResponse.sessionId && retryResponse.sessionId !== sessionId) {
-              setSessionId(retryResponse.sessionId);
-              localStorage.setItem('nl_conversation_session', retryResponse.sessionId);
+            if (!sessionId) {
+              setError('会话ID不存在，无法重试');
+              return;
             }
+            
+            // 收集 additionalParams
+            const additionalParams: {
+              preferences?: Record<string, any>;
+              [key: string]: any;
+            } = {};
+            
+            if (latestMessage?.questionAnswers) {
+              const questionAnswers = latestMessage.questionAnswers;
+              const preferences: Record<string, any> = {};
+              
+              Object.entries(questionAnswers).forEach(([questionId, answer]) => {
+                const question = latestMessage.clarificationQuestions?.find(
+                  q => (typeof q === 'object' ? q.id : undefined) === questionId
+                );
+                
+                if (question && typeof question === 'object') {
+                  if (question.metadata?.category === 'preferences') {
+                    if (question.id.includes('style') || question.text.includes('风格')) {
+                      preferences.style = answer;
+                    } else if (question.id.includes('interests') || question.text.includes('兴趣')) {
+                      preferences.interests = Array.isArray(answer) ? answer : [answer];
+                    } else if (question.id.includes('pace') || question.text.includes('节奏')) {
+                      preferences.pace = answer;
+                    }
+                  }
+                }
+              });
+
+              if (Object.keys(preferences).length > 0) {
+                additionalParams.preferences = preferences;
+              }
+            }
+            
+            const retryResponse = await tripsApi.confirmCreateTrip(sessionId, {
+              confirm: true,
+              ...(Object.keys(additionalParams).length > 0 && { additionalParams }),
+            });
             
             if (retryResponse.trip) {
               const messageId = `ai-${Date.now()}`;
               const successMessage: ChatMessage = {
                 id: messageId,
                 role: 'assistant',
-                content: '🎉 行程创建成功！正在为您跳转到规划工作台...',
+                content: retryResponse.message || '🎉 行程创建成功！正在为您跳转到规划工作台...',
                 timestamp: new Date(),
+                responseBlocks: retryResponse.plannerResponseBlocks,
+                parsedParams: retryResponse.parsedParams,
               };
               setMessages(prev => [...prev, successMessage]);
               setNewMessageId(messageId);
-              
+
               if (onTripCreated) {
                 onTripCreated(retryResponse.trip.id);
               }
-              
+
+              const delay = retryResponse.generatingItems ? 3000 : 1500;
               setTimeout(() => {
                 navigate(`/dashboard/plan-studio?tripId=${retryResponse.trip!.id}`);
-              }, 1500);
+              }, delay);
+            } else {
+              setError('行程创建失败，请重试或联系客服');
             }
             return; // 重试成功，直接返回
           } catch (retryErr: any) {
@@ -2616,14 +2969,26 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
     <div className={cn("flex flex-col h-full bg-white", className)}>
       {/* 头部 - 仅在 showHeader 为 true 时显示（避免与 Dialog 标题重复） */}
       {showHeader && (
-        <div className="flex items-center gap-3 px-4 py-3 border-b bg-slate-50">
-          <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
-            <Logo variant="icon" size={32} className="text-white" />
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
+              <Logo variant="icon" size={32} className="text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-800">智能行程规划</h3>
+              <p className="text-xs text-muted-foreground">用自然语言描述，AI 帮你规划</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-slate-800">智能行程规划</h3>
-            <p className="text-xs text-muted-foreground">用自然语言描述，AI 帮你规划</p>
-          </div>
+          {/* 🆕 新建对话按钮 */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNewConversation}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            新建对话
+          </Button>
         </div>
       )}
 
@@ -2640,6 +3005,12 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
               isLatest={idx === messages.length - 1}
               isNewMessage={msg.id === newMessageId}
               onSendMessage={sendMessage}
+              onOpenConflictDialog={(conflicts, runId) => {
+                // 🆕 打开冲突检测弹窗
+                setDetectedConflicts(conflicts);
+                setConflictRunId(runId || null);
+                setConflictDialogOpen(true);
+              }}
               onQuestionAnswer={async (fieldKey, value) => {
                 // 🆕 fieldKey 可能是 fieldName 或 questionId（向后兼容）
                 // 🆕 1. 更新本地状态（立即）
@@ -2694,6 +3065,27 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
                     if (q.inputType === 'multiple_choice') {
                       return Array.isArray(answer) && answer.length > 0;
                     }
+                    
+                    // 🆕 HCI优化：检查条件输入字段是否已填写（如果触发）
+                    if (q.conditionalInputs && q.conditionalInputs.length > 0) {
+                      const selectedValue = typeof answer === 'string' ? answer : String(answer);
+                      const triggeredInput = q.conditionalInputs.find(ci => ci.triggerValue === selectedValue);
+                      if (triggeredInput && triggeredInput.required) {
+                        const conditionalFieldKey = `${fieldKey}_${triggeredInput.triggerValue}`;
+                        const conditionalAnswer = updatedMessage?.questionAnswers?.[conditionalFieldKey];
+                        if (!conditionalAnswer || conditionalAnswer === '') {
+                          return false;
+                        }
+                        // 日期范围验证：确保 startDate 和 endDate 都存在
+                        if (triggeredInput.inputType === 'date_range' && typeof conditionalAnswer === 'object') {
+                          const rangeValue = conditionalAnswer as { startDate?: string; endDate?: string };
+                          if (!rangeValue.startDate || !rangeValue.endDate) {
+                            return false;
+                          }
+                        }
+                      }
+                    }
+                    
                     return true;
                   });
                   
@@ -2708,13 +3100,38 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
                     if (q.inputType === 'multiple_choice') {
                       return Array.isArray(answer) && answer.length > 0;
                     }
+                    
+                    // 🆕 HCI优化：检查条件输入字段是否已填写（如果触发）
+                    if (q.conditionalInputs && q.conditionalInputs.length > 0) {
+                      const selectedValue = typeof answer === 'string' ? answer : String(answer);
+                      const triggeredInput = q.conditionalInputs.find(ci => ci.triggerValue === selectedValue);
+                      if (triggeredInput && triggeredInput.required) {
+                        const conditionalFieldKey = `${fieldKey}_${triggeredInput.triggerValue}`;
+                        const conditionalAnswer = updatedMessage?.questionAnswers?.[conditionalFieldKey];
+                        if (!conditionalAnswer || conditionalAnswer === '') {
+                          return false;
+                        }
+                        // 日期范围验证：确保 startDate 和 endDate 都存在
+                        if (triggeredInput.inputType === 'date_range' && typeof conditionalAnswer === 'object') {
+                          const rangeValue = conditionalAnswer as { startDate?: string; endDate?: string };
+                          if (!rangeValue.startDate || !rangeValue.endDate) {
+                            return false;
+                          }
+                        }
+                      }
+                    }
+                    
                     return true;
                   });
                   
                   // 🐛 只有所有问题（包括必填和非必填）都回答后才自动提交
-                  if (allQuestionsAnswered && allRequiredAnswered) {
+                  // 🆕 防重复提交：检查是否已经在自动提交中
+                  if (allQuestionsAnswered && allRequiredAnswered && !autoSubmittingMessageId) {
+                    // 🆕 标记当前消息正在自动提交，防止重复触发
+                    setAutoSubmittingMessageId(msg.id);
+                    
                     // 🐛 保存答案引用，确保在 setTimeout 回调中能访问到最新的答案
-                    // 🆕 使用 fieldName 构建 finalAnswers
+                    // 🆕 使用 fieldName 构建 finalAnswers（包含条件输入字段）
                     const finalAnswers: Record<string, string | string[] | number | boolean | null> = {};
                     if (updatedMessage && updatedMessage.clarificationQuestions) {
                       updatedMessage.clarificationQuestions.forEach(q => {
@@ -2722,6 +3139,20 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
                         const answer = updatedMessage?.questionAnswers?.[fieldKey] ?? updatedMessage?.questionAnswers?.[q.id];
                         if (answer !== null && answer !== undefined) {
                           finalAnswers[fieldKey] = answer;
+                        }
+                        
+                        // 🆕 HCI优化：收集条件输入字段的值
+                        if (q.conditionalInputs && q.conditionalInputs.length > 0) {
+                          const selectedValue = typeof answer === 'string' ? answer : String(answer);
+                          q.conditionalInputs.forEach(conditionalInput => {
+                            if (conditionalInput.triggerValue === selectedValue) {
+                              const conditionalFieldKey = `${fieldKey}_${conditionalInput.triggerValue}`;
+                              const conditionalAnswer = updatedMessage?.questionAnswers?.[conditionalFieldKey];
+                              if (conditionalAnswer !== null && conditionalAnswer !== undefined) {
+                                finalAnswers[conditionalFieldKey] = conditionalAnswer;
+                              }
+                            }
+                          });
                         }
                       });
                     }
@@ -2750,26 +3181,120 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
                     };
                     setMessages(prev => [...prev, previewMessage]);
                     
+                    // 🆕 优化：添加自动提交倒计时提示（符合反馈原则）
                     // 🐛 所有问题都已回答，延迟 1.5 秒后自动发送（给用户时间看到答案预览）
                     // 根据答案生成明确的确认消息，例如："明确两人出行，计划停留7天"
-                    setTimeout(() => {
-                      const confirmText = generateConfirmationMessage(
-                        finalQuestions,
-                        finalAnswers
-                      );
-                      console.log('[NLChatInterface] 自动提交确认消息:', confirmText);
-                      console.log('[NLChatInterface] 提交的答案:', finalAnswers);
-                      console.log('[NLChatInterface] 所有问题已回答，自动提交');
-                      
-                      // 🐛 直接传递答案给 sendMessage，确保答案正确传输
-                      // 因为 setTimeout 回调执行时，messages 状态可能还没有更新完成
-                      sendMessage(confirmText, finalAnswers);
+                    const cancelId = `auto-submit-${Date.now()}`;
+                    setAutoSubmitCancelId(cancelId);
+                    setAutoSubmitCountdown(1.5);
+                    
+                    // 🆕 倒计时更新（每 0.1 秒更新一次）
+                    let currentCountdown = 1.5;
+                    const countdownInterval = setInterval(() => {
+                      currentCountdown -= 0.1;
+                      setAutoSubmitCountdown(prev => {
+                        if (prev === null || currentCountdown <= 0) {
+                          clearInterval(countdownInterval);
+                          return 0;
+                        }
+                        return Math.max(0, currentCountdown);
+                      });
+                    }, 100);
+                    
+                    // 🆕 自动提交定时器
+                    const submitTimer = setTimeout(() => {
+                      // 🆕 检查是否被取消（通过检查当前 cancelId）
+                      setAutoSubmitCancelId(currentCancelId => {
+                        if (currentCancelId !== cancelId) {
+                          clearInterval(countdownInterval);
+                          return currentCancelId;
+                        }
+                        
+                        // 🆕 执行自动提交
+                        const confirmText = generateConfirmationMessage(
+                          finalQuestions,
+                          finalAnswers
+                        );
+                        console.log('[NLChatInterface] 自动提交确认消息:', confirmText);
+                        console.log('[NLChatInterface] 提交的答案:', finalAnswers);
+                        console.log('[NLChatInterface] 所有问题已回答，自动提交');
+                        
+                        // 🐛 直接传递答案给 sendMessage，确保答案正确传输
+                        // 因为 setTimeout 回调执行时，messages 状态可能还没有更新完成
+                        sendMessage(confirmText, finalAnswers);
+                        
+                        // 🆕 清理状态
+                        setAutoSubmitCountdown(null);
+                        setAutoSubmitTimerId(null);
+                        setAutoSubmitCancelId(null);
+                        setAutoSubmittingMessageId(null); // 🆕 清除自动提交标记
+                        clearInterval(countdownInterval);
+                        
+                        return null;
+                      });
                     }, 1500); // 延长到 1.5 秒，让用户看到答案预览
+                    
+                    setAutoSubmitTimerId(submitTimer);
+                  } else if (autoSubmittingMessageId === msg.id) {
+                    // 🆕 如果已经在自动提交中，跳过（防止重复触发）
+                    console.log('[NLChatInterface] 消息已在自动提交中，跳过重复触发');
                   }
                 }
               }}
             />
           ))}
+          
+          {/* 🆕 自动提交倒计时提示（符合反馈原则）- 在消息流末尾显示 */}
+          {autoSubmitCountdown !== null && autoSubmitCountdown > 0 && (
+            <div className="px-4 py-3">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in slide-in-from-bottom-1 duration-300">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                    <span className="text-sm text-blue-900">
+                      {autoSubmitCountdown > 0 ? `将在 ${autoSubmitCountdown.toFixed(1)} 秒后自动提交` : '正在提交...'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // 🆕 取消自动提交
+                        if (autoSubmitTimerId) {
+                          clearTimeout(autoSubmitTimerId);
+                        }
+                        setAutoSubmitCountdown(null);
+                        setAutoSubmitTimerId(null);
+                        setAutoSubmitCancelId(null);
+                        setAutoSubmittingMessageId(null); // 🆕 清除自动提交标记
+                      }}
+                      className="text-xs h-7 px-2"
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        // 🆕 立即提交（需要找到对应的答案和问题）
+                        if (autoSubmitTimerId) {
+                          clearTimeout(autoSubmitTimerId);
+                        }
+                        setAutoSubmitCountdown(null);
+                        setAutoSubmitTimerId(null);
+                        setAutoSubmitCancelId(null);
+                        setAutoSubmittingMessageId(null); // 🆕 清除自动提交标记
+                        // TODO: 实现立即提交逻辑（需要保存 finalAnswers 和 finalQuestions 的引用）
+                      }}
+                      className="text-xs h-7 px-2 bg-blue-600 hover:bg-blue-700"
+                    >
+                      立即提交
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* 加载状态 */}
           {isLoading && <TypingIndicator />}
@@ -2844,6 +3369,52 @@ ${latestParams.hasElderly ? '有老人同行' : ''}`.trim();
           </Button>
         </div>
       </form>
+
+      {/* 🆕 冲突检测弹窗 */}
+      <Dialog open={conflictDialogOpen} onOpenChange={setConflictDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-600" />
+              检测到约束冲突
+            </DialogTitle>
+            <DialogDescription>
+              我们检测到您设置的约束之间存在冲突，请查看下方的冲突详情和权衡选项。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <ConflictDetectionCard
+              conflicts={detectedConflicts}
+              runId={conflictRunId || undefined}
+              tripId={undefined} // TODO: 从上下文获取
+              userId={undefined} // TODO: 从用户上下文获取
+              onResolve={(conflict, option) => {
+                console.log('[NLChatInterface] 用户选择权衡选项:', { conflict, option });
+                // TODO: 应用选择的权衡选项
+                toast.info(`您选择了：${option}`, {
+                  description: '我们正在为您调整约束设置...',
+                });
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConflictDialogOpen(false)}
+            >
+              我知道了
+            </Button>
+            <Button
+              onClick={() => {
+                setConflictDialogOpen(false);
+                // 可以添加"查看详情"的逻辑
+              }}
+            >
+              查看详情
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

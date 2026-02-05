@@ -10,6 +10,10 @@
 
 import apiClient from './client';
 
+/**
+ * 用户偏好接口文档位置: docs/api/user-preferences.md
+ */
+
 // ==================== 通用类型 ====================
 
 export interface SuggestedAction {
@@ -103,29 +107,65 @@ export type PlanningPhase =
 
 /**
  * 创建会话请求
+ * POST /api/agent/planning-assistant/sessions
  */
 export interface CreateSessionRequest {
-  userId?: string;
+  userId?: string; // 可选，用户ID。如果提供，会话将与用户关联；如果不提供，将创建匿名会话
 }
 
 /**
  * 创建会话响应
+ * HTTP 201 Created
  */
 export interface CreateSessionResponse {
-  sessionId: string;
+  sessionId: string; // 会话ID，用于后续对话
 }
 
 /**
  * 规划对话请求
+ * POST /api/agent/planning-assistant/chat
  */
 export interface PlanningChatRequest {
-  sessionId: string;
-  message: string;
-  userId?: string;
-  language?: 'en' | 'zh';
+  sessionId: string; // 必填，会话ID（通过创建会话接口获取）
+  message: string; // 必填，用户消息
+  userId?: string; // 可选，用户ID
+  language?: 'en' | 'zh'; // 可选，语言偏好，默认为 'zh'
   context?: {
-    currentLocation?: Location;
+    currentLocation?: {
+      lat?: number;
+      lng?: number;
+    };
     timezone?: string;
+    // 🆕 扩展字段（如果后端支持）
+    tripId?: string;
+    targetDay?: number;
+    targetItemId?: string;
+    selectedContext?: {
+      dayIndex?: number;
+      date?: string;
+      itemId?: string;
+      placeName?: string;
+      itemType?: string;
+    };
+    adjacentItems?: {
+      prevItem?: { name: string; endTime: string; type?: string };
+      nextItem?: { name: string; startTime: string; type?: string };
+    };
+    dayStats?: {
+      totalItems: number;
+      hasMeal: boolean;
+      hasTransit: boolean;
+      freeSlots?: Array<{ start: string; end: string }>;
+    };
+    clarificationData?: {
+      selectedAction?: string;
+      params?: {
+        dayNumber?: number;
+        timeSlot?: { start: string; end: string };
+        targetItemId?: string;
+        gapId?: string;
+      };
+    };
   };
 }
 
@@ -579,6 +619,9 @@ export const planningAssistantApi = {
   /**
    * 创建会话
    * POST /agent/planning-assistant/sessions
+   * 
+   * 创建一个新的旅行规划对话会话
+   * 根据 API 文档：只接受 userId（可选），返回 sessionId
    */
   createSession: async (data?: CreateSessionRequest): Promise<CreateSessionResponse> => {
     const response = await apiClient.post<CreateSessionResponse>(
@@ -650,6 +693,39 @@ export const planningAssistantApi = {
   clearUserPreferences: async (userId: string): Promise<{ success: boolean }> => {
     const response = await apiClient.post<{ success: boolean }>(
       `/agent/planning-assistant/users/${userId}/preferences/clear`
+    );
+    return response.data;
+  },
+};
+
+// ==================== 决策风格偏好 API ====================
+
+/**
+ * 决策风格偏好响应
+ */
+export interface DecisionStylePreferencesResponse {
+  riskTolerance: 'LOW' | 'MEDIUM' | 'HIGH';
+  preferredPace: 'LEISURE' | 'MODERATE' | 'FAST';
+  budgetPreference: 'LOW' | 'MEDIUM' | 'HIGH';
+  decisionPatterns: {
+    prefersDetailedPlans: boolean;
+    oftenModifiesPlans: boolean;
+    prefersSafety: boolean;
+  };
+  inferredTags: string[];
+  confidence: number; // 0-1
+}
+
+export const decisionStyleApi = {
+  /**
+   * 推断用户偏好
+   * GET /api/v1/decision-replay/style/:userId/preferences
+   * 
+   * 基于用户历史决策数据推断用户偏好
+   */
+  getPreferences: async (userId: string): Promise<DecisionStylePreferencesResponse> => {
+    const response = await apiClient.get<DecisionStylePreferencesResponse>(
+      `/v1/decision-replay/style/${userId}/preferences`
     );
     return response.data;
   },

@@ -99,6 +99,10 @@ interface PlanStudioContextValue {
   pendingSuggestions: PendingSuggestion[];
   /** 最近的用户操作 */
   recentAction: UserAction | null;
+  /** 是否有未保存的时间轴改动 */
+  hasUnsavedScheduleChanges: boolean;
+  /** 设置是否有未保存的时间轴改动 */
+  setHasUnsavedScheduleChanges: (hasChanges: boolean) => void;
   
   // ========== 左侧 → 右侧 (行程 → 助手) ==========
   /** 选中某一天 */
@@ -161,6 +165,9 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
   
   // 最近操作
   const [recentAction, setRecentAction] = useState<UserAction | null>(null);
+  
+  // 🆕 未保存的时间轴改动状态
+  const [hasUnsavedScheduleChanges, setHasUnsavedScheduleChanges] = useState(false);
   
   // 回调处理器
   const [onAskAssistant, setOnAskAssistantState] = useState<((question: string, context: SelectedContext) => void) | null>(null);
@@ -303,6 +310,8 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     selectedContext,
     pendingSuggestions,
     recentAction,
+    hasUnsavedScheduleChanges,
+    setHasUnsavedScheduleChanges,
     selectDay,
     selectItem,
     clearSelection,
@@ -322,6 +331,7 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     selectedContext,
     pendingSuggestions,
     recentAction,
+    hasUnsavedScheduleChanges,
     selectDay,
     selectItem,
     clearSelection,

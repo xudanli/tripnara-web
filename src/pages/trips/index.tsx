@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyMedia } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight, CloudSun, MessageSquare, FileText, Maximize2, Minimize2, X } from 'lucide-react';
+import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight, CloudSun, MessageSquare, FileText, Maximize2, Minimize2, X, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { TripPlanning } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
@@ -709,7 +709,14 @@ export default function TripsPage() {
                   <CardHeader>
                     <div className="flex items-start justify-between mb-2">
                       <CardTitle className="text-xl">
-                        {trip.destination ? getCountryName(trip.destination) : '未知目的地'}
+                        {/* 🆕 显示行程名称（如果有）或显示默认格式 */}
+                        {trip.name || (
+                          trip.destination && trip.startDate
+                            ? `${getCountryName(trip.destination)} ${format(new Date(trip.startDate), 'yyyy-MM-dd')}`
+                            : trip.destination
+                              ? getCountryName(trip.destination)
+                              : '未知目的地'
+                        )}
                       </CardTitle>
                       <Badge 
                         className={getTripStatusClasses((trip.status || 'PLANNING') as any)} 
@@ -719,6 +726,13 @@ export default function TripsPage() {
                       </Badge>
                     </div>
                     <CardDescription>
+                      {/* 🆕 副标题：目的地和日期范围 */}
+                      <div className="flex items-center gap-2 text-sm mb-1">
+                        <MapPin className="w-4 h-4" />
+                        <span>
+                          {trip.destination ? getCountryName(trip.destination) : '未知目的地'}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar className="w-4 h-4" />
                         <span>
@@ -913,6 +927,7 @@ export default function TripsPage() {
               onTripCreated={handleNlTripCreated}
               className="h-full"
               showHeader={false}
+              resetOnMount={true}
             />
           </div>
         </DialogContent>

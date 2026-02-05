@@ -862,8 +862,14 @@ export default function IntentTab({ tripId }: IntentTabProps) {
           disabled={saving}
           className="px-6 bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          {saving ? <Spinner className="w-4 h-4 mr-2" /> : null}
-          {t('planStudio.intentTab.saveAndContinue')}
+          {saving ? (
+            <>
+              <Spinner className="w-4 h-4 mr-2" />
+              保存中...
+            </>
+          ) : (
+            t('planStudio.intentTab.saveAndContinue')
+          )}
         </Button>
       </div>
       

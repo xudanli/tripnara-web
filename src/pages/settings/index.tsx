@@ -9,6 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 import {
   AlertDialog,
@@ -27,6 +30,8 @@ import { userApi, UserApiError, type User } from '@/api/user';
 import { countriesApi } from '@/api/countries';
 import type { UserPreferences } from '@/api/user';
 import type { Country } from '@/types/country';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // 可选的景点类型
 const ATTRACTION_TYPES = [
@@ -85,7 +90,10 @@ const TRAVELER_TAGS = [
 export default function SettingsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab') || 'preferences';
+  // 支持的 tab 值：account, preferences, data, integrations
+  // 如果 URL 参数是 'profile'，映射到 'account'（个人资料在账户 tab 中）
+  const rawTabParam = searchParams.get('tab') || 'preferences';
+  const tabParam = rawTabParam === 'profile' ? 'account' : rawTabParam;
   const [activeTab, setActiveTab] = useState(tabParam);
 
   const {
@@ -117,10 +125,13 @@ export default function SettingsPage() {
 
   // 当URL参数变化时更新Tab
   useEffect(() => {
-    if (tabParam) {
-      setActiveTab(tabParam);
-    }
-  }, [tabParam]);
+    const rawTabParam = searchParams.get('tab') || 'preferences';
+    const normalizedTab = rawTabParam === 'profile' ? 'account' : rawTabParam;
+    // 验证 tab 值是否有效
+    const validTabs = ['account', 'preferences', 'data', 'integrations'];
+    const finalTab = validTabs.includes(normalizedTab) ? normalizedTab : 'preferences';
+    setActiveTab(finalTab);
+  }, [searchParams]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -146,6 +157,12 @@ export default function SettingsPage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  
+  // 🆕 国家选择器搜索状态
+  const [nationalityOpen, setNationalityOpen] = useState(false);
+  const [nationalitySearchQuery, setNationalitySearchQuery] = useState('');
+  const [residencyOpen, setResidencyOpen] = useState(false);
+  const [residencySearchQuery, setResidencySearchQuery] = useState('');
 
   // 加载用户信息
   useEffect(() => {
@@ -260,13 +277,18 @@ export default function SettingsPage() {
       });
       setUser(updatedUser);
       setUserUpdateSuccess(true);
+      toast.success('账户信息已更新', {
+        description: '您的账户信息已成功保存',
+        duration: 3000,
+      });
       setTimeout(() => setUserUpdateSuccess(false), 3000);
     } catch (err) {
-      if (err instanceof UserApiError) {
-        setUserError(err.message);
-      } else {
-        setUserError('更新用户信息失败');
-      }
+      const errorMessage = err instanceof UserApiError ? err.message : '更新用户信息失败';
+      setUserError(errorMessage);
+      toast.error('更新失败', {
+        description: errorMessage,
+        duration: 5000,
+      });
       console.error('Failed to update user:', err);
     } finally {
       setUserUpdating(false);
@@ -276,7 +298,9 @@ export default function SettingsPage() {
   // 处理删除账户
   const handleDeleteAccount = async () => {
     if (deleteConfirmText !== '确认删除') {
-      setUserError('请输入"确认删除"以确认操作');
+      const errorMsg = '请输入"确认删除"以确认操作';
+      setUserError(errorMsg);
+      // 移除 toast.error，只使用页面内的错误提示，避免"两次弹窗"的感觉
       return;
     }
 
@@ -284,17 +308,25 @@ export default function SettingsPage() {
       setDeleting(true);
       setUserError(null);
       await userApi.deleteMe('确认删除');
-      // 删除成功后，清除本地状态并跳转到首页
-      sessionStorage.removeItem('accessToken');
-      localStorage.removeItem('user');
-      navigate('/', { replace: true });
-      window.location.reload();
+      // 删除成功后，显示提示并跳转
+      toast.success('账户已删除', {
+        description: '您的账户及其所有数据已永久删除',
+        duration: 2000,
+      });
+      // 延迟跳转，让用户看到成功提示
+      setTimeout(() => {
+        sessionStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+        navigate('/', { replace: true });
+        window.location.reload();
+      }, 2000);
     } catch (err) {
-      if (err instanceof UserApiError) {
-        setUserError(err.message);
-      } else {
-        setUserError('删除账户失败');
-      }
+      const errorMessage = err instanceof UserApiError ? err.message : '删除账户失败';
+      setUserError(errorMessage);
+      toast.error('删除失败', {
+        description: errorMessage,
+        duration: 5000,
+      });
       console.error('Failed to delete account:', err);
       setDeleting(false);
     }
@@ -308,9 +340,18 @@ export default function SettingsPage() {
     try {
       await updateProfile(formData);
       setSubmitSuccess(true);
+      toast.success('偏好设置已保存', {
+        description: '您的偏好设置已成功保存',
+        duration: 3000,
+      });
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (err) {
-      // 错误由 updateError 处理
+      // 错误由 updateError 处理，但也要显示 toast 提示
+      const errorMessage = updateError || (err instanceof Error ? err.message : '保存偏好设置失败');
+      toast.error('保存失败', {
+        description: errorMessage,
+        duration: 5000,
+      });
       console.error('Failed to update preferences:', err);
     }
   };
@@ -481,49 +522,171 @@ export default function SettingsPage() {
                       {/* 国籍 */}
                       <div className="space-y-2">
                         <Label htmlFor="nationality">国籍</Label>
-                        <Select
-                          value={formData.nationality || '__none__'}
-                          onValueChange={(value) =>
-                            setFormData((prev) => ({ ...prev, nationality: value === '__none__' ? undefined : value }))
-                          }
-                          disabled={countriesLoading}
-                        >
-                          <SelectTrigger id="nationality">
-                            <SelectValue placeholder={countriesLoading ? '加载中...' : '选择国籍'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">未设置</SelectItem>
-                            {countries.map((country) => (
-                              <SelectItem key={country.isoCode} value={country.isoCode}>
-                                {country.nameCN} ({country.isoCode})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Popover open={nationalityOpen} onOpenChange={setNationalityOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              id="nationality"
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={nationalityOpen}
+                              className="w-full justify-between"
+                              disabled={countriesLoading}
+                            >
+                              {formData.nationality
+                                ? countries.find((c) => c.isoCode === formData.nationality)?.nameCN || formData.nationality
+                                : countriesLoading
+                                ? '加载中...'
+                                : '选择国籍'}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-none p-0" align="start">
+                            <Command shouldFilter={false}>
+                              <CommandInput
+                                placeholder="搜索国家..."
+                                value={nationalitySearchQuery}
+                                onValueChange={setNationalitySearchQuery}
+                              />
+                              <CommandList className="max-h-[300px]">
+                                <CommandEmpty>
+                                  {nationalitySearchQuery ? '未找到匹配的国家' : '暂无国家数据'}
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    value="__none__"
+                                    onSelect={() => {
+                                      setFormData((prev) => ({ ...prev, nationality: undefined }));
+                                      setNationalityOpen(false);
+                                      setNationalitySearchQuery('');
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        'mr-2 h-4 w-4',
+                                        !formData.nationality ? 'opacity-100' : 'opacity-0'
+                                      )}
+                                    />
+                                    未设置
+                                  </CommandItem>
+                                  {countries
+                                    .filter((country) => {
+                                      if (!nationalitySearchQuery) return true;
+                                      const query = nationalitySearchQuery.toLowerCase();
+                                      return (
+                                        country.nameCN?.toLowerCase().includes(query) ||
+                                        country.nameEN?.toLowerCase().includes(query) ||
+                                        country.isoCode?.toLowerCase().includes(query)
+                                      );
+                                    })
+                                    .map((country) => (
+                                      <CommandItem
+                                        key={country.isoCode}
+                                        value={`${country.nameCN} ${country.nameEN} ${country.isoCode}`}
+                                        onSelect={() => {
+                                          setFormData((prev) => ({ ...prev, nationality: country.isoCode }));
+                                          setNationalityOpen(false);
+                                          setNationalitySearchQuery('');
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            'mr-2 h-4 w-4',
+                                            formData.nationality === country.isoCode ? 'opacity-100' : 'opacity-0'
+                                          )}
+                                        />
+                                        {country.nameCN} ({country.isoCode})
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
 
                       {/* 居住国 */}
                       <div className="space-y-2">
                         <Label htmlFor="residencyCountry">居住国</Label>
-                        <Select
-                          value={formData.residencyCountry || '__none__'}
-                          onValueChange={(value) =>
-                            setFormData((prev) => ({ ...prev, residencyCountry: value === '__none__' ? undefined : value }))
-                          }
-                          disabled={countriesLoading}
-                        >
-                          <SelectTrigger id="residencyCountry">
-                            <SelectValue placeholder={countriesLoading ? '加载中...' : '选择居住国'} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">未设置</SelectItem>
-                            {countries.map((country) => (
-                              <SelectItem key={country.isoCode} value={country.isoCode}>
-                                {country.nameCN} ({country.isoCode})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Popover open={residencyOpen} onOpenChange={setResidencyOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              id="residencyCountry"
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={residencyOpen}
+                              className="w-full justify-between"
+                              disabled={countriesLoading}
+                            >
+                              {formData.residencyCountry
+                                ? countries.find((c) => c.isoCode === formData.residencyCountry)?.nameCN || formData.residencyCountry
+                                : countriesLoading
+                                ? '加载中...'
+                                : '选择居住国'}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-none p-0" align="start">
+                            <Command shouldFilter={false}>
+                              <CommandInput
+                                placeholder="搜索国家..."
+                                value={residencySearchQuery}
+                                onValueChange={setResidencySearchQuery}
+                              />
+                              <CommandList className="max-h-[300px]">
+                                <CommandEmpty>
+                                  {residencySearchQuery ? '未找到匹配的国家' : '暂无国家数据'}
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    value="__none__"
+                                    onSelect={() => {
+                                      setFormData((prev) => ({ ...prev, residencyCountry: undefined }));
+                                      setResidencyOpen(false);
+                                      setResidencySearchQuery('');
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        'mr-2 h-4 w-4',
+                                        !formData.residencyCountry ? 'opacity-100' : 'opacity-0'
+                                      )}
+                                    />
+                                    未设置
+                                  </CommandItem>
+                                  {countries
+                                    .filter((country) => {
+                                      if (!residencySearchQuery) return true;
+                                      const query = residencySearchQuery.toLowerCase();
+                                      return (
+                                        country.nameCN?.toLowerCase().includes(query) ||
+                                        country.nameEN?.toLowerCase().includes(query) ||
+                                        country.isoCode?.toLowerCase().includes(query)
+                                      );
+                                    })
+                                    .map((country) => (
+                                      <CommandItem
+                                        key={country.isoCode}
+                                        value={`${country.nameCN} ${country.nameEN} ${country.isoCode}`}
+                                        onSelect={() => {
+                                          setFormData((prev) => ({ ...prev, residencyCountry: country.isoCode }));
+                                          setResidencyOpen(false);
+                                          setResidencySearchQuery('');
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            'mr-2 h-4 w-4',
+                                            formData.residencyCountry === country.isoCode ? 'opacity-100' : 'opacity-0'
+                                          )}
+                                        />
+                                        {country.nameCN} ({country.isoCode})
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </CardContent>
                   </Card>

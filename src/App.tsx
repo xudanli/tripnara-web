@@ -39,6 +39,7 @@ import RouteDirectionsByCountryPage from './pages/route-directions/by-country';
 import RouteTemplatesPage from './pages/route-directions/templates';
 import RouteTemplateDetailPage from './pages/route-directions/templates/[id]';
 import PlanStudioPage from './pages/plan-studio';
+import PlanVariantsPage from './pages/plan-studio/PlanVariantsPage';
 import ExecutePage from './pages/execute';
 import ReadinessPage from './pages/readiness';
 import SettingsPage from './pages/settings';
@@ -107,6 +108,7 @@ function App() {
           <Route path="trips/decision" element={<TripDecisionPage />} />
           <Route path="trips/what-if" element={<TripWhatIfPage />} />
           <Route path="plan-studio" element={<PlanStudioPage />} />
+          <Route path="trips/:tripId/plan-variants" element={<PlanVariantsPage />} />
           <Route path="execute" element={<ExecutePage />} />
           <Route path="readiness" element={<ReadinessPage />} />
           <Route path="agent" element={<AgentPage />} />

@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/select';
 import type { BudgetConstraint } from '@/api/planning-workbench';
 import { formatCurrency } from '@/utils/format';
+import { formatCostCategory } from '@/hooks/useItineraryCost';
 
 interface TripBudgetPageProps {
   tripId?: string;  // 可选：如果作为子组件传入，使用传入的 tripId
@@ -568,7 +569,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                   return (
                     <div key={category} className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="capitalize">{category}</span>
+                        <span>{formatCostCategory(category)}</span>
                         <span>{formatCurrency(amount ?? 0, currency)}</span>
                       </div>
                       <Progress value={percent} className="h-2" />

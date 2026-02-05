@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import type { TripDetail, UpdateTripRequest } from '@/types/trip';
 import {
@@ -12,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 interface EditTripDialogProps {
   trip: TripDetail;
@@ -24,6 +26,7 @@ export function EditTripDialog({ trip, open, onOpenChange, onSuccess }: EditTrip
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<UpdateTripRequest>({
+    name: trip.name,
     destination: trip.destination,
     startDate: trip.startDate.split('T')[0], // 只取日期部分
     endDate: trip.endDate.split('T')[0],
@@ -34,6 +37,7 @@ export function EditTripDialog({ trip, open, onOpenChange, onSuccess }: EditTrip
   useEffect(() => {
     if (open && trip) {
       setFormData({
+        name: trip.name,
         destination: trip.destination,
         startDate: trip.startDate.split('T')[0],
         endDate: trip.endDate.split('T')[0],
@@ -57,10 +61,17 @@ export function EditTripDialog({ trip, open, onOpenChange, onSuccess }: EditTrip
       };
       
       await tripsApi.update(trip.id, updateData);
+      toast.success('行程信息已更新', {
+        description: '您的行程信息已成功保存',
+        duration: 3000,
+      });
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      setError(err.message || '更新行程失败');
+      const errorMessage = err.message || '更新行程失败';
+      setError(errorMessage);
+      // 移除 Toast 错误通知，避免与内联错误消息重复
+      // 模态框内的操作错误应该只使用内联错误消息
     } finally {
       setLoading(false);
     }
@@ -81,6 +92,20 @@ export function EditTripDialog({ trip, open, onOpenChange, onSuccess }: EditTrip
                 {error}
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="tripName">行程名称（可选）</Label>
+              <Input
+                id="tripName"
+                value={formData.name || ''}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="例如：冰岛环岛游"
+                maxLength={200}
+              />
+              <p className="text-xs text-muted-foreground">
+                为你的行程起个名字吧（可选，如不填写将自动生成）
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="destination">目的地</Label>
@@ -142,7 +167,14 @@ export function EditTripDialog({ trip, open, onOpenChange, onSuccess }: EditTrip
               取消
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? '保存中...' : '保存'}
+              {loading ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  保存中...
+                </>
+              ) : (
+                '保存'
+              )}
             </Button>
           </DialogFooter>
         </form>

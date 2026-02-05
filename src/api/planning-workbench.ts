@@ -1328,11 +1328,14 @@ export const planningWorkbenchApi = {
         error?.response?.status === 404;
       
       if (isNotFoundError) {
-        // "未找到"错误使用警告级别，因为预算评估是可选的
-        console.warn('[Planning Workbench API] ⚠️ 预算评估结果不存在（方案可能尚未进行预算评估）:', {
-          planId,
-          message: errorMessage,
-        });
+        // "未找到"错误使用调试级别，因为预算评估是可选的
+        // 只在开发环境显示详细日志
+        if (import.meta.env.DEV) {
+          console.debug('[Planning Workbench API] 🔍 预算评估结果不存在（方案可能尚未进行预算评估）:', {
+            planId,
+            message: errorMessage,
+          });
+        }
       } else {
         // 其他错误使用错误级别
         console.error('[Planning Workbench API] ❌ getPlanBudgetEvaluation 请求失败:', {
@@ -1618,5 +1621,106 @@ export const planningWorkbenchApi = {
       `/planning-workbench/tasks/${taskId}/cancel`
     );
     return handleResponse(response);
+  },
+
+  /**
+   * Auto综合优化
+   * POST /api/planning-workbench/auto-optimize
+   * 
+   * 批量应用高优先级建议（severity === BLOCKER），帮助用户快速优化行程
+   */
+  autoOptimize: async (
+    data: {
+      tripId: string;
+      preview?: boolean;
+      limit?: number;
+    }
+  ): Promise<{
+    success: boolean;
+    appliedCount: number;
+    suggestions: Array<{
+      id: string;
+      title: string;
+      severity: 'blocker' | 'warn' | 'info';
+      applied: boolean;
+      error?: string;
+    }>;
+    impact?: {
+      metrics?: {
+        fatigue?: number;
+        buffer?: number;
+        cost?: number;
+      };
+      risks?: Array<{
+        id: string;
+        severity: string;
+        title: string;
+      }>;
+    };
+  }> => {
+    try {
+      console.log('[Planning Workbench API] 发送 autoOptimize 请求:', {
+        tripId: data.tripId,
+        preview: data.preview,
+        limit: data.limit,
+      });
+
+      const response = await apiClient.post<ApiResponseWrapper<{
+        success: boolean;
+        appliedCount: number;
+        suggestions: Array<{
+          id: string;
+          title: string;
+          severity: 'blocker' | 'warn' | 'info';
+          applied: boolean;
+          error?: string;
+        }>;
+        impact?: {
+          metrics?: {
+            fatigue?: number;
+            buffer?: number;
+            cost?: number;
+          };
+          risks?: Array<{
+            id: string;
+            severity: string;
+            title: string;
+          }>;
+        };
+      }>>(
+        '/planning-workbench/auto-optimize',
+        data,
+        {
+          timeout: 60000, // 60 秒超时（优化可能需要较长时间）
+        }
+      );
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Planning Workbench API] ✅ autoOptimize 成功:', {
+        success: wrappedResponse.success,
+        appliedCount: wrappedResponse.appliedCount,
+        suggestionsCount: wrappedResponse.suggestions.length,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Planning Workbench API] ❌ autoOptimize 请求失败:', {
+        error,
+        tripId: data.tripId,
+        message: error.message,
+        response: error.response?.data,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，优化处理时间较长，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || 'Auto综合优化失败，请稍后重试');
+      }
+    }
   },
 };

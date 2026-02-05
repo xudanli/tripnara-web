@@ -37,6 +37,35 @@ export interface DimensionStatus {
 }
 
 /**
+ * 指标详细说明
+ */
+export interface MetricExplanation {
+  metricName: string;
+  displayName: string; // 如"时间灵活性"
+  definition: string; // 完整定义（100-200字）
+  calculation: {
+    formula: string; // 计算公式
+    parameters: Array<{
+      name: string;
+      description: string;
+      value?: number;
+    }>;
+  };
+  idealRange: {
+    excellent: { min: number; max: number; }; // ≥ 80%
+    good: { min: number; max: number; }; // 60-79%
+    needsImprovement: { min: number; max: number; }; // < 60%
+  };
+  currentState: {
+    score: number;
+    level: 'excellent' | 'good' | 'needsImprovement';
+    analysis: string; // 当前状态分析（50-100字）
+  };
+  weight: number;
+  contribution: number; // score × weight
+}
+
+/**
  * 健康度维度
  */
 export interface HealthDimensions {
@@ -51,7 +80,9 @@ export interface HealthDimensions {
  */
 export interface Health {
   overall: HealthStatus;
+  overallScore: number; // 0-100，使用木桶效应计算（min(各维度分数)）
   dimensions: HealthDimensions;
+  lastUpdated?: string; // 最后更新时间
 }
 
 /**
@@ -390,4 +421,64 @@ export const tripDetailApi = {
       }
     }
   },
+
+  /**
+   * 获取指标详细说明（GET 方式）
+   * GET /api/trip-detail/:tripId/metrics/:metricName/explanation
+   * 
+   * 获取健康度指标的详细说明（定义、计算方法、理想范围、当前状态分析）。
+   */
+  getMetricExplanation: async (
+    tripId: string,
+    metricName: 'schedule' | 'budget' | 'pace' | 'feasibility'
+  ): Promise<MetricExplanation> => {
+    try {
+      console.log('[Trip Detail API] 发送 getMetricExplanation 请求:', {
+        tripId,
+        metricName,
+      });
+
+      const response = await apiClient.get<ApiResponseWrapper<MetricExplanation>>(
+        `/trip-detail/${tripId}/metrics/${metricName}/explanation`,
+        {
+          timeout: 30000, // 30 秒超时
+        }
+      );
+
+      console.log('[Trip Detail API] 收到 getMetricExplanation 原始响应:', {
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+
+      const wrappedResponse = handleResponse(response);
+      console.log('[Trip Detail API] 解析后的响应:', {
+        tripId,
+        metricName: wrappedResponse.metricName,
+        displayName: wrappedResponse.displayName,
+      });
+
+      return wrappedResponse;
+    } catch (error: any) {
+      console.error('[Trip Detail API] getMetricExplanation 请求失败:', {
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+        tripId,
+        metricName,
+      });
+
+      if (error.message) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      } else {
+        throw new Error(error.message || '获取指标详细说明失败，请稍后重试');
+      }
+    }
+  },
+
 };

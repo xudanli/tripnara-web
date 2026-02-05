@@ -5,12 +5,11 @@ import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { tripDetailApi } from '@/api/trip-detail';
-import type { Health, StatusUnderstanding } from '@/api/trip-detail';
+import type { Health } from '@/api/trip-detail';
 import type { 
   TripDetail, 
   ItineraryItem, 
   TripRecapReport,
-  EvidenceListResponse,
   PersonaAlert,
   DayMetricsResponse,
   TripMetricsResponse,
@@ -49,14 +48,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Clock, Cloud, AlertCircle, Info, AlertTriangle, Plus, Wallet, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Info, AlertTriangle, Plus, Wallet } from 'lucide-react';
 import TripBudgetPage from './budget';
 import BudgetOverviewCard from '@/components/trips/BudgetOverviewCard';
-import BudgetAlertBanner from '@/components/trips/BudgetAlertBanner';
 import BudgetMonitorCard from '@/components/trips/BudgetMonitorCard';
 import TripCostSummaryCard from '@/components/trips/TripCostSummaryCard';
 import UnpaidItemsList from '@/components/trips/UnpaidItemsList';
 import HealthBar from '@/components/trips/HealthBar';
+import { MetricExplanationDialog } from '@/components/trips/MetricExplanationDialog';
+import { AutoOptimizeDialog } from '@/components/trips/AutoOptimizeDialog';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
 import PersonaModeToggle, { type PersonaMode } from '@/components/common/PersonaModeToggle';
@@ -69,7 +69,6 @@ import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryI
 import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
 import ComplianceRulesCard from '@/components/trips/ComplianceRulesCard';
-import BusinessHoursCard from '@/components/trips/BusinessHoursCard';
 import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
 import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
@@ -89,7 +88,6 @@ import {
 import { useMemo } from 'react';
 import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/persona-colors';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
-import { getGateStatusClasses } from '@/lib/gate-status';
 import { WeatherCard, WeatherAlertBanner } from '@/components/weather/WeatherCard';
 
 // 决策记录标签页组件
@@ -279,10 +277,11 @@ export default function TripDetailPage() {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewSuggestion, setPreviewSuggestion] = useState<Suggestion | null>(null);
   const [activeTab, setActiveTab] = useState<string>('overview'); // ✅ Tab 状态控制
+  const [metricExplanationDialogOpen, setMetricExplanationDialogOpen] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<'schedule' | 'budget' | 'pace' | 'feasibility' | null>(null);
+  const [autoOptimizeDialogOpen, setAutoOptimizeDialogOpen] = useState(false);
   
-  // 新增：证据、风险、指标相关状态
-  const [evidence, setEvidence] = useState<EvidenceListResponse | null>(null);
-  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  // 新增：风险、指标相关状态
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
   const [personaAlertsLoading, setPersonaAlertsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -296,7 +295,6 @@ export default function TripDetailPage() {
   
   // 新增：行程详情页 Agent 相关状态
   const [tripHealth, setTripHealth] = useState<Health | null>(null);
-  const [statusUnderstanding, setStatusUnderstanding] = useState<StatusUnderstanding | null>(null);
   
   // 新增：提取的数据状态（通过 useMemo 计算）
   const abuData = useMemo<AbuViewData | null>(() => {
@@ -506,13 +504,11 @@ export default function TripDetailPage() {
         await loadTripState();
         // 加载相关数据（先加载不依赖 trip 的数据）
         await Promise.all([
-          loadEvidence(),
           loadSuggestions(),
           loadConflicts(),
           loadPersonaAlerts(), // 新增：加载三人格提醒
           loadDecisionLogs(), // 新增：加载决策日志
           loadTripHealth(), // 新增：加载行程健康度
-          loadTripStatus(), // 新增：加载行程状态理解
         ]);
       } else {
         setError('行程数据为空');
@@ -619,20 +615,6 @@ export default function TripDetailPage() {
     }
   };
 
-  // 加载关键证据（前3条）
-  const loadEvidence = async () => {
-    if (!id) return;
-    try {
-      setEvidenceLoading(true);
-      const data = await tripsApi.getEvidence(id, { limit: 3, offset: 0 });
-      setEvidence(data);
-    } catch (err: any) {
-      console.error('Failed to load evidence:', err);
-      // 静默处理错误，不影响主流程
-    } finally {
-      setEvidenceLoading(false);
-    }
-  };
 
   // 检查是否是"未发现问题"类型的建议
   const isNoIssueSuggestion = (suggestion: Suggestion): boolean => {
@@ -803,18 +785,6 @@ export default function TripDetailPage() {
     }
   };
 
-  // 新增：加载行程状态理解
-  const loadTripStatus = async () => {
-    if (!id) return;
-    try {
-      const status = await tripDetailApi.getStatus(id);
-      setStatusUnderstanding(status);
-    } catch (err: any) {
-      console.error('Failed to load trip status:', err);
-      // 静默处理错误，不影响主流程
-      setStatusUnderstanding(null);
-    }
-  };
 
   // 加载行程指标（用于健康度计算）
   const loadTripMetrics = async () => {
@@ -1247,7 +1217,7 @@ export default function TripDetailPage() {
     );
   }
 
-  // 计算健康度指标（从 API 获取真实数据）
+  // 计算健康度指标（优先使用 tripHealth API 数据）
   const healthMetrics = (() => {
     // ✅ 如果行程项为空，返回空值（不显示健康度）
     const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
@@ -1257,6 +1227,16 @@ export default function TripDetailPage() {
         buffer: 0,
         risk: 0,
         cost: 0,
+      };
+    }
+
+    // ✅ 优先使用 tripHealth API 数据
+    if (tripHealth && tripHealth.dimensions) {
+      return {
+        executable: tripHealth.dimensions.schedule?.score || 0,
+        buffer: tripHealth.dimensions.budget?.score || 0,
+        risk: 100 - (tripHealth.dimensions.pace?.score || 0), // 风险是节奏的反向（风险越低越好）
+        cost: tripHealth.dimensions.feasibility?.score || 0,
       };
     }
 
@@ -1270,7 +1250,7 @@ export default function TripDetailPage() {
 
     if (!tripMetrics) return defaultMetrics;
 
-    // 基于行程指标计算健康度
+    // Fallback：基于行程指标计算健康度（如果 API 数据不可用）
     const summary = tripMetrics.summary;
     const totalDays = trip?.statistics?.totalDays || trip?.TripDay?.length || 1;
     
@@ -1345,7 +1325,7 @@ export default function TripDetailPage() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/trips')}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
-              <h1 className="text-2xl font-bold">{trip.destination}</h1>
+              <h1 className="text-2xl font-bold">{trip.name || trip.destination}</h1>
               <Badge 
                 variant="outline" 
                 className={cn(
@@ -1387,6 +1367,10 @@ export default function TripDetailPage() {
                 buffer={healthMetrics.buffer}
                 risk={healthMetrics.risk}
                 cost={healthMetrics.cost}
+                onMetricClick={(metricName) => {
+                  setSelectedMetric(metricName);
+                  setMetricExplanationDialogOpen(true);
+                }}
               />
             ) : (
               // ✅ 弱化上方提示，只显示简单的占位
@@ -1397,12 +1381,41 @@ export default function TripDetailPage() {
             )}
           </div>
 
-          {/* 右：视图模式切换 + 主 CTA */}
+          {/* 右：视图模式切换 + Auto 综合按钮 + 主 CTA */}
           <div className="flex items-center gap-2" data-tour="primary-cta">
             {/* ✅ 已取消状态下隐藏视图切换 */}
             {trip.status !== 'CANCELLED' && (
               <PersonaModeToggle value={viewMode} onChange={setViewMode} />
             )}
+            {/* Auto 综合按钮 - 仅在规划中状态显示 */}
+            {trip.status === 'PLANNING' && (() => {
+              // 过滤出高优先级建议（severity === 'blocker'）
+              const blockerSuggestions = suggestions.filter(s => s.severity === 'blocker');
+              const hasBlockerSuggestions = blockerSuggestions.length > 0;
+              
+              return (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => {
+                    if (!hasBlockerSuggestions) {
+                      toast.info('当前没有高优先级建议需要优化');
+                      return;
+                    }
+                    setAutoOptimizeDialogOpen(true);
+                  }}
+                  disabled={!hasBlockerSuggestions}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Auto 综合
+                  {hasBlockerSuggestions && (
+                    <Badge variant="destructive" className="ml-2 h-5 px-1.5 text-xs">
+                      {blockerSuggestions.length}
+                    </Badge>
+                  )}
+                </Button>
+              );
+            })()}
             {mainCTA && CTAIcon && (
               <Button onClick={mainCTA.action} size="lg">
                 <CTAIcon className="w-4 h-4 mr-2" />
@@ -1448,11 +1461,10 @@ export default function TripDetailPage() {
                               { status: 'CANCELLED', label: '已取消', icon: '❌', description: '取消行程' }
                             );
                           } else if (currentStatus === 'IN_PROGRESS') {
-                            // 进行中 → 已完成、已取消、规划中（允许重新规划）
+                            // 进行中 → 已完成、已取消（不允许改回规划中）
                             allowedTransitions.push(
                               { status: 'COMPLETED', label: '已完成', icon: '✅', description: '完成行程' },
-                              { status: 'CANCELLED', label: '已取消', icon: '❌', description: '取消行程' },
-                              { status: 'PLANNING', label: '规划中', icon: '📋', description: '重新规划' }
+                              { status: 'CANCELLED', label: '已取消', icon: '❌', description: '取消行程' }
                             );
                           } else if (currentStatus === 'COMPLETED') {
                             // 已完成 → 已取消（不能改回规划中或进行中）
@@ -1816,77 +1828,8 @@ export default function TripDetailPage() {
                 </Card>
               </div>
 
-              {/* 右（4/12）：健康度 + 状态理解 + 助手中心 + Evidence Quick Peek */}
+              {/* 右（4/12）：预算概览 + 助手中心 */}
               <div className="col-span-12 lg:col-span-4 space-y-6">
-                {/* 行程健康度（来自 trip-detail API） */}
-                {tripHealth && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">行程健康度</CardTitle>
-                      <CardDescription>理解与掌控旅行现状</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-sm',
-                            tripHealth.overall === 'healthy' && getGateStatusClasses('ALLOW'),
-                            tripHealth.overall === 'warning' && getGateStatusClasses('NEED_CONFIRM'),
-                            tripHealth.overall === 'critical' && getGateStatusClasses('REJECT')
-                          )}
-                        >
-                          {tripHealth.overall === 'healthy' && '健康'}
-                          {tripHealth.overall === 'warning' && '警告'}
-                          {tripHealth.overall === 'critical' && '严重'}
-                        </Badge>
-                      </div>
-                      <div className="space-y-3">
-                        {Object.entries(tripHealth.dimensions).map(([key, dimension]) => (
-                          <div key={key} className="space-y-1">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                {key === 'schedule' && '时间'}
-                                {key === 'budget' && (
-                                  <button
-                                    onClick={() => {
-                                      setActiveTab('budget');
-                                    }}
-                                    className="flex items-center gap-1 hover:text-primary transition-colors"
-                                  >
-                                    预算
-                                    <ExternalLink className="w-3 h-3" />
-                                  </button>
-                                )}
-                                {key === 'pace' && '节奏'}
-                                {key === 'feasibility' && '可达性'}
-                              </span>
-                              <span className="font-medium">{dimension.score}/100</span>
-                            </div>
-                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                              <div
-                                className={cn(
-                                  'h-full transition-all',
-                                  dimension.score >= 80 && 'bg-green-500',
-                                  dimension.score >= 60 && dimension.score < 80 && 'bg-yellow-500',
-                                  dimension.score < 60 && 'bg-red-500'
-                                )}
-                                style={{ width: `${dimension.score}%` }}
-                              />
-                            </div>
-                            {dimension.issues.length > 0 && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {dimension.issues.slice(0, 2).join(', ')}
-                                {dimension.issues.length > 2 && ` +${dimension.issues.length - 2} 更多`}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
                 {/* 预算概览卡片 */}
                 {id && (
                   <BudgetOverviewCard
@@ -1903,58 +1846,6 @@ export default function TripDetailPage() {
                   />
                 )}
 
-                {/* 状态理解（来自 trip-detail API） */}
-                {statusUnderstanding && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">状态理解</CardTitle>
-                      <CardDescription>当前行程状态分析</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">进度</span>
-                          <span className="text-sm font-medium">
-                            {statusUnderstanding.progress.completed}/{statusUnderstanding.progress.total} (
-                            {statusUnderstanding.progress.percentage}%)
-                          </span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary transition-all"
-                            style={{ width: `${statusUnderstanding.progress.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                      {statusUnderstanding.nextSteps.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">下一步：</p>
-                          <ul className="space-y-1">
-                            {statusUnderstanding.nextSteps.slice(0, 3).map((step, index) => (
-                              <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>{step.step}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {statusUnderstanding.risks.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-orange-600">风险：</p>
-                          <ul className="space-y-1">
-                            {statusUnderstanding.risks.slice(0, 2).map((risk, index) => (
-                              <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
-                                <AlertTriangle className="w-3 h-3 text-orange-600 mt-0.5 flex-shrink-0" />
-                                <span>{risk.description}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
 
                 {/* 助手中心 - 已取消状态下隐藏 */}
                 {trip.status !== 'CANCELLED' && (
@@ -1994,8 +1885,11 @@ export default function TripDetailPage() {
                             preview: false,
                           });
                           
-                          // 重新加载建议列表
-                          await loadSuggestions();
+                          // 重新加载建议列表和健康度数据
+                          await Promise.all([
+                            loadSuggestions(),
+                            loadTripHealth(), // ✅ 应用建议后自动刷新健康度数据
+                          ]);
                           
                           // 显示成功提示
                           toast.success('建议已成功应用');
@@ -2034,9 +1928,12 @@ export default function TripDetailPage() {
                             preview: false,
                           });
                           
-                          // 重新加载建议列表和行程数据
-                          await loadSuggestions();
-                          await loadTrip();
+                          // 重新加载建议列表、行程数据和健康度数据
+                          await Promise.all([
+                            loadSuggestions(),
+                            loadTrip(),
+                            loadTripHealth(), // ✅ 应用建议后自动刷新健康度数据
+                          ]);
                           
                           // 显示成功提示
                           toast.success('建议已成功应用');
@@ -2064,132 +1961,7 @@ export default function TripDetailPage() {
                 </div>
                 )}
 
-                {/* Evidence Quick Peek - 已取消状态下隐藏 */}
-                {trip.status !== 'CANCELLED' && (
-                  <Card data-tour="evidence-quick-peek">
-                  <CardHeader>
-                    <CardTitle>关键证据</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {evidenceLoading ? (
-                      <div className="flex items-center justify-center py-4">
-                        <Spinner className="w-4 h-4" />
-                    </div>
-                    ) : evidence && evidence.items.length > 0 ? (
-                      <>
-                        {evidence.items.map((item) => {
-                          const typeConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-                            opening_hours: { label: '营业时间', icon: Clock, color: 'text-blue-600' },
-                            road_closure: { label: '封路信息', icon: AlertCircle, color: 'text-red-600' },
-                            weather: { label: '天气窗口', icon: Cloud, color: 'text-sky-600' },
-                            booking: { label: '预订信息', icon: Calendar, color: 'text-purple-600' },
-                            other: { label: '其他', icon: Info, color: 'text-gray-600' },
-                          };
-                          
-                          const config = typeConfig[item.type] || { label: item.type, icon: Info, color: 'text-gray-600' };
-                          const Icon = config.icon;
-                          
-                          // 如果是营业时间类型，使用优化的组件
-                          if (item.type === 'opening_hours') {
-                            // 从 title 或 description 中提取地点名称
-                            // title 可能是 "营业时间" 或 "地点名 营业时间"
-                            // description 可能包含 "地点名 营业时间: {...JSON...}"
-                            let placeName: string | undefined = undefined;
-                            
-                            // 尝试从 title 提取
-                            if (item.title) {
-                              const titleMatch = item.title.match(/^(.+?)\s*营业时间/);
-                              if (titleMatch && titleMatch[1] && titleMatch[1] !== '营业时间') {
-                                placeName = titleMatch[1].trim();
-                              }
-                            }
-                            
-                            // 如果 title 中没有，尝试从 description 开头提取
-                            if (!placeName && item.description) {
-                              const descMatch = item.description.match(/^(.+?)\s*营业时间\s*[:：]/);
-                              if (descMatch && descMatch[1]) {
-                                placeName = descMatch[1].trim();
-                              }
-                            }
-                            
-                            return (
-                              <BusinessHoursCard
-                                key={item.id}
-                                title={placeName}
-                                description={item.description || ''}
-                                day={item.day}
-                              />
-                            );
-                          }
-                          
-                          // 其他类型的证据，使用原有样式
-                          let displayContent = item.description || '';
-                          
-                          // 确定显示的标题：优先使用 item.title，如果没有则使用类型标签
-                          const displayTitle = item.title || config.label;
-                          
-                          return (
-                            <div
-                              key={item.id}
-                              className="p-3 border rounded-lg hover:bg-muted/50 transition-colors space-y-2"
-                            >
-                              <div className="flex items-start gap-2">
-                                <Icon className={cn('w-4 h-4 mt-0.5 flex-shrink-0', config.color)} />
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                    <span className="text-sm font-medium">{displayTitle}</span>
-                                    {item.day && (
-                                      <Badge variant="outline" className="text-xs">
-                                        Day {item.day}
-                                      </Badge>
-                                    )}
-                      </div>
-                                  {displayContent && (
-                                    <div className="text-xs text-muted-foreground break-words">
-                                      {displayContent}
-                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {evidence.total > evidence.items.length && (
-                          <div className="text-xs text-muted-foreground text-center pt-2 border-t">
-                            还有 {evidence.total - evidence.items.length} 条证据
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-center py-6 text-sm text-muted-foreground">
-                        暂无关键证据
-                      </div>
-                    )}
-                    {/* ✅ 查看所有证据按钮 */}
-                    <Button
-                      variant="outline"
-                      className="w-full mt-4"
-                      onClick={() => {
-                        setDrawerTab('evidence');
-                        setDrawerOpen(true);
-                      }}
-                    >
-                      查看所有证据
-                    </Button>
-                  </CardContent>
-                </Card>
-                )}
 
-                {/* ✅ 只有规划中状态才显示规划工作台按钮 */}
-                {trip.status === 'PLANNING' && (
-                  <Button
-                    className="w-full"
-                    onClick={() => navigate(`/dashboard/plan-studio?tripId=${id}`)}
-                  >
-                    <Compass className="w-4 h-4 mr-2" />
-                    打开计划工作室
-                  </Button>
-                )}
                     </div>
                       </div>
           </TabsContent>
@@ -2751,6 +2523,73 @@ export default function TripDetailPage() {
           }}
         />
       )}
+
+      {/* 指标详细说明弹窗 */}
+      {id && (
+        <MetricExplanationDialog
+          tripId={id}
+          metricName={selectedMetric}
+          open={metricExplanationDialogOpen}
+          onOpenChange={(open) => {
+            setMetricExplanationDialogOpen(open);
+            if (!open) {
+              setSelectedMetric(null);
+            }
+          }}
+        />
+      )}
+
+      {/* Auto 综合优化弹窗 */}
+      {id && (() => {
+        // 过滤出高优先级建议（severity === 'blocker'）
+        const blockerSuggestions = suggestions.filter(s => s.severity === 'blocker');
+        
+        return (
+          <AutoOptimizeDialog
+            tripId={id}
+            suggestions={blockerSuggestions}
+            open={autoOptimizeDialogOpen}
+            onOpenChange={(open) => {
+              setAutoOptimizeDialogOpen(open);
+            }}
+            onSuccess={async (result) => {
+              // 优化成功后刷新数据
+              await Promise.all([
+                loadTrip(), // 重新加载行程数据
+                loadSuggestions(), // 重新加载建议列表
+                loadTripHealth(), // 重新加载健康度数据
+              ]);
+              
+              // 显示成功提示
+              if (result.success && result.appliedCount > 0) {
+                toast.success(`成功应用 ${result.appliedCount} 条高优先级建议`);
+                
+                // 如果有影响数据，显示影响信息
+                if (result.impact?.metrics) {
+                  const metrics = result.impact.metrics;
+                  const impactMessages: string[] = [];
+                  
+                  if (metrics.fatigue !== undefined && metrics.fatigue !== 0) {
+                    impactMessages.push(`疲劳指数${metrics.fatigue > 0 ? '+' : ''}${metrics.fatigue}`);
+                  }
+                  if (metrics.buffer !== undefined && metrics.buffer !== 0) {
+                    impactMessages.push(`缓冲时间${metrics.buffer > 0 ? '+' : ''}${metrics.buffer}分钟`);
+                  }
+                  if (metrics.cost !== undefined && metrics.cost !== 0) {
+                    impactMessages.push(`费用${metrics.cost > 0 ? '+' : ''}¥${metrics.cost}`);
+                  }
+                  
+                  if (impactMessages.length > 0) {
+                    toast.info(`优化影响：${impactMessages.join('，')}`);
+                  }
+                }
+              } else {
+                toast.warning('没有成功应用任何建议');
+              }
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

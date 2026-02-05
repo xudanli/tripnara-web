@@ -9,6 +9,7 @@
     "about": "关于我们",
     "login": "登录",
     "startPlanning": "开始规划",
+    "openApp": "打开 TripNARA",
     "user": "用户",
     "logout": "退出登录",
     "preferences": "偏好设置",
@@ -1907,8 +1908,11 @@
       "professional": "专业工具",
       "share": "分享&社区"
     },
-    "settings": "设置",
+    "profile": "个人资料",
     "preferences": "偏好设置",
+    "notifications": "通知设置",
+    "account": "账户设置",
+    "settings": "设置",
     "logout": "退出登录"
   },
   "globalCommandBar": {

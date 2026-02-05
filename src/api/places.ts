@@ -93,6 +93,64 @@ export interface RecommendedActivity {
   };
 }
 
+/**
+ * 关键证据响应
+ */
+export interface PlaceEvidenceResponse {
+  placeId: number;
+  placeName: string;
+  evidence: {
+    businessHours?: {
+      open: string;
+      close: string;
+      timezone: string;
+      exceptions?: Array<{
+        date: string;
+        open?: string;
+        close?: string;
+        closed?: boolean;
+        note?: string;
+      }>;
+    };
+    roadClosure?: {
+      hasClosure: boolean;
+      closures?: Array<{
+        date: string;
+        reason: string;
+        affectedRoutes?: string[];
+        alternativeRoutes?: string[];
+      }>;
+    };
+    weatherWindow?: {
+      date: string;
+      condition: string;
+      description: string;
+      temperature: {
+        min: number;
+        max: number;
+        unit: 'celsius' | 'fahrenheit';
+      };
+      precipitation?: {
+        probability: number;
+        amount?: number;
+      };
+      wind?: {
+        speed: number;
+        direction: string;
+      };
+      suitableForOutdoor?: boolean;
+    };
+    otherInfo?: {
+      crowdLevel?: 'low' | 'medium' | 'high';
+      specialEvents?: Array<{
+        date: string;
+        name: string;
+        impact?: string;
+      }>;
+    };
+  };
+}
+
 export const placesApi = {
   getAll: async (params?: { page?: number; limit?: number }) => {
     const response = await apiClient.get<ApiResponse<PaginatedResponse<Place>>>(
@@ -309,6 +367,25 @@ export const placesApi = {
   ): Promise<RecommendedActivity[]> => {
     const response = await apiClient.get<ApiResponseWrapper<RecommendedActivity[]>>(
       '/places/recommendations/activities',
+      { params }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 获取关键证据
+   * GET /api/places/:placeId/evidence
+   */
+  getEvidence: async (
+    placeId: number,
+    params?: {
+      date?: string;
+      includeWeather?: boolean;
+      includeTraffic?: boolean;
+    }
+  ): Promise<PlaceEvidenceResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<PlaceEvidenceResponse>>(
+      `/places/${placeId}/evidence`,
       { params }
     );
     return handleResponse(response);

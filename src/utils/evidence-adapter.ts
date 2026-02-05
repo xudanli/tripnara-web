@@ -38,13 +38,22 @@ export function adaptTripEvidenceToReadiness(
     ? `POI ${tripEvidence.poiId}`
     : '全局';
 
+  // 🆕 处理 confidence 字段：优先使用新的对象格式，如果没有则使用简单的字符串格式
+  const confidenceValue = tripEvidence.confidence 
+    ? {
+        score: tripEvidence.confidence.score,
+        level: tripEvidence.confidence.level,
+        factors: tripEvidence.confidence.factors,
+      }
+    : (severityToConfidence[tripEvidence.severity || 'medium'] || 'medium');
+
   return {
     id: tripEvidence.id,
     category: typeToCategory[tripEvidence.type] || 'poi',
     source: tripEvidence.source || '未知来源',
     timestamp: tripEvidence.timestamp,
     scope,
-    confidence: severityToConfidence[tripEvidence.severity || 'medium'] || 'medium',
+    confidence: confidenceValue,
     // 🆕 保留原始证据的标题和描述（用于区分不同的证据项）
     title: tripEvidence.title,
     description: tripEvidence.description,
@@ -53,11 +62,6 @@ export function adaptTripEvidenceToReadiness(
     day: tripEvidence.day,
     // 🆕 P0修复：证据增强字段（v1.2.0）
     freshness: tripEvidence.freshness,
-    confidence: tripEvidence.confidence ? {
-      score: tripEvidence.confidence.score,
-      level: tripEvidence.confidence.level,
-      factors: tripEvidence.confidence.factors,
-    } : undefined,
     qualityScore: tripEvidence.qualityScore,
     // 注意：TripEvidenceItem 可能没有这些字段，需要从 API 响应中获取
     // 如果 API 返回了这些字段，应该直接使用

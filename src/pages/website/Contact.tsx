@@ -268,23 +268,27 @@ export default function ContactPage() {
                       margin: 0,
                     }}
                   >
-                    {(t(`contact.recruiting.positions.${key}.expectations`, { returnObjects: true }) as string[] || []).map((expectation, idx) => (
-                      <li
-                        key={idx}
-                        style={{
-                          padding: '0.5rem 0',
-                          fontSize: '0.95rem',
-                          color: '#666',
-                          lineHeight: '1.6',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '0.5rem',
-                        }}
-                      >
-                        <span style={{ color: 'oklch(0.205 0 0)', fontSize: '0.8rem', marginTop: '0.3rem', flexShrink: 0 }}>•</span>
-                        <span>{expectation}</span>
-                      </li>
-                    ))}
+                    {(() => {
+                      const expectations = t(`contact.recruiting.positions.${key}.expectations`, { returnObjects: true });
+                      const expectationsArray = Array.isArray(expectations) ? expectations : [];
+                      return expectationsArray.map((expectation: string, idx: number) => (
+                        <li
+                          key={idx}
+                          style={{
+                            padding: '0.5rem 0',
+                            fontSize: '0.95rem',
+                            color: '#666',
+                            lineHeight: '1.6',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <span style={{ color: 'oklch(0.205 0 0)', fontSize: '0.8rem', marginTop: '0.3rem', flexShrink: 0 }}>•</span>
+                          <span>{expectation}</span>
+                        </li>
+                      ));
+                    })()}
                   </ul>
                 </div>
 

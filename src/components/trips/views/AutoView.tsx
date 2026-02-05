@@ -25,9 +25,12 @@ import {
   Sparkles,
   Compass,
   Plus,
-  Target
+  Target,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EmptyStateCard } from '@/components/ui/empty-state-images';
 import { formatCurrency } from '@/utils/format';
 import { getPersonaIconColorClasses, getPersonaColorClasses, getPersonaBackgroundClasses } from '@/lib/persona-colors';
 import AbuView from './AbuView';
@@ -63,6 +66,7 @@ export default function AutoView({
   onAddItem
 }: AutoViewProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'abu' | 'dre' | 'neptune'>('overview');
+  const [isExpanded, setIsExpanded] = useState(false); // ✅ 控制综合视图展开/折叠
   
   // 获取货币单位
   const currency = trip?.budgetConfig?.currency || 'CNY';
@@ -135,66 +139,57 @@ export default function AutoView({
     return (
       <Card className="border-2 border-dashed border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
         <CardContent className="py-24 px-8 min-h-[60vh] flex items-center justify-center">
-          <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-2xl w-full">
-            {/* 大图标 */}
-            <div className="p-6 rounded-full bg-primary/10 animate-pulse">
-              <Compass className="w-16 h-16 text-primary" />
-            </div>
-            
-            {/* 主文案 - 更友好、有温度 */}
-            <div className="space-y-3">
-              <h2 className="text-2xl font-semibold text-foreground">
-                你还没有添加任何行程哦～
-              </h2>
-              <p className="text-base text-muted-foreground leading-relaxed">
-                这里现在空空的，但每一次精彩旅程都从第一步开始 ✨
-                <br />
-                点击下方按钮，轻松开启你的旅行计划！
-              </p>
-            </div>
-            
-            {/* 主次按钮组 */}
-            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
-              {/* 主按钮：创建第一个行程项 */}
-              {onAddItem ? (
-                <Button
-                  size="lg"
-                  onClick={onAddItem}
-                  className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
-                >
-                  <Plus className="w-5 h-5 mr-2" />
-                  创建第一个行程项
-                </Button>
-              ) : onNavigateToPlanStudio ? (
-                <Button
-                  size="lg"
-                  onClick={onNavigateToPlanStudio}
-                  className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
-                >
-                  <Target className="w-5 h-5 mr-2" />
-                  开始规划我的行程
-                </Button>
-              ) : null}
-              
-              {/* 次按钮：进入规划工作台 */}
-              {onNavigateToPlanStudio && onAddItem && (
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={onNavigateToPlanStudio}
-                  className="flex-1 text-base h-12"
-                >
-                  <Compass className="w-5 h-5 mr-2" />
-                  进入规划工作台
-                </Button>
-              )}
-            </div>
-            
-            {/* 辅助提示 - 更轻量 */}
-            <p className="text-xs text-muted-foreground/70 max-w-md">
-              一个行程项可以是景点、美食、住宿或交通，试试添加第一站吧
-            </p>
-          </div>
+          <EmptyStateCard
+            type="no-trip-added"
+            title="你还没有添加任何行程哦～"
+            description="这里现在空空的，但每一次精彩旅程都从第一步开始 ✨ 点击下方按钮，轻松开启你的旅行计划！"
+            imageWidth={180}
+            imageHeight={180}
+            action={
+              <div className="flex flex-col items-center gap-4 w-full max-w-md">
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                  {/* 主按钮：创建第一个行程项 */}
+                  {onAddItem ? (
+                    <Button
+                      size="lg"
+                      onClick={onAddItem}
+                      className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
+                    >
+                      <Plus className="w-5 h-5 mr-2" />
+                      创建第一个行程项
+                    </Button>
+                  ) : onNavigateToPlanStudio ? (
+                    <Button
+                      size="lg"
+                      onClick={onNavigateToPlanStudio}
+                      className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
+                    >
+                      <Target className="w-5 h-5 mr-2" />
+                      开始规划我的行程
+                    </Button>
+                  ) : null}
+                  
+                  {/* 次按钮：进入规划工作台 */}
+                  {onNavigateToPlanStudio && onAddItem && (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={onNavigateToPlanStudio}
+                      className="flex-1 text-base h-12"
+                    >
+                      <Compass className="w-5 h-5 mr-2" />
+                      进入规划工作台
+                    </Button>
+                  )}
+                </div>
+                
+                {/* 辅助提示 - 更轻量 */}
+                <p className="text-xs text-muted-foreground/70 max-w-md">
+                  一个行程项可以是景点、美食、住宿或交通，试试添加第一站吧
+                </p>
+              </div>
+            }
+          />
         </CardContent>
       </Card>
     );
@@ -212,143 +207,218 @@ export default function AutoView({
 
   return (
     <div className="space-y-6">
-      {/* 综合概览卡片 */}
-      <Card className="border-2 border-primary/20">
-        <CardHeader>
+      {/* ✅ 方案3：简化综合视图为摘要卡片（可展开） */}
+      <Card className="border border-gray-200 hover:border-gray-300 transition-colors">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Eye className="w-5 h-5 text-primary" />
-                综合视图
-              </CardTitle>
-              <CardDescription className="mt-1">
-                整合三人格的视角，全面了解行程状态
-              </CardDescription>
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-primary" />
+              <CardTitle className="text-base">综合视图</CardTitle>
             </div>
-            <Badge variant="outline" className={cn('flex items-center gap-1.5', safetyBadge.className)}>
-              {safetyBadge.icon && <safetyBadge.icon className="w-3.5 h-3.5" />}
-              {safetyBadge.label}
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className={cn('flex items-center gap-1.5', safetyBadge.className)}>
+                {safetyBadge.icon && <safetyBadge.icon className="w-3 h-3" />}
+                {safetyBadge.label}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="h-8 px-2"
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="w-4 h-4 mr-1" />
+                    <span className="text-xs">收起</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4 mr-1" />
+                    <span className="text-xs">展开</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Abu 安全视角 */}
-            <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('ABU'))}>
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('ABU'))}>
-                    <Shield className={cn('w-5 h-5', getPersonaIconColorClasses('ABU'))} />
-                  </div>
-                  <span className="font-semibold text-sm">安全视角</span>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">安全评分</span>
-                      <span className={`text-base font-bold ${getSafetyColor(metrics.safetyScore)}`}>
-                        {metrics.safetyScore}/100
-                      </span>
-                    </div>
-                    <Progress 
-                      value={metrics.safetyScore} 
-                      className="h-2"
-                    />
-                  </div>
-                  <div className={cn('flex items-center justify-between pt-2 border-t', getPersonaColorClasses('ABU').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-abu-accent/30')}>
-                    <span className="text-xs text-muted-foreground">关键问题</span>
-                    <Badge 
-                      variant={metrics.criticalIssues > 0 ? 'destructive' : 'secondary'} 
-                      className="text-xs"
-                    >
-                      {metrics.criticalIssues}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        
+        {/* 摘要卡片（默认显示） */}
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-3 gap-3">
+            {/* 安全视角摘要 */}
+            <div className={cn(
+              'flex flex-col items-center p-3 rounded-lg border transition-colors',
+              'bg-gradient-to-br to-white',
+              getPersonaBackgroundClasses('ABU'),
+              'hover:shadow-sm cursor-pointer'
+            )} onClick={() => !isExpanded && setIsExpanded(true)}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Shield className={cn('w-4 h-4', getPersonaIconColorClasses('ABU'))} />
+                <span className="text-xs font-medium">安全</span>
+              </div>
+              <span className={cn('text-lg font-bold', getSafetyColor(metrics.safetyScore))}>
+                {metrics.safetyScore}
+              </span>
+              <span className="text-xs text-muted-foreground">/100</span>
+            </div>
 
-            {/* Dr.Dre 节奏视角 */}
-            <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('DR_DRE'))}>
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('DR_DRE'))}>
-                    <Activity className={cn('w-5 h-5', getPersonaIconColorClasses('DR_DRE'))} />
-                  </div>
-                  <span className="font-semibold text-sm">节奏视角</span>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">节奏评分</span>
-                      <span className={cn('text-base font-bold', getPersonaIconColorClasses('DR_DRE'))}>
-                        {metrics.rhythmScore}/100
-                      </span>
-                    </div>
-                    <Progress 
-                      value={metrics.rhythmScore} 
-                      className={cn('h-2', getPersonaBackgroundClasses('DR_DRE'))}
-                    />
-                  </div>
-                  <div className={cn('pt-2 border-t', getPersonaColorClasses('DR_DRE').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-dre-accent/30')}>
-                    <p className="text-xs text-muted-foreground mb-1.5">
-                      {metrics.rhythmScore >= 80 
-                        ? '节奏适中，建议不多，行程流畅'
-                        : metrics.rhythmScore >= 60
-                        ? '节奏基本合理，有少量优化空间'
-                        : '节奏需要调整，建议优化'}
-                    </p>
-                    {metrics.drDreWarnings > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">有 {metrics.drDreWarnings} 个建议可优化</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-xs"
-                          onClick={() => setActiveTab('dre')}
-                        >
-                          查看 →
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* 节奏视角摘要 */}
+            <div className={cn(
+              'flex flex-col items-center p-3 rounded-lg border transition-colors',
+              'bg-gradient-to-br to-white',
+              getPersonaBackgroundClasses('DR_DRE'),
+              'hover:shadow-sm cursor-pointer'
+            )} onClick={() => !isExpanded && setIsExpanded(true)}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <Activity className={cn('w-4 h-4', getPersonaIconColorClasses('DR_DRE'))} />
+                <span className="text-xs font-medium">节奏</span>
+              </div>
+              <span className={cn('text-lg font-bold', getPersonaIconColorClasses('DR_DRE'))}>
+                {metrics.rhythmScore}
+              </span>
+              <span className="text-xs text-muted-foreground">/100</span>
+            </div>
 
-            {/* Neptune 修复视角 */}
-            <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('NEPTUNE'))}>
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('NEPTUNE'))}>
-                    <RefreshCw className={cn('w-5 h-5', getPersonaIconColorClasses('NEPTUNE'))} />
-                  </div>
-                  <span className="font-semibold text-sm">修复视角</span>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs text-muted-foreground">准备度</span>
-                      <span className={cn('text-base font-bold', getPersonaIconColorClasses('NEPTUNE'))}>
-                        {metrics.readinessScore}/100
-                      </span>
-                    </div>
-                    <Progress 
-                      value={metrics.readinessScore} 
-                      className={cn('h-2', getPersonaBackgroundClasses('NEPTUNE'))}
-                    />
-                  </div>
-                  <div className={cn('flex items-center justify-between pt-2 border-t', getPersonaColorClasses('NEPTUNE').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-neptune-accent/30')}>
-                    <span className="text-xs text-muted-foreground">建议</span>
-                    <Badge variant="outline" className="text-xs">
-                      {metrics.suggestions}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* 修复视角摘要 */}
+            <div className={cn(
+              'flex flex-col items-center p-3 rounded-lg border transition-colors',
+              'bg-gradient-to-br to-white',
+              getPersonaBackgroundClasses('NEPTUNE'),
+              'hover:shadow-sm cursor-pointer'
+            )} onClick={() => !isExpanded && setIsExpanded(true)}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <RefreshCw className={cn('w-4 h-4', getPersonaIconColorClasses('NEPTUNE'))} />
+                <span className="text-xs font-medium">修复</span>
+              </div>
+              <span className={cn('text-lg font-bold', getPersonaIconColorClasses('NEPTUNE'))}>
+                {metrics.readinessScore}
+              </span>
+              <span className="text-xs text-muted-foreground">/100</span>
+            </div>
           </div>
         </CardContent>
+
+        {/* 详细视图（展开后显示） */}
+        {isExpanded && (
+          <CardContent className="pt-4 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Abu 安全视角 */}
+              <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('ABU'))}>
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('ABU'))}>
+                      <Shield className={cn('w-5 h-5', getPersonaIconColorClasses('ABU'))} />
+                    </div>
+                    <span className="font-semibold text-sm">安全视角</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-muted-foreground">安全评分</span>
+                        <span className={`text-base font-bold ${getSafetyColor(metrics.safetyScore)}`}>
+                          {metrics.safetyScore}/100
+                        </span>
+                      </div>
+                      <Progress 
+                        value={metrics.safetyScore} 
+                        className="h-2"
+                      />
+                    </div>
+                    <div className={cn('flex items-center justify-between pt-2 border-t', getPersonaColorClasses('ABU').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-abu-accent/30')}>
+                      <span className="text-xs text-muted-foreground">关键问题</span>
+                      <Badge 
+                        variant={metrics.criticalIssues > 0 ? 'destructive' : 'secondary'} 
+                        className="text-xs"
+                      >
+                        {metrics.criticalIssues}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Dr.Dre 节奏视角 */}
+              <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('DR_DRE'))}>
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('DR_DRE'))}>
+                      <Activity className={cn('w-5 h-5', getPersonaIconColorClasses('DR_DRE'))} />
+                    </div>
+                    <span className="font-semibold text-sm">节奏视角</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-muted-foreground">节奏评分</span>
+                        <span className={cn('text-base font-bold', getPersonaIconColorClasses('DR_DRE'))}>
+                          {metrics.rhythmScore}/100
+                        </span>
+                      </div>
+                      <Progress 
+                        value={metrics.rhythmScore} 
+                        className={cn('h-2', getPersonaBackgroundClasses('DR_DRE'))}
+                      />
+                    </div>
+                    <div className={cn('pt-2 border-t', getPersonaColorClasses('DR_DRE').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-dre-accent/30')}>
+                      <p className="text-xs text-muted-foreground mb-1.5">
+                        {metrics.rhythmScore >= 80 
+                          ? '节奏适中，建议不多，行程流畅'
+                          : metrics.rhythmScore >= 60
+                          ? '节奏基本合理，有少量优化空间'
+                          : '节奏需要调整，建议优化'}
+                      </p>
+                      {metrics.drDreWarnings > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">有 {metrics.drDreWarnings} 个建议可优化</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => setActiveTab('dre')}
+                          >
+                            查看 →
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Neptune 修复视角 */}
+              <Card className={cn('border bg-gradient-to-br to-white shadow-sm hover:shadow-md transition-shadow', getPersonaBackgroundClasses('NEPTUNE'))}>
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className={cn('p-2 rounded-lg', getPersonaBackgroundClasses('NEPTUNE'))}>
+                      <RefreshCw className={cn('w-5 h-5', getPersonaIconColorClasses('NEPTUNE'))} />
+                    </div>
+                    <span className="font-semibold text-sm">修复视角</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-muted-foreground">准备度</span>
+                        <span className={cn('text-base font-bold', getPersonaIconColorClasses('NEPTUNE'))}>
+                          {metrics.readinessScore}/100
+                        </span>
+                      </div>
+                      <Progress 
+                        value={metrics.readinessScore} 
+                        className={cn('h-2', getPersonaBackgroundClasses('NEPTUNE'))}
+                      />
+                    </div>
+                    <div className={cn('flex items-center justify-between pt-2 border-t', getPersonaColorClasses('NEPTUNE').split(' ').find(cls => cls.startsWith('border-')) || 'border-persona-neptune-accent/30')}>
+                      <span className="text-xs text-muted-foreground">建议</span>
+                      <Badge variant="outline" className="text-xs">
+                        {metrics.suggestions}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* 标签页切换详细视图 */}

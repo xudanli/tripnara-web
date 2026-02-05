@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { citiesApi } from '@/api/cities';
@@ -101,6 +102,7 @@ export default function NewTripPage() {
     travelers: [{ type: 'ADULT', mobilityTag: 'CITY_POTATO' }],
     pace: 'standard',  // 默认标准节奏
     preferences: [],   // 兴趣偏好
+    name: '', // 🆕 行程名称（可选）
   });
   
   // 多选目的地（城市/国家）
@@ -676,13 +678,23 @@ export default function NewTripPage() {
     
     // 验证国家代码格式（必须是2个大写字母）
     if (!finalDestination || !/^[A-Z]{2}$/.test(finalDestination)) {
-      setError(`无效的目的地国家代码: ${finalDestination || '空'}。必须是 ISO 3166-1 alpha-2 格式(2个大写字母,如 JP、IS、US)`);
+      const validationError = `无效的目的地国家代码: ${finalDestination || '空'}。必须是 ISO 3166-1 alpha-2 格式(2个大写字母,如 JP、IS、US)`;
+      setError(validationError);
+      toast.error('验证失败', {
+        description: validationError,
+        duration: 5000,
+      });
       setLoading(false);
       return;
     }
     
     if (!finalDestination) {
-      setError('请至少选择一个目的地');
+      const noDestinationError = '请至少选择一个目的地';
+      setError(noDestinationError);
+      toast.error('验证失败', {
+        description: noDestinationError,
+        duration: 3000,
+      });
       setLoading(false);
       return;
     }
@@ -699,7 +711,11 @@ export default function NewTripPage() {
 
     try {
       await tripsApi.create(submitData);
-      // 创建成功后跳转到行程列表，并传递状态以触发刷新
+      // 创建成功后显示提示并跳转到行程列表
+      toast.success('行程创建成功', {
+        description: '您的行程已成功创建',
+        duration: 3000,
+      });
       navigate('/dashboard/trips', { state: { from: 'create' } });
     } catch (err: any) {
       // 🆕 特殊处理 UNAUTHORIZED 错误
@@ -720,17 +736,31 @@ export default function NewTripPage() {
           // 重试创建行程
           try {
             await tripsApi.create(submitData);
+            toast.success('行程创建成功', {
+              description: '您的行程已成功创建',
+              duration: 3000,
+            });
             navigate('/dashboard/trips', { state: { from: 'create' } });
             return; // 成功，直接返回
           } catch (retryErr: any) {
             // 重试仍然失败，显示错误
-            setError(retryErr.message || '创建行程失败，请重新登录');
+            const retryErrorMessage = retryErr.message || '创建行程失败，请重新登录';
+            setError(retryErrorMessage);
+            toast.error('创建失败', {
+              description: retryErrorMessage,
+              duration: 5000,
+            });
             console.error('[NewTripPage] 重试后仍然失败:', retryErr);
           }
         } catch (refreshErr) {
           // Token 刷新失败，跳转登录
           console.error('[NewTripPage] Token 刷新失败，跳转登录页:', refreshErr);
-          setError('登录已过期，请重新登录');
+          const refreshErrorMessage = '登录已过期，请重新登录';
+          setError(refreshErrorMessage);
+          toast.error('认证失败', {
+            description: refreshErrorMessage,
+            duration: 3000,
+          });
           setTimeout(() => {
             navigate('/login', { replace: true });
           }, 2000);
@@ -789,6 +819,10 @@ export default function NewTripPage() {
       });
       
       setError(errorMessage);
+      toast.error('创建失败', {
+        description: errorMessage,
+        duration: 5000,
+      });
     } finally {
       setLoading(false);
     }
@@ -1270,6 +1304,21 @@ export default function NewTripPage() {
                   </Card>
                 )}
 
+                {/* 🆕 行程名称字段 */}
+                <div className="space-y-2">
+                  <Label htmlFor="tripName">行程名称（可选）</Label>
+                  <Input
+                    id="tripName"
+                    value={formData.name || ''}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="例如：冰岛环岛游"
+                    maxLength={200}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    为你的行程起个名字吧（可选，如不填写将自动生成）
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="startDate">开始日期</Label>
@@ -1642,6 +1691,14 @@ export default function NewTripPage() {
                   取消
                 </Button>
                   <Button type="submit" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Spinner className="w-4 h-4 mr-2" />
+                        创建中...
+                      </>
+                    ) : (
+                      '创建行程'
+                    )}
                     {loading && <Spinner className="w-4 h-4 mr-2" />}
                   创建行程
                 </Button>

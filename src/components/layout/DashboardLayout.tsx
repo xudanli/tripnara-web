@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { tripsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
+import { Toaster } from '@/components/ui/sonner';
 import type { EntryPoint } from '@/api/agent';
 import type { TripDetail } from '@/types/trip';
 
@@ -207,7 +208,8 @@ function DashboardLayoutInner({
   entryPoint: EntryPoint | undefined;
   isDashboardPage: boolean;
 }) {
-  const { currentSessionId, onSessionSelect, onNewSession } = useNLConversation();
+  const location = useLocation();
+  const isPlanStudioPage = location.pathname.includes('/plan-studio');
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
@@ -227,37 +229,22 @@ function DashboardLayoutInner({
           <div className="flex-1 flex h-full">
             {/* 主内容区 */}
             <div className="flex-1 h-full overflow-hidden transition-all duration-300">
-              {/* 规划工作台的 AI 助手侧边栏 */}
-              {entryPoint === 'planning_workbench' && activeTripId ? (
-                <div className="flex h-full">
-                  <div className="flex-1 h-full overflow-hidden">
-                    <main className="h-full overflow-y-auto pb-16 lg:pb-0">
-                      <Outlet />
-                    </main>
-                  </div>
-                  {/* AI 助手侧边栏 */}
-                  <div 
-                    className={cn(
-                      'h-full overflow-hidden border-l border-gray-200 transition-all duration-300 ease-in-out',
-                      sidebarExpanded ? 'w-96' : 'w-16'
-                    )}
-                  >
-                    <AgentChatSidebar 
-                      activeTripId={activeTripId} 
-                      entryPoint={entryPoint}
-                      onExpandedChange={setSidebarExpanded}
-                    />
-                  </div>
-                </div>
-              ) : (
-                /* 普通页面内容 */
-                <main className="h-full overflow-y-auto pb-16 lg:pb-0">
-                  <Outlet />
-                </main>
-              )}
+              <main className="h-full overflow-y-auto pb-16 lg:pb-0">
+                <Outlet />
+              </main>
             </div>
             
-            {/* 🆕 移除上下文侧边栏 - Dashboard 页面不再显示右侧"当前行程"区域 */}
+            {/* 🆕 规划工作台右侧 AI 助手抽屉 */}
+            {(isDashboardPage || location.pathname.includes('/plan-studio')) && (
+              <AgentChatSidebar
+                activeTripId={activeTripId}
+                onSystem2Response={() => {
+                  // 行程更新后的回调
+                }}
+                entryPoint={entryPoint}
+                onExpandedChange={setSidebarExpanded}
+              />
+            )}
           </div>
         </div>
 
@@ -275,12 +262,8 @@ function DashboardLayoutInner({
         {/* 移动端底部导航 */}
         <MobileBottomNav />
 
-        {/* 智能助手悬浮按钮（仅移动端 + 仅规划工作台详情页） */}
-        {entryPoint === 'planning_workbench' && activeTripId && (
-          <div className="lg:hidden">
-            <AgentChatFab activeTripId={activeTripId} />
-          </div>
-        )}
+        {/* Toast 通知组件 */}
+        <Toaster position="top-right" richColors />
       </div>
   );
 }

@@ -129,19 +129,25 @@ apiClient.interceptors.response.use(
     // 防御性检查：确保 response.data 存在且是对象
     if (response.data && typeof response.data === 'object' && response.data !== null && 'success' in response.data) {
       if (response.data.success === false) {
-        const errorData = response.data.error;
+        const errorData = (response.data as any)?.error;
+        // 防御性检查：确保 error 对象存在
         const errorCode = errorData?.code || 'UNKNOWN_ERROR';
-        const errorMessage = errorData?.message || '请求失败';
+        const errorMessage = errorData?.message || (errorData ? '请求失败' : '服务器返回了无效的错误格式');
         
         // 如果是 UNAUTHORIZED 错误，需要特殊处理（即使状态码是 201）
         if (errorCode === 'UNAUTHORIZED' || errorMessage.includes('登录') || errorMessage.includes('认证')) {
-          console.error('[API Client] ❌ 响应体显示未授权错误（状态码可能是 2xx）:', {
-            url: response.config.url,
-            status: response.status,
-            errorCode,
-            errorMessage,
-            responseData: response.data,
-          });
+          // 未授权错误始终记录，但只在开发环境显示详细信息
+          if (import.meta.env.DEV) {
+            console.error('[API Client] ❌ 响应体显示未授权错误（状态码可能是 2xx）:', {
+              url: response.config.url,
+              status: response.status,
+              errorCode,
+              errorMessage,
+              responseData: response.data,
+            });
+          } else {
+            console.error('[API Client] ❌ 未授权错误:', errorMessage);
+          }
           
           // 创建一个类似 401 的错误对象，触发认证流程
           const authError = new Error(errorMessage) as any;
@@ -166,13 +172,16 @@ apiClient.interceptors.response.use(
           errorMessage.includes('不存在');
         
         if (isNotFoundError) {
-          // "未找到"类型的错误使用警告级别，因为可能是正常的业务场景（资源不存在）
-          console.warn('[API Client] ⚠️ 资源不存在（状态码可能是 2xx）:', {
-            url: response.config.url,
-            status: response.status,
-            errorCode,
-            errorMessage,
-          });
+          // "未找到"类型的错误使用调试级别，因为可能是正常的业务场景（资源不存在）
+          // 只在开发环境显示详细日志
+          if (import.meta.env.DEV) {
+            console.debug('[API Client] 🔍 资源不存在（状态码可能是 2xx）:', {
+              url: response.config.url,
+              status: response.status,
+              errorCode,
+              errorMessage,
+            });
+          }
         } else {
           // 其他业务错误使用错误级别
           console.error('[API Client] ❌ 响应体显示失败（状态码可能是 2xx）:', {

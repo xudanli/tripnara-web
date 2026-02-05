@@ -262,44 +262,8 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      const response = await tripPlannerApi.start({ tripId });
-      
-      setSessionId(response.sessionId);
-      setCurrentPhase(response.phase);
-      
-      // 🔍 调试：打印初始 richContent 数据
-      console.log('[useTripPlannerAssistant] 初始 richContent:', {
-        type: response.richContent?.type,
-        hasData: !!response.richContent,
-        data: response.richContent,
-      });
-      if (response.richContent?.type === 'timeline') {
-        const timelineData = response.richContent as any;
-        console.log('[useTripPlannerAssistant] 初始 Timeline 数据:', {
-          days: timelineData.data?.length,
-          firstDay: timelineData.data?.[0],
-          firstDayItems: timelineData.data?.[0]?.items,
-          // 检查 items 的字段
-          firstItem: timelineData.data?.[0]?.items?.[0],
-          firstItemKeys: timelineData.data?.[0]?.items?.[0] ? Object.keys(timelineData.data[0].items[0]) : [],
-        });
-      }
-      
-      // 添加欢迎消息
-      const welcomeMessage: PlannerMessage = {
-        id: generateMessageId(),
-        role: 'assistant',
-        content: response.message,
-        timestamp: new Date(),
-        phase: response.phase,
-        intent: response.intent,
-        richContent: response.richContent,
-        quickActions: response.quickActions,
-      };
-      setMessages([welcomeMessage]);
-      setIsInitialized(true);
-      
-      console.log('[useTripPlannerAssistant] 会话已启动:', response.sessionId);
+      // ⚠️ 接口已删除，等待重新规划
+      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -332,30 +296,8 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      const response = await tripPlannerApi.chat({
-        tripId,
-        message: message.trim(),
-        sessionId: sessionId || undefined,
-        targetDay: options?.targetDay,
-        targetItemId: options?.targetItemId,
-        context: {
-          language: 'zh',
-          // 🆕 传递完整上下文
-          selectedContext: options?.context?.selectedContext,
-          adjacentItems: options?.context?.adjacentItems,
-          dayStats: options?.context?.dayStats,
-        },
-        // 🆕 传递澄清数据
-        clarificationData: options?.clarificationData,
-      });
-      
-      // 更新 sessionId（首次对话时会返回）
-      if (response.sessionId && !sessionId) {
-        setSessionId(response.sessionId);
-      }
-      
-      // 添加助手回复
-      addAssistantMessage(response);
+      // ⚠️ 接口已删除，等待重新规划
+      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -376,35 +318,8 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      // 添加用户操作提示
-      const actionLabels: Record<QuickActionType, string> = {
-        OPTIMIZE_ROUTE: '优化行程路线',
-        ARRANGE_MEALS: '推荐餐厅',
-        CREATE_CHECKLIST: '生成行前清单',
-        SHOW_OVERVIEW: '查看行程概览',
-        PLAN_TRANSPORT: '规划交通',
-        FILL_FREE_TIME: '填充空闲时间',
-        GET_SUGGESTION: '获取建议',
-        EXPORT_ITINERARY: '导出行程',
-        APPLY_PACE_ADJUSTMENT: '应用节奏调整',
-        MANUAL_ADJUST: '手动调整',
-      };
-      addUserMessage(`🎯 ${actionLabels[action] || action}`);
-      
-      const response = await tripPlannerApi.action({
-        tripId,
-        action,
-        sessionId: sessionId || undefined,
-        params,
-      });
-      
-      // 更新 sessionId
-      if (response.sessionId && !sessionId) {
-        setSessionId(response.sessionId);
-      }
-      
-      // 添加助手回复
-      addAssistantMessage(response);
+      // ⚠️ 接口已删除，等待重新规划
+      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -425,31 +340,8 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      const response = await tripPlannerApi.confirm({
-        tripId,
-        sessionId,
-        changeIds: idsToConfirm,
-      });
-      
-      // 清除已确认的修改
-      setPendingChanges(prev => 
-        prev.filter(c => !idsToConfirm.includes(c.id))
-      );
-      
-      // 添加确认消息
-      const confirmMessage: PlannerMessage = {
-        id: generateMessageId(),
-        role: 'assistant',
-        content: response.message || response.messageCN || '修改已确认并应用 ✅',
-        timestamp: new Date(),
-        tripUpdate: response.tripUpdate,
-      };
-      setMessages(prev => [...prev, confirmMessage]);
-      
-      // 通知行程更新
-      if (response.tripUpdate && onTripUpdate) {
-        onTripUpdate(response.tripUpdate);
-      }
+      // ⚠️ 接口已删除，等待重新规划
+      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -483,26 +375,8 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      const response = await tripPlannerApi.undo({
-        tripId,
-        sessionId,
-      });
-      
-      // 添加撤销结果消息
-      const undoMessage: PlannerMessage = {
-        id: generateMessageId(),
-        role: 'assistant',
-        content: response.success 
-          ? `✅ ${response.message || '已撤销上一次修改'}${response.undoneAction ? `\n撤销的操作：${response.undoneAction}` : ''}`
-          : `❌ ${response.message || '撤销失败'}`,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, undoMessage]);
-      
-      // 通知行程更新
-      if (response.tripUpdate && onTripUpdate) {
-        onTripUpdate(response.tripUpdate);
-      }
+      // ⚠️ 接口已删除，等待重新规划
+      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
     } catch (err: any) {
       handleError(err);
     } finally {

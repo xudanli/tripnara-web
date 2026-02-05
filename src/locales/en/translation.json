@@ -9,6 +9,7 @@
     "about": "About",
     "login": "Login",
     "startPlanning": "Start Planning",
+    "openApp": "Open TripNARA",
     "user": "User",
     "logout": "Logout",
     "preferences": "Preferences",
@@ -939,15 +940,104 @@
     },
     "recruiting": {
       "title": "Recruiting",
-      "text": "If you also believe that travel is more than checking in, welcome to join us."
+      "text": "If you also believe that travel is more than checking in, welcome to join us.",
+      "positions": {
+        "product": {
+          "title": "Product Lead"
+        },
+        "data": {
+          "title": "Data Analyst / Data Scientist"
+        },
+        "geography": {
+          "title": "Geography Engineer / Route Accessibility Expert"
+        },
+        "ai": {
+          "title": "AI Engineer / Algorithm Developer"
+        },
+        "outdoor": {
+          "title": "Outdoor Route Expert / Travel Route Validator"
+        },
+        "design": {
+          "title": "Design Lead"
+        }
+      }
     }
   },
   "contact": {
-    "title": "Contact Us",
+    "title": "Join Us",
     "name": "Name",
     "email": "Email",
     "message": "Message",
-    "send": "Send Message"
+    "send": "Send Message",
+    "recruiting": {
+      "title": "We're not looking for \"employees\", we're looking for decision-makers.",
+      "subtitle": "Join us not to go to more places, but to walk the right path.",
+      "intro": "At TripNARA, we're not in a hurry to publish more routes. We spend more time judging: should this route exist?",
+      "intro2": "So, we're not looking for people who \"can do\", but people who \"should do\".",
+      "intro3": "If you're willing to treat your career as a real path choice, welcome to join us.",
+      "apply": {
+        "title": "How to Apply",
+        "text": "Please send us your resume, portfolio, or \"judgments\" you've made.",
+        "email": "📩 Application Email: join@tripnara.com",
+        "note": "💬 You can also write a paragraph telling us: \"Why did you choose this career path?\""
+      },
+      "positions": {
+        "product": {
+          "tagline": "We don't build products with features, we judge needs with logic.",
+          "expectations": [
+            "Familiar with System 1 / System 2 thinking models",
+            "Able to handle uncertain inputs and assist in judgment",
+            "Respect decision boundaries, not pursue universal models"
+          ]
+        },
+        "data": {
+          "tagline": "We're not a KPI factory, we use data to prove paths are valid.",
+          "expectations": [
+            "Skilled at structuring and quantifying ambiguous problems",
+            "Able to assess route risks, rhythm, and variables",
+            "Understand that data's role is to \"support judgment\", not \"replace judgment\""
+          ]
+        },
+        "geography": {
+          "tagline": "Maps are not decoration, but constraints for decisions.",
+          "expectations": [
+            "Familiar with real terrain and route assessment (DEM / GIS preferred)",
+            "Understand the huge gap between armchair strategy and real feasibility",
+            "Able to tell us \"which roads cannot be taken\" is more important than \"where to go\""
+          ]
+        },
+        "ai": {
+          "tagline": "We don't use AI to generate routes, but a decision system that judges whether a route should exist.",
+          "expectations": [
+            "Familiar with System 1 / System 2 thinking models",
+            "Able to handle uncertain inputs and assist in judgment",
+            "Respect decision boundaries, not pursue universal models"
+          ]
+        },
+        "outdoor": {
+          "tagline": "Only after walking a road can you understand what those curves on the map mean.",
+          "expectations": [
+            "Have walked various types of routes in person, with real route design experience",
+            "Able to make multi-dimensional judgments on routes: \"rhythm\", \"risk\", \"alternatives\", etc.",
+            "Transform experience into systematic input, not story sharing"
+          ]
+        },
+        "design": {
+          "tagline": "Design is not \"beautifying itineraries\", but \"expressing route judgments\".",
+          "expectations": [
+            "Skilled at visualizing complex concepts (philosophy, AI, structure) into user-understandable information",
+            "Understand the brand positioning of \"design as judgment\"",
+            "Preference for minimalist, structural design (focus on whitespace, sense of relationship)"
+          ]
+        }
+      },
+      "applyButton": "I Want to Apply",
+      "viewFullDesc": "View Full Job Description",
+      "closing": {
+        "quote": "🛤️ Some roads don't exist on maps, but you know they exist.",
+        "text": "If you also believe that not all routes are worth existing, we might be missing exactly one person: you."
+      }
+    }
   },
   "routeIntelligence": {
     "title": "How Should a Route Be Understood?",
@@ -1566,8 +1656,11 @@
       "professional": "Professional Tools",
       "share": "Share & Community"
     },
-    "settings": "Settings",
+    "profile": "Profile",
     "preferences": "Preferences",
+    "notifications": "Notifications",
+    "account": "Account",
+    "settings": "Settings",
     "logout": "Logout"
   },
   "globalCommandBar": {

@@ -37,7 +37,7 @@ export interface RagSearchRequest {
 }
 
 /**
- * RAG 检索结果项
+ * RAG 检索结果项（旧接口，已废弃）
  */
 export interface RagRetrievalResult {
   id: string;
@@ -53,6 +53,56 @@ export interface RagRetrievalResult {
     tags?: string[];
     [key: string]: any;
   };
+}
+
+/**
+ * Chunk 检索请求参数（新接口）
+ */
+export interface ChunkRetrievalRequest {
+  query: string; // 查询文本（必填）
+  limit?: number; // 返回数量限制（可选，默认 10）
+  credibilityMin?: number; // 最小可信度（可选，默认 0.5）
+  type?: string; // 文档类型（可选）
+  category?: string; // 文件分类（可选）
+  fileId?: string; // 文件ID（可选）
+  chunkCategory?: 'RULES' | 'POI_INFO' | 'GATE' | 'WEATHER' | 'GENERAL'; // Chunk分类过滤（可选）
+  
+  // Hybrid Search 配置（推荐启用）
+  useHybridSearch?: boolean; // 是否使用混合检索（默认 true，推荐）
+  denseWeight?: number; // Dense检索权重（默认 0.6）
+  sparseWeight?: number; // Sparse检索权重（默认 0.4）
+  
+  // 高级功能（可选）
+  useReranking?: boolean; // 是否使用重排序（默认 false）
+  rerankTopK?: number; // 重排序的Top-K数量（默认 20）
+  useQueryExpansion?: boolean; // 是否使用查询扩展（默认 false）
+  maxQueryVariants?: number; // 最大查询变体数量（默认 3）
+  useIntentClassification?: boolean; // 是否使用意图分类自动过滤（默认 false）
+}
+
+/**
+ * Chunk 检索结果项（新接口）
+ */
+export interface ChunkRetrievalResult {
+  id: string; // Chunk ID（与 chunkId 相同）
+  chunkId: string; // Chunk ID
+  content: string; // Chunk 内容
+  type: string; // Chunk 类型（PARAGRAPH, HEADING等）
+  credibilityScore: number; // 可信度分数（0-1）
+  keywords?: string[]; // 关键词列表
+  metadata?: {
+    page?: number;
+    section?: string;
+    [key: string]: any;
+  };
+  fileId: string; // 所属文件ID
+  similarity: number; // 相似度分数（0-1，主要分数）
+  sourceFile: string; // 文件名
+  denseScore?: number; // Dense检索分数（可选，Hybrid Search时提供）
+  sparseScore?: number; // Sparse检索分数（可选，Hybrid Search时提供）
+  hybridScore?: number; // 混合检索最终分数（可选，Hybrid Search时提供）
+  rerankScore?: number; // 重排序分数（可选，启用重排序时提供）
+  rerankReason?: string; // 重排序原因（可选，启用重排序时提供）
 }
 
 /**
@@ -316,35 +366,50 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
 
 export const ragApi = {
   /**
-   * RAG 搜索
-   * POST /rag/search
-   * 从 RAG 知识库中搜索相关文档，支持更复杂的查询参数
+   * 🆕 Chunk 检索（推荐使用）
+   * POST /rag/chunks/retrieve
+   * 使用新的知识库系统（KnowledgeFile + Chunk）检索文档，默认启用混合检索
    */
-  search: async (data: RagSearchRequest): Promise<RagRetrievalResult[]> => {
+  retrieveChunks: async (data: ChunkRetrievalRequest): Promise<ChunkRetrievalResult[]> => {
     try {
-      console.log('[RAG API] 发送 search 请求:', {
+      console.log('[RAG API] 发送 retrieveChunks 请求:', {
         query: data.query?.substring(0, 50) + '...',
-        collection: data.collection,
-        countryCode: data.countryCode,
-        tags: data.tags,
         limit: data.limit,
+        useHybridSearch: data.useHybridSearch,
+        chunkCategory: data.chunkCategory,
       });
 
-      const response = await apiClient.post<ApiResponseWrapper<RagRetrievalResult[]>>(
-        '/rag/search',
-        data,
+      const response = await apiClient.post<ApiResponseWrapper<ChunkRetrievalResult[]>>(
+        '/rag/chunks/retrieve',
         {
-          timeout: 30000, // 30 秒超时
+          query: data.query,
+          limit: data.limit ?? 10,
+          credibilityMin: data.credibilityMin ?? 0.5,
+          ...(data.type && { type: data.type }),
+          ...(data.category && { category: data.category }),
+          ...(data.fileId && { fileId: data.fileId }),
+          ...(data.chunkCategory && { chunkCategory: data.chunkCategory }),
+          useHybridSearch: data.useHybridSearch ?? true,
+          denseWeight: data.denseWeight ?? 0.6,
+          sparseWeight: data.sparseWeight ?? 0.4,
+          useReranking: data.useReranking ?? false,
+          rerankTopK: data.rerankTopK ?? 20,
+          useQueryExpansion: data.useQueryExpansion ?? false,
+          maxQueryVariants: data.maxQueryVariants ?? 3,
+          useIntentClassification: data.useIntentClassification ?? false,
+        },
+        {
+          timeout: data.useReranking ? 60000 : 30000, // 启用重排序时增加超时时间
         }
       );
 
-      console.log('[RAG API] 收到 search 响应:', {
+      console.log('[RAG API] 收到 retrieveChunks 响应:', {
         resultsCount: response.data?.success ? response.data.data?.length : 0,
       });
 
       return handleResponse(response);
     } catch (error: any) {
-      console.error('[RAG API] search 请求失败:', {
+      console.error('[RAG API] retrieveChunks 请求失败:', {
         error,
         message: error.message,
         request: data,
@@ -354,35 +419,58 @@ export const ragApi = {
   },
 
   /**
-   * RAG 文档检索
+   * ⚠️ RAG 搜索（已废弃）
+   * POST /rag/search
+   * 此接口已废弃，请使用 retrieveChunks
+   * @deprecated 请使用 retrieveChunks 接口
+   */
+  search: async (data: RagSearchRequest): Promise<RagRetrievalResult[]> => {
+    console.warn('[RAG API] ⚠️ search 接口已废弃，请使用 retrieveChunks 接口');
+    try {
+      const response = await apiClient.post<ApiResponseWrapper<RagRetrievalResult[]>>(
+        '/rag/search',
+        data,
+        {
+          timeout: 30000,
+        }
+      );
+      return handleResponse(response);
+    } catch (error: any) {
+      // 如果是废弃错误，提供迁移建议
+      if (error.response?.data?.error?.code === 'BUSINESS_ERROR' && 
+          error.response?.data?.data?.deprecated) {
+        console.error('[RAG API] 接口已废弃，请迁移到 retrieveChunks:', {
+          newEndpoint: error.response.data.data.newEndpoint,
+          migrationGuide: error.response.data.data.migrationGuide,
+        });
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * ⚠️ RAG 文档检索（已废弃）
    * GET /rag/retrieve
-   * 从 RAG 知识库中检索相关文档（简单版本）
+   * 此接口已废弃，请使用 retrieveChunks
+   * @deprecated 请使用 retrieveChunks 接口
    */
   retrieve: async (params: RagRetrievalRequest): Promise<RagRetrievalResult[]> => {
+    console.warn('[RAG API] ⚠️ retrieve 接口已废弃，请使用 retrieveChunks 接口');
     try {
-      console.log('[RAG API] 发送 retrieve 请求:', {
-        query: params.query?.substring(0, 50) + '...',
-        collection: params.collection,
-        countryCode: params.countryCode,
-        limit: params.limit,
-      });
-
       const response = await apiClient.get<ApiResponseWrapper<RagRetrievalResult[]>>(
         '/rag/retrieve',
         { params }
       );
-
-      console.log('[RAG API] 收到 retrieve 响应:', {
-        resultsCount: response.data?.success ? response.data.data?.length : 0,
-      });
-
       return handleResponse(response);
     } catch (error: any) {
-      console.error('[RAG API] retrieve 请求失败:', {
-        error,
-        message: error.message,
-        params,
-      });
+      // 如果是废弃错误，提供迁移建议
+      if (error.response?.data?.error?.code === 'BUSINESS_ERROR' && 
+          error.response?.data?.data?.deprecated) {
+        console.error('[RAG API] 接口已废弃，请迁移到 retrieveChunks:', {
+          newEndpoint: error.response.data.data.newEndpoint,
+          migrationGuide: error.response.data.data.migrationGuide,
+        });
+      }
       throw error;
     }
   },

@@ -1,52 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { routeDirectionsApi } from '@/api/route-directions';
-import type { RouteTemplate, UpdateRouteTemplateRequest } from '@/types/places-routes';
+import type { RouteTemplate } from '@/types/places-routes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft,
   Calendar,
   MapPin,
-  Edit,
-  Save,
-  X,
   CheckCircle2,
   XCircle,
-  Loader2,
   Mountain,
+  Clock,
 } from 'lucide-react';
-import { toast } from 'sonner';
-
-const PACE_OPTIONS = [
-  { value: 'RELAXED', label: '放松' },
-  { value: 'BALANCED', label: '平衡' },
-  { value: 'CHALLENGE', label: '挑战' },
-];
 
 export default function RouteTemplateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [template, setTemplate] = useState<RouteTemplate | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-
-  // 编辑表单状态
-  const [formData, setFormData] = useState<UpdateRouteTemplateRequest>({
-    nameCN: '',
-    nameEN: '',
-    durationDays: undefined,
-    defaultPacePreference: 'BALANCED',
-    isActive: true,
-  });
 
   useEffect(() => {
     if (id) {
@@ -60,16 +35,31 @@ export default function RouteTemplateDetailPage() {
       setLoading(true);
       setError(null);
       const data = await routeDirectionsApi.getTemplateById(Number(id));
-      setTemplate(data);
-      // 初始化表单数据
-      setFormData({
-        nameCN: data.nameCN || '',
-        nameEN: data.nameEN || '',
-        durationDays: data.durationDays,
-        defaultPacePreference: data.defaultPacePreference,
-        isActive: data.isActive,
-        dayPlans: data.dayPlans || [],
+      
+      // 🔍 调试：检查数据结构
+      console.log('📋 [RouteTemplateDetail] 加载的模板数据:', {
+        templateId: data.id,
+        nameCN: data.nameCN,
+        dayPlansCount: data.dayPlans?.length || 0,
+        dayPlans: data.dayPlans?.map((dayPlan: any, idx: number) => ({
+          day: dayPlan.day,
+          theme: dayPlan.theme,
+          hasPois: !!dayPlan.pois && dayPlan.pois.length > 0,
+          poisCount: dayPlan.pois?.length || 0,
+          pois: dayPlan.pois?.map((poi: any) => ({
+            id: poi.id,
+            nameCN: poi.nameCN,
+            nameEN: poi.nameEN,
+            order: poi.order,
+            required: poi.required,
+          })) || [],
+          hasRequiredNodes: !!dayPlan.requiredNodes && dayPlan.requiredNodes.length > 0,
+          requiredNodesCount: dayPlan.requiredNodes?.length || 0,
+          requiredNodes: dayPlan.requiredNodes || [],
+        })) || [],
       });
+      
+      setTemplate(data);
     } catch (err: any) {
       setError(err.message || '加载路线模板详情失败');
       console.error('Failed to load template:', err);
@@ -78,39 +68,6 @@ export default function RouteTemplateDetailPage() {
     }
   };
 
-  const handleSave = async () => {
-    if (!id) return;
-    try {
-      setSaving(true);
-      setError(null);
-      await routeDirectionsApi.updateTemplate(Number(id), formData);
-      toast.success('更新成功');
-      setIsEditing(false);
-      // 重新加载数据
-      await loadTemplate();
-    } catch (err: any) {
-      const errorMessage = err.message || '更新路线模板失败';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      console.error('Failed to update template:', err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCancel = () => {
-    if (template) {
-      setFormData({
-        nameCN: template.nameCN || '',
-        nameEN: template.nameEN || '',
-        durationDays: template.durationDays,
-        defaultPacePreference: template.defaultPacePreference,
-        isActive: template.isActive,
-        dayPlans: template.dayPlans || [],
-      });
-    }
-    setIsEditing(false);
-  };
 
   const getIntensityColor = (intensity?: string) => {
     switch (intensity) {
@@ -184,29 +141,6 @@ export default function RouteTemplateDetailPage() {
             {template.nameEN && <p className="text-muted-foreground mt-1">{template.nameEN}</p>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isEditing ? (
-            <>
-              <Button variant="outline" onClick={handleCancel} disabled={saving}>
-                <X className="w-4 h-4 mr-2" />
-                取消
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4 mr-2" />
-                )}
-                保存
-              </Button>
-            </>
-          ) : (
-            <Button onClick={() => setIsEditing(true)}>
-              <Edit className="w-4 h-4 mr-2" />
-              编辑
-            </Button>
-          )}
-        </div>
       </div>
 
       {/* 错误提示 */}
@@ -230,93 +164,28 @@ export default function RouteTemplateDetailPage() {
               <CardTitle>基本信息</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {isEditing ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="nameCN">中文名称</Label>
-                    <Input
-                      id="nameCN"
-                      value={formData.nameCN}
-                      onChange={(e) => setFormData({ ...formData, nameCN: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="nameEN">英文名称</Label>
-                    <Input
-                      id="nameEN"
-                      value={formData.nameEN}
-                      onChange={(e) => setFormData({ ...formData, nameEN: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="durationDays">行程天数</Label>
-                    <Input
-                      id="durationDays"
-                      type="number"
-                      value={formData.durationDays || ''}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          durationDays: e.target.value ? parseInt(e.target.value, 10) : undefined,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="defaultPacePreference">默认节奏偏好</Label>
-                    <Select
-                      value={formData.defaultPacePreference}
-                      onValueChange={(value: any) =>
-                        setFormData({ ...formData, defaultPacePreference: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PACE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="isActive">激活状态</Label>
-                    <Switch
-                      id="isActive"
-                      checked={formData.isActive}
-                      onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {template.durationDays} 天
-                    </Badge>
-                    <Badge className={getPaceColor(template.defaultPacePreference)}>
-                      {template.defaultPacePreference}
-                    </Badge>
-                    <div className="flex items-center gap-2">
-                      {template.isActive ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
-                          <span className="text-sm text-green-600">已激活</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-400">未激活</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
+              <div className="flex items-center gap-4 flex-wrap">
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  {template.durationDays} 天
+                </Badge>
+                <Badge className={getPaceColor(template.defaultPacePreference)}>
+                  {template.defaultPacePreference}
+                </Badge>
+                <div className="flex items-center gap-2">
+                  {template.isActive ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-600">已激活</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-400">未激活</span>
+                    </>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -351,49 +220,133 @@ export default function RouteTemplateDetailPage() {
                             </div>
                           )}
                           {/* ✅ 优先显示 pois 格式（新格式） */}
-                          {dayPlan.pois && dayPlan.pois.length > 0 ? (
-                            <div className="space-y-2 mt-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-muted-foreground">POI列表:</span>
+                          {dayPlan.pois && Array.isArray(dayPlan.pois) && dayPlan.pois.length > 0 ? (
+                            <div className="space-y-3 mt-4 pt-3 border-t">
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-sm font-semibold text-foreground">POI活动列表</span>
                                 <Badge variant="secondary" className="text-xs">
                                   {dayPlan.pois.length} 个
                                 </Badge>
                               </div>
-                              <div className="flex flex-wrap gap-2">
+                              <div className="space-y-2">
                                 {dayPlan.pois
-                                  .sort((a, b) => (a.order || 0) - (b.order || 0))
-                                  .map((poi, poiIdx) => (
-                                    <Badge
-                                      key={poi.id || poiIdx}
-                                      variant={poi.required ? 'default' : 'outline'}
-                                      className="text-xs"
-                                    >
-                                      {poi.nameCN || poi.nameEN || `POI ${poi.id}`}
-                                      {poi.required && (
-                                        <span className="ml-1 text-[10px]">★</span>
-                                      )}
-                                      {poi.durationMinutes && (
-                                        <span className="ml-1 text-[10px] opacity-70">
-                                          ({Math.round(poi.durationMinutes / 60)}h)
-                                        </span>
-                                      )}
-                                    </Badge>
-                                  ))}
+                                  .sort((a, b) => {
+                                    const orderA = a.order ?? 999;
+                                    const orderB = b.order ?? 999;
+                                    return orderA - orderB;
+                                  })
+                                  .map((poi, poiIdx) => {
+                                    const displayOrder = poi.order !== undefined && poi.order !== null ? poi.order : poiIdx + 1;
+                                    const poiName = poi.nameCN || poi.nameEN || `POI ${poi.id}`;
+                                    
+                                    // 🆕 格式化时间显示
+                                    const formatTime = (timeStr?: string): string | null => {
+                                      if (!timeStr) return null;
+                                      try {
+                                        // 处理 ISO 8601 格式（如 "2024-05-01T09:00:00.000Z"）
+                                        const date = new Date(timeStr);
+                                        if (!isNaN(date.getTime())) {
+                                          return date.toLocaleTimeString('zh-CN', { 
+                                            hour: '2-digit', 
+                                            minute: '2-digit',
+                                            hour12: false 
+                                          });
+                                        }
+                                        // 处理简单时间格式（如 "09:00:00"）
+                                        if (timeStr.includes(':')) {
+                                          const parts = timeStr.split(':');
+                                          if (parts.length >= 2) {
+                                            return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+                                          }
+                                        }
+                                        return timeStr;
+                                      } catch {
+                                        return timeStr;
+                                      }
+                                    };
+                                    
+                                    const startTimeDisplay = formatTime(poi.startTime);
+                                    const endTimeDisplay = formatTime(poi.endTime);
+                                    
+                                    return (
+                                      <div
+                                        key={poi.id || `poi-${poiIdx}`}
+                                        className="flex items-start gap-3 p-3 rounded-lg border bg-background hover:bg-muted/50 transition-colors"
+                                      >
+                                        {/* 顺序编号 */}
+                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm flex items-center justify-center border border-primary/20">
+                                          {displayOrder}
+                                        </div>
+                                        {/* POI名称和详情 */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                                            <span className="font-medium text-sm text-foreground">
+                                              {poiName}
+                                            </span>
+                                            {poi.required && (
+                                              <Badge variant="default" className="text-[10px] px-1.5 py-0.5 h-5">
+                                                必游
+                                              </Badge>
+                                            )}
+                                            {/* 🆕 显示时间 */}
+                                            {(startTimeDisplay || endTimeDisplay) && (
+                                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <Clock className="w-3 h-3" />
+                                                {startTimeDisplay && endTimeDisplay ? (
+                                                  <span>{startTimeDisplay} - {endTimeDisplay}</span>
+                                                ) : startTimeDisplay ? (
+                                                  <span>{startTimeDisplay} 开始</span>
+                                                ) : endTimeDisplay ? (
+                                                  <span>{endTimeDisplay} 结束</span>
+                                                ) : null}
+                                              </div>
+                                            )}
+                                            {poi.durationMinutes && (
+                                              <span className="text-xs text-muted-foreground">
+                                                {Math.round(poi.durationMinutes / 60)}小时
+                                              </span>
+                                            )}
+                                            {poi.category && (
+                                              <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 h-5">
+                                                {poi.category}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          {poi.description && (
+                                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                              {poi.description}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                               </div>
                             </div>
                           ) : (
                             /* ⚠️ 向后兼容：如果没有 pois，显示 requiredNodes（已废弃） */
-                            dayPlan.requiredNodes && dayPlan.requiredNodes.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                <span className="text-sm text-muted-foreground">必需节点:</span>
-                                <Badge variant="outline" className="text-xs bg-yellow-50 border-yellow-200">
-                                  旧格式（已废弃）
-                                </Badge>
-                                {dayPlan.requiredNodes.map((node, nodeIdx) => (
-                                  <Badge key={nodeIdx} variant="outline" className="text-xs">
-                                    {node}
+                            dayPlan.requiredNodes && Array.isArray(dayPlan.requiredNodes) && dayPlan.requiredNodes.length > 0 ? (
+                              <div className="space-y-2 mt-4 pt-3 border-t">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-foreground">必需节点</span>
+                                  <Badge variant="outline" className="text-xs bg-yellow-50 border-yellow-200 text-yellow-800">
+                                    旧格式（已废弃）
                                   </Badge>
-                                ))}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {dayPlan.requiredNodes.map((node, nodeIdx) => (
+                                    <Badge key={nodeIdx} variant="outline" className="text-xs">
+                                      {node}
+                                    </Badge>
+                                  ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  ⚠️ 此模板使用旧数据格式，仅显示节点ID。请联系管理员更新为新的POI格式。
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="mt-4 pt-3 border-t">
+                                <p className="text-sm text-muted-foreground">暂无POI活动信息</p>
                               </div>
                             )
                           )}
@@ -433,7 +386,7 @@ export default function RouteTemplateDetailPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
-                  <Label className="text-sm text-muted-foreground">名称</Label>
+                  <p className="text-sm text-muted-foreground mb-1">名称</p>
                   <p className="font-medium">{template.routeDirection.nameCN}</p>
                   {template.routeDirection.nameEN && (
                     <p className="text-sm text-muted-foreground">{template.routeDirection.nameEN}</p>
@@ -441,13 +394,13 @@ export default function RouteTemplateDetailPage() {
                 </div>
                 {template.routeDirection.countryCode && (
                   <div>
-                    <Label className="text-sm text-muted-foreground">国家代码</Label>
+                    <p className="text-sm text-muted-foreground mb-1">国家代码</p>
                     <p className="font-medium">{template.routeDirection.countryCode}</p>
                   </div>
                 )}
                 {template.routeDirection.tags && template.routeDirection.tags.length > 0 && (
                   <div>
-                    <Label className="text-sm text-muted-foreground">标签</Label>
+                    <p className="text-sm text-muted-foreground mb-1">标签</p>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {template.routeDirection.tags.map((tag, idx) => (
                         <Badge key={idx} variant="outline">
@@ -479,16 +432,16 @@ export default function RouteTemplateDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label className="text-sm text-muted-foreground">模板ID</Label>
+                <p className="text-sm text-muted-foreground mb-1">模板ID</p>
                 <p className="font-medium">{template.id}</p>
               </div>
               <div>
-                <Label className="text-sm text-muted-foreground">UUID</Label>
+                <p className="text-sm text-muted-foreground mb-1">UUID</p>
                 <p className="font-mono text-sm break-all">{template.uuid}</p>
               </div>
               {template.createdAt && (
                 <div>
-                  <Label className="text-sm text-muted-foreground">创建时间</Label>
+                  <p className="text-sm text-muted-foreground mb-1">创建时间</p>
                   <p className="text-sm">
                     {new Date(template.createdAt).toLocaleString('zh-CN')}
                   </p>
@@ -496,7 +449,7 @@ export default function RouteTemplateDetailPage() {
               )}
               {template.updatedAt && (
                 <div>
-                  <Label className="text-sm text-muted-foreground">更新时间</Label>
+                  <p className="text-sm text-muted-foreground mb-1">更新时间</p>
                   <p className="text-sm">
                     {new Date(template.updatedAt).toLocaleString('zh-CN')}
                   </p>

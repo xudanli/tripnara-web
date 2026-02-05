@@ -236,6 +236,7 @@ export interface TripStatistics {
 
 export interface TripDetail extends BaseEntity {
   id: string;
+  name?: string; // 🆕 行程名称（可选）
   destination: string;
   startDate: string;
   endDate: string;
@@ -261,6 +262,7 @@ export interface TripDetail extends BaseEntity {
 
 export interface TripListItem extends BaseEntity {
   id: string;
+  name?: string; // 🆕 行程名称（可选）
   destination: string;
   startDate: string;
   endDate: string;
@@ -292,6 +294,7 @@ export interface CreateTripRequest {
   endDate: string;
   totalBudget: number;
   travelers: Traveler[];
+  name?: string; // 🆕 行程名称（可选）
   // 旅行风格（节奏）- 前置收集，减少进入规划工作台后的设置
   pace?: TripPace;
   // 兴趣偏好 - 前置收集，用于AI推荐
@@ -304,6 +307,7 @@ export interface CreateTripRequest {
 
 export interface CreateTripResponse extends BaseEntity {
   id: string;
+  name?: string; // 🆕 行程名称（可选）
   destination: string;
   startDate: string;
   endDate: string;
@@ -377,6 +381,12 @@ export interface CreateTripFromNLRequest {
    * 如果不提供，会创建新会话
    */
   sessionId?: string;
+  /**
+   * 🆕 是否开始新对话（可选）
+   * 如果为 true，后端会清空旧上下文，开始全新的对话
+   * 即使提供了 sessionId，也会忽略旧上下文
+   */
+  isNewConversation?: boolean;
   /** 
    * 上下文包ID（可选）
    * 如果提供，后端将使用该上下文包来增强理解用户意图
@@ -560,6 +570,31 @@ export interface PlannerResponseBlock {
  * 注意：与 src/types/clarification.ts 中的 ClarificationQuestion 不同，
  * 这个版本更简化，专门用于 NL 对话场景
  */
+/**
+ * 🆕 HCI优化：条件输入字段配置
+ * 当用户选择特定选项时，显示后续输入字段
+ */
+export interface ConditionalInputField {
+  /** 触发此输入字段的选项值（当用户选择此选项时显示输入字段） */
+  triggerValue: string;
+  /** 输入字段类型 */
+  inputType: 'text' | 'date' | 'number' | 'date_range';
+  /** 输入字段标签 */
+  label?: string;
+  /** 占位符 */
+  placeholder?: string;
+  /** 是否必填 */
+  required?: boolean;
+  /** 验证规则 */
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+  };
+  /** 提示文本 */
+  hint?: string;
+}
+
 export interface NLClarificationQuestion {
   id: string;  // 唯一标识，用于关联到 responseBlocks
   text: string;  // 问题文本
@@ -567,6 +602,18 @@ export interface NLClarificationQuestion {
   options?: string[];  // 选项（用于 single_choice / multiple_choice）
   required?: boolean;  // 是否必填
   hint?: string;  // 提示信息
+  /**
+   * 🆕 P0: 问题分组
+   * 'required' - 必需问题组（澄清问题）
+   * 'optional' - 补充问题组（补充问题）
+   * 如果未提供，向后兼容：根据 required 字段推断
+   */
+  group?: 'required' | 'optional';
+  /**
+   * 🆕 HCI优化：条件输入字段（当用户选择特定选项时显示后续输入字段）
+   * 例如：选择"不准确，需要修改"后显示日期选择框
+   */
+  conditionalInputs?: ConditionalInputField[];
   metadata?: {
     category?: string;  // 'activities' | 'budget' | 'dates' | 'preferences'
     priority?: 'high' | 'medium' | 'low';
@@ -598,78 +645,6 @@ export interface ParsedTripParams {
   };
   needsClarification?: boolean;
   inferredFields?: string[];     // 推断的字段列表，如 ['startDate', 'totalBudget']
-}
-
-/**
- * 规划师回复内容块类型
- */
-export type PlannerResponseBlockType =
-  | 'paragraph'        // 普通段落文本
-  | 'heading'          // 标题
-  | 'list'             // 列表（有序/无序）
-  | 'summary_card'     // 摘要卡片（目的地、天数、预算等）
-  | 'question_card'    // 澄清问题卡片（独立组件）
-  | 'highlight'        // 高亮信息（重要提示）
-  | 'budget_summary'   // 预算摘要
-  | 'itinerary_overview'; // 行程概览
-
-/**
- * 规划师回复内容块
- */
-export interface PlannerResponseBlock {
-  type: PlannerResponseBlockType;
-  id?: string;  // 可选，用于前端渲染 key
-  
-  // paragraph 类型
-  content?: string;  // 段落文本内容
-  
-  // heading 类型
-  level?: 1 | 2 | 3;  // 标题级别
-  text?: string;  // 标题文本
-  
-  // list 类型
-  title?: string;  // 列表标题（如"核心思路"）
-  items?: string[];  // 列表项
-  ordered?: boolean;  // 是否有序列表
-  
-  // summary_card 类型
-  summary?: {
-    destination?: string;
-    duration?: string;  // "10天"
-    travelers?: string;  // "双人"
-    budget?: {
-      amount: number;
-      currency: string;
-      details?: string[];  // ["租用四驱车", "住宿", "特色活动", "餐饮"]
-    };
-  };
-  
-  // question_card 类型（与 clarificationQuestions 关联）
-  questionId?: string;  // 关联到 clarificationQuestions 中的 id
-  
-  // highlight 类型
-  highlightText?: string;
-  highlightType?: 'info' | 'warning' | 'success';
-  
-  // budget_summary 类型
-  budget?: {
-    estimatedAmount: number;
-    currency: string;
-    duration: string;
-    travelers: string;
-    breakdown?: Array<{
-      category: string;
-      amount: number;
-      percentage?: number;
-    }>;
-  };
-  
-  // itinerary_overview 类型
-  itinerary?: {
-    theme?: string;  // "自驾探索冰岛南岸"
-    route?: string;  // "以雷克雅未克为起点和终点..."
-    dailyStructure?: string;  // "每天的驾驶时间会控制在2-3小时以内..."
-  };
 }
 
 /**
@@ -745,6 +720,12 @@ export interface CreateTripFromNLResponse {
   needsClarification?: boolean;
   
   /**
+   * 🆕 需要用户确认创建行程
+   * 如果为 true，表示所有必需字段已收集，但需要用户确认后才创建行程
+   */
+  needsConfirmation?: boolean;
+  
+  /**
    * 🆕 Gate 预检查阻止标记
    * 如果为 true，表示被 Gate 预检查阻止，需要用户选择替代方案
    */
@@ -811,6 +792,12 @@ export interface CreateTripFromNLResponse {
    * 如果未提供 plannerResponseBlocks，使用此字段
    */
   plannerReply?: string;
+  
+  /**
+   * 🆕 是否显示确认卡片
+   * 当 needsConfirmation 为 true 时，前端应显示确认卡片
+   */
+  showConfirmCard?: boolean;
   
   // 建议的快捷回复选项
   suggestedQuestions?: string[];
@@ -882,6 +869,7 @@ export interface CreateTripFromNLResponse {
 // ==================== 更新行程 ====================
 
 export interface UpdateTripRequest {
+  name?: string; // 🆕 行程名称（可选）
   destination?: string;
   startDate?: string;
   endDate?: string;
@@ -901,6 +889,30 @@ export interface TripState {
     placeName: string;
     startTime: string;
     estimatedArrivalTime?: string;
+    // ⚠️ 新增：Place 字段（后端应返回完整的地点信息，包括坐标）
+    Place?: {
+      id: number;
+      nameCN?: string;
+      nameEN?: string | null;
+      latitude?: number;        // ⚠️ 新增：纬度
+      longitude?: number;      // ⚠️ 新增：经度
+      address?: string;
+      rating?: number | null;
+      businessHours?: {         // ⚠️ 建议：营业时间
+        open?: string;
+        close?: string;
+        timezone?: string;
+      };
+      metadata?: PlaceMetadata;
+      // 兼容其他可能的坐标字段名
+      lat?: number;
+      lng?: number;
+      // 兼容 metadata.location 格式
+      location?: {
+        lat?: number;
+        lng?: number;
+      };
+    };
   } | null;
   eta?: string;
   timezone: string;
@@ -1108,7 +1120,8 @@ export type ConflictType =
   | 'BUFFER_INSUFFICIENT'     // 缓冲不足
   | 'CLOSURE_RISK'            // 闭园风险
   | 'ACCESSIBILITY_MISMATCH'  // 无障碍不匹配
-  | 'TRANSPORT_TOO_LONG';     // 交通过长
+  | 'TRANSPORT_TOO_LONG'      // 交通过长
+  | 'SEASONAL_CONFLICT';      // 季节性冲突
 
 export interface ConflictSuggestion {
   action: string;

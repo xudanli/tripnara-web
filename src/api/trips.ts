@@ -301,6 +301,31 @@ export const tripsApi = {
   },
 
   /**
+   * 🆕 确认创建行程
+   * POST /trips/nl-conversation/:sessionId/confirm-create
+   * 用户确认创建行程，系统根据已收集的参数创建行程
+   */
+  confirmCreateTrip: async (
+    sessionId: string,
+    data: {
+      confirm: boolean;
+      additionalParams?: {
+        preferences?: Record<string, any>;
+        [key: string]: any;
+      };
+    }
+  ): Promise<CreateTripFromNLResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<CreateTripFromNLResponse>>(
+      `/trips/nl-conversation/${sessionId}/confirm-create`,
+      data,
+      {
+        timeout: 120000, // 120 秒超时
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
    * 🆕 更新消息的问题答案
    * PUT /trips/nl-conversation/:sessionId/messages/:messageId
    * 如果后端不支持此接口，将回退到更新整个会话

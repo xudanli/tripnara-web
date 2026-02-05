@@ -606,6 +606,8 @@ export interface DayPlanPoi {
   required?: boolean;              // 是否为必游POI（默认false）
   order?: number;                  // POI顺序（可选，用于排序）
   durationMinutes?: number;        // 预计停留时间（分钟，可选）
+  startTime?: string;              // 🆕 开始时间（可选，ISO 8601格式，如 "09:00:00" 或 "2024-05-01T09:00:00.000Z"）
+  endTime?: string;                // 🆕 结束时间（可选，ISO 8601格式，如 "12:00:00" 或 "2024-05-01T12:00:00.000Z"）
   metadata?: Record<string, any>;  // 其他元数据（可选）
 }
 
@@ -723,6 +725,7 @@ export interface CreateTripFromTemplateRequest {
   startDate: string;         // ISO 8601, 如 "2024-06-01"
   endDate: string;           // ISO 8601, 如 "2024-06-07"
   totalBudget?: number;      // 可选
+  name?: string;             // 🆕 行程名称（可选，如果是从模版创建，建议使用模版名称）
   
   // 可选：用户偏好覆盖
   pacePreference?: 'RELAXED' | 'BALANCED' | 'CHALLENGE';  // 覆盖模板默认值

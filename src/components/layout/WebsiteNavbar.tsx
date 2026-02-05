@@ -54,6 +54,25 @@ export default function WebsiteNavbar() {
   const { t } = useTranslation();
   const { user, isAuthenticated, logout } = useAuth();
 
+  // 根据用户信息生成头像背景色
+  const getAvatarColor = (displayName?: string | null, email?: string | null): string => {
+    const colors = [
+      '#9333ea', // purple
+      '#3b82f6', // blue
+      '#10b981', // green
+      '#f59e0b', // amber
+      '#ec4899', // pink
+      '#6366f1', // indigo
+      '#ef4444', // red
+      '#06b6d4', // cyan
+      '#8b5cf6', // violet
+      '#f97316', // orange
+    ];
+    const identifier = displayName || email || 'U';
+    const index = identifier.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -236,146 +255,147 @@ export default function WebsiteNavbar() {
             <LanguageSwitcher />
             {isAuthenticated ? (
               <div
-                style={{ position: 'relative' }}
-                ref={(el) => {
-                  userMenuRef.current = el;
-                }}
-                onMouseEnter={() => setUserMenuOpen(true)}
-                onMouseLeave={() => setUserMenuOpen(false)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}
               >
-                <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.5rem 1rem',
-                    backgroundColor: 'transparent',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '0.95rem',
-                    fontWeight: '500',
-                    color: '#333',
-                    transition: 'all 0.2s',
+                {/* Avatar with dropdown menu */}
+                <div
+                  style={{ position: 'relative' }}
+                  ref={(el) => {
+                    userMenuRef.current = el;
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f5f5f5';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!userMenuOpen) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }
-                  }}
+                  onMouseEnter={() => setUserMenuOpen(true)}
+                  onMouseLeave={() => setUserMenuOpen(false)}
                 >
                   {user?.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
                       alt={user?.displayName || user?.email || 'User'}
+                      onClick={() => setUserMenuOpen(!userMenuOpen)}
                       style={{
-                        width: '24px',
-                        height: '24px',
+                        width: '32px',
+                        height: '32px',
                         borderRadius: '50%',
                         objectFit: 'cover',
+                        cursor: 'pointer',
+                        transition: 'opacity 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '0.8';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '1';
                       }}
                     />
                   ) : (
                     <div
+                      onClick={() => setUserMenuOpen(!userMenuOpen)}
                       style={{
-                        width: '24px',
-                        height: '24px',
+                        width: '32px',
+                        height: '32px',
                         borderRadius: '50%',
-                        backgroundColor: 'oklch(0.205 0 0)',
+                        backgroundColor: 'oklch(0.205 0 0)', // 品牌色（黑色）
                         color: '#fff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '0.75rem',
+                        fontSize: '0.875rem',
                         fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'opacity 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '0.8';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '1';
                       }}
                     >
                       {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <span>{user?.displayName || user?.email || t('nav.user')}</span>
-                  <span style={{ fontSize: '0.7rem' }}>▼</span>
-                </button>
-                {userMenuOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: 0,
-                      marginTop: '0.5rem',
-                      backgroundColor: '#fff',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                      minWidth: '200px',
-                      padding: '0.5rem 0',
-                      zIndex: 1001,
-                    }}
-                  >
+                  {userMenuOpen && (
                     <div
                       style={{
-                        padding: '0.75rem 1rem',
-                        borderBottom: '1px solid #e0e0e0',
-                        marginBottom: '0.25rem',
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        marginTop: '0.5rem',
+                        backgroundColor: '#fff',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                        minWidth: '200px',
+                        padding: '0.5rem 0',
+                        zIndex: 1001,
                       }}
                     >
-                      <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#000' }}>
-                        {user?.displayName || user?.email}
-                      </div>
-                      {user?.email && user?.displayName && (
-                        <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
-                          {user.email}
+                      <div
+                        style={{
+                          padding: '0.75rem 1rem',
+                          borderBottom: '1px solid #e0e0e0',
+                          marginBottom: '0.25rem',
+                        }}
+                      >
+                        <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#000' }}>
+                          {user?.displayName || user?.email}
                         </div>
-                      )}
+                        {user?.email && user?.displayName && (
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+                            {user.email}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleLogout}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '0.75rem 1rem',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: 'oklch(0.205 0 0)',
+                          fontSize: '0.95rem',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#fef2f2';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        {t('nav.logout')}
+                      </button>
                     </div>
-                    <Link
-                      to="/dashboard/settings?tab=preferences"
-                      onClick={() => setUserMenuOpen(false)}
-                      style={{
-                        display: 'block',
-                        padding: '0.75rem 1rem',
-                        textDecoration: 'none',
-                        color: '#333',
-                        fontSize: '0.95rem',
-                        transition: 'background-color 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f5f5f5';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      {t('nav.preferences')}
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '0.75rem 1rem',
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        color: 'oklch(0.205 0 0)',
-                        fontSize: '0.95rem',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#fef2f2';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      {t('nav.logout')}
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
+                {/* Open App Button */}
+                <Link
+                  to="/dashboard"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: 'transparent',
+                    color: '#333',
+                    textDecoration: 'none',
+                    borderRadius: '9999px',
+                    fontSize: '0.95rem',
+                    fontWeight: '500',
+                    border: '1px solid #e0e0e0',
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f5f5f5';
+                    e.currentTarget.style.borderColor = '#d0d0d0';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.borderColor = '#e0e0e0';
+                  }}
+                >
+                  {t('nav.openApp')}
+                </Link>
               </div>
             ) : (
               <Link
@@ -461,7 +481,7 @@ export default function WebsiteNavbar() {
               fontWeight: '600',
             }}
           >
-            {t('nav.startPlanning')}
+            {isAuthenticated ? t('nav.openApp') : t('nav.startPlanning')}
           </Link>
 
           {navItems.map((item) => (
@@ -534,7 +554,7 @@ export default function WebsiteNavbar() {
                       width: '40px',
                       height: '40px',
                       borderRadius: '50%',
-                      backgroundColor: 'oklch(0.205 0 0)',
+                      backgroundColor: 'oklch(0.205 0 0)', // 品牌色（黑色）
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',

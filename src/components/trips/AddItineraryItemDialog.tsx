@@ -363,12 +363,20 @@ export function AddItineraryItemDialog({
         }
       }
       
-      toast.success('行程项添加成功');
+      toast.success('行程项添加成功', {
+        description: '行程项已添加到您的行程中',
+        duration: 3000,
+      });
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
       console.error('Create itinerary item failed:', err);
-      setError(err.message || '添加失败，请重试');
+      const errorMessage = err.message || '添加失败，请重试';
+      setError(errorMessage);
+      toast.error('添加失败', {
+        description: errorMessage,
+        duration: 5000,
+      });
     } finally {
       setSubmitting(false);
     }

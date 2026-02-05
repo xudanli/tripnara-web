@@ -8,9 +8,10 @@ interface HealthBarProps {
   risk: number; // 0-100 (风险越低越好)
   cost: number; // 0-100 (成本控制)
   className?: string;
+  onMetricClick?: (metricName: 'schedule' | 'budget' | 'pace' | 'feasibility') => void;
 }
 
-export default function HealthBar({ executable, buffer, risk, cost, className }: HealthBarProps) {
+export default function HealthBar({ executable, buffer, risk, cost, className, onMetricClick }: HealthBarProps) {
   const getHealthColor = (value: number, reverse = false) => {
     const score = reverse ? 100 - value : value;
     if (score >= 80) return 'text-green-600';
@@ -25,7 +26,13 @@ export default function HealthBar({ executable, buffer, risk, cost, className }:
     return <XCircle className="h-4 w-4" />;
   };
 
-  const overallHealth = Math.round((executable * 0.4 + buffer * 0.2 + (100 - risk) * 0.3 + cost * 0.1));
+  // 使用木桶效应计算健康度：整体健康度由最低维度决定
+  const overallHealth = Math.round(Math.min(
+    executable,        // 可执行度
+    buffer,            // 缓冲
+    100 - risk,        // 风险（反转：风险越低越好）
+    cost               // 成本
+  ));
 
   return (
     <TooltipProvider>
@@ -65,7 +72,10 @@ export default function HealthBar({ executable, buffer, risk, cost, className }:
         <div className="grid grid-cols-4 gap-2.5">
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <div 
+                className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => onMetricClick?.('schedule')}
+              >
                 <div className={cn('mb-1.5', getHealthColor(executable))}>
                   {getHealthIcon(executable)}
                 </div>
@@ -80,12 +90,18 @@ export default function HealthBar({ executable, buffer, risk, cost, className }:
               <p className="text-xs text-muted-foreground">
                 基于时间窗口、营业时间、距离等因素综合评估。值越高表示行程越容易按计划执行。
               </p>
+              {onMetricClick && (
+                <p className="text-xs text-primary mt-1">点击查看详细说明</p>
+              )}
             </TooltipContent>
           </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <div 
+                className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => onMetricClick?.('budget')}
+              >
                 <div className={cn('mb-1.5', getHealthColor(buffer))}>
                   {getHealthIcon(buffer)}
                 </div>
@@ -100,12 +116,18 @@ export default function HealthBar({ executable, buffer, risk, cost, className }:
               <p className="text-xs text-muted-foreground">
                 行程中预留的缓冲时间占比。充足的缓冲可以应对突发情况，如交通延误、活动超时等。
               </p>
+              {onMetricClick && (
+                <p className="text-xs text-primary mt-1">点击查看详细说明</p>
+              )}
             </TooltipContent>
           </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <div 
+                className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => onMetricClick?.('pace')}
+              >
                 <div className={cn('mb-1.5', getHealthColor(risk, true))}>
                   {getHealthIcon(risk, true)}
                 </div>
@@ -120,12 +142,18 @@ export default function HealthBar({ executable, buffer, risk, cost, className }:
               <p className="text-xs text-muted-foreground">
                 综合评估安全风险、时间冲突、天气等因素。值越低表示行程越安全可靠。
               </p>
+              {onMetricClick && (
+                <p className="text-xs text-primary mt-1">点击查看详细说明</p>
+              )}
             </TooltipContent>
           </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+              <div 
+                className="flex flex-col items-center p-2.5 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => onMetricClick?.('feasibility')}
+              >
                 <div className={cn('mb-1.5', getHealthColor(cost))}>
                   {getHealthIcon(cost)}
                 </div>
@@ -140,6 +168,9 @@ export default function HealthBar({ executable, buffer, risk, cost, className }:
               <p className="text-xs text-muted-foreground">
                 预算使用情况。基于总预算、每日预算和实际花费计算。值越高表示成本控制越好。
               </p>
+              {onMetricClick && (
+                <p className="text-xs text-primary mt-1">点击查看详细说明</p>
+              )}
             </TooltipContent>
           </Tooltip>
         </div>

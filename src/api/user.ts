@@ -1,5 +1,9 @@
 import apiClient from './client';
 
+/**
+ * 用户偏好接口文档位置: docs/api/user-preferences.md
+ */
+
 // ==================== 类型定义 ====================
 
 /**
@@ -159,9 +163,25 @@ export const userApi = {
       // 检查响应格式
       if (!response.data.success) {
         const errorData = response.data as unknown as ErrorResponse;
+        // 防御性检查：确保 error 对象存在
+        if (errorData?.error) {
+          throw new UserApiError(
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '获取用户信息失败'
+          );
+        } else {
+          throw new UserApiError(
+            'UNKNOWN_ERROR',
+            '获取用户信息失败：服务器返回了无效的错误格式'
+          );
+        }
+      }
+      
+      // 防御性检查：确保返回的数据存在
+      if (!response.data.data) {
         throw new UserApiError(
-          errorData.error.code,
-          errorData.error.message
+          'INVALID_RESPONSE',
+          '获取用户信息失败：服务器返回的数据为空'
         );
       }
       
@@ -196,10 +216,10 @@ export const userApi = {
       // 处理后端错误响应
       if (error.response?.data) {
         const errorData = error.response.data as ErrorResponse;
-        if (!errorData.success && errorData.error) {
+        if (!errorData.success && errorData?.error) {
           throw new UserApiError(
-            errorData.error.code,
-            errorData.error.message
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '获取用户信息失败'
           );
         }
       }
@@ -223,9 +243,25 @@ export const userApi = {
       // 检查响应格式
       if (!response.data.success) {
         const errorData = response.data as unknown as ErrorResponse;
+        // 防御性检查：确保 error 对象存在
+        if (errorData?.error) {
+          throw new UserApiError(
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '更新用户信息失败'
+          );
+        } else {
+          throw new UserApiError(
+            'UNKNOWN_ERROR',
+            '更新用户信息失败：服务器返回了无效的错误格式'
+          );
+        }
+      }
+      
+      // 防御性检查：确保返回的数据存在
+      if (!response.data.data) {
         throw new UserApiError(
-          errorData.error.code,
-          errorData.error.message
+          'INVALID_RESPONSE',
+          '更新用户信息失败：服务器返回的数据为空'
         );
       }
       
@@ -268,10 +304,10 @@ export const userApi = {
       // 处理后端错误响应
       if (error.response?.data) {
         const errorData = error.response.data as ErrorResponse;
-        if (!errorData.success && errorData.error) {
+        if (!errorData.success && errorData?.error) {
           throw new UserApiError(
-            errorData.error.code,
-            errorData.error.message
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '更新用户信息失败'
           );
         }
       }
@@ -302,9 +338,25 @@ export const userApi = {
       // 检查响应格式
       if (!response.data.success) {
         const errorData = response.data as unknown as ErrorResponse;
+        // 防御性检查：确保 error 对象存在
+        if (errorData?.error) {
+          throw new UserApiError(
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '删除用户账户失败'
+          );
+        } else {
+          throw new UserApiError(
+            'UNKNOWN_ERROR',
+            '删除用户账户失败：服务器返回了无效的错误格式'
+          );
+        }
+      }
+      
+      // 防御性检查：确保返回的数据存在
+      if (!response.data.data) {
         throw new UserApiError(
-          errorData.error.code,
-          errorData.error.message
+          'INVALID_RESPONSE',
+          '删除用户账户失败：服务器返回的数据为空'
         );
       }
       
@@ -347,10 +399,10 @@ export const userApi = {
       // 处理后端错误响应
       if (error.response?.data) {
         const errorData = error.response.data as ErrorResponse;
-        if (!errorData.success && errorData.error) {
+        if (!errorData.success && errorData?.error) {
           throw new UserApiError(
-            errorData.error.code,
-            errorData.error.message
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '删除用户账户失败'
           );
         }
       }
@@ -371,9 +423,25 @@ export const userApi = {
       // 检查响应格式
       if (!response.data.success) {
         const errorData = response.data as unknown as ErrorResponse;
+        // 防御性检查：确保 error 对象存在
+        if (errorData?.error) {
+          throw new UserProfileApiError(
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '获取用户偏好失败'
+          );
+        } else {
+          throw new UserProfileApiError(
+            'UNKNOWN_ERROR',
+            '获取用户偏好失败：服务器返回了无效的错误格式'
+          );
+        }
+      }
+      
+      // 防御性检查：确保返回的数据存在
+      if (!response.data.data) {
         throw new UserProfileApiError(
-          errorData.error.code,
-          errorData.error.message
+          'INVALID_RESPONSE',
+          '获取用户偏好失败：服务器返回的数据为空'
         );
       }
       
@@ -400,10 +468,10 @@ export const userApi = {
       // 处理后端错误响应
       if (error.response?.data) {
         const errorData = error.response.data as ErrorResponse;
-        if (!errorData.success && errorData.error) {
+        if (!errorData.success && errorData?.error) {
           throw new UserProfileApiError(
-            errorData.error.code,
-            errorData.error.message
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '获取用户偏好失败'
           );
         }
       }
@@ -433,9 +501,25 @@ export const userApi = {
       // 检查响应格式
       if (!response.data.success) {
         const errorData = response.data as unknown as ErrorResponse;
+        // 防御性检查：确保 error 对象存在
+        if (errorData?.error) {
+          throw new UserProfileApiError(
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '更新用户偏好失败'
+          );
+        } else {
+          throw new UserProfileApiError(
+            'UNKNOWN_ERROR',
+            '更新用户偏好失败：服务器返回了无效的错误格式'
+          );
+        }
+      }
+      
+      // 防御性检查：确保返回的数据存在
+      if (!response.data.data) {
         throw new UserProfileApiError(
-          errorData.error.code,
-          errorData.error.message
+          'INVALID_RESPONSE',
+          '更新用户偏好失败：服务器返回的数据为空'
         );
       }
       
@@ -462,10 +546,10 @@ export const userApi = {
       // 处理后端错误响应
       if (error.response?.data) {
         const errorData = error.response.data as ErrorResponse;
-        if (!errorData.success && errorData.error) {
+        if (!errorData.success && errorData?.error) {
           throw new UserProfileApiError(
-            errorData.error.code,
-            errorData.error.message
+            errorData.error.code || 'UNKNOWN_ERROR',
+            errorData.error.message || '更新用户偏好失败'
           );
         }
       }
