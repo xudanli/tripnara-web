@@ -24,8 +24,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react';
+import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2, Loader2 } from 'lucide-react';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
+import { useIntegrationAuth } from '@/hooks/useIntegrationAuth';
 import { userApi, UserApiError, type User } from '@/api/user';
 import { countriesApi } from '@/api/countries';
 import type { UserPreferences } from '@/api/user';
@@ -86,6 +87,133 @@ const TRAVELER_TAGS = [
   { value: 'adventure', label: '冒险爱好者' },
   { value: 'photography', label: '摄影爱好者' },
 ];
+
+// 集成授权卡片组件
+interface IntegrationCardProps {
+  service: 'google-calendar' | 'browserbase' | 'airbnb';
+  title: string;
+  description: string;
+  iconSrc: string;
+  iconAlt: string;
+}
+
+function IntegrationCard({ service, title, description, iconSrc, iconAlt }: IntegrationCardProps) {
+  const {
+    status,
+    loading,
+    error,
+    authorizing,
+    isAuthorized,
+    authorize,
+    revoke,
+  } = useIntegrationAuth(service);
+
+  const handleAuthorize = async () => {
+    try {
+      await authorize();
+      toast.success('授权成功');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '授权失败');
+    }
+  };
+
+  const handleRevoke = async () => {
+    try {
+      await revoke();
+      toast.success('已撤销授权');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '撤销授权失败');
+    }
+  };
+
+  const getStatusBadge = () => {
+    if (loading || authorizing) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {authorizing ? '授权中...' : '加载中...'}
+        </div>
+      );
+    }
+
+    if (isAuthorized) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+          <CheckCircle2 className="h-4 w-4" />
+          已连接
+        </div>
+      );
+    }
+
+    if (status === 'expired') {
+      return (
+        <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
+          <AlertCircle className="h-4 w-4" />
+          已过期
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <AlertCircle className="h-4 w-4" />
+        未连接
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+          <img 
+            src={iconSrc} 
+            alt={iconAlt} 
+            className="w-full h-full object-contain p-1"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="font-medium">{title}</div>
+            {getStatusBadge()}
+          </div>
+          <div className="text-sm text-muted-foreground">{description}</div>
+          {error && (
+            <div className="text-sm text-destructive mt-1">{error}</div>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {isAuthorized ? (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleRevoke}
+            disabled={loading}
+          >
+            断开连接
+          </Button>
+        ) : (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleAuthorize}
+            disabled={loading || authorizing}
+          >
+            {authorizing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                授权中...
+              </>
+            ) : (
+              '连接'
+            )}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -998,20 +1126,43 @@ export default function SettingsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <IntegrationCard
+                    service="google-calendar"
+                    title="日历同步"
+                    description="同步行程到Google Calendar"
+                    iconSrc="/images/personas/Google Calendar.png"
+                    iconAlt="Google Calendar"
+                  />
+                  <IntegrationCard
+                    service="browserbase"
+                    title="浏览器自动化"
+                    description="使用浏览器自动化功能进行数据抓取"
+                    iconSrc="/images/personas/google maps.png"
+                    iconAlt="Browserbase"
+                  />
                   <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <div className="font-medium">日历同步</div>
-                      <div className="text-sm text-muted-foreground">同步行程到Google Calendar</div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                        <img 
+                          src="/images/personas/google maps.png" 
+                          alt="Google Maps" 
+                          className="w-full h-full object-contain p-1"
+                        />
+                      </div>
+                      <div>
+                        <div className="font-medium">地图应用</div>
+                        <div className="text-sm text-muted-foreground">导出到Google Maps / Apple Maps</div>
+                      </div>
                     </div>
-                    <Button variant="outline">连接</Button>
+                    <Button variant="outline" disabled>即将推出</Button>
                   </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <div className="font-medium">地图应用</div>
-                      <div className="text-sm text-muted-foreground">导出到Google Maps / Apple Maps</div>
-                    </div>
-                    <Button variant="outline">连接</Button>
-                  </div>
+                  <IntegrationCard
+                    service="airbnb"
+                    title="Airbnb"
+                    description="同步住宿预订信息到行程"
+                    iconSrc="/images/personas/airbnb.png"
+                    iconAlt="Airbnb"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
