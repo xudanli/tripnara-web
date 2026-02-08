@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlanningAssistant, type PlanningMessage } from '@/hooks/usePlanningAssistant';
+import { useAirbnb } from '@/hooks/useAirbnb';
 import type { 
   GuidingQuestion, 
   DestinationRecommendation, 
@@ -19,11 +20,17 @@ import type {
   ExpertCitation,
   DegradationInfo,
 } from '@/api/assistant';
+import { AirbnbSearchResults, AirbnbListingDetailsDialog } from '@/components/airbnb';
+import { extractAirbnbSearchParams, hasAccommodationIntent } from '@/utils/airbnb-context-extractor';
+import { itineraryItemsApi } from '@/api/trips';
+import type { CreateItineraryItemRequest } from '@/types/trip';
+import { tripsApi } from '@/api/trips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 import { 
   Send, 
@@ -641,6 +648,8 @@ export default function PlanningAssistantChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState('');
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
   const {
     messages,
@@ -648,6 +657,7 @@ export default function PlanningAssistantChat({
     loading,
     error,
     confirmedTripId,
+    currentRecommendations,
     sendMessage,
     selectOption,
     selectRecommendation,
@@ -658,6 +668,51 @@ export default function PlanningAssistantChat({
     preferencesLoading,
     fetchUserPreferences,
   } = usePlanningAssistant(userId);
+
+  // Airbnb 搜索功能
+  const {
+    searchResults: airbnbResults,
+    searchLoading: airbnbLoading,
+    searchError: airbnbError,
+    search: searchAirbnb,
+    authStatus: airbnbAuthStatus,
+    checkAuthStatus: checkAirbnbAuth,
+  } = useAirbnb();
+
+
+  // 自动触发 Airbnb 搜索
+  useEffect(() => {
+    const lastUserMessage = messages
+      .filter(m => m.role === 'user')
+      .pop();
+    
+    const lastAssistantMessage = messages
+      .filter(m => m.role === 'assistant')
+      .pop();
+
+    if (
+      lastUserMessage && 
+      hasAccommodationIntent(lastUserMessage.content) &&
+      !airbnbLoading &&
+      !airbnbResults &&
+      airbnbAuthStatus?.isAuthorized
+    ) {
+      // 提取搜索参数（使用改进的上下文提取）
+      const params = extractAirbnbSearchParams(
+        messages,
+        lastAssistantMessage?.recommendations?.[0],
+        userPreferences
+      );
+      
+      // 触发搜索
+      searchAirbnb(params);
+    }
+  }, [messages, airbnbLoading, airbnbResults, airbnbAuthStatus, searchAirbnb, userPreferences, hasAccommodationIntent, extractAirbnbSearchParams]);
+
+  // 检查 Airbnb 授权状态
+  useEffect(() => {
+    checkAirbnbAuth();
+  }, [checkAirbnbAuth]);
   
   // 加载用户偏好 (P1 新功能)
   useEffect(() => {
@@ -763,6 +818,80 @@ export default function PlanningAssistantChat({
               />
             ))}
 
+            {/* Airbnb 搜索结果展示 */}
+            {(airbnbResults || airbnbLoading || airbnbError) && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <Card className="border-primary/20">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Home className="w-4 h-4 text-primary" />
+                      Airbnb 房源推荐
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      为您找到了一些 Airbnb 房源选择
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <AirbnbSearchResults
+                      results={airbnbResults}
+                      loading={airbnbLoading}
+                      error={airbnbError}
+                      isAuthorized={airbnbAuthStatus?.isAuthorized ?? false}
+                      onViewDetails={(listingId) => {
+                        setSelectedListingId(listingId);
+                        setDetailsDialogOpen(true);
+                      }}
+                      onAddToTrip={async (listing) => {
+                        // 如果行程已创建，添加到行程中
+                        if (confirmedTripId) {
+                          try {
+                            const trip = await tripsApi.getById(confirmedTripId);
+                            if (trip.TripDay && trip.TripDay.length > 0) {
+                              // 使用第一个日期（实际应该让用户选择）
+                              const firstDay = trip.TripDay[0];
+                              
+                              // 提取价格信息
+                              const priceText = listing.structuredDisplayPrice?.primaryLine?.accessibilityLabel || '';
+                              const priceMatch = priceText.match(/\$(\d+)/);
+                              const estimatedCost = priceMatch ? parseFloat(priceMatch[1]) * 6.5 : undefined; // 简单汇率转换
+                              
+                              // 创建行程项（住宿类型）
+                              const itemData: CreateItineraryItemRequest = {
+                                tripDayId: firstDay.id,
+                                type: 'ACTIVITY', // 住宿作为活动项
+                                startTime: new Date().toISOString(), // TODO: 使用实际日期
+                                endTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // TODO: 使用实际日期
+                                note: `Airbnb: ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference}\n链接: ${listing.url}`,
+                                estimatedCost,
+                                costCategory: 'ACCOMMODATION',
+                                currency: 'CNY',
+                              };
+                              
+                              await itineraryItemsApi.create(itemData);
+                              toast.success(`已将 ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference} 添加到行程`);
+                            } else {
+                              toast.error('行程中没有日期信息');
+                            }
+                          } catch (error: any) {
+                            console.error('添加到行程失败:', error);
+                            toast.error(error.message || '添加到行程失败');
+                          }
+                        } else {
+                          // 行程未创建，提示用户先创建行程
+                          toast.info('请先完成行程规划', {
+                            description: '创建行程后可以将房源添加到行程中',
+                          });
+                        }
+                      }}
+                      onAuthorize={() => {
+                        checkAirbnbAuth();
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* 加载指示器 */}
             {loading && (
               <div className="flex gap-3 animate-in fade-in duration-200">
@@ -777,6 +906,67 @@ export default function PlanningAssistantChat({
             )}
           </div>
         </ScrollArea>
+      )}
+
+      {/* Airbnb 房源详情对话框 */}
+      {selectedListingId && (
+        <AirbnbListingDetailsDialog
+          listingId={selectedListingId}
+          open={detailsDialogOpen}
+          onOpenChange={setDetailsDialogOpen}
+          onAddToTrip={async (listing) => {
+            // 如果行程已创建，添加到行程中
+            if (confirmedTripId) {
+              try {
+                const trip = await tripsApi.getById(confirmedTripId);
+                if (trip.TripDay && trip.TripDay.length > 0) {
+                  const firstDay = trip.TripDay[0];
+                  
+                  const priceText = listing.structuredDisplayPrice?.primaryLine?.accessibilityLabel || '';
+                  const priceMatch = priceText.match(/\$(\d+)/);
+                  const estimatedCost = priceMatch ? parseFloat(priceMatch[1]) * 6.5 : undefined;
+                  
+                  const itemData: CreateItineraryItemRequest = {
+                    tripDayId: firstDay.id,
+                    type: 'ACTIVITY',
+                    startTime: new Date().toISOString(),
+                    endTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                    note: `Airbnb: ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference}\n链接: ${listing.url}`,
+                    estimatedCost,
+                    costCategory: 'ACCOMMODATION',
+                    currency: 'CNY',
+                  };
+                  
+                  await itineraryItemsApi.create(itemData);
+                  toast.success(`已将 ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference} 添加到行程`);
+                  setDetailsDialogOpen(false);
+                }
+              } catch (error: any) {
+                toast.error(error.message || '添加到行程失败');
+              }
+            } else {
+              toast.info('请先完成行程规划');
+            }
+          }}
+          searchParams={(() => {
+            if (!airbnbResults) return undefined;
+            // 从搜索结果中提取搜索参数
+            const lastAssistantMessage = messages
+              .filter(m => m.role === 'assistant')
+              .pop();
+            const params = extractAirbnbSearchParams(
+              messages, 
+              lastAssistantMessage?.recommendations?.[0], 
+              userPreferences
+            );
+            return {
+              checkin: params.checkin,
+              checkout: params.checkout,
+              adults: params.adults || 2,
+              children: params.children,
+            };
+          })()}
+        />
       )}
 
       {/* 错误提示 */}

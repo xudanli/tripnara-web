@@ -4,10 +4,11 @@ import { format } from 'date-fns';
 import { DateTime } from 'luxon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, X, ChevronLeft, ChevronRight, Utensils, Hotel, Coffee, Fuel } from 'lucide-react';
 import type { ItineraryItem, BookingStatus } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import type { PlaceImageInfo } from '@/types/place-image';
+import type { PlaceCategory } from '@/types/places-routes';
 import Logo from '@/components/common/Logo';
 import { WeatherMini } from '@/components/weather/WeatherCard';
 import {
@@ -21,6 +22,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import {
   Collapsible,
@@ -56,6 +60,8 @@ interface ItineraryItemRowProps {
   onApplyPatch?: (item: ItineraryItem) => void;
   /** 问 NARA - 与 AI 助手联动 */
   onAskNara?: (item: ItineraryItem, question: string) => void;
+  /** 搜索附近 - 打开附近地点搜索对话框 */
+  onSearchNearby?: (item: ItineraryItem, category?: PlaceCategory) => void;
 }
 
 // 类别图标映射
@@ -107,11 +113,38 @@ export default function ItineraryItemRow({
   onReplace,
   onApplyPatch,
   onAskNara,
+  onSearchNearby,
 }: ItineraryItemRowProps) {
   const { t } = useTranslation();
   const place = item.Place;
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
+  
+  // 获取地点的坐标（支持多种格式）
+  const getPlaceCoordinates = useMemo(() => {
+    if (!place) return null;
+    
+    // 优先使用标准格式 latitude/longitude
+    if (place.latitude !== undefined && place.longitude !== undefined) {
+      return { lat: place.latitude, lng: place.longitude };
+    }
+    
+    // 其次使用兼容格式 lat/lng
+    if (place.lat !== undefined && place.lng !== undefined) {
+      return { lat: place.lat, lng: place.lng };
+    }
+    
+    // 最后尝试从 metadata 中获取
+    const metadata = place.metadata as any;
+    if (metadata?.location?.lat !== undefined && metadata?.location?.lng !== undefined) {
+      return { lat: metadata.location.lat, lng: metadata.location.lng };
+    }
+    if (metadata?.latitude !== undefined && metadata?.longitude !== undefined) {
+      return { lat: metadata.latitude, lng: metadata.longitude };
+    }
+    
+    return null;
+  }, [place]);
   // 详情弹窗状态
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   // 图片查看器状态
@@ -964,18 +997,85 @@ export default function ItineraryItemRow({
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {onAskNara && place && (
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              {onSearchNearby && (
                 <>
-                  <DropdownMenuItem onSelect={() => onAskNara(item, `${place.nameCN || place.nameEN}附近有什么好吃的餐厅？`)}>
-                    🍽️ 附近餐厅
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => onAskNara(item, `${place.nameCN || place.nameEN}建议游玩多长时间？`)}>
-                    ⏱️ 停留时间
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => onAskNara(item, `去${place.nameCN || place.nameEN}有什么注意事项？`)}>
-                    ⚠️ 注意事项
-                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger 
+                      disabled={!getPlaceCoordinates}
+                      className={cn(
+                        !getPlaceCoordinates && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      <MapPin className="w-4 h-4 mr-2 text-blue-600" />
+                      <span className="font-medium">搜索附近</span>
+                      {!getPlaceCoordinates && (
+                        <span className="ml-auto text-xs text-muted-foreground">（需坐标）</span>
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-[160px]">
+                      <DropdownMenuItem 
+                        onSelect={() => {
+                          if (getPlaceCoordinates) {
+                            onSearchNearby(item, 'ATTRACTION');
+                          }
+                        }}
+                        disabled={!getPlaceCoordinates}
+                        className="cursor-pointer"
+                      >
+                        <Star className="w-4 h-4 mr-2 text-amber-500" />
+                        <span>景点</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onSelect={() => {
+                          if (getPlaceCoordinates) {
+                            onSearchNearby(item, 'RESTAURANT');
+                          }
+                        }}
+                        disabled={!getPlaceCoordinates}
+                        className="cursor-pointer"
+                      >
+                        <Utensils className="w-4 h-4 mr-2 text-red-500" />
+                        <span>餐厅</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onSelect={() => {
+                          if (getPlaceCoordinates) {
+                            onSearchNearby(item, 'HOTEL');
+                          }
+                        }}
+                        disabled={!getPlaceCoordinates}
+                        className="cursor-pointer"
+                      >
+                        <Hotel className="w-4 h-4 mr-2 text-purple-500" />
+                        <span>酒店</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onSelect={() => {
+                          if (getPlaceCoordinates) {
+                            onSearchNearby(item, 'CAFE');
+                          }
+                        }}
+                        disabled={!getPlaceCoordinates}
+                        className="cursor-pointer"
+                      >
+                        <Coffee className="w-4 h-4 mr-2 text-amber-700" />
+                        <span>休息点</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onSelect={() => {
+                          if (getPlaceCoordinates) {
+                            onSearchNearby(item, 'TRANSPORT');
+                          }
+                        }}
+                        disabled={!getPlaceCoordinates}
+                        className="cursor-pointer"
+                      >
+                        <Fuel className="w-4 h-4 mr-2 text-green-600" />
+                        <span>加油站</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                   <div className="h-px bg-slate-200 my-1" />
                 </>
               )}

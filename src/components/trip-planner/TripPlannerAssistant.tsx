@@ -611,7 +611,7 @@ function POIListContent({
   
   // 🆕 处理一键添加
   const handleAddToItinerary = async (
-    suggestion: { id: string; name: string; nameCN?: string; type: string },
+    suggestion: { id: string; name: string; nameCN?: string; type: string; placeId?: number; location?: { lat: number; lng: number } },
     recommendation: { day: number; timeSlot: { start: string; end: string } }
   ) => {
     if (!tripId || !sessionId) {
@@ -622,9 +622,24 @@ function POIListContent({
     setAddingIds(prev => new Set(prev).add(suggestion.id));
     
     try {
-      // ⚠️ 接口已删除，等待重新规划
-      toast.error('规划工作台智能体对话接口已删除，等待重新规划');
-      return;
+      await tripPlannerApi.applySuggestion({
+        tripId,
+        sessionId,
+        suggestionId: suggestion.id,
+        targetDay: recommendation.day,
+        timeSlot: recommendation.timeSlot,
+        suggestionType: 'add_place',
+        place: {
+          name: suggestion.name,
+          nameCN: suggestion.nameCN,
+          placeId: suggestion.placeId,
+          category: suggestion.type,
+          location: suggestion.location,
+        },
+      });
+      
+      toast.success('已添加到行程');
+      onAddToItinerary?.();
     } catch (error: any) {
       console.error('[POIListContent] 添加失败:', error);
       toast.error(error.message || '添加失败，请重试');
@@ -2316,10 +2331,10 @@ function MessageBubble({
   selectedGaps?: string[];
   onSelectGaps?: (gaps: string[]) => void;
   onPreferencesChange?: (updates: Partial<GapDisplayPreferences>) => void;
-  onIgnoreGap?: (gapId: string, gapType: GapType) => void;
-  onIgnoreGapsBatch?: (gapIds: string[]) => void;
-  onUnignoreGap?: (gapId: string) => void;
-  onUnignoreGapsBatch?: (gapIds: string[]) => void;
+  onIgnoreGap?: (gapId: string, gapType: GapType) => Promise<void>;
+  onIgnoreGapsBatch?: (gapIds: string[]) => Promise<void>;
+  onUnignoreGap?: (gapId: string) => Promise<void>;
+  onUnignoreGapsBatch?: (gapIds: string[]) => Promise<void>;
 }) {
   const isUser = message.role === 'user';
   
@@ -2465,10 +2480,10 @@ function MessageBubble({
               preferences={gapPreferences}
               selectedGaps={selectedGaps || []}
               onSelectGaps={onSelectGaps}
-              onIgnoreGap={onIgnoreGap}
-              onIgnoreGapsBatch={onIgnoreGapsBatch}
-              onUnignoreGap={onUnignoreGap}
-              onUnignoreGapsBatch={onUnignoreGapsBatch}
+              onIgnoreGap={onIgnoreGap!}
+              onIgnoreGapsBatch={onIgnoreGapsBatch!}
+              onUnignoreGap={onUnignoreGap!}
+              onUnignoreGapsBatch={onUnignoreGapsBatch!}
               tripId={tripId}
             />
           </div>
@@ -2575,38 +2590,72 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
     const newPreferences = { ...gapPreferences, ...updates };
     setGapPreferences(newPreferences);
     
-    // ⚠️ 接口已删除，等待重新规划
-    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
-    // 回滚
-    setGapPreferences(gapPreferences);
+    try {
+      await tripPlannerApi.updateGapPreferences({
+        ...newPreferences,
+        tripId,
+        sessionId: sessionId || undefined,
+      });
+    } catch (error: any) {
+      console.error('[TripPlannerAssistant] 更新缺口偏好失败:', error);
+      toast.error('更新偏好失败，已回滚');
+      // 回滚
+      setGapPreferences(gapPreferences);
+    }
   };
 
   // 🆕 忽略缺口
-  // ⚠️ 接口已删除，等待重新规划
-  const handleIgnoreGap = async (gapId: string, gapType: GapType) => {
-    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  const handleIgnoreGap = async (gapId: string, gapType: GapType): Promise<void> => {
+    try {
+      await tripPlannerApi.ignoreGap({
+        gapId,
+        gapType,
+        tripId,
+      });
+      toast.success('已忽略缺口');
+    } catch (error: any) {
+      console.error('[TripPlannerAssistant] 忽略缺口失败:', error);
+      toast.error(error.message || '忽略缺口失败');
+    }
   };
 
   // 🆕 批量忽略缺口
-  // ⚠️ 接口已删除，等待重新规划
-  const handleIgnoreGapsBatch = async (gapIds: string[]) => {
-    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  const handleIgnoreGapsBatch = async (gapIds: string[]): Promise<void> => {
+    try {
+      const result = await tripPlannerApi.ignoreGapsBatch({
+        gapIds,
+        tripId,
+      });
+      toast.success(`已忽略 ${result.ignoredCount} 个缺口`);
+    } catch (error: any) {
+      console.error('[TripPlannerAssistant] 批量忽略缺口失败:', error);
+      toast.error(error.message || '批量忽略缺口失败');
+    }
   };
 
   // 🆕 取消忽略缺口
-  // ⚠️ 接口已删除，等待重新规划
-  const handleUnignoreGap = async (gapId: string) => {
-    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  const handleUnignoreGap = async (gapId: string): Promise<void> => {
+    try {
+      await tripPlannerApi.unignoreGap(gapId, { tripId });
+      toast.success('已取消忽略缺口');
+    } catch (error: any) {
+      console.error('[TripPlannerAssistant] 取消忽略缺口失败:', error);
+      toast.error(error.message || '取消忽略缺口失败');
+    }
   };
 
   // 🆕 批量取消忽略缺口
-  // ⚠️ 接口已删除，等待重新规划
-  const handleUnignoreGapsBatch = async (gapIds: string[]) => {
-    toast.error('规划工作台智能体对话接口已删除，等待重新规划');
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  const handleUnignoreGapsBatch = async (gapIds: string[]): Promise<void> => {
+    try {
+      const result = await tripPlannerApi.unignoreGapsBatch({
+        gapIds,
+        tripId,
+      });
+      toast.success(`已取消忽略 ${result.unignoredCount} 个缺口`);
+    } catch (error: any) {
+      console.error('[TripPlannerAssistant] 批量取消忽略缺口失败:', error);
+      toast.error(error.message || '批量取消忽略缺口失败');
+    }
   };
 
   // 🆕 监听行程更新，自动触发 NARA 重新检查

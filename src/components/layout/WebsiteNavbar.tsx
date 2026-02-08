@@ -250,14 +250,41 @@ export default function WebsiteNavbar() {
             </div>
           ))}
 
-          {/* Right side buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: '2rem' }}>
+          {/* Right side buttons - 参考 YouMind 设计：主要 CTA 突出，用户菜单低调 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: '2rem' }}>
             <LanguageSwitcher />
             {isAuthenticated ? (
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}
               >
-                {/* Avatar with dropdown menu */}
+                {/* 主要 CTA：打开应用按钮（突出显示，深色背景） */}
+                <Link
+                  to="/dashboard"
+                  style={{
+                    padding: '0.5rem 1.25rem',
+                    backgroundColor: '#1a1a1a',
+                    color: '#fff',
+                    textDecoration: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.95rem',
+                    fontWeight: '600',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#2a2a2a';
+                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#1a1a1a';
+                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                  }}
+                >
+                  {t('nav.openApp')}
+                </Link>
+                
+                {/* 用户菜单（次要操作，更低调） */}
                 <div
                   style={{ position: 'relative' }}
                   ref={(el) => {
@@ -272,12 +299,13 @@ export default function WebsiteNavbar() {
                       alt={user?.displayName || user?.email || 'User'}
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
                       style={{
-                        width: '32px',
-                        height: '32px',
+                        width: '36px',
+                        height: '36px',
                         borderRadius: '50%',
                         objectFit: 'cover',
                         cursor: 'pointer',
                         transition: 'opacity 0.2s',
+                        border: '1px solid #e0e0e0',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.opacity = '0.8';
@@ -290,8 +318,8 @@ export default function WebsiteNavbar() {
                     <div
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
                       style={{
-                        width: '32px',
-                        height: '32px',
+                        width: '36px',
+                        height: '36px',
                         borderRadius: '50%',
                         backgroundColor: 'oklch(0.205 0 0)', // 品牌色（黑色）
                         color: '#fff',
@@ -302,6 +330,7 @@ export default function WebsiteNavbar() {
                         fontWeight: '600',
                         cursor: 'pointer',
                         transition: 'opacity 0.2s',
+                        border: '1px solid transparent',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.opacity = '0.8';
@@ -353,7 +382,7 @@ export default function WebsiteNavbar() {
                           padding: '0.75rem 1rem',
                           backgroundColor: 'transparent',
                           border: 'none',
-                          color: 'oklch(0.205 0 0)',
+                          color: '#dc2626',
                           fontSize: '0.95rem',
                           cursor: 'pointer',
                           transition: 'background-color 0.2s',
@@ -370,63 +399,38 @@ export default function WebsiteNavbar() {
                     </div>
                   )}
                 </div>
-                {/* Open App Button */}
-                <Link
-                  to="/dashboard"
-                  style={{
-                    padding: '0.5rem 1rem',
-                    backgroundColor: 'transparent',
-                    color: '#333',
-                    textDecoration: 'none',
-                    borderRadius: '9999px',
-                    fontSize: '0.95rem',
-                    fontWeight: '500',
-                    border: '1px solid #e0e0e0',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f5f5f5';
-                    e.currentTarget.style.borderColor = '#d0d0d0';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.borderColor = '#e0e0e0';
-                  }}
-                >
-                  {t('nav.openApp')}
-                </Link>
               </div>
             ) : (
               <Link
                 to="/login"
                 style={{
-                  padding: '0.6rem 1.5rem',
-                  backgroundColor: '#1a1a1a',
-                  color: '#fff',
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: '#f5f5f5', // 浅灰色背景，参考 YouMind
+                  color: '#000',
                   textDecoration: 'none',
                   borderRadius: '8px',
                   fontSize: '0.95rem',
-                  fontWeight: '600',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  fontWeight: '500',
+                  border: '1px solid #000', // 黑色边框
                   transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#2a2a2a';
-                  e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+                  e.currentTarget.style.backgroundColor = '#e5e5e5';
+                  e.currentTarget.style.borderColor = '#333';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#1a1a1a';
-                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.backgroundColor = '#f5f5f5';
+                  e.currentTarget.style.borderColor = '#000';
                 }}
                 onClick={(e) => {
                   // Active state: add inset shadow
                   const target = e.currentTarget;
                   if (target) {
-                    target.style.boxShadow = 'inset 0 1px 2px rgba(0, 0, 0, 0.2)';
+                    target.style.backgroundColor = '#e0e0e0';
                     setTimeout(() => {
                       if (target) {
-                        target.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+                        target.style.backgroundColor = '#f5f5f5';
                       }
                     }, 150);
                   }

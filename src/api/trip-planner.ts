@@ -8,11 +8,18 @@
  * - 确认修改
  * 
  * 🆕 已更新为新接口：
- * - Base URL: /api/agent/planning-assistant
- * - 旧接口已移除，不再使用 /api/trip-planner
+ * - 优化已创建行程：使用旅程助手 API `/api/agent/journey-assistant/chat`（需要 tripId）
+ * - 新规划：使用规划助手 API `/api/agent/planning-assistant/chat`（需要 sessionId）
+ * - 保持原有接口签名以保持向后兼容
+ * 
+ * 根据文档（规划助手前端对接指南 v1.0.0）：
+ * - 规划助手接口当前暂不支持 tripId 参数来处理已创建行程的优化
+ * - 如需优化已创建行程，暂时仍使用旅程助手接口
  */
 
-import apiClient from './client';
+// 接口已删除，不再需要导入
+// import { planningAssistantApi, journeyAssistantApi } from './assistant';
+// import type { PlanningChatRequest, JourneyChatRequest, JourneyAssistantResponse } from './assistant';
 
 // ==================== 阶段与意图枚举 ====================
 
@@ -567,10 +574,13 @@ export interface PlannerChatRequest {
 
 /**
  * 对话交互响应
+ * 
+ * 注意：此响应格式与 PlanningChatResponse 兼容，但包含规划工作台特有的字段
  */
 export interface PlannerChatResponse {
   sessionId: string;
   message: string;
+  messageCN?: string; // 兼容新格式
   phase: PlannerPhase;
   intent: PlannerIntent;
   richContent?: RichContent;
@@ -584,6 +594,12 @@ export interface PlannerChatResponse {
   guardianEvaluation?: GuardianEvaluation;
   disclaimer?: Disclaimer;
   meta?: PlannerResponseMeta;
+  
+  // 🆕 兼容新格式字段
+  sections?: any[];
+  citations?: any[];
+  degradation?: any;
+  notification?: any;
 }
 
 /**
@@ -716,128 +732,115 @@ interface ErrorResponse {
 
 type ApiResponseWrapper<T> = SuccessResponse<T> | ErrorResponse;
 
-/**
- * 处理 API 响应
- */
-function handleResponse<T>(response: { data: ApiResponseWrapper<T> | T }): T {
-  // 检查是否是包装格式
-  const data = response.data;
-  
-  if (data && typeof data === 'object' && 'success' in data) {
-    const wrapped = data as ApiResponseWrapper<T>;
-    if (!wrapped.success) {
-      const errorData = (wrapped as ErrorResponse).error;
-      const errorMessage = errorData?.message || errorData?.code || '请求失败';
-      console.error('[Trip Planner API] API 返回错误:', errorData);
-      throw new Error(errorMessage);
-    }
-    return (wrapped as SuccessResponse<T>).data;
-  }
-  
-  // 非包装格式，直接返回
-  return data as T;
-}
+// handleResponse 函数已移除，直接使用 planningAssistantApi 的响应格式
 
 // ==================== API 实现 ====================
 
+/**
+ * 规划工作台右侧对话框接口已删除
+ * 所有接口方法已移除
+ */
 export const tripPlannerApi = {
   /**
    * 开始规划会话
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  start: async (data: StartPlanningRequest): Promise<StartPlanningResponse> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  start: async (_data: StartPlanningRequest): Promise<StartPlanningResponse> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 对话交互
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  chat: async (data: PlannerChatRequest): Promise<PlannerChatResponse> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  chat: async (_data: PlannerChatRequest): Promise<PlannerChatResponse> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 快捷操作
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  action: async (data: PlannerActionRequest): Promise<PlannerActionResponse> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  action: async (_data: PlannerActionRequest): Promise<PlannerActionResponse> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 确认修改
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  confirm: async (data: ConfirmChangesRequest): Promise<ConfirmChangesResponse> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  confirm: async (_data: ConfirmChangesRequest): Promise<ConfirmChangesResponse> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 应用建议
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  applySuggestion: async (data: ApplySuggestionRequest): Promise<ApplySuggestionResponse> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  applySuggestion: async (_data: ApplySuggestionRequest): Promise<ApplySuggestionResponse> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 撤销上一次修改
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  undo: async (data: { tripId: string; sessionId: string }): Promise<UndoResponse> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  undo: async (_data: { tripId: string; sessionId: string }): Promise<UndoResponse> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   // ==================== 缺口偏好 API ====================
 
   /**
    * 获取用户缺口偏好
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  getGapPreferences: async (params?: { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  getGapPreferences: async (_params?: { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 更新用户缺口偏好
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  updateGapPreferences: async (data: Partial<GapDisplayPreferences> & { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  updateGapPreferences: async (_data: Partial<GapDisplayPreferences> & { tripId?: string; sessionId?: string }): Promise<GapDisplayPreferences> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 忽略单个缺口
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  ignoreGap: async (data: { gapId: string; gapType: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<void> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  ignoreGap: async (_data: { gapId: string; gapType: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<void> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 批量忽略缺口
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  ignoreGapsBatch: async (data: { gapIds: string[]; gapType?: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<{ ignoredCount: number; totalCount: number }> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  ignoreGapsBatch: async (_data: { gapIds: string[]; gapType?: GapType; tripId?: string; pattern?: IgnorePattern }): Promise<{ ignoredCount: number; totalCount: number }> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 取消忽略单个缺口
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  unignoreGap: async (gapId: string, params?: { tripId?: string }): Promise<void> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  unignoreGap: async (_gapId: string, _params?: { tripId?: string }): Promise<void> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 
   /**
    * 批量取消忽略缺口
-   * ⚠️ 接口已删除，等待重新规划
+   * ⚠️ 接口已删除
    */
-  unignoreGapsBatch: async (data: { gapIds: string[]; tripId?: string }): Promise<{ unignoredCount: number; totalCount: number }> => {
-    throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+  unignoreGapsBatch: async (_data: { gapIds: string[]; tripId?: string }): Promise<{ unignoredCount: number; totalCount: number }> => {
+    throw new Error('规划工作台右侧对话框接口已删除');
   },
 };
+
+// ==================== 辅助函数 ====================
+// 辅助函数已删除，接口已移除
 
 export default tripPlannerApi;

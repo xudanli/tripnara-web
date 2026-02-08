@@ -7,12 +7,12 @@ import { Spinner } from '@/components/ui/spinner';
 import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info, ClipboardCheck, ExternalLink, Calendar } from 'lucide-react';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
-// 🆕 tripPlannerApi 已移除，规划工作台的智能体对话窗口相关接口已删除，后续重新规划
-// import { tripPlannerApi } from '@/api/trip-planner';
+import { tripPlannerApi } from '@/api/trip-planner';
 import { readinessApi, type ScoreBreakdownResponse } from '@/api/readiness';
 import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict, DayTravelInfoResponse, PersonaAlert } from '@/types/trip';
 import type { SuggestionStats } from '@/types/suggestion';
 import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
+import type { PlaceCategory } from '@/types/places-routes';
 import { format } from 'date-fns';
 import { useDrawer } from '@/components/layout/DashboardLayout';
 import {
@@ -117,6 +117,9 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const [conflicts, setConflicts] = useState<PlanStudioConflict[]>([]);
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
   const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
+  
+  // 🆕 使用 useDrawer hook（必须在 DashboardLayout 上下文中）
+  // 注意：如果出现错误，说明组件不在 DashboardLayout 中，需要检查路由配置
   const { setDrawerOpen, setDrawerTab, setHighlightItemId } = useDrawer();
   
   // 准备度相关状态
@@ -142,6 +145,12 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   // 添加行程项对话框状态
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const [addItemDay, setAddItemDay] = useState<TripDetail['TripDay'][0] | null>(null);
+  
+  // 搜索附近对话框状态
+  const [searchNearbyDialogOpen, setSearchNearbyDialogOpen] = useState(false);
+  const [searchNearbyItem, setSearchNearbyItem] = useState<ItineraryItem | null>(null);
+  const [searchNearbyDay, setSearchNearbyDay] = useState<TripDetail['TripDay'][0] | null>(null);
+  const [searchNearbyCategory, setSearchNearbyCategory] = useState<PlaceCategory | 'all' | undefined>(undefined);
 
   // 收集所有地点信息用于批量加载图片（使用 useMemo 避免每次渲染都创建新数组）
   // 使用稳定的依赖：基于 place IDs 的字符串，而不是整个 Map 对象
@@ -506,14 +515,60 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
             return false;
           }
           
-          // ⚠️ 接口已删除，等待重新规划
-          toast.error('规划工作台智能体对话接口已删除，等待重新规划');
-          return false;
+          // 获取 sessionId（从 planStudioContext 或创建新会话）
+          // 注意：ScheduleTab 没有直接访问 sessionId，需要通过其他方式获取
+          // 暂时先创建会话或使用 itineraryItemsApi 直接添加
+          // TODO: 需要从 planStudioContext 或 TripPlannerAssistant 获取 sessionId
+          
+          // 临时方案：如果没有 sessionId，直接使用 itineraryItemsApi 添加
+          // 理想情况下应该通过 tripPlannerApi.applySuggestion，但需要 sessionId
+          // 这里先尝试创建会话
+          let sessionId: string | undefined;
+          try {
+            const startResponse = await tripPlannerApi.start({ tripId });
+            sessionId = startResponse.sessionId;
+          } catch (err: any) {
+            console.warn('创建会话失败，将直接添加:', err);
+            // 如果创建会话失败，可以考虑直接使用 itineraryItemsApi
+            // 但为了保持一致性，这里先返回错误
+            toast.error('无法创建会话，请稍后重试');
+            return false;
+          }
+          
+          // 解析时间段（如果有）
+          let timeSlot: { start: string; end: string } | undefined;
+          if (suggestion.suggestedTime) {
+            // 假设 suggestedTime 是 "HH:mm-HH:mm" 格式
+            const [start, end] = suggestion.suggestedTime.split('-');
+            if (start && end) {
+              timeSlot = { start, end };
+            }
+          }
+          
+          await tripPlannerApi.applySuggestion({
+            tripId,
+            sessionId,
+            suggestionId: suggestion.id,
+            targetDay: suggestion.targetDay,
+            timeSlot,
+            suggestionType: suggestion.type,
+            place: {
+              name: suggestion.place.name,
+              nameCN: suggestion.place.nameCN,
+              category: suggestion.place.category,
+              address: suggestion.place.address,
+              location: suggestion.place.location,
+            },
+          });
+          
+          toast.success('已添加到行程');
+          await loadTrip(); // 重新加载行程数据
+          return true;
         }
         return false;
-      } catch (err) {
+      } catch (err: any) {
         console.error('应用建议失败:', err);
-        toast.error('添加失败，请重试');
+        toast.error(err.message || '添加失败，请重试');
         return false;
       }
     });
@@ -572,6 +627,39 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const handleReplaceItem = (itemId: string, placeName: string) => {
     setReplacingItem({ id: itemId, placeName });
     setReplaceDialogOpen(true);
+  };
+
+  const handleSearchNearby = (item: ItineraryItem, category?: PlaceCategory) => {
+    // 找到 item 对应的 day
+    const day = trip?.TripDay?.find(d => 
+      d.ItineraryItem?.some(i => i.id === item.id)
+    );
+    
+    if (!day) {
+      toast.error('无法找到对应的行程日期');
+      return;
+    }
+    
+    const place = item.Place;
+    if (!place) {
+      toast.error('该地点没有地点信息，无法搜索附近');
+      return;
+    }
+    
+    // 检查坐标（支持多种格式）
+    const hasCoordinates = 
+      (place.latitude !== undefined && place.longitude !== undefined) ||
+      (place.lat !== undefined && place.lng !== undefined);
+    
+    if (!hasCoordinates) {
+      toast.error('该地点没有坐标信息，无法搜索附近');
+      return;
+    }
+    
+    setSearchNearbyItem(item);
+    setSearchNearbyDay(day);
+    setSearchNearbyCategory(category);
+    setSearchNearbyDialogOpen(true);
   };
 
   const handleReplaceSuccess = async (result: ReplaceItineraryItemResponse) => {
@@ -1024,6 +1112,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                             onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
+                            onSearchNearby={handleSearchNearby}
                             onApplyPatch={(_item) => {
                               // 应用补丁功能 - 现在通过自动触发机制处理
                               toast.info(t('planStudio.scheduleTab.applyPatchNotImplemented'));
@@ -1098,6 +1187,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                                   onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
+                                  onSearchNearby={handleSearchNearby}
                                   onAskNara={planStudioActions ? (item, question) => {
                                     // 计算当天统计
                                     const dayStats = {
@@ -1822,6 +1912,44 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
             }
           }}
           onSuccess={loadTrip}
+        />
+      )}
+
+      {/* 搜索附近对话框 */}
+      {searchNearbyDay && searchNearbyItem && (
+        <EnhancedAddItineraryItemDialog
+          tripDay={searchNearbyDay}
+          tripId={tripId}
+          countryCode={trip?.destination}
+          open={searchNearbyDialogOpen}
+          onOpenChange={(open) => {
+            setSearchNearbyDialogOpen(open);
+            if (!open) {
+              setSearchNearbyItem(null);
+              setSearchNearbyDay(null);
+              setSearchNearbyCategory(undefined);
+            }
+          }}
+          onSuccess={loadTrip}
+          initialSearchMode="nearby"
+          itemId={searchNearbyItem.id}
+          initialLocation={(() => {
+            const place = searchNearbyItem.Place;
+            if (!place) return undefined;
+            
+            // 优先使用标准格式
+            if (place.latitude !== undefined && place.longitude !== undefined) {
+              return { lat: place.latitude, lng: place.longitude };
+            }
+            
+            // 使用兼容格式
+            if (place.lat !== undefined && place.lng !== undefined) {
+              return { lat: place.lat, lng: place.lng };
+            }
+            
+            return undefined;
+          })()}
+          initialCategory={searchNearbyCategory}
         />
       )}
     </>

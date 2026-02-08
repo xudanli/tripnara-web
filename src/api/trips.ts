@@ -78,6 +78,7 @@ import type {
   RedoActionRequest,
   UndoRedoResponse,
   CreateTripShareRequest,
+  NearbyPoiItem,
   ConflictsResponse,
   UpdateIntentRequest,
   IntentResponse,
@@ -1849,6 +1850,61 @@ export const itineraryItemsApi = {
     }>>(
       `/trips/${tripId}/evidence/batch-update`,
       { updates }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 基于行程项搜索附近POI
+   * GET /itinerary-items/nearby-poi
+   */
+  getNearbyPoi: async (params: {
+    itemId?: string;
+    lat?: number;
+    lng?: number;
+    radius?: number;
+    categories?: string | string[];
+    minRating?: number;
+    openNow?: boolean;
+    limit?: number;
+  }): Promise<NearbyPoiItem[]> => {
+    const queryParams: any = {};
+    
+    if (params.itemId) {
+      queryParams.itemId = params.itemId;
+    } else if (params.lat !== undefined && params.lng !== undefined) {
+      queryParams.lat = params.lat;
+      queryParams.lng = params.lng;
+    } else {
+      throw new Error('必须提供 itemId 或 lat/lng 坐标');
+    }
+    
+    if (params.radius !== undefined) {
+      queryParams.radius = params.radius;
+    }
+    
+    if (params.categories) {
+      // 如果是数组，转换为逗号分隔的字符串
+      queryParams.categories = Array.isArray(params.categories)
+        ? params.categories.join(',')
+        : params.categories;
+    }
+    
+    if (params.minRating !== undefined) {
+      queryParams.minRating = params.minRating;
+    }
+    
+    if (params.openNow !== undefined) {
+      queryParams.openNow = params.openNow;
+    }
+    
+    if (params.limit !== undefined) {
+      queryParams.limit = params.limit;
+    }
+    
+    const response = await apiClient.get<ApiResponseWrapper<NearbyPoiItem[]>>(
+      '/itinerary-items/nearby-poi',
+      { params: queryParams }
     );
     return handleResponse(response);
   },

@@ -262,15 +262,23 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      // ⚠️ 接口已删除，等待重新规划
-      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+      const response = await tripPlannerApi.start({
+        tripId,
+      });
+      
+      setSessionId(response.sessionId);
+      setCurrentPhase(response.phase);
+      setIsInitialized(true);
+      
+      // 添加初始助手消息
+      addAssistantMessage(response);
     } catch (err: any) {
       handleError(err);
     } finally {
       setLoading(false);
       initializingRef.current = false;
     }
-  }, [tripId, loading, generateMessageId, handleError]);
+  }, [tripId, loading, generateMessageId, handleError, addAssistantMessage]);
 
   /**
    * 发送消息
@@ -280,6 +288,20 @@ export function useTripPlannerAssistant({
     options?: SendMessageOptions
   ) => {
     if (!tripId || !message.trim() || loading) return;
+    
+    // 确保有会话
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+      try {
+        const startResponse = await tripPlannerApi.start({ tripId });
+        currentSessionId = startResponse.sessionId;
+        setSessionId(currentSessionId);
+        setIsInitialized(true);
+      } catch (err: any) {
+        handleError(err);
+        return;
+      }
+    }
     
     // 添加用户消息（附带上下文信息）
     const ctx = options?.context?.selectedContext;
@@ -296,8 +318,22 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      // ⚠️ 接口已删除，等待重新规划
-      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+      const response = await tripPlannerApi.chat({
+        sessionId: currentSessionId!,
+        message,
+        language: 'zh',
+        context: {
+          tripId,
+          targetDay: options?.targetDay,
+          targetItemId: options?.targetItemId,
+          selectedContext: options?.context?.selectedContext,
+          adjacentItems: options?.context?.adjacentItems,
+          dayStats: options?.context?.dayStats,
+          clarificationData: options?.clarificationData,
+        },
+      });
+      
+      addAssistantMessage(response);
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -314,18 +350,38 @@ export function useTripPlannerAssistant({
   ) => {
     if (!tripId || loading) return;
     
+    // 确保有会话
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+      try {
+        const startResponse = await tripPlannerApi.start({ tripId });
+        currentSessionId = startResponse.sessionId;
+        setSessionId(currentSessionId);
+        setIsInitialized(true);
+      } catch (err: any) {
+        handleError(err);
+        return;
+      }
+    }
+    
     setLoading(true);
     setError(null);
     
     try {
-      // ⚠️ 接口已删除，等待重新规划
-      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+      const response = await tripPlannerApi.action({
+        tripId,
+        action,
+        sessionId: currentSessionId!,
+        params,
+      });
+      
+      addAssistantMessage(response);
     } catch (err: any) {
       handleError(err);
     } finally {
       setLoading(false);
     }
-  }, [tripId, sessionId, loading, addUserMessage, addAssistantMessage, handleError]);
+  }, [tripId, sessionId, loading, addAssistantMessage, handleError]);
 
   /**
    * 确认修改
@@ -340,8 +396,28 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      // ⚠️ 接口已删除，等待重新规划
-      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+      const response = await tripPlannerApi.confirm({
+        tripId,
+        sessionId,
+        changeIds: idsToConfirm,
+      });
+      
+      // 更新待确认修改列表
+      setPendingChanges([]);
+      
+      // 添加确认消息
+      const confirmMessage: PlannerMessage = {
+        id: generateMessageId(),
+        role: 'assistant',
+        content: response.messageCN || response.message,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, confirmMessage]);
+      
+      // 通知行程更新
+      if (response.tripUpdate && onTripUpdate) {
+        onTripUpdate(response.tripUpdate);
+      }
     } catch (err: any) {
       handleError(err);
     } finally {
@@ -375,8 +451,24 @@ export function useTripPlannerAssistant({
     setError(null);
     
     try {
-      // ⚠️ 接口已删除，等待重新规划
-      throw new Error('规划工作台智能体对话接口已删除，等待重新规划');
+      const response = await tripPlannerApi.undo({
+        tripId,
+        sessionId,
+      });
+      
+      // 添加撤销消息
+      const undoMessage: PlannerMessage = {
+        id: generateMessageId(),
+        role: 'assistant',
+        content: response.message,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, undoMessage]);
+      
+      // 通知行程更新
+      if (response.tripUpdate && onTripUpdate) {
+        onTripUpdate(response.tripUpdate);
+      }
     } catch (err: any) {
       handleError(err);
     } finally {

@@ -6,6 +6,7 @@ import AgentChat from './AgentChat';
 import PlanningAssistantChat from './PlanningAssistantChat';
 import JourneyAssistantChat from './JourneyAssistantChat';
 import { TripPlannerAssistant, type TripPlannerAssistantRef } from '@/components/trip-planner';
+import { PlanningAssistantSidebar } from '@/components/planning-assistant-v2/PlanningAssistantSidebar';
 import { NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
 import Logo from '@/components/common/Logo';
 import type { EntryPoint } from '@/api/agent';
@@ -117,21 +118,25 @@ export default function AgentChatSidebar({
     switch (config.component) {
       case 'planning':
         // 如果有 tripId，使用新的 TripPlannerAssistant (NARA 助手)
+        // 注意：TripPlannerAssistant 的接口已删除，这里暂时保留以保持兼容性
         if (activeTripId) {
+          // 🆕 优先使用 Planning Assistant V2（如果后端支持优化已创建行程）
+          // 否则回退到旧的 TripPlannerAssistant（会显示接口已删除的错误）
           return (
-            <TripPlannerAssistant
-              ref={tripPlannerRef}
+            <PlanningAssistantSidebar
+              userId={user?.id}
               tripId={activeTripId}
               className="h-full"
               onTripUpdate={onSystem2Response}
             />
           );
         }
-        // 没有 tripId 时，显示传统的规划助手（用于创建新行程）
+        // 没有 tripId 时，使用 Planning Assistant V2（用于创建新行程）
         return (
-          <PlanningAssistantChat
+          <PlanningAssistantSidebar
             userId={user?.id}
             className="h-full"
+            onTripUpdate={onSystem2Response}
           />
         );
       case 'journey':

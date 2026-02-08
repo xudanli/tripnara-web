@@ -48,6 +48,7 @@ import {
   Search,
   Star,
   Clock,
+  Info,
   Plus,
   Navigation,
   Sparkles,
@@ -72,6 +73,14 @@ interface EnhancedAddItineraryItemDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  /** 初始搜索模式 */
+  initialSearchMode?: SearchMode;
+  /** 初始位置（用于附近搜索） */
+  initialLocation?: { lat: number; lng: number };
+  /** 初始类别筛选 */
+  initialCategory?: PlaceCategory | 'all';
+  /** 行程项ID（用于基于行程项搜索附近POI） */
+  itemId?: string;
 }
 
 interface ItemTypeOption {
@@ -210,6 +219,10 @@ export function EnhancedAddItineraryItemDialog({
   open,
   onOpenChange,
   onSuccess,
+  initialSearchMode,
+  initialLocation,
+  initialCategory,
+  itemId,
 }: EnhancedAddItineraryItemDialogProps) {
   const { t } = useTranslation();
   
@@ -217,12 +230,12 @@ export function EnhancedAddItineraryItemDialog({
   const [viewMode, setViewMode] = useState<'browse' | 'configure'>('browse');
   
   // 搜索模式
-  const [searchMode, setSearchMode] = useState<SearchMode>('search');
+  const [searchMode, setSearchMode] = useState<SearchMode>(initialSearchMode || 'search');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>(initialCategory || 'all');
   const [searchResults, setSearchResults] = useState<PlaceWithDistance[]>([]);
   const [searching, setSearching] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(initialLocation || null);
   // 搜索范围：'current' 当前位置 | 'destination' 行程目的地
   const [searchScope, setSearchScope] = useState<'current' | 'destination'>('current');
   // 搜索结果警告（当选择行程目的地但结果距离很远时）
@@ -259,8 +272,14 @@ export function EnhancedAddItineraryItemDialog({
 
   const debouncedQuery = useDebounce(searchQuery, 300);
 
-  // 获取用户位置
+  // 获取用户位置（如果没有提供初始位置）
   useEffect(() => {
+    // 如果提供了初始位置，使用它；否则尝试获取用户位置
+    if (initialLocation) {
+      setUserLocation(initialLocation);
+      return;
+    }
+    
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -274,7 +293,7 @@ export function EnhancedAddItineraryItemDialog({
         }
       );
     }
-  }, []);
+  }, [initialLocation]);
 
   // 重置表单
   const resetForm = useCallback(() => {
@@ -301,12 +320,22 @@ export function EnhancedAddItineraryItemDialog({
     setSearchWarning(null);
   }, [userLocation]);
 
-  // 打开时重置表单
+  // 打开时重置表单或设置初始状态
   useEffect(() => {
     if (open) {
-      resetForm();
+      if (initialSearchMode && initialLocation) {
+        // 如果提供了初始搜索模式和位置，设置它们
+        setSearchMode(initialSearchMode);
+        setUserLocation(initialLocation);
+        setSearchScope('current');
+        if (initialCategory) {
+          setSelectedCategory(initialCategory);
+        }
+      } else {
+        resetForm();
+      }
     }
-  }, [open, resetForm]);
+  }, [open, resetForm, initialSearchMode, initialLocation, initialCategory]);
 
   // 搜索地点
   const handleSearch = useCallback(async (query: string, mode: SearchMode, category: PlaceCategory | 'all') => {
@@ -365,13 +394,204 @@ export function EnhancedAddItineraryItemDialog({
           isArray: Array.isArray(results),
         });
       } else if (mode === 'nearby') {
-        results = await placesApi.getNearbyPlaces({
-          lat: userLocation!.lat,
-          lng: userLocation!.lng,
-          radius: 5000,
-          type: category !== 'all' ? category : undefined,
-          countryCode,
-        });
+        // 优先使用新接口：基于行程项搜索附近POI
+        if (itemId) {
+          // 将 PlaceCategory 转换为 API 需要的类别字符串
+          // API 支持的类别：ATTRACTION, RESTAURANT, HOTEL, GAS_STATION, REST_AREA
+          // 注意：ItineraryItemRow 中"休息点"使用的是 'CAFE'，"加油站"使用的是 'TRANSPORT'
+          // 这里需要特殊处理这些映射
+          let apiCategory: string | undefined;
+          if (category !== 'all') {
+            // 特殊处理：ItineraryItemRow 传递的特殊值
+            if (category === 'CAFE') {
+              // ItineraryItemRow 中"休息点"使用 'CAFE'，映射为 'REST_AREA'
+              apiCategory = 'REST_AREA';
+            } else if (category === 'TRANSPORT') {
+              // ItineraryItemRow 中"加油站"使用 'TRANSPORT'，映射为 'GAS_STATION'
+              apiCategory = 'GAS_STATION';
+            } else {
+              // 标准映射
+              const categoryMap: Record<PlaceCategory, string> = {
+                ATTRACTION: 'ATTRACTION',
+                RESTAURANT: 'RESTAURANT',
+                HOTEL: 'HOTEL',
+                CAFE: 'RESTAURANT', // 咖啡厅归类为餐厅（但通常会被上面的特殊处理拦截）
+                BAR: 'RESTAURANT', // 酒吧归类为餐厅
+                MUSEUM: 'ATTRACTION', // 博物馆归类为景点
+                PARK: 'ATTRACTION', // 公园归类为景点
+                SHOPPING: 'ATTRACTION', // 购物归类为景点
+                TRANSPORT: 'REST_AREA', // 交通枢纽归类为休息点（但通常会被上面的特殊处理拦截）
+                TRANSIT_HUB: 'REST_AREA', // 交通枢纽归类为休息点
+                OTHER: 'ATTRACTION', // 其他归类为景点
+              };
+              apiCategory = categoryMap[category];
+            }
+          }
+          
+          const categories = apiCategory ? [apiCategory] : undefined;
+          
+          const nearbyPoiResults = await itineraryItemsApi.getNearbyPoi({
+            itemId,
+            radius: 5000,
+            categories,
+            limit: 20,
+          });
+          
+          // 转换为 PlaceWithDistance 格式
+          // API 返回的 category 可能是：ATTRACTION, RESTAURANT, HOTEL, GAS_STATION, REST_AREA
+          // 需要映射回 PlaceCategory 类型
+          const apiToPlaceCategory: Record<string, PlaceCategory> = {
+            ATTRACTION: 'ATTRACTION',
+            RESTAURANT: 'RESTAURANT',
+            HOTEL: 'HOTEL',
+            GAS_STATION: 'OTHER', // 加油站映射为 OTHER（因为 PlaceCategory 没有 GAS_STATION）
+            REST_AREA: 'OTHER', // 休息点映射为 OTHER（因为 PlaceCategory 没有 REST_AREA）
+          };
+          
+          results = nearbyPoiResults.map((poi) => {
+            // 转换 openingHours 格式：API 返回 { open, close, openNow }，需要转换为 Record<string, string>
+            let openingHours: Record<string, string> | undefined;
+            if (poi.openingHours) {
+              const hours = poi.openingHours;
+              if (hours.open && hours.close) {
+                openingHours = {
+                  monday: `${hours.open}-${hours.close}`,
+                  tuesday: `${hours.open}-${hours.close}`,
+                  wednesday: `${hours.open}-${hours.close}`,
+                  thursday: `${hours.open}-${hours.close}`,
+                  friday: `${hours.open}-${hours.close}`,
+                  saturday: `${hours.open}-${hours.close}`,
+                  sunday: `${hours.open}-${hours.close}`,
+                };
+              }
+            }
+            
+            // 构建 metadata，确保类型正确
+            const metadata: any = {
+              ...poi.metadata,
+              // 保留原始 API 类别，以便显示
+              originalCategory: poi.category,
+            };
+            
+            // 只有在有 openingHours 时才添加
+            if (openingHours) {
+              metadata.openingHours = openingHours;
+            }
+            
+            // 保留 openNow 信息（作为额外字段）
+            if (poi.openingHours?.openNow !== undefined) {
+              metadata.openNow = poi.openingHours.openNow;
+            }
+            
+            return {
+              id: poi.id,
+              nameCN: poi.nameCN,
+              nameEN: poi.nameEN,
+              category: apiToPlaceCategory[poi.category] || 'OTHER',
+              address: poi.address,
+              rating: poi.rating,
+              latitude: poi.lat,
+              longitude: poi.lng,
+              distance: poi.distanceMeters,
+              metadata,
+            };
+          });
+        } else if (userLocation) {
+          // 如果没有 itemId，使用新接口的坐标模式
+          // 将 PlaceCategory 转换为 API 需要的类别字符串
+          let apiCategory: string | undefined;
+          if (category !== 'all') {
+            // 特殊处理：ItineraryItemRow 传递的特殊值
+            if (category === 'CAFE') {
+              apiCategory = 'REST_AREA';
+            } else if (category === 'TRANSPORT') {
+              apiCategory = 'GAS_STATION';
+            } else {
+              const categoryMap: Record<PlaceCategory, string> = {
+                ATTRACTION: 'ATTRACTION',
+                RESTAURANT: 'RESTAURANT',
+                HOTEL: 'HOTEL',
+                CAFE: 'RESTAURANT',
+                BAR: 'RESTAURANT',
+                MUSEUM: 'ATTRACTION',
+                PARK: 'ATTRACTION',
+                SHOPPING: 'ATTRACTION',
+                TRANSPORT: 'REST_AREA',
+                TRANSIT_HUB: 'REST_AREA',
+                OTHER: 'ATTRACTION',
+              };
+              apiCategory = categoryMap[category];
+            }
+          }
+          
+          const categories = apiCategory ? [apiCategory] : undefined;
+          
+          const nearbyPoiResults = await itineraryItemsApi.getNearbyPoi({
+            lat: userLocation.lat,
+            lng: userLocation.lng,
+            radius: 5000,
+            categories,
+            limit: 20,
+          });
+          
+          // 转换为 PlaceWithDistance 格式
+          const apiToPlaceCategory: Record<string, PlaceCategory> = {
+            ATTRACTION: 'ATTRACTION',
+            RESTAURANT: 'RESTAURANT',
+            HOTEL: 'HOTEL',
+            GAS_STATION: 'OTHER',
+            REST_AREA: 'OTHER',
+          };
+          
+          results = nearbyPoiResults.map((poi) => {
+            // 转换 openingHours 格式
+            let openingHours: Record<string, string> | undefined;
+            if (poi.openingHours) {
+              const hours = poi.openingHours;
+              if (hours.open && hours.close) {
+                openingHours = {
+                  monday: `${hours.open}-${hours.close}`,
+                  tuesday: `${hours.open}-${hours.close}`,
+                  wednesday: `${hours.open}-${hours.close}`,
+                  thursday: `${hours.open}-${hours.close}`,
+                  friday: `${hours.open}-${hours.close}`,
+                  saturday: `${hours.open}-${hours.close}`,
+                  sunday: `${hours.open}-${hours.close}`,
+                };
+              }
+            }
+            
+            const metadata: any = {
+              ...poi.metadata,
+              originalCategory: poi.category,
+            };
+            
+            if (openingHours) {
+              metadata.openingHours = openingHours;
+            }
+            
+            if (poi.openingHours?.openNow !== undefined) {
+              metadata.openNow = poi.openingHours.openNow;
+            }
+            
+            return {
+              id: poi.id,
+              nameCN: poi.nameCN,
+              nameEN: poi.nameEN,
+              category: apiToPlaceCategory[poi.category] || 'OTHER',
+              address: poi.address,
+              rating: poi.rating,
+              latitude: poi.lat,
+              longitude: poi.lng,
+              distance: poi.distanceMeters,
+              metadata,
+            };
+          });
+        } else {
+          toast.error(t('planStudio.placesTab.needLocationForNearby'));
+          setSearchResults([]);
+          return;
+        }
       } else if (mode === 'recommend') {
         // 使用新的推荐活动接口
         if (!countryCode) {
@@ -509,6 +729,17 @@ export function EnhancedAddItineraryItemDialog({
       }
     }
   }, [debouncedQuery, searchMode, selectedCategory, handleSearch]);
+
+  // 当对话框打开且提供了初始搜索模式时，自动执行搜索
+  useEffect(() => {
+    if (open && initialSearchMode === 'nearby' && userLocation && initialLocation) {
+      // 延迟执行搜索，确保状态已更新
+      const timer = setTimeout(() => {
+        handleSearch('', 'nearby', 'all');
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [open, initialSearchMode, userLocation, initialLocation, handleSearch]);
 
   // 切换搜索模式时触发搜索
   const handleModeChange = async (mode: SearchMode) => {
@@ -967,6 +1198,15 @@ export function EnhancedAddItineraryItemDialog({
                         <div className="flex items-start gap-2">
                           <span>⚠️</span>
                           <span>{searchWarning}</span>
+                        </div>
+                      </div>
+                    )}
+                    {/* Wanderlog 参考提示 */}
+                    {searchMode === 'nearby' && searchResults.length > 0 && (
+                      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800 mb-2">
+                        <div className="flex items-start gap-2">
+                          <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                          <span>搜索结果参考了 Wanderlog 的数据，为您提供更准确的附近地点信息</span>
                         </div>
                       </div>
                     )}

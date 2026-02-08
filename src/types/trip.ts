@@ -118,6 +118,16 @@ export interface Place {
   address: string;
   rating: number | null;
   
+  // ========== 坐标信息 ==========
+  /** 纬度（标准格式） */
+  latitude?: number;
+  /** 经度（标准格式） */
+  longitude?: number;
+  /** 纬度（兼容格式） */
+  lat?: number;
+  /** 经度（兼容格式） */
+  lng?: number;
+  
   // ========== 元数据 ==========
   metadata?: PlaceMetadata;
   
@@ -2608,6 +2618,64 @@ export interface ItineraryItemDetailResponse extends Omit<ItineraryItemDetail, '
       nameEN: string;
     };
   } | null;
+}
+
+// ==================== 基于行程项搜索附近POI ====================
+
+/**
+ * 搜索附近POI的请求参数
+ */
+export interface NearbyPoiRequest {
+  /** 行程项ID（如果提供则使用行程项的坐标） */
+  itemId?: string;
+  /** 纬度（如果未提供 itemId，则必须提供） */
+  lat?: number;
+  /** 经度（如果未提供 itemId，则必须提供） */
+  lng?: number;
+  /** 搜索半径（米），默认5000米 */
+  radius?: number;
+  /** 要搜索的POI类别（可多选，用逗号分隔），默认搜索所有类别 */
+  categories?: string;
+  /** 最小评分（0-5） */
+  minRating?: number;
+  /** 是否只返回当前营业的地点（仅对餐厅有效） */
+  openNow?: boolean;
+  /** 返回结果数量限制，默认20 */
+  limit?: number;
+}
+
+/**
+ * 附近POI响应项
+ */
+export interface NearbyPoiItem {
+  id: number;
+  nameCN: string;
+  nameEN?: string;
+  category: string;
+  address?: string;
+  rating?: number;
+  lat: number;
+  lng: number;
+  distanceMeters: number;
+  openingHours?: {
+    open?: string;
+    close?: string;
+    openNow?: boolean;
+  };
+  metadata?: {
+    placeId?: string;
+    types?: string[];
+    priceLevel?: number;
+    [key: string]: any;
+  };
+}
+
+/**
+ * 搜索附近POI的响应
+ */
+export interface NearbyPoiResponse {
+  success: true;
+  data: NearbyPoiItem[];
 }
 
 // ==================== 批量更新行程项 ====================
