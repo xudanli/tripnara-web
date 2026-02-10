@@ -492,6 +492,7 @@ export default function RouteTemplatesPage() {
           templateName={selectedTemplate.nameCN}
           defaultDurationDays={selectedTemplate.durationDays}
           defaultPacePreference={selectedTemplate.defaultPacePreference}
+          defaultDestination={selectedTemplate.routeDirection?.countryCode} // 🆕 从模板中获取目的地
           open={createDialogOpen}
           onOpenChange={(open) => {
             setCreateDialogOpen(open);

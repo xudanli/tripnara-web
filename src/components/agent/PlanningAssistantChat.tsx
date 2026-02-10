@@ -373,7 +373,7 @@ function PlanCandidateCard({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">预算估算</span>
               <span className="text-sm font-semibold text-primary">
-                {formatCurrency(plan.estimatedBudget.total, 'CNY')}
+                {formatCurrency(plan.estimatedBudget.total, plan.estimatedBudget.currency || 'CNY')}
               </span>
             </div>
             <div className="grid grid-cols-5 gap-1 text-xs">
@@ -382,7 +382,7 @@ function PlanCandidateCard({
                   <Icon className="w-3 h-3 mx-auto text-muted-foreground" />
                   <div className="text-muted-foreground mt-0.5">{label}</div>
                   <div className="font-medium">
-                    {formatCurrency(plan.estimatedBudget.breakdown[key as keyof typeof plan.estimatedBudget.breakdown] || 0, 'CNY')}
+                    {formatCurrency(plan.estimatedBudget.breakdown[key as keyof typeof plan.estimatedBudget.breakdown] || 0, plan.estimatedBudget.currency || 'CNY')}
                   </div>
                 </div>
               ))}

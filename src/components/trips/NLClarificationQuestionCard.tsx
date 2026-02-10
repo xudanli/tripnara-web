@@ -46,17 +46,20 @@ export function NLClarificationQuestionCard({
   const [conditionalInputErrors, setConditionalInputErrors] = useState<Record<string, string>>({});
 
   // 🆕 检查当前选中的选项是否触发条件输入字段
-  const getTriggeredConditionalInputs = (): ConditionalInputField[] => {
+  const getTriggeredConditionalInputs = (currentValue?: string | string[] | number | boolean | null): ConditionalInputField[] => {
     if (!question.conditionalInputs || question.conditionalInputs.length === 0) {
       return [];
     }
 
+    // 🆕 使用传入的 currentValue，如果没有则使用组件的 value
+    const valueToCheck = currentValue !== undefined ? currentValue : value;
+
     // 获取当前选中的值（需要标准化处理，与选项值匹配）
     let selectedValue = '';
     if (question.inputType === 'single_choice' || question.inputType === 'boolean') {
-      if (typeof value === 'string') {
-        selectedValue = value.trim();
-      } else if (typeof value === 'boolean') {
+      if (typeof valueToCheck === 'string') {
+        selectedValue = valueToCheck.trim();
+      } else if (typeof valueToCheck === 'boolean') {
         const options = question.options || ['是', '否'];
         // 标准化选项值
         const normalizedOptions = options.map((opt: any) => {
@@ -65,10 +68,10 @@ export function NLClarificationQuestionCard({
           }
           return String(opt);
         });
-        selectedValue = value ? normalizedOptions[0] : (normalizedOptions[1] || normalizedOptions[0]);
-      } else if (typeof value === 'object' && value !== null) {
+        selectedValue = valueToCheck ? normalizedOptions[0] : (normalizedOptions[1] || normalizedOptions[0]);
+      } else if (typeof valueToCheck === 'object' && valueToCheck !== null) {
         // 处理对象类型的值
-        selectedValue = String((value as any).value ?? (value as any).label ?? value).trim();
+        selectedValue = String((valueToCheck as any).value ?? (valueToCheck as any).label ?? valueToCheck).trim();
       }
     }
 
@@ -77,33 +80,67 @@ export function NLClarificationQuestionCard({
       questionId: question.id,
       questionText: question.text?.substring(0, 50),
       inputType: question.inputType,
-      currentValue: value,
+      currentValue: valueToCheck,
       selectedValue,
       hasConditionalInputs: question.conditionalInputs?.length > 0,
       conditionalInputs: question.conditionalInputs,
       triggerValues: question.conditionalInputs?.map(ci => ci.triggerValue),
+      options: question.options,
     });
 
     if (!selectedValue) {
       return [];
     }
 
-    // 检查是否有匹配的条件输入字段（使用精确匹配和模糊匹配）
+    // 🆕 改进的匹配逻辑：更健壮的匹配方式
+    const normalizeString = (str: string): string => {
+      // 移除所有标点符号和空格，只保留核心文字
+      return str
+        .replace(/[,，。、\s]/g, '') // 移除逗号、空格等
+        .toLowerCase()
+        .trim();
+    };
+
+    // 检查是否有匹配的条件输入字段（使用精确匹配、模糊匹配和标准化匹配）
     const matched = question.conditionalInputs.filter((conditionalInput) => {
       const triggerValue = conditionalInput.triggerValue?.trim();
       if (!triggerValue) return false;
       
-      // 精确匹配
+      // 1. 精确匹配
       if (triggerValue === selectedValue) {
         console.log('[NLClarificationQuestionCard] 精确匹配:', { triggerValue, selectedValue });
         return true;
       }
       
-      // 模糊匹配：检查 selectedValue 是否包含 triggerValue，或 triggerValue 是否包含 selectedValue
-      // 这可以处理选项值可能有细微差异的情况（例如："不准确, 需要修改" vs "不准确，需要修改"）
+      // 2. 模糊匹配：检查 selectedValue 是否包含 triggerValue，或 triggerValue 是否包含 selectedValue
       const containsMatch = selectedValue.includes(triggerValue) || triggerValue.includes(selectedValue);
       if (containsMatch) {
         console.log('[NLClarificationQuestionCard] 模糊匹配:', { triggerValue, selectedValue });
+        return true;
+      }
+      
+      // 3. 🆕 标准化匹配：移除标点符号后比较（处理 "不准确, 需要修改" vs "不准确，需要修改"）
+      const normalizedTrigger = normalizeString(triggerValue);
+      const normalizedSelected = normalizeString(selectedValue);
+      if (normalizedTrigger === normalizedSelected || 
+          normalizedSelected.includes(normalizedTrigger) || 
+          normalizedTrigger.includes(normalizedSelected)) {
+        console.log('[NLClarificationQuestionCard] 标准化匹配:', { 
+          triggerValue, 
+          selectedValue,
+          normalizedTrigger,
+          normalizedSelected
+        });
+        return true;
+      }
+      
+      // 4. 🆕 关键词匹配：检查是否包含关键部分（例如："需要修改"、"需要调整"）
+      const keyPhrases = ['需要修改', '需要调整', '不准确', '不符合'];
+      const hasKeyPhrase = keyPhrases.some(phrase => 
+        selectedValue.includes(phrase) && triggerValue.includes(phrase)
+      );
+      if (hasKeyPhrase) {
+        console.log('[NLClarificationQuestionCard] 关键词匹配:', { triggerValue, selectedValue });
         return true;
       }
       
@@ -121,7 +158,8 @@ export function NLClarificationQuestionCard({
     onAnswer?.(fieldKey, newValue);
 
     // 🆕 如果选项改变，清除不再触发的条件输入字段的值
-    const triggeredInputs = getTriggeredConditionalInputs();
+    // 🐛 修复：使用 newValue 而不是旧的 value 来检查触发的条件输入字段
+    const triggeredInputs = getTriggeredConditionalInputs(newValue);
     const newTriggeredKeys = new Set(triggeredInputs.map((ci) => ci.triggerValue));
     setConditionalInputValues((prev) => {
       const updated = { ...prev };
@@ -737,9 +775,15 @@ export function NLClarificationQuestionCard({
             currentValue: value,
             conditionalInputs: question.conditionalInputs,
             triggeredInputs,
+            triggeredInputsCount: triggeredInputs.length,
           });
-          return triggeredInputs.map((conditionalInput) => (
-            <div key={conditionalInput.triggerValue}>
+          
+          if (triggeredInputs.length === 0) {
+            return null;
+          }
+          
+          return triggeredInputs.map((conditionalInput, index) => (
+            <div key={`${question.id}_${conditionalInput.triggerValue}_${index}`}>
               {renderConditionalInput(conditionalInput)}
             </div>
           ));

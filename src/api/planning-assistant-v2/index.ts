@@ -24,6 +24,7 @@ export type {
   ChatHistoryResponse,
   // 对话
   ChatRequest,
+  ChatRequestContext,
   ChatResponse,
   RoutingTarget,
   // 推荐

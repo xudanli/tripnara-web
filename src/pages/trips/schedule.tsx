@@ -23,6 +23,43 @@ export default function TripSchedulePage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [redoing, setRedoing] = useState(false);
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
+  
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!id) return;
+      try {
+        // 优先从预算约束获取货币
+        const constraint = await tripsApi.getBudgetConstraint(id);
+        if (constraint.budgetConstraint.currency) {
+          setCurrency(constraint.budgetConstraint.currency);
+          return;
+        }
+      } catch {
+        // 如果获取预算约束失败，尝试从目的地获取
+      }
+      
+      // 其次从目的地获取货币策略
+      try {
+        const trip = await tripsApi.getById(id);
+        if (trip.destination) {
+          const { countriesApi } = await import('@/api/countries');
+          const currencyStrategy = await countriesApi.getCurrencyStrategy(trip.destination);
+          if (currencyStrategy?.currencyCode) {
+            setCurrency(currencyStrategy.currencyCode);
+            return;
+          }
+        }
+      } catch {
+        // 如果获取失败，保持默认值 CNY
+      }
+      
+      setCurrency('CNY');
+    };
+    
+    loadCurrency();
+  }, [id]);
 
   useEffect(() => {
     if (id) {
@@ -228,7 +265,7 @@ export default function TripSchedulePage() {
                       </div>
                       {item.metadata?.cost && (
                         <div className="flex items-center gap-1">
-                          <span>{formatCurrency(item.metadata.cost, 'CNY')}</span>
+                          <span>{formatCurrency(item.metadata.cost, currency)}</span>
                         </div>
                       )}
                     </div>
@@ -242,7 +279,7 @@ export default function TripSchedulePage() {
                 </div>
                 <div className="flex items-center justify-between text-sm mt-2">
                   <span className="text-muted-foreground">总费用</span>
-                  <span>{formatCurrency(schedule.schedule.totalCost ?? 0, 'CNY')}</span>
+                  <span>{formatCurrency(schedule.schedule.totalCost ?? 0, currency)}</span>
                 </div>
               </div>
             </div>

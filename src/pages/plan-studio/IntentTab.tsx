@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { X, MapPin, Plus, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
+import { X, MapPin, Plus, ChevronDown, ChevronUp, Wallet, ExternalLink, Info } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { PlaceWithDistance } from '@/types/places-routes';
@@ -32,6 +32,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   
   // 审批相关状态
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
@@ -519,12 +520,31 @@ export default function IntentTab({ tripId }: IntentTabProps) {
           {/* 预算约束详细设置 */}
           <div className="space-y-4 pt-4 border-t">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">预算约束详细设置</Label>
-              {budgetConstraint && (
-                <Badge variant="outline" className="text-xs">
-                  已设置
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                <Label className="text-base font-semibold">{t('planStudio.intentTab.budgetConstraintDetails')}</Label>
+                <div className="group relative">
+                  <Info className="w-4 h-4 text-muted-foreground cursor-help" />
+                  <div className="absolute left-0 top-6 w-64 p-2 bg-popover border rounded-md shadow-lg text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                    {t('planStudio.intentTab.budgetConstraintTooltip')}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {budgetConstraint && (
+                  <Badge variant="outline" className="text-xs">
+                    {t('planStudio.intentTab.budgetConstraintSet')}
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={() => navigate(`/dashboard/trips/${tripId}?tab=budget&openConstraintDialog=true`)}
+                >
+                  {t('planStudio.intentTab.goToBudgetPage')}
+                  <ExternalLink className="w-3 h-3 ml-1" />
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

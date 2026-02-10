@@ -15,6 +15,7 @@ export {
 export { PlanningAssistantErrorBoundary } from './ErrorBoundary';
 export { RecommendationGrid } from './RecommendationGrid';
 export { RecommendationCarousel } from './RecommendationCarousel';
+export { QuickActions } from './QuickActions';
 export { HotelList } from './HotelList';
 export { RestaurantList } from './RestaurantList';
 export { WeatherDisplay } from './WeatherDisplay';

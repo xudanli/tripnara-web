@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,13 +33,6 @@ import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
 import type { PipelineStatus, PipelineStage, TripListItem, TripDetail } from '@/types/trip';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
 import { Settings2, Zap, Footprints, Wallet, Sparkles } from 'lucide-react';
@@ -57,11 +50,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Progress } from '@/components/ui/progress';
+import { EditTripDialog } from '@/components/trips/EditTripDialog';
+import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
+import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
 
 function PlanStudioPageContent() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const tripId = searchParams.get('tripId');
   const defaultTab = searchParams.get('tab') || 'schedule';
   // 如果访问已移除的 tab，重定向到 schedule
@@ -86,13 +83,17 @@ function PlanStudioPageContent() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   
-  // 行程切换相关
+  // 行程相关（用于检查是否有行程和显示欢迎页面）
   const [allTrips, setAllTrips] = useState<TripListItem[]>([]);
   const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
-  const [loadingTrips, setLoadingTrips] = useState(false);
   
   // 当前行程详情（用于摘要条显示）
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
+  
+  // 对话框状态
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
   
   // 生成方案相关状态
   const [generatingPlan, setGeneratingPlan] = useState(false);
@@ -108,17 +109,6 @@ function PlanStudioPageContent() {
     }
     // 如果找不到，返回代码本身
     return countryCode;
-  };
-
-  // 处理行程切换
-  const handleTripChange = (newTripId: string) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set('tripId', newTripId);
-    // 保持当前tab
-    if (activeTab) {
-      newParams.set('tab', activeTab);
-    }
-    setSearchParams(newParams);
   };
 
   const handleTabChange = (value: string) => {
@@ -149,12 +139,35 @@ function PlanStudioPageContent() {
     loadCountries();
   }, []);
 
+  // 处理从其他页面传递过来的状态（如侧边栏的操作）
+  useEffect(() => {
+    const state = location.state as {
+      openEditDialog?: boolean;
+      openShareDialog?: boolean;
+      openCollaboratorsDialog?: boolean;
+    } | null;
+
+    if (state) {
+      if (state.openEditDialog) {
+        setEditDialogOpen(true);
+      }
+      if (state.openShareDialog) {
+        setShareDialogOpen(true);
+      }
+      if (state.openCollaboratorsDialog) {
+        setCollaboratorsDialogOpen(true);
+      }
+      
+      // 清除 state，避免刷新页面时重复打开
+      navigate(location.pathname + location.search, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname, location.search]);
+
   // 检查行程数据和验证tripId是否有效
   useEffect(() => {
     const checkTripsAndTripId = async () => {
       try {
         setLoading(true);
-        setLoadingTrips(true);
         
         // 1. 检查是否有任何行程（只显示规划中的行程）
         const allTripsData = await tripsApi.getAll();
@@ -205,7 +218,6 @@ function PlanStudioPageContent() {
         setShowWelcomeModal(true);
       } finally {
         setLoading(false);
-        setLoadingTrips(false);
       }
     };
     
@@ -660,65 +672,20 @@ function PlanStudioPageContent() {
           </div>
         </div>
 
-        {/* 第二行：行程切换和天气卡片（移动端堆叠，桌面端横向） */}
-        {(hasTrips && allTrips.length > 0) || (tripId && tripExists && weatherLocation) ? (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 pt-2 sm:pt-0 border-t sm:border-t-0">
-            {/* 行程切换下拉菜单 */}
-            {hasTrips && allTrips.length > 0 && (
-              <div className="w-full sm:w-64">
-                <Select
-                  value={tripId || ''}
-                  onValueChange={handleTripChange}
-                  disabled={loadingTrips}
-                >
-                  <SelectTrigger className="w-full text-sm">
-                    <SelectValue placeholder="选择行程">
-                      {tripId && allTrips.find(t => t.id === tripId) ? (
-                        <span className="flex items-center gap-2">
-                          <span className="font-medium truncate">
-                            {allTrips.find(t => t.id === tripId)!.name || getCountryName(allTrips.find(t => t.id === tripId)!.destination)}
-                          </span>
-                          <span className="text-xs text-muted-foreground hidden sm:inline">
-                            ({allTrips.find(t => t.id === tripId)!.destination})
-                          </span>
-                        </span>
-                      ) : (
-                        '选择行程'
-                      )}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allTrips.map((trip) => (
-                      <SelectItem key={trip.id} value={trip.id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">
-                            {trip.name || getCountryName(trip.destination)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {trip.destination} • {trip.days?.length || 0} 天
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            
-            {/* 天气卡片 */}
-            {tripId && tripExists && weatherLocation && (
-              <div className="flex-shrink-0">
-                <WeatherCard
-                  location={weatherLocation.location}
-                  includeWindDetails={isIceland}
-                  compact={true}
-                  refreshInterval={10 * 60 * 1000} // 10分钟刷新一次
-                  locationName={weatherLocation.name}
-                />
-              </div>
-            )}
+        {/* 第二行：天气卡片 */}
+        {tripId && tripExists && weatherLocation && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-2 sm:pt-0 border-t sm:border-t-0">
+            <div className="flex-shrink-0">
+              <WeatherCard
+                location={weatherLocation.location}
+                includeWindDetails={isIceland}
+                compact={true}
+                refreshInterval={10 * 60 * 1000} // 10分钟刷新一次
+                locationName={weatherLocation.name}
+              />
+            </div>
           </div>
-        ) : null}
+        )}
       </div>
 
       {/* 摘要条 - 显示当前行程核心设置 */}
@@ -747,14 +714,22 @@ function PlanStudioPageContent() {
               {/* 主内容区 */}
               <div className="max-w-5xl mx-auto">
                 <TabsContent value="schedule" className="mt-0">
-                  <ScheduleTab 
-                    tripId={tripId} 
-                    refreshKey={refreshKey}
-                    onOpenReadinessDrawer={(findingId?: string) => {
-                      setHighlightFindingId(findingId);
-                      setReadinessDrawerOpen(true);
-                    }}
-                  />
+                  {tripId ? (
+                    <ScheduleTab 
+                      tripId={tripId} 
+                      refreshKey={refreshKey}
+                      onOpenReadinessDrawer={(findingId?: string) => {
+                        setHighlightFindingId(findingId);
+                        setReadinessDrawerOpen(true);
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center p-8">
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground">请先选择行程</p>
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
                 <TabsContent value="workbench" className="mt-0">
                   <PlanningWorkbenchTab 
@@ -817,6 +792,39 @@ function PlanStudioPageContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 编辑对话框 */}
+      {currentTrip && (
+        <EditTripDialog
+          trip={currentTrip}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSuccess={() => {
+            // 重新加载行程数据
+            if (tripId) {
+              tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
+            }
+          }}
+        />
+      )}
+
+      {/* 分享对话框 */}
+      {tripId && (
+        <ShareTripDialog
+          tripId={tripId}
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+        />
+      )}
+
+      {/* 协作者对话框 */}
+      {tripId && (
+        <CollaboratorsDialog
+          tripId={tripId}
+          open={collaboratorsDialogOpen}
+          onOpenChange={setCollaboratorsDialogOpen}
+        />
+      )}
     </div>
   );
 }

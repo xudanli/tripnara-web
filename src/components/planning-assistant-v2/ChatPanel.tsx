@@ -5,22 +5,34 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatV2 } from '@/hooks/useChatV2';
 import { MessageBubble } from './MessageBubble';
+import { QuickActions } from './QuickActions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, Sparkles } from 'lucide-react';
+import { Send, Loader2, Sparkles, MapPin, Calendar, DollarSign } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import type { TripDetail } from '@/types/trip';
 
 interface ChatPanelProps {
   sessionId: string | null;
   userId?: string;
+  context?: {
+    tripId?: string;
+    countryCode?: string;
+    currentLocation?: { lat: number; lng: number };
+    timezone?: string;
+  };
+  destination?: string; // 当前选定的目的地，用于快捷操作
+  tripInfo?: TripDetail; // 行程详细信息，用于上下文感知和显示
   className?: string;
 }
 
-export function ChatPanel({ sessionId, userId, className }: ChatPanelProps) {
+export function ChatPanel({ sessionId, userId, context, destination, tripInfo, className }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { messages, sendMessage, isLoading, error } = useChatV2(sessionId, userId);
+  const { messages, sendMessage, isLoading, error } = useChatV2(sessionId, userId, context);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -56,7 +68,58 @@ export function ChatPanel({ sessionId, userId, className }: ChatPanelProps) {
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
         <div className="space-y-4">
-          {messages.length === 0 && (
+          {/* 当前行程信息提示（规划工作台场景） */}
+          {tripInfo && messages.length === 0 && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 flex-shrink-0">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm font-medium text-foreground">
+                      我已了解您的当前行程
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      {tripInfo.destination && (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          <span>{tripInfo.destination}</span>
+                        </div>
+                      )}
+                      {tripInfo.startDate && tripInfo.endDate && (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          <span>
+                            {new Date(tripInfo.startDate).toLocaleDateString('zh-CN', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                            {' - '}
+                            {new Date(tripInfo.endDate).toLocaleDateString('zh-CN', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        </div>
+                      )}
+                      {tripInfo.totalBudget && tripInfo.totalBudget > 0 && (
+                        <div className="flex items-center gap-1">
+                          <DollarSign className="w-3 h-3" />
+                          <span>预算 ¥{tripInfo.totalBudget.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      我可以根据您的行程信息提供更精准的建议，比如推荐酒店、餐厅、天气查询等。
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {messages.length === 0 && !tripInfo && (
             <div className="flex items-center justify-center h-full text-center text-muted-foreground">
               <div>
                 <p className="text-lg font-medium mb-2">开始对话</p>
@@ -68,6 +131,17 @@ export function ChatPanel({ sessionId, userId, className }: ChatPanelProps) {
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
+          
+          {/* 快捷操作按钮（仅在消息为空时显示） */}
+          {messages.length === 0 && (
+            <div className="px-2 pb-4">
+              <QuickActions
+                onAction={sendMessage}
+                destination={destination}
+                disabled={isLoading || !sessionId}
+              />
+            </div>
+          )}
           
           {isLoading && (
             <div className="flex gap-3 animate-in fade-in duration-200">

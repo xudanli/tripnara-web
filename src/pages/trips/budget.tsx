@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { planningWorkbenchApi } from '@/api/planning-workbench';
+import { countriesApi } from '@/api/countries';
 import type {
   BudgetSummary,
   BudgetOptimizationSuggestion,
@@ -9,6 +10,7 @@ import type {
   BudgetTrendsResponse,
   BudgetStatisticsResponse,
   BudgetMonitorResponse,
+  TripDetail,
 } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +62,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   const { id: routeId } = useParams<{ id: string }>();
   const id = propTripId || routeId;  // 优先使用传入的 tripId
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [budget, setBudget] = useState<BudgetSummary | null>(null);
   const [optimizations, setOptimizations] = useState<BudgetOptimizationSuggestion[]>([]);
   const [details, setDetails] = useState<BudgetDetailsResponse | null>(null);
@@ -67,9 +70,8 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   const [statistics, setStatistics] = useState<BudgetStatisticsResponse | null>(null);
   const [monitor, setMonitor] = useState<BudgetMonitorResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // 获取货币单位
-  const currency = budget?.currency || 'CNY';
+  const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [destinationCurrency, setDestinationCurrency] = useState<string>('CNY'); // 🆕 目的地货币
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [trendsLoading, setTrendsLoading] = useState(false);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
@@ -82,6 +84,10 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
   const [constraintDialogOpen, setConstraintDialogOpen] = useState(false);
   const [constraint, setConstraint] = useState<BudgetConstraint | null>(null);
+  
+  // 🆕 获取货币单位：优先使用预算约束中的货币，其次使用目的地货币，最后默认CNY
+  // 注意：必须在 constraint 状态声明之后才能使用
+  const currency = budget?.currency || constraint?.currency || destinationCurrency || 'CNY';
   const [loadingConstraint, setLoadingConstraint] = useState(false);
   const [savingConstraint, setSavingConstraint] = useState(false);
   const [deletingConstraint, setDeletingConstraint] = useState(false);
@@ -99,7 +105,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
     alertThreshold: string;
   }>({
     total: '',
-    currency: 'CNY',
+    currency: 'CNY', // 默认值，会在加载行程和预算约束后更新
     dailyBudget: '',
     categoryLimits: {
       accommodation: '',
@@ -111,8 +117,47 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
     alertThreshold: '0.8',
   });
 
+  // 🆕 加载行程信息以获取目的地和货币
+  const loadTrip = async () => {
+    if (!id) return;
+    try {
+      const tripData = await tripsApi.getById(id);
+      setTrip(tripData);
+      
+      // 根据目的地获取货币策略
+      if (tripData.destination) {
+        try {
+          const currencyStrategy = await countriesApi.getCurrencyStrategy(tripData.destination);
+          if (currencyStrategy?.currencyCode) {
+            setDestinationCurrency(currencyStrategy.currencyCode);
+            // 如果还没有设置预算约束，使用目的地货币作为默认值
+            // 注意：这里使用函数式更新，避免直接访问 constraint 状态
+            setConstraintForm(prev => {
+              // 检查当前是否已有预算约束（通过 constraint 状态）
+              // 如果没有，则使用目的地货币
+              return {
+                ...prev,
+                currency: prev.currency === 'CNY' ? currencyStrategy.currencyCode : prev.currency,
+              };
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to load currency strategy:', err);
+          // 如果获取失败，保持默认值
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load trip:', err);
+    }
+  };
+
   useEffect(() => {
     if (id) {
+      // 🆕 先加载行程信息以获取目的地货币
+      loadTrip().then(() => {
+        // 行程加载完成后再加载预算约束（需要目的地货币作为默认值）
+        loadBudgetConstraint();
+      });
       loadBudget();
       loadOptimizations();
       loadStatistics();
@@ -121,6 +166,18 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]); // loadBudget 等函数是稳定的，不需要加入依赖
+
+  // 🆕 检测URL参数，如果openConstraintDialog=true，打开预算约束对话框
+  useEffect(() => {
+    const openConstraintDialog = searchParams.get('openConstraintDialog');
+    if (openConstraintDialog === 'true' && id) {
+      setConstraintDialogOpen(true);
+      // 清除URL参数
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('openConstraintDialog');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, id, setSearchParams]);
 
   // 加载当前行程的最新方案 ID
   const loadCurrentPlanId = async () => {
@@ -146,10 +203,10 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
       setLoadingConstraint(true);
       const data = await tripsApi.getBudgetConstraint(id);
       setConstraint(data.budgetConstraint);
-      // 填充表单
+      // 填充表单：优先使用已设置的货币，否则使用目的地货币
       setConstraintForm({
         total: data.budgetConstraint.total?.toString() || '',
-        currency: data.budgetConstraint.currency || 'CNY',
+        currency: data.budgetConstraint.currency || destinationCurrency || 'CNY',
         dailyBudget: data.budgetConstraint.dailyBudget?.toString() || '',
         categoryLimits: {
           accommodation: data.budgetConstraint.categoryLimits?.accommodation?.toString() || '',
@@ -166,6 +223,13 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
         console.error('Failed to load budget constraint:', err);
       }
       setConstraint(null);
+      // 🆕 如果没有预算约束，使用目的地货币作为默认值
+      if (destinationCurrency && destinationCurrency !== 'CNY') {
+        setConstraintForm(prev => ({
+          ...prev,
+          currency: destinationCurrency,
+        }));
+      }
     } finally {
       setLoadingConstraint(false);
     }
@@ -174,6 +238,26 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   // 保存预算约束
   const handleSaveConstraint = async () => {
     if (!id) return;
+
+    // 🆕 如果已有约束且行程不是PLANNING状态，显示确认提示
+    if (constraint && trip && trip.status !== 'PLANNING') {
+      const hasActualSpending = budget && budget.totalActual > 0;
+      if (hasActualSpending) {
+        const confirmed = window.confirm(
+          '修改预算约束可能会影响现有的预算监控和方案。如果修改了货币单位，历史支出数据可能无法正确显示。\n\n确定要继续吗？'
+        );
+        if (!confirmed) {
+          return;
+        }
+      } else {
+        const confirmed = window.confirm(
+          '修改预算约束可能会影响现有的规划方案。确定要继续吗？'
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+    }
 
     // 验证总预算
     const total = parseFloat(constraintForm.total);
@@ -564,18 +648,37 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Object.entries(budget.categoryBreakdown).map(([category, amount]) => {
-                  const percent = (amount / budget.totalBudget) * 100;
-                  return (
-                    <div key={category} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span>{formatCostCategory(category)}</span>
-                        <span>{formatCurrency(amount ?? 0, currency)}</span>
+                {Object.entries(budget.categoryBreakdown)
+                  .filter(([_, amount]) => amount > 0) // 🆕 只显示有金额的类别
+                  .map(([category, amount]) => {
+                    // 🐛 修复：后端返回的是小写键名（accommodation, transportation等），需要转换为大写
+                    // 映射关系：accommodation -> ACCOMMODATION, transportation -> TRANSPORTATION, food -> FOOD, activities -> ACTIVITIES, other -> OTHER
+                    const categoryMapping: Record<string, string> = {
+                      'accommodation': 'ACCOMMODATION',
+                      'transportation': 'TRANSPORTATION',
+                      'food': 'FOOD',
+                      'activities': 'ACTIVITIES',
+                      'other': 'OTHER',
+                    };
+                    const categoryUpper = categoryMapping[category.toLowerCase()] || category.toUpperCase();
+                    const categoryLabel = formatCostCategory(categoryUpper);
+                    const percent = budget.totalBudget > 0 ? (amount / budget.totalBudget) * 100 : 0;
+                    return (
+                      <div key={category} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span>{categoryLabel}</span>
+                          <span>{formatCurrency(amount ?? 0, currency)}</span>
+                        </div>
+                        <Progress value={percent} className="h-2" />
                       </div>
-                      <Progress value={percent} className="h-2" />
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                {/* 🆕 如果所有类别都是0，显示提示 */}
+                {Object.values(budget.categoryBreakdown).every(amount => amount <= 0) && (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    暂无类别消费数据
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -970,20 +1073,32 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                     onValueChange={(value) =>
                       setConstraintForm({ ...constraintForm, currency: value })
                     }
+                    disabled={
+                      // 🆕 如果行程不是PLANNING状态，或有实际支出，禁用货币单位修改
+                      (trip && trip.status !== 'PLANNING') ||
+                      (budget && budget.totalActual > 0)
+                    }
                   >
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-[140px] min-w-[140px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="CNY">CNY</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="JPY">JPY</SelectItem>
+                      <SelectItem value="CNY">CNY (人民币)</SelectItem>
+                      <SelectItem value="USD">USD (美元)</SelectItem>
+                      <SelectItem value="EUR">EUR (欧元)</SelectItem>
+                      <SelectItem value="JPY">JPY (日元)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   预算范围：100 - 1,000,000 {constraintForm.currency}
+                  {(trip && trip.status !== 'PLANNING') || (budget && budget.totalActual > 0) ? (
+                    <span className="block mt-1 text-amber-600">
+                      {trip && trip.status !== 'PLANNING'
+                        ? '行程已开始，货币单位不可修改'
+                        : '已有实际支出，货币单位不可修改'}
+                    </span>
+                  ) : null}
                 </p>
               </div>
 

@@ -53,11 +53,22 @@ export interface ChatHistoryResponse {
 
 // ==================== 对话类型 ====================
 
+export interface ChatRequestContext {
+  currentLocation?: {
+    lat: number;
+    lng: number;
+  };
+  timezone?: string;
+  tripId?: string; // 行程ID。规划工作台场景下必需（当 context.tripId 或 context.countryCode 存在时）
+  countryCode?: string; // 国家代码（ISO 3166-1 alpha-2，如 "IS"、"JP"）。规划工作台场景下必需（当 context.tripId 或 context.countryCode 存在时）
+}
+
 export interface ChatRequest {
   sessionId: string;
   message: string;
   userId?: string;
   language?: 'en' | 'zh';
+  context?: ChatRequestContext; // 请求上下文信息
 }
 
 // 路由目标类型（支持所有 MCP 服务）

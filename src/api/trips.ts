@@ -373,8 +373,33 @@ export const tripsApi = {
    * GET /trips/:id
    */
   getById: async (id: string): Promise<TripDetail> => {
-    const response = await apiClient.get<ApiResponseWrapper<TripDetail>>(`/trips/${id}`);
-    return handleResponse(response);
+    console.log('[Trips API] getById 开始:', { id });
+    try {
+      const response = await apiClient.get<ApiResponseWrapper<TripDetail>>(`/trips/${id}`);
+      console.log('[Trips API] getById 收到响应:', {
+        id,
+        status: response.status,
+        hasData: !!response.data,
+        dataSuccess: response.data?.success,
+        dataType: typeof response.data,
+      });
+      const result = handleResponse(response);
+      console.log('[Trips API] getById handleResponse 成功:', {
+        id,
+        resultId: result?.id,
+        hasResult: !!result,
+      });
+      return result;
+    } catch (error: any) {
+      console.error('[Trips API] getById 失败:', {
+        id,
+        error,
+        message: error.message,
+        code: error.code,
+        response: error.response?.data,
+      });
+      throw error;
+    }
   },
 
   /**
@@ -1233,11 +1258,46 @@ export const tripsApi = {
     id: string,
     params?: { dates?: string[] }
   ): Promise<TripMetricsResponse> => {
-    const response = await apiClient.get<ApiResponseWrapper<TripMetricsResponse>>(
-      `/trips/${id}/metrics`,
-      { params: params?.dates ? { dates: params.dates } : undefined }
-    );
-    return handleResponse(response);
+    try {
+      console.log('[Trips API] 发送 getMetrics 请求:', {
+        tripId: id,
+        params,
+      });
+      const response = await apiClient.get<ApiResponseWrapper<TripMetricsResponse>>(
+        `/trips/${id}/metrics`,
+        { 
+          params: params?.dates ? { dates: params.dates } : undefined,
+          timeout: 60000, // 60 秒超时
+        }
+      );
+      console.log('[Trips API] 收到 getMetrics 响应:', {
+        tripId: id,
+        hasData: !!response.data,
+        success: response.data?.success,
+      });
+      const result = handleResponse(response);
+      console.log('[Trips API] getMetrics 解析成功:', {
+        tripId: result.tripId,
+        daysCount: result.days?.length || 0,
+      });
+      return result;
+    } catch (error: any) {
+      console.error('[Trips API] getMetrics 请求失败:', {
+        tripId: id,
+        error,
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        response: error.response?.data,
+      });
+      // 重新抛出错误，让调用方处理
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('请求超时（已等待 60 秒），请稍后重试');
+      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      }
+      throw error;
+    }
   },
 
   // ==================== 优化结果应用 ====================

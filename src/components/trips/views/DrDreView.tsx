@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TripDetail, ItineraryItem, TripMetricsResponse } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
-import { Brain, TrendingUp, Clock, Activity, Lock, RefreshCw, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
+import { Brain, TrendingUp, Clock, Activity, Lock, RefreshCw, BarChart3, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { Spinner } from '@/components/ui/spinner';
 import type { DrDreViewData } from '@/utils/trip-data-extractors';
@@ -16,6 +16,20 @@ import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
 import { toast } from 'sonner';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { formatCurrency } from '@/utils/format';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface DrDreViewProps {
   trip: TripDetail;
@@ -23,6 +37,7 @@ interface DrDreViewProps {
   tripMetrics: TripMetricsResponse | null;
   tripMetricsLoading?: boolean; // 🆕 添加loading状态
   onItemClick?: (item: ItineraryItem) => void;
+  onScheduleChanged?: () => void; // 🆕 行程变更后的回调（用于刷新数据）
 }
 
 interface Candidate {
@@ -33,14 +48,122 @@ interface Candidate {
   regenerateResult?: any; // 保存重新排程的完整结果
 }
 
-export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoading = false }: DrDreViewProps) {
+export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoading = false, onScheduleChanged }: DrDreViewProps) {
   const { t } = useTranslation();
+  
+  // 🐛 调试：记录组件接收到的 props 变化
+  useEffect(() => {
+    console.log('[DrDreView] Props 更新:', {
+      tripId: trip?.id,
+      hasDrDreData: !!drDreData,
+      drDreMetrics: drDreData?.metrics,
+      drDreDataRef: drDreData, // 完整对象引用，用于检查是否变化
+      hasTripMetrics: !!tripMetrics,
+      tripMetricsSummary: tripMetrics?.summary,
+      tripMetricsRef: tripMetrics, // 完整对象引用
+      tripMetricsLoading,
+      timestamp: new Date().toISOString(), // 时间戳，确认 useEffect 是否触发
+    });
+  }, [trip?.id, drDreData, tripMetrics, tripMetricsLoading]);
+  
+  // 🐛 调试：记录组件每次渲染
+  console.log('[DrDreView] 组件渲染:', {
+    tripId: trip?.id,
+    hasDrDreData: !!drDreData,
+    renderTime: new Date().toISOString(),
+  });
+  
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
+  
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!trip.id) return;
+      try {
+        // 优先从预算约束获取货币
+        const constraint = await tripsApi.getBudgetConstraint(trip.id);
+        if (constraint.budgetConstraint.currency) {
+          setCurrency(constraint.budgetConstraint.currency);
+          return;
+        }
+      } catch {
+        // 如果获取预算约束失败，尝试从目的地获取
+      }
+      
+      // 其次从目的地获取货币策略
+      if (trip.destination) {
+        try {
+          const { countriesApi } = await import('@/api/countries');
+          const currencyStrategy = await countriesApi.getCurrencyStrategy(trip.destination);
+          if (currencyStrategy?.currencyCode) {
+            setCurrency(currencyStrategy.currencyCode);
+            return;
+          }
+        } catch {
+          // 如果获取失败，保持默认值 CNY
+        }
+      }
+      
+      // 默认使用 CNY
+      setCurrency('CNY');
+    };
+    
+    loadCurrency();
+  }, [trip.id, trip.destination]);
+  
   const [priorities, setPriorities] = useState({
     time: 50,
     comfort: 50,
     cost: 50,
     experience: 50,
   });
+  
+  // 参数预设
+  type PriorityPreset = 'balanced' | 'time-first' | 'comfort-first' | 'cost-first' | 'experience-first' | 'custom';
+  const [priorityPreset, setPriorityPreset] = useState<PriorityPreset>('balanced');
+  
+  // 应用预设
+  const applyPreset = (preset: PriorityPreset) => {
+    switch (preset) {
+      case 'balanced':
+        setPriorities({ time: 25, comfort: 25, cost: 25, experience: 25 });
+        break;
+      case 'time-first':
+        setPriorities({ time: 70, comfort: 10, cost: 10, experience: 10 });
+        break;
+      case 'comfort-first':
+        setPriorities({ time: 10, comfort: 70, cost: 10, experience: 10 });
+        break;
+      case 'cost-first':
+        setPriorities({ time: 10, comfort: 10, cost: 70, experience: 10 });
+        break;
+      case 'experience-first':
+        setPriorities({ time: 10, comfort: 10, cost: 10, experience: 70 });
+        break;
+      case 'custom':
+        // 保持当前值
+        break;
+    }
+    setPriorityPreset(preset);
+  };
+  
+  // 检测当前是否为预设值
+  useEffect(() => {
+    const current = priorities;
+    if (current.time === 25 && current.comfort === 25 && current.cost === 25 && current.experience === 25) {
+      setPriorityPreset('balanced');
+    } else if (current.time === 70 && current.comfort === 10 && current.cost === 10 && current.experience === 10) {
+      setPriorityPreset('time-first');
+    } else if (current.time === 10 && current.comfort === 70 && current.cost === 10 && current.experience === 10) {
+      setPriorityPreset('comfort-first');
+    } else if (current.time === 10 && current.comfort === 10 && current.cost === 70 && current.experience === 10) {
+      setPriorityPreset('cost-first');
+    } else if (current.time === 10 && current.comfort === 10 && current.cost === 10 && current.experience === 70) {
+      setPriorityPreset('experience-first');
+    } else {
+      setPriorityPreset('custom');
+    }
+  }, [priorities]);
   const [constraints, setConstraints] = useState({
     latestEndTime: false,
     latestEndTimeValue: '22:00', // 默认最晚结束时间 22:00
@@ -59,6 +182,7 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
 
   // 如果数据未加载完成，显示加载状态
   if (!drDreData) {
+    console.log('[DrDreView] drDreData 为 null，显示加载状态');
     return (
       <div className="flex items-center justify-center p-8">
         <Spinner className="w-8 h-8" />
@@ -66,6 +190,12 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
       </div>
     );
   }
+  
+  console.log('[DrDreView] drDreData 存在，继续渲染:', {
+    metrics: drDreData.metrics,
+    adjustmentsCount: drDreData.adjustments?.length || 0,
+    logsCount: drDreData.logs?.length || 0,
+  });
 
   // 使用真实数据
   const metrics = drDreData.metrics || {
@@ -78,9 +208,21 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
   
   console.log('[DrDreView] 使用的指标数据:', {
     metrics,
+    metricsTotalFatigue: metrics.totalFatigue,
+    metricsAvgBuffer: metrics.avgBuffer,
+    metricsTotalWalk: metrics.totalWalk,
+    metricsTotalDrive: metrics.totalDrive,
+    drDreDataMetrics: drDreData.metrics,
+    drDreDataMetricsTotalFatigue: drDreData.metrics?.totalFatigue,
     tripMetrics,
     hasTripMetrics: !!tripMetrics,
     tripMetricsSummary: tripMetrics?.summary,
+    tripMetricsSummaryTotalFatigue: tripMetrics?.summary?.totalFatigue,
+    tripMetricsSummaryTotalBuffer: tripMetrics?.summary?.totalBuffer,
+    tripMetricsSummaryTotalWalk: tripMetrics?.summary?.totalWalk,
+    tripMetricsSummaryTotalDrive: tripMetrics?.summary?.totalDrive,
+    // 🐛 检查数据是否真的更新了
+    dataUpdateTime: new Date().toISOString(),
   });
 
   const metricsByItem = drDreData.metricsByItem || {};
@@ -248,30 +390,46 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
       
       console.log('[DrDreView] 重新排程API响应:', result);
       
-      // 将API响应转换为候选方案格式
-      // 注意：API返回的是单个更新后的行程，我们将其作为唯一的候选方案
-      const newCandidates = [
-        {
-          id: 'regenerated-1',
-          deltaSummary: '重新排程方案',
-          metrics: { ...metrics },
-          patchPreview: {
-            adjustment: `已调整 ${result.changes.length} 个行程项`,
-            reasonCodes: result.changes.map(c => c.type),
+      // 🆕 regenerate API 可能已经直接应用了更改（返回 updatedDraft）
+      // 如果返回了 updatedDraft，说明已经应用，需要刷新数据
+      if (result.updatedDraft) {
+        // 已直接应用，刷新数据
+        toast.success('重新排程成功', {
+          description: `已调整 ${result.changes.length} 个行程项`,
+          duration: 3000,
+        });
+        
+        // 🆕 通知父组件刷新数据（包括冲突数据）
+        onScheduleChanged?.();
+        
+        // 清空候选方案（因为已经应用）
+        setCandidates([]);
+        setShowCandidates(false);
+      } else {
+        // 未直接应用，生成候选方案供用户选择
+        const newCandidates = [
+          {
+            id: 'regenerated-1',
+            deltaSummary: '重新排程方案',
+            metrics: { ...metrics },
+            patchPreview: {
+              adjustment: `已调整 ${result.changes.length} 个行程项`,
+              reasonCodes: result.changes.map(c => c.type),
+            },
+            regenerateResult: result, // 保存完整结果，用于后续应用
           },
-          regenerateResult: result, // 保存完整结果，用于后续应用
-        },
-      ];
-      
-      setCandidates(newCandidates);
-      setShowCandidates(true);
-      
-      toast.success('重新排程成功', {
-        description: `已生成新的排程方案，包含 ${result.changes.length} 项调整`,
-        duration: 3000,
-      });
-      
-      console.log('[DrDreView] 重新排程完成，生成候选方案:', newCandidates.length);
+        ];
+        
+        setCandidates(newCandidates);
+        setShowCandidates(true);
+        
+        toast.success('重新排程成功', {
+          description: `已生成新的排程方案，包含 ${result.changes.length} 项调整`,
+          duration: 3000,
+        });
+        
+        console.log('[DrDreView] 重新排程完成，生成候选方案:', newCandidates.length);
+      }
     } catch (error: any) {
       console.error('[DrDreView] 重新排程失败:', {
         error,
@@ -356,7 +514,7 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
             {trip.totalBudget && (
             <div className="p-3 border rounded-lg">
                 <div className="text-xs text-muted-foreground mb-1.5">总预算</div>
-                <div className="text-base font-bold">¥{trip.totalBudget.toLocaleString()}</div>
+                <div className="text-base font-bold">{formatCurrency(trip.totalBudget, currency)}</div>
             </div>
             )}
           </div>
@@ -371,10 +529,22 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Brain className="w-4 h-4 text-orange-600" />
-                  <CardTitle className="text-base">What-if 调参</CardTitle>
+                  <CardTitle className="text-base">节奏优化</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">
+                          调整优先级和约束参数，优化现有方案的节奏。适用于已创建行程后，发现节奏问题时进行微调优化。
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CardDescription className="text-xs m-0">调整优先级，预览不同方案</CardDescription>
+                  <CardDescription className="text-xs m-0">调整优先级和约束参数，优化现有方案的节奏</CardDescription>
                   {whatIfExpanded ? (
                     <ChevronUp className="w-4 h-4 text-muted-foreground" />
                   ) : (
@@ -386,8 +556,26 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="space-y-4">
+              {/* 参数预设选择 */}
+              <div className="flex items-center justify-between pb-3 border-b">
+                <Label className="text-sm font-medium">快速预设</Label>
+                <Select value={priorityPreset} onValueChange={(v) => applyPreset(v as PriorityPreset)}>
+                  <SelectTrigger className="w-[180px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="balanced">均衡模式</SelectItem>
+                    <SelectItem value="time-first">时间优先</SelectItem>
+                    <SelectItem value="comfort-first">舒适优先</SelectItem>
+                    <SelectItem value="cost-first">成本优先</SelectItem>
+                    <SelectItem value="experience-first">体验优先</SelectItem>
+                    <SelectItem value="custom">自定义</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
               {/* 优先级滑杆 - 桌面端一行显示 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 pt-2">
                 <div>
                   <Label className="flex items-center justify-between mb-1.5 text-sm">
                     <span>时间优先</span>
@@ -843,10 +1031,35 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
                 取消
               </Button>
               <Button
-                onClick={() => {
-                  // 应用选中的方案
-                  console.log(t('tripViews.dre.candidates.apply'));
-                  setShowCandidates(false);
+                onClick={async () => {
+                  // 🆕 应用选中的方案
+                  if (candidates.length === 0) {
+                    toast.warning('没有可应用的方案');
+                    return;
+                  }
+                  
+                  // 获取第一个候选方案（通常只有一个）
+                  const candidate = candidates[0];
+                  
+                  // 如果候选方案包含 regenerateResult，说明需要应用重新排程结果
+                  if (candidate.regenerateResult?.updatedDraft) {
+                    try {
+                      // 🆕 regenerate API 已经应用了更改，只需要刷新数据
+                      toast.success('方案已应用');
+                      setShowCandidates(false);
+                      
+                      // 🆕 通知父组件刷新数据（包括冲突数据）
+                      onScheduleChanged?.();
+                    } catch (error: any) {
+                      console.error('[DrDreView] 应用方案失败:', error);
+                      toast.error('应用方案失败：' + (error.message || '未知错误'));
+                    }
+                  } else {
+                    // 如果没有 regenerateResult，说明方案已经应用，只需要刷新
+                    toast.success('方案已应用');
+                    setShowCandidates(false);
+                    onScheduleChanged?.();
+                  }
                 }}
               >
                 {t('tripViews.dre.candidates.apply')}

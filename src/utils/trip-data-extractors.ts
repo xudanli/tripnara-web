@@ -126,19 +126,27 @@ function buildRiskMapFromLogs(logs: DecisionLogEntry[]): Record<string, {
   description: string;
   evidenceRefs?: string[];
 }> {
-  const riskMap: Record<string, any> = {};
+  const riskMap: Record<string, {
+    type: string;
+    severity: 'HIGH' | 'MEDIUM' | 'LOW';
+    description: string;
+    evidenceRefs?: string[];
+  }> = {};
   
   for (const log of logs) {
     if (log.action === 'REJECT' || log.action === 'RISK_WARNING') {
       const itemId = log.metadata?.itemId || log.metadata?.target;
       if (itemId) {
-        const severity = log.metadata?.riskLevel === 'HIGH' ? 'HIGH' :
-                        log.metadata?.riskLevel === 'MEDIUM' ? 'MEDIUM' : 'LOW';
+        // 确保 severity 始终有值
+        const riskLevel = log.metadata?.riskLevel;
+        const severity: 'HIGH' | 'MEDIUM' | 'LOW' = 
+          riskLevel === 'HIGH' ? 'HIGH' :
+          riskLevel === 'MEDIUM' ? 'MEDIUM' : 'LOW';
         
         riskMap[itemId] = {
           type: log.action === 'REJECT' ? '硬约束违反' : '风险警告',
           severity,
-          description: log.description,
+          description: log.description || '',
           evidenceRefs: log.metadata?.evidenceRefs || [],
         };
       }
@@ -196,16 +204,27 @@ export function extractDrDreData(
   decisionLogs: DecisionLogEntry[],
   tripMetrics: TripMetricsResponse | null
 ): DrDreViewData {
+  console.log('[extractDrDreData] 开始提取数据:', {
+    hasTripMetrics: !!tripMetrics,
+    tripMetricsSummary: tripMetrics?.summary,
+    daysCount: tripMetrics?.days?.length || 0,
+  });
+  
   const drDreLogs = decisionLogs.filter(log => log.persona === 'DR_DRE');
   
   // 使用已获取的 tripMetrics
+  const daysCount = tripMetrics?.days?.length || 1;
   const metrics = {
     totalFatigue: tripMetrics?.summary.totalFatigue || 0,
-    avgBuffer: tripMetrics?.summary.averageWalkPerDay || 0, // Use averageWalkPerDay as fallback
+    avgBuffer: tripMetrics?.summary.totalBuffer 
+      ? (tripMetrics.summary.totalBuffer / daysCount)
+      : (tripMetrics?.summary.averageWalkPerDay || 0), // Fallback to averageWalkPerDay if totalBuffer not available
     totalWalk: tripMetrics?.summary.totalWalk || 0,
     totalDrive: tripMetrics?.summary.totalDrive || 0,
     maxDailyFatigue: tripMetrics?.days ? Math.max(...tripMetrics.days.map(d => d.metrics.fatigue || 0)) : undefined,
   };
+  
+  console.log('[extractDrDreData] 提取的指标:', metrics);
   
   // 从决策日志中提取调整操作
   const adjustments = drDreLogs
@@ -223,11 +242,12 @@ export function extractDrDreData(
   const metricsByItem: Record<string, any> = {};
   // TODO: Extract per-item metrics from a different source if needed
   
+  // 🐛 确保返回新对象引用，避免 React 缓存问题
   return {
-    metrics,
-    metricsByItem,
-    adjustments,
-    logs: drDreLogs,
+    metrics: { ...metrics }, // 创建 metrics 的新引用
+    metricsByItem: { ...metricsByItem }, // 创建 metricsByItem 的新引用
+    adjustments: [...adjustments], // 创建 adjustments 的新数组引用
+    logs: [...drDreLogs], // 创建 logs 的新数组引用
   };
 }
 

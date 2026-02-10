@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { executionApi } from '@/api/execution';
 import { placesApi } from '@/api/places';
@@ -40,6 +40,9 @@ import { WeatherCard } from '@/components/weather/WeatherCard';
 import { cn } from '@/lib/utils';
 import { FallbackSolutionPreviewDialog } from '@/components/execute/FallbackSolutionPreviewDialog';
 import { ReorderScheduleDialog } from '@/components/execute/ReorderScheduleDialog';
+import { EditTripDialog } from '@/components/trips/EditTripDialog';
+import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
+import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
 
 // ⚠️ 改进：提取常量配置，减少硬编码
 const EXECUTE_CONFIG = {
@@ -55,6 +58,7 @@ const EXECUTE_CONFIG = {
 export default function ExecutePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const tripId = searchParams.get('tripId');
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [tripState, setTripState] = useState<TripState | null>(null);
@@ -62,6 +66,11 @@ export default function ExecutePage() {
   const [loading, setLoading] = useState(true);
   const [showRepairSheet, setShowRepairSheet] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
+  
+  // 对话框状态
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
   
   // 执行阶段相关状态
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -235,6 +244,30 @@ export default function ExecutePage() {
       };
     }
   }, [tripId, onboardingState.toursCompleted.execute]);
+
+  // 处理从其他页面传递过来的状态（如侧边栏的操作）
+  useEffect(() => {
+    const state = location.state as {
+      openEditDialog?: boolean;
+      openShareDialog?: boolean;
+      openCollaboratorsDialog?: boolean;
+    } | null;
+
+    if (state) {
+      if (state.openEditDialog) {
+        setEditDialogOpen(true);
+      }
+      if (state.openShareDialog) {
+        setShareDialogOpen(true);
+      }
+      if (state.openCollaboratorsDialog) {
+        setCollaboratorsDialogOpen(true);
+      }
+      
+      // 清除 state，避免刷新页面时重复打开
+      navigate(location.pathname + location.search, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname, location.search]);
 
   // 获取用户当前位置
   useEffect(() => {
@@ -1451,6 +1484,39 @@ export default function ExecutePage() {
             await loadData();
             await loadReminders();
           }}
+        />
+      )}
+
+      {/* 编辑对话框 */}
+      {trip && (
+        <EditTripDialog
+          trip={trip}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSuccess={() => {
+            // 重新加载行程数据
+            if (tripId) {
+              loadData();
+            }
+          }}
+        />
+      )}
+
+      {/* 分享对话框 */}
+      {tripId && (
+        <ShareTripDialog
+          tripId={tripId}
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+        />
+      )}
+
+      {/* 协作者对话框 */}
+      {tripId && (
+        <CollaboratorsDialog
+          tripId={tripId}
+          open={collaboratorsDialogOpen}
+          onOpenChange={setCollaboratorsDialogOpen}
         />
       )}
     </div>

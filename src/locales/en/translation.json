@@ -269,7 +269,11 @@
         "challenge": "Extreme Challenge (Tight Time, Rich Experience)"
       },
       "cancel": "Cancel",
-      "saveAndContinue": "Save & Continue to Schedule"
+      "saveAndContinue": "Save & Continue to Schedule",
+      "budgetConstraintDetails": "Budget Constraint Details",
+      "budgetConstraintTooltip": "These constraints will affect plan generation. For more detailed budget management (such as modifying currency, deleting constraints, etc.), please go to the Budget page.",
+      "goToBudgetPage": "Go to Budget Page",
+      "budgetConstraintSet": "Set"
     },
     "placesTab": {
       "title": "Find Places",
@@ -379,8 +383,17 @@
       "description": "Edit and manage daily itinerary, adjust time windows, resolve time conflicts, and add buffer time."
     },
     "whatIfTab": {
-      "title": "What-If Scenario Comparison",
-      "description": "Generate multiple scenarios with different strategies and compare to choose the best. Difference from \"Decision Evaluation\" tab: What-If focuses on multi-scenario generation and comparison, while Decision Evaluation focuses on deep evaluation of a single plan.",
+      "title": "Multi-Scenario Comparison",
+      "description": "Generate multiple scenarios with different strategies and compare to choose the best. Suitable for exploring different planning strategies when creating a trip.",
+      "subtitle": "Explore different strategies to find the best plan",
+      "strategyPresets": {
+        "safe": "Safety First",
+        "experience": "Experience First",
+        "challenge": "Challenge First",
+        "safeDesc": "Prioritize safety and comfort, slower pace, lower risk",
+        "experienceDesc": "Prioritize experience richness, flexible time arrangement, high experience density",
+        "challengeDesc": "Prioritize challenge, tight schedule, rich experience but higher intensity"
+      },
       "generating": "Generating scenarios...",
       "generateComparison": "Generate Comparison (600 samples)",
       "scenarios": {

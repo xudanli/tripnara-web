@@ -10,7 +10,7 @@ interface LogoProps {
 
 export default function Logo({ 
   className, 
-  size = 24, 
+  size = 48, 
   variant = 'full',
   color = 'currentColor'
 }: LogoProps) {
@@ -30,7 +30,15 @@ export default function Logo({
       width={size}
       height={size}
       className={cn('flex-shrink-0 object-contain', variant === 'icon' && className)}
-      style={{ width: size, height: size }}
+      style={{ 
+        width: `${size}px`, 
+        height: `${size}px`, 
+        maxWidth: `${size}px`, 
+        maxHeight: `${size}px`,
+        minWidth: `${size}px`,
+        minHeight: `${size}px`,
+        display: 'block'
+      }}
     />
   );
 

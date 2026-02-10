@@ -18,13 +18,14 @@ import { Spinner } from '@/components/ui/spinner';
 import { CheckCircle2, AlertTriangle, TrendingUp, Activity, Clock, DollarSign, Shield, Info } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { toast } from 'sonner';
+import { formatCurrency } from '@/utils/format';
 
 interface SuggestionPreviewDialogProps {
   tripId: string;
   suggestion: Suggestion | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>; // 🆕 支持异步回调，确保数据刷新完成
 }
 
 export function SuggestionPreviewDialog({
@@ -37,6 +38,29 @@ export function SuggestionPreviewDialog({
   const [loading, setLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<ApplySuggestionResponse | null>(null);
   const [applying, setApplying] = useState(false);
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
+  
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!tripId) return;
+      try {
+        // 优先从预算约束获取货币
+        const constraint = await tripsApi.getBudgetConstraint(tripId);
+        if (constraint.budgetConstraint.currency) {
+          setCurrency(constraint.budgetConstraint.currency);
+          return;
+        }
+      } catch {
+        // 如果获取预算约束失败，保持默认值 CNY
+      }
+      setCurrency('CNY');
+    };
+    
+    if (open) {
+      loadCurrency();
+    }
+  }, [tripId, open]);
 
   const loadPreview = async () => {
     if (!suggestion || !suggestion.actions || suggestion.actions.length === 0) {
@@ -92,8 +116,9 @@ export function SuggestionPreviewDialog({
         toast.info(`应用建议后产生了 ${result.triggeredSuggestions.length} 个新建议`);
       }
 
+      // 🐛 修复：等待 onConfirm 完成后再关闭对话框，确保数据刷新完成
+      await onConfirm();
       onOpenChange(false);
-      onConfirm();
     } catch (err: any) {
       console.error('Failed to apply suggestion:', err);
       toast.error(err.message || '应用建议失败');
@@ -189,7 +214,7 @@ export function SuggestionPreviewDialog({
                             previewResult.impact.metrics.cost > 0 ? 'text-red-600' : 'text-green-600'
                           }`}>
                             {previewResult.impact.metrics.cost > 0 ? '+' : ''}
-                            ¥{previewResult.impact.metrics.cost}
+                            {formatCurrency(Math.abs(previewResult.impact.metrics.cost), currency)}
                           </div>
                         </div>
                       )}

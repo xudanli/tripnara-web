@@ -18,6 +18,7 @@ import { ResponseBlockRenderer } from './ResponseBlockRenderer';
 import { NLClarificationQuestionCard } from './NLClarificationQuestionCard';
 import { StructuredContentTypewriter } from './StructuredContentTypewriter';
 import ConversationGuide from './ConversationGuide';
+import { CreateTripWelcomeScreen } from './CreateTripWelcomeScreen';
 import GateWarningCard, { type GateAlternative } from './GateWarningCard';
 import PersonaInfoCard from './PersonaInfoCard';
 import RecommendedRoutesCard from './RecommendedRoutesCard';
@@ -47,6 +48,7 @@ import {
   Loader2,
   ArrowRight,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
@@ -259,6 +261,7 @@ function MessageBubble({
   onQuestionAnswer,
   onSendMessage,
   onOpenConflictDialog, // 🆕 打开冲突检测弹窗的回调
+  currency = 'CNY', // 🆕 货币代码
 }: { 
   message: ChatMessage;
   onQuickReply?: (text: string) => void;
@@ -269,6 +272,7 @@ function MessageBubble({
   onQuestionAnswer?: (questionId: string, value: string | string[] | number | boolean | null) => void;
   onSendMessage?: (text: string) => void;  // 🆕 用于发送消息（替代方案选择）
   onOpenConflictDialog?: (conflicts: Conflict[], runId?: string) => void; // 🆕 打开冲突检测弹窗
+  currency?: string; // 🆕 货币代码
 }) {
   const isUser = message.role === 'user';
   
@@ -314,51 +318,46 @@ function MessageBubble({
       "flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300",
       isUser ? "flex-row-reverse" : "flex-row"
     )}>
-      {/* 头像 */}
-      <div className={cn(
-        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-        isUser 
-          ? "bg-slate-200" 
-          : "bg-slate-800"
-      )}>
-        {isUser ? (
-          <User className="w-4 h-4 text-slate-600" />
-        ) : (
-          <Logo variant="icon" size={32} className="text-white" />
-        )}
-      </div>
+      {/* 🆕 Gemini风格：AI消息使用小图标，用户消息不显示图标 */}
+      {!isUser && (
+        <div className="flex-shrink-0 mt-1">
+          {/* 蓝色小图标（类似Gemini的钻石图标） */}
+          <div className="w-5 h-5 flex items-center justify-center text-blue-600">
+            <Sparkles className="w-4 h-4" strokeWidth={2.5} />
+          </div>
+        </div>
+      )}
 
       {/* 消息内容（增加最大宽度） */}
       <div className={cn(
-        "flex flex-col max-w-[90%]",
+        "flex flex-col flex-1",
         isUser ? "items-end" : "items-start"
       )}>
-        {/* 角色标签 */}
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs text-muted-foreground">
-            {isUser ? '我' : '旅行规划师'}
-          </span>
-          {/* 🐛 如果所有问题都已回答，显示"已确认"标识 */}
-          {!isUser && allQuestionsAnswered && !isLatest && (
-            <Badge variant="outline" className="text-xs h-4 px-1.5 py-0 border-green-300 text-green-700 bg-green-50">
-              <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />
-              已确认
-            </Badge>
-          )}
-          {/* 🐛 如果有澄清问题但未全部回答，显示"待确认"标识 */}
-          {!isUser && !allQuestionsAnswered && message.clarificationQuestions && message.clarificationQuestions.length > 0 && !isLatest && (
-            <Badge variant="outline" className="text-xs h-4 px-1.5 py-0 border-amber-300 text-amber-700 bg-amber-50">
-              待确认
-            </Badge>
-          )}
-        </div>
+        {/* 🆕 Gemini风格：简化角色标签，仅在需要时显示状态 */}
+        {!isUser && (
+          <div className="flex items-center gap-2 mb-1">
+            {/* 🐛 如果所有问题都已回答，显示"已确认"标识 */}
+            {allQuestionsAnswered && !isLatest && (
+              <Badge variant="outline" className="text-xs h-4 px-1.5 py-0 border-green-300 text-green-700 bg-green-50">
+                <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />
+                已确认
+              </Badge>
+            )}
+            {/* 🐛 如果有澄清问题但未全部回答，显示"待确认"标识 */}
+            {!allQuestionsAnswered && message.clarificationQuestions && message.clarificationQuestions.length > 0 && !isLatest && (
+              <Badge variant="outline" className="text-xs h-4 px-1.5 py-0 border-amber-300 text-amber-700 bg-amber-50">
+                待确认
+              </Badge>
+            )}
+          </div>
+        )}
 
-        {/* 消息气泡 */}
+        {/* 🆕 Gemini风格：消息气泡 - AI白色背景，用户灰色气泡 */}
         <div className={cn(
-          "rounded-2xl px-5 py-4 text-sm max-w-[95%]",
+          "rounded-lg px-4 py-3 text-sm max-w-[85%]",
           isUser 
-            ? "bg-primary text-primary-foreground rounded-tr-sm" 
-            : "bg-slate-100 text-slate-800 rounded-tl-sm"
+            ? "bg-gray-200 text-gray-900 rounded-tr-sm" 
+            : "bg-white text-gray-900 rounded-tl-sm border border-gray-100"
         )}>
           {/* 🆕 结构化内容渲染（优先，支持打字机效果） */}
           {!isUser && message.responseBlocks && message.responseBlocks.length > 0 ? (
@@ -406,14 +405,20 @@ function MessageBubble({
               </div>
             )
           ) : (
-            /* 降级：普通文本渲染 */
-            <p className="whitespace-pre-wrap leading-relaxed">
-              {textToShow}
+            /* 🆕 Gemini风格：降级：普通文本渲染 - 更清晰的文本样式 */
+            <div className="whitespace-pre-wrap leading-relaxed text-gray-900">
+              <div className="prose prose-sm max-w-none">
+                {textToShow.split('\n').map((line, idx) => (
+                  <p key={idx} className="mb-2 last:mb-0">
+                    {line || '\u00A0'}
+                  </p>
+                ))}
+              </div>
               {/* 打字光标 */}
               {isTyping && (
-                <span className="inline-block w-0.5 h-4 bg-slate-600 ml-0.5 animate-pulse" />
+                <span className="inline-block w-0.5 h-4 bg-blue-600 ml-0.5 animate-pulse" />
               )}
-            </p>
+            </div>
           )}
         </div>
         
@@ -1035,6 +1040,7 @@ function MessageBubble({
             params={message.parsedParams}
             onConfirm={onConfirm}
             onEdit={onEdit}
+            currency={currency}
             className="mt-4"
           />
         )}
@@ -1055,11 +1061,13 @@ function TripSummaryCard({
   params,
   onConfirm,
   onEdit,
+  currency = 'CNY', // 🆕 货币代码，默认 CNY
   className,
 }: {
   params: ParsedTripParams;
   onConfirm?: () => void;
   onEdit?: () => void;
+  currency?: string; // 🆕 货币代码
   className?: string;
 }) {
   const hasInferredFields = params.inferredFields && params.inferredFields.length > 0;
@@ -1139,7 +1147,7 @@ function TripSummaryCard({
             <div className="flex items-center gap-2">
               <Wallet className="w-4 h-4 text-muted-foreground" />
               <span>
-                {formatCurrency(params.totalBudget, 'CNY')}
+                {formatCurrency(params.totalBudget, currency)}
                 {params.inferredFields?.includes('totalBudget') && (
                   <Badge variant="outline" className="ml-1 text-xs text-amber-600 border-amber-300">
                     推断
@@ -1217,6 +1225,7 @@ export default function NLChatInterface({
   const [conversationContext, setConversationContext] = useState<ConversationContext | null>(null);  // 对话上下文
   const [latestParams, setLatestParams] = useState<ParsedTripParams | null>(null);
   const [newMessageId, setNewMessageId] = useState<string | null>(null);  // 用于打字机效果
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
   const [currentContextPackage, setCurrentContextPackage] = useState<ContextPackage | null>(null);  // 当前上下文包
   const [sessionId, setSessionId] = useState<string | null>(null);  // 会话ID，用于多轮对话
   // 🆕 问题答案保存状态追踪（用于批量保存检查）
@@ -1402,23 +1411,11 @@ export default function NLChatInterface({
     // 🆕 设置标记，下次发送消息时不传递 sessionId，后端会自动清空旧会话
     setIsFirstMessageAfterReset(true);
     
-    // 🆕 显示欢迎消息
-    const welcomeMessage: ChatMessage = {
-      id: 'welcome',
-      role: 'assistant',
-      content: '你好！我是你的旅行规划助手 ✨\n\n告诉我你的旅行想法，比如想去哪里、什么时候、和谁一起，我来帮你规划完美行程！',
-      timestamp: new Date(),
-      suggestedQuestions: [
-        '想带家人去日本看樱花',
-        '计划蜜月旅行',
-        '想去冰岛看极光',
-        '带孩子去东京迪士尼',
-      ],
-    };
-    setMessages([welcomeMessage]);
-    setNewMessageId('welcome');  // 触发打字机效果
+    // 🆕 优化：清空消息，让新的 CreateTripWelcomeScreen 显示
+    setMessages([]);
+    setNewMessageId(null);
     
-    console.log('[NLChatInterface] ✅ 新建对话，已设置 isFirstMessageAfterReset=true（下次发送消息时不传递 sessionId）');
+    console.log('[NLChatInterface] ✅ 新建对话，已清空消息，显示新的创建行程欢迎界面');
   }, []);
 
   // 监听会话切换事件
@@ -1548,21 +1545,10 @@ export default function NLChatInterface({
         setLatestParams(null);
         setSavedQuestionAnswers(new Map());
         
-        // 显示欢迎消息
-        const welcomeMessage: ChatMessage = {
-          id: 'welcome',
-          role: 'assistant',
-          content: '你好！我是你的旅行规划助手 ✨\n\n告诉我你的旅行想法，比如想去哪里、什么时候、和谁一起，我来帮你规划完美行程！',
-          timestamp: new Date(),
-          suggestedQuestions: [
-            '想带家人去日本看樱花',
-            '计划蜜月旅行',
-            '想去冰岛看极光',
-            '带孩子去东京迪士尼',
-          ],
-        };
-        setMessages([welcomeMessage]);
-        setNewMessageId('welcome');  // 触发打字机效果
+        // 🆕 优化：清空消息，让新的 CreateTripWelcomeScreen 显示
+        setMessages([]);
+        setNewMessageId(null);
+        console.log('[NLChatInterface] 会话切换：清空消息，显示新的创建行程欢迎界面');
         return;
       }
       
@@ -1572,6 +1558,21 @@ export default function NLChatInterface({
         try {
           const conversation = await tripsApi.getNLConversation(savedSessionId);
           if (conversation && conversation.messages.length > 0) {
+            // 🆕 检查恢复的消息是否是欢迎消息或空会话
+            const isWelcomeOnly = conversation.messages.length === 1 && 
+              conversation.messages[0].role === 'assistant' &&
+              (conversation.messages[0].content.includes('你好') || 
+               conversation.messages[0].content.includes('旅行规划助手'));
+            
+            // 🆕 如果是欢迎消息，清空会话，显示新的欢迎界面
+            if (isWelcomeOnly) {
+              console.log('[NLChatInterface] 检测到欢迎消息，清空会话，显示新的创建行程欢迎界面');
+              localStorage.removeItem('nl_conversation_session');
+              setSessionId(null);
+              setMessages([]);
+              return;
+            }
+            
             // 恢复会话
             setSessionId(conversation.sessionId);
             
@@ -1715,41 +1716,56 @@ export default function NLChatInterface({
           localStorage.removeItem('nl_conversation_session');
           setSessionId(null);
           
-          // 🆕 会话过期或不存在时的提示
+          // 🆕 会话过期或不存在时，清空消息显示新的欢迎界面
           if (err.code === 'NOT_FOUND' || err.response?.status === 404) {
-            const expiredMessageId = `system-expired-${Date.now()}`;
-            const expiredMessage: ChatMessage = {
-              id: expiredMessageId,
-              role: 'assistant',
-              content: '之前的对话已过期（24小时），让我们重新开始规划吧',
-              timestamp: new Date(),
-            };
-            setMessages([expiredMessage]);
+            setMessages([]);
+            console.log('[NLChatInterface] 会话已过期，显示新的创建行程欢迎界面');
           }
         }
       }
       
-      // 没有会话或恢复失败，显示欢迎消息
+      // 🆕 优化：没有会话或恢复失败时，不添加欢迎消息
+      // 让新的 CreateTripWelcomeScreen 组件显示（当 messages.length === 0 时）
+      // 只有在用户开始对话后，才显示聊天界面
       if (messages.length === 0) {
-        const welcomeMessage: ChatMessage = {
-          id: 'welcome',
-          role: 'assistant',
-          content: '你好！我是你的旅行规划助手 ✨\n\n告诉我你的旅行想法，比如想去哪里、什么时候、和谁一起，我来帮你规划完美行程！',
-          timestamp: new Date(),
-          suggestedQuestions: [
-            '想带家人去日本看樱花',
-            '计划蜜月旅行',
-            '想去冰岛看极光',
-            '带孩子去东京迪士尼',
-          ],
-        };
-        setMessages([welcomeMessage]);
-        setNewMessageId('welcome');  // 触发打字机效果
+        // 不添加欢迎消息，让新的欢迎界面显示
+        console.log('[NLChatInterface] 无会话，显示新的创建行程欢迎界面');
       }
     };
 
     loadSession();
   }, [resetOnMount]); // 依赖 resetOnMount，当它变化时重新执行
+
+  // 🆕 根据目的地获取货币策略
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!latestParams?.destination) {
+        setCurrency('CNY');
+        return;
+      }
+      
+      try {
+        // 提取国家代码（destination 格式可能是 "IS" 或 "IS, Reykjavik"）
+        const destinationParts = latestParams.destination.split(',');
+        const countryCode = destinationParts[0]?.trim().toUpperCase();
+        
+        if (countryCode) {
+          const { countriesApi } = await import('@/api/countries');
+          const currencyStrategy = await countriesApi.getCurrencyStrategy(countryCode);
+          if (currencyStrategy?.currencyCode) {
+            setCurrency(currencyStrategy.currencyCode);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[NLChatInterface] 获取货币策略失败，使用默认值 CNY:', err);
+      }
+      
+      setCurrency('CNY');
+    };
+    
+    loadCurrency();
+  }, [latestParams?.destination]);
 
   // 构建上下文包（用于增强自然语言理解）
   const buildContextForNL = useCallback(async (userText: string, destinationCountry?: string): Promise<string | undefined> => {
@@ -2965,11 +2981,37 @@ export default function NLChatInterface({
     sendMessage(inputValue);
   };
 
+  // 🆕 如果没有消息，显示优化后的欢迎界面
+  if (messages.length === 0 && !isLoading) {
+    return (
+      <div className={cn("flex flex-col h-full bg-gray-50", className)}>
+        <CreateTripWelcomeScreen
+          onStart={(message) => {
+            sendMessage(message);
+          }}
+          isLoading={isLoading}
+          isCreating={isCreating}
+          error={error}
+          onRetry={() => {
+            // 🆕 P1: 重试机制 - 如果有最后一条用户消息，重新发送
+            if (messages.length > 0) {
+              const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+              if (lastUserMessage) {
+                setError(null);
+                sendMessage(lastUserMessage.content);
+              }
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex flex-col h-full bg-white", className)}>
-      {/* 头部 - 仅在 showHeader 为 true 时显示（避免与 Dialog 标题重复） */}
+    <div className={cn("flex flex-col h-full bg-gray-50", className)}>
+      {/* 🆕 Gemini风格：头部 - 仅在 showHeader 为 true 时显示（避免与 Dialog 标题重复） */}
       {showHeader && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b bg-slate-50">
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b bg-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
               <Logo variant="icon" size={32} className="text-white" />
@@ -2992,9 +3034,9 @@ export default function NLChatInterface({
         </div>
       )}
 
-      {/* 消息区域 */}
-      <ScrollArea ref={scrollRef} className="flex-1 p-4">
-        <div className="space-y-4">
+      {/* 🆕 Gemini风格：消息区域 - 更宽的容器，更聚焦对话 */}
+      <ScrollArea ref={scrollRef} className="flex-1">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
           {messages.map((msg, idx) => (
             <MessageBubble
               key={msg.id}
@@ -3005,6 +3047,7 @@ export default function NLChatInterface({
               isLatest={idx === messages.length - 1}
               isNewMessage={msg.id === newMessageId}
               onSendMessage={sendMessage}
+              currency={currency}
               onOpenConflictDialog={(conflicts, runId) => {
                 // 🆕 打开冲突检测弹窗
                 setDetectedConflicts(conflicts);
@@ -3286,7 +3329,7 @@ export default function NLChatInterface({
                         setAutoSubmittingMessageId(null); // 🆕 清除自动提交标记
                         // TODO: 实现立即提交逻辑（需要保存 finalAnswers 和 finalQuestions 的引用）
                       }}
-                      className="text-xs h-7 px-2 bg-blue-600 hover:bg-blue-700"
+                      className="text-xs h-7 px-2 bg-black hover:bg-gray-800"
                     >
                       立即提交
                     </Button>
@@ -3332,8 +3375,8 @@ export default function NLChatInterface({
         </div>
       )}
 
-      {/* 输入区域 */}
-      <form onSubmit={handleSubmit} className="p-4 border-t bg-slate-50/50">
+      {/* 🆕 Gemini风格：输入区域 - 大输入框，带工具按钮 */}
+      <form onSubmit={handleSubmit} className="border-t bg-white">
         {/* 对话引导（首次使用或快捷命令） */}
         <ConversationGuide
           isFirstTime={isFirstTime}
@@ -3347,26 +3390,76 @@ export default function NLChatInterface({
           }}
         />
         
-        <div className="flex gap-2">
-          <Input
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="描述您的旅行想法..."
-            disabled={isLoading || isCreating}
-            className="flex-1 bg-white"
-          />
-          <Button 
-            type="submit" 
-            disabled={!inputValue.trim() || isLoading || isCreating}
-            className="bg-slate-900 hover:bg-slate-800 text-white"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <ArrowRight className="w-4 h-4" />
-            )}
-          </Button>
+        {/* 🆕 Gemini风格：大输入框容器 */}
+        <div className="max-w-4xl mx-auto px-6 py-4">
+          <div className="flex flex-col gap-2">
+            {/* Gemini风格：统一的输入条容器 - 更大更突出 */}
+            <div className={cn(
+              'flex items-center gap-2',
+              'bg-white rounded-2xl shadow-sm',
+              'border border-gray-200',
+              'transition-all duration-200',
+              'hover:shadow-md focus-within:shadow-md focus-within:border-black/50'
+            )}>
+              {/* 🆕 左侧工具按钮（类似Gemini的+和工具图标） */}
+              <div className="flex items-center gap-1 px-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  aria-label="添加附件"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              {/* 输入框 - 无边框，作为容器的一部分 */}
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="例如：3 月和家人去日本 7 天，节奏轻松"
+                disabled={isLoading || isCreating}
+                className={cn(
+                  'flex-1 h-14 text-base',
+                  'border-0 bg-transparent shadow-none',
+                  'rounded-2xl px-2',
+                  'placeholder:text-gray-400',
+                  'focus-visible:outline-none focus-visible:ring-0',
+                  'disabled:cursor-not-allowed'
+                )}
+              />
+              
+              {/* 🆕 右侧按钮组 */}
+              <div className="flex items-center gap-1 px-3">
+                {/* 发送按钮 */}
+                <Button 
+                  type="submit" 
+                  disabled={!inputValue.trim() || isLoading || isCreating}
+                  className={cn(
+                    'h-9 w-9 p-0 flex-shrink-0',
+                    'bg-black hover:bg-gray-800',
+                    'text-white rounded-lg',
+                    'transition-all duration-200',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2'
+                  )}
+                  aria-label="发送消息"
+                >
+                  {isLoading || isCreating ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-5 h-5" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            {/* 🆕 Gemini风格：降低心理负担的文案 */}
+            <p className="text-xs text-gray-400 text-center px-2">
+              不需要想得很清楚，后面可以随时修改
+            </p>
+          </div>
         </div>
       </form>
 

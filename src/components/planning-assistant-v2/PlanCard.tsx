@@ -14,6 +14,7 @@ interface PlanCardProps {
   plan: Plan;
   isSelected?: boolean;
   onSelect?: (planId: string) => void;
+  currency?: string; // 🆕 货币代码，默认 CNY
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export function PlanCard({
   plan,
   isSelected,
   onSelect,
+  currency = 'CNY', // 🆕 默认货币
   className,
 }: PlanCardProps) {
   return (
@@ -93,7 +95,7 @@ export function PlanCard({
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium">预算估算</span>
             <span className="text-lg font-semibold text-primary">
-              {formatCurrency(plan.estimatedBudget.total, 'CNY')}
+              {formatCurrency(plan.estimatedBudget.total, currency)}
             </span>
           </div>
           <div className="grid grid-cols-4 gap-2 text-xs">
@@ -103,7 +105,7 @@ export function PlanCard({
                 <div key={key} className="text-center">
                   <div className="text-muted-foreground capitalize">{key}</div>
                   <div className="font-medium">
-                    {formatCurrency(value, 'CNY')}
+                    {formatCurrency(value, currency)}
                   </div>
                 </div>
               ))}

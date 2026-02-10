@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import HealthBar from '@/components/trips/HealthBar';
 import ComplianceRulesCard from '@/components/trips/ComplianceRulesCard';
+import PersonaModeToggle, { type PersonaMode } from '@/components/common/PersonaModeToggle';
 import { Plus, Sparkles, Compass, Info } from 'lucide-react';
 
 interface PlanTopActionsProps {
@@ -21,6 +22,8 @@ interface PlanTopActionsProps {
   tripStatus: string;
   tripId: string;
   countryCodes: string[];
+  viewMode?: PersonaMode; // 🆕 视图模式
+  onViewModeChange?: (mode: PersonaMode) => void; // 🆕 视图模式变更回调
   onMetricClick?: (metricName: 'schedule' | 'budget' | 'pace' | 'feasibility') => void;
   onAddItem?: () => void;
   onAutoOptimize?: () => void;
@@ -34,6 +37,8 @@ export default function PlanTopActions({
   tripStatus,
   tripId,
   countryCodes,
+  viewMode,
+  onViewModeChange,
   onMetricClick,
   onAddItem,
   onAutoOptimize,
@@ -75,6 +80,11 @@ export default function PlanTopActions({
 
         {/* 右侧：操作按钮（桌面端10%，移动端100%） */}
         <div className="flex items-center gap-2 w-full lg:w-auto lg:flex-1 lg:max-w-[10%] lg:justify-end">
+          {/* 🆕 视图模式切换 - 只在规划中状态显示 */}
+          {tripStatus !== 'CANCELLED' && viewMode !== undefined && onViewModeChange && (
+            <PersonaModeToggle value={viewMode} onChange={onViewModeChange} />
+          )}
+
           {/* + 添加行程按钮 */}
           {tripStatus !== 'CANCELLED' && (
             <Button

@@ -4,9 +4,10 @@ import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import MobileBottomNav from './MobileBottomNav';
 import EvidenceDrawer from './EvidenceDrawer';
 // ConversationHistorySidebar 已移除 - Dashboard 页面不再显示对话历史
-import DashboardTopBar from './DashboardTopBar';
+// DashboardTopBar 已删除 - 顶部导航栏已移除
 import AgentChatFab from '@/components/agent/AgentChatFab';
 import AgentChatSidebar from '@/components/agent/AgentChatSidebar';
+import MainSidebar from './MainSidebar';
 import { NLConversationProvider, useNLConversation } from '@/contexts/NLConversationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -26,7 +27,7 @@ interface DrawerContextType {
   setHighlightItemId: (id?: string) => void;
 }
 
-const DrawerContext = createContext<DrawerContextType | undefined>(undefined);
+export const DrawerContext = createContext<DrawerContextType | undefined>(undefined);
 
 export const useDrawer = () => {
   const context = useContext(DrawerContext);
@@ -146,10 +147,6 @@ export default function DashboardLayout() {
     return undefined;
   }, [location.pathname, tripIdMatch]);
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
   const drawerContextValue: DrawerContextType = {
     drawerOpen,
     setDrawerOpen,
@@ -158,6 +155,16 @@ export default function DashboardLayout() {
     highlightItemId,
     setHighlightItemId,
   };
+
+  // 🐛 修复：即使未认证，也要渲染 Context Provider，避免子组件报错
+  // 未认证时返回 null，但 Context Provider 必须在子组件之前渲染
+  if (!isAuthenticated) {
+    return (
+      <DrawerContext.Provider value={drawerContextValue}>
+        {null}
+      </DrawerContext.Provider>
+    );
+  }
 
   return (
     <DrawerContext.Provider value={drawerContextValue}>
@@ -213,19 +220,18 @@ function DashboardLayoutInner({
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-        {/* 顶部导航栏 */}
-        <DashboardTopBar />
+        {/* 顶部导航栏已删除 */}
 
         {/* 移动端菜单按钮和侧边栏已删除 - 使用底部导航栏 MobileBottomNav */}
 
         {/* 主内容区域 */}
         <div className="flex flex-1 overflow-hidden">
-          {/* 🆕 移除对话历史侧边栏 - Dashboard 页面不再显示对话历史 */}
-          {/* 对话历史侧边栏已移除，Dashboard 页面显示继续编辑卡片和快捷入口 */}
+          {/* 🆕 左侧主导航栏（混合模式） */}
+          <div className="hidden lg:block">
+            <MainSidebar />
+          </div>
 
-          {/* 左侧导航菜单已完全删除 - 所有功能通过对话界面访问 */}
-
-          {/* 主内容区和侧边栏 */}
+          {/* 主内容区和右侧侧边栏 */}
           <div className="flex-1 flex h-full">
             {/* 主内容区 */}
             <div className="flex-1 h-full overflow-hidden transition-all duration-300">
@@ -234,8 +240,8 @@ function DashboardLayoutInner({
               </main>
             </div>
             
-            {/* 🆕 规划工作台右侧 AI 助手抽屉 */}
-            {(isDashboardPage || location.pathname.includes('/plan-studio')) && (
+            {/* 🆕 规划工作台右侧 AI 助手抽屉 - Dashboard 页面不显示 */}
+            {location.pathname.includes('/plan-studio') && !isDashboardPage && (
               <AgentChatSidebar
                 activeTripId={activeTripId}
                 onSystem2Response={() => {

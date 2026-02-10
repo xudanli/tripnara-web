@@ -396,8 +396,24 @@ export const tripDetailApi = {
       console.log('[Trip Detail API] 解析后的响应:', {
         tripId,
         overall: wrappedResponse.overall,
+        overallScore: wrappedResponse.overallScore,
         dimensions: Object.keys(wrappedResponse.dimensions || {}),
       });
+      
+      // 🆕 检查每个维度是否包含 weight 字段
+      if (wrappedResponse.dimensions) {
+        Object.entries(wrappedResponse.dimensions).forEach(([key, dim]: [string, any]) => {
+          console.log(`[Trip Detail API] 维度 ${key}:`, {
+            hasWeight: 'weight' in (dim || {}),
+            weight: dim?.weight,
+            hasDefinition: 'definition' in (dim || {}),
+            hasCalculation: 'calculation' in (dim || {}),
+            hasIdealRange: 'idealRange' in (dim || {}),
+            score: dim?.score,
+            status: dim?.status,
+          });
+        });
+      }
 
       return wrappedResponse;
     } catch (error: any) {
@@ -455,6 +471,23 @@ export const tripDetailApi = {
         tripId,
         metricName: wrappedResponse.metricName,
         displayName: wrappedResponse.displayName,
+        hasWeight: 'weight' in wrappedResponse,
+        weight: wrappedResponse.weight,
+        hasContribution: 'contribution' in wrappedResponse,
+        contribution: wrappedResponse.contribution,
+        currentStateScore: wrappedResponse.currentState?.score,
+      });
+      
+      // 🆕 详细检查返回的数据结构
+      console.log('[Trip Detail API] MetricExplanation 完整结构:', {
+        metricName: wrappedResponse.metricName,
+        displayName: wrappedResponse.displayName,
+        weight: wrappedResponse.weight,
+        contribution: wrappedResponse.contribution,
+        hasDefinition: !!wrappedResponse.definition,
+        hasCalculation: !!wrappedResponse.calculation,
+        hasIdealRange: !!wrappedResponse.idealRange,
+        hasCurrentState: !!wrappedResponse.currentState,
       });
 
       return wrappedResponse;

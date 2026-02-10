@@ -21,6 +21,7 @@ import {
   getGateStatusLabel,
   getGateStatusClasses,
 } from '@/lib/gate-status';
+import { cn } from '@/lib/utils';
 
 interface AbuViewProps {
   trip: TripDetail;
@@ -45,8 +46,8 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
 
   // 使用真实数据
   const gatingStatus = abuData.gatingStatus;
-  const violations = abuData.violations;
-  const riskMap = abuData.riskMap;
+  const violations = abuData.violations || [];
+  const riskMap = abuData.riskMap || {};
 
   // 标准化状态（PASSED -> ALLOW, WARN -> NEED_CONFIRM, BLOCKED -> REJECT）
   const normalizedStatus = normalizeGateStatus(gatingStatus);
@@ -100,27 +101,27 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
 
   const getItemRisk = (itemId: string) => {
     const risk = riskMap[itemId];
-    if (!risk) {
+    if (!risk || !risk.severity) {
       return { level: 'NONE', tags: [], confidence: 0 };
     }
     return {
       level: risk.severity,
-      tags: [risk.type],
+      tags: risk.type ? [risk.type] : [],
       confidence: 0.8, // 默认值
     };
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 顶部：安全状态条 */}
-      <Card className={`border-2 ${getStatusColor()}`}>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+      <Card className={`border ${getStatusColor()}`}>
+        <CardContent className="p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
               {getStatusIcon()}
               <div>
-                <div className="font-semibold text-lg">安全状态：{getStatusText()}</div>
-                <div className="text-sm opacity-80">
+                <div className="font-semibold text-base">安全状态：{getStatusText()}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
                   {normalizedStatus === 'ALLOW'
                     ? t('tripViews.abu.violations.messages.safeToExecute') || '已通过所有安全检查'
                     : gatingStatus === 'WARN'
@@ -132,34 +133,46 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
             {normalizedStatus !== 'ALLOW' && (
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => {
                   // 跳转到 Neptune 修复
                   console.log(t('tripViews.abu.violations.gotoNeptune'));
                 }}
               >
                 {t('tripViews.abu.violations.gotoNeptune')}
-                <ExternalLink className="w-4 h-4 ml-2" />
+                <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
               </Button>
             )}
           </div>
         </CardContent>
       </Card>
 
+      {/* 🆕 无风险时的友好提示 */}
+      {normalizedStatus === 'ALLOW' && violations.length === 0 && Object.keys(riskMap).length === 0 && (
+        <Card className="border-green-200 bg-green-50/50">
+          <CardContent className="py-12 text-center">
+            <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-600" />
+            <div className="text-sm font-medium text-gray-900 mb-1">所有行程项状态良好</div>
+            <div className="text-xs text-muted-foreground">无需修复，可以放心前往 ✨</div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 右侧：最关键 1-3 条红线摘要 */}
       {violations.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-red-600" />
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="w-4 h-4 text-red-600" />
               红线摘要
             </CardTitle>
-            <CardDescription>最关键的风险项，点击可定位到对应行程项</CardDescription>
+            <CardDescription className="text-xs">最关键的风险项，点击可定位到对应行程项</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             {violations.slice(0, 3).map((violation) => (
               <div
                 key={violation.id}
-                className="p-3 border border-red-300 bg-red-50 rounded-lg cursor-pointer hover:bg-red-100"
+                className="p-3 border border-red-200 bg-red-50/50 rounded-lg cursor-pointer hover:bg-red-100/50 transition-colors"
                 onClick={() => {
                   // 定位到对应的行程项
                   const firstDay = violation.affectedDays[0];
@@ -173,16 +186,16 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                   }
                 }}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="destructive">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Badge variant="destructive" className="text-xs">
                         硬约束违反
                       </Badge>
-                      <span className="font-medium">{violation.explanation}</span>
+                      <span className="text-sm font-medium truncate">{violation.explanation}</span>
                     </div>
                     {violation.reasonCodes.length > 0 && (
-                      <div className="flex gap-1 mt-1">
+                      <div className="flex gap-1 mt-1.5 flex-wrap">
                         {violation.reasonCodes.map((code) => (
                           <Badge key={code} variant="outline" className="text-xs">
                             {code}
@@ -191,12 +204,12 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                       </div>
                     )}
                     {violation.affectedDays.length > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1">
+                      <div className="text-xs text-muted-foreground mt-1.5">
                         影响天数: {violation.affectedDays.join(', ')}
                       </div>
                     )}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 </div>
               </div>
             ))}
@@ -204,101 +217,106 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
         </Card>
       )}
 
-      {/* 中部：行程时间轴（带风险徽标） */}
-      <div className="space-y-4">
-        {trip.TripDay.map((day) => (
-          <Card key={day.id}>
-            <CardHeader>
-              <CardTitle>
-                {format(new Date(day.date), 'yyyy年MM月dd日')} ({day.date})
-              </CardTitle>
-              {/* ✅ 显示当天主题（如果存在） */}
-              {day.theme && (
-                <p className="text-sm text-muted-foreground font-medium mt-1">
-                  {day.theme}
-                </p>
-              )}
-            </CardHeader>
-            <CardContent>
-              {day.ItineraryItem.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  该日暂无安排
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {day.ItineraryItem.map((item) => {
-                    const risk = getItemRisk(item.id);
-                    
-                    // 🔍 诊断：检查Place信息是否存在
-                    if (item.placeId && !item.Place) {
-                      console.warn('⚠️ [AbuView] 行程项缺少Place信息:', {
-                        itemId: item.id,
-                        placeId: item.placeId,
-                        type: item.type,
-                        note: item.note,
-                        day: day.date,
-                      });
-                    }
-                    
-                    return (
-                      <div
-                        key={item.id}
-                        id={`item-${item.id}`}
-                        className="flex items-center gap-4 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                        onClick={() => handleItemClick(item)}
-                      >
-                        {/* 左侧风险徽标 */}
-                        <div className="flex-shrink-0">
-                          {risk.level !== 'NONE' ? (
-                            <Badge className={getRiskBadgeColor(risk.level)}>
+      {/* 中部：行程时间轴（带风险徽标）- 仅在存在风险时显示，且只显示有风险的行程项 */}
+      {(normalizedStatus !== 'ALLOW' || violations.length > 0 || Object.keys(riskMap).length > 0) && (
+        <div className="space-y-4">
+          {trip.TripDay.map((day) => {
+            // 🆕 先过滤出有风险的行程项
+            const riskyItems = day.ItineraryItem.filter((item) => {
+              const risk = getItemRisk(item.id);
+              return risk.level !== 'NONE';
+            });
+
+            // 🆕 如果这一天没有有风险的行程项，不显示这一天
+            if (riskyItems.length === 0) {
+              return null;
+            }
+
+            return (
+              <Card key={day.id}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">
+                    {format(new Date(day.date), 'yyyy年MM月dd日')} ({day.date})
+                  </CardTitle>
+                  {/* ✅ 显示当天主题（如果存在） */}
+                  {day.theme && (
+                    <p className="text-xs text-muted-foreground font-medium mt-1">
+                      {day.theme}
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {riskyItems.map((item) => {
+                      const risk = getItemRisk(item.id);
+                      
+                      // 🔍 诊断：检查Place信息是否存在
+                      if (item.placeId && !item.Place) {
+                        console.warn('⚠️ [AbuView] 行程项缺少Place信息:', {
+                          itemId: item.id,
+                          placeId: item.placeId,
+                          type: item.type,
+                          note: item.note,
+                          day: day.date,
+                        });
+                      }
+                      
+                      return (
+                        <div
+                          key={item.id}
+                          id={`item-${item.id}`}
+                          className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => handleItemClick(item)}
+                        >
+                          {/* 左侧风险徽标 */}
+                          <div className="flex-shrink-0 pt-0.5">
+                            <Badge className={cn(getRiskBadgeColor(risk.level), 'text-xs')}>
                               {risk.level === 'HIGH' ? '高' : risk.level === 'MEDIUM' ? '中' : '低'}
                             </Badge>
-                          ) : (
-                            <div className="w-16 h-6 flex items-center justify-center text-xs text-muted-foreground">
-                              无风险
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              {item.Place?.nameCN || item.Place?.nameEN || (item.placeId ? `POI ${item.placeId}` : item.type)}
-                            </span>
-                            {/* ✅ 显示必游标记（如果存在） */}
-                            {(item.isRequired || item.note?.includes('[必游]')) && (
-                              <Badge variant="default" className="text-xs">
-                                必游
-                              </Badge>
-                            )}
                           </div>
-                          {item.note && (
-                            <div className="text-sm text-muted-foreground">{item.note}</div>
-                          )}
-                          {risk.tags.length > 0 && (
-                            <div className="flex gap-1 mt-1">
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium truncate">
+                                {item.Place?.nameCN || item.Place?.nameEN || (item.placeId ? `POI ${item.placeId}` : item.type)}
+                              </span>
+                              {/* ✅ 显示必游标记（如果存在） */}
+                              {(item.isRequired || item.note?.includes('[必游]')) && (
+                                <Badge variant="default" className="text-xs">
+                                  必游
+                                </Badge>
+                              )}
+                            </div>
+                            {item.note && (
+                              <div className="text-xs text-muted-foreground mb-1.5 line-clamp-2">{item.note}</div>
+                            )}
+                            {risk.tags.length > 0 && (
+                              <div className="flex gap-1 mt-1.5 flex-wrap">
                               {risk.tags.map((tag, idx) => (
                                 <Badge key={idx} variant="outline" className="text-xs">
                                   {tag}
                                 </Badge>
                               ))}
                             </div>
-                          )}
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                              {format(new Date(item.startTime), 'HH:mm')} -{' '}
+                              {format(new Date(item.endTime), 'HH:mm')}
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </div>
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {format(new Date(item.startTime), 'HH:mm')} -{' '}
-                          {format(new Date(item.endTime), 'HH:mm')}
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* 右侧抽屉：风险卡（Evidence Card） */}
       <Sheet open={evidenceSheetOpen} onOpenChange={setEvidenceSheetOpen}>

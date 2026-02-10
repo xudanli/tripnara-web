@@ -12,6 +12,7 @@ import { AlertTriangle, CheckCircle2, Clock, Info } from 'lucide-react';
 import type { Suggestion, ApplySuggestionResponse } from '@/types/suggestion';
 import { tripsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/utils/format';
 
 interface AdjustTimeDialogProps {
   tripId: string;
@@ -33,6 +34,29 @@ export function AdjustTimeDialog({
   const [previewResult, setPreviewResult] = useState<ApplySuggestionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
+  
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!tripId) return;
+      try {
+        // 优先从预算约束获取货币
+        const constraint = await tripsApi.getBudgetConstraint(tripId);
+        if (constraint.budgetConstraint.currency) {
+          setCurrency(constraint.budgetConstraint.currency);
+          return;
+        }
+      } catch {
+        // 如果获取预算约束失败，保持默认值 CNY
+      }
+      setCurrency('CNY');
+    };
+    
+    if (open) {
+      loadCurrency();
+    }
+  }, [tripId, open]);
 
   // 当对话框打开时，获取预览
   useEffect(() => {
@@ -200,7 +224,7 @@ export function AdjustTimeDialog({
                             previewResult.impact.metrics.cost < 0 ? 'text-green-600' : 'text-red-600'
                           )}>
                             {previewResult.impact.metrics.cost > 0 ? '+' : ''}
-                            ¥{previewResult.impact.metrics.cost}
+                            {formatCurrency(Math.abs(previewResult.impact.metrics.cost), currency)}
                           </div>
                         </div>
                       )}

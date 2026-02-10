@@ -1,10 +1,21 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import { useAuth } from '@/hooks/useAuth';
 import Logo from '../common/Logo';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ChevronDown } from 'lucide-react';
 
 interface NavItem {
   key: string;
@@ -49,58 +60,13 @@ export default function WebsiteNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const dropdownRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
-  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const { t } = useTranslation();
   const { user, isAuthenticated, logout } = useAuth();
-
-  // 根据用户信息生成头像背景色
-  const getAvatarColor = (displayName?: string | null, email?: string | null): string => {
-    const colors = [
-      '#9333ea', // purple
-      '#3b82f6', // blue
-      '#10b981', // green
-      '#f59e0b', // amber
-      '#ec4899', // pink
-      '#6366f1', // indigo
-      '#ef4444', // red
-      '#06b6d4', // cyan
-      '#8b5cf6', // violet
-      '#f97316', // orange
-    ];
-    const identifier = displayName || email || 'U';
-    const index = identifier.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (openDropdown) {
-        const ref = dropdownRefs.current[openDropdown];
-        if (ref && !ref.contains(event.target as Node)) {
-          setOpenDropdown(null);
-        }
-      }
-      if (userMenuOpen && userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openDropdown, userMenuOpen]);
 
   const handleLogout = async () => {
     await logout();
     setUserMenuOpen(false);
     navigate('/');
-  };
-
-  const handleDropdownToggle = (key: string) => {
-    setOpenDropdown(openDropdown === key ? null : key);
   };
 
   const isActive = (path: string) => {
@@ -118,7 +84,7 @@ export default function WebsiteNavbar() {
           to="/"
           className="no-underline text-foreground flex items-center"
         >
-          <Logo variant="full" size={28} className="text-foreground" />
+          <Logo variant="full" size={40} className="text-foreground" />
         </Link>
 
         {/* Desktop Navigation */}
@@ -127,49 +93,34 @@ export default function WebsiteNavbar() {
             <div
               key={item.key}
               className="relative"
-              ref={(el) => {
-                dropdownRefs.current[item.key] = el;
-              }}
-              onMouseEnter={() => item.dropdownItems && setOpenDropdown(item.key)}
-              onMouseLeave={() => item.dropdownItems && setOpenDropdown(null)}
             >
               {item.dropdownItems ? (
-                <>
-                  <button
-                    onClick={() => handleDropdownToggle(item.key)}
-                    className={cn(
-                      'bg-transparent border-none cursor-pointer py-2 flex items-center gap-1 relative transition-colors text-sm',
-                      isActive(item.path) ? 'text-foreground font-bold' : 'text-muted-foreground font-normal',
-                      'hover:text-foreground'
-                    )}
-                  >
-                    {t(`nav.${item.key}`)}
-                    <span className="text-[0.7rem]">▼</span>
-                    {isActive(item.path) && (
-                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
-                    )}
-                  </button>
-                  {openDropdown === item.key && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        marginTop: '0.25rem',
-                        backgroundColor: '#fff',
-                        border: '2px solid oklch(0.205 0 0)',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                        minWidth: '280px',
-                        padding: '0.5rem 0',
-                        zIndex: 1001,
-                      }}
-                      onMouseEnter={() => setOpenDropdown(item.key)}
-                      onMouseLeave={() => setOpenDropdown(null)}
+                <DropdownMenu open={openDropdown === item.key} onOpenChange={(open) => setOpenDropdown(open ? item.key : null)}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        'h-auto py-2 px-0 flex items-center gap-1 relative',
+                        isActive(item.path) ? 'text-foreground font-bold' : 'text-muted-foreground font-normal',
+                        'hover:text-foreground'
+                      )}
                     >
-                      {item.dropdownItems.map((dropdownItem) => (
+                      {t(`nav.${item.key}`)}
+                      <ChevronDown className="h-3 w-3" />
+                      {isActive(item.path) && (
+                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent 
+                    align="start" 
+                    className="min-w-[280px] border-2 border-black rounded-lg"
+                    onMouseEnter={() => setOpenDropdown(item.key)}
+                    onMouseLeave={() => setOpenDropdown(null)}
+                  >
+                    {item.dropdownItems.map((dropdownItem) => (
+                      <DropdownMenuItem key={dropdownItem.key} asChild>
                         <Link
-                          key={dropdownItem.key}
                           to={dropdownItem.path}
                           onClick={(e) => {
                             setOpenDropdown(null);
@@ -189,61 +140,27 @@ export default function WebsiteNavbar() {
                               }
                             }
                           }}
-                          style={{
-                            display: 'block',
-                            padding: '0.75rem 1.25rem',
-                            textDecoration: 'none',
-                            color: '#333',
-                            fontSize: '0.9rem',
-                            transition: 'background-color 0.2s',
-                            cursor: 'pointer',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#f5f5f5';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
+                          className="cursor-pointer"
                         >
                           {t(`nav.dropdown.${dropdownItem.key}`)}
                         </Link>
-                      ))}
-                    </div>
-                  )}
-                </>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : (
                 <Link
                   to={item.path}
-                  style={{
-                    textDecoration: 'none',
-                    color: isActive(item.path) ? '#000' : '#666',
-                    fontWeight: isActive(item.path) ? '700' : '400',
-                    fontSize: '0.95rem',
-                    padding: '0.5rem 0',
-                    position: 'relative',
-                    transition: 'color 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#000';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive(item.path)) {
-                      e.currentTarget.style.color = '#666';
-                    }
-                  }}
+                  className={cn(
+                    'no-underline py-2 relative transition-colors text-sm',
+                    isActive(item.path) 
+                      ? 'text-foreground font-bold' 
+                      : 'text-muted-foreground font-normal hover:text-foreground'
+                  )}
                 >
                   {t(`nav.${item.key}`)}
                   {isActive(item.path) && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: '2px',
-                        backgroundColor: '#000',
-                      }}
-                    />
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground" />
                   )}
                 </Link>
               )}
@@ -251,272 +168,108 @@ export default function WebsiteNavbar() {
           ))}
 
           {/* Right side buttons - 参考 YouMind 设计：主要 CTA 突出，用户菜单低调 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: '2rem' }}>
+          <div className="flex items-center gap-3 ml-8">
             <LanguageSwitcher />
             {isAuthenticated ? (
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}
-              >
+              <div className="flex items-center gap-3">
                 {/* 主要 CTA：打开应用按钮（突出显示，深色背景） */}
-                <Link
-                  to="/dashboard"
-                  style={{
-                    padding: '0.5rem 1.25rem',
-                    backgroundColor: '#1a1a1a',
-                    color: '#fff',
-                    textDecoration: 'none',
-                    borderRadius: '8px',
-                    fontSize: '0.95rem',
-                    fontWeight: '600',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#2a2a2a';
-                    e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#1a1a1a';
-                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
-                  }}
-                >
-                  {t('nav.openApp')}
-                </Link>
+                <Button asChild className="bg-black hover:bg-gray-800 text-white shadow-md hover:shadow-lg transition-all whitespace-nowrap">
+                  <Link to="/dashboard">
+                    {t('nav.openApp')}
+                  </Link>
+                </Button>
                 
                 {/* 用户菜单（次要操作，更低调） */}
-                <div
-                  style={{ position: 'relative' }}
-                  ref={(el) => {
-                    userMenuRef.current = el;
-                  }}
-                  onMouseEnter={() => setUserMenuOpen(true)}
-                  onMouseLeave={() => setUserMenuOpen(false)}
-                >
-                  {user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user?.displayName || user?.email || 'User'}
-                      onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        cursor: 'pointer',
-                        transition: 'opacity 0.2s',
-                        border: '1px solid #e0e0e0',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.opacity = '0.8';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = '1';
-                      }}
-                    />
-                  ) : (
-                    <div
-                      onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '50%',
-                        backgroundColor: 'oklch(0.205 0 0)', // 品牌色（黑色）
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.875rem',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'opacity 0.2s',
-                        border: '1px solid transparent',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.opacity = '0.8';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = '1';
-                      }}
-                    >
-                      {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  {userMenuOpen && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        right: 0,
-                        marginTop: '0.5rem',
-                        backgroundColor: '#fff',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                        minWidth: '200px',
-                        padding: '0.5rem 0',
-                        zIndex: 1001,
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: '0.75rem 1rem',
-                          borderBottom: '1px solid #e0e0e0',
-                          marginBottom: '0.25rem',
-                        }}
-                      >
-                        <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#000' }}>
+                <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <button className="outline-none">
+                      <Avatar className="h-9 w-9 border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity">
+                        <AvatarImage src={user?.avatarUrl || undefined} alt={user?.displayName || user?.email || 'User'} />
+                        <AvatarFallback className="bg-black text-white text-sm font-semibold">
+                          {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[200px]">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-semibold leading-none">
                           {user?.displayName || user?.email}
-                        </div>
+                        </p>
                         {user?.email && user?.displayName && (
-                          <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+                          <p className="text-xs leading-none text-muted-foreground">
                             {user.email}
-                          </div>
+                          </p>
                         )}
                       </div>
-                      <button
-                        onClick={handleLogout}
-                        style={{
-                          width: '100%',
-                          textAlign: 'left',
-                          padding: '0.75rem 1rem',
-                          backgroundColor: 'transparent',
-                          border: 'none',
-                          color: '#dc2626',
-                          fontSize: '0.95rem',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#fef2f2';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                      >
-                        {t('nav.logout')}
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                    >
+                      {t('nav.logout')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : (
-              <Link
-                to="/login"
-                style={{
-                  padding: '0.5rem 1.25rem',
-                  backgroundColor: '#f5f5f5', // 浅灰色背景，参考 YouMind
-                  color: '#000',
-                  textDecoration: 'none',
-                  borderRadius: '8px',
-                  fontSize: '0.95rem',
-                  fontWeight: '500',
-                  border: '1px solid #000', // 黑色边框
-                  transition: 'all 0.2s',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#e5e5e5';
-                  e.currentTarget.style.borderColor = '#333';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f5f5f5';
-                  e.currentTarget.style.borderColor = '#000';
-                }}
-                onClick={(e) => {
-                  // Active state: add inset shadow
-                  const target = e.currentTarget;
-                  if (target) {
-                    target.style.backgroundColor = '#e0e0e0';
-                    setTimeout(() => {
-                      if (target) {
-                        target.style.backgroundColor = '#f5f5f5';
-                      }
-                    }, 150);
-                  }
-                }}
-              >
-                {t('nav.startPlanning')}
-              </Link>
+              <Button asChild variant="outline" className="border-black bg-gray-100 hover:bg-gray-200 whitespace-nowrap">
+                <Link to="/login">
+                  {t('nav.startPlanning')}
+                </Link>
+              </Button>
             )}
           </div>
         </div>
 
         {/* Mobile Menu Button */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          style={{
-            display: 'none',
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-          }}
-          className="mobile-menu-button"
+          className="hidden mobile-menu-button"
           aria-label="Toggle menu"
         >
-          ☰
-        </button>
+          <span className="text-2xl">☰</span>
+        </Button>
       </div>
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-            padding: '1rem',
-            borderTop: '1px solid #e0e0e0',
-          }}
-          className="mobile-menu"
-        >
+        <div className="mobile-menu flex flex-col gap-4 p-4 border-t border-gray-200">
           {/* CTA first on mobile */}
-          <Link
-            to={isAuthenticated ? "/dashboard" : "/login"}
+          <Button
+            asChild
+            className="w-full bg-black hover:bg-gray-800 text-white font-semibold"
             onClick={() => setMobileMenuOpen(false)}
-            style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: '#1a1a1a',
-              color: '#fff',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              textAlign: 'center',
-              fontWeight: '600',
-            }}
           >
-            {isAuthenticated ? t('nav.openApp') : t('nav.startPlanning')}
-          </Link>
+            <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+              {isAuthenticated ? t('nav.openApp') : t('nav.startPlanning')}
+            </Link>
+          </Button>
 
           {navItems.map((item) => (
             <div key={item.key}>
               <Link
                 to={item.path}
                 onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  display: 'block',
-                  textDecoration: 'none',
-                  color: isActive(item.path) ? '#000' : '#333',
-                  fontWeight: isActive(item.path) ? '700' : '400',
-                  padding: '0.5rem 0',
-                }}
+                className={cn(
+                  'block no-underline py-2',
+                  isActive(item.path) ? 'text-foreground font-bold' : 'text-gray-700 font-normal'
+                )}
               >
                 {t(`nav.${item.key}`)}
               </Link>
               {item.dropdownItems && (
-                <div style={{ paddingLeft: '1rem', marginTop: '0.5rem' }}>
+                <div className="pl-4 mt-2">
                   {item.dropdownItems.map((dropdownItem) => (
                     <Link
                       key={dropdownItem.key}
                       to={dropdownItem.path}
                       onClick={() => setMobileMenuOpen(false)}
-                      style={{
-                        display: 'block',
-                        textDecoration: 'none',
-                        color: '#666',
-                        fontSize: '0.9rem',
-                        padding: '0.4rem 0',
-                      }}
+                      className="block no-underline text-gray-600 text-sm py-1"
                     >
                       {t(`nav.dropdown.${dropdownItem.key}`)}
                     </Link>
@@ -526,97 +279,49 @@ export default function WebsiteNavbar() {
             </div>
           ))}
 
-          <div style={{ padding: '0.5rem 0', borderTop: '1px solid #e0e0e0', marginTop: '0.5rem' }}>
+          <div className="py-2 border-t border-gray-200 mt-2">
             <LanguageSwitcher />
           </div>
           {isAuthenticated ? (
             <>
-              <div
-                style={{
-                  padding: '0.75rem 1rem',
-                  borderTop: '1px solid #e0e0e0',
-                  marginTop: '0.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                }}
-              >
-                {user?.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user?.displayName || user?.email || 'User'}
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      backgroundColor: 'oklch(0.205 0 0)', // 品牌色（黑色）
-                      color: '#fff',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1rem',
-                      fontWeight: '600',
-                    }}
-                  >
+              <div className="pt-3 mt-2 border-t border-gray-200 flex items-center gap-3 px-4">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={user?.avatarUrl || undefined} alt={user?.displayName || user?.email || 'User'} />
+                  <AvatarFallback className="bg-black text-white text-base font-semibold">
                     {(user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#000' }}>
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <div className="font-semibold text-sm text-foreground">
                     {user?.displayName || user?.email}
                   </div>
                   {user?.email && user.displayName && (
-                    <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+                    <div className="text-xs text-muted-foreground mt-1">
                       {user.email}
                     </div>
                   )}
                 </div>
               </div>
-              <Link
-                to="/dashboard/settings?tab=preferences"
+              <Button
+                variant="outline"
+                asChild
                 onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  padding: '0.75rem 1rem',
-                  backgroundColor: 'transparent',
-                  color: '#333',
-                  textDecoration: 'none',
-                  borderRadius: '8px',
-                  textAlign: 'center',
-                  border: '1px solid #e0e0e0',
-                }}
+                className="w-full"
               >
-                {t('nav.preferences')}
-              </Link>
-              <button
+                <Link to="/dashboard/settings?tab=preferences">
+                  {t('nav.preferences')}
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => {
                   handleLogout();
                   setMobileMenuOpen(false);
                 }}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem 1rem',
-                  backgroundColor: 'transparent',
-                  color: 'oklch(0.205 0 0)',
-                  textDecoration: 'none',
-                  borderRadius: '8px',
-                  textAlign: 'center',
-                  border: '1px solid oklch(0.205 0 0)',
-                  cursor: 'pointer',
-                  fontSize: '0.95rem',
-                  fontWeight: '500',
-                }}
+                className="w-full border-black text-black hover:bg-gray-100"
               >
                 {t('nav.logout')}
-              </button>
+              </Button>
             </>
           ) : null}
         </div>

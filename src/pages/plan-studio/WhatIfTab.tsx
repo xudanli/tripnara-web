@@ -4,7 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { TrendingUp, Shield, AlertTriangle } from 'lucide-react';
+import { TrendingUp, Shield, AlertTriangle, Sparkles } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import { tripsApi } from '@/api/trips';
 import { planningPolicyApi } from '@/api/planning-policy';
@@ -22,12 +24,15 @@ interface WhatIfTabProps {
   personaMode?: PersonaMode;
 }
 
+type StrategyPreset = 'safe' | 'experience' | 'challenge' | 'custom';
+
 export default function WhatIfTab({ tripId, personaMode = 'abu' }: WhatIfTabProps) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [scenarios, setScenarios] = useState<Candidate[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyPreset>('safe');
 
   useEffect(() => {
     loadTrip();
@@ -86,26 +91,55 @@ export default function WhatIfTab({ tripId, personaMode = 'abu' }: WhatIfTabProp
         }
       }
 
-      // 构建规划策略（根据 personaMode）
-      // 注意：PlanningPolicy 的实际结构需要根据后端要求调整
-      const policy: PlanningPolicy = {
-        pacing: {
-          hpMax: personaMode === 'abu' ? 100 : personaMode === 'dre' ? 80 : 90,
-          regenRate: personaMode === 'abu' ? 10 : personaMode === 'dre' ? 15 : 12,
-          walkSpeedMin: 4.0,
-          forcedRestIntervalMin: 120,
-        },
-        constraints: {
-          maxSingleWalkMin: personaMode === 'abu' ? 60 : personaMode === 'dre' ? 90 : 75,
-          requireWheelchairAccess: false,
-          forbidStairs: false,
-        },
-        weights: {
-          tagAffinity: {},
-          walkPainPerMin: personaMode === 'abu' ? 0.1 : personaMode === 'dre' ? 0.05 : 0.08,
-          overtimePenaltyPerMin: personaMode === 'abu' ? 0.2 : personaMode === 'dre' ? 0.1 : 0.15,
-        },
+      // 构建规划策略（根据预设策略）
+      const getPolicyForStrategy = (strategy: StrategyPreset): PlanningPolicy => {
+        const basePolicy: PlanningPolicy = {
+          pacing: {
+            hpMax: personaMode === 'abu' ? 100 : personaMode === 'dre' ? 80 : 90,
+            regenRate: personaMode === 'abu' ? 10 : personaMode === 'dre' ? 15 : 12,
+            walkSpeedMin: 4.0,
+            forcedRestIntervalMin: 120,
+          },
+          constraints: {
+            maxSingleWalkMin: personaMode === 'abu' ? 60 : personaMode === 'dre' ? 90 : 75,
+            requireWheelchairAccess: false,
+            forbidStairs: false,
+          },
+          weights: {
+            tagAffinity: {},
+            walkPainPerMin: personaMode === 'abu' ? 0.1 : personaMode === 'dre' ? 0.05 : 0.08,
+            overtimePenaltyPerMin: personaMode === 'abu' ? 0.2 : personaMode === 'dre' ? 0.1 : 0.15,
+          },
+        };
+
+        // 根据策略调整权重
+        switch (strategy) {
+          case 'safe':
+            // 安全优先：舒适度高，风险低
+            basePolicy.weights.walkPainPerMin = (basePolicy.weights.walkPainPerMin || 0.1) * 1.5;
+            basePolicy.weights.overtimePenaltyPerMin = (basePolicy.weights.overtimePenaltyPerMin || 0.2) * 1.5;
+            basePolicy.pacing.hpMax = Math.min(basePolicy.pacing.hpMax || 100, 100);
+            break;
+          case 'experience':
+            // 体验优先：体验密度高，时间灵活
+            basePolicy.weights.walkPainPerMin = (basePolicy.weights.walkPainPerMin || 0.1) * 0.7;
+            basePolicy.weights.overtimePenaltyPerMin = (basePolicy.weights.overtimePenaltyPerMin || 0.2) * 0.5;
+            break;
+          case 'challenge':
+            // 挑战优先：时间紧凑，体验丰富
+            basePolicy.weights.walkPainPerMin = (basePolicy.weights.walkPainPerMin || 0.1) * 0.5;
+            basePolicy.weights.overtimePenaltyPerMin = (basePolicy.weights.overtimePenaltyPerMin || 0.2) * 0.3;
+            basePolicy.pacing.hpMax = Math.max(basePolicy.pacing.hpMax || 100, 120);
+            break;
+          case 'custom':
+            // 自定义：使用默认值
+            break;
+        }
+
+        return basePolicy;
       };
+
+      const policy = getPolicyForStrategy(selectedStrategy);
 
       // 计算 dayEndMin（一天的结束时间，以分钟为单位）
       const dayEnd = new Date(firstDay.date);
@@ -201,10 +235,43 @@ export default function WhatIfTab({ tripId, personaMode = 'abu' }: WhatIfTabProp
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>{t('planStudio.whatIfTab.title')}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>{t('planStudio.whatIfTab.title')}</CardTitle>
+            {t('planStudio.whatIfTab.subtitle') && (
+              <Badge variant="outline" className="text-xs">
+                {t('planStudio.whatIfTab.subtitle')}
+              </Badge>
+            )}
+          </div>
           <CardDescription>{t('planStudio.whatIfTab.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 预设策略选择 */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">选择策略</Label>
+            <Tabs value={selectedStrategy} onValueChange={(v) => setSelectedStrategy(v as StrategyPreset)}>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="safe" className="text-xs">
+                  <Shield className="w-3 h-3 mr-1" />
+                  {t('planStudio.whatIfTab.strategyPresets.safe')}
+                </TabsTrigger>
+                <TabsTrigger value="experience" className="text-xs">
+                  <Sparkles className="w-3 h-3 mr-1" />
+                  {t('planStudio.whatIfTab.strategyPresets.experience')}
+                </TabsTrigger>
+                <TabsTrigger value="challenge" className="text-xs">
+                  <TrendingUp className="w-3 h-3 mr-1" />
+                  {t('planStudio.whatIfTab.strategyPresets.challenge')}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <p className="text-xs text-muted-foreground">
+              {selectedStrategy === 'safe' && t('planStudio.whatIfTab.strategyPresets.safeDesc')}
+              {selectedStrategy === 'experience' && t('planStudio.whatIfTab.strategyPresets.experienceDesc')}
+              {selectedStrategy === 'challenge' && t('planStudio.whatIfTab.strategyPresets.challengeDesc')}
+            </p>
+          </div>
+
           <Button onClick={handleCompare} disabled={loading} className="w-full">
             {loading ? (
               <>

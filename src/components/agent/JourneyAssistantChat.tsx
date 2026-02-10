@@ -7,6 +7,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useJourneyAssistant, type JourneyMessage } from '@/hooks/useJourneyAssistant';
+import { tripsApi } from '@/api/trips';
 import type { 
   JourneyState,
   ScheduleItem,
@@ -143,7 +144,7 @@ function StatusOverview({ state }: { state: JourneyState }) {
           </div>
           <div className="flex items-center gap-1 text-muted-foreground">
             <Star className="w-3 h-3 text-amber-500" />
-            预算 {formatCurrency(state.stats.spentBudget, 'CNY')}/{formatCurrency(state.stats.totalBudget, 'CNY')}
+            预算 {formatCurrency(state.stats.spentBudget, currency)}/{formatCurrency(state.stats.totalBudget, currency)}
           </div>
         </div>
       </CardContent>
@@ -585,6 +586,43 @@ export default function JourneyAssistantChat({
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState('');
   const [activeTab, setActiveTab] = useState<'chat' | 'schedule' | 'reminders'>('chat');
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
+  
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!tripId) return;
+      try {
+        // 优先从预算约束获取货币
+        const constraint = await tripsApi.getBudgetConstraint(tripId);
+        if (constraint.budgetConstraint.currency) {
+          setCurrency(constraint.budgetConstraint.currency);
+          return;
+        }
+      } catch {
+        // 如果获取预算约束失败，尝试从目的地获取
+      }
+      
+      // 其次从目的地获取货币策略
+      try {
+        const trip = await tripsApi.getById(tripId);
+        if (trip.destination) {
+          const { countriesApi } = await import('@/api/countries');
+          const currencyStrategy = await countriesApi.getCurrencyStrategy(trip.destination);
+          if (currencyStrategy?.currencyCode) {
+            setCurrency(currencyStrategy.currencyCode);
+            return;
+          }
+        }
+      } catch {
+        // 如果获取失败，保持默认值 CNY
+      }
+      
+      setCurrency('CNY');
+    };
+    
+    loadCurrency();
+  }, [tripId]);
 
   const {
     messages,

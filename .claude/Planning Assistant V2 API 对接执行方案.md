@@ -1,9 +1,15 @@
 # Planning Assistant V2 API 完整接口文档
 
-**版本**: 2.1.0  
-**最后更新**: 2026-02-08  
+**版本**: 2.1.1  
+**最后更新**: 2026-02-09  
 **基础路径**: `/api/agent/planning-assistant/v2`  
 **状态**: ✅ **生产就绪**
+
+**最新更新 (v2.1.1)**:
+- ✅ 添加 `tripId` 和 `countryCode` 到 `RequestContextDto`
+- ✅ 规划工作台场景下，`tripId` 和 `countryCode` 为必需参数
+- ✅ 酒店搜索优先使用 Airbnb，降级到 HotelDirectService
+- ✅ 前端已更新支持 `context` 参数传递
 
 ---
 
@@ -15,16 +21,28 @@
 - [速率限制](#速率限制)
 - [接口列表](#接口列表)
 - [错误处理](#错误处理)
-- [前端集成示例](#前端集成示例)
 - [使用示例](#使用示例)
 - [Swagger 文档](#swagger-文档)
-- [变更历史](#变更历史)
 
 ---
 
-## 🆕 最新更新 (v2.1.0)
+## 🆕 最新更新 (v2.1.1)
 
-### 2026-02-08 更新
+### 2026-02-09 更新
+
+#### ✨ 新增功能
+
+1. **规划工作台场景支持**
+   - `POST /chat` 接口的 `context` 参数新增 `tripId` 和 `countryCode` 字段
+   - 规划工作台场景下（当 `context.tripId` 或 `context.countryCode` 存在时），这两个参数为**必需参数**
+   - 工具调用时自动传递 `tripId` 和 `countryCode` 参数，用于上下文感知
+
+2. **酒店搜索优先级调整**
+   - 酒店搜索（`hotel` 路由目标）现在**优先使用 Airbnb 搜索**
+   - 如果 Airbnb 不可用或结果为空，自动降级到 Google Places API 的酒店搜索
+   - 响应中可能包含 `airbnbListings` 或 `hotels` 字段，取决于实际使用的服务
+
+### 2026-02-08 更新 (v2.1.0)
 
 #### ✨ 新增功能
 
@@ -48,21 +66,51 @@
    - 智能路由到业务接口时，会话状态会自动保存
    - 解决了会话状态查询返回 404 的问题
 
+5. **酒店搜索功能**
+   - `POST /chat` 接口新增 `hotel` 路由目标
+   - 支持通过自然语言搜索酒店（如："冰岛酒店"、"搜索酒店"）
+   - 响应中新增 `hotels` 或 `airbnbListings` 字段，包含酒店/房源详细信息
+   - **优先级：Airbnb > HotelDirectService**：优先使用 Airbnb 搜索，如果 Airbnb 不可用或结果为空，再降级到 Google Places API 的酒店搜索
+   - 支持地理编码：自动将目的地名称转换为坐标进行搜索
+   - **规划工作台场景支持**：支持传递 `tripId` 和 `countryCode` 进行上下文感知搜索
+
+6. **🆕 MCP 服务自然语言调用（完整支持）**
+   - **所有 14 个 MCP 服务**都支持通过自然语言调用
+   - 新增路由目标：`airbnb`、`accommodation`、`restaurant`、`weather`、`search`、`flight`、`rail`、`translate`、`currency`、`image`
+   - 智能路由系统：自动识别用户意图并路由到相应的 MCP 服务
+   - 参数自动提取：自动从自然语言中提取目的地、位置、日期、语言、货币等参数
+   - 地理编码支持：自动将地名转换为坐标
+   - 完善的错误处理和降级机制
+
+**支持的 MCP 服务自然语言调用**:
+- ✅ Hotel Direct API - "推荐酒店"
+- ✅ Airbnb MCP - "推荐 Airbnb"、"找民宿"
+- ✅ Accommodation - "推荐住宿"（酒店+Airbnb）
+- ✅ Restaurant Direct API - "推荐餐厅"、"附近有什么好吃的"
+- ✅ Weather Direct API - "天气怎么样"、"查天气"
+- ✅ Exa MCP - "搜索冰岛信息"、"网上搜索"
+- ✅ Amadeus MCP - "搜索航班"、"查机票"
+- ✅ Rail MCP - "查询从巴黎到伦敦的火车"
+- ✅ Translation Direct API - "翻译一下"、"这是什么意思"
+- ✅ Currency Direct API - "100美元换人民币"、"汇率"
+- ✅ Image Direct API - "找图片"、"图片搜索"
+
 #### 🔧 修复
 
 1. 修复了智能路由时会话状态未保存的问题
 2. 修复了推荐数据未包含在响应中的问题
 3. 修复了语言检测和响应语言不一致的问题
 4. 修复了推荐引擎国家代码映射错误（iceland -> IS）
+5. 🆕 修复了路由目标类型定义不完整的问题
+6. 🆕 修复了 null 检查问题
 
 #### 📝 文档更新
 
-- 更新了响应字段说明（表格形式）
-- 添加了详细的前端使用建议和代码示例
-- 添加了 React/TypeScript 和 Vue 3 集成示例
-- 更新了响应示例，包含完整的推荐数据字段
-
----
+- 更新了响应字段说明（新增所有 MCP 服务的响应字段）
+- 添加了前端使用建议（支持所有路由目标）
+- 更新了响应示例
+- 🆕 添加了完整的 MCP 服务自然语言调用指南
+- 🆕 更新了路由目标类型定义
 
 ---
 
@@ -363,9 +411,36 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
   "sessionId": "550e8400-e29b-41d4-a716-446655440000",
   "message": "我想去冰岛旅行，预算5万，7天",
   "userId": "user_123456",  // 可选，但建议提供
-  "language": "zh"  // 可选，en 或 zh
+  "language": "zh",  // 可选，en 或 zh
+  "context": {  // 可选，请求上下文信息
+    "currentLocation": {
+      "lat": 39.9042,
+      "lng": 116.4074
+    },
+    "timezone": "Asia/Shanghai",
+    "tripId": "trip_123456",  // 可选，行程ID。规划工作台场景下必需
+    "countryCode": "IS"  // 可选，国家代码（ISO 3166-1 alpha-2）。规划工作台场景下必需
+  }
 }
 ```
+
+**请求参数说明**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `sessionId` | string | ✅ | 会话ID，通过创建会话接口获取 |
+| `message` | string | ✅ | 用户发送的消息内容 |
+| `userId` | string | ❌ | 用户ID（可选，但建议提供） |
+| `language` | 'en' \| 'zh' | ❌ | 语言偏好，默认为 'zh' |
+| `context` | object | ❌ | 请求上下文信息 |
+| `context.currentLocation` | object | ❌ | 当前位置信息 `{lat: number, lng: number}` |
+| `context.timezone` | string | ❌ | 时区（如 "Asia/Shanghai"） |
+| `context.tripId` | string | ⚠️ 条件必填 | 行程ID。**规划工作台场景下必需**（当 `context.tripId` 或 `context.countryCode` 存在时，视为规划工作台场景） |
+| `context.countryCode` | string | ⚠️ 条件必填 | 国家代码（ISO 3166-1 alpha-2，如 "IS"、"JP"）。**规划工作台场景下必需**（当 `context.tripId` 或 `context.countryCode` 存在时，视为规划工作台场景） |
+
+**重要说明**：
+- **规划工作台场景**：如果提供了 `context.tripId` 或 `context.countryCode`，系统会判定为规划工作台场景。在此场景下，`tripId` 和 `countryCode` 都是**必需参数**，缺少任何一个都会返回 `400 BadRequestException`。
+- **普通场景**：如果不提供这些参数，系统会按普通对话场景处理，这些参数为可选。
 
 **响应** (200):
 ```json
@@ -447,11 +522,21 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
 | `phase` | string | ✅ | 当前对话阶段（INITIAL/RECOMMENDING/COMPARING_PLANS等） |
 | `sessionId` | string | ❌ | 会话ID |
 | `routing` | object | ❌ | 智能路由信息（当路由到业务接口时包含） |
-| `routing.target` | string | - | 目标接口：`recommendations` / `generate` / `compare` / `chat` |
+| `routing.target` | string | - | 目标接口：`recommendations` / `generate` / `compare` / `hotel` / `airbnb` / `accommodation` / `restaurant` / `flight` / `rail` / `weather` / `search` / `translate` / `currency` / `image` / `chat` |
 | `routing.reason` | string | - | 路由原因说明 |
 | `routing.params` | object | - | 从用户消息中提取的参数 |
 | `recommendations` | array | ❌ | **目的地推荐列表**（当 `routing.target === "recommendations"` 时包含） |
 | `plans` | array | ❌ | **方案候选列表**（当 `routing.target === "generate"` 时包含） |
+| `hotels` | array | ❌ | **酒店列表**（当 `routing.target === "hotel"` 时包含） |
+| `airbnbListings` | array | ❌ | **Airbnb 房源列表**（当 `routing.target === "airbnb"` 时包含） |
+| `restaurants` | array | ❌ | **餐厅列表**（当 `routing.target === "restaurant"` 时包含） |
+| `weather` | object | ❌ | **天气信息**（当 `routing.target === "weather"` 时包含） |
+| `searchResults` | array | ❌ | **搜索结果**（当 `routing.target === "search"` 时包含） |
+| `flights` | array | ❌ | **航班列表**（当 `routing.target === "flight"` 时包含） |
+| `railRoutes` | array | ❌ | **铁路路线列表**（当 `routing.target === "rail"` 时包含） |
+| `translation` | object | ❌ | **翻译结果**（当 `routing.target === "translate"` 时包含） |
+| `currencyConversion` | object | ❌ | **货币转换结果**（当 `routing.target === "currency"` 时包含） |
+| `images` | array | ❌ | **图片列表**（当 `routing.target === "image"` 时包含） |
 | `suggestedActions` | array | ❌ | 建议操作列表 |
 
 **推荐数据字段** (`recommendations` 数组中的对象):
@@ -487,6 +572,32 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
 | `pace` | string | 节奏：`relaxed` / `moderate` / `intensive` |
 | `suitability` | object | 适合度评分 |
 
+**酒店数据字段** (`hotels` 数组中的对象):
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `placeId` | string | Google Places place_id |
+| `name` | string | 酒店名称 |
+| `address` | string | 地址 |
+| `location` | object | 位置信息 `{lat: number, lng: number}` |
+| `rating` | number | 评分（0-5） |
+| `userRatingsTotal` | number | 评价总数 |
+| `priceLevel` | number | 价格等级（1-4，1=便宜，4=昂贵） |
+| `types` | string[] | 类型列表 |
+| `openingHours` | object | 营业时间 `{openNow: boolean, weekdayText?: string[]}` |
+| `photos` | array | 照片列表 `[{photoReference: string, width: number, height: number}]` |
+| `phoneNumber` | string | 电话号码 |
+| `website` | string | 网站URL |
+| `reviews` | array | 评价列表 |
+| `amenities` | string[] | 设施列表 |
+| `roomTypes` | string[] | 房型列表 |
+
+**注意**: 
+- **酒店搜索优先级**：当路由到 `hotel` 目标时，系统会**优先使用 Airbnb 搜索**。如果 Airbnb 不可用或结果为空，再降级到 Google Places API 的酒店搜索。
+- 如果用户消息中包含目的地名称（如"冰岛酒店"），系统会自动进行地理编码
+- 规划工作台场景下，`tripId` 和 `countryCode` 会自动传递给工具调用，用于上下文感知
+- 搜索结果按评分和相关性排序，最多返回 10 个结果
+
 **前端使用建议**: 
 
 1. **显示回复消息**：
@@ -502,8 +613,6 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
      // 显示推荐列表
      response.recommendations.forEach(rec => {
        console.log(`${rec.nameCN} (${rec.countryCode}) - 匹配度: ${rec.matchScore}`);
-       console.log(`  亮点: ${rec.highlightsCN.join(', ')}`);
-       console.log(`  预算: ${rec.estimatedBudget.min}-${rec.estimatedBudget.max} ${rec.estimatedBudget.currency}`);
      });
    }
    ```
@@ -518,7 +627,19 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
    }
    ```
 
-4. **检查路由类型**：
+4. **显示酒店数据**：
+   ```javascript
+   if (response.routing?.target === 'hotel' && response.hotels) {
+     // 显示酒店列表
+     response.hotels.forEach(hotel => {
+       console.log(`${hotel.name} - 评分: ${hotel.rating}/5`);
+       console.log(`地址: ${hotel.address}`);
+       console.log(`价格等级: ${hotel.priceLevel || 'N/A'}`);
+     });
+   }
+   ```
+
+5. **检查路由类型**（支持所有 MCP 服务）：
    ```javascript
    switch (response.routing?.target) {
      case 'recommendations':
@@ -530,12 +651,45 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
      case 'compare':
        // 显示对比结果
        break;
+     case 'hotel':
+       // 显示酒店列表（已排除 Airbnb）
+       break;
+     case 'airbnb':
+       // 显示 Airbnb 房源列表
+       break;
+     case 'accommodation':
+       // 显示住宿列表（酒店 + Airbnb）
+       break;
+     case 'restaurant':
+       // 显示餐厅列表
+       break;
+     case 'weather':
+       // 显示天气信息
+       break;
+     case 'search':
+       // 显示搜索结果
+       break;
+     case 'flight':
+       // 显示航班列表
+       break;
+     case 'rail':
+       // 显示铁路路线列表
+       break;
+     case 'translate':
+       // 显示翻译结果
+       break;
+     case 'currency':
+       // 显示货币转换结果
+       break;
+     case 'image':
+       // 显示图片列表
+       break;
      default:
        // 显示普通对话回复
    }
    ```
 
-**示例**:
+**示例 1: 目的地推荐**:
 ```bash
 curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
   -H "Content-Type: application/json" \
@@ -545,6 +699,426 @@ curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
     "userId": "user_123456"
   }'
 ```
+
+**示例 2: 酒店搜索（排除 Airbnb）**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "冰岛酒店",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应示例（酒店搜索）**:
+```json
+{
+  "message": "I found 5 hotels for you (excluding Airbnb).",
+  "messageCN": "我为您找到了5家酒店（已排除Airbnb）。",
+  "reply": "我为您找到了5家酒店（已排除Airbnb）。",
+  "replyCN": "我为您找到了5家酒店（已排除Airbnb）。",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "hotel",
+    "reason": "User wants to search for hotels",
+    "reasonCN": "用户想要搜索酒店",
+    "params": {
+      "destination": "冰岛",
+      "excludeAirbnb": true
+    }
+  },
+  "hotels": [
+    {
+      "placeId": "ChIJ...",
+      "name": "Hotel Reykjavik Centrum",
+      "address": "Aðalstræti 16, 101 Reykjavík, Iceland",
+      "location": {
+        "lat": 64.1466,
+        "lng": -21.9426
+      },
+      "rating": 4.2,
+      "userRatingsTotal": 1234,
+      "priceLevel": 3,
+      "types": ["lodging", "point_of_interest", "establishment"],
+      "phoneNumber": "+354 123 4567",
+      "website": "https://example.com/hotel",
+      "amenities": ["lodging"]
+    }
+  ]
+}
+```
+
+---
+
+## 🆕 MCP 服务自然语言调用指南
+
+### 概述
+
+Planning Assistant V2 支持通过自然语言调用所有 MCP 服务。用户只需用简单的自然语言表达需求，系统会自动识别意图并调用相应的 MCP 服务。
+
+### 支持的路由目标
+
+| 路由目标 | MCP 服务 | 示例输入 | 响应字段 |
+|---------|---------|---------|---------|
+| `hotel` | Hotel Direct API | "推荐酒店"、"找酒店"、"冰岛酒店" | `hotels` |
+| `airbnb` | Airbnb MCP | "推荐 Airbnb"、"找民宿"、"短租" | `airbnbListings` |
+| `accommodation` | Hotel + Airbnb | "推荐住宿"、"找住处" | `hotels` + `airbnbListings` |
+| `restaurant` | Restaurant Direct API | "推荐餐厅"、"附近有什么好吃的" | `restaurants` |
+| `weather` | Weather Direct API | "天气怎么样"、"查天气"、"天气预报" | `weather` |
+| `search` | Exa MCP | "搜索冰岛信息"、"查一下"、"网上搜索" | `searchResults` |
+| `flight` | Amadeus MCP | "搜索航班"、"查机票"、"航班查询" | `flights` |
+| `rail` | Rail MCP | "火车票"、"铁路查询"、"查询从巴黎到伦敦的火车" | `railRoutes` |
+| `translate` | Translation Direct API | "翻译一下"、"这是什么意思"、"翻译成中文" | `translation` |
+| `currency` | Currency Direct API | "汇率"、"货币转换"、"100美元换人民币" | `currencyConversion` |
+| `image` | Image Direct API | "找图片"、"图片搜索"、"看看图片" | `images` |
+
+### 使用示例
+
+#### 示例 1: Airbnb 搜索
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "推荐 Airbnb 房源",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "I found 10 Airbnb listings for you.",
+  "messageCN": "我为您找到了10个Airbnb房源。",
+  "reply": "我为您找到了10个Airbnb房源。",
+  "replyCN": "我为您找到了10个Airbnb房源。",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "airbnb",
+    "reason": "User wants Airbnb listings",
+    "reasonCN": "用户想要搜索 Airbnb/民宿"
+  },
+  "airbnbListings": [
+    {
+      "id": "listing_1",
+      "name": "Cozy Apartment in Reykjavik",
+      "location": {
+        "lat": 64.1466,
+        "lng": -21.9426
+      },
+      "price": {
+        "amount": 150,
+        "currency": "USD"
+      }
+    }
+  ]
+}
+```
+
+#### 示例 2: 餐厅搜索
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "附近有什么好吃的",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "I found 8 restaurants for you.",
+  "messageCN": "我为您找到了8家餐厅。",
+  "reply": "我为您找到了8家餐厅。",
+  "replyCN": "我为您找到了8家餐厅。",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "restaurant",
+    "reason": "User wants to search for restaurants",
+    "reasonCN": "用户想要搜索餐厅"
+  },
+  "restaurants": [
+    {
+      "placeId": "ChIJ...",
+      "name": "Restaurant Name",
+      "address": "123 Main St",
+      "location": {
+        "lat": 64.1466,
+        "lng": -21.9426
+      },
+      "rating": 4.5,
+      "userRatingsTotal": 500,
+      "priceLevel": 2
+    }
+  ]
+}
+```
+
+#### 示例 3: 天气查询
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "冰岛天气怎么样",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "Weather in 冰岛: sunny, 15°C.",
+  "messageCN": "冰岛的天气：晴天，温度 15°C。",
+  "reply": "冰岛的天气：晴天，温度 15°C。",
+  "replyCN": "冰岛的天气：晴天，温度 15°C。",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "weather",
+    "reason": "User wants weather information",
+    "reasonCN": "用户想要查询天气"
+  },
+  "weather": {
+    "condition": "sunny",
+    "temperature": 15,
+    "humidity": 60,
+    "windSpeed": 10
+  }
+}
+```
+
+#### 示例 4: Web 搜索
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "搜索冰岛旅游攻略",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "I found 10 search results for you.",
+  "messageCN": "我为您找到了10条相关信息。",
+  "reply": "我为您找到了10条相关信息。",
+  "replyCN": "我为您找到了10条相关信息。",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "search",
+    "reason": "User wants web search",
+    "reasonCN": "用户想要搜索信息"
+  },
+  "searchResults": [
+    {
+      "title": "Iceland Travel Guide",
+      "url": "https://example.com/iceland-guide",
+      "snippet": "Complete guide to traveling in Iceland..."
+    }
+  ]
+}
+```
+
+#### 示例 5: 铁路查询
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "查询从巴黎到伦敦的火车",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "I found 3 rail routes from 巴黎 to 伦敦.",
+  "messageCN": "我为您找到了3条从巴黎到伦敦的铁路路线。",
+  "reply": "我为您找到了3条从巴黎到伦敦的铁路路线。",
+  "replyCN": "我为您找到了3条从巴黎到伦敦的铁路路线。",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "rail",
+    "reason": "User wants to search for rail routes",
+    "reasonCN": "用户想要查询铁路"
+  },
+  "railRoutes": [
+    {
+      "origin": "Paris",
+      "destination": "London",
+      "duration": "2h 16m",
+      "price": {
+        "amount": 50,
+        "currency": "EUR"
+      }
+    }
+  ]
+}
+```
+
+#### 示例 6: 翻译服务
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "翻译一下 Hello World",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "Translation: 你好世界",
+  "messageCN": "翻译结果：你好世界",
+  "reply": "翻译结果：你好世界",
+  "replyCN": "翻译结果：你好世界",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "translate",
+    "reason": "User wants translation",
+    "reasonCN": "用户想要翻译"
+  },
+  "translation": {
+    "text": "你好世界",
+    "source": "en",
+    "target": "zh"
+  }
+}
+```
+
+#### 示例 7: 货币转换
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "100美元换人民币",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "100 USD = 720 CNY",
+  "messageCN": "100 USD = 720 CNY",
+  "reply": "100 USD = 720 CNY",
+  "replyCN": "100 USD = 720 CNY",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "currency",
+    "reason": "User wants currency conversion",
+    "reasonCN": "用户想要货币转换"
+  },
+  "currencyConversion": {
+    "result": 720,
+    "from": "USD",
+    "to": "CNY",
+    "rate": 7.2
+  }
+}
+```
+
+#### 示例 8: 住宿搜索（酒店 + Airbnb）
+
+**请求**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "推荐住宿",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应**:
+```json
+{
+  "message": "I found 5 hotels and 10 Airbnb listings, 15 total accommodations.",
+  "messageCN": "我为您找到了5家酒店和10个Airbnb房源，共15个住宿选择。",
+  "reply": "我为您找到了5家酒店和10个Airbnb房源，共15个住宿选择。",
+  "replyCN": "我为您找到了5家酒店和10个Airbnb房源，共15个住宿选择。",
+  "sessionId": "session-id",
+  "phase": "RECOMMENDING",
+  "routing": {
+    "target": "accommodation",
+    "reason": "User wants accommodation (hotels + Airbnb)",
+    "reasonCN": "用户想要搜索住宿（包括酒店和 Airbnb）"
+  },
+  "hotels": [...],
+  "airbnbListings": [...]
+}
+```
+
+### 智能路由说明
+
+系统使用两层路由策略：
+
+1. **LLM 路由**（优先）: 使用 LLM 分析用户意图，置信度 > 0.7 时使用
+2. **关键词路由**（回退）: 当 LLM 路由置信度较低时，使用关键词匹配
+
+### 参数自动提取
+
+系统会自动从自然语言中提取以下参数：
+
+- `destination`: 目的地
+- `location`: 位置坐标（lat, lng）
+- `origin`: 出发地（铁路/航班查询）
+- `date`: 日期（格式：YYYY-MM-DD）
+- `query`: 搜索查询
+- `sourceLanguage` / `targetLanguage`: 翻译语言
+- `fromCurrency` / `toCurrency`: 货币类型
+- `amount`: 金额
+
+### 地理编码支持
+
+当用户提供目的地名称但没有坐标时，系统会自动使用 Google Maps Direct API 进行地理编码，将地名转换为坐标进行搜索。
+
+### 错误处理
+
+- **服务不可用**: 如果 MCP 服务不可用，系统会自动回退到通用对话接口
+- **参数缺失**: 如果缺少必要参数，系统会返回友好的错误提示
+- **OAuth 认证**: 如果 Rail MCP 等服务需要 OAuth 认证但未配置，会返回认证提示
 
 ---
 
@@ -573,20 +1147,36 @@ curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
 {
   "recommendations": [
     {
-      "id": "dest_1",
+      "id": "route_direction_1",
+      "countryCode": "IS",
       "name": "Iceland",
       "nameCN": "冰岛",
-      "description": "A land of fire and ice...",
-      "descriptionCN": "冰与火之地...",
+      "description": "Land of fire and ice with stunning natural landscapes",
+      "descriptionCN": "冰与火之国，拥有令人惊叹的自然景观",
+      "highlights": ["nature", "aurora", "adventure", "photography"],
+      "highlightsCN": ["自然风光", "极光", "冒险", "摄影"],
       "matchScore": 95,
-      "reasons": ["符合您的预算", "适合7天旅行"]
+      "matchReasons": ["符合您的预算", "适合7天旅行"],
+      "matchReasonsCN": ["符合您的预算", "适合7天旅行"],
+      "estimatedBudget": {
+        "min": 4000,
+        "max": 8000,
+        "currency": "USD"
+      },
+      "bestSeasons": ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"],
+      "tags": ["nature", "aurora", "adventure", "photography"]
     }
   ],
-  "total": 10
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "preferencesUsed": {},
+  "generatedAt": "2026-02-08T10:30:00Z"
 }
 ```
 
-**注意**: `/recommendations` 接口返回的是推荐数据的简化版本。如果需要完整的推荐详情（包括 `highlights`, `estimatedBudget`, `bestSeasons`, `imageUrl`, `tags` 等），请使用 `/chat` 接口，它会在响应中直接返回完整的推荐数据。
+**注意**: 
+- 推荐数据现在包含来自路线模板的丰富信息
+- `id` 字段可能以 `route_direction_` 开头，表示来自路线方向数据
+- 推荐已按匹配分数排序
 
 **示例**:
 ```bash
@@ -1010,53 +1600,6 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/plans/comp
 
 ---
 
-## 📖 使用示例
-
-### 完整流程示例
-
-```bash
-# 1. 创建会话
-SESSION_ID=$(curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions" \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "user_123456"}' | jq -r '.sessionId')
-
-# 2. 发送对话消息
-curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"sessionId\": \"$SESSION_ID\",
-    \"message\": \"我想去冰岛旅行，预算5万，7天\",
-    \"userId\": \"user_123456\"
-  }"
-
-# 3. 生成方案（异步）
-TASK_ID=$(curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/plans/generate-async" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"sessionId\": \"$SESSION_ID\",
-    \"destination\": \"Iceland\",
-    \"duration\": 7,
-    \"budget\": 50000,
-    \"userId\": \"user_123456\"
-  }" | jq -r '.taskId')
-
-# 4. 查询任务状态
-curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/plans/generate/$TASK_ID" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-
-# 5. 确认方案
-curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/plans/plan-id/confirm" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"sessionId\": \"$SESSION_ID\",
-    \"userId\": \"user_123456\"
-  }"
-```
-
----
-
 ## 💻 前端集成示例
 
 ### React/TypeScript 示例
@@ -1306,26 +1849,32 @@ curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/plans/pla
 
 ---
 
+**文档版本**: 2.1.1  
+**最后更新**: 2026-02-09
+
+---
+
 ## 📝 变更历史
+
+### v2.1.1 (2026-02-09)
+- ✨ 新增：`POST /chat` 接口支持 `context` 参数（`tripId` 和 `countryCode`）
+- ✨ 新增：规划工作台场景下，`tripId` 和 `countryCode` 为必需参数
+- ✨ 新增：酒店搜索优先使用 Airbnb，降级到 HotelDirectService
+- 🔧 前端：更新 `ChatRequest` 类型定义，添加 `context` 字段
+- 🔧 前端：更新 `useChatV2` hook，支持传递 `context` 参数
+- 🔧 前端：更新 `PlanningAssistantSidebar`，自动从 `tripId` 提取 `countryCode`
 
 ### v2.1.0 (2026-02-08)
 - ✨ 新增：`POST /chat` 响应包含 `recommendations` 和 `plans` 字段
 - ✨ 新增：语言自适应响应（`reply` 和 `replyCN` 字段）
 - ✨ 新增：路线模板数据整合到推荐引擎
-- ✨ 新增：前端集成示例（React/TypeScript 和 Vue 3）
 - 🔧 修复：会话状态自动保存问题
 - 🔧 修复：推荐数据未包含在响应中的问题
 - 🔧 修复：语言检测和响应不一致问题
-- 🔧 修复：推荐引擎国家代码映射错误（iceland -> IS）
 
 ### v2.0.0 (2026-02-08)
 - 🎉 初始版本发布
 - ✅ 完整的认证和授权机制
 - ✅ 速率限制配置
-- ✅ 智能路由功能
-
----
-
-**文档版本**: 2.1.0  
-**最后更新**: 2026-02-08  
+- ✅ 智能路由功能  
 **维护者**: Planning Assistant Team

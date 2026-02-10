@@ -22,6 +22,7 @@ interface CreateTripFromTemplateDialogProps {
   templateName?: string;
   defaultDurationDays?: number;
   defaultPacePreference?: 'RELAXED' | 'BALANCED' | 'INTENSE' | 'CHALLENGE';
+  defaultDestination?: string; // 🆕 模板的目的地（国家代码），如 "IS", "JP"
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (tripId: string) => void;
@@ -32,6 +33,7 @@ export function CreateTripFromTemplateDialog({
   templateName,
   defaultDurationDays,
   defaultPacePreference,
+  defaultDestination, // 🆕 模板的目的地
   open,
   onOpenChange,
   onSuccess,
@@ -43,7 +45,7 @@ export function CreateTripFromTemplateDialog({
   const [destinationOpen, setDestinationOpen] = useState(false);
   
   const [formData, setFormData] = useState<CreateTripFromTemplateRequest>({
-    destination: '',
+    destination: defaultDestination || '', // 🆕 默认使用模板的目的地
     startDate: '',
     endDate: '',
     totalBudget: undefined,
@@ -58,13 +60,12 @@ export function CreateTripFromTemplateDialog({
   useEffect(() => {
     if (open) {
       loadCountries();
-      // 🆕 当对话框打开时，如果模版名称存在，自动设置为行程名称
-      if (templateName) {
-        setFormData(prev => ({
-          ...prev,
-          name: templateName,
-        }));
-      }
+      // 🆕 当对话框打开时，重置表单数据（包括模板的目的地）
+      setFormData(prev => ({
+        ...prev,
+        destination: defaultDestination || '', // 🆕 使用模板的目的地
+        name: templateName || prev.name, // 🆕 如果模版名称存在，自动设置为行程名称
+      }));
       // 计算默认结束日期
       if (formData.startDate && defaultDurationDays) {
         const start = new Date(formData.startDate);
@@ -76,7 +77,7 @@ export function CreateTripFromTemplateDialog({
         }));
       }
     }
-  }, [open, defaultDurationDays, templateName]);
+  }, [open, defaultDurationDays, templateName, defaultDestination]);
 
   useEffect(() => {
     // 当开始日期改变时，自动计算结束日期

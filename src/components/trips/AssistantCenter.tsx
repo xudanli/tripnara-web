@@ -101,60 +101,60 @@ export function AssistantCenter({
   }
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>助手中心</CardTitle>
-        <CardDescription>三人格的建议与提醒</CardDescription>
+    <Card className={cn("shadow-sm border-gray-200", className)}>
+      <CardHeader className="p-3 sm:p-4 pb-1">
+        <CardTitle className="text-sm sm:text-base font-semibold text-gray-900">助手中心</CardTitle>
+        <CardDescription className="text-xs text-gray-500 mt-0.5">三人格的建议与提醒</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 sm:p-4 pt-1">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FilterTab)}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="all" className="relative">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-9">
+            <TabsTrigger value="all" className="relative text-xs">
               全部
               {stats.all > 0 && (
-                <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
+                <Badge variant="secondary" className="ml-1 h-4 px-1 text-xs">
                   {stats.all}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="abu" className="relative">
-              <Shield className="w-3.5 h-3.5 mr-1.5" />
+            <TabsTrigger value="abu" className="relative text-xs">
+              <Shield className="w-3 h-3 mr-1" />
               风险
               {stats.abu > 0 && (
-                <Badge variant="destructive" className="ml-1.5 h-5 px-1.5 text-xs">
+                <Badge variant="destructive" className="ml-1 h-4 px-1 text-xs">
                   {stats.abu}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="drdre" className="relative">
-              <Activity className="w-3.5 h-3.5 mr-1.5" />
+            <TabsTrigger value="drdre" className="relative text-xs">
+              <Activity className="w-3 h-3 mr-1" />
               节奏
               {stats.drdre > 0 && (
-                <Badge variant="default" className="ml-1.5 h-5 px-1.5 text-xs bg-orange-500">
+                <Badge variant="default" className="ml-1 h-4 px-1 text-xs bg-orange-500">
                   {stats.drdre}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="neptune" className="relative">
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            <TabsTrigger value="neptune" className="relative text-xs">
+              <RefreshCw className="w-3 h-3 mr-1" />
               修复
               {stats.neptune > 0 && (
-                <Badge variant="default" className="ml-1.5 h-5 px-1.5 text-xs bg-yellow-500">
+                <Badge variant="default" className="ml-1 h-4 px-1 text-xs bg-yellow-500">
                   {stats.neptune}
                 </Badge>
               )}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value={activeTab} className="mt-4">
+          <TabsContent value={activeTab} className="mt-3">
             {filteredSuggestions.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium mb-1">当前行程很健康 ✅</p>
+              <div className="py-6 text-center text-xs text-muted-foreground">
+                <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="font-medium mb-0.5">当前行程很健康 ✅</p>
                 <p>暂无需要处理的建议</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {filteredSuggestions.map((suggestion, index) => (
                   <SuggestionCard
                     key={suggestion.id || `suggestion-${index}-${suggestion.createdAt}`}
@@ -236,36 +236,36 @@ function SuggestionCard({ suggestion, trip, onClick, onActionClick }: Suggestion
   return (
     <div
       className={cn(
-        'p-4 border rounded-lg cursor-pointer hover:shadow-md transition-all space-y-3',
+        'p-2.5 sm:p-3 border rounded-lg cursor-pointer hover:shadow-sm transition-all space-y-1.5',
         severity.className,
         'bg-white' // 降低红色卡片饱和度，使用白色背景
       )}
       onClick={onClick}
     >
       {/* 标题行 */}
-      <div className="flex items-start gap-2">
-        <PersonaIcon className={cn('w-4 h-4 mt-0.5 flex-shrink-0', persona.color)} />
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="font-semibold text-sm">{getOptimizedTitle()}</span>
-            <Badge variant="outline" className={cn('text-xs', severity.className)}>
-              <SeverityIcon className="w-3 h-3 mr-1" />
+      <div className="flex items-start gap-1.5">
+        <PersonaIcon className={cn('w-3.5 h-3.5 mt-0.5 flex-shrink-0', persona.color)} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+            <span className="font-semibold text-xs truncate">{getOptimizedTitle()}</span>
+            <Badge variant="outline" className={cn('text-xs flex-shrink-0 px-1.5 py-0', severity.className)}>
+              <SeverityIcon className="w-2.5 h-2.5 mr-0.5" />
               {severity.label}
             </Badge>
             {dayInfo && (
-              <Badge variant="outline" className="text-xs">
-                <Calendar className="w-3 h-3 mr-1" />
+              <Badge variant="outline" className="text-xs flex-shrink-0 px-1.5 py-0">
+                <Calendar className="w-2.5 h-2.5 mr-0.5" />
                 {dayInfo}
               </Badge>
             )}
           </div>
           {/* 优化描述：使用更自然的语言 */}
-          <p className="text-sm text-gray-700 leading-relaxed">
+          <p className="text-xs text-gray-700 leading-tight break-words">
             {suggestion.description || suggestion.summary}
           </p>
           {/* 如果有建议文本 */}
           {suggestion.metadata?.suggestion && (
-            <p className="text-xs text-muted-foreground mt-1 italic">
+            <p className="text-xs text-muted-foreground mt-0.5 italic break-words">
               建议：{suggestion.metadata.suggestion}
             </p>
           )}
@@ -274,14 +274,14 @@ function SuggestionCard({ suggestion, trip, onClick, onActionClick }: Suggestion
 
       {/* 操作按钮 */}
       {suggestion.actions.length > 0 && (
-        <div className="flex gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col sm:flex-row gap-1.5 pt-1.5 border-t" onClick={(e) => e.stopPropagation()}>
           {suggestion.actions.slice(0, 2).map((action) => (
             <Button
               key={action.id}
               size="sm"
               variant={action.primary || action.label.includes('调整') || action.label.includes('修复') ? 'default' : 'outline'}
               className={cn(
-                'text-xs h-8',
+                'text-xs h-7',
                 (action.primary || action.label.includes('调整') || action.label.includes('修复')) && 'bg-gray-900 hover:bg-gray-800 text-white'
               )}
               onClick={(e) => {

@@ -24,10 +24,44 @@ export default function BudgetOverviewCard({
   const [budget, setBudget] = useState<BudgetSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
 
   useEffect(() => {
     loadBudget();
+    loadCurrency(); // 🆕 加载货币信息
   }, [tripId]);
+
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  const loadCurrency = async () => {
+    if (!tripId) return;
+    try {
+      // 优先从预算约束获取货币
+      const constraint = await tripsApi.getBudgetConstraint(tripId);
+      if (constraint.budgetConstraint.currency) {
+        setCurrency(constraint.budgetConstraint.currency);
+        return;
+      }
+    } catch {
+      // 如果获取预算约束失败，尝试从目的地获取
+    }
+    
+    // 其次从目的地获取货币策略
+    try {
+      const trip = await tripsApi.getById(tripId);
+      if (trip.destination) {
+        const { countriesApi } = await import('@/api/countries');
+        const currencyStrategy = await countriesApi.getCurrencyStrategy(trip.destination);
+        if (currencyStrategy?.currencyCode) {
+          setCurrency(currencyStrategy.currencyCode);
+          return;
+        }
+      }
+    } catch {
+      // 如果获取失败，保持默认值 CNY
+    }
+    
+    setCurrency('CNY');
+  };
 
   const loadBudget = async () => {
     if (!tripId) return;
@@ -132,15 +166,15 @@ export default function BudgetOverviewCard({
   const status = getBudgetStatus();
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Wallet className="w-5 h-5" />
-              预算概览
+    <Card className="shadow-sm border-gray-200">
+      <CardHeader className="p-3 sm:p-4 pb-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-sm sm:text-base font-semibold text-gray-900 flex items-center gap-1.5">
+              <Wallet className="w-4 h-4 flex-shrink-0 text-gray-700" />
+              <span className="truncate">预算概览</span>
             </CardTitle>
-            <CardDescription className="mt-1">
+            <CardDescription className="mt-0.5 text-xs text-gray-500">
               总预算与支出情况
             </CardDescription>
           </div>
@@ -149,110 +183,108 @@ export default function BudgetOverviewCard({
               variant="ghost"
               size="sm"
               onClick={onSetConstraint}
-              className="h-8"
+              className="h-7 w-7 flex-shrink-0 p-0 hover:bg-gray-100"
             >
-              <Settings2 className="w-4 h-4" />
+              <Settings2 className="w-3.5 h-3.5 text-gray-600" />
             </Button>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* 预算总额和已支出 */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">总预算</span>
-            <span className="text-lg font-bold">
-              {formatCurrencyAmount(budget.totalBudget, budget.currency || 'CNY')}
+      <CardContent className="p-3 sm:p-4 pt-1 space-y-2.5">
+        {/* 🎯 紧凑布局：预算总额和已支出合并显示 */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">总预算</span>
+            <span className="text-sm sm:text-base font-bold truncate">
+              {formatCurrencyAmount(budget.totalBudget, currency)}
             </span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">已支出</span>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold">
-                {formatCurrencyAmount(budget.totalSpent, budget.currency || 'CNY')}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">已支出</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm sm:text-base font-semibold truncate">
+                {formatCurrencyAmount(budget.totalSpent, currency)}
               </span>
-              <Badge variant="outline" className={cn('text-xs', status.color)}>
+              <Badge variant="outline" className={cn('text-xs flex-shrink-0 px-1.5 py-0', status.color)}>
                 {usagePercent.toFixed(1)}%
               </Badge>
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">剩余</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">剩余</span>
             <span className={cn(
-              'text-lg font-semibold',
+              'text-sm sm:text-base font-semibold truncate',
               remaining < 0 ? status.textColor : 'text-foreground'
             )}>
-              {formatCurrencyAmount(Math.max(remaining, 0), budget.currency || 'CNY')}
+              {formatCurrencyAmount(Math.max(remaining, 0), currency)}
             </span>
           </div>
         </div>
 
-        {/* 进度条（使用更克制的颜色） */}
+        {/* 🎯 进度条和状态合并在一行 */}
         <div className="space-y-1">
           <Progress
             value={usagePercent}
-            className={cn('h-2.5', {
+            className={cn('h-2', {
               'bg-budget-safe/20': status.statusColor === 'budget-safe',
               'bg-budget-warning/20': status.statusColor === 'budget-warning',
               'bg-budget-critical/20': status.statusColor === 'budget-critical',
             })}
           />
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">使用率: {usagePercent.toFixed(1)}%</span>
-            <Badge variant="outline" className={cn('text-xs border', status.borderColor, status.bgColor, status.textColor)}>
+            <span className="text-muted-foreground">使用率 {usagePercent.toFixed(1)}%</span>
+            <Badge variant="outline" className={cn('text-xs border px-1.5 py-0', status.borderColor, status.bgColor, status.textColor)}>
               {status.label}
             </Badge>
           </div>
         </div>
 
-        {/* 统计信息 */}
-        <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+        {/* 🎯 统计信息：更紧凑的布局 */}
+        <div className="grid grid-cols-2 gap-3 pt-1.5 border-t">
           <div>
-            <div className="text-xs text-muted-foreground mb-1">日均支出</div>
-            <div className="text-sm font-semibold">
-              {formatCurrencyAmount(dailyAverage, budget.currency || 'CNY')}
+            <div className="text-xs text-muted-foreground mb-0.5">日均支出</div>
+            <div className="text-xs sm:text-sm font-semibold">
+              {formatCurrencyAmount(dailyAverage, currency)}
             </div>
           </div>
           {budget.todaySpent !== undefined && (
             <div>
-              <div className="text-xs text-muted-foreground mb-1">今日支出</div>
-              <div className="text-sm font-semibold">
-                {formatCurrencyAmount(budget.todaySpent, budget.currency || 'CNY')}
+              <div className="text-xs text-muted-foreground mb-0.5">今日支出</div>
+              <div className="text-xs sm:text-sm font-semibold">
+                {formatCurrencyAmount(budget.todaySpent, currency)}
               </div>
             </div>
           )}
         </div>
 
-        {/* 预算预警提示（使用设计 Token，克制呈现） */}
+        {/* 🎯 预算预警提示：更紧凑的显示 */}
         {usagePercent >= 80 && (
           <div className={cn(
-            'p-3 rounded-lg border flex items-start gap-2.5',
+            'p-2 rounded-md border flex items-start gap-2',
             status.bgColor,
             status.borderColor
           )}>
-            <AlertTriangle className={cn('w-4 h-4 mt-0.5 flex-shrink-0', status.textColor)} />
-            <div className="flex-1 space-y-1">
-              <div className={cn('text-sm font-semibold', status.textColor)}>
-                {usagePercent >= 100 ? '预算已超支' : '预算使用率较高'}
-              </div>
-              <div className={cn('text-xs leading-relaxed', status.textColor, 'opacity-90')}>
-                {usagePercent >= 100
-                  ? `已超出预算 ${formatCurrencyAmount(Math.abs(remaining), budget.currency || 'CNY')}，建议检查预算明细或调整预算约束。`
-                  : `当前预算使用率已达 ${usagePercent.toFixed(1)}%，建议关注预算使用情况。`}
+            <AlertTriangle className={cn('w-3.5 h-3.5 mt-0.5 flex-shrink-0', status.textColor)} />
+            <div className="flex-1">
+              <div className={cn('text-xs font-semibold leading-tight', status.textColor)}>
+                {usagePercent >= 100 
+                  ? `已超支 ${formatCurrencyAmount(Math.abs(remaining), currency)}`
+                  : `使用率 ${usagePercent.toFixed(1)}%，建议关注`}
               </div>
             </div>
           </div>
         )}
 
-        {/* 操作按钮 */}
+        {/* 🎯 操作按钮：更小的尺寸 */}
         {onViewDetails && (
           <Button
             variant="outline"
-            className="w-full"
+            size="sm"
+            className="w-full h-8 text-xs"
             onClick={onViewDetails}
           >
             查看详情
-            <ExternalLink className="w-4 h-4 ml-2" />
+            <ExternalLink className="w-3 h-3 ml-1.5" />
           </Button>
         )}
       </CardContent>

@@ -3,6 +3,7 @@
  * 显示Auto综合优化的结果（指标变化、变更摘要）
  */
 
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,8 +15,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { tripsApi } from '@/api/trips';
+import { formatCurrency } from '@/utils/format';
 
 interface OptimizationResultDialogProps {
+  tripId: string; // 🆕 添加 tripId 以获取货币信息
   open: boolean;
   onOpenChange: (open: boolean) => void;
   result: {
@@ -44,10 +48,34 @@ interface OptimizationResultDialogProps {
 }
 
 export function OptimizationResultDialog({
+  tripId,
   open,
   onOpenChange,
   result,
 }: OptimizationResultDialogProps) {
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
+  
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!tripId) return;
+      try {
+        // 优先从预算约束获取货币
+        const constraint = await tripsApi.getBudgetConstraint(tripId);
+        if (constraint.budgetConstraint.currency) {
+          setCurrency(constraint.budgetConstraint.currency);
+          return;
+        }
+      } catch {
+        // 如果获取预算约束失败，保持默认值 CNY
+      }
+      setCurrency('CNY');
+    };
+    
+    if (open) {
+      loadCurrency();
+    }
+  }, [tripId, open]);
   const getMetricIcon = (value: number | undefined) => {
     if (value === undefined) return null;
     if (value > 0) return <TrendingUp className="w-4 h-4 text-green-600" />;
@@ -112,7 +140,7 @@ export function OptimizationResultDialog({
                       {getMetricIcon(result.impact.metrics.cost)}
                       <span className={cn('font-medium', getMetricColor(result.impact.metrics.cost))}>
                         {result.impact.metrics.cost > 0 ? '+' : ''}
-                        ¥{result.impact.metrics.cost}
+                        {formatCurrency(Math.abs(result.impact.metrics.cost), currency)}
                       </span>
                     </div>
                   </div>

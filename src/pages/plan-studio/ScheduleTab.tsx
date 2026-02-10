@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useContext } from 'react';
+import { useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,12 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   // 左右联动上下文 - 使用 useContext 直接访问（可能为 null）
   const planStudioContext = useContext(PlanStudioContext);
   
+  // 🚀 使用 ref 存储 context，避免在依赖项中使用导致循环
+  const planStudioContextRef = useRef(planStudioContext);
+  useEffect(() => {
+    planStudioContextRef.current = planStudioContext;
+  }, [planStudioContext]);
+  
   // 从 context 中解构需要的 actions（使用 useMemo 稳定对象引用）
   const planStudioActions = useMemo(() => {
     if (!planStudioContext) return null;
@@ -101,16 +107,57 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const [loading, setLoading] = useState(true);
   
   // 🆕 检测未保存的时间轴改动
+  // 🚀 性能优化：使用 useRef 存储 schedules 和 context，避免无限循环
+  const schedulesRef = useRef<Map<string, ScheduleResponse>>(new Map());
+  const prevHasUnsavedRef = useRef<boolean>(false);
+  const setHasUnsavedScheduleChangesRef = useRef<((hasChanges: boolean) => void) | null>(null);
+  
+  // 更新 context 方法 ref（使用 ref 存储，避免依赖导致循环）
+  // 🚀 关键：不将 planStudioContext 放在依赖数组中，只在组件渲染时更新 ref
+  if (planStudioContext) {
+    setHasUnsavedScheduleChangesRef.current = planStudioContext.setHasUnsavedScheduleChanges;
+  } else {
+    setHasUnsavedScheduleChangesRef.current = null;
+  }
+  
+  // 只在 schedules Map 的内容真正变化时才更新
   useEffect(() => {
-    if (!planStudioContext) return;
+    const setHasUnsaved = setHasUnsavedScheduleChangesRef.current;
+    if (!setHasUnsaved) return;
     
-    // 检查 schedules Map 中是否有任何 persisted: false 的项
-    const hasUnsaved = Array.from(schedules.values()).some(
-      schedule => schedule.persisted === false
-    );
+    // 检查 schedules Map 的内容是否真的变化了
+    const currentSchedules = schedules;
+    const prevSchedules = schedulesRef.current;
     
-    planStudioContext.setHasUnsavedScheduleChanges(hasUnsaved);
-  }, [schedules, planStudioContext]);
+    // 比较两个 Map 的内容是否相同
+    let hasChanged = false;
+    if (currentSchedules.size !== prevSchedules.size) {
+      hasChanged = true;
+    } else {
+      for (const [date, schedule] of currentSchedules.entries()) {
+        const prevSchedule = prevSchedules.get(date);
+        if (!prevSchedule || prevSchedule.persisted !== schedule.persisted) {
+          hasChanged = true;
+          break;
+        }
+      }
+    }
+    
+    // 如果内容变化了，更新 ref 并检查是否需要更新 context
+    if (hasChanged) {
+      schedulesRef.current = new Map(currentSchedules);
+      
+      const hasUnsaved = Array.from(currentSchedules.values()).some(
+        schedule => schedule.persisted === false
+      );
+      
+      // 只在值真正变化时才更新 context
+      if (prevHasUnsavedRef.current !== hasUnsaved) {
+        prevHasUnsavedRef.current = hasUnsaved;
+        setHasUnsaved(hasUnsaved);
+      }
+    }
+  }, [schedules]); // 🚀 只依赖 schedules，不依赖 planStudioContext
   const [itineraryItemsMap, setItineraryItemsMap] = useState<Map<string, ItineraryItemDetail[]>>(new Map());
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
   const [dayTravelInfoMap, setDayTravelInfoMap] = useState<Map<string, DayTravelInfoResponse>>(new Map());
@@ -277,117 +324,115 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       setTrip(data);
       
       // 加载所有日期的 Schedule 和 ItineraryItem
+      // 🚀 性能优化：并行加载所有天的数据，而不是串行
       if (data.TripDay && data.TripDay.length > 0) {
         const scheduleMap = new Map<string, ScheduleResponse>();
         
-        for (const day of data.TripDay) {
-          // 使用 itineraryItemsApi.getAll(tripDayId) 获取每天的行程项
-          // 这个 API 会返回包含退房项和 crossDayInfo 的完整数据
-          try {
-            // 强制刷新，避免使用缓存数据（特别是跨天移动后）
-            const dayItems = await itineraryItemsApi.getAll(day.id, true);
-            if (dayItems && dayItems.length > 0) {
-              // 🔍 调试：检查所有行程项，特别是酒店相关的
-              const hotelItems = dayItems.filter(item => 
-                item.Place?.category === 'HOTEL' || item.type === 'ACTIVITY' && item.Place?.category === 'HOTEL'
-              );
-              const checkoutItems = dayItems.filter(item => 
-                item.crossDayInfo?.displayMode === 'checkout' || item.crossDayInfo?.isCheckoutItem
-              );
-              const checkinItems = dayItems.filter(item => 
-                item.crossDayInfo?.displayMode === 'checkin'
-              );
-              
-              console.log(`[ScheduleTab] Day ${day.date} 行程项统计:`, {
-                total: dayItems.length,
-                hotelItems: hotelItems.length,
-                checkinItems: checkinItems.length,
-                checkoutItems: checkoutItems.length,
-                allItems: dayItems.map(item => ({
-                  id: item.id,
-                  type: item.type,
-                  placeName: item.Place?.nameCN || item.Place?.nameEN,
-                  placeCategory: item.Place?.category,
-                  crossDayInfo: item.crossDayInfo,
-                  startTime: item.startTime,
-                  endTime: item.endTime,
-                })),
-              });
-              
-              // 后端已经按 startTime 排序返回，前端也做一次排序以确保一致性
-              // 🆕 对于退房项，使用 endTime 进行排序（因为退房项显示的是退房时间）
-              const sortedItems = [...dayItems].sort((a, b) => {
-                // 如果都是退房项，按 endTime 排序
-                const aIsCheckout = a.crossDayInfo?.displayMode === 'checkout' || a.crossDayInfo?.isCheckoutItem;
-                const bIsCheckout = b.crossDayInfo?.displayMode === 'checkout' || b.crossDayInfo?.isCheckoutItem;
-                
-                if (aIsCheckout && bIsCheckout) {
-                  return (a.endTime || '').localeCompare(b.endTime || '');
-                }
-                // 如果只有一个是退房项，退房项排在后面（因为退房时间通常较晚）
-                if (aIsCheckout && !bIsCheckout) {
-                  return 1;
-                }
-                if (!aIsCheckout && bIsCheckout) {
-                  return -1;
-                }
-                // 都不是退房项，按 startTime 排序
-                return (a.startTime || '').localeCompare(b.startTime || '');
-              });
-              setItineraryItemsMap(prev => new Map(prev).set(day.date, sortedItems));
-            } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-              // 回退：使用 trip 数据中的 ItineraryItem
-              const items = day.ItineraryItem as ItineraryItemDetail[];
-              setItineraryItemsMap(prev => new Map(prev).set(day.date, items));
-            }
-          } catch (itemsErr) {
-            console.error(`Failed to load items for day ${day.date}:`, itemsErr);
-            // 回退：使用 trip 数据中的 ItineraryItem
-            if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-              const items = day.ItineraryItem as ItineraryItemDetail[];
-              setItineraryItemsMap(prev => new Map(prev).set(day.date, items));
-            }
+        // 🚀 并行加载所有天的行程项和时间表
+        const itemsMap = new Map<string, ItineraryItemDetail[]>();
+        
+        const dayLoadPromises = data.TripDay.map(async (day) => {
+          let dayItems: ItineraryItemDetail[] | null = null;
+          let scheduleResponse: ScheduleResponse | null = null;
+          
+          // 🚀 并行加载行程项和时间表（每个天内部也并行）
+          const [itemsResult, scheduleResult] = await Promise.allSettled([
+            // 加载行程项
+            itineraryItemsApi.getAll(day.id, true).catch((err) => {
+              console.error(`Failed to load items for day ${day.date}:`, err);
+              return null;
+            }),
+            // 加载时间表
+            tripsApi.getSchedule(tripId, day.date).catch((err) => {
+              console.error(`Failed to load schedule for ${day.date}:`, err);
+              return null;
+            }),
+          ]);
+          
+          // 处理行程项结果
+          if (itemsResult.status === 'fulfilled' && itemsResult.value) {
+            dayItems = itemsResult.value;
+          } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+            dayItems = day.ItineraryItem as ItineraryItemDetail[];
           }
           
-          try {
-            // 先尝试获取 Schedule
-            const scheduleResponse = await tripsApi.getSchedule(tripId, day.date);
+          // 处理时间表结果
+          if (scheduleResult.status === 'fulfilled' && scheduleResult.value) {
+            scheduleResponse = scheduleResult.value;
+          }
+          
+          // 处理行程项数据
+          if (dayItems && dayItems.length > 0) {
+            // 🔍 调试：检查所有行程项，特别是酒店相关的
+            const hotelItems = dayItems.filter(item => 
+              item.Place?.category === 'HOTEL' || item.type === 'ACTIVITY' && item.Place?.category === 'HOTEL'
+            );
+            const checkoutItems = dayItems.filter(item => 
+              item.crossDayInfo?.displayMode === 'checkout' || item.crossDayInfo?.isCheckoutItem
+            );
+            const checkinItems = dayItems.filter(item => 
+              item.crossDayInfo?.displayMode === 'checkin'
+            );
             
-            // 如果 Schedule 有数据，直接使用
-            if (scheduleResponse.schedule && scheduleResponse.schedule.items && scheduleResponse.schedule.items.length > 0) {
-              scheduleMap.set(day.date, scheduleResponse);
-            } else {
-              // Schedule 为空，使用 trip 数据中的 ItineraryItem（已在上面设置到 Map 中）
-                if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-                  const scheduleItems = convertItineraryItemsToScheduleItems(day.ItineraryItem as ItineraryItemDetail[]);
-                  scheduleMap.set(day.date, {
-                    date: day.date,
-                    schedule: scheduleItems.length > 0 ? {
-                      items: scheduleItems,
-                    } : null,
-                    persisted: false,
-                  });
-                } else {
-                  scheduleMap.set(day.date, {
-                    date: day.date,
-                    schedule: null,
-                    persisted: false,
-                  });
+            console.log(`[ScheduleTab] Day ${day.date} 行程项统计:`, {
+              total: dayItems.length,
+              hotelItems: hotelItems.length,
+              checkinItems: checkinItems.length,
+              checkoutItems: checkoutItems.length,
+            });
+            
+            // 后端已经按 startTime 排序返回，前端也做一次排序以确保一致性
+            // 🆕 对于退房项，使用 endTime 进行排序（因为退房项显示的是退房时间）
+            const sortedItems = [...dayItems].sort((a, b) => {
+              // 如果都是退房项，按 endTime 排序
+              const aIsCheckout = a.crossDayInfo?.displayMode === 'checkout' || a.crossDayInfo?.isCheckoutItem;
+              const bIsCheckout = b.crossDayInfo?.displayMode === 'checkout' || b.crossDayInfo?.isCheckoutItem;
+              
+              if (aIsCheckout && bIsCheckout) {
+                return (a.endTime || '').localeCompare(b.endTime || '');
               }
-            }
-          } catch (err) {
-            console.error(`Failed to load schedule for ${day.date}:`, err);
-            // 如果获取 Schedule 失败，使用 trip 数据中的 ItineraryItem（已在上面设置到 Map 中）
-            if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+              // 如果只有一个是退房项，退房项排在后面（因为退房时间通常较晚）
+              if (aIsCheckout && !bIsCheckout) {
+                return 1;
+              }
+              if (!aIsCheckout && bIsCheckout) {
+                return -1;
+              }
+              // 都不是退房项，按 startTime 排序
+              return (a.startTime || '').localeCompare(b.startTime || '');
+            });
+            itemsMap.set(day.date, sortedItems);
+          } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+            // 回退：使用 trip 数据中的 ItineraryItem
+            const items = day.ItineraryItem as ItineraryItemDetail[];
+            itemsMap.set(day.date, items);
+          }
+          
+          // 处理时间表数据
+          if (scheduleResponse && scheduleResponse.schedule && scheduleResponse.schedule.items && scheduleResponse.schedule.items.length > 0) {
+            // Schedule 有数据，直接使用
+            scheduleMap.set(day.date, scheduleResponse);
+          } else {
+            // Schedule 为空，使用 trip 数据中的 ItineraryItem
+            if (dayItems && dayItems.length > 0) {
+              const scheduleItems = convertItineraryItemsToScheduleItems(dayItems);
+              scheduleMap.set(day.date, {
+                date: day.date,
+                schedule: scheduleItems.length > 0 ? {
+                  items: scheduleItems,
+                } : null,
+                persisted: false,
+              });
+            } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
               const scheduleItems = convertItineraryItemsToScheduleItems(day.ItineraryItem as ItineraryItemDetail[]);
-                scheduleMap.set(day.date, {
-                  date: day.date,
-                  schedule: scheduleItems.length > 0 ? {
-                    items: scheduleItems,
-                  } : null,
-                  persisted: false,
-                });
-              } else {
+              scheduleMap.set(day.date, {
+                date: day.date,
+                schedule: scheduleItems.length > 0 ? {
+                  items: scheduleItems,
+                } : null,
+                persisted: false,
+              });
+            } else {
               scheduleMap.set(day.date, {
                 date: day.date,
                 schedule: null,
@@ -395,16 +440,17 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
               });
             }
           }
-        }
+        });
+        
+        // 🚀 等待所有天的数据加载完成
+        await Promise.all(dayLoadPromises);
+        
+        // 批量更新状态（减少重新渲染次数）
+        setItineraryItemsMap(new Map(itemsMap));
         setSchedules(scheduleMap);
         
-        // 🆕 检测未保存的时间轴改动
-        if (planStudioContext) {
-          const hasUnsaved = Array.from(scheduleMap.values()).some(
-            schedule => schedule.persisted === false
-          );
-          planStudioContext.setHasUnsavedScheduleChanges(hasUnsaved);
-        }
+        // 🆕 检测未保存的时间轴改动（移除这里的直接调用，由 useEffect 统一处理）
+        // 注意：这里不再直接调用 setHasUnsavedScheduleChanges，避免重复更新
         
         // 加载每日指标和冲突（传入 trip 数据，避免异步 state 问题）
         await loadMetricsAndConflicts(data.id, data);
@@ -414,7 +460,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
     } finally {
       setLoading(false);
     }
-  }, [tripId]);
+  }, [tripId]); // 🚀 移除 planStudioContext 依赖，避免无限循环
 
   // 在 loadTrip 定义后使用它
   useEffect(() => {

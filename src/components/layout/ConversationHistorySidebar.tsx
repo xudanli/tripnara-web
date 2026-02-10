@@ -117,10 +117,10 @@ export default function ConversationHistorySidebar({
           )}
         </div>
       ) : (
-        /* 展开状态：显示会话列表 */
+        /* 🆕 Gemini风格：展开状态：显示会话列表 - 参考Gemini的左侧边栏间距 */
         <div className="flex flex-col h-full w-64">
-          {/* 头部 */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          {/* 🆕 Gemini风格：头部 - 参考Gemini的顶部间距 */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
             <h2 className="text-sm font-semibold" id="conversation-history-title">对话历史</h2>
             <Button
               variant="ghost"
@@ -135,12 +135,12 @@ export default function ConversationHistorySidebar({
             </Button>
           </div>
 
-          {/* 新建会话按钮 */}
-          <div className="p-2 border-b border-gray-200">
+          {/* 🆕 Gemini风格：新建会话按钮 - 参考Gemini的"发起新对话"间距 */}
+          <div className="px-5 py-3 border-b border-gray-200">
             <Button
               variant="default"
               size="sm"
-              className="w-full"
+              className="w-full bg-black hover:bg-gray-800 text-white"
               onClick={onNewSession}
               aria-label="创建新对话会话"
             >
@@ -149,19 +149,19 @@ export default function ConversationHistorySidebar({
             </Button>
           </div>
 
-          {/* 会话列表 */}
+          {/* 🆕 Gemini风格：会话列表 - 参考Gemini的列表间距 */}
           <ScrollArea className="flex-1" aria-labelledby="conversation-history-title">
             {loading ? (
               <div className="flex items-center justify-center py-8" role="status" aria-label="加载对话历史中">
                 <Spinner className="w-5 h-5" aria-hidden="true" />
               </div>
             ) : conversations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 px-4 text-center" role="status">
+              <div className="flex flex-col items-center justify-center py-8 px-5 text-center" role="status">
                 <MessageSquare className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
                 <p className="text-sm text-muted-foreground">暂无历史会话</p>
               </div>
             ) : (
-              <div className="p-2 space-y-1" role="list" aria-label="对话会话列表">
+              <div className="px-5 py-3 space-y-1" role="list" aria-label="对话会话列表">
                 {conversations.map((conversation, index) => {
                   const isActive = conversation.sessionId === currentSessionId;
                   const title = getSessionTitle(conversation);
@@ -180,31 +180,33 @@ export default function ConversationHistorySidebar({
                       onClick={() => onSessionSelect(conversation.sessionId)}
                       onKeyDown={(e) => handleKeyDown(e, () => onSessionSelect(conversation.sessionId))}
                       className={cn(
-                        'w-full text-left p-3 rounded-lg transition-colors',
-                        'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
-                        isActive && 'bg-primary/10 border border-primary/20'
+                        // 🆕 Gemini风格：参考Gemini的列表项间距和样式
+                        'w-full text-left px-4 py-3 rounded-lg transition-colors',
+                        'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2',
+                        isActive && 'bg-gray-100 border border-gray-200'
                       )}
                       role="listitem"
                       aria-label={`会话 ${index + 1}: ${title}${summary ? `, 目的地: ${summary}` : ''}${timeAgo ? `, ${timeAgo}` : ''}`}
                       aria-current={isActive ? 'true' : 'false'}
                       tabIndex={0}
                     >
-                      <div className="flex items-start justify-between mb-1">
+                      {/* 🆕 Gemini风格：参考Gemini的文本样式和间距 */}
+                      <div className="flex items-start justify-between mb-1.5">
                         <span className={cn(
-                          'text-sm font-medium truncate flex-1',
-                          isActive ? 'text-primary' : 'text-gray-900'
+                          'text-sm font-normal truncate flex-1',
+                          isActive ? 'text-gray-900 font-medium' : 'text-gray-700'
                         )}>
                           {title}
                         </span>
                       </div>
                       {summary && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
                           <MapPin className="h-3 w-3" aria-hidden="true" />
                           <span className="truncate">{summary}</span>
                         </div>
                       )}
                       {timeAgo && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
                           <Calendar className="h-3 w-3" aria-hidden="true" />
                           <span>{timeAgo}</span>
                         </div>

@@ -25,15 +25,23 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { RecommendationParams } from '@/api/planning-assistant-v2';
+import type { TripDetail } from '@/types/trip';
 
 interface PlanningAssistantProps {
   userId?: string;
+  tripId?: string | null;
+  countryCode?: string | null;
+  tripInfo?: TripDetail; // 行程详细信息，用于上下文感知
   className?: string;
+  onSendMessageReady?: (sendMessage: (message: string) => Promise<void>) => void; // 🆕 通知父组件 sendMessage 已准备好
 }
 
-export function PlanningAssistant({ userId, className }: PlanningAssistantProps) {
+export function PlanningAssistant({ userId, tripId, countryCode, tripInfo, className, onSendMessageReady }: PlanningAssistantProps) {
   const navigate = useNavigate();
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  
+  // 🆕 获取货币：优先从 tripInfo 的 budgetConfig 获取，其次从目的地获取，默认 CNY
+  const currency = tripInfo?.budgetConfig?.currency || 'CNY';
   const [recommendationParams, setRecommendationParams] = useState<RecommendationParams | null>(null);
   const [showComparison, setShowComparison] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -50,7 +58,23 @@ export function PlanningAssistant({ userId, className }: PlanningAssistantProps)
     deleteSession,
   } = usePlanningSessionV2(userId);
 
-  const { messages, sendMessage, isLoading: chatLoading } = useChatV2(sessionId, userId);
+  const { messages, sendMessage, isLoading: chatLoading } = useChatV2(
+    sessionId,
+    userId,
+    tripId || countryCode
+      ? {
+          tripId: tripId || undefined,
+          countryCode: countryCode || undefined,
+        }
+      : undefined
+  );
+
+  // 🆕 通知父组件 sendMessage 已准备好
+  useEffect(() => {
+    if (onSendMessageReady && sessionId) {
+      onSendMessageReady(sendMessage);
+    }
+  }, [onSendMessageReady, sendMessage, sessionId]);
 
   // 🆕 从消息中提取推荐和方案数据
   useEffect(() => {
@@ -103,7 +127,10 @@ export function PlanningAssistant({ userId, className }: PlanningAssistantProps)
     progress,
   } = useAsyncTaskV2(taskId);
 
-  // 自动创建会话
+  // 规划工作台场景：如果有 tripId 或 countryCode，视为规划工作台场景
+  const isPlanningWorkbench = !!(tripId || countryCode);
+
+  // 自动创建会话（规划工作台场景总是创建，其他场景也创建）
   useEffect(() => {
     if (!sessionId && !sessionLoading) {
       createSession(userId);
@@ -183,8 +210,9 @@ export function PlanningAssistant({ userId, className }: PlanningAssistantProps)
     return <FullScreenLoading message="正在初始化..." />;
   }
 
-  // 显示欢迎界面
-  if (!sessionId || messages.length === 0) {
+  // 显示欢迎界面（仅在非规划工作台场景且没有会话或消息时）
+  // 规划工作台场景：即使没有消息，也直接显示对话界面（不显示欢迎界面）
+  if (!isPlanningWorkbench && (!sessionId || messages.length === 0)) {
     return (
       <PlanningAssistantErrorBoundary>
         <div className={`h-full ${className || ''}`}>
@@ -208,7 +236,22 @@ export function PlanningAssistant({ userId, className }: PlanningAssistantProps)
             </TabsList>
 
             <TabsContent value="chat" className="flex-1 overflow-hidden flex flex-col">
-              <ChatPanel sessionId={sessionId} userId={userId} />
+              <ChatPanel
+                sessionId={sessionId}
+                userId={userId}
+                context={
+                  tripId || countryCode
+                    ? {
+                        tripId: tripId || undefined,
+                        countryCode: countryCode || undefined,
+                        // 后端可以通过 tripId 自动获取完整行程信息
+                        // 这里只传递必要的标识信息
+                      }
+                    : undefined
+                }
+                destination={tripInfo?.destination || sessionState?.preferences?.destination}
+                tripInfo={tripInfo}
+              />
             </TabsContent>
 
             <TabsContent value="recommendations" className="flex-1 overflow-auto p-4 min-h-0">
@@ -309,6 +352,7 @@ export function PlanningAssistant({ userId, className }: PlanningAssistantProps)
                         plan={plan}
                         isSelected={selectedPlanId === plan.id}
                         onSelect={handleSelectPlan}
+                        currency={currency}
                       />
                     ))}
                   </div>
@@ -335,6 +379,7 @@ export function PlanningAssistant({ userId, className }: PlanningAssistantProps)
                         plan={plan}
                         isSelected={selectedPlanId === plan.id}
                         onSelect={handleSelectPlan}
+                        currency={currency}
                       />
                     ))}
                   </div>
@@ -359,6 +404,7 @@ export function PlanningAssistant({ userId, className }: PlanningAssistantProps)
                   comparison={comparisonResult}
                   onSelectPlan={handleSelectPlan}
                   selectedPlanId={selectedPlanId}
+                  currency={currency}
                 />
               </TabsContent>
             )}

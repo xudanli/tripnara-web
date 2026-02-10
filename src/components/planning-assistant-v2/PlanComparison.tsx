@@ -14,6 +14,7 @@ interface PlanComparisonProps {
   comparison: ComparePlansResponse;
   onSelectPlan?: (planId: string) => void;
   selectedPlanId?: string;
+  currency?: string; // 🆕 货币代码，默认 CNY
   className?: string;
 }
 
@@ -21,6 +22,7 @@ export function PlanComparison({
   comparison,
   onSelectPlan,
   selectedPlanId,
+  currency = 'CNY', // 🆕 默认货币
   className,
 }: PlanComparisonProps) {
   return (
@@ -55,7 +57,7 @@ export function PlanComparison({
                   <span className="font-medium">
                     {typeof plan.scores[dimension] === 'number'
                       ? dimension === 'budget'
-                        ? formatCurrency(plan.scores[dimension], 'CNY')
+                        ? formatCurrency(plan.scores[dimension], currency)
                         : plan.scores[dimension]
                       : plan.scores[dimension]}
                   </span>
@@ -92,13 +94,13 @@ export function PlanComparison({
                     <TableCell>
                       {typeof diff.plan1Value === 'number' &&
                       diff.field === 'budget'
-                        ? formatCurrency(diff.plan1Value, 'CNY')
+                        ? formatCurrency(diff.plan1Value, currency)
                         : String(diff.plan1Value)}
                     </TableCell>
                     <TableCell>
                       {typeof diff.plan2Value === 'number' &&
                       diff.field === 'budget'
-                        ? formatCurrency(diff.plan2Value, 'CNY')
+                        ? formatCurrency(diff.plan2Value, currency)
                         : String(diff.plan2Value)}
                     </TableCell>
                     <TableCell>

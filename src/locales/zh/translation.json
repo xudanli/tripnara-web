@@ -284,7 +284,11 @@
         "challenge": "极限挑战（时间紧，体验多）"
       },
       "cancel": "取消",
-      "saveAndContinue": "保存并继续到时间轴"
+      "saveAndContinue": "保存并继续到时间轴",
+      "budgetConstraintDetails": "预算约束详细设置",
+      "budgetConstraintTooltip": "这些约束将影响规划生成。如需更详细的预算管理（如修改货币单位、删除约束等），请前往预算页面。",
+      "goToBudgetPage": "前往预算页面",
+      "budgetConstraintSet": "已设置"
     },
     "placesTab": {
       "title": "找点",
@@ -392,8 +396,17 @@
       }
     },
     "whatIfTab": {
-      "title": "What-If 多方案对比",
-      "description": "生成多个不同策略的方案并对比，选择最适合的。与「决策评估」Tab 的区别：What-If 专注于多方案生成和对比，决策评估专注于单个方案的深度评估。",
+      "title": "多方案对比",
+      "description": "生成多个不同策略的方案并对比，选择最适合的。适用于创建行程时探索不同规划策略。",
+      "subtitle": "探索不同策略，找到最适合的方案",
+      "strategyPresets": {
+        "safe": "安全优先",
+        "experience": "体验优先",
+        "challenge": "挑战优先",
+        "safeDesc": "优先考虑安全性和舒适度，节奏较慢，风险较低",
+        "experienceDesc": "优先考虑体验丰富度，时间安排灵活，体验密度高",
+        "challengeDesc": "优先考虑挑战性，时间紧凑，体验丰富但强度较高"
+      },
       "generating": "正在生成方案...",
       "generateComparison": "生成对比方案 (600 samples)",
       "scenarios": {

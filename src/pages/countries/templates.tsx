@@ -558,6 +558,7 @@ export default function CountryTemplatesPage() {
           templateName={selectedTemplate.nameCN}
           defaultDurationDays={selectedTemplate.durationDays}
           defaultPacePreference={selectedTemplate.defaultPacePreference}
+          defaultDestination={selectedTemplate.routeDirection?.countryCode} // 🆕 从模板中获取目的地
           onSuccess={async (tripId) => {
             // 显示成功提示
             toast.success('行程创建成功，正在跳转到行程库...');

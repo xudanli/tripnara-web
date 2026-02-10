@@ -25,13 +25,62 @@ interface MetricExplanationDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// 指标名称映射
-const metricNameMap: Record<string, { displayName: string; icon: typeof CheckCircle2 }> = {
-  schedule: { displayName: '时间灵活性', icon: CheckCircle2 },
-  budget: { displayName: '预算控制', icon: TrendingUp },
-  pace: { displayName: '节奏合理性', icon: AlertTriangle },
-  feasibility: { displayName: '可达性', icon: XCircle },
+// 指标名称映射（包含默认权重，根据产品需求文档：可执行度40%、缓冲20%、风险30%、成本10%）
+const metricNameMap: Record<string, { displayName: string; icon: typeof CheckCircle2; defaultWeight: number }> = {
+  schedule: { displayName: '时间灵活性', icon: CheckCircle2, defaultWeight: 0.4 }, // 可执行度 40%
+  budget: { displayName: '预算控制', icon: TrendingUp, defaultWeight: 0.2 }, // 缓冲 20%
+  pace: { displayName: '节奏合理性', icon: AlertTriangle, defaultWeight: 0.3 }, // 风险（反转后）30%
+  feasibility: { displayName: '可达性', icon: XCircle, defaultWeight: 0.1 }, // 成本 10%
 };
+
+// 🆕 获取默认的计算方法（当接口未返回时使用）
+function getDefaultCalculation(metricName: string): NonNullable<MetricExplanation['calculation']> {
+  const calculations: Record<string, MetricExplanation['calculation']> = {
+    schedule: {
+      formula: '时间灵活性 = (可用时间窗 - 时间冲突) / 总时间 × 100%',
+      parameters: [
+        { name: '可用时间窗', description: '行程中可用于安排活动的时间段总和' },
+        { name: '时间冲突', description: '行程项之间的时间重叠或冲突时长' },
+        { name: '总时间', description: '行程的总时长' },
+      ],
+    },
+    budget: {
+      formula: '预算控制 = (预算上限 - 预计花费) / 预算上限 × 100%',
+      parameters: [
+        { name: '预算上限', description: '用户设定的预算上限' },
+        { name: '预计花费', description: '根据行程项计算的预计总花费' },
+      ],
+    },
+    pace: {
+      formula: '节奏合理性 = 100% - (疲劳指数 × 0.5) - (缓冲不足率 × 0.3)',
+      parameters: [
+        { name: '疲劳指数', description: '基于活动强度和休息时间的综合疲劳评估（0-100）' },
+        { name: '缓冲不足率', description: '缓冲时间不足的天数占比（0-100%）' },
+      ],
+    },
+    feasibility: {
+      formula: '可达性 = (可达行程项数 / 总行程项数) × 100%',
+      parameters: [
+        { name: '可达行程项数', description: '在当前条件下可以到达和完成的行程项数量' },
+        { name: '总行程项数', description: '行程中的总行程项数量' },
+      ],
+    },
+  };
+  
+  return calculations[metricName] || {
+    formula: '计算方法待完善',
+    parameters: [],
+  };
+}
+
+// 🆕 获取默认的理想范围（当接口未返回时使用）
+function getDefaultIdealRange(): MetricExplanation['idealRange'] {
+  return {
+    excellent: { min: 80, max: 100 }, // ≥ 80%
+    good: { min: 60, max: 79 }, // 60-79%
+    needsImprovement: { min: 0, max: 59 }, // < 60%
+  };
+}
 
 export function MetricExplanationDialog({
   tripId,
@@ -56,7 +105,64 @@ export function MetricExplanationDialog({
     setLoading(true);
     try {
       const data = await tripDetailApi.getMetricExplanation(tripId, metricName);
-      setExplanation(data);
+      
+      // 🆕 检查所有字段，包括 calculation 和 idealRange
+      console.log('[MetricExplanationDialog] 收到 API 响应:', {
+        metricName: data.metricName,
+        displayName: data.displayName,
+        hasWeight: 'weight' in data,
+        weight: data.weight,
+        hasContribution: 'contribution' in data,
+        contribution: data.contribution,
+        hasCalculation: 'calculation' in data,
+        calculation: data.calculation,
+        calculationType: typeof data.calculation,
+        hasIdealRange: 'idealRange' in data,
+        idealRange: data.idealRange,
+        idealRangeType: typeof data.idealRange,
+        hasDefinition: 'definition' in data,
+        definition: data.definition,
+        hasCurrentState: 'currentState' in data,
+        currentState: data.currentState,
+      });
+      
+      // 🆕 如果 API 返回的数据缺少 metricName 或 displayName，从传入的参数补充
+      const enrichedData: MetricExplanation = {
+        ...data,
+        metricName: data.metricName || metricName,
+        displayName: data.displayName || (metricNameMap[metricName]?.displayName || metricName),
+        // 🆕 如果 weight 缺失，使用默认权重（根据产品需求文档）
+        weight: data.weight ?? (metricNameMap[metricName]?.defaultWeight ?? 0.25),
+        // 🆕 如果 calculation 缺失或为空，提供默认值
+        calculation: (data.calculation && 
+          (data.calculation.formula || 
+           (data.calculation.parameters && data.calculation.parameters.length > 0)))
+          ? data.calculation
+          : getDefaultCalculation(metricName),
+        // 🆕 如果 idealRange 缺失或为空，提供默认值
+        idealRange: (data.idealRange && 
+          data.idealRange.excellent && 
+          typeof data.idealRange.excellent.min === 'number')
+          ? data.idealRange
+          : getDefaultIdealRange(),
+      };
+      
+      // 🆕 如果 contribution 缺失，计算它
+      if (enrichedData.contribution === undefined && enrichedData.currentState?.score !== undefined) {
+        enrichedData.contribution = enrichedData.currentState.score * enrichedData.weight;
+      }
+      
+      console.log('[MetricExplanationDialog] 处理后的数据:', {
+        weight: enrichedData.weight,
+        contribution: enrichedData.contribution,
+        score: enrichedData.currentState?.score,
+        hasCalculation: !!enrichedData.calculation,
+        hasIdealRange: !!enrichedData.idealRange,
+        calculationFormula: enrichedData.calculation?.formula,
+        idealRangeExcellent: enrichedData.idealRange?.excellent,
+      });
+      
+      setExplanation(enrichedData);
     } catch (err: any) {
       console.error('Failed to load metric explanation:', err);
       toast.error('加载指标说明失败：' + (err.message || '未知错误'));
@@ -70,7 +176,7 @@ export function MetricExplanationDialog({
     return null;
   }
 
-  const metricInfo = metricNameMap[metricName] || { displayName: metricName, icon: Info };
+  const metricInfo = metricNameMap[metricName] || { displayName: metricName, icon: Info, defaultWeight: 0.25 };
   const MetricIcon = metricInfo.icon;
 
   const getLevelBadge = (level: 'excellent' | 'good' | 'needsImprovement') => {
@@ -115,37 +221,46 @@ export function MetricExplanationDialog({
         ) : explanation ? (
           <div className="space-y-6">
             {/* 当前状态 */}
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">当前状态</span>
-                {getLevelBadge(explanation.currentState.level)}
+            {explanation.currentState && (
+              <div className="p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">当前状态</span>
+                  {explanation.currentState.level && getLevelBadge(explanation.currentState.level)}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn('text-2xl font-bold', explanation.currentState.level && getLevelColor(explanation.currentState.level))}>
+                    {explanation.currentState.score ?? 0}%
+                  </span>
+                  <span className="text-sm text-muted-foreground">/ 100</span>
+                </div>
+                {explanation.currentState.analysis && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {explanation.currentState.analysis}
+                  </p>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <span className={cn('text-2xl font-bold', getLevelColor(explanation.currentState.level))}>
-                  {explanation.currentState.score}%
-                </span>
-                <span className="text-sm text-muted-foreground">/ 100</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-2">
-                {explanation.currentState.analysis}
-              </p>
-            </div>
+            )}
 
             {/* 定义 */}
-            <div>
-              <h3 className="text-sm font-semibold mb-2">定义</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {explanation.definition}
-              </p>
-            </div>
+            {explanation.definition && (
+              <div>
+                <h3 className="text-sm font-semibold mb-2">定义</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {explanation.definition}
+                </p>
+              </div>
+            )}
 
             {/* 计算方法 */}
-            <div>
-              <h3 className="text-sm font-semibold mb-2">计算方法</h3>
-              <div className="p-3 bg-muted/50 rounded-lg">
-                <code className="text-sm font-mono">{explanation.calculation.formula}</code>
-              </div>
-              {explanation.calculation.parameters.length > 0 && (
+            {explanation.calculation && (
+              <div>
+                <h3 className="text-sm font-semibold mb-2">计算方法</h3>
+                {explanation.calculation.formula && (
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <code className="text-sm font-mono">{explanation.calculation.formula}</code>
+                  </div>
+                )}
+                {explanation.calculation.parameters && explanation.calculation.parameters.length > 0 && (
                 <div className="mt-3 space-y-2">
                   <p className="text-xs text-muted-foreground mb-2">参数说明：</p>
                   {explanation.calculation.parameters.map((param, index) => (
@@ -158,45 +273,172 @@ export function MetricExplanationDialog({
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
-            {/* 理想范围 */}
-            <div>
-              <h3 className="text-sm font-semibold mb-2">理想范围</h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-2 bg-green-50 rounded">
-                  <span className="text-sm">优秀</span>
-                  <span className="text-sm font-medium">
-                    {explanation.idealRange.excellent.min}% - {explanation.idealRange.excellent.max}%
-                  </span>
+            {/* 理想范围 - 优化后的可视化显示 */}
+            {explanation.idealRange && (
+              <div>
+                <h3 className="text-sm font-semibold mb-3">理想范围</h3>
+                
+                {/* 🆕 可视化进度条 */}
+                <div className="relative mb-4">
+                  <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                    {/* 渐变背景：从红色到绿色 */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500" />
+                    
+                    {/* 🆕 当前分数指示器 */}
+                    {explanation.currentState?.score !== undefined && (
+                      <div 
+                        className="absolute top-0 bottom-0 w-0.5 bg-gray-900 shadow-lg z-10 transition-all duration-300"
+                        style={{ left: `${explanation.currentState.score}%` }}
+                      >
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rounded-full border-2 border-white" />
+                      </div>
+                    )}
+                    
+                    {/* 范围分隔线 */}
+                    {explanation.idealRange.needsImprovement && (
+                      <div 
+                        className="absolute top-0 bottom-0 w-px bg-white/60 z-5"
+                        style={{ left: `${explanation.idealRange.needsImprovement.max + 1}%` }}
+                      />
+                    )}
+                    {explanation.idealRange.good && (
+                      <div 
+                        className="absolute top-0 bottom-0 w-px bg-white/60 z-5"
+                        style={{ left: `${explanation.idealRange.good.max + 1}%` }}
+                      />
+                    )}
+                  </div>
+                  
+                  {/* 🆕 当前分数标签 */}
+                  {explanation.currentState?.score !== undefined && (
+                    <div 
+                      className="absolute -top-6 text-xs font-medium text-gray-700 whitespace-nowrap transition-all duration-300"
+                      style={{ left: `${Math.min(Math.max(explanation.currentState.score, 5), 95)}%`, transform: 'translateX(-50%)' }}
+                    >
+                      {explanation.currentState.score}%
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center justify-between p-2 bg-yellow-50 rounded">
-                  <span className="text-sm">良好</span>
-                  <span className="text-sm font-medium">
-                    {explanation.idealRange.good.min}% - {explanation.idealRange.good.max}%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-red-50 rounded">
-                  <span className="text-sm">需改进</span>
-                  <span className="text-sm font-medium">
-                    {explanation.idealRange.needsImprovement.min}% - {explanation.idealRange.needsImprovement.max}%
-                  </span>
+                
+                {/* 🆕 优化后的范围列表 - 高亮当前所在范围 */}
+                <div className="space-y-2">
+                  {explanation.idealRange.excellent && (() => {
+                    const currentScore = explanation.currentState?.score ?? 0;
+                    const isActive = currentScore >= explanation.idealRange.excellent.min && currentScore <= explanation.idealRange.excellent.max;
+                    return (
+                      <div className={cn(
+                        'flex items-center justify-between p-3 rounded-lg border-2 transition-all',
+                        isActive 
+                          ? 'bg-green-50 border-green-300 shadow-sm' 
+                          : 'bg-green-50/50 border-green-100'
+                      )}>
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            'w-2 h-2 rounded-full',
+                            isActive ? 'bg-green-600' : 'bg-green-300'
+                          )} />
+                          <span className={cn('text-sm font-medium', isActive && 'text-green-900')}>
+                            优秀
+                          </span>
+                          {isActive && (
+                            <Badge variant="outline" className="text-xs border-green-300 text-green-700 bg-green-100">
+                              当前
+                            </Badge>
+                          )}
+                        </div>
+                        <span className={cn('text-sm font-medium', isActive && 'text-green-900')}>
+                          {explanation.idealRange.excellent.min}% - {explanation.idealRange.excellent.max}%
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  
+                  {explanation.idealRange.good && (() => {
+                    const currentScore = explanation.currentState?.score ?? 0;
+                    const isActive = currentScore >= explanation.idealRange.good.min && currentScore <= explanation.idealRange.good.max;
+                    return (
+                      <div className={cn(
+                        'flex items-center justify-between p-3 rounded-lg border-2 transition-all',
+                        isActive 
+                          ? 'bg-yellow-50 border-yellow-300 shadow-sm' 
+                          : 'bg-yellow-50/50 border-yellow-100'
+                      )}>
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            'w-2 h-2 rounded-full',
+                            isActive ? 'bg-yellow-600' : 'bg-yellow-300'
+                          )} />
+                          <span className={cn('text-sm font-medium', isActive && 'text-yellow-900')}>
+                            良好
+                          </span>
+                          {isActive && (
+                            <Badge variant="outline" className="text-xs border-yellow-300 text-yellow-700 bg-yellow-100">
+                              当前
+                            </Badge>
+                          )}
+                        </div>
+                        <span className={cn('text-sm font-medium', isActive && 'text-yellow-900')}>
+                          {explanation.idealRange.good.min}% - {explanation.idealRange.good.max}%
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  
+                  {explanation.idealRange.needsImprovement && (() => {
+                    const currentScore = explanation.currentState?.score ?? 0;
+                    const isActive = currentScore >= explanation.idealRange.needsImprovement.min && currentScore <= explanation.idealRange.needsImprovement.max;
+                    return (
+                      <div className={cn(
+                        'flex items-center justify-between p-3 rounded-lg border-2 transition-all',
+                        isActive 
+                          ? 'bg-red-50 border-red-300 shadow-sm' 
+                          : 'bg-red-50/50 border-red-100'
+                      )}>
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            'w-2 h-2 rounded-full',
+                            isActive ? 'bg-red-600' : 'bg-red-300'
+                          )} />
+                          <span className={cn('text-sm font-medium', isActive && 'text-red-900')}>
+                            需改进
+                          </span>
+                          {isActive && (
+                            <Badge variant="outline" className="text-xs border-red-300 text-red-700 bg-red-100">
+                              当前
+                            </Badge>
+                          )}
+                        </div>
+                        <span className={cn('text-sm font-medium', isActive && 'text-red-900')}>
+                          {explanation.idealRange.needsImprovement.min}% - {explanation.idealRange.needsImprovement.max}%
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
-            </div>
+            )}
 
             {/* 权重和贡献 */}
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-              <div>
-                <span className="text-xs text-muted-foreground">权重</span>
-                <p className="text-sm font-medium">{Math.round(explanation.weight * 100)}%</p>
+            {(explanation.weight !== undefined || explanation.contribution !== undefined) && (
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                {explanation.weight !== undefined && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">权重</span>
+                    <p className="text-sm font-medium">{Math.round(explanation.weight * 100)}%</p>
+                  </div>
+                )}
+                {explanation.contribution !== undefined && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">贡献值</span>
+                    <p className="text-sm font-medium">{Math.round(explanation.contribution * 100)}%</p>
+                  </div>
+                )}
               </div>
-              <div>
-                <span className="text-xs text-muted-foreground">贡献值</span>
-                <p className="text-sm font-medium">{Math.round(explanation.contribution)}</p>
-              </div>
-            </div>
+            )}
           </div>
         ) : (
           <div className="text-center text-muted-foreground py-8">

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useContext } from 'react';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { DrawerContext } from '@/components/layout/DashboardLayout';
 import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
@@ -17,7 +18,6 @@ import type {
 } from '@/types/trip';
 import type { Suggestion, SuggestionStats } from '@/types/suggestion';
 import { AssistantCenter } from '@/components/trips/AssistantCenter';
-import { SuggestionGuardBar } from '@/components/trips/SuggestionGuardBar';
 import DayItineraryCard from '@/components/trips/DayItineraryCard';
 import { AdjustTimeDialog } from '@/components/trips/AdjustTimeDialog';
 import { SuggestionPreviewDialog } from '@/components/trips/SuggestionPreviewDialog';
@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,12 +55,10 @@ import BudgetOverviewCard from '@/components/trips/BudgetOverviewCard';
 import BudgetMonitorCard from '@/components/trips/BudgetMonitorCard';
 import TripCostSummaryCard from '@/components/trips/TripCostSummaryCard';
 import UnpaidItemsList from '@/components/trips/UnpaidItemsList';
-import HealthBar from '@/components/trips/HealthBar';
+import HealthBarWithGuidance from '@/components/trips/HealthBarWithGuidance';
 import { MetricExplanationDialog } from '@/components/trips/MetricExplanationDialog';
 import { AutoOptimizeDialog } from '@/components/trips/AutoOptimizeDialog';
-import { useDrawer } from '@/components/layout/DashboardLayout';
 import { format } from 'date-fns';
-import PersonaModeToggle, { type PersonaMode } from '@/components/common/PersonaModeToggle';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
@@ -74,7 +73,7 @@ import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
 import DrDreView from '@/components/trips/views/DrDreView';
 import NeptuneView from '@/components/trips/views/NeptuneView';
-import AutoView from '@/components/trips/views/AutoView';
+import AutoOverview from '@/components/trips/views/AutoOverview';
 import { 
   extractAbuData, 
   extractDrDreData, 
@@ -89,6 +88,7 @@ import { useMemo } from 'react';
 import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/persona-colors';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { WeatherCard, WeatherAlertBanner } from '@/components/weather/WeatherCard';
+import { formatCurrency } from '@/utils/format';
 
 // 决策记录标签页组件
 function DecisionLogTab({ tripId }: { tripId: string }) {
@@ -238,7 +238,11 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
 export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useTranslation();
+  
+  console.log('[TripDetail] 组件渲染:', { id, hasId: !!id, pathname: location.pathname });
 
   // 提取国家代码的辅助函数
   const extractCountryCodes = (destination: string | undefined): string[] => {
@@ -247,7 +251,10 @@ export default function TripDetailPage() {
     const countryCode = parts[0]?.trim().toUpperCase();
     return countryCode ? [countryCode] : [];
   };
-  const { setDrawerOpen, setDrawerTab } = useDrawer();
+  // 安全地使用 DrawerContext，如果不在 DashboardLayout 中则使用空函数
+  const drawerContext = useContext(DrawerContext);
+  const setDrawerOpen = drawerContext?.setDrawerOpen || (() => {});
+  const setDrawerTab = drawerContext?.setDrawerTab || (() => {});
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,7 +278,7 @@ export default function TripDetailPage() {
   const [statusConfirmText, setStatusConfirmText] = useState(''); // ✅ 状态修改确认输入
   const [statusConfirmCode, setStatusConfirmCode] = useState<string>(''); // ✅ 随机验证码
   const [country, setCountry] = useState<Country | null>(null);
-  const [viewMode, setViewMode] = useState<PersonaMode>('auto');
+  const [planViewTab, setPlanViewTab] = useState<'abu' | 'dre' | 'neptune'>('abu'); // 🆕 规划Tab的视图切换（安全/节奏/修复）
   const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
   const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
@@ -288,24 +295,61 @@ export default function TripDetailPage() {
   const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
   const [tripMetrics, setTripMetrics] = useState<TripMetricsResponse | null>(null);
+  const [tripMetricsLoading, setTripMetricsLoading] = useState(false); // 🆕 跟踪tripMetrics加载状态
   const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null);
   
   // 新增：决策日志相关状态
   const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
+  const [decisionLogsLoading, setDecisionLogsLoading] = useState(false); // 🆕 跟踪decisionLogs加载状态
   
   // 新增：行程详情页 Agent 相关状态
   const [tripHealth, setTripHealth] = useState<Health | null>(null);
   
+  // 🆕 货币状态：用于格式化费用显示
+  const [currency, setCurrency] = useState<string>('CNY');
+  
   // 新增：提取的数据状态（通过 useMemo 计算）
+  // ✅ 即使数据为空，也返回空数据结构，让视图组件自己处理空状态
   const abuData = useMemo<AbuViewData | null>(() => {
-    if (decisionLogs.length === 0 && personaAlerts.length === 0) return null;
+    // 如果有行程项，即使没有决策日志和提醒，也应该显示视图（显示空状态）
+    const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
+    if (!hasTripItems) return null; // 没有行程项时返回null
     return extractAbuData(decisionLogs, personaAlerts);
-  }, [decisionLogs, personaAlerts]);
+  }, [decisionLogs, personaAlerts, trip]);
   
   const drDreData = useMemo<DrDreViewData | null>(() => {
-    if (decisionLogs.length === 0 && !tripMetrics) return null;
-    return extractDrDreData(decisionLogs, tripMetrics);
-  }, [decisionLogs, tripMetrics]);
+    // 如果有行程项，即使没有决策日志和指标，也应该显示视图（显示空状态）
+    const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
+    if (!hasTripItems) return null; // 没有行程项时返回null
+    
+    // 🐛 调试：记录依赖项的变化
+    const decisionLogsRef = decisionLogs; // 保存引用用于比较
+    const tripMetricsRef = tripMetrics; // 保存引用用于比较
+    
+    console.log('[TripDetail] drDreData useMemo 重新计算:', {
+      decisionLogsCount: decisionLogs.length,
+      decisionLogsRef: decisionLogsRef, // 完整数组引用
+      hasTripMetrics: !!tripMetrics,
+      tripMetricsRef: tripMetricsRef, // 完整对象引用
+      tripMetricsSummary: tripMetrics?.summary,
+      tripMetricsSummaryTotalFatigue: tripMetrics?.summary?.totalFatigue,
+      tripMetricsSummaryTotalBuffer: tripMetrics?.summary?.totalBuffer,
+      tripMetricsSummaryTotalWalk: tripMetrics?.summary?.totalWalk,
+      tripMetricsSummaryTotalDrive: tripMetrics?.summary?.totalDrive,
+      tripId: trip?.id,
+      recalculateTime: new Date().toISOString(),
+    });
+    
+    const result = extractDrDreData(decisionLogs, tripMetrics);
+    
+    console.log('[TripDetail] drDreData useMemo 计算结果:', {
+      metrics: result.metrics,
+      adjustmentsCount: result.adjustments?.length || 0,
+      logsCount: result.logs?.length || 0,
+    });
+    
+    return result;
+  }, [decisionLogs, tripMetrics, trip]);
   
   const neptuneData = useMemo<NeptuneViewData | null>(() => {
     if (decisionLogs.length === 0 && suggestions.length === 0) return null;
@@ -389,10 +433,43 @@ export default function TripDetailPage() {
   }, [trip?.destination]);
 
   useEffect(() => {
+    console.log('[TripDetail] useEffect 执行:', { id, hasId: !!id, idType: typeof id });
     if (id) {
+      console.log('[TripDetail] useEffect: id存在，准备调用loadTrip');
       loadTrip();
+    } else {
+      console.warn('[TripDetail] useEffect: id为空，不调用loadTrip');
     }
   }, [id]);
+
+  // 处理从其他页面传递过来的状态（如侧边栏的操作）
+  useEffect(() => {
+    const state = location.state as {
+      openEditDialog?: boolean;
+      openShareDialog?: boolean;
+      openCollaboratorsDialog?: boolean;
+      changeStatus?: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+    } | null;
+
+    if (state) {
+      if (state.openEditDialog) {
+        setEditDialogOpen(true);
+      }
+      if (state.openShareDialog) {
+        setShareDialogOpen(true);
+      }
+      if (state.openCollaboratorsDialog) {
+        setCollaboratorsDialogOpen(true);
+      }
+      if (state.changeStatus) {
+        setPendingStatus(state.changeStatus);
+        setStatusChangeDialogOpen(true);
+      }
+      
+      // 清除 state，避免刷新页面时重复打开
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate, location.pathname]);
 
   // ✅ 当行程状态变化时，自动调整 Tab（仅在状态变化时，不覆盖用户手动选择）
   useEffect(() => {
@@ -410,11 +487,27 @@ export default function TripDetailPage() {
   }, [trip?.status, activeTab]);
 
   const loadTrip = async () => {
-    if (!id) return;
+    console.log('[TripDetail] loadTrip 开始执行:', { id, hasId: !!id });
+    if (!id) {
+      console.warn('[TripDetail] loadTrip: id为空，提前返回');
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
-      const data = await tripsApi.getById(id);
+      console.log('[TripDetail] 开始调用 tripsApi.getById:', { id });
+      let data;
+      try {
+        data = await tripsApi.getById(id);
+        console.log('[TripDetail] tripsApi.getById 成功:', { tripId: data?.id, hasData: !!data, dataType: typeof data });
+      } catch (apiErr: any) {
+        console.error('[TripDetail] tripsApi.getById 抛出异常:', {
+          error: apiErr,
+          message: apiErr.message,
+          stack: apiErr.stack,
+        });
+        throw apiErr; // 重新抛出，让外层catch处理
+      }
       
       // 🔍 详细检查行程数据中的POI信息
       console.log('📋 [TripDetailPage] 加载的行程数据:', {
@@ -491,11 +584,16 @@ export default function TripDetailPage() {
           loadCountryInfo(data.destination);
         }
         
+        // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+        await loadCurrency(data.destination);
+        
         // 在 trip 设置后加载依赖 trip 的数据
-        // 使用 setTimeout 确保 state 已更新
-        setTimeout(() => {
-          loadTripMetrics();
-        }, 0);
+        // 🆕 直接传入id，不依赖trip state
+        console.log('[TripDetail] 准备调用 loadTripMetrics:', { id, hasId: !!id });
+        // 🆕 不await，让它在后台执行，避免阻塞其他数据加载
+        loadTripMetrics(id).catch(err => {
+          console.error('[TripDetail] loadTripMetrics 调用失败:', err);
+        });
         
         // 检查收藏和点赞状态
         // 注意：如果后端在 GET /trips/:id 响应中包含 isCollected、isLiked、likeCount 字段，
@@ -516,10 +614,13 @@ export default function TripDetailPage() {
     } catch (err: any) {
       console.error('❌ [TripDetail] 加载行程失败:', {
         tripId: id,
-        error: err.message,
+        error: err,
+        message: err.message,
         code: err.code,
         status: err.response?.status,
+        statusText: err.response?.statusText,
         response: err.response?.data,
+        stack: err.stack,
       });
       
       // 提取更详细的错误信息
@@ -560,6 +661,46 @@ export default function TripDetailPage() {
       console.error('Failed to load country info:', err);
       // 加载失败不影响主流程
     }
+  };
+  
+  // 🆕 检测URL参数，如果tab=budget，切换到预算标签页
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'budget') {
+      setActiveTab('budget');
+      // 不清除URL参数，因为openConstraintDialog参数需要保留给TripBudgetPage
+    }
+  }, [searchParams]);
+
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币，最后默认CNY
+  const loadCurrency = async (destination?: string) => {
+    if (!id) return;
+    try {
+      // 优先从预算约束获取货币
+      const constraint = await tripsApi.getBudgetConstraint(id);
+      if (constraint.budgetConstraint.currency) {
+        setCurrency(constraint.budgetConstraint.currency);
+        return;
+      }
+    } catch {
+      // 如果获取预算约束失败，尝试从目的地获取
+    }
+    
+    // 其次从目的地获取货币策略
+    if (destination) {
+      try {
+        const currencyStrategy = await countriesApi.getCurrencyStrategy(destination);
+        if (currencyStrategy?.currencyCode) {
+          setCurrency(currencyStrategy.currencyCode);
+          return;
+        }
+      } catch {
+        // 如果获取失败，保持默认值 CNY
+      }
+    }
+    
+    // 默认使用 CNY
+    setCurrency('CNY');
   };
 
 
@@ -762,13 +903,26 @@ export default function TripDetailPage() {
   const loadDecisionLogs = async () => {
     if (!id) return;
     try {
+      setDecisionLogsLoading(true);
       // 获取足够多的日志（100条）
       const response = await tripsApi.getDecisionLog(id, 100, 0);
-      setDecisionLogs(response.items || []);
+      const newLogs = response.items || [];
+      console.log('[TripDetail] loadDecisionLogs 完成:', {
+        logsCount: newLogs.length,
+        drDreLogsCount: newLogs.filter(log => log.persona === 'DR_DRE').length,
+        tripId: id,
+        // 🐛 调试：记录完整数组引用，用于检查是否变化
+        logsRef: newLogs,
+        loadTime: new Date().toISOString(),
+      });
+      // 🐛 确保设置新的数组引用，触发 useMemo 重新计算
+      setDecisionLogs([...newLogs]); // 创建新数组引用
     } catch (err: any) {
       console.error('Failed to load decision logs:', err);
       // 静默处理错误，不影响主流程
       setDecisionLogs([]);
+    } finally {
+      setDecisionLogsLoading(false);
     }
   };
 
@@ -777,6 +931,16 @@ export default function TripDetailPage() {
     if (!id) return;
     try {
       const health = await tripDetailApi.getHealth(id);
+      console.log('[Trip Detail Page] 健康度数据加载完成:', {
+        overall: health.overall,
+        overallScore: health.overallScore,
+        dimensions: health.dimensions ? Object.keys(health.dimensions) : [],
+        // 🆕 检查每个维度是否包含 weight
+        scheduleWeight: (health.dimensions as any)?.schedule?.weight,
+        budgetWeight: (health.dimensions as any)?.budget?.weight,
+        paceWeight: (health.dimensions as any)?.pace?.weight,
+        feasibilityWeight: (health.dimensions as any)?.feasibility?.weight,
+      });
       setTripHealth(health);
     } catch (err: any) {
       console.error('Failed to load trip health:', err);
@@ -787,11 +951,42 @@ export default function TripDetailPage() {
 
 
   // 加载行程指标（用于健康度计算）
-  const loadTripMetrics = async () => {
-    if (!id || !trip) return;
+  const loadTripMetrics = async (tripId?: string) => {
+    // 🆕 支持传入tripId参数，避免依赖trip state
+    console.log('[TripDetail] loadTripMetrics 被调用:', { tripId, id, hasTripId: !!tripId, hasId: !!id });
+    const targetTripId = tripId || id;
+    console.log('[TripDetail] loadTripMetrics targetTripId:', { targetTripId, hasTargetTripId: !!targetTripId });
+    if (!targetTripId) {
+      console.warn('[TripDetail] loadTripMetrics: tripId为空，跳过加载');
+      return;
+    }
     try {
-      const data = await tripsApi.getMetrics(id);
-      setTripMetrics(data);
+      setTripMetricsLoading(true);
+      console.log('[TripDetail] 开始加载行程指标:', { tripId: targetTripId });
+      const data = await tripsApi.getMetrics(targetTripId);
+      console.log('[TripDetail] 行程指标加载成功:', {
+        tripId: targetTripId,
+        hasDays: !!data.days,
+        daysCount: data.days?.length || 0,
+        summary: data.summary,
+        totalFatigue: data.summary?.totalFatigue,
+        totalBuffer: data.summary?.totalBuffer,
+        totalWalk: data.summary?.totalWalk,
+        totalDrive: data.summary?.totalDrive,
+        // 🐛 调试：记录完整的数据对象引用，用于检查是否变化
+        dataRef: data,
+        loadTime: new Date().toISOString(),
+      });
+      // 🐛 确保设置新的对象引用，触发 useMemo 重新计算
+      // 深度克隆所有嵌套对象，确保 React 能检测到变化
+      setTripMetrics({
+        ...data,
+        summary: data.summary ? { ...data.summary } : undefined,
+        days: data.days ? data.days.map(day => ({
+          ...day,
+          metrics: day.metrics ? { ...day.metrics } : undefined,
+        })) : undefined,
+      });
       
       // 建立每日指标映射
       if (data.days) {
@@ -802,8 +997,20 @@ export default function TripDetailPage() {
         setDayMetricsMap(metricsMap);
       }
     } catch (err: any) {
-      console.error('Failed to load trip metrics:', err);
-      // 静默处理错误，不影响主流程
+      console.error('[TripDetail] 加载行程指标失败:', {
+        tripId: targetTripId,
+        error: err,
+        message: err.message,
+        code: err.code,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        responseData: err.response?.data,
+        url: err.config?.url,
+      });
+      // 设置错误状态，让组件显示错误提示
+      setTripMetrics(null);
+    } finally {
+      setTripMetricsLoading(false);
     }
   };
 
@@ -812,6 +1019,10 @@ export default function TripDetailPage() {
     if (!id) return;
     try {
       const data = await tripsApi.getConflicts(id);
+      console.log('[TripDetail] loadConflicts 完成:', {
+        conflictsCount: data?.conflicts?.length || 0,
+        tripId: id,
+      });
       setConflicts(data);
     } catch (err: any) {
       console.error('Failed to load conflicts:', err);
@@ -1316,36 +1527,51 @@ export default function TripDetailPage() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* 顶部 Header（12/12） */}
-      <div className="border-b bg-white px-6 py-4">
-        <div className="flex items-start justify-between gap-6">
-          {/* 左：Trip Title + 标签 */}
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/trips')}>
-          <ArrowLeft className="w-4 h-4" />
+      {/* 顶部 Header（12/12）- 控制中枢版本 */}
+      <div className="border-b bg-white px-4 sm:px-6 py-2.5 sm:py-3 shadow-sm">
+        <div className="flex flex-col xl:flex-row items-start justify-between gap-3 xl:gap-4">
+          {/* 左：Trip Title + 标签 - 稳定信息 */}
+          <div className="flex-1 min-w-0 w-full xl:w-auto order-1">
+            <div className="flex items-center gap-2 sm:gap-2.5 mb-1.5 flex-wrap">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => navigate('/dashboard/trips')}
+          className="h-7 w-7 hover:bg-gray-100"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
         </Button>
-              <h1 className="text-2xl font-bold">{trip.name || trip.destination}</h1>
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 truncate">{trip.name || trip.destination}</h1>
               <Badge 
                 variant="outline" 
                 className={cn(
-                  'font-medium',
+                  'font-medium flex-shrink-0 text-xs',
                   getTripStatusClasses(trip.status as any)
                 )}
               >
                 {getTripStatusLabel(trip.status as any)}
               </Badge>
             </div>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground ml-11">
-            <div className="flex items-center gap-1">
-              <Calendar className="w-4 h-4" />
-              <span>
-                {format(new Date(trip.startDate), 'yyyy-MM-dd')} -{' '}
-                {format(new Date(trip.endDate), 'yyyy-MM-dd')}
-              </span>
-            </div>
-              <Badge variant="secondary">标准节奏</Badge>
-              <Badge variant="secondary">自驾</Badge>
+            <div className="flex items-center gap-2 sm:gap-2.5 text-xs text-gray-600 ml-8 sm:ml-9 flex-wrap">
+              {/* 🆕 优化后的行程信息显示 */}
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5" />
+                <span className="font-medium">
+                  {format(new Date(trip.startDate), 'yyyy.MM.dd')}
+                  {trip.startDate !== trip.endDate && (
+                    <> - {format(new Date(trip.endDate), 'yyyy.MM.dd')}</>
+                  )}
+                </span>
+              </div>
+              {/* 计算天数 */}
+              {(() => {
+                const days = Math.ceil((new Date(trip.endDate).getTime() - new Date(trip.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                return days > 0 ? (
+                  <span className="text-gray-500">· {days} 天</span>
+                ) : null;
+              })()}
+              <Badge variant="secondary" className="text-xs">标准节奏</Badge>
+              <Badge variant="secondary" className="text-xs">自驾</Badge>
               {/* 天气卡片 */}
               {weatherLocation && (
                 <WeatherCard
@@ -1359,17 +1585,25 @@ export default function TripDetailPage() {
             </div>
           </div>
 
-          {/* 中：Health Bar */}
-          <div className="w-80" data-tour="health-bar">
+          {/* 中：Health Bar - 控制中枢版本（只在有行程项时显示） */}
+          <div className="w-full xl:w-auto xl:flex-1 xl:max-w-md flex-shrink-0 order-3 xl:order-2" data-tour="health-bar">
             {trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) ? (
-              <HealthBar
+              <HealthBarWithGuidance
                 executable={healthMetrics.executable}
                 buffer={healthMetrics.buffer}
                 risk={healthMetrics.risk}
                 cost={healthMetrics.cost}
+                tripStatus={trip.status}
+                overallScore={tripHealth?.overallScore} // 🆕 优先使用 API 返回的整体健康度分数
                 onMetricClick={(metricName) => {
                   setSelectedMetric(metricName);
                   setMetricExplanationDialogOpen(true);
+                }}
+                onNavigateToPlanStudio={() => {
+                  if (id) navigate(`/dashboard/plan-studio?tripId=${id}`);
+                }}
+                onNavigateToBudget={() => {
+                  setActiveTab('budget');
                 }}
               />
             ) : (
@@ -1381,50 +1615,72 @@ export default function TripDetailPage() {
             )}
           </div>
 
-          {/* 右：视图模式切换 + Auto 综合按钮 + 主 CTA */}
-          <div className="flex items-center gap-2" data-tour="primary-cta">
-            {/* ✅ 已取消状态下隐藏视图切换 */}
-            {trip.status !== 'CANCELLED' && (
-              <PersonaModeToggle value={viewMode} onChange={setViewMode} />
+          {/* 右：主 CTA + 辅助操作 */}
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap order-2 xl:order-3 w-full xl:w-auto justify-end xl:justify-start" data-tour="primary-cta">
+            {/* 🆕 主 CTA - 突出显示，唯一主要行动 */}
+            {mainCTA && CTAIcon && (
+              <Button 
+                onClick={mainCTA.action} 
+                size="lg"
+                className="bg-gray-900 hover:bg-gray-800 text-white shadow-md hover:shadow-lg transition-all text-base font-medium px-6"
+              >
+                <CTAIcon className="w-4 h-4 mr-2" />
+                {mainCTA.label}
+              </Button>
             )}
-            {/* Auto 综合按钮 - 仅在规划中状态显示 */}
+            
+            {/* 🆕 Auto 综合 - 弱化为图标按钮 */}
             {trip.status === 'PLANNING' && (() => {
               // 过滤出高优先级建议（severity === 'blocker'）
               const blockerSuggestions = suggestions.filter(s => s.severity === 'blocker');
               const hasBlockerSuggestions = blockerSuggestions.length > 0;
               
               return (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => {
-                    if (!hasBlockerSuggestions) {
-                      toast.info('当前没有高优先级建议需要优化');
-                      return;
-                    }
-                    setAutoOptimizeDialogOpen(true);
-                  }}
-                  disabled={!hasBlockerSuggestions}
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Auto 综合
-                  {hasBlockerSuggestions && (
-                    <Badge variant="destructive" className="ml-2 h-5 px-1.5 text-xs">
-                      {blockerSuggestions.length}
-                    </Badge>
-                  )}
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="relative">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            if (!hasBlockerSuggestions) {
+                              toast.info('当前没有高优先级建议需要优化');
+                              return;
+                            }
+                            setAutoOptimizeDialogOpen(true);
+                          }}
+                          disabled={!hasBlockerSuggestions}
+                          className="h-10 w-10"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </Button>
+                        {hasBlockerSuggestions && (
+                          <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 px-1.5 text-xs pointer-events-none">
+                            {blockerSuggestions.length}
+                          </Badge>
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-semibold mb-1">🤖 AI 自动优化</p>
+                      <p className="text-xs text-muted-foreground">
+                        系统正在自动平衡节奏、成本和风险
+                        <br />
+                        你也可以随时手动调整
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               );
             })()}
-            {mainCTA && CTAIcon && (
-              <Button onClick={mainCTA.action} size="lg">
-                <CTAIcon className="w-4 h-4 mr-2" />
-                {mainCTA.label}
-              </Button>
-            )}
+            
+            {/* ✅ 视图模式已移至规划tab，Header不再显示 */}
+            
+            {/* 更多菜单 - 弱化为图标 */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
+                <Button variant="outline" size="icon" className="h-10 w-10">
                   <MoreVertical className="w-4 h-4" />
           </Button>
               </DropdownMenuTrigger>
@@ -1523,13 +1779,6 @@ export default function TripDetailPage() {
         </div>
       </div>
 
-      {/* 护航提示条（仅在有待处理建议时显示） */}
-      <SuggestionGuardBar
-        stats={suggestionStats}
-        onClick={() => {
-          // 滚动到助手中心或打开助手中心（如果需要）
-        }}
-      />
       {/* ✅ 状态修改确认对话框 - 根据状态转换显示对应操作说明 */}
       <AlertDialog 
         open={statusChangeDialogOpen} 
@@ -1725,7 +1974,7 @@ export default function TripDetailPage() {
 
       {/* 天气预警横幅 - 当目的地有极端天气时显示 */}
       {weatherLocation && trip.startDate && (
-        <div className="px-6 py-2">
+        <div className="px-4 sm:px-6 py-2">
           <WeatherAlertBanner
             location={weatherLocation.location}
             locationName={weatherLocation.name}
@@ -1737,8 +1986,8 @@ export default function TripDetailPage() {
       {/* 主体分区（顶部 Tab 4 个） */}
       <div className="flex-1 overflow-hidden flex flex-col">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <div className="border-b bg-white px-6">
-        <TabsList>
+          <div className="border-b bg-white px-4 sm:px-6 shadow-sm">
+        <TabsList className="h-11">
               <TabsTrigger value="overview">
                 <Eye className="w-4 h-4 mr-2" />
                 总览
@@ -1769,19 +2018,19 @@ export default function TripDetailPage() {
         </TabsList>
           </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <TabsContent value="overview" className="mt-0 space-y-6">
-            <div className="grid grid-cols-12 gap-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50/50">
+          <TabsContent value="overview" className="mt-0 space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
               {/* 左（8/12）：Route Map / Skeleton + Day Summary */}
-              <div className="col-span-12 lg:col-span-8 space-y-6">
+              <div className="lg:col-span-12 xl:col-span-8 space-y-3 sm:space-y-4">
                 {/* Route Map / Skeleton */}
-          <Card>
-            <CardHeader>
-                    <CardTitle>路线骨架图</CardTitle>
-                    <CardDescription>Day1~DayN 路线概览</CardDescription>
+          <Card className="shadow-sm border-gray-200">
+            <CardHeader className="p-3 sm:p-4 pb-1">
+                    <CardTitle className="text-sm sm:text-base font-semibold text-gray-900">路线骨架图</CardTitle>
+                    <CardDescription className="text-xs text-gray-500 mt-0.5">Day1~DayN 路线概览</CardDescription>
             </CardHeader>
-            <CardContent>
-                    <div className="space-y-4">
+            <CardContent className="p-3 sm:p-4 pt-1">
+                    <div className="space-y-3">
                       {trip.TripDay.map((day, idx) => {
                         const dayMetrics = dayMetricsMap.get(day.date);
                         
@@ -1829,7 +2078,7 @@ export default function TripDetailPage() {
               </div>
 
               {/* 右（4/12）：预算概览 + 助手中心 */}
-              <div className="col-span-12 lg:col-span-4 space-y-6">
+              <div className="lg:col-span-12 xl:col-span-4 space-y-3 sm:space-y-4">
                 {/* 预算概览卡片 */}
                 {id && (
                   <BudgetOverviewCard
@@ -1885,10 +2134,15 @@ export default function TripDetailPage() {
                             preview: false,
                           });
                           
-                          // 重新加载建议列表和健康度数据
+                          // 重新加载建议列表、健康度数据和冲突数据
                           await Promise.all([
                             loadSuggestions(),
+                            loadTrip(), // 🆕 重新加载行程数据（确保行程项时间更新）
+                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
+                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
+                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
                             loadTripHealth(), // ✅ 应用建议后自动刷新健康度数据
+                            loadConflicts(), // 🆕 重新加载冲突数据（应用建议后可能已解决冲突）
                           ]);
                           
                           // 显示成功提示
@@ -1928,11 +2182,15 @@ export default function TripDetailPage() {
                             preview: false,
                           });
                           
-                          // 重新加载建议列表、行程数据和健康度数据
+                          // 重新加载建议列表、行程数据、健康度数据和冲突数据
                           await Promise.all([
                             loadSuggestions(),
                             loadTrip(),
+                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
+                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
+                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
                             loadTripHealth(), // ✅ 应用建议后自动刷新健康度数据
+                            loadConflicts(), // 🆕 重新加载冲突数据（应用建议后可能已解决冲突）
                           ]);
                           
                           // 显示成功提示
@@ -2028,98 +2286,264 @@ export default function TripDetailPage() {
             </Card>
           ) : (
             <>
-              {/* 视图模式说明（仅在非Auto模式显示） */}
-              {viewMode !== 'auto' && (
-              <Card className="bg-blue-50 border-blue-200">
-                  <CardContent className="p-4">
-                  <div className="text-sm">
-                    {viewMode === 'abu' && (
-                      <div className="flex items-center gap-2">
-                        <Shield className={cn('w-4 h-4', getPersonaIconColorClasses('ABU'))} />
-                        <span>
-                            <strong>{t('personaModeToggle.abu.label')}：</strong>{t('personaModeToggle.abu.desc')}
-                        </span>
-                        </div>
-                    )}
-                    {viewMode === 'dre' && (
-                      <div className="flex items-center gap-2">
-                        <Activity className={cn('w-4 h-4', getPersonaIconColorClasses('DR_DRE'))} />
-                        <span>
-                            <strong>{t('personaModeToggle.dre.label')}：</strong>{t('personaModeToggle.dre.desc')}
-                        </span>
-                    </div>
-              )}
-                    {viewMode === 'neptune' && (
-                      <div className="flex items-center gap-2">
-                        <RefreshCw className={cn('w-4 h-4', getPersonaIconColorClasses('NEPTUNE'))} />
-                        <span>
-                            <strong>{t('personaModeToggle.neptune.label')}：</strong>{t('personaModeToggle.neptune.desc')}
-                        </span>
-                        </div>
-                              )}
-                            </div>
-                  </CardContent>
-                </Card>
+              {/* 🆕 综合视图（固定显示在顶部） */}
+              {trip.status !== 'CANCELLED' && (
+                <AutoOverview
+                  trip={trip}
+                  overallMetrics={overallMetrics}
+                  abuData={abuData}
+                  drDreData={drDreData}
+                  neptuneData={neptuneData}
+                  onViewClick={(view) => {
+                    // 点击视角卡片时，切换到对应的Tab
+                    setPlanViewTab(view);
+                  }}
+                />
               )}
 
-              {/* 🆕 合规规则卡片 */}
-              {trip && trip.destination && (
+              {/* 🆕 合规规则卡片 - 暂时禁用后端调用 */}
+              {/* {trip && trip.destination && (
                 <ComplianceRulesCard
                   tripId={id!}
                   countryCodes={extractCountryCodes(trip.destination)}
                   ruleTypes={['VISA', 'TRANSPORT', 'ENTRY']}
                 />
-              )}
+              )} */}
 
-              {/* 根据视图模式显示不同的视图组件 */}
-              {viewMode === 'auto' && (
-                <AutoView 
-                  trip={trip} 
-                  overallMetrics={overallMetrics}
-                  abuData={abuData}
-                  drDreData={drDreData}
-                  neptuneData={neptuneData}
-                  onNavigateToPlanStudio={trip.status === 'PLANNING' ? () => navigate(`/dashboard/plan-studio?tripId=${id}`) : undefined}
-                  onAddItem={trip.status !== 'CANCELLED' ? () => {
-                    // ✅ 已取消状态下不允许添加行程项
-                    const firstDay = trip.TripDay?.[0];
-                    if (firstDay) {
-                      setSelectedDayId(firstDay.id);
-                      setCreateItemDialogOpen(true);
-                    }
-                  } : undefined}
-                />
-              )}
-              {viewMode === 'abu' && (
-                <AbuView 
-                  trip={trip} 
-                  abuData={abuData}
-                  onItemClick={() => {
-                    setDrawerTab('risk');
-                    setDrawerOpen(true);
-                  }}
-                />
-              )}
-              {viewMode === 'dre' && (
-                <DrDreView 
-                  trip={trip} 
-                  drDreData={drDreData}
-                  tripMetrics={tripMetrics}
-                  onItemClick={() => {
-                    setDrawerTab('evidence');
-                    setDrawerOpen(true);
-                  }}
-                />
-              )}
-              {viewMode === 'neptune' && (
-                <NeptuneView 
-                  trip={trip} 
-                  neptuneData={neptuneData}
-                  onItemClick={() => {
-                    setDrawerTab('evidence');
-                    setDrawerOpen(true);
-                  }}
-                />
+              {/* 🆕 3个视角Tab切换 - 优化后的样式 */}
+              {trip.status !== 'CANCELLED' && (
+                <Tabs value={planViewTab} onValueChange={(v) => {
+                  console.log('[TripDetail] planViewTab 切换:', { from: planViewTab, to: v });
+                  setPlanViewTab(v as typeof planViewTab);
+                }} className="w-full">
+                  {/* 🐛 调试：记录当前 tab 状态 */}
+                  {console.log('[TripDetail] Tabs 渲染，当前 planViewTab:', planViewTab)}
+                  <TabsList className="grid w-full grid-cols-3 h-11 bg-muted/50 rounded-lg p-1">
+                    <TabsTrigger 
+                      value="abu" 
+                      className={cn(
+                        'flex items-center justify-center gap-2 relative',
+                        'transition-all duration-200 ease-in-out',
+                        'rounded-md px-4 py-2',
+                        // 未激活状态
+                        'text-muted-foreground',
+                        'hover:text-foreground hover:bg-muted/80',
+                        // 激活状态
+                        'data-[state=active]:bg-persona-abu/20',
+                        'data-[state=active]:text-persona-abu-foreground',
+                        'data-[state=active]:font-semibold',
+                        'data-[state=active]:shadow-sm',
+                        // 底部指示器
+                        'data-[state=active]:after:absolute',
+                        'data-[state=active]:after:bottom-0',
+                        'data-[state=active]:after:left-1/2',
+                        'data-[state=active]:after:-translate-x-1/2',
+                        'data-[state=active]:after:w-8',
+                        'data-[state=active]:after:h-0.5',
+                        'data-[state=active]:after:bg-persona-abu-foreground',
+                        'data-[state=active]:after:rounded-full'
+                      )}
+                    >
+                      <Shield className="w-4 h-4" />
+                      安全
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="dre" 
+                      className={cn(
+                        'flex items-center justify-center gap-2 relative',
+                        'transition-all duration-200 ease-in-out',
+                        'rounded-md px-4 py-2',
+                        // 未激活状态
+                        'text-muted-foreground',
+                        'hover:text-foreground hover:bg-muted/80',
+                        // 激活状态
+                        'data-[state=active]:bg-persona-dre/20',
+                        'data-[state=active]:text-persona-dre-foreground',
+                        'data-[state=active]:font-semibold',
+                        'data-[state=active]:shadow-sm',
+                        // 底部指示器
+                        'data-[state=active]:after:absolute',
+                        'data-[state=active]:after:bottom-0',
+                        'data-[state=active]:after:left-1/2',
+                        'data-[state=active]:after:-translate-x-1/2',
+                        'data-[state=active]:after:w-8',
+                        'data-[state=active]:after:h-0.5',
+                        'data-[state=active]:after:bg-persona-dre-foreground',
+                        'data-[state=active]:after:rounded-full'
+                      )}
+                    >
+                      <Activity className="w-4 h-4" />
+                      节奏
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="neptune" 
+                      className={cn(
+                        'flex items-center justify-center gap-2 relative',
+                        'transition-all duration-200 ease-in-out',
+                        'rounded-md px-4 py-2',
+                        // 未激活状态
+                        'text-muted-foreground',
+                        'hover:text-foreground hover:bg-muted/80',
+                        // 激活状态
+                        'data-[state=active]:bg-persona-neptune/20',
+                        'data-[state=active]:text-persona-neptune-foreground',
+                        'data-[state=active]:font-semibold',
+                        'data-[state=active]:shadow-sm',
+                        // 底部指示器
+                        'data-[state=active]:after:absolute',
+                        'data-[state=active]:after:bottom-0',
+                        'data-[state=active]:after:left-1/2',
+                        'data-[state=active]:after:-translate-x-1/2',
+                        'data-[state=active]:after:w-8',
+                        'data-[state=active]:after:h-0.5',
+                        'data-[state=active]:after:bg-persona-neptune-foreground',
+                        'data-[state=active]:after:rounded-full'
+                      )}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      修复
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* 安全视角 */}
+                  <TabsContent value="abu" className="mt-4">
+                    {abuData ? (
+                      <AbuView 
+                        trip={trip} 
+                        abuData={abuData}
+                        onItemClick={() => {
+                          setDrawerTab('risk');
+                          setDrawerOpen(true);
+                        }}
+                      />
+                    ) : (personaAlertsLoading || decisionLogsLoading) ? (
+                      <div className="flex items-center justify-center p-8">
+                        <Spinner className="w-6 h-6" />
+                        <span className="ml-2">加载安全数据...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center p-8">
+                        <div className="text-center">
+                          <Shield className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <div className="text-sm text-muted-foreground">暂无安全数据</div>
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  {/* 节奏视角 */}
+                  <TabsContent value="dre" className="mt-4">
+                    {(() => {
+                      // 🐛 调试：记录渲染时的数据状态和 tab 状态
+                      console.log('[TripDetail] DrDreView 渲染检查:', {
+                        planViewTab, // 🆕 当前选中的 tab
+                        isDreTabActive: planViewTab === 'dre', // 🆕 是否在节奏 tab
+                        hasDrDreData: !!drDreData,
+                        drDreDataMetrics: drDreData?.metrics,
+                        hasTripMetrics: !!tripMetrics,
+                        tripMetricsSummary: tripMetrics?.summary,
+                        tripMetricsLoading,
+                        decisionLogsCount: decisionLogs.length,
+                        tripId: trip?.id,
+                        renderTime: new Date().toISOString(),
+                      });
+                      
+                      // 🐛 如果不在 dre tab，提前返回（不渲染组件）
+                      if (planViewTab !== 'dre') {
+                        console.log('[TripDetail] ⚠️ 不在 "dre" tab，跳过渲染 DrDreView', { planViewTab });
+                        return null;
+                      }
+                      
+                      console.log('[TripDetail] ✅ 在 "dre" tab，准备渲染 DrDreView', {
+                        hasDrDreData: !!drDreData,
+                        drDreMetrics: drDreData?.metrics,
+                        tripMetricsSummary: tripMetrics?.summary,
+                      });
+                      
+                      return drDreData ? (
+                        <DrDreView 
+                          key={`drDre-${trip?.id}-${decisionLogs.length}-${tripMetrics?.summary?.totalFatigue || 0}-${tripMetrics?.summary?.totalBuffer || 0}-${tripMetrics?.summary?.totalWalk || 0}-${tripMetrics?.summary?.totalDrive || 0}`} // 🐛 使用稳定的 key，基于实际数据值
+                          trip={trip} 
+                          drDreData={drDreData}
+                          tripMetrics={tripMetrics}
+                          tripMetricsLoading={tripMetricsLoading}
+                          onItemClick={() => {
+                            setDrawerTab('evidence');
+                            setDrawerOpen(true);
+                          }}
+                          onScheduleChanged={async () => {
+                            // 🆕 重新排程后刷新数据（包括冲突数据）
+                            await Promise.all([
+                              loadTrip(),
+                              loadSuggestions(),
+                              loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
+                              loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
+                              loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
+                              loadTripHealth(),
+                              loadConflicts(), // 🆕 重新加载冲突数据（重新排程后可能已解决冲突）
+                            ]);
+                          }}
+                        />
+                      ) : tripMetricsLoading ? (
+                      // tripMetrics 正在加载中
+                      <div className="flex items-center justify-center p-8">
+                        <Spinner className="w-6 h-6" />
+                        <span className="ml-2">加载节奏数据...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center p-8">
+                        <div className="text-center">
+                          <Activity className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <div className="text-sm text-muted-foreground">暂无节奏数据</div>
+                        </div>
+                      </div>
+                    );
+                    })()}
+                  </TabsContent>
+
+                  {/* 修复视角 */}
+                  <TabsContent value="neptune" className="mt-4">
+                    {neptuneData ? (
+                      <NeptuneView 
+                        trip={trip} 
+                        neptuneData={neptuneData}
+                        onItemClick={() => {
+                          setDrawerTab('evidence');
+                          setDrawerOpen(true);
+                        }}
+                        onRepairApplied={async () => {
+                          // 刷新数据
+                          await Promise.all([
+                            loadTrip(),
+                            loadSuggestions(),
+                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
+                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
+                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
+                            loadTripHealth(),
+                            loadConflicts(), // 🆕 重新加载冲突数据（应用修复后可能已解决冲突）
+                          ]);
+                        }}
+                        onAlternativeApplied={async () => {
+                          // 刷新数据
+                          await Promise.all([
+                            loadTrip(),
+                            loadSuggestions(),
+                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
+                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
+                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
+                            loadTripHealth(),
+                            loadConflicts(), // 🆕 重新加载冲突数据（应用替代方案后可能已解决冲突）
+                          ]);
+                        }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center p-8">
+                        <Spinner className="w-6 h-6" />
+                        <span className="ml-2">加载修复数据...</span>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               )}
             </>
           )}
@@ -2497,9 +2921,16 @@ export default function TripDetailPage() {
             }
           }}
           onSuccess={async () => {
-            // 重新加载建议列表和行程数据
-            await loadSuggestions();
-            await loadTrip();
+            // 🐛 修复：调整时间后也需要刷新所有相关数据
+            await Promise.all([
+              loadSuggestions(),
+              loadTrip(),
+              loadTripMetrics(), // 🆕 重新加载行程指标
+              loadDecisionLogs(), // 🆕 重新加载决策日志
+              loadPersonaAlerts(), // 🆕 重新加载人格提醒
+              loadTripHealth(), // 🆕 重新加载健康度数据
+              loadConflicts(), // 🆕 重新加载冲突数据
+            ]);
           }}
         />
       )}
@@ -2517,9 +2948,16 @@ export default function TripDetailPage() {
             }
           }}
           onConfirm={async () => {
-            // 重新加载建议列表和行程数据
-            await loadSuggestions();
-            await loadTrip();
+            // 重新加载建议列表、行程数据、健康度数据和冲突数据
+            await Promise.all([
+              loadSuggestions(),
+              loadTrip(),
+              loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
+              loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
+              loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
+              loadTripHealth(), // 🆕 应用建议后重新加载健康度数据
+              loadConflicts(), // 🆕 重新加载冲突数据（应用建议后可能已解决冲突）
+            ]);
           }}
         />
       )}
@@ -2557,7 +2995,11 @@ export default function TripDetailPage() {
               await Promise.all([
                 loadTrip(), // 重新加载行程数据
                 loadSuggestions(), // 重新加载建议列表
+                loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
+                loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
+                loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
                 loadTripHealth(), // 重新加载健康度数据
+                loadConflicts(), // 🆕 重新加载冲突数据（优化后可能已解决冲突）
               ]);
               
               // 显示成功提示
@@ -2576,7 +3018,9 @@ export default function TripDetailPage() {
                     impactMessages.push(`缓冲时间${metrics.buffer > 0 ? '+' : ''}${metrics.buffer}分钟`);
                   }
                   if (metrics.cost !== undefined && metrics.cost !== 0) {
-                    impactMessages.push(`费用${metrics.cost > 0 ? '+' : ''}¥${metrics.cost}`);
+                    // 🐛 修复：使用 formatCurrency 而不是硬编码 ¥ 符号
+                    const costFormatted = formatCurrency(Math.abs(metrics.cost), currency);
+                    impactMessages.push(`费用${metrics.cost > 0 ? '+' : '-'}${costFormatted}`);
                   }
                   
                   if (impactMessages.length > 0) {

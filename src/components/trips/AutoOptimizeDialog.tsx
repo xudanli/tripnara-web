@@ -3,7 +3,7 @@
  * 显示将应用的高优先级建议列表，用户确认后执行优化
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,10 +15,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { planningWorkbenchApi } from '@/api/planning-workbench';
+import { tripsApi } from '@/api/trips';
 import { toast } from 'sonner';
 import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Suggestion } from '@/types/suggestion';
+import { formatCurrency } from '@/utils/format';
 
 interface AutoOptimizeDialogProps {
   tripId: string;
@@ -60,6 +62,29 @@ export function AutoOptimizeDialog({
   const [loading, setLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<any>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
+  
+  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  useEffect(() => {
+    const loadCurrency = async () => {
+      if (!tripId) return;
+      try {
+        // 优先从预算约束获取货币
+        const constraint = await tripsApi.getBudgetConstraint(tripId);
+        if (constraint.budgetConstraint.currency) {
+          setCurrency(constraint.budgetConstraint.currency);
+          return;
+        }
+      } catch {
+        // 如果获取预算约束失败，保持默认值 CNY
+      }
+      setCurrency('CNY');
+    };
+    
+    if (open) {
+      loadCurrency();
+    }
+  }, [tripId, open]);
 
   // 预览优化结果
   const handlePreview = async () => {
@@ -165,7 +190,7 @@ export function AutoOptimizeDialog({
                           previewResult.impact.metrics.cost < 0 ? 'text-green-600' : 'text-red-600'
                         )}>
                           {previewResult.impact.metrics.cost > 0 ? '+' : ''}
-                          ¥{previewResult.impact.metrics.cost}
+                          {formatCurrency(Math.abs(previewResult.impact.metrics.cost), currency)}
                         </span>
                       </div>
                     )}

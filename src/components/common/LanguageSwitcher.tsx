@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 export default function LanguageSwitcher() {
   const { i18n } = useTranslation();
@@ -14,28 +14,20 @@ export default function LanguageSwitcher() {
 
   return (
     <div className="flex gap-2 items-center">
-      <button
+      <Button
+        variant={isActive('en') ? 'default' : 'outline'}
+        size="sm"
         onClick={() => changeLanguage('en')}
-        className={cn(
-          'px-3 py-1 rounded border text-sm cursor-pointer transition-all',
-          isActive('en')
-            ? 'bg-primary text-primary-foreground border-primary'
-            : 'bg-transparent text-foreground border-border hover:bg-accent'
-        )}
       >
         EN
-      </button>
-      <button
+      </Button>
+      <Button
+        variant={isActive('zh') ? 'default' : 'outline'}
+        size="sm"
         onClick={() => changeLanguage('zh')}
-        className={cn(
-          'px-3 py-1 rounded border text-sm cursor-pointer transition-all',
-          isActive('zh')
-            ? 'bg-primary text-primary-foreground border-primary'
-            : 'bg-transparent text-foreground border-border hover:bg-accent'
-        )}
       >
         中文
-      </button>
+      </Button>
     </div>
   );
 }

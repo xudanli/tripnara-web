@@ -46,6 +46,7 @@ import SettingsPage from './pages/settings';
 import AgentPage from './pages/agent';
 import DecisionDraftPage from './pages/decision-draft';
 import PlanningAssistantV2Page from './pages/planning-assistant-v2';
+import TrailsHubPage from './pages/trails';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -126,6 +127,7 @@ function App() {
           <Route path="route-directions/by-country" element={<RouteDirectionsByCountryPage />} />
           <Route path="route-directions/templates" element={<RouteTemplatesPage />} />
           <Route path="route-directions/templates/:id" element={<RouteTemplateDetailPage />} />
+          <Route path="trails" element={<TrailsHubPage />} />
         </Route>
 
         {/* Legacy routes redirect to dashboard */}

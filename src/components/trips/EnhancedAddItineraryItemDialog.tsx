@@ -1201,15 +1201,6 @@ export function EnhancedAddItineraryItemDialog({
                         </div>
                       </div>
                     )}
-                    {/* Wanderlog 参考提示 */}
-                    {searchMode === 'nearby' && searchResults.length > 0 && (
-                      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800 mb-2">
-                        <div className="flex items-start gap-2">
-                          <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                          <span>搜索结果参考了 Wanderlog 的数据，为您提供更准确的附近地点信息</span>
-                        </div>
-                      </div>
-                    )}
                     {searchResults.map((place) => (
                       <Card 
                         key={place.id} 

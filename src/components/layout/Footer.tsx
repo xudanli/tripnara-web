@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
+import { Button } from '@/components/ui/button';
 
 export default function Footer() {
   const { t } = useTranslation();
@@ -63,12 +64,14 @@ export default function Footer() {
               >
                 {t('nav.about')}
               </Link>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setContactUsOpen(true)}
-                className="text-muted-foreground text-sm bg-transparent border-none cursor-pointer p-0 text-left hover:text-background transition-colors"
+                className="text-muted-foreground hover:text-background p-0 h-auto font-normal justify-start"
               >
                 {t('footer.contact')}
-              </button>
+              </Button>
             </nav>
           </div>
 

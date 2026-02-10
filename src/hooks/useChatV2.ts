@@ -9,7 +9,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   chatApi,
   type ChatRequest,
-  type ChatResponse,
 } from '@/api/planning-assistant-v2';
 
 import type { RoutingTarget } from '@/api/planning-assistant-v2';
@@ -61,11 +60,16 @@ export interface UseChatV2Return {
  */
 export function useChatV2(
   sessionId: string | null,
-  userId?: string
+  userId?: string,
+  context?: {
+    tripId?: string;
+    countryCode?: string;
+    currentLocation?: { lat: number; lng: number };
+    timezone?: string;
+  }
 ): UseChatV2Return {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const messageIdCounter = useState(0)[1];
 
   const generateMessageId = useCallback(() => {
     return `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -123,6 +127,8 @@ export function useChatV2(
         finalContent: replyContent,
         phase: data.phase,
         routing: data.routing,
+        routingTarget: data.routing?.target,
+        routingReason: data.routing?.reasonCN || data.routing?.reason,
         recommendationsCount: data.recommendations?.length || 0,
         plansCount: data.plans?.length || 0,
         hotelsCount: data.hotels?.length || 0,
@@ -136,6 +142,15 @@ export function useChatV2(
         hasCurrencyConversion: !!data.currencyConversion,
         fullData: data,
       });
+
+      // 路由警告：如果期望酒店搜索但路由到了推荐
+      if (data.routing?.target === 'recommendations' && (data.hotels?.length || data.airbnbListings?.length)) {
+        console.warn('[useChatV2] ⚠️ 路由警告: 路由目标是 recommendations，但响应中包含酒店数据', {
+          routingTarget: data.routing.target,
+          hotelsCount: data.hotels?.length || 0,
+          airbnbListingsCount: data.airbnbListings?.length || 0,
+        });
+      }
 
       // 更新会话状态
       if (sessionId) {
@@ -152,14 +167,29 @@ export function useChatV2(
     async (message: string) => {
       if (!sessionId || !message.trim()) return;
 
+      const requestContext = context ? {
+        tripId: context.tripId,
+        countryCode: context.countryCode,
+        currentLocation: context.currentLocation,
+        timezone: context.timezone,
+      } : undefined;
+
+      // 调试日志：记录发送的消息和上下文
+      console.log('[useChatV2] 发送消息:', {
+        message: message.trim(),
+        context: requestContext,
+        hasContext: !!requestContext,
+      });
+
       await sendMessageMutation.mutateAsync({
         sessionId,
         message: message.trim(),
         userId,
         language: 'zh',
+        context: requestContext,
       });
     },
-    [sessionId, userId, sendMessageMutation]
+    [sessionId, userId, context, sendMessageMutation]
   );
 
   const clearMessages = useCallback(() => {

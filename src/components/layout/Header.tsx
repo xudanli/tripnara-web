@@ -63,7 +63,7 @@ export default function Header() {
               navigate('/dashboard/trips');
             }}
           >
-            <Logo variant="full" size={28} color="#111827" />
+            <Logo variant="full" size={40} color="#111827" />
           </a>
 
           {/* Navigation Items */}
