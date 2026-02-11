@@ -1681,6 +1681,207 @@
     "settings": "Settings",
     "preferences": "Preferences",
     "logout": "Logout"
+  },
+  "fitness": {
+    "questionnaire": {
+      "title": "Understand Your Fitness Level",
+      "subtitle": "Complete {{count}} simple questions for personalized trip recommendations",
+      "skip": "Maybe Later",
+      "back": "Back",
+      "next": "Next",
+      "submit": "Complete Assessment",
+      "progress": "Question {{current}} / {{total}}",
+      "resultTitle": "Assessment Complete!",
+      "resultHint": "After completing more trips, we'll automatically optimize your assessment based on your feedback",
+      "startPlanning": "Start Planning",
+      "recommendedAscent": "Recommended Daily Ascent",
+      "recommendedDistance": "Recommended Daily Distance",
+      "questions": {
+        "weekly_exercise": {
+          "question": "What are your exercise habits?",
+          "options": {
+            "0": "Rarely exercise",
+            "1": "Occasional walks/light exercise",
+            "2": "Exercise 2-3 times/week",
+            "3": "Exercise 4+ times/week",
+            "4": "Professional athlete level"
+          }
+        },
+        "longest_hike": {
+          "question": "What's the longest hike you've completed?",
+          "options": {
+            "0": "Less than 5 km",
+            "1": "5-10 km",
+            "2": "10-20 km",
+            "3": "20-30 km",
+            "4": "More than 30 km"
+          }
+        },
+        "elevation_experience": {
+          "question": "What's your high-altitude hiking experience?",
+          "options": {
+            "0": "No high-altitude experience",
+            "1": "Experienced below 2000m",
+            "2": "Experienced 2000-3000m",
+            "3": "Experienced 3000-4000m",
+            "4": "Experienced above 4000m"
+          }
+        },
+        "age_group": {
+          "question": "What's your age group?",
+          "options": {
+            "0": "18-29 years",
+            "1": "30-39 years",
+            "2": "40-49 years",
+            "3": "50-59 years",
+            "4": "60+ years"
+          }
+        }
+      }
+    },
+    "profile": {
+      "title": "Fitness Profile",
+      "default": "Default",
+      "defaultHint": "You haven't completed the fitness assessment. Using default parameters.",
+      "reassess": "Reassess",
+      "startAssess": "Start Assessment",
+      "overallScore": "Overall Score",
+      "recommendedAscent": "Recommended Daily Ascent",
+      "recommendedDistance": "Recommended Daily Distance",
+      "ageModifier": "Age Modifier",
+      "basedOnTrips": "Based on {{count}} trips",
+      "lowConfidenceHint": "Complete more trips and submit feedback to improve assessment accuracy"
+    },
+    "feedback": {
+      "title": "Congratulations on completing your trip!",
+      "subtitle": "Your feedback will help us plan better trips for you",
+      "question": "How did you feel about this trip's intensity?",
+      "tooTired": "Too tired",
+      "justRight": "Just right",
+      "couldDoMore": "Could do more",
+      "completedAsPlanned": "Completed all activities as planned",
+      "adjustmentsQuestion": "What adjustments did you make? (Optional)",
+      "skip": "Maybe Later",
+      "submit": "Submit Feedback",
+      "successTitle": "Thanks for your feedback!",
+      "successHint": "Your feedback will help us optimize future trip recommendations"
+    },
+    "prompt": {
+      "title": "Understand Your Fitness Level",
+      "message": "Complete fitness assessment for personalized trip recommendations",
+      "notAssessed": "Fitness not assessed",
+      "startNow": "Assess Now",
+      "later": "Maybe Later"
+    },
+    "levels": {
+      "LOW": "Beginner",
+      "MEDIUM_LOW": "Basic",
+      "MEDIUM": "Intermediate",
+      "MEDIUM_HIGH": "Advanced",
+      "HIGH": "Expert"
+    },
+    "confidence": {
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "label": "Confidence"
+    },
+    "dimensions": {
+      "climbingAbility": "Climbing Ability",
+      "endurance": "Endurance",
+      "recoverySpeed": "Recovery Speed"
+    },
+    "adjustments": {
+      "skipped_spots": "Skipped some attractions",
+      "extended_rest": "Extended rest time",
+      "shortened_hike": "Shortened hiking distance",
+      "changed_transport": "Changed transportation",
+      "other": "Other adjustments"
+    },
+    "ageGroups": {
+      "18-29": "18-29 years",
+      "30-39": "30-39 years",
+      "40-49": "40-49 years",
+      "50-59": "50-59 years",
+      "60+": "60+ years"
+    },
+    "terrain": {"title":"Terrain Info","summary":"Terrain Summary","fatigueImpact":"Fatigue Impact","travelSpeed":"Travel Speed","riskLevel":"Risk Level","bestSeason":"Best Season","recommendedGear":"Recommended Gear","offSeasonNotice":"Off-Season Notice","offSeasonWarning":"Current month is not within the best season for this terrain. Please prepare accordingly and stay safe.","fatigueLabels":{"normal":"Normal","slightlyHigher":"Slightly Higher","higher":"Higher","veryHigh":"Very High"},"speedLabels":{"normal":"Normal","slower":"Slower","slow":"Slow","verySlow":"Very Slow"},"types":{"easy":"Easy","moderate":"Moderate","technical":"Technical","extreme":"Extreme","alpine":"Alpine","glacier":"Glacier","desert":"Desert","jungle":"Jungle","coastal":"Coastal","scree":"Scree"},"riskLevels":{"LOW":"Low Risk","MEDIUM":"Medium Risk","HIGH":"High Risk","CRITICAL":"Critical Risk"},"riskDescriptions":{"LOW":"Safe for most hikers with basic preparation","MEDIUM":"Requires experience and proper equipment","HIGH":"Advanced skills and technical gear required","CRITICAL":"Expert level only. Life-threatening conditions possible."},"criticalWarning":{"title":"Critical Risk Warning","description":"This section poses serious safety risks. Only recommended for personnel with professional skills and equipment.","acknowledge":"I understand the risks"}},
+    "acclimatization": {"title":"Altitude Acclimatization","description":"Track your altitude adaptation progress for safer trip recommendations","noRecords":"No acclimatization records yet","noRecordsHint":"Records will be created automatically after high-altitude trips (>2500m)","acclimatizedAltitude":"Acclimatized Altitude","efficiency":"Efficiency","efficiencyLevels":{"excellent":"Excellent","good":"Good","fair":"Fair","needsImprovement":"Needs Improvement"},"daysAtCurrent":"Days at Current","totalDays":"Total Acc. Days","lastChange":"Last Alt. Change","amsSensitivity":"AMS Sensitivity","amsSensitivityHint":"AMS sensitivity affects how the system recommends high-altitude trips.","sensitivityLevels":{"LOW":"Low Sensitivity","MEDIUM":"Medium Sensitivity","HIGH":"High Sensitivity"},"sensitivityDescriptions":{"LOW":"Less susceptible to altitude sickness.","MEDIUM":"Normal susceptibility to altitude sickness.","HIGH":"More susceptible to altitude sickness."},"rateModifier":"Personal adaptation rate modifier","recommendedMaxSleep":"Recommended max sleep altitude","advice":{"title":"Acclimatization Advice","content":"Based on your acclimatization status, recommended daily sleeping altitude gain should not exceed {{gain}}m."},"amsWarning":{"badge":"AMS Symptoms","title":"Altitude Sickness Warning","description":"The system detected you may be experiencing altitude sickness symptoms.","advice1":"Stop ascending immediately","advice2":"Drink plenty of water","advice3":"If symptoms worsen, descend immediately","advice4":"Seek medical help if necessary","acknowledge":"I Understand"},"guide":{"title":"What is Altitude Acclimatization?","description":"Altitude acclimatization is the process by which your body gradually adapts to high-altitude environments.","gotIt":"Got it"}},
+    "analytics": {
+      "trend": {
+        "title": "Fitness Trend",
+        "description": "Analysis of your fitness changes over the past {{days}} days",
+        "improving": "Fitness is improving",
+        "stable": "Fitness is stable",
+        "declining": "Fitness is declining",
+        "insufficientData": "Insufficient data",
+        "confidence": "Confidence",
+        "dataPoints": "Data points",
+        "periodDays": "Analysis period",
+        "insufficientDataHint": "Complete more trips to unlock fitness trend analysis"
+      },
+      "anomaly": {
+        "title": "Fitness Anomaly Alert",
+        "viewDetails": "View Details",
+        "dismiss": "Dismiss",
+        "types": {
+          "suddenDecline": "Sudden decline",
+          "consistentOverload": "Consistent overload",
+          "ratingInconsistency": "Rating inconsistency",
+          "unusualPattern": "Unusual pattern"
+        },
+        "severity": {
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        }
+      },
+      "report": {
+        "title": "Fitness Analysis Report",
+        "viewFullReport": "View Full Report",
+        "totalTrips": "Total Trips",
+        "completionRate": "Completion Rate",
+        "avgFatigueIndex": "Avg Fatigue Index",
+        "avgEffortRating": "Avg Effort Rating",
+        "capabilityChanges": "Capability Changes",
+        "recommendations": "Recommendations"
+      },
+      "timeline": {
+        "title": "Fitness Timeline",
+        "description": "Your fitness change history",
+        "empty": "No fitness records yet",
+        "emptyHint": "Records will appear here after completing questionnaires or submitting feedback",
+        "loadMore": "Load More",
+        "events": {
+          "tripFeedback": "Trip Feedback",
+          "calibration": "Calibration",
+          "questionnaire": "Questionnaire"
+        }
+      },
+      "wearable": {
+        "title": "Activity Data Sync",
+        "description": "Connect your fitness devices for more accurate assessment",
+        "connected": "Connected",
+        "notConnected": "Not Connected",
+        "lastSync": "Last sync",
+        "connect": "Connect",
+        "disconnect": "Disconnect",
+        "sync": "Sync",
+        "syncing": "Syncing",
+        "comingSoon": "Coming Soon",
+        "disconnectTitle": "Disconnect",
+        "disconnectDescription": "Your activity data will no longer be synced.",
+        "whyConnect": "Why connect fitness devices?",
+        "whyConnectDescription": "Connected devices provide real activity data for more accurate fitness assessment.",
+        "estimate": {
+          "title": "Fitness Estimate from Activity Data",
+          "maxDailyAscent": "Est. Max Daily Ascent",
+          "confidence": "Confidence",
+          "activityCount": "Activities Analyzed",
+          "dataRange": "Data Range"
+        }
+      }
+    }
   }
 }
 

@@ -9,6 +9,8 @@ import { Spinner } from '@/components/ui/spinner';
 import WelcomeModal from '@/components/onboarding/WelcomeModal';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import NLChatInterface from '@/components/trips/NLChatInterface';
+import { useFitnessPrompt } from '@/hooks/useFitnessPrompt';
+import { FitnessPromptCard, FitnessQuestionnaireDialog } from '@/components/fitness';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -21,6 +23,10 @@ export default function DashboardPage() {
   } = useOnboarding();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // 体能评估提示
+  const { shouldShow, tryShowPrompt, onComplete, onDismiss, hasProfile, isLoading: fitnessLoading } = useFitnessPrompt();
+  const [showFitnessQuestionnaire, setShowFitnessQuestionnaire] = useState(false);
 
   useEffect(() => {
     // 🆕 强制清除旧的会话，确保显示新的欢迎界面
@@ -42,6 +48,19 @@ export default function DashboardPage() {
       setShowWelcomeModal(true);
     }
   }, [isFirstTime, loading]);
+
+  // 检查是否需要显示体能评估提示（在 Welcome Modal 完成后或非首次登录时）
+  useEffect(() => {
+    if (loading || showWelcomeModal || fitnessLoading) return;
+    
+    // 如果还没有体能画像，尝试显示提示
+    if (!hasProfile) {
+      const timer = setTimeout(() => {
+        tryShowPrompt('login');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, showWelcomeModal, fitnessLoading, hasProfile, tryShowPrompt]);
 
   const handleWelcomeComplete = (experienceType: 'steady' | 'balanced' | 'exploratory') => {
     completeWelcome(experienceType);
@@ -66,6 +85,30 @@ export default function DashboardPage() {
           dismiss();
         }}
         onComplete={handleWelcomeComplete}
+      />
+
+      {/* 体能评估提示横幅 - 在聊天界面顶部显示 */}
+      {shouldShow && (
+        <div className="px-4 pt-2">
+          <FitnessPromptCard
+            variant="banner"
+            onStartAssessment={() => {
+              setShowFitnessQuestionnaire(true);
+            }}
+            onDismiss={onDismiss}
+          />
+        </div>
+      )}
+
+      {/* 体能评估问卷弹窗 */}
+      <FitnessQuestionnaireDialog
+        open={showFitnessQuestionnaire}
+        onOpenChange={setShowFitnessQuestionnaire}
+        onComplete={() => {
+          onComplete();
+          setShowFitnessQuestionnaire(false);
+        }}
+        trigger="dashboard_prompt"
       />
 
       {/* 🆕 默认显示自然语言创建行程界面 */}

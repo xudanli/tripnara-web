@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -8,7 +8,20 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { formatCurrency } from '@/utils/format';
-import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles, Cloud, Shield, Route, HelpCircle, ChevronUp } from 'lucide-react';
+import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles, Cloud, Shield, Route, HelpCircle, ChevronUp, Zap, Users, BarChart3 } from 'lucide-react';
+// V2 优化组件
+import { 
+  PlanEvaluationCard, 
+  NegotiationResultCard,
+  RiskAssessmentCard,
+} from '@/components/optimization';
+import { 
+  useEvaluatePlan, 
+  useNegotiation, 
+  useRiskAssessment,
+} from '@/hooks/useOptimizationV2';
+import type { RoutePlanDraft } from '@/types/optimization-v2';
+import type { WorldModelContext } from '@/types/strategy';
 import {
   Collapsible,
   CollapsibleContent,
@@ -1999,7 +2012,212 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* V2 优化评估区域 */}
+      {trip && result && (
+        <V2OptimizeSection tripId={tripId} trip={trip} result={result} />
+      )}
     </div>
+  );
+}
+
+// V2 优化评估区域组件
+function V2OptimizeSection({ 
+  tripId, 
+  trip, 
+  result 
+}: { 
+  tripId: string; 
+  trip: TripDetail;
+  result: ExecutePlanningWorkbenchResponse;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const evaluateMutation = useEvaluatePlan();
+  const negotiationMutation = useNegotiation();
+  const riskMutation = useRiskAssessment();
+
+  // 将 result 转换为 RoutePlanDraft
+  const planDraft = useMemo((): RoutePlanDraft => {
+    return {
+      tripId: tripId,
+      routeDirectionId: trip.destination?.toLowerCase().replace(/\s+/g, '-') || undefined,
+      segments: (trip.TripDay || []).map((day, index) => ({
+        id: day.id,
+        dayIndex: index,
+        date: day.date,
+        items: (day.ItineraryItem || []).map(item => ({
+          id: item.id,
+          placeId: item.placeId || undefined,
+          name: item.Place?.nameCN || item.Place?.nameEN || item.note || '活动',
+          type: item.type === 'TRANSIT' ? 'TRANSPORT' : 
+                item.type === 'REST' ? 'REST' :
+                item.type === 'MEAL_ANCHOR' || item.type === 'MEAL_FLOATING' ? 'MEAL' : 'ACTIVITY',
+          startTime: item.startTime || undefined,
+          endTime: item.endTime || undefined,
+        })),
+      })),
+    };
+  }, [trip, tripId]);
+
+  // 构建 WorldModelContext
+  const worldContext = useMemo((): WorldModelContext => {
+    const startDate = trip.startDate ? new Date(trip.startDate) : new Date();
+    return {
+      physical: {
+        demEvidence: [],
+        roadStates: [],
+        hazardZones: [],
+        ferryStates: [],
+        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
+        month: startDate.getMonth() + 1,
+      },
+      human: {
+        maxDailyAscentM: 800,
+        rollingAscent3DaysM: 2000,
+        maxSlopePct: 30,
+        weatherRiskWeight: 0.3,
+        bufferDayBias: 'MEDIUM',
+        riskTolerance: 'MEDIUM',
+      },
+      routeDirection: {
+        id: tripId,
+        nameCN: trip.name || '规划方案',
+        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
+      },
+    };
+  }, [trip, tripId]);
+
+  const handleEvaluate = async () => {
+    try {
+      await evaluateMutation.mutateAsync({ plan: planDraft, world: worldContext });
+      toast.success('V2 评估完成');
+    } catch (error) {
+      toast.error('评估失败');
+    }
+  };
+
+  const handleNegotiate = async () => {
+    try {
+      await negotiationMutation.mutateAsync({ plan: planDraft, world: worldContext });
+      toast.success('协商完成');
+    } catch (error) {
+      toast.error('协商失败');
+    }
+  };
+
+  const handleRiskAssess = async () => {
+    try {
+      await riskMutation.mutateAsync({ plan: planDraft, world: worldContext });
+      toast.success('风险评估完成');
+    } catch (error) {
+      toast.error('风险评估失败');
+    }
+  };
+
+  const isLoading = evaluateMutation.isPending || negotiationMutation.isPending || riskMutation.isPending;
+
+  return (
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+      <Card className="border-dashed border-primary/30">
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Zap className="w-4 h-4 text-primary" />
+                V2 优化引擎
+                <Badge variant="outline" className="text-xs">Beta</Badge>
+              </CardTitle>
+              {isExpanded ? (
+                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              )}
+            </div>
+            <CardDescription>
+              使用 8 维效用函数评估当前方案
+            </CardDescription>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="space-y-4">
+            {/* 操作按钮 */}
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleEvaluate} disabled={isLoading} size="sm">
+                {evaluateMutation.isPending ? (
+                  <>
+                    <Spinner className="w-4 h-4 mr-2" />
+                    评估中...
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    评估方案
+                  </>
+                )}
+              </Button>
+              <Button onClick={handleNegotiate} disabled={isLoading} variant="outline" size="sm">
+                {negotiationMutation.isPending ? (
+                  <>
+                    <Spinner className="w-4 h-4 mr-2" />
+                    协商中...
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-4 h-4 mr-2" />
+                    三守护者协商
+                  </>
+                )}
+              </Button>
+              <Button onClick={handleRiskAssess} disabled={isLoading} variant="outline" size="sm">
+                {riskMutation.isPending ? (
+                  <>
+                    <Spinner className="w-4 h-4 mr-2" />
+                    评估中...
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    风险评估
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* 评估结果 */}
+            {evaluateMutation.data && (
+              <PlanEvaluationCard
+                evaluation={evaluateMutation.data}
+                showRadar
+                compact
+              />
+            )}
+
+            {/* 协商结果 */}
+            {negotiationMutation.data && (
+              <NegotiationResultCard
+                result={negotiationMutation.data}
+                compact
+              />
+            )}
+
+            {/* 风险评估结果 */}
+            {riskMutation.data && (
+              <RiskAssessmentCard
+                assessment={riskMutation.data}
+                compact
+              />
+            )}
+
+            {/* 空状态 */}
+            {!evaluateMutation.data && !negotiationMutation.data && !riskMutation.data && !isLoading && (
+              <div className="py-4 text-center text-sm text-muted-foreground">
+                点击上方按钮开始 V2 优化分析
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
 

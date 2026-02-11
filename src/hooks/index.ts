@@ -79,3 +79,56 @@ export type { UseAutoFetchEvidenceReturn, UseAutoFetchEvidenceOptions } from './
 // 行程权限
 export { useTripPermissions } from './useTripPermissions';
 export type { UseTripPermissionsReturn } from './useTripPermissions';
+
+// 体能评估
+export { 
+  useFitnessProfile,
+  useFitnessProfileWithDefault,
+  useHasFitnessProfile,
+  useFitnessQuestionnaire,
+  useFeedbackStats,
+  useSubmitQuestionnaire,
+  useSubmitFeedback,
+  useCalibrateFitness,
+  useRefreshFitnessProfile,
+  usePrefetchQuestionnaire,
+  fitnessKeys,
+} from './useFitnessQuery';
+
+export { useQuestionnaireProgress } from './useQuestionnaireProgress';
+export { useFitnessPrompt } from './useFitnessPrompt';
+
+// V2 优化系统
+export {
+  // 计划优化
+  useEvaluatePlan,
+  useComparePlans,
+  useOptimizePlan,
+  useRiskAssessment,
+  useNegotiation,
+  useSubmitFeedback as useSubmitOptimizationFeedback,
+  useUserPreferences as useOptimizationPreferences,
+  // 团队协作
+  useTeam,
+  useCreateTeam,
+  useUpdateTeam,
+  useDeleteTeam,
+  useAddTeamMember,
+  useRemoveTeamMember,
+  useTeamNegotiation,
+  useTeamWeights,
+  useTeamConstraints,
+  // 实时状态
+  useRealtimeState,
+  usePredictedState,
+  useSubscribeRealtime,
+  useUnsubscribeRealtime,
+  useSubmitFieldReport,
+  useRealtimeEvents,
+  // 组合 Hook
+  useFullOptimizationFlow,
+  // Query Keys
+  optimizationKeys,
+  teamKeys,
+  realtimeKeys,
+} from './useOptimizationV2';

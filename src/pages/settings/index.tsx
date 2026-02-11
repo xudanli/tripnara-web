@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2, Loader2 } from 'lucide-react';
+import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2, Loader2, Dumbbell } from 'lucide-react';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useIntegrationAuth } from '@/hooks/useIntegrationAuth';
 import { userApi, UserApiError, type User } from '@/api/user';
@@ -33,6 +33,16 @@ import type { UserPreferences } from '@/api/user';
 import type { Country } from '@/types/country';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useFitnessContext } from '@/contexts/FitnessContext';
+import { 
+  FitnessProfileCard, 
+  FitnessQuestionnaireDialog,
+  FitnessTrendCard,
+  FitnessAnomalyBanner,
+  FitnessTimeline,
+  WearableConnectionCard,
+  AcclimatizationCard,
+} from '@/components/fitness';
 
 // 可选的景点类型
 const ATTRACTION_TYPES = [
@@ -251,12 +261,16 @@ export default function SettingsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // 体能画像相关状态
+  const { profile: fitnessProfile, isDefault: isFitnessDefault, isLoading: fitnessLoading } = useFitnessContext();
+  const [fitnessQuestionnaireOpen, setFitnessQuestionnaireOpen] = useState(false);
+
   // 当URL参数变化时更新Tab
   useEffect(() => {
     const rawTabParam = searchParams.get('tab') || 'preferences';
     const normalizedTab = rawTabParam === 'profile' ? 'account' : rawTabParam;
     // 验证 tab 值是否有效
-    const validTabs = ['account', 'preferences', 'data', 'integrations'];
+    const validTabs = ['account', 'preferences', 'fitness', 'data', 'integrations'];
     const finalTab = validTabs.includes(normalizedTab) ? normalizedTab : 'preferences';
     setActiveTab(finalTab);
   }, [searchParams]);
@@ -501,6 +515,7 @@ export default function SettingsPage() {
             <TabsList>
               <TabsTrigger value="account">账户</TabsTrigger>
               <TabsTrigger value="preferences">偏好</TabsTrigger>
+              <TabsTrigger value="fitness">体能</TabsTrigger>
               <TabsTrigger value="data">数据</TabsTrigger>
               <TabsTrigger value="integrations">集成</TabsTrigger>
             </TabsList>
@@ -1020,6 +1035,106 @@ export default function SettingsPage() {
                   </div>
                 </form>
               )}
+            </TabsContent>
+
+            {/* 体能 */}
+            <TabsContent value="fitness" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Dumbbell className="h-5 w-5" />
+                    体能评估
+                  </CardTitle>
+                  <CardDescription>
+                    了解您的体能水平，获得更精准的行程推荐
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {fitnessLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Spinner className="w-8 h-8" />
+                    </div>
+                  ) : (
+                    <FitnessProfileCard
+                      profile={fitnessProfile}
+                      isDefault={isFitnessDefault}
+                      onReassess={() => setFitnessQuestionnaireOpen(true)}
+                      showChart={true}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 异常提醒 */}
+              <FitnessAnomalyBanner className="mb-2" />
+
+              {/* 体能趋势分析 */}
+              <FitnessTrendCard 
+                periodDays={90}
+                showChart={true}
+                showDetailsLink={false}
+              />
+
+              {/* 高海拔适应 */}
+              <AcclimatizationCard 
+                showDetails={true}
+                showGuide={false}
+              />
+
+              {/* 可穿戴设备连接 */}
+              <WearableConnectionCard />
+
+              {/* 体能时间线 */}
+              <FitnessTimeline 
+                limit={10}
+                collapsible={true}
+                defaultCollapsed={true}
+              />
+
+              {/* 体能说明卡片 */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>体能评估说明</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="p-4 rounded-lg bg-muted/50">
+                      <h4 className="font-medium mb-2">🎯 评估目的</h4>
+                      <p className="text-sm text-muted-foreground">
+                        帮助系统了解您的体能水平，从而推荐更适合您的行程强度和节奏。
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/50">
+                      <h4 className="font-medium mb-2">📊 评估方式</h4>
+                      <p className="text-sm text-muted-foreground">
+                        通过简单问卷和行程反馈，系统会自动校准您的体能模型。
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/50">
+                      <h4 className="font-medium mb-2">🔄 持续优化</h4>
+                      <p className="text-sm text-muted-foreground">
+                        每次行程后提交反馈，系统会自动优化推荐的准确度。
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/50">
+                      <h4 className="font-medium mb-2">🔒 隐私保护</h4>
+                      <p className="text-sm text-muted-foreground">
+                        您的体能数据仅用于行程推荐，不会分享给第三方。
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 体能问卷弹窗 */}
+              <FitnessQuestionnaireDialog
+                open={fitnessQuestionnaireOpen}
+                onOpenChange={setFitnessQuestionnaireOpen}
+                onComplete={() => {
+                  setFitnessQuestionnaireOpen(false);
+                }}
+                trigger="settings_page"
+              />
             </TabsContent>
 
             {/* 数据 */}

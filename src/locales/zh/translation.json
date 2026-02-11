@@ -1934,6 +1934,311 @@
     "preferences": "偏好设置",
     "contact": "联系我们",
     "logout": "退出登录"
+  },
+  "fitness": {
+    "questionnaire": {
+      "title": "了解您的体能水平",
+      "subtitle": "完成 {{count}} 个简单问题，获得个性化行程建议",
+      "skip": "稍后再说",
+      "back": "上一步",
+      "next": "下一步",
+      "submit": "完成评估",
+      "progress": "问题 {{current}} / {{total}}",
+      "resultTitle": "体能评估完成！",
+      "resultHint": "完成更多行程后，我们将根据您的实际反馈自动优化评估",
+      "startPlanning": "开始规划行程",
+      "recommendedAscent": "推荐单日爬升",
+      "recommendedDistance": "推荐单日距离",
+      "questions": {
+        "weekly_exercise": {
+          "question": "您的日常运动习惯是？",
+          "options": {
+            "0": "几乎不运动",
+            "1": "偶尔散步或轻度运动",
+            "2": "每周运动 2-3 次",
+            "3": "每周运动 4+ 次",
+            "4": "专业运动员水平"
+          }
+        },
+        "longest_hike": {
+          "question": "您完成过的最长徒步距离是？",
+          "options": {
+            "0": "少于 5 公里",
+            "1": "5-10 公里",
+            "2": "10-20 公里",
+            "3": "20-30 公里",
+            "4": "超过 30 公里"
+          }
+        },
+        "elevation_experience": {
+          "question": "您的高海拔徒步经验如何？",
+          "options": {
+            "0": "没有高海拔经验",
+            "1": "体验过 2000m 以下",
+            "2": "体验过 2000-3000m",
+            "3": "体验过 3000-4000m",
+            "4": "体验过 4000m 以上"
+          }
+        },
+        "age_group": {
+          "question": "您的年龄段是？",
+          "options": {
+            "0": "18-29 岁",
+            "1": "30-39 岁",
+            "2": "40-49 岁",
+            "3": "50-59 岁",
+            "4": "60 岁以上"
+          }
+        }
+      }
+    },
+    "profile": {
+      "title": "体能画像",
+      "default": "默认",
+      "defaultHint": "您尚未完成体能评估，当前使用默认参数",
+      "reassess": "重新评估",
+      "startAssess": "开始评估",
+      "overallScore": "总评分",
+      "recommendedAscent": "推荐单日爬升",
+      "recommendedDistance": "推荐单日距离",
+      "ageModifier": "年龄修正系数",
+      "basedOnTrips": "基于 {{count}} 次行程数据",
+      "lowConfidenceHint": "完成更多行程并提交反馈，可以提高评估准确度"
+    },
+    "feedback": {
+      "title": "恭喜完成行程！",
+      "subtitle": "您的反馈将帮助我们更好地规划下次行程",
+      "question": "这次行程的体能感受如何？",
+      "tooTired": "太累了",
+      "justRight": "刚刚好",
+      "couldDoMore": "还能再走",
+      "completedAsPlanned": "按计划完成了所有行程",
+      "adjustmentsQuestion": "实际做了哪些调整？（可选）",
+      "skip": "稍后再说",
+      "submit": "提交反馈",
+      "successTitle": "感谢您的反馈！",
+      "successHint": "您的反馈将帮助我们优化后续行程推荐"
+    },
+    "prompt": {
+      "title": "了解您的体能水平",
+      "message": "完成体能评估，获得个性化的行程建议",
+      "notAssessed": "未完成体能评估",
+      "startNow": "立即评估",
+      "later": "稍后再说"
+    },
+    "levels": {
+      "LOW": "入门徒步者",
+      "MEDIUM_LOW": "有一定基础",
+      "MEDIUM": "经验丰富",
+      "MEDIUM_HIGH": "资深户外爱好者",
+      "HIGH": "专业级别"
+    },
+    "confidence": {
+      "LOW": "低",
+      "MEDIUM": "中",
+      "HIGH": "高",
+      "label": "置信度"
+    },
+    "dimensions": {
+      "climbingAbility": "爬升能力",
+      "endurance": "耐力",
+      "recoverySpeed": "恢复速度"
+    },
+    "adjustments": {
+      "skipped_spots": "跳过了某些景点",
+      "extended_rest": "延长了休息时间",
+      "shortened_hike": "缩短了徒步距离",
+      "changed_transport": "改变了交通方式",
+      "other": "其他调整"
+    },
+    "ageGroups": {
+      "18-29": "18-29岁",
+      "30-39": "30-39岁",
+      "40-49": "40-49岁",
+      "50-59": "50-59岁",
+      "60+": "60岁以上"
+    },
+    "terrain": {
+      "title": "地形信息",
+      "summary": "地形难度汇总",
+      "fatigueImpact": "疲劳影响",
+      "travelSpeed": "行进速度",
+      "riskLevel": "风险等级",
+      "bestSeason": "最佳季节",
+      "recommendedGear": "建议装备",
+      "offSeasonNotice": "非最佳季节提醒",
+      "offSeasonWarning": "当前不在此地形的最佳季节范围内。请做好额外准备并注意安全。",
+      "fatigueLabels": {
+        "normal": "正常",
+        "slightlyHigher": "稍高",
+        "higher": "较高",
+        "veryHigh": "很高"
+      },
+      "speedLabels": {
+        "normal": "正常",
+        "slower": "较慢",
+        "slow": "缓慢",
+        "verySlow": "很慢"
+      },
+      "types": {
+        "easy": "简单",
+        "moderate": "中等",
+        "technical": "技术型",
+        "extreme": "极限",
+        "alpine": "高山",
+        "glacier": "冰川",
+        "desert": "沙漠",
+        "jungle": "丛林",
+        "coastal": "海岸",
+        "scree": "碎石坡"
+      },
+      "riskLevels": {
+        "LOW": "低风险",
+        "MEDIUM": "中等风险",
+        "HIGH": "高风险",
+        "CRITICAL": "极高风险"
+      },
+      "riskDescriptions": {
+        "LOW": "适合大多数徒步者，仅需基本准备",
+        "MEDIUM": "需要一定经验和合适装备",
+        "HIGH": "需要专业技能和技术装备",
+        "CRITICAL": "仅限专家级别。可能存在生命危险。"
+      },
+      "criticalWarning": {
+        "title": "极高风险警告",
+        "description": "此路段存在严重安全风险，仅建议具有专业技能和装备的人员通过。",
+        "acknowledge": "我了解风险"
+      }
+    },
+    "acclimatization": {
+      "title": "高海拔适应",
+      "description": "追踪您的高海拔适应进度，获得更安全的行程建议",
+      "noRecords": "暂无适应记录",
+      "noRecordsHint": "参加高海拔（>2500m）行程后将自动记录",
+      "acclimatizedAltitude": "已适应海拔",
+      "efficiency": "适应效率",
+      "efficiencyLevels": {
+        "excellent": "优秀",
+        "good": "良好",
+        "fair": "一般",
+        "needsImprovement": "需提升"
+      },
+      "daysAtCurrent": "当前海拔停留",
+      "totalDays": "累积适应天数",
+      "lastChange": "上次海拔变化",
+      "amsSensitivity": "高反敏感度",
+      "amsSensitivityHint": "高反敏感度影响系统对您高海拔行程的推荐策略。如果您有高反历史，建议设置为「高敏感」。",
+      "sensitivityLevels": {
+        "LOW": "低敏感",
+        "MEDIUM": "中等敏感",
+        "HIGH": "高敏感"
+      },
+      "sensitivityDescriptions": {
+        "LOW": "对高原反应不敏感，适应后可较快提升海拔。",
+        "MEDIUM": "对高原反应敏感度适中，建议遵循标准适应规则。",
+        "HIGH": "对高原反应较敏感，需要更慢的爬升速度和更多休息日。"
+      },
+      "rateModifier": "个人适应速率修正",
+      "recommendedMaxSleep": "建议下次最高睡眠海拔",
+      "advice": {
+        "title": "适应建议",
+        "content": "根据您的适应状态，建议单日睡眠海拔增益不超过 {{gain}}m。在 3000m以上，每上升 1000m 建议安排 1-2 天适应。"
+      },
+      "amsWarning": {
+        "badge": "有高反症状",
+        "title": "高原反应症状警告",
+        "description": "系统检测到您可能正在经历高原反应症状。请认真对待以下建议：",
+        "advice1": "立即停止上升，就地休息",
+        "advice2": "多喝水，避免剧烈运动",
+        "advice3": "如症状加重，立即下撤至较低海拔",
+        "advice4": "必要时寻求医疗帮助",
+        "acknowledge": "我已了解"
+      },
+      "guide": {
+        "title": "什么是高海拔适应？",
+        "description": "高海拔适应是人体逐渐适应高海拔低氧环境的过程。系统会追踪您的适应状态，帮助您更安全地规划高海拔行程。",
+        "sensitivityExplanation": "高反敏感度：",
+        "lowExplanation": "对高反不敏感，适应较快",
+        "mediumExplanation": "正常水平，遵循标准规则",
+        "highExplanation": "易受高反影响，需更慢爬升",
+        "gotIt": "了解了"
+      }
+    },
+    "analytics": {
+      "trend": {
+        "title": "体能趋势",
+        "description": "分析您最近 {{days}} 天的体能变化",
+        "improving": "体能正在提升",
+        "stable": "体能保持稳定",
+        "declining": "体能有所下降",
+        "insufficientData": "数据不足",
+        "confidence": "置信度",
+        "dataPoints": "数据点",
+        "periodDays": "分析天数",
+        "insufficientDataHint": "继续完成更多行程后，我们将为您分析体能趋势"
+      },
+      "anomaly": {
+        "title": "体能异常提醒",
+        "viewDetails": "查看详情",
+        "dismiss": "暂时忽略",
+        "types": {
+          "suddenDecline": "体能突然下降",
+          "consistentOverload": "持续超负荷",
+          "ratingInconsistency": "评分不一致",
+          "unusualPattern": "异常模式"
+        },
+        "severity": {
+          "high": "严重",
+          "medium": "中等",
+          "low": "轻微"
+        }
+      },
+      "report": {
+        "title": "体能分析报告",
+        "viewFullReport": "查看完整报告",
+        "totalTrips": "行程次数",
+        "completionRate": "完成率",
+        "avgFatigueIndex": "平均疲劳指数",
+        "avgEffortRating": "平均体感评分",
+        "capabilityChanges": "体能变化",
+        "recommendations": "建议"
+      },
+      "timeline": {
+        "title": "体能时间线",
+        "description": "您的体能变化历史记录",
+        "empty": "暂无体能相关记录",
+        "emptyHint": "完成问卷或提交行程反馈后，记录会显示在这里",
+        "loadMore": "加载更多",
+        "events": {
+          "tripFeedback": "行程反馈",
+          "calibration": "体能校准",
+          "questionnaire": "问卷提交"
+        }
+      },
+      "wearable": {
+        "title": "运动数据同步",
+        "description": "连接您的运动设备，获得更准确的体能评估",
+        "connected": "已连接",
+        "notConnected": "未连接",
+        "lastSync": "上次同步",
+        "connect": "连接",
+        "disconnect": "断开连接",
+        "sync": "同步",
+        "syncing": "同步中",
+        "comingSoon": "即将推出",
+        "disconnectTitle": "断开连接",
+        "disconnectDescription": "断开后将不再同步您的运动数据。",
+        "whyConnect": "为什么要连接运动设备？",
+        "whyConnectDescription": "连接后，系统将分析您的真实运动数据，更准确地评估您的体能水平。",
+        "estimate": {
+          "title": "基于运动数据的体能评估",
+          "maxDailyAscent": "估算单日最大爬升",
+          "confidence": "置信度",
+          "activityCount": "分析活动数",
+          "dataRange": "数据范围"
+        }
+      }
+    }
   }
 }
 

@@ -149,183 +149,142 @@ export function CreateTripWelcomeScreen({
             </p>
           </div>
 
-          {/* 3. 创建行程输入区（绝对主角） */}
-          <Card className={cn(
-            "shadow-lg border-2 transition-all duration-200",
-            error 
-              ? "border-red-200 hover:border-red-300" 
-              : "border-gray-200 hover:border-primary/30"
-          )}>
-            <CardContent className="p-4 sm:p-6">
-              <div className="space-y-4">
-                {/* 标题 */}
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    创建新行程
-                  </h2>
-                </div>
-                
-                {/* 分隔线 */}
-                <div className="border-t border-gray-200" />
-                
-                {/* 提示文字 */}
-                <p className="text-sm text-gray-600">
-                  📍 想去哪？几天？和谁？
-                </p>
-                
-                {/* 大号输入框 - ChatGPT 风格 */}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label htmlFor="trip-input" className="sr-only">
-                      描述您的旅行想法
-                    </label>
-                    {/* ChatGPT 风格：统一的输入条容器 */}
-                    <div className={cn(
-                      'flex items-end gap-2',
-                      'bg-white rounded-2xl shadow-sm',
-                      'border border-gray-200',
-                      'transition-all duration-200',
-                      'hover:shadow-md focus-within:shadow-md focus-within:border-primary/30',
-                      'p-2'
-                    )}>
-                      {/* 输入框 - 无边框，作为容器的一部分 */}
-                      <Textarea
-                        id="trip-input"
-                        ref={textareaRef}
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        placeholder="例如：3 月和家人去日本 7 天，节奏轻松"
-                        disabled={isLoading || isCreating}
-                        aria-describedby="trip-input-hint"
-                        aria-invalid={false}
-                        className={cn(
-                          'flex-1 min-h-[80px] sm:min-h-[100px] text-base resize-none',
-                          'border-0 bg-transparent shadow-none',
-                          'rounded-xl px-3 sm:px-4 py-2 sm:py-3',
-                          'placeholder:text-gray-400',
-                          'focus-visible:outline-none focus-visible:ring-0',
-                          'transition-all duration-200',
-                          'disabled:cursor-not-allowed'
-                        )}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                            handleSubmit(e);
-                          }
-                        }}
-                      />
-                      {/* 按钮 - 作为输入条的一部分，底部对齐 */}
-                      <Button
-                        type="submit"
-                        disabled={!inputValue.trim() || isLoading || isCreating}
-                        aria-label={!inputValue.trim() ? '请输入旅行想法后再生成行程' : '立即生成行程'}
-                        aria-describedby={!inputValue.trim() ? 'submit-hint' : undefined}
-                        className={cn(
-                          'h-10 w-10 p-0 mb-2 flex-shrink-0',
-                          'bg-primary hover:bg-primary/90',
-                          'text-white rounded-xl',
-                          'transition-all duration-200',
-                          'disabled:opacity-50 disabled:cursor-not-allowed',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-                          'active:scale-[0.98]'
-                        )}
-                      >
-                        {isLoading || isCreating ? (
-                          <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <ArrowRight className="w-5 h-5" aria-hidden="true" />
-                        )}
-                      </Button>
-                    </div>
-                    {/* 🆕 HCI优化：关联提示文字 */}
-                    <p id="trip-input-hint" className="sr-only">
-                      输入您的旅行想法，例如目的地、天数、同行人员等信息
-                    </p>
-                    {/* 🆕 HCI优化：禁用状态提示 */}
-                    {!inputValue.trim() && (
-                      <p id="submit-hint" className="sr-only">
-                        请输入旅行想法后才能生成行程
-                      </p>
-                    )}
-                  </div>
-                </form>
-                
-                {/* 🆕 P1: 错误提示区域 */}
-                {error && (
-                  <div 
-                    role="alert"
-                    aria-live="assertive"
-                    className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg"
-                  >
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-red-900 font-medium mb-1">
-                          生成行程时出现问题
-                        </p>
-                        <p className="text-xs text-red-700">
-                          {error}
-                        </p>
-                        {onRetry && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={onRetry}
-                            className="mt-2 h-7 text-xs"
-                            aria-label="重试生成行程"
-                          >
-                            <RefreshCw className="w-3 h-3 mr-1" />
-                            重试
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* 降低心理负担的文案 */}
-                <p className="text-xs text-gray-500 text-center">
-                  不需要想得很清楚，后面可以随时修改 · 已为上万用户生成真实可用行程
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 4. 可点击示例（结果导向） */}
+          {/* 3. 创建行程输入区 - 认知负荷优化：移除重复信息 */}
           <div className="space-y-3">
-            <p className="text-sm font-medium text-gray-700 text-center">
-              或者选择一个示例快速开始：
+            {/* 输入框区域 - 作为绝对视觉焦点 */}
+            <form onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="trip-input" className="sr-only">
+                  描述您的旅行想法
+                </label>
+                {/* 输入容器 - 统一使用白底 + gray-200 边框 */}
+                <div className={cn(
+                  'flex items-end gap-2',
+                  'bg-white rounded-2xl shadow-sm',
+                  'border border-gray-200',
+                  'transition-all duration-200',
+                  'hover:shadow-md focus-within:shadow-md focus-within:border-black/50',
+                  'p-2',
+                  error && 'border-red-200'
+                )}>
+                  <Textarea
+                    id="trip-input"
+                    ref={textareaRef}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder="例如：3 月和家人去日本 7 天，节奏轻松"
+                    disabled={isLoading || isCreating}
+                    aria-describedby="trip-input-hint"
+                    aria-invalid={!!error}
+                    className={cn(
+                      'flex-1 min-h-[80px] sm:min-h-[100px] text-base resize-none',
+                      'border-0 bg-transparent shadow-none',
+                      'rounded-xl px-3 sm:px-4 py-2 sm:py-3',
+                      'placeholder:text-gray-400',
+                      'focus-visible:outline-none focus-visible:ring-0',
+                      'transition-all duration-200',
+                      'disabled:cursor-not-allowed'
+                    )}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        handleSubmit(e);
+                      }
+                    }}
+                  />
+                  {/* 发送按钮 */}
+                  <Button
+                    type="submit"
+                    disabled={!inputValue.trim() || isLoading || isCreating}
+                    aria-label={!inputValue.trim() ? '请输入旅行想法后再生成行程' : '立即生成行程'}
+                    aria-describedby={!inputValue.trim() ? 'submit-hint' : undefined}
+                    className={cn(
+                      'h-9 w-9 p-0 mb-2 flex-shrink-0',
+                      'bg-black hover:bg-gray-800',
+                      'text-white rounded-lg',
+                      'transition-all duration-200',
+                      'disabled:opacity-50 disabled:cursor-not-allowed',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2'
+                    )}
+                  >
+                    {isLoading || isCreating ? (
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </div>
+                <p id="trip-input-hint" className="sr-only">
+                  输入您的旅行想法，例如目的地、天数、同行人员等信息
+                </p>
+                {!inputValue.trim() && (
+                  <p id="submit-hint" className="sr-only">
+                    请输入旅行想法后才能生成行程
+                  </p>
+                )}
+              </div>
+            </form>
+            
+            {/* 错误提示 - 仅在出错时显示 */}
+            {error && (
+              <div 
+                role="alert"
+                aria-live="assertive"
+                className="flex items-center gap-2 text-sm text-red-600"
+              >
+                <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                <span>{error}</span>
+                {onRetry && (
+                  <button
+                    type="button"
+                    onClick={onRetry}
+                    className="text-red-700 underline hover:no-underline ml-1"
+                  >
+                    重试
+                  </button>
+                )}
+              </div>
+            )}
+            
+            {/* 简短的信心补充 - 单行 */}
+            <p className="text-xs text-gray-400 text-center">
+              不需要想得很清楚，后面可以随时修改
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" role="list">
+          </div>
+
+          {/* 4. 可点击示例 - 简化引导文字 */}
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500 text-center">
+              或选择示例快速开始
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" role="list">
               {exampleCards.map((example) => (
                 <Card
                   key={example.id}
                   role="listitem"
                   tabIndex={isLoading || isCreating ? -1 : 0}
-                  aria-label={`选择示例：${example.title}，${example.subtitle}，点击或按 Enter 键使用此示例`}
+                  aria-label={`选择示例：${example.title}`}
                   aria-disabled={isLoading || isCreating}
                   className={cn(
                     'cursor-pointer transition-all duration-200',
-                    'hover:shadow-md active:scale-[0.98]',
-                    'border-2',
+                    'border border-gray-200 bg-white shadow-sm',
+                    'hover:shadow-md hover:border-gray-300 active:scale-[0.98]',
                     selectedExample === example.id
-                      ? 'border-primary bg-primary/5 ring-2 ring-primary ring-offset-2 animate-in zoom-in-95 duration-200'
-                      : 'border-gray-200 hover:border-primary/30',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                      ? 'border-black/50 shadow-md ring-1 ring-black/10'
+                      : '',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2',
                     (isLoading || isCreating) && 'opacity-50 cursor-not-allowed'
                   )}
                   onClick={() => handleExampleClick(example)}
                   onKeyDown={(e) => handleExampleKeyDown(e, example)}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl" aria-hidden="true">{example.emoji}</span>
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl" aria-hidden="true">{example.emoji}</span>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 text-sm mb-1">
+                        <h3 className="font-medium text-gray-900 text-sm">
                           {example.title}
                         </h3>
-                        <p className="text-xs text-gray-600">
+                        <p className="text-xs text-gray-500 truncate">
                           {example.subtitle}
                         </p>
                       </div>
@@ -334,13 +293,6 @@ export function CreateTripWelcomeScreen({
                 </Card>
               ))}
             </div>
-          </div>
-
-          {/* 5. 风险消除 / 信心补充 */}
-          <div className="text-center">
-            <p className="text-xs text-gray-500">
-              💡 提示：生成的行程包含详细的日程安排、交通建议和游玩推荐，可直接使用
-            </p>
           </div>
         </div>
       </div>

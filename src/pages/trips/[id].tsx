@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DrawerContext } from '@/components/layout/DashboardLayout';
@@ -27,6 +27,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TripFeedbackDialog, TripTerrainSummary } from '@/components/fitness';
+import type { TerrainType } from '@/types/fitness';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,6 +91,280 @@ import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/person
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { WeatherCard, WeatherAlertBanner } from '@/components/weather/WeatherCard';
 import { formatCurrency } from '@/utils/format';
+// V2 优化组件
+import { 
+  PlanEvaluationCard, 
+  NegotiationResultCard,
+  RiskAssessmentCard,
+  RealtimeStatusBanner,
+} from '@/components/optimization';
+import { 
+  useEvaluatePlan, 
+  useNegotiation, 
+  useRiskAssessment,
+  useRealtimeState,
+} from '@/hooks/useOptimizationV2';
+import type { RoutePlanDraft } from '@/types/optimization-v2';
+import type { WorldModelContext } from '@/types/strategy';
+import { Zap } from 'lucide-react';
+
+// V2 优化标签页组件
+function OptimizeTabContent({ tripId, trip }: { tripId: string; trip: TripDetail }) {
+  const evaluateMutation = useEvaluatePlan();
+  const negotiationMutation = useNegotiation();
+  const riskMutation = useRiskAssessment();
+  const { data: realtimeState, refetch: refetchRealtime, isFetching } = useRealtimeState(tripId);
+
+  // 将 TripDetail 转换为 RoutePlanDraft
+  const planDraft = useMemo((): RoutePlanDraft => {
+    // 类型映射函数
+    const mapItemType = (type: string): 'ACTIVITY' | 'TRANSPORT' | 'REST' | 'MEAL' => {
+      switch (type) {
+        case 'ACTIVITY': return 'ACTIVITY';
+        case 'TRANSIT': return 'TRANSPORT';
+        case 'REST': return 'REST';
+        case 'MEAL_ANCHOR':
+        case 'MEAL_FLOATING': return 'MEAL';
+        default: return 'ACTIVITY';
+      }
+    };
+
+    // 获取项目名称
+    const getItemName = (item: ItineraryItem): string => {
+      if (item.Place?.nameCN) return item.Place.nameCN;
+      if (item.Place?.nameEN) return item.Place.nameEN;
+      if (item.note) return item.note;
+      switch (item.type) {
+        case 'REST': return '休息';
+        case 'TRANSIT': return '交通';
+        case 'MEAL_ANCHOR':
+        case 'MEAL_FLOATING': return '用餐';
+        default: return '活动';
+      }
+    };
+
+    // 计算时长（分钟）
+    const getDuration = (item: ItineraryItem): number | undefined => {
+      if (item.startTime && item.endTime) {
+        const start = new Date(`2000-01-01T${item.startTime}`);
+        const end = new Date(`2000-01-01T${item.endTime}`);
+        const diff = (end.getTime() - start.getTime()) / (1000 * 60);
+        return diff > 0 ? diff : undefined;
+      }
+      return undefined;
+    };
+
+    return {
+      tripId: trip.id,
+      routeDirectionId: trip.destination?.toLowerCase().replace(/\s+/g, '-') || undefined,
+      segments: (trip.TripDay || []).map((day, index) => ({
+        id: day.id,
+        dayIndex: index,
+        date: day.date,
+        items: (day.ItineraryItem || []).map(item => ({
+          id: item.id,
+          placeId: item.placeId || undefined,
+          name: getItemName(item),
+          type: mapItemType(item.type),
+          startTime: item.startTime || undefined,
+          endTime: item.endTime || undefined,
+          durationMinutes: getDuration(item),
+        })),
+      })),
+    };
+  }, [trip]);
+
+  // 构建简化的 WorldModelContext
+  const worldContext = useMemo((): WorldModelContext => {
+    const startDate = trip.startDate ? new Date(trip.startDate) : new Date();
+    return {
+      physical: {
+        demEvidence: [],
+        roadStates: [],
+        hazardZones: [],
+        ferryStates: [],
+        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
+        month: startDate.getMonth() + 1,
+      },
+      human: {
+        maxDailyAscentM: 800,
+        rollingAscent3DaysM: 2000,
+        maxSlopePct: 30,
+        weatherRiskWeight: 0.3,
+        bufferDayBias: 'MEDIUM',
+        riskTolerance: 'MEDIUM',
+      },
+      routeDirection: {
+        id: trip.id,
+        nameCN: trip.name || '未命名行程',
+        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
+      },
+    };
+  }, [trip]);
+
+  // 执行评估
+  const handleEvaluate = async () => {
+    try {
+      await evaluateMutation.mutateAsync({ plan: planDraft, world: worldContext });
+      toast.success('计划评估完成');
+    } catch (error) {
+      toast.error('评估失败，请稍后重试');
+    }
+  };
+
+  // 执行协商
+  const handleNegotiate = async () => {
+    try {
+      await negotiationMutation.mutateAsync({ plan: planDraft, world: worldContext });
+      toast.success('协商完成');
+    } catch (error) {
+      toast.error('协商失败，请稍后重试');
+    }
+  };
+
+  // 执行风险评估
+  const handleRiskAssess = async () => {
+    try {
+      await riskMutation.mutateAsync({ plan: planDraft, world: worldContext });
+      toast.success('风险评估完成');
+    } catch (error) {
+      toast.error('风险评估失败，请稍后重试');
+    }
+  };
+
+  const isLoading = evaluateMutation.isPending || negotiationMutation.isPending || riskMutation.isPending;
+
+  return (
+    <div className="space-y-4">
+      {/* 实时状态横幅 */}
+      {realtimeState && (
+        <RealtimeStatusBanner
+          state={realtimeState}
+          connected
+          onRefresh={() => refetchRealtime()}
+          refreshing={isFetching}
+          collapsible
+          compact
+        />
+      )}
+
+      {/* 操作按钮 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Zap className="w-4 h-4" />
+            V2 优化引擎
+          </CardTitle>
+          <CardDescription>
+            使用 8 维效用函数评估和优化您的行程计划
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={handleEvaluate}
+              disabled={isLoading}
+              size="sm"
+            >
+              {evaluateMutation.isPending ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  评估中...
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  评估计划
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleNegotiate}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+            >
+              {negotiationMutation.isPending ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  协商中...
+                </>
+              ) : (
+                <>
+                  <Users className="w-4 h-4 mr-2" />
+                  三守护者协商
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleRiskAssess}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+            >
+              {riskMutation.isPending ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  评估中...
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  风险评估
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 评估结果 */}
+      {evaluateMutation.data && (
+        <PlanEvaluationCard
+          evaluation={evaluateMutation.data}
+          showRadar
+          showWeights
+          title="计划评估结果"
+          description="基于 8 维效用函数的综合评估"
+        />
+      )}
+
+      {/* 协商结果 */}
+      {negotiationMutation.data && (
+        <NegotiationResultCard
+          result={negotiationMutation.data}
+          title="三守护者协商结论"
+        />
+      )}
+
+      {/* 风险评估结果 */}
+      {riskMutation.data && (
+        <RiskAssessmentCard
+          assessment={riskMutation.data}
+          showFactors
+          title="Monte Carlo 风险评估"
+        />
+      )}
+
+      {/* 空状态提示 */}
+      {!evaluateMutation.data && !negotiationMutation.data && !riskMutation.data && !isLoading && (
+        <Card className="border-dashed">
+          <CardContent className="py-12">
+            <div className="flex flex-col items-center justify-center text-center">
+              <Zap className="w-12 h-12 text-muted-foreground/50 mb-4" />
+              <p className="text-muted-foreground">
+                点击上方按钮开始优化分析
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                评估您的行程计划，获取专业建议
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
 
 // 决策记录标签页组件
 function DecisionLogTab({ tripId }: { tripId: string }) {
@@ -278,7 +554,7 @@ export default function TripDetailPage() {
   const [statusConfirmText, setStatusConfirmText] = useState(''); // ✅ 状态修改确认输入
   const [statusConfirmCode, setStatusConfirmCode] = useState<string>(''); // ✅ 随机验证码
   const [country, setCountry] = useState<Country | null>(null);
-  const [planViewTab, setPlanViewTab] = useState<'abu' | 'dre' | 'neptune'>('abu'); // 🆕 规划Tab的视图切换（安全/节奏/修复）
+  const [planViewTab, setPlanViewTab] = useState<'abu' | 'dre' | 'neptune' | 'optimize'>('abu'); // 🆕 规划Tab的视图切换（安全/节奏/修复/优化）
   const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
   const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
@@ -287,6 +563,9 @@ export default function TripDetailPage() {
   const [metricExplanationDialogOpen, setMetricExplanationDialogOpen] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<'schedule' | 'budget' | 'pace' | 'feasibility' | null>(null);
   const [autoOptimizeDialogOpen, setAutoOptimizeDialogOpen] = useState(false);
+  // 体能反馈弹窗状态
+  const [fitnessFeedbackDialogOpen, setFitnessFeedbackDialogOpen] = useState(false);
+  const [fitnessFeedbackShown, setFitnessFeedbackShown] = useState(false);
   
   // 新增：风险、指标相关状态
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
@@ -485,6 +764,28 @@ export default function TripDetailPage() {
       setActiveTab('plan');
     }
   }, [trip?.status, activeTab]);
+
+  // ✅ 当行程状态变为已完成时，延迟显示体能反馈弹窗
+  useEffect(() => {
+    if (!trip || !id) return;
+    
+    // 如果行程已完成且尚未显示过反馈弹窗，则显示
+    if (trip.status === 'COMPLETED' && !fitnessFeedbackShown) {
+      // 检查是否已提交过该行程的反馈（使用 localStorage 缓存）
+      const feedbackKey = `fitness_feedback_submitted_${id}`;
+      const alreadySubmitted = localStorage.getItem(feedbackKey);
+      
+      if (!alreadySubmitted) {
+        // 延迟3秒后显示反馈弹窗，给用户时间查看复盘结果
+        const timer = setTimeout(() => {
+          setFitnessFeedbackDialogOpen(true);
+          setFitnessFeedbackShown(true);
+        }, 3000);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [trip?.status, id, fitnessFeedbackShown]);
 
   const loadTrip = async () => {
     console.log('[TripDetail] loadTrip 开始执行:', { id, hasId: !!id });
@@ -2031,7 +2332,7 @@ export default function TripDetailPage() {
             </CardHeader>
             <CardContent className="p-3 sm:p-4 pt-1">
                     <div className="space-y-3">
-                      {trip.TripDay.map((day, idx) => {
+                      {(trip.TripDay || []).map((day, idx) => {
                         const dayMetrics = dayMetricsMap.get(day.date);
                         
                         return (
@@ -2079,6 +2380,19 @@ export default function TripDetailPage() {
 
               {/* 右（4/12）：预算概览 + 助手中心 */}
               <div className="lg:col-span-12 xl:col-span-4 space-y-3 sm:space-y-4">
+                {/* 地形难度汇总 - 基于行程天数模拟地形数据 */}
+                {trip.TripDay && trip.TripDay.length > 0 && (
+                  <TripTerrainSummary 
+                    terrainTypes={
+                      // 根据行程天数模拟地形类型（实际应从后端获取）
+                      trip.TripDay.map((_, idx) => {
+                        const terrains: TerrainType[] = ['easy', 'moderate', 'alpine', 'technical', 'scree'];
+                        return terrains[idx % terrains.length];
+                      })
+                    }
+                  />
+                )}
+
                 {/* 预算概览卡片 */}
                 {id && (
                   <BudgetOverviewCard
@@ -2226,7 +2540,7 @@ export default function TripDetailPage() {
 
           {/* Plan Tab */}
           <TabsContent value="plan" className="mt-0 space-y-4">
-          {trip.TripDay.length === 0 ? (
+          {(!trip.TripDay || trip.TripDay.length === 0) ? (
             <Card className="border-2 border-dashed border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
               <CardContent className="py-24 px-8 min-h-[60vh] flex items-center justify-center">
                 <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-2xl w-full">
@@ -2316,9 +2630,7 @@ export default function TripDetailPage() {
                   console.log('[TripDetail] planViewTab 切换:', { from: planViewTab, to: v });
                   setPlanViewTab(v as typeof planViewTab);
                 }} className="w-full">
-                  {/* 🐛 调试：记录当前 tab 状态 */}
-                  {console.log('[TripDetail] Tabs 渲染，当前 planViewTab:', planViewTab)}
-                  <TabsList className="grid w-full grid-cols-3 h-11 bg-muted/50 rounded-lg p-1">
+                  <TabsList className="grid w-full grid-cols-4 h-11 bg-muted/50 rounded-lg p-1">
                     <TabsTrigger 
                       value="abu" 
                       className={cn(
@@ -2402,6 +2714,34 @@ export default function TripDetailPage() {
                     >
                       <RefreshCw className="w-4 h-4" />
                       修复
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="optimize" 
+                      className={cn(
+                        'flex items-center justify-center gap-2 relative',
+                        'transition-all duration-200 ease-in-out',
+                        'rounded-md px-4 py-2',
+                        // 未激活状态
+                        'text-muted-foreground',
+                        'hover:text-foreground hover:bg-muted/80',
+                        // 激活状态
+                        'data-[state=active]:bg-primary/20',
+                        'data-[state=active]:text-primary',
+                        'data-[state=active]:font-semibold',
+                        'data-[state=active]:shadow-sm',
+                        // 底部指示器
+                        'data-[state=active]:after:absolute',
+                        'data-[state=active]:after:bottom-0',
+                        'data-[state=active]:after:left-1/2',
+                        'data-[state=active]:after:-translate-x-1/2',
+                        'data-[state=active]:after:w-8',
+                        'data-[state=active]:after:h-0.5',
+                        'data-[state=active]:after:bg-primary',
+                        'data-[state=active]:after:rounded-full'
+                      )}
+                    >
+                      <Zap className="w-4 h-4" />
+                      优化
                     </TabsTrigger>
                   </TabsList>
 
@@ -2542,6 +2882,11 @@ export default function TripDetailPage() {
                         <span className="ml-2">加载修复数据...</span>
                       </div>
                     )}
+                  </TabsContent>
+
+                  {/* V2 优化视角 */}
+                  <TabsContent value="optimize" className="mt-4">
+                    <OptimizeTabContent tripId={id!} trip={trip} />
                   </TabsContent>
                 </Tabs>
               )}
@@ -3034,6 +3379,22 @@ export default function TripDetailPage() {
           />
         );
       })()}
+
+      {/* 体能反馈弹窗 - 行程完成后显示 */}
+      {id && trip && (
+        <TripFeedbackDialog
+          tripId={id}
+          tripName={trip.name || trip.destination}
+          open={fitnessFeedbackDialogOpen}
+          onOpenChange={setFitnessFeedbackDialogOpen}
+          onComplete={() => {
+            // 标记该行程已提交反馈
+            localStorage.setItem(`fitness_feedback_submitted_${id}`, 'true');
+            setFitnessFeedbackDialogOpen(false);
+            toast.success('感谢您的反馈！您的体能画像将根据反馈进行优化');
+          }}
+        />
+      )}
     </div>
   );
 }
