@@ -107,16 +107,19 @@ function MemberCard({
   onEdit,
   onRemove,
   readonly = false,
+  /** 归一化后的决策权重（0-100），用于展示；未传时用原始 decisionWeight */
+  displayWeightPercent,
 }: {
   member: TeamMember;
   isLeader?: boolean;
   onEdit?: (member: TeamMember) => void;
   onRemove?: (userId: string) => void;
   readonly?: boolean;
+  displayWeightPercent?: number;
 }) {
-  const roleConfig = ROLE_CONFIG[member.role];
-  const fitnessConfig = FITNESS_LEVEL_CONFIG[member.fitnessLevel];
-  const RoleIcon = roleConfig.icon;
+  const roleConfig = ROLE_CONFIG[member.role as MemberRole] ?? ROLE_CONFIG.MEMBER;
+  const fitnessConfig = FITNESS_LEVEL_CONFIG[member.fitnessLevel as FitnessLevelType] ?? FITNESS_LEVEL_CONFIG.INTERMEDIATE;
+  const RoleIcon = roleConfig?.icon ?? User;
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
@@ -135,7 +138,7 @@ function MemberCard({
             {fitnessConfig.label}
           </Badge>
           <span className="text-xs text-muted-foreground">
-            权重 {Math.round(member.decisionWeight * 100)}%
+            权重 {displayWeightPercent !== undefined ? Math.round(displayWeightPercent) : Math.round(member.decisionWeight * 100)}%
           </span>
         </div>
       </div>
@@ -169,6 +172,8 @@ function TeamConstraintsDisplay({
 }: {
   constraints: TeamConstraintsResponse;
 }) {
+  const c = constraints?.constraints ?? {};
+  const sources = constraints?.constraintSources ?? [];
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium">
@@ -177,59 +182,59 @@ function TeamConstraintsDisplay({
       </div>
       
       <div className="grid gap-2 text-sm">
-        {constraints.constraints.maxDailyAscentM && (
+        {c.maxDailyAscentM && (
           <div className="flex items-center justify-between p-2 rounded bg-muted/50">
             <div className="flex items-center gap-2">
               <Mountain className="h-4 w-4 text-muted-foreground" />
               <span>每日最大爬升</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-medium">{constraints.constraints.maxDailyAscentM}m</span>
+              <span className="font-medium">{c.maxDailyAscentM}m</span>
               <Badge variant="outline" className="text-xs">
-                {constraints.constraintSources.find(s => s.constraint === 'maxDailyAscentM')?.sourceDisplayName}
+                {sources.find(s => s.constraint === 'maxDailyAscentM')?.sourceDisplayName}
               </Badge>
             </div>
           </div>
         )}
         
-        {constraints.constraints.maxDailyHours && (
+        {c.maxDailyHours && (
           <div className="flex items-center justify-between p-2 rounded bg-muted/50">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <span>每日最大活动时长</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-medium">{constraints.constraints.maxDailyHours}h</span>
+              <span className="font-medium">{c.maxDailyHours}h</span>
               <Badge variant="outline" className="text-xs">
-                {constraints.constraintSources.find(s => s.constraint === 'maxDailyHours')?.sourceDisplayName}
+                {sources.find(s => s.constraint === 'maxDailyHours')?.sourceDisplayName}
               </Badge>
             </div>
           </div>
         )}
 
-        {constraints.constraints.altitudeLimit && (
+        {c.altitudeLimit && (
           <div className="flex items-center justify-between p-2 rounded bg-muted/50">
             <div className="flex items-center gap-2">
               <Shield className="h-4 w-4 text-muted-foreground" />
               <span>海拔限制</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-medium">{constraints.constraints.altitudeLimit}m</span>
+              <span className="font-medium">{c.altitudeLimit}m</span>
               <Badge variant="outline" className="text-xs">
-                {constraints.constraintSources.find(s => s.constraint === 'altitudeLimit')?.sourceDisplayName}
+                {sources.find(s => s.constraint === 'altitudeLimit')?.sourceDisplayName}
               </Badge>
             </div>
           </div>
         )}
 
-        {constraints.constraints.specialNeeds && constraints.constraints.specialNeeds.length > 0 && (
+        {c.specialNeeds && c.specialNeeds.length > 0 && (
           <div className="p-2 rounded bg-muted/50">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
               <span>特殊需求</span>
             </div>
             <div className="flex flex-wrap gap-1">
-              {constraints.constraints.specialNeeds.map((need, i) => (
+              {c.specialNeeds.map((need, i) => (
                 <Badge key={i} variant="secondary" className="text-xs">
                   {need}
                 </Badge>
@@ -504,9 +509,9 @@ export function TeamManagementPanel({
     );
   }
 
-  const teamTypeConfig = TEAM_TYPE_CONFIG[team.type];
-  const decisionModeConfig = DECISION_MODE_CONFIG[team.decisionWeightMode];
-  const TeamIcon = teamTypeConfig.icon;
+  const teamTypeConfig = TEAM_TYPE_CONFIG[team.type as TeamType] ?? TEAM_TYPE_CONFIG.CUSTOM;
+  const decisionModeConfig = DECISION_MODE_CONFIG[team.decisionWeightMode as DecisionWeightMode] ?? DECISION_MODE_CONFIG.EQUAL;
+  const TeamIcon = teamTypeConfig?.icon ?? Users;
   const leader = team.members.find(m => m.role === 'LEADER');
 
   return (
@@ -562,16 +567,27 @@ export function TeamManagementPanel({
           
           {expandedSections.members && (
             <div className="space-y-2 mt-2">
-              {team.members.map(member => (
-                <MemberCard
-                  key={member.userId}
-                  member={member}
-                  isLeader={member.role === 'LEADER'}
-                  onEdit={onEditMember}
-                  onRemove={onRemoveMember}
-                  readonly={readonly}
-                />
-              ))}
+              {(() => {
+                const contribMap = new Map(
+                  weights?.memberContributions?.map(c => [c.userId, c.contributionWeight * 100]) ?? []
+                );
+                const total = team.members.reduce((s, m) => s + (m.decisionWeight ?? 0), 0);
+                return team.members.map(member => (
+                  <MemberCard
+                    key={member.userId}
+                    member={member}
+                    isLeader={member.role === 'LEADER'}
+                    onEdit={onEditMember}
+                    onRemove={onRemoveMember}
+                    readonly={readonly}
+                    displayWeightPercent={
+                      contribMap.has(member.userId) ? contribMap.get(member.userId)
+                      : total > 0 ? (member.decisionWeight ?? 0) / total * 100
+                      : undefined
+                    }
+                  />
+                ));
+              })()}
               
               {!readonly && onAddMember && (
                 <Button

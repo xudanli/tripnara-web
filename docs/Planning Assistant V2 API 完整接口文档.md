@@ -479,8 +479,9 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
 | `routing.params` | object | - | 从用户消息中提取的参数 |
 | `recommendations` | array | ❌ | **目的地推荐列表**（当 `routing.target === "recommendations"` 时包含） |
 | `plans` | array | ❌ | **方案候选列表**（当 `routing.target === "generate"` 时包含） |
-| `hotels` | array | ❌ | **酒店列表**（当 `routing.target === "hotel"` 时包含） |
-| `airbnbListings` | array | ❌ | **Airbnb 房源列表**（当 `routing.target === "airbnb"` 时包含） |
+| `hotels` | array | ❌ | **酒店列表**（当 `routing.target === "hotel"` 时包含，过渡期保留） |
+| `airbnbListings` | array | ❌ | **Airbnb 房源列表**（当 `routing.target === "airbnb"` 时包含，建议废弃） |
+| `accommodations` | array | ❌ | **统一住宿列表**（酒店+Airbnb，`AccommodationItemDto[]`，推荐使用） |
 | `restaurants` | array | ❌ | **餐厅列表**（当 `routing.target === "restaurant"` 时包含） |
 | `weather` | object | ❌ | **天气信息**（当 `routing.target === "weather"` 时包含） |
 | `searchResults` | array | ❌ | **搜索结果**（当 `routing.target === "search"` 时包含） |
@@ -544,6 +545,28 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
 | `amenities` | string[] | 设施列表 |
 | `roomTypes` | string[] | 房型列表 |
 
+**统一住宿数据字段** (`accommodations` 数组中的对象，AccommodationItemDto):
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | string | ✅ | 唯一标识（酒店 placeId / Airbnb listingId） |
+| `source` | `'hotel' \| 'airbnb'` | ✅ | 数据来源 |
+| `name` | string | ✅ | 名称 |
+| `nameCN` | string | ❌ | 中文名称 |
+| `nameEN` | string | ❌ | 英文名称 |
+| `address` | string | ❌ | 地址 |
+| `roomSpecs` | string | ❌ | 房型描述（如 "1 bedroom, 1 queen bed"） |
+| `location` | object | ❌ | 坐标 `{lat: number, lng: number}` |
+| `rating` | number | ❌ | 评分（0-5） |
+| `ratingCount` | number | ❌ | 评价数量 |
+| `price` | string | ❌ | 价格展示文本（如 "¥800/晚"） |
+| `priceLevel` | 1\|2\|3\|4 | ❌ | 价格等级（1=便宜，4=昂贵） |
+| `url` | string | ❌ | 详情/预订链接 |
+| `photoUrl` | string | ❌ | 主图 URL |
+| `photos` | string[] | ❌ | 图片 URL 列表 |
+| `checkIn` | string | ❌ | 入住日期（YYYY-MM-DD） |
+| `checkOut` | string | ❌ | 退房日期（YYYY-MM-DD） |
+
 **注意**: 
 - 酒店搜索结果**默认排除 Airbnb**（通过名称、地址、类型过滤）
 - 如果用户消息中包含目的地名称（如"冰岛酒店"），系统会自动进行地理编码
@@ -578,15 +601,21 @@ curl -X GET "https://api.tripnara.com/api/agent/planning-assistant/v2/sessions/s
    }
    ```
 
-4. **显示酒店数据**：
+4. **显示住宿数据**（推荐使用 `accommodations` 统一字段）：
    ```javascript
-   if (response.routing?.target === 'hotel' && response.hotels) {
-     // 显示酒店列表
-     response.hotels.forEach(hotel => {
-       console.log(`${hotel.name} - 评分: ${hotel.rating}/5`);
-       console.log(`地址: ${hotel.address}`);
-       console.log(`价格等级: ${hotel.priceLevel || 'N/A'}`);
+   if (response.accommodations && response.accommodations.length > 0) {
+     // 统一住宿列表（酒店 + Airbnb）
+     response.accommodations.forEach(acc => {
+       const name = acc.nameCN || acc.nameEN || acc.name;
+       console.log(`${name} [${acc.source}] - 评分: ${acc.rating}/5`);
+       if (acc.roomSpecs) console.log(`房型: ${acc.roomSpecs}`);
+       if (acc.price) console.log(`价格: ${acc.price}`);
+       if (acc.url) console.log(`链接: ${acc.url}`);
      });
+   }
+   // 兼容：仅 hotel 时
+   else if (response.routing?.target === 'hotel' && response.hotels) {
+     response.hotels.forEach(hotel => { /* ... */ });
    }
    ```
 
@@ -651,7 +680,49 @@ curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
   }'
 ```
 
-**示例 2: 酒店搜索（排除 Airbnb）**:
+**示例 2a: 酒店搜索 - 日期澄清（用户未提供日期）**:
+```bash
+curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session-id",
+    "message": "推荐酒店",
+    "userId": "user_123456",
+    "language": "zh"
+  }'
+```
+
+**响应示例（日期澄清）**:
+```json
+{
+  "message": "When do you plan to check in and check out? I can check availability and prices with dates.",
+  "messageCN": "好的，请问您计划哪天入住、哪天退房？有了日期可以帮您查价格和可订性。",
+  "reply": "好的，请问您计划哪天入住、哪天退房？有了日期可以帮您查价格和可订性。",
+  "replyCN": "好的，请问您计划哪天入住、哪天退房？有了日期可以帮您查价格和可订性。",
+  "phase": "CLARIFYING_HOTEL_DATES",
+  "sessionId": "session-id",
+  "clarificationNeeded": {
+    "type": "HOTEL_DATES",
+    "message": "When do you plan to check in and check out? I can check availability and prices with dates.",
+    "messageCN": "好的，请问您计划哪天入住、哪天退房？有了日期可以帮您查价格和可订性。",
+    "suggestedDates": {
+      "checkIn": "2026-02-22",
+      "checkOut": "2026-02-23"
+    }
+  },
+  "routing": {
+    "target": "hotel",
+    "reason": "Clarifying hotel dates",
+    "params": { "destination": "酒店", "location": "Iceland" }
+  }
+}
+```
+
+用户补充日期后（如发送「3月15日到20日」或「好的」），下一轮对话会执行酒店搜索并返回结果。
+
+`clarificationNeeded.suggestedDates` 可选：当有 `tripId` 且行程有 `startDate`/`endDate` 时包含 `{ checkIn, checkOut }`（YYYY-MM-DD），前端可展示「确认使用行程日期」快捷按钮。
+
+**示例 2b: 酒店搜索（排除 Airbnb）**:
 ```bash
 curl -X POST "https://api.tripnara.com/api/agent/planning-assistant/v2/chat" \
   -H "Content-Type: application/json" \

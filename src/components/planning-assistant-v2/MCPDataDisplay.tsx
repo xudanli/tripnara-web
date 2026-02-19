@@ -6,6 +6,7 @@
 
 import { RecommendationCarousel } from './RecommendationCarousel';
 import { HotelList } from './HotelList';
+import { AccommodationList } from './AccommodationList';
 import { RestaurantList } from './RestaurantList';
 import { WeatherDisplay } from './WeatherDisplay';
 import { SearchResults } from './SearchResults';
@@ -22,6 +23,16 @@ interface MCPDataDisplayProps {
 
 export function MCPDataDisplay({ message, className }: MCPDataDisplayProps) {
   const { routing } = message;
+
+  // 住宿混合列表：routing.target === 'accommodation' 或 accommodations 存在时展示
+  if (message.accommodations && message.accommodations.length > 0) {
+    return (
+      <AccommodationList
+        accommodations={message.accommodations}
+        className={cn('mt-3', className)}
+      />
+    );
+  }
 
   if (!routing) {
     return null;
@@ -44,6 +55,10 @@ export function MCPDataDisplay({ message, className }: MCPDataDisplayProps) {
       if (message.hotels && message.hotels.length > 0) {
         return <HotelList hotels={message.hotels} className={cn('mt-3', className)} />;
       }
+      break;
+
+    case 'accommodation':
+      // 已在顶部统一处理 accommodations
       break;
 
     case 'restaurant':

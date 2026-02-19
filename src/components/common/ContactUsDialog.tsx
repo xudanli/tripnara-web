@@ -268,11 +268,11 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
               <div className="bg-black text-white px-3 py-1 rounded text-sm">
                 {t('contactUs.contactByEmail', { defaultValue: '通过邮件联系我们:' })}{' '}
                 <a
-                  href="mailto:contact@tripnara.com"
+                  href="mailto:support@tripnara.com"
                   className="underline hover:no-underline"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  contact@tripnara.com
+                  support@tripnara.com
                 </a>
               </div>
             </div>
@@ -290,7 +290,7 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
                 <span className="text-sm">Discord</span>
               </a>
               <a
-                href="mailto:contact@tripnara.com"
+                href="mailto:support@tripnara.com"
                 className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
                 onClick={(e) => e.stopPropagation()}
               >

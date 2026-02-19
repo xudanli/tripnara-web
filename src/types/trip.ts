@@ -1,5 +1,6 @@
 import type { BaseEntity } from './common';
 import type { PlaceCategory } from './places-routes';
+import type { DrivingFatiguePreferences } from './user-travel-profile';
 
 // ==================== 基础类型 ====================
 
@@ -39,6 +40,8 @@ export interface PacingConfig {
   maxDailyActivities?: number;
   restIntervalHours?: number;
   level?: string;
+  /** 驾驶疲劳偏好（用于驾驶时间安全评估，2-15-8 法则；来自 UserTravelProfile.extendedProfile） */
+  drivingFatiguePreferences?: DrivingFatiguePreferences;
 }
 
 export interface BudgetConfig {
@@ -886,6 +889,7 @@ export interface UpdateTripRequest {
   totalBudget?: number;
   travelers?: Traveler[];
   status?: TripStatus; // ✅ 行程状态（需要后端API支持）
+  metadata?: Record<string, unknown>; // 元数据（如 teamId 等）
 }
 
 // ==================== 行程状态 ====================

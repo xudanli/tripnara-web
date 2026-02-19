@@ -22,6 +22,7 @@ import {
   Wifi,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
 } from 'lucide-react';
 import { EmptyExecuteIllustration } from '@/components/illustrations';
 import { format } from 'date-fns';
@@ -43,6 +44,14 @@ import { ReorderScheduleDialog } from '@/components/execute/ReorderScheduleDialo
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
+import { RealtimeStatusBanner, FieldReportForm } from '@/components/optimization';
+import { useRealtimeState, useSubmitFieldReport, usePredictedState } from '@/hooks/useOptimizationV2';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 // ⚠️ 改进：提取常量配置，减少硬编码
 const EXECUTE_CONFIG = {
@@ -71,6 +80,7 @@ export default function ExecutePage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
+  const [fieldReportDialogOpen, setFieldReportDialogOpen] = useState(false);
   
   // 执行阶段相关状态
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -91,6 +101,10 @@ export default function ExecutePage() {
   
   const { state: onboardingState, completeTour, completeStep } = useOnboarding();
   const [showExecuteTour, setShowExecuteTour] = useState(false);
+
+  const { data: realtimeState, refetch: refetchRealtime, isFetching: realtimeFetching } = useRealtimeState(tripId ?? undefined);
+  const { data: predictedState } = usePredictedState(tripId ?? undefined, 24);
+  const submitFieldReportMutation = useSubmitFieldReport();
 
   // ⚠️ 重要：所有 useMemo 必须在任何条件返回之前调用
   // 获取天气位置：优先使用用户当前位置，其次使用行程项坐标，最后使用目的地国家默认坐标
@@ -850,6 +864,14 @@ export default function ExecutePage() {
             <Wifi className="h-4 w-4" />
             <span>在线</span>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFieldReportDialogOpen(true)}
+          >
+            <ClipboardList className="h-4 w-4 mr-1" />
+            实地报告
+          </Button>
           {/* 天气卡片 */}
           {weatherLocation && (
             <WeatherCard
@@ -866,6 +888,36 @@ export default function ExecutePage() {
       {/* 主内容区 */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-12 gap-6 max-w-7xl mx-auto">
+          {/* 实时状态横幅 + 预测 */}
+          {tripId && (
+            <div className="col-span-12 space-y-2">
+              {realtimeState && (
+                <RealtimeStatusBanner
+                  state={realtimeState}
+                  connected
+                  onRefresh={() => refetchRealtime()}
+                  refreshing={realtimeFetching}
+                  collapsible
+                  compact
+                />
+              )}
+              {predictedState && (
+                <Card className="p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">未来 24h 预测</span>
+                    <Badge variant="outline">
+                      可行概率 {Math.round(predictedState.feasibility.probability * 100)}%
+                    </Badge>
+                  </div>
+                  {predictedState.feasibility.riskFactors.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      风险因素: {predictedState.feasibility.riskFactors.join(', ')}
+                    </p>
+                  )}
+                </Card>
+              )}
+            </div>
+          )}
           {/* B. 主卡片：Next Step（8/12） */}
           <div className="col-span-12 lg:col-span-8 space-y-6">
             {nextStop ? (
@@ -1519,6 +1571,25 @@ export default function ExecutePage() {
           onOpenChange={setCollaboratorsDialogOpen}
         />
       )}
+
+      {/* 实地报告对话框 */}
+      <Dialog open={fieldReportDialogOpen} onOpenChange={setFieldReportDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>实地报告</DialogTitle>
+          </DialogHeader>
+          <FieldReportForm
+            defaultLocation={userLocation ?? undefined}
+            onSubmit={async (req) => {
+              await submitFieldReportMutation.mutateAsync(req);
+              setFieldReportDialogOpen(false);
+              toast.success('感谢您的反馈！');
+            }}
+            onCancel={() => setFieldReportDialogOpen(false)}
+            isSubmitting={submitFieldReportMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

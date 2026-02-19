@@ -70,8 +70,10 @@ export {
   DimensionComparisonRow,
   TotalScoreComparison,
   DimensionBarChart,
-  DIMENSION_LABELS,
 } from './PlanComparisonView';
+
+// 8 维统一配置（从 types 导出）
+export { DIMENSION_LABELS, BREAKDOWN_TO_WEIGHT_KEY } from '@/types/optimization-v2';
 export type { PlanComparisonViewProps } from './PlanComparisonView';
 
 // 反馈表单
@@ -84,6 +86,9 @@ export {
   MODIFICATION_TYPE_CONFIG,
 } from './FeedbackForm';
 export type { FeedbackFormProps } from './FeedbackForm';
+
+// 创建团队
+export { CreateTeamDialog } from './CreateTeamDialog';
 
 // 实地报告
 export {

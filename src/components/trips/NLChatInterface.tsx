@@ -1329,8 +1329,9 @@ export default function NLChatInterface({
       params,
     });
     
-    if (!hasHardConstraints && !hasSoftConstraints) {
-      console.log('[NLChatInterface] 冲突检测跳过：没有足够的约束信息');
+    // 必须至少有一个硬约束才能调用冲突检测 API
+    if (!hasHardConstraints) {
+      console.log('[NLChatInterface] 冲突检测跳过：没有硬约束信息（API 要求 constraints 是必需的）');
       return;
     }
 

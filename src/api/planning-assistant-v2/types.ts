@@ -89,6 +89,23 @@ export type RoutingTarget =
   | 'image'
   | 'chat';
 
+/** 澄清需求类型（如酒店日期、目的地等） */
+export type ClarificationType = 'HOTEL_DATES' | 'DESTINATION' | 'DATES' | string;
+
+/** 建议日期（行程日期，用于酒店搜索确认） */
+export interface SuggestedDates {
+  checkIn: string;  // YYYY-MM-DD
+  checkOut: string;  // YYYY-MM-DD
+}
+
+export interface ClarificationNeeded {
+  type: ClarificationType;
+  message: string;
+  messageCN?: string;
+  /** 建议日期（有 trip 时从行程带出），用户可回复「好的」确认 */
+  suggestedDates?: SuggestedDates;
+}
+
 export interface ChatResponse {
   message: string; // 英文回复（始终提供）
   messageCN?: string; // 中文回复（始终提供）
@@ -96,6 +113,8 @@ export interface ChatResponse {
   replyCN?: string; // 中文回复（始终提供）
   sessionId: string;
   phase: string;
+  /** 需要用户补充信息时返回（如酒店搜索缺日期 → type: HOTEL_DATES） */
+  clarificationNeeded?: ClarificationNeeded;
   routing?: {
     target: RoutingTarget;
     reason: string;
@@ -108,6 +127,7 @@ export interface ChatResponse {
   // MCP 服务响应数据
   hotels?: Hotel[]; // 酒店列表（当 routing.target === "hotel" 时包含）
   airbnbListings?: AirbnbListing[]; // Airbnb 房源列表（当 routing.target === "airbnb" 时包含）
+  accommodations?: Accommodation[]; // 住宿混合列表（当 routing.target === "accommodation" 时包含）
   restaurants?: Restaurant[]; // 餐厅列表（当 routing.target === "restaurant" 时包含）
   weather?: WeatherInfo; // 天气信息（当 routing.target === "weather" 时包含）
   searchResults?: SearchResult[]; // 搜索结果（当 routing.target === "search" 时包含）
@@ -335,6 +355,32 @@ export interface Hotel {
   reviews?: any[];
   amenities?: string[];
   roomTypes?: string[];
+}
+
+/** 住宿统一卡片（酒店 + Airbnb 混合列表，对应后端 AccommodationItemDto） */
+export interface Accommodation {
+  id: string;
+  source: 'hotel' | 'airbnb';
+  name: string;
+  nameCN?: string;
+  nameEN?: string;
+  address?: string;
+  /** 房型描述（如 "1 bedroom, 1 queen bed"） */
+  roomSpecs?: string;
+  location?: { lat: number; lng: number };
+  rating?: number;
+  ratingCount?: number;
+  /** 价格展示文本（如 "¥800/晚"） */
+  price?: string;
+  /** 价格等级（1=便宜，4=昂贵） */
+  priceLevel?: 1 | 2 | 3 | 4;
+  url?: string;
+  photoUrl?: string;
+  photos?: string[];
+  checkIn?: string;
+  checkOut?: string;
+  /** 原始数据（调试用） */
+  raw?: Record<string, unknown>;
 }
 
 // Airbnb 房源数据

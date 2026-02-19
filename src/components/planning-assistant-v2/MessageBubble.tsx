@@ -2,16 +2,153 @@
  * Planning Assistant V2 - 消息气泡组件
  */
 
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { User, Sparkles } from 'lucide-react';
+import { User, Sparkles, MessageCircle, CalendarIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 import type { ChatMessage } from '@/hooks/useChatV2';
 import { MCPDataDisplay } from './MCPDataDisplay';
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  onSendMessage?: (text: string) => void | Promise<void>;
+  isLastAssistantMessage?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+/** 澄清提示：当需要用户补充信息时显示；HOTEL_DATES 时展示日期选择器 */
+function ClarificationPrompt({
+  clarificationNeeded,
+  onSendMessage,
+  showDatePicker,
+  className,
+}: {
+  clarificationNeeded: NonNullable<ChatMessage['clarificationNeeded']>;
+  onSendMessage?: (text: string) => void | Promise<void>;
+  showDatePicker?: boolean;
+  className?: string;
+}) {
+  const suggestedDates = clarificationNeeded.suggestedDates;
+  const [checkIn, setCheckIn] = useState(suggestedDates?.checkIn ?? '');
+  const [checkOut, setCheckOut] = useState(suggestedDates?.checkOut ?? '');
+
+  const hint = getClarificationHint(clarificationNeeded.type);
+  const text = clarificationNeeded.messageCN || clarificationNeeded.message;
+  const isHotelDates = clarificationNeeded.type === 'HOTEL_DATES';
+
+  const handleConfirmSuggestedDates = () => {
+    if (!suggestedDates || !onSendMessage) return;
+    const start = new Date(suggestedDates.checkIn);
+    const end = new Date(suggestedDates.checkOut);
+    const msg = `${format(start, 'M月d日', { locale: zhCN })}到${format(end, 'M月d日', { locale: zhCN })}`;
+    onSendMessage(msg);
+  };
+
+  const handleConfirmDates = () => {
+    if (!checkIn || !checkOut || !onSendMessage) return;
+    const [y1, m1, d1] = checkIn.split('-').map(Number);
+    const [y2, m2, d2] = checkOut.split('-').map(Number);
+    const start = new Date(y1, m1 - 1, d1);
+    const end = new Date(y2, m2 - 1, d2);
+    if (start > end) return;
+    const text = `${format(start, 'M月d日', { locale: zhCN })}到${format(end, 'M月d日', { locale: zhCN })}`;
+    onSendMessage(text);
+    setCheckIn('');
+    setCheckOut('');
+  };
+
+  const canConfirm = checkIn && checkOut && checkIn <= checkOut;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div
+      className={cn(
+        'mt-3 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm',
+        className
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <MessageCircle className="h-4 w-4 flex-shrink-0 text-amber-600 mt-0.5" />
+        <div>
+          <p className="font-medium text-amber-800">请补充信息</p>
+          <p className="text-amber-700 mt-0.5">{text}</p>
+          {hint && !showDatePicker && (
+            <p className="text-xs text-amber-600 mt-1.5">{hint}</p>
+          )}
+        </div>
+      </div>
+
+      {/* 酒店日期：有 suggestedDates 时优先展示「确认使用行程日期」；否则展示日期选择器 */}
+      {isHotelDates && showDatePicker && onSendMessage && (
+        <div className="space-y-2">
+          {suggestedDates ? (
+            <>
+              <Button
+                size="sm"
+                className="w-full h-8 bg-amber-600 hover:bg-amber-700"
+                onClick={handleConfirmSuggestedDates}
+              >
+                <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                确认使用行程日期并搜索
+              </Button>
+              <p className="text-xs text-amber-600">或选择其他日期：</p>
+            </>
+          ) : null}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium text-amber-800 block mb-1">入住</label>
+              <Input
+                type="date"
+                value={checkIn}
+                onChange={(e) => setCheckIn(e.target.value)}
+                min={today}
+                className="h-8 text-xs border-amber-300 bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-amber-800 block mb-1">退房</label>
+              <Input
+                type="date"
+                value={checkOut}
+                onChange={(e) => setCheckOut(e.target.value)}
+                min={checkIn || today}
+                className="h-8 text-xs border-amber-300 bg-white"
+              />
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant={suggestedDates ? 'outline' : 'default'}
+            className="w-full h-8"
+            onClick={handleConfirmDates}
+            disabled={!canConfirm}
+          >
+            <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+            {suggestedDates ? '使用以上日期搜索' : '确认并搜索酒店'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getClarificationHint(type: string): string | null {
+  switch (type) {
+    case 'HOTEL_DATES':
+      return '例如：3月15日到20日、3月15日入住3月20日退房';
+    case 'DESTINATION':
+      return '例如：冰岛、东京、巴黎';
+    case 'DATES':
+      return '例如：3月1日到7日、下周';
+    default:
+      return null;
+  }
+}
+
+export function MessageBubble({ message, onSendMessage, isLastAssistantMessage }: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -56,6 +193,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             {message.content || '(空消息)'}
           </div>
         </div>
+
+        {/* 澄清提示：需要用户补充信息时显示；最后一条时展示可交互的日期选择器 */}
+        {!isUser && message.clarificationNeeded && (
+          <ClarificationPrompt
+            clarificationNeeded={message.clarificationNeeded}
+            onSendMessage={onSendMessage}
+            showDatePicker={isLastAssistantMessage}
+          />
+        )}
 
         {/* MCP 服务数据展示（推荐、酒店、餐厅、天气等） */}
         {!isUser && <MCPDataDisplay message={message} />}

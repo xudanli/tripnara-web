@@ -4,11 +4,12 @@
  * 兼容新旧两种字段名（question/text, type/inputType）
  */
 
-import type { NLClarificationQuestion } from '@/types/trip';
+import type { NLClarificationQuestion, ConditionalInputField } from '@/types/trip';
 
 /**
  * 适配器函数：将后端返回的澄清问题格式转换为前端格式
  * 兼容新旧两种字段名（question/text, type/inputType）
+ * 透传 conditionalInputs，用于条件输入（日期选择、预算输入等）
  */
 export function normalizeClarificationQuestion(
   q: any
@@ -23,17 +24,27 @@ export function normalizeClarificationQuestion(
     inputType = 'multiple_choice';
   }
   
+  const options = q.options || [];
+  
+  // 透传 conditionalInputs；若后端未提供，则根据选项语义注入 fallback
+  let conditionalInputs: ConditionalInputField[] | undefined = q.conditionalInputs;
+  if (!conditionalInputs?.length && Array.isArray(options)) {
+    conditionalInputs = inferConditionalInputsFromOptions(options, q.metadata?.fieldName);
+  }
+  
   return {
     id: q.id,
     // 向后兼容：同时支持 question 和 text
     text: questionText,
     // 向后兼容：同时支持 type 和 inputType
     inputType: inputType as NLClarificationQuestion['inputType'],
-    options: q.options,
+    options,
     required: q.required !== undefined ? q.required : true,
     placeholder: q.placeholder,
     hint: q.hint,
     default: q.default,
+    group: q.group,
+    conditionalInputs,
     metadata: {
       category: q.metadata?.category,
       priority: q.metadata?.priority,
@@ -42,6 +53,44 @@ export function normalizeClarificationQuestion(
       fieldName: q.metadata?.fieldName,
     },
   };
+}
+
+/**
+ * 根据选项文本推断条件输入字段（后端未提供时使用）
+ * 例如：「不准确,需要修改具体日期」→ date_range；「需要调整,我的总预算是____元」→ number
+ */
+function inferConditionalInputsFromOptions(
+  options: any[],
+  _fieldName?: string
+): ConditionalInputField[] {
+  const result: ConditionalInputField[] = [];
+  
+  for (const opt of options) {
+    const s = (typeof opt === 'object' && opt !== null ? (opt.value ?? opt.label ?? '') : String(opt)).trim();
+    if (!s) continue;
+    // 日期相关：不准确/需要修改 + 日期
+    if (/不准确|需要修改|修改.*日期/.test(s) && /日期|时间|天/.test(s)) {
+      result.push({
+        triggerValue: s,
+        inputType: 'date_range',
+        label: '请选择行程日期范围',
+        required: true,
+      });
+    }
+    // 预算相关：需要调整 + 预算/元
+    if (/需要调整|不符合|调整/.test(s) && /预算|元|____/.test(s)) {
+      result.push({
+        triggerValue: s,
+        inputType: 'number',
+        label: '请输入总预算（元）',
+        placeholder: '例如：15000',
+        required: true,
+        validation: { min: 1, max: 10000000 },
+      });
+    }
+  }
+  
+  return result;
 }
 
 /**

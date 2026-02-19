@@ -14,7 +14,7 @@ import type { SuggestionStats } from '@/types/suggestion';
 import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
 import type { PlaceCategory } from '@/types/places-routes';
 import { format } from 'date-fns';
-import { useDrawer } from '@/components/layout/DashboardLayout';
+import { DrawerContext } from '@/components/layout/DashboardLayout';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -165,9 +165,11 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
   const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
   
-  // 🆕 使用 useDrawer hook（必须在 DashboardLayout 上下文中）
-  // 注意：如果出现错误，说明组件不在 DashboardLayout 中，需要检查路由配置
-  const { setDrawerOpen, setDrawerTab, setHighlightItemId } = useDrawer();
+  // 安全使用 DrawerContext（若不在 DashboardLayout 中则使用空函数，避免报错）
+  const drawerContext = useContext(DrawerContext);
+  const setDrawerOpen = drawerContext?.setDrawerOpen ?? (() => {});
+  const setDrawerTab = drawerContext?.setDrawerTab ?? (() => {});
+  const setHighlightItemId = drawerContext?.setHighlightItemId ?? (() => {});
   
   // 准备度相关状态
   const [readinessData, setReadinessData] = useState<ScoreBreakdownResponse | null>(null);

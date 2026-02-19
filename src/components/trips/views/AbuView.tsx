@@ -39,7 +39,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
     return (
       <div className="flex items-center justify-center p-8">
         <Spinner className="w-8 h-8" />
-        <span className="ml-2">加载安全数据...</span>
+        <span className="ml-2">{t('tripViews.abu.loadingSafetyData')}</span>
       </div>
     );
   }
@@ -60,14 +60,14 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
   };
 
   const getStatusText = () => {
-    // 保持原有的国际化文本，但使用标准化状态
+    // 使用国际化文本
     switch (normalizedStatus) {
       case 'ALLOW':
-        return t('tripViews.abu.status.executable') || '已通过所有安全检查';
+        return t('tripViews.abu.status.executable');
       case 'NEED_CONFIRM':
-        return t('tripViews.abu.status.needConfirm') || '存在安全风险，建议检查';
+        return t('tripViews.abu.status.needConfirm');
       case 'REJECT':
-        return t('tripViews.abu.status.blocked') || '存在硬约束违反，路线不可执行';
+        return t('tripViews.abu.status.blocked');
       default:
         return statusLabel;
     }
@@ -120,13 +120,13 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
             <div className="flex items-center gap-2.5">
               {getStatusIcon()}
               <div>
-                <div className="font-semibold text-base">安全状态：{getStatusText()}</div>
+                <div className="font-semibold text-base">{t('tripViews.abu.safetyStatus')}：{getStatusText()}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {normalizedStatus === 'ALLOW'
-                    ? t('tripViews.abu.violations.messages.safeToExecute') || '已通过所有安全检查'
+                    ? t('tripViews.abu.violations.messages.safeToExecute')
                     : gatingStatus === 'WARN'
-                    ? t('tripViews.abu.violations.messages.needConfirm') || '存在安全风险，建议检查'
-                    : t('tripViews.abu.violations.messages.mustFix') || '存在硬约束违反，路线不可执行'}
+                    ? t('tripViews.abu.violations.messages.needConfirm')
+                    : t('tripViews.abu.violations.messages.mustFix')}
                 </div>
               </div>
             </div>
@@ -152,8 +152,8 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
         <Card className="border-green-200 bg-green-50/50">
           <CardContent className="py-12 text-center">
             <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-600" />
-            <div className="text-sm font-medium text-gray-900 mb-1">所有行程项状态良好</div>
-            <div className="text-xs text-muted-foreground">无需修复，可以放心前往 ✨</div>
+            <div className="text-sm font-medium text-gray-900 mb-1">{t('tripViews.abu.allItemsGood')}</div>
+            <div className="text-xs text-muted-foreground">{t('tripViews.abu.noFixNeeded')}</div>
           </CardContent>
         </Card>
       )}
@@ -164,9 +164,9 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Shield className="w-4 h-4 text-red-600" />
-              红线摘要
+              {t('tripViews.abu.redlineSummary.title')}
             </CardTitle>
-            <CardDescription className="text-xs">最关键的风险项，点击可定位到对应行程项</CardDescription>
+            <CardDescription className="text-xs">{t('tripViews.abu.redlineSummary.description')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {violations.slice(0, 3).map((violation) => (
@@ -190,7 +190,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1.5">
                       <Badge variant="destructive" className="text-xs">
-                        硬约束违反
+                        {t('tripViews.abu.hardConstraintViolation')}
                       </Badge>
                       <span className="text-sm font-medium truncate">{violation.explanation}</span>
                     </div>
@@ -205,7 +205,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                     )}
                     {violation.affectedDays.length > 0 && (
                       <div className="text-xs text-muted-foreground mt-1.5">
-                        影响天数: {violation.affectedDays.join(', ')}
+                        {t('tripViews.abu.affectedDays')}: {violation.affectedDays.join(', ')}
                       </div>
                     )}
                   </div>
@@ -236,7 +236,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
               <Card key={day.id}>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">
-                    {format(new Date(day.date), 'yyyy年MM月dd日')} ({day.date})
+                    {format(new Date(day.date), t('tripViews.abu.dateFormat'))} ({day.date})
                   </CardTitle>
                   {/* ✅ 显示当天主题（如果存在） */}
                   {day.theme && (
@@ -271,7 +271,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                           {/* 左侧风险徽标 */}
                           <div className="flex-shrink-0 pt-0.5">
                             <Badge className={cn(getRiskBadgeColor(risk.level), 'text-xs')}>
-                              {risk.level === 'HIGH' ? '高' : risk.level === 'MEDIUM' ? '中' : '低'}
+                              {risk.level === 'HIGH' ? t('tripViews.abu.riskLevel.high') : risk.level === 'MEDIUM' ? t('tripViews.abu.riskLevel.medium') : t('tripViews.abu.riskLevel.low')}
                             </Badge>
                           </div>
 
@@ -283,7 +283,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                               {/* ✅ 显示必游标记（如果存在） */}
                               {(item.isRequired || item.note?.includes('[必游]')) && (
                                 <Badge variant="default" className="text-xs">
-                                  必游
+                                  {t('tripViews.abu.mustVisit')}
                                 </Badge>
                               )}
                             </div>
@@ -324,10 +324,10 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-red-600" />
-              风险详情
+              {t('tripViews.abu.riskDetails.title')}
             </SheetTitle>
             <SheetDescription>
-              {selectedItem?.Place?.nameCN || selectedItem?.type} 的风险评估与证据
+              {selectedItem?.Place?.nameCN || selectedItem?.type}{t('tripViews.abu.riskDetails.subtitle')}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-4">
@@ -335,20 +335,20 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">行程项信息</CardTitle>
+                    <CardTitle className="text-lg">{t('tripViews.abu.itemInfo.title')}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <div>
-                      <span className="font-medium">地点：</span>
+                      <span className="font-medium">{t('tripViews.abu.itemInfo.location')}:</span>{' '}
                       {selectedItem.Place?.nameCN || selectedItem.type}
                     </div>
                     <div>
-                      <span className="font-medium">时间：</span>
+                      <span className="font-medium">{t('tripViews.abu.itemInfo.time')}:</span>{' '}
                       {format(new Date(selectedItem.startTime), 'yyyy-MM-dd HH:mm')} -{' '}
                       {format(new Date(selectedItem.endTime), 'HH:mm')}
                     </div>
                     <div>
-                      <span className="font-medium">类型：</span>
+                      <span className="font-medium">{t('tripViews.abu.itemInfo.type')}:</span>{' '}
                       {selectedItem.type}
                     </div>
                   </CardContent>
@@ -369,10 +369,10 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                         <CardContent className="pt-6">
                           <div className="flex items-center gap-2 text-green-800">
                             <CheckCircle2 className="w-5 h-5" />
-                            <span className="font-medium">无风险</span>
+                            <span className="font-medium">{t('tripViews.abu.noRisk.title')}</span>
                           </div>
                           <div className="text-sm text-green-700 mt-2">
-                            该行程项已通过安全检查，无已知风险。
+                            {t('tripViews.abu.noRisk.description')}
                           </div>
                         </CardContent>
                       </Card>
@@ -386,7 +386,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                           <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
                               <Badge variant="destructive">
-                                {itemRisk.level === 'HIGH' ? '高风险' : itemRisk.level === 'MEDIUM' ? '中风险' : '低风险'}
+                                {itemRisk.level === 'HIGH' ? t('tripViews.abu.riskLevel.highRisk') : itemRisk.level === 'MEDIUM' ? t('tripViews.abu.riskLevel.mediumRisk') : t('tripViews.abu.riskLevel.lowRisk')}
                               </Badge>
                               {itemRisk.tags.join(', ')}
                             </CardTitle>
@@ -395,7 +395,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                             <div className="text-sm">{itemRisk.tags.join('、')}</div>
                             {itemRisk.tags.length > 0 && (
                               <div className="text-xs text-muted-foreground mt-2">
-                                风险类型: {itemRisk.tags[0]}
+                                {t('tripViews.abu.riskType')}: {itemRisk.tags[0]}
                               </div>
                             )}
                           </CardContent>
@@ -410,20 +410,20 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                           <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
                               <Badge variant="destructive">
-                                硬约束违反
+                                {t('tripViews.abu.hardConstraintViolation')}
                               </Badge>
                               {violation.explanation}
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="space-y-4">
                             <div>
-                              <div className="font-medium mb-2">拒绝原因：</div>
+                              <div className="font-medium mb-2">{t('tripViews.abu.rejectReason')}:</div>
                               <div className="text-sm">{violation.explanation}</div>
                             </div>
 
                             {violation.reasonCodes.length > 0 && (
                             <div>
-                                <div className="font-medium mb-2">原因码：</div>
+                                <div className="font-medium mb-2">{t('tripViews.abu.reasonCodes')}:</div>
                                 <div className="flex gap-2 flex-wrap">
                                   {violation.reasonCodes.map((code) => (
                                     <Badge key={code} variant="outline">
@@ -436,7 +436,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
 
                             {violation.evidenceRefs && violation.evidenceRefs.length > 0 && (
                               <div>
-                                <div className="font-medium mb-2">证据引用：</div>
+                                <div className="font-medium mb-2">{t('tripViews.abu.evidenceRefs')}:</div>
                                 <div className="text-sm text-muted-foreground">
                                   {violation.evidenceRefs.join(', ')}
                                   </div>
@@ -444,23 +444,23 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                             )}
 
                             <div>
-                              <div className="font-medium mb-2">影响范围：</div>
+                              <div className="font-medium mb-2">{t('tripViews.abu.affectedScope')}:</div>
                               <div className="text-sm text-muted-foreground">
-                                影响 {violation.affectedDays.length} 个日期
+                                {t('tripViews.abu.affectedDatesCount', { count: violation.affectedDays.length })}
                               </div>
                             </div>
 
                             <div>
-                              <div className="font-medium mb-2">建议动作：</div>
+                              <div className="font-medium mb-2">{t('tripViews.abu.suggestedAction')}:</div>
                                   <Button
                                     className="w-full"
                                     variant="destructive"
                                     onClick={() => {
                                       // 跳转到 Neptune 修复
-                                      console.log('跳转到 Neptune 修复');
+                                      console.log(t('tripViews.abu.violations.gotoNeptune'));
                                     }}
                                   >
-                                必须修复（跳转到 Neptune）
+                                {t('tripViews.abu.mustFixNeptune')}
                                     <ExternalLink className="w-4 h-4 ml-2" />
                                   </Button>
                             </div>

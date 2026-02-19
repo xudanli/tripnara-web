@@ -19,6 +19,12 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   phase?: string;
+  clarificationNeeded?: {
+    type: string;
+    message: string;
+    messageCN?: string;
+    suggestedDates?: { checkIn: string; checkOut: string };
+  };
   routing?: {
     target: RoutingTarget;
     reason: string;
@@ -31,6 +37,7 @@ export interface ChatMessage {
   // MCP 服务响应数据
   hotels?: any[]; // 酒店列表
   airbnbListings?: any[]; // Airbnb 房源列表
+  accommodations?: any[]; // 住宿混合列表（酒店 + Airbnb）
   restaurants?: any[]; // 餐厅列表
   weather?: any; // 天气信息
   searchResults?: any[]; // 搜索结果
@@ -97,6 +104,7 @@ export function useChatV2(
         content: replyContent,
         timestamp: new Date(),
         phase: data.phase,
+        clarificationNeeded: data.clarificationNeeded,
         routing: data.routing,
         // 推荐和方案数据
         recommendations: data.recommendations,
@@ -104,6 +112,7 @@ export function useChatV2(
         // MCP 服务响应数据
         hotels: data.hotels,
         airbnbListings: data.airbnbListings,
+        accommodations: data.accommodations,
         restaurants: data.restaurants,
         weather: data.weather,
         searchResults: data.searchResults,

@@ -30,7 +30,8 @@ interface AutoOverviewProps {
   abuData: AbuViewData | null;
   drDreData: DrDreViewData | null;
   neptuneData: NeptuneViewData | null;
-  onViewClick?: (view: 'abu' | 'dre' | 'neptune') => void; // 🆕 点击视角卡片时的回调
+  onViewClick?: (view: 'abu' | 'dre' | 'neptune') => void;
+  onRequestDetailView?: () => void; // 用户点击「查看问题」或「查看分析」时，请求展开详情 Tab
 }
 
 export default function AutoOverview({ 
@@ -39,7 +40,8 @@ export default function AutoOverview({
   abuData, 
   drDreData, 
   neptuneData,
-  onViewClick
+  onViewClick,
+  onRequestDetailView
 }: AutoOverviewProps) {
   const [isExpanded, setIsExpanded] = useState(false); // ✅ 控制综合视图展开/折叠
   
@@ -171,7 +173,10 @@ export default function AutoOverview({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setIsExpanded(true)}
+                  onClick={() => {
+                    setIsExpanded(true);
+                    onRequestDetailView?.();
+                  }}
                   className="h-7 px-2 text-xs text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
                 >
                   查看问题
@@ -184,7 +189,10 @@ export default function AutoOverview({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setIsExpanded(true)}
+                  onClick={() => {
+                    setIsExpanded(true);
+                    onRequestDetailView?.();
+                  }}
                   className="h-7 px-2 text-xs"
                 >
                   ▶ 查看分析
@@ -197,7 +205,7 @@ export default function AutoOverview({
 
       {/* 展开后的详细视图 */}
       {isExpanded && (
-        <CardContent className="pt-4 border-t">
+        <CardContent className="pt-4 border-t animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold">综合分析（3 个视角）</h3>
             <Button

@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time-validation';
+import { formatValidationMessage } from '@/utils/openingHoursFormatter';
 import { useItineraryValidation, getDefaultCostCategory } from '@/hooks';
 import { AlertTriangle, Info, AlertCircle, DollarSign } from 'lucide-react';
 import type { CostCategory } from '@/types/trip';
@@ -279,7 +280,9 @@ export function CreateItineraryItemDialog({
         if (validation) {
           // 检查是否有错误
           if (validation.errors && validation.errors.length > 0) {
-            const errorMessages = validation.errors.map(e => e.message).join('\n');
+            const errorMessages = validation.errors
+              .map(e => formatValidationMessage(e.message, e.details))
+              .join('\n');
             setError(errorMessages);
             setValidationResult({
               errors: validation.errors,
@@ -374,8 +377,7 @@ export function CreateItineraryItemDialog({
     } catch (err: any) {
       const errorMessage = err.message || '创建行程项失败';
       setError(errorMessage);
-      // 移除 Toast 错误通知，避免与内联错误消息重复
-      // 模态框内的操作错误应该只使用内联错误消息
+      toast.error(errorMessage, { description: '请根据提示调整后重试' });
     } finally {
       setLoading(false);
     }
@@ -410,7 +412,7 @@ export function CreateItineraryItemDialog({
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-red-800">{err.message}</p>
+                        <p className="text-sm font-medium text-red-800">{formatValidationMessage(err.message, err.details)}</p>
                         {err.suggestions && err.suggestions.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {err.suggestions.map((suggestion: any, sIdx: number) => (
@@ -435,7 +437,7 @@ export function CreateItineraryItemDialog({
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-yellow-800">{warning.message}</p>
+                        <p className="text-sm font-medium text-yellow-800">{formatValidationMessage(warning.message, warning.details)}</p>
                       {warning.suggestions && warning.suggestions.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {warning.suggestions.map((suggestion: any, sIdx: number) => (
@@ -476,7 +478,7 @@ export function CreateItineraryItemDialog({
                   <div key={idx} className="rounded-lg bg-blue-50 border border-blue-200 p-3">
                     <div className="flex items-start gap-2">
                       <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-blue-800">{info.message}</p>
+                      <p className="text-sm text-blue-800">{formatValidationMessage(info.message, info.details)}</p>
                     </div>
                   </div>
                 ))}
@@ -511,10 +513,11 @@ export function CreateItineraryItemDialog({
               </div>
             )}
 
-            {/* 错误提示（兼容旧代码） */}
-            {error && !validationResult && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                {error}
+            {/* 错误提示：校验错误在 validationResult 中展示，此处展示 API/创建失败等错误 */}
+            {error && (!validationResult || validationResult.errors.length === 0) && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <span>{formatValidationMessage(error)}</span>
               </div>
             )}
 

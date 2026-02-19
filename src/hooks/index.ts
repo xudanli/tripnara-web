@@ -119,6 +119,8 @@ export {
   useTeamWeights,
   useTeamConstraints,
   // 实时状态
+  useInitializeRealtimeState,
+  useRealtimeStateExists,
   useRealtimeState,
   usePredictedState,
   useSubscribeRealtime,

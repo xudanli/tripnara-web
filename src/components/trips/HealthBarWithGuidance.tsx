@@ -1,12 +1,13 @@
 /**
- * 健康度组件 - 控制中枢版本
- * 包含人话总结、下一步建议和可点击的建议卡
+ * 行程评分组件 - TripNARA 交互哲学版
+ * 单状态原则：默认仅显示「行程评分」，子维度折叠（渐进揭示）
+ * 依据：tripnara-interaction-philosophy-prd.md
  */
 
+import { useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CheckCircle2, AlertTriangle, XCircle, ArrowRight, Compass, Wallet, Shield, Activity } from 'lucide-react';
+import { ChevronDown, ChevronUp, Compass, Wallet, Shield, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 
 interface HealthBarWithGuidanceProps {
   executable: number; // 0-100
@@ -17,6 +18,7 @@ interface HealthBarWithGuidanceProps {
   onMetricClick?: (metricName: 'schedule' | 'budget' | 'pace' | 'feasibility') => void;
   onNavigateToPlanStudio?: () => void;
   onNavigateToBudget?: () => void;
+  onExpandToPlanDetails?: () => void; // 点击「展开：查看分析」时，可跳转并展开规划 Tab 内的问题与改进
   tripStatus?: string;
   overallScore?: number; // 🆕 优先使用 API 返回的整体健康度分数（0-100）
 }
@@ -30,10 +32,13 @@ export default function HealthBarWithGuidance({
   onMetricClick,
   onNavigateToPlanStudio,
   onNavigateToBudget,
+  onExpandToPlanDetails,
   tripStatus = 'PLANNING',
   overallScore, // 🆕 优先使用 API 返回的整体健康度分数
 }: HealthBarWithGuidanceProps) {
-  // 🆕 优先使用 API 返回的 overallScore，如果没有则使用木桶效应计算
+  const [detailsExpanded, setDetailsExpanded] = useState(false); // 子维度默认折叠
+
+  // 优先使用 API 返回的 overallScore，如果没有则使用木桶效应计算
   const overallHealth = overallScore !== undefined && overallScore !== null
     ? Math.round(overallScore)
     : Math.round(Math.min(
@@ -189,6 +194,14 @@ export default function HealthBarWithGuidance({
 
   const metricCards = getMetricCards();
 
+  // 行程评分等级（用户视角）
+  const getScoreLevel = () => {
+    if (overallHealth >= 90) return { label: '优秀', color: 'text-green-600' };
+    if (overallHealth >= 70) return { label: '良好', color: 'text-yellow-600' };
+    return { label: '待优化', color: 'text-red-600' };
+  };
+  const scoreLevel = getScoreLevel();
+
   const getColorClasses = (color: string) => {
     switch (color) {
       case 'green':
@@ -299,31 +312,25 @@ export default function HealthBarWithGuidance({
   return (
     <TooltipProvider>
       <div className={cn('space-y-2', className)}>
-        {/* 🎯 恢复明显的健康度显示 - 更紧凑 */}
+        {/* 单状态：行程评分（PRD：只保留一个） */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between mb-0.5">
             <div className="flex items-center gap-1.5">
               <span className="text-sm">{healthSummary.statusIcon}</span>
-              <span className="text-xs font-medium text-gray-700">健康度</span>
+              <span className="text-xs font-medium text-gray-700">行程评分</span>
+              <span className={cn('text-xs font-medium', scoreLevel.color)}>{scoreLevel.label}</span>
             </div>
-            <span className={cn('text-sm font-bold', 
-              overallHealth >= 80 ? 'text-green-600' : 
-              overallHealth >= 60 ? 'text-yellow-600' : 'text-red-600'
-            )}>
-              {overallHealth}%
+            <span className={cn('text-sm font-bold', scoreLevel.color)}>
+              {overallHealth}
             </span>
           </div>
           
-          {/* 🎯 恢复进度条：始终显示 - 更小的高度 */}
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
-            {/* 渐变背景 */}
             <div className="absolute inset-0 bg-gradient-to-r from-red-500 via-orange-500 via-yellow-500 via-lime-500 to-green-500" />
-            {/* 进度指示器（白色遮罩，从右向左） */}
             <div 
               className="absolute top-0 right-0 h-full bg-white/90 transition-all duration-300"
               style={{ width: `${100 - overallHealth}%` }}
             />
-            {/* 刻度线 */}
             <div className="absolute top-0 left-0 right-0 h-full flex items-center pointer-events-none">
               {[0, 25, 50, 75, 100].map((mark) => (
                 <div
@@ -335,39 +342,48 @@ export default function HealthBarWithGuidance({
             </div>
           </div>
 
-          {/* 🎯 恢复状态和下一步建议 - 更紧凑 */}
           {overallHealth < 90 && (
             <div className="space-y-0.5">
-              <p className="text-xs text-gray-600 leading-tight">
-                {healthSummary.summary}
-              </p>
+              <p className="text-xs text-gray-600 leading-tight">{healthSummary.summary}</p>
               {healthSummary.nextStep && (
-                <p className="text-xs text-gray-500 leading-tight">
-                  {healthSummary.nextStep}
-                </p>
+                <p className="text-xs text-gray-500 leading-tight">{healthSummary.nextStep}</p>
               )}
             </div>
           )}
           {overallHealth >= 90 && healthSummary.nextStep && (
-            <p className="text-xs text-gray-600 leading-tight">
-              {healthSummary.nextStep}
-            </p>
+            <p className="text-xs text-gray-600 leading-tight">{healthSummary.nextStep}</p>
           )}
         </div>
 
-        {/* 🎯 恢复4个指标的网格展示 - 更紧凑 */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {allMetricCards.map((card) => {
-            const colors = getColorClasses(card.color);
-            const Icon = card.icon;
-            
+        {/* 子维度：折叠展示（PRD：渐进揭示）；点击可展开本组件指标卡，并可选跳转至规划 Tab 问题与改进 */}
+        <button
+          type="button"
+          onClick={() => {
+            setDetailsExpanded(!detailsExpanded);
+            if (!detailsExpanded) onExpandToPlanDetails?.();
+          }}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {detailsExpanded ? (
+            <ChevronUp className="w-3 h-3" />
+          ) : (
+            <ChevronDown className="w-3 h-3" />
+          )}
+          {detailsExpanded ? '收起分析' : '展开：查看分析'}
+        </button>
+
+        {detailsExpanded && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 animate-in fade-in duration-200">
+            {allMetricCards.map((card) => {
+              const colors = getColorClasses(card.color);
+              const Icon = card.icon;
               return (
                 <Tooltip key={card.name}>
                   <TooltipTrigger asChild>
                     <div
                       onClick={card.onClick}
                       className={cn(
-                        'p-2 rounded-md border cursor-pointer transition-all group',
+                        'p-2 rounded-md border cursor-pointer transition-all',
                         'hover:shadow-sm hover:border-opacity-80',
                         colors.bg,
                         colors.border
@@ -376,12 +392,8 @@ export default function HealthBarWithGuidance({
                       <div className="flex flex-col items-center gap-1">
                         <Icon className={cn('w-4 h-4', colors.icon)} />
                         <div className="text-center">
-                          <div className="text-xs font-medium text-gray-700 mb-0.5">
-                            {card.name}
-                          </div>
-                          <div className={cn('text-sm font-bold', colors.text)}>
-                            {card.value}%
-                          </div>
+                          <div className="text-xs font-medium text-gray-700 mb-0.5">{card.name}</div>
+                          <div className={cn('text-sm font-bold', colors.text)}>{card.value}%</div>
                         </div>
                       </div>
                     </div>
@@ -395,8 +407,9 @@ export default function HealthBarWithGuidance({
                   </TooltipContent>
                 </Tooltip>
               );
-          })}
-        </div>
+            })}
+          </div>
+        )}
       </div>
     </TooltipProvider>
   );

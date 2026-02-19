@@ -16,7 +16,8 @@ import type {
   CalibrationResult,
 } from '@/types/fitness';
 
-const BASE_PATH = '/api/v1/fitness';
+// 注意：baseURL 已经是 /api，所以这里不需要 /api 前缀
+const BASE_PATH = '/v1/fitness';
 
 /**
  * 体能 API 错误类

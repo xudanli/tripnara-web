@@ -1,12 +1,18 @@
 /**
  * Planning Assistant V2 - 酒店列表组件
+ * 渐进式披露：默认展示前 4 条，可展开全部；列表区域固定高度 + 内部滚动
  */
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Star, Phone, Globe } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MapPin, Star, Phone, Globe, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Hotel } from '@/api/planning-assistant-v2';
+
+const INITIAL_VISIBLE = 4;
+const LIST_MAX_HEIGHT = 320;
 
 interface HotelListProps {
   hotels: Hotel[];
@@ -14,13 +20,24 @@ interface HotelListProps {
 }
 
 export function HotelList({ hotels, className }: HotelListProps) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!hotels || hotels.length === 0) {
     return null;
   }
 
+  const total = hotels.length;
+  const visibleCount = expanded ? total : Math.min(INITIAL_VISIBLE, total);
+  const hasMore = total > INITIAL_VISIBLE && !expanded;
+  const visibleHotels = hotels.slice(0, visibleCount);
+
   return (
-    <div className={cn('mt-4 space-y-3', className)}>
-      {hotels.map((hotel) => (
+    <div className={cn('mt-4', className)}>
+      <div
+        className="space-y-3 overflow-y-auto pr-1"
+        style={{ maxHeight: LIST_MAX_HEIGHT }}
+      >
+        {visibleHotels.map((hotel) => (
         <Card key={hotel.placeId} className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between">
@@ -80,7 +97,19 @@ export function HotelList({ hotels, className }: HotelListProps) {
             )}
           </CardContent>
         </Card>
-      ))}
+        ))}
+      </div>
+      {hasMore && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full mt-2 text-muted-foreground hover:text-foreground"
+          onClick={() => setExpanded(true)}
+        >
+          <ChevronDown className="w-4 h-4 mr-1" />
+          展开全部 {total} 个
+        </Button>
+      )}
     </div>
   );
 }

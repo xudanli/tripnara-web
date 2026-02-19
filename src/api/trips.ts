@@ -1458,28 +1458,32 @@ export const itineraryItemsApi = {
       }
       
       // 处理后端错误响应
+      // 兼容两种格式：1) 自定义 { success, error: { message } } 2) NestJS { message, error, statusCode }
       if (error.response?.data) {
-        const errorData = error.response.data as ErrorResponse;
-        if (!errorData.success && errorData.error) {
-          const apiError = new Error(errorData.error.message) as Error & {
-            code?: string;
-            details?: any;
-            warnings?: any[];
-            cascadeImpact?: any;
-            travelInfo?: any;
-          };
-          apiError.code = errorData.error.code;
-          apiError.details = errorData.error.details;
-          
-          // 提取 warnings、cascadeImpact、travelInfo
-          if (errorData.error.details) {
-            apiError.warnings = errorData.error.details.warnings || [];
-            apiError.cascadeImpact = errorData.error.details.cascadeImpact;
-            apiError.travelInfo = errorData.error.details.travelInfo;
-          }
-          
-          throw apiError;
+        const errorData = error.response.data as ErrorResponse & { message?: string };
+        const message =
+          errorData.message ??
+          (typeof errorData.error === 'object' && errorData.error?.message
+            ? errorData.error.message
+            : undefined) ??
+          error.message ??
+          '创建行程项失败';
+        const errObj = typeof errorData.error === 'object' ? errorData.error : null;
+        const apiError = new Error(message) as Error & {
+          code?: string;
+          details?: any;
+          warnings?: any[];
+          cascadeImpact?: any;
+          travelInfo?: any;
+        };
+        apiError.code = errObj?.code;
+        apiError.details = errObj?.details;
+        if (apiError.details) {
+          apiError.warnings = apiError.details.warnings || [];
+          apiError.cascadeImpact = apiError.details.cascadeImpact;
+          apiError.travelInfo = apiError.details.travelInfo;
         }
+        throw apiError;
       }
       
       throw error;
@@ -1593,29 +1597,32 @@ export const itineraryItemsApi = {
         throw error;
       }
       
-      // 处理后端错误响应
+      // 处理后端错误响应（兼容 NestJS { message } 与自定义 { error: { message } } 格式）
       if (error.response?.data) {
-        const errorData = error.response.data as ErrorResponse;
-        if (!errorData.success && errorData.error) {
-          const apiError = new Error(errorData.error.message) as Error & {
-            code?: string;
-            details?: any;
-            warnings?: any[];
-            cascadeImpact?: any;
-            travelInfo?: any;
-          };
-          apiError.code = errorData.error.code;
-          apiError.details = errorData.error.details;
-          
-          // 提取 warnings、cascadeImpact、travelInfo
-          if (errorData.error.details) {
-            apiError.warnings = errorData.error.details.warnings || [];
-            apiError.cascadeImpact = errorData.error.details.cascadeImpact;
-            apiError.travelInfo = errorData.error.details.travelInfo;
-          }
-          
-          throw apiError;
+        const errorData = error.response.data as ErrorResponse & { message?: string };
+        const message =
+          errorData.message ??
+          (typeof errorData.error === 'object' && errorData.error?.message
+            ? errorData.error.message
+            : undefined) ??
+          error.message ??
+          '更新行程项失败';
+        const errObj = typeof errorData.error === 'object' ? errorData.error : null;
+        const apiError = new Error(message) as Error & {
+          code?: string;
+          details?: any;
+          warnings?: any[];
+          cascadeImpact?: any;
+          travelInfo?: any;
+        };
+        apiError.code = errObj?.code;
+        apiError.details = errObj?.details;
+        if (apiError.details) {
+          apiError.warnings = apiError.details.warnings || [];
+          apiError.cascadeImpact = apiError.details.cascadeImpact;
+          apiError.travelInfo = apiError.details.travelInfo;
         }
+        throw apiError;
       }
       
       throw error;

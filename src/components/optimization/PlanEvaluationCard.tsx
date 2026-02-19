@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import type { EvaluatePlanResponse, ObjectiveFunctionWeights } from '@/types/optimization-v2';
+import { BREAKDOWN_TO_WEIGHT_KEY, DEFAULT_WEIGHTS } from '@/types/optimization-v2';
 import {
   Shield,
   Sparkles,
@@ -86,7 +87,7 @@ const DIMENSION_CONFIG = {
     description: '天气风险应对',
   },
   budgetScore: {
-    key: 'budget',
+    key: 'budgetRisk',
     label: '预算',
     labelEn: 'Budget',
     icon: Wallet,
@@ -94,7 +95,7 @@ const DIMENSION_CONFIG = {
     description: '预算合理性',
   },
   crowdScore: {
-    key: 'crowd',
+    key: 'crowdAvoidance',
     label: '避流',
     labelEn: 'Crowd',
     icon: Users,
@@ -138,7 +139,8 @@ function DimensionRow({
 }) {
   const config = DIMENSION_CONFIG[dimension];
   const Icon = config.icon;
-  const percentage = Math.round(score * 100);
+  const s = Number(score);
+  const percentage = Number.isNaN(s) ? 0 : Math.round(Math.max(0, Math.min(1, s)) * 100);
   
   return (
     <div className="flex items-center gap-3 py-1.5">
@@ -152,7 +154,7 @@ function DimensionRow({
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-medium">{config.label}</span>
           <div className="flex items-center gap-2">
-            {showWeight && weight !== undefined && (
+            {showWeight && weight !== undefined && !Number.isNaN(weight) && (
               <span className="text-xs text-muted-foreground">
                 权重 {Math.round(weight * 100)}%
               </span>
@@ -181,7 +183,12 @@ function ComparisonIndicator({
   currentValue: number; 
   compareValue: number;
 }) {
-  const diff = currentValue - compareValue;
+  const curr = Number(currentValue);
+  const comp = Number(compareValue);
+  if (Number.isNaN(curr) || Number.isNaN(comp)) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const diff = curr - comp;
   const percentage = Math.round(Math.abs(diff) * 100);
   
   if (Math.abs(diff) < 0.01) {
@@ -257,10 +264,10 @@ export function PlanEvaluationCard({
     });
   }, [evaluation, compareEvaluation]);
 
-  // 获取对应的权重
+  // 获取对应的权重（breakdown key -> weight key）；API 未返回时用默认权重
   const getWeight = (key: DimensionKey): number => {
-    const weightKey = DIMENSION_CONFIG[key].key as keyof ObjectiveFunctionWeights;
-    return evaluation.weightsUsed?.[weightKey] ?? 0;
+    const weightKey = BREAKDOWN_TO_WEIGHT_KEY[key] ?? DIMENSION_CONFIG[key].key as keyof ObjectiveFunctionWeights;
+    return evaluation.weightsUsed?.[weightKey] ?? DEFAULT_WEIGHTS[weightKey] ?? 0;
   };
 
   return (
@@ -273,10 +280,10 @@ export function PlanEvaluationCard({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-2xl font-bold tabular-nums">
-              {Math.round(evaluation.totalUtility * 100)}
+              {Number.isNaN(Number(evaluation.totalUtility)) ? '—' : Math.round((evaluation.totalUtility ?? 0) * 100)}
             </span>
             <span className="text-sm text-muted-foreground">/ 100</span>
-            <UtilityBadge value={evaluation.totalUtility} />
+            <UtilityBadge value={Number(evaluation.totalUtility) || 0} />
           </div>
         </div>
         {compareEvaluation && (
@@ -368,7 +375,12 @@ export function PlanEvaluationCard({
 
         {/* 评估时间 */}
         <div className="mt-4 pt-4 border-t text-xs text-muted-foreground">
-          评估时间: {new Date(evaluation.timestamp).toLocaleString('zh-CN')}
+          评估时间: {evaluation.timestamp
+            ? (() => {
+                const d = new Date(evaluation.timestamp);
+                return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN');
+              })()
+            : '—'}
         </div>
       </CardContent>
     </Card>

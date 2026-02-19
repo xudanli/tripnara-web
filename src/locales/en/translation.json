@@ -405,11 +405,53 @@
   },
   "tripViews": {
     "abu": {
+      "safetyStatus": "Safety Status",
+      "allItemsGood": "All items are in good status",
+      "noFixNeeded": "No fix needed, safe to proceed ✨",
+      "loadingSafetyData": "Loading safety data...",
+      "dateFormat": "MMM dd, yyyy",
       "status": {
         "executable": "Executable",
         "needConfirm": "Need Confirmation",
         "blocked": "Blocked"
       },
+      "redlineSummary": {
+        "title": "Redline Summary",
+        "description": "Critical risk items, click to navigate to corresponding item"
+      },
+      "riskLevel": {
+        "high": "High",
+        "medium": "Med",
+        "low": "Low",
+        "highRisk": "High Risk",
+        "mediumRisk": "Medium Risk",
+        "lowRisk": "Low Risk"
+      },
+      "hardConstraintViolation": "Hard Constraint Violation",
+      "affectedDays": "Affected Days",
+      "mustVisit": "Must Visit",
+      "riskDetails": {
+        "title": "Risk Details",
+        "subtitle": "'s risk assessment and evidence"
+      },
+      "itemInfo": {
+        "title": "Item Information",
+        "location": "Location",
+        "time": "Time",
+        "type": "Type"
+      },
+      "noRisk": {
+        "title": "No Risk",
+        "description": "This item has passed safety check with no known risks."
+      },
+      "riskType": "Risk Type",
+      "rejectReason": "Rejection Reason",
+      "reasonCodes": "Reason Codes",
+      "evidenceRefs": "Evidence References",
+      "affectedScope": "Affected Scope",
+      "affectedDatesCount": "Affects {{count}} dates",
+      "suggestedAction": "Suggested Action",
+      "mustFixNeptune": "Must Fix (Go to Neptune)",
       "violations": {
         "nightHikeRisk": "Night Hiking Risk",
         "bufferInsufficient": "Insufficient Buffer",

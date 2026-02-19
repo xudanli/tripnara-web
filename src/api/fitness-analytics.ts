@@ -23,8 +23,8 @@ import type {
   SyncRequestParams,
 } from '@/types/fitness-analytics';
 
-/** API 基础路径 */
-const BASE_PATH = '/api/v1/fitness/analytics';
+/** API 基础路径 - 注意：baseURL 已经是 /api，所以这里不需要 /api 前缀 */
+const BASE_PATH = '/v1/fitness/analytics';
 
 /** API 错误类 */
 export class FitnessAnalyticsApiError extends Error {

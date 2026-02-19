@@ -75,7 +75,6 @@ import { zhCN } from 'date-fns/locale';
 import AbuView from '@/components/trips/views/AbuView';
 import DrDreView from '@/components/trips/views/DrDreView';
 import NeptuneView from '@/components/trips/views/NeptuneView';
-import AutoOverview from '@/components/trips/views/AutoOverview';
 import { 
   extractAbuData, 
   extractDrDreData, 
@@ -86,283 +85,59 @@ import {
   type NeptuneViewData,
   type OverallMetrics,
 } from '@/utils/trip-data-extractors';
+import { tripDetailToRoutePlanDraft } from '@/utils/plan-converters';
+import { buildWorldModelContext } from '@/utils/world-context-builder';
+import { useFitnessContext } from '@/contexts/FitnessContext';
 import { useMemo } from 'react';
 import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/persona-colors';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { WeatherCard, WeatherAlertBanner } from '@/components/weather/WeatherCard';
 import { formatCurrency } from '@/utils/format';
 // V2 优化组件
-import { 
-  PlanEvaluationCard, 
-  NegotiationResultCard,
-  RiskAssessmentCard,
-  RealtimeStatusBanner,
-} from '@/components/optimization';
-import { 
-  useEvaluatePlan, 
-  useNegotiation, 
-  useRiskAssessment,
-  useRealtimeState,
-} from '@/hooks/useOptimizationV2';
-import type { RoutePlanDraft } from '@/types/optimization-v2';
-import type { WorldModelContext } from '@/types/strategy';
-import { Zap } from 'lucide-react';
+import { OptimizationDashboard, FeedbackForm } from '@/components/optimization';
+import { useSubmitFeedback } from '@/hooks/useOptimizationV2';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { MessageSquare, Zap } from 'lucide-react';
 
 // V2 优化标签页组件
-function OptimizeTabContent({ tripId, trip }: { tripId: string; trip: TripDetail }) {
-  const evaluateMutation = useEvaluatePlan();
-  const negotiationMutation = useNegotiation();
-  const riskMutation = useRiskAssessment();
-  const { data: realtimeState, refetch: refetchRealtime, isFetching } = useRealtimeState(tripId);
+function OptimizeTabContent({
+  tripId,
+  trip,
+  onTripRefetch,
+}: {
+  tripId: string;
+  trip: TripDetail;
+  onTripRefetch?: () => void | Promise<void>;
+}) {
+  const { profile: fitnessProfile } = useFitnessContext();
 
-  // 将 TripDetail 转换为 RoutePlanDraft
-  const planDraft = useMemo((): RoutePlanDraft => {
-    // 类型映射函数
-    const mapItemType = (type: string): 'ACTIVITY' | 'TRANSPORT' | 'REST' | 'MEAL' => {
-      switch (type) {
-        case 'ACTIVITY': return 'ACTIVITY';
-        case 'TRANSIT': return 'TRANSPORT';
-        case 'REST': return 'REST';
-        case 'MEAL_ANCHOR':
-        case 'MEAL_FLOATING': return 'MEAL';
-        default: return 'ACTIVITY';
-      }
-    };
+  const planDraft = useMemo(
+    () => tripDetailToRoutePlanDraft(trip),
+    [trip]
+  );
+  const worldContext = useMemo(
+    () => buildWorldModelContext(trip, { fitnessProfile }),
+    [trip, fitnessProfile]
+  );
 
-    // 获取项目名称
-    const getItemName = (item: ItineraryItem): string => {
-      if (item.Place?.nameCN) return item.Place.nameCN;
-      if (item.Place?.nameEN) return item.Place.nameEN;
-      if (item.note) return item.note;
-      switch (item.type) {
-        case 'REST': return '休息';
-        case 'TRANSIT': return '交通';
-        case 'MEAL_ANCHOR':
-        case 'MEAL_FLOATING': return '用餐';
-        default: return '活动';
-      }
-    };
-
-    // 计算时长（分钟）
-    const getDuration = (item: ItineraryItem): number | undefined => {
-      if (item.startTime && item.endTime) {
-        const start = new Date(`2000-01-01T${item.startTime}`);
-        const end = new Date(`2000-01-01T${item.endTime}`);
-        const diff = (end.getTime() - start.getTime()) / (1000 * 60);
-        return diff > 0 ? diff : undefined;
-      }
-      return undefined;
-    };
-
-    return {
-      tripId: trip.id,
-      routeDirectionId: trip.destination?.toLowerCase().replace(/\s+/g, '-') || undefined,
-      segments: (trip.TripDay || []).map((day, index) => ({
-        id: day.id,
-        dayIndex: index,
-        date: day.date,
-        items: (day.ItineraryItem || []).map(item => ({
-          id: item.id,
-          placeId: item.placeId || undefined,
-          name: getItemName(item),
-          type: mapItemType(item.type),
-          startTime: item.startTime || undefined,
-          endTime: item.endTime || undefined,
-          durationMinutes: getDuration(item),
-        })),
-      })),
-    };
-  }, [trip]);
-
-  // 构建简化的 WorldModelContext
-  const worldContext = useMemo((): WorldModelContext => {
-    const startDate = trip.startDate ? new Date(trip.startDate) : new Date();
-    return {
-      physical: {
-        demEvidence: [],
-        roadStates: [],
-        hazardZones: [],
-        ferryStates: [],
-        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
-        month: startDate.getMonth() + 1,
-      },
-      human: {
-        maxDailyAscentM: 800,
-        rollingAscent3DaysM: 2000,
-        maxSlopePct: 30,
-        weatherRiskWeight: 0.3,
-        bufferDayBias: 'MEDIUM',
-        riskTolerance: 'MEDIUM',
-      },
-      routeDirection: {
-        id: trip.id,
-        nameCN: trip.name || '未命名行程',
-        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
-      },
-    };
-  }, [trip]);
-
-  // 执行评估
-  const handleEvaluate = async () => {
-    try {
-      await evaluateMutation.mutateAsync({ plan: planDraft, world: worldContext });
-      toast.success('计划评估完成');
-    } catch (error) {
-      toast.error('评估失败，请稍后重试');
-    }
-  };
-
-  // 执行协商
-  const handleNegotiate = async () => {
-    try {
-      await negotiationMutation.mutateAsync({ plan: planDraft, world: worldContext });
-      toast.success('协商完成');
-    } catch (error) {
-      toast.error('协商失败，请稍后重试');
-    }
-  };
-
-  // 执行风险评估
-  const handleRiskAssess = async () => {
-    try {
-      await riskMutation.mutateAsync({ plan: planDraft, world: worldContext });
-      toast.success('风险评估完成');
-    } catch (error) {
-      toast.error('风险评估失败，请稍后重试');
-    }
-  };
-
-  const isLoading = evaluateMutation.isPending || negotiationMutation.isPending || riskMutation.isPending;
+  const teamId = (trip as { metadata?: { teamId?: string } })?.metadata?.teamId;
+  const tripMetadata = (trip as { metadata?: Record<string, unknown> })?.metadata;
 
   return (
-    <div className="space-y-4">
-      {/* 实时状态横幅 */}
-      {realtimeState && (
-        <RealtimeStatusBanner
-          state={realtimeState}
-          connected
-          onRefresh={() => refetchRealtime()}
-          refreshing={isFetching}
-          collapsible
-          compact
-        />
-      )}
-
-      {/* 操作按钮 */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Zap className="w-4 h-4" />
-            V2 优化引擎
-          </CardTitle>
-          <CardDescription>
-            使用 8 维效用函数评估和优化您的行程计划
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={handleEvaluate}
-              disabled={isLoading}
-              size="sm"
-            >
-              {evaluateMutation.isPending ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  评估中...
-                </>
-              ) : (
-                <>
-                  <BarChart3 className="w-4 h-4 mr-2" />
-                  评估计划
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={handleNegotiate}
-              disabled={isLoading}
-              variant="outline"
-              size="sm"
-            >
-              {negotiationMutation.isPending ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  协商中...
-                </>
-              ) : (
-                <>
-                  <Users className="w-4 h-4 mr-2" />
-                  三守护者协商
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={handleRiskAssess}
-              disabled={isLoading}
-              variant="outline"
-              size="sm"
-            >
-              {riskMutation.isPending ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  评估中...
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="w-4 h-4 mr-2" />
-                  风险评估
-                </>
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 评估结果 */}
-      {evaluateMutation.data && (
-        <PlanEvaluationCard
-          evaluation={evaluateMutation.data}
-          showRadar
-          showWeights
-          title="计划评估结果"
-          description="基于 8 维效用函数的综合评估"
-        />
-      )}
-
-      {/* 协商结果 */}
-      {negotiationMutation.data && (
-        <NegotiationResultCard
-          result={negotiationMutation.data}
-          title="三守护者协商结论"
-        />
-      )}
-
-      {/* 风险评估结果 */}
-      {riskMutation.data && (
-        <RiskAssessmentCard
-          assessment={riskMutation.data}
-          showFactors
-          title="Monte Carlo 风险评估"
-        />
-      )}
-
-      {/* 空状态提示 */}
-      {!evaluateMutation.data && !negotiationMutation.data && !riskMutation.data && !isLoading && (
-        <Card className="border-dashed">
-          <CardContent className="py-12">
-            <div className="flex flex-col items-center justify-center text-center">
-              <Zap className="w-12 h-12 text-muted-foreground/50 mb-4" />
-              <p className="text-muted-foreground">
-                点击上方按钮开始优化分析
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                评估您的行程计划，获取专业建议
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <OptimizationDashboard
+      plan={planDraft}
+      world={worldContext}
+      tripId={tripId}
+      teamId={teamId}
+      tripMetadata={tripMetadata}
+      onTripUpdated={onTripRefetch}
+    />
   );
 }
 
@@ -517,6 +292,8 @@ export default function TripDetailPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const submitFeedbackMutation = useSubmitFeedback();
   
   console.log('[TripDetail] 组件渲染:', { id, hasId: !!id, pathname: location.pathname });
 
@@ -554,7 +331,8 @@ export default function TripDetailPage() {
   const [statusConfirmText, setStatusConfirmText] = useState(''); // ✅ 状态修改确认输入
   const [statusConfirmCode, setStatusConfirmCode] = useState<string>(''); // ✅ 随机验证码
   const [country, setCountry] = useState<Country | null>(null);
-  const [planViewTab, setPlanViewTab] = useState<'abu' | 'dre' | 'neptune' | 'optimize'>('abu'); // 🆕 规划Tab的视图切换（安全/节奏/修复/优化）
+  const [planViewTab, setPlanViewTab] = useState<'abu' | 'dre' | 'neptune'>('abu'); // 问题与改进内的子视角（安全/节奏/修复）
+  const [planDetailTab, setPlanDetailTab] = useState<'issues' | 'optimize'>('issues'); // 方案A二段式：问题与改进 | 智能优化
   const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
   const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
@@ -566,6 +344,7 @@ export default function TripDetailPage() {
   // 体能反馈弹窗状态
   const [fitnessFeedbackDialogOpen, setFitnessFeedbackDialogOpen] = useState(false);
   const [fitnessFeedbackShown, setFitnessFeedbackShown] = useState(false);
+  const [optimizationFeedbackDialogOpen, setOptimizationFeedbackDialogOpen] = useState(false);
   
   // 新增：风险、指标相关状态
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
@@ -630,8 +409,8 @@ export default function TripDetailPage() {
     return result;
   }, [decisionLogs, tripMetrics, trip]);
   
-  const neptuneData = useMemo<NeptuneViewData | null>(() => {
-    if (decisionLogs.length === 0 && suggestions.length === 0) return null;
+  const neptuneData = useMemo<NeptuneViewData>(() => {
+    // 始终返回数据结构，让 NeptuneView 展示空状态；仅在加载中时由 UI 显示加载态
     return extractNeptuneData(decisionLogs, suggestions);
   }, [decisionLogs, suggestions]);
   
@@ -645,6 +424,19 @@ export default function TripDetailPage() {
     if (decisionLogs.length === 0 && personaAlerts.length === 0 && !suggestionStats) return null;
     return calculateOverallMetrics(decisionLogs, personaAlerts, suggestionStats, suggestions);
   }, [decisionLogs, personaAlerts, suggestionStats, suggestions, trip]);
+
+  const hasPlanIssues = useMemo(() => {
+    if (!overallMetrics) return true; // 数据未就绪时默认展示问题与改进
+    const h = Math.min(overallMetrics.safetyScore, overallMetrics.rhythmScore, overallMetrics.readinessScore);
+    return h < 90;
+  }, [overallMetrics]);
+
+  // 方案A：智能优化已并入规划Tab内，非PLANNING时若在优化子Tab则切回问题与改进
+  useEffect(() => {
+    if (trip?.status !== 'PLANNING' && planDetailTab === 'optimize') {
+      setPlanDetailTab('issues');
+    }
+  }, [trip?.status, planDetailTab]);
 
   // ⚠️ 重要：所有 hooks（包括 useMemo）必须在任何条件返回之前调用
   // 获取天气位置：优先使用行程项坐标，否则使用目的地国家默认坐标
@@ -755,12 +547,12 @@ export default function TripDetailPage() {
     if (!trip) return;
     
     // 如果当前在"执行"tab，但状态不是进行中或已完成，切换回"规划"tab
-    if (activeTab === 'execute' && trip.status !== 'IN_PROGRESS' && trip.status !== 'COMPLETED') {
+    if (activeTab === 'execute' && trip?.status !== 'IN_PROGRESS' && trip?.status !== 'COMPLETED') {
       setActiveTab('plan');
     }
     
     // 如果当前在"复盘"tab，但状态不是已完成，切换回"规划"tab
-    if (activeTab === 'insights' && trip.status !== 'COMPLETED') {
+    if (activeTab === 'insights' && trip?.status !== 'COMPLETED') {
       setActiveTab('plan');
     }
   }, [trip?.status, activeTab]);
@@ -770,7 +562,7 @@ export default function TripDetailPage() {
     if (!trip || !id) return;
     
     // 如果行程已完成且尚未显示过反馈弹窗，则显示
-    if (trip.status === 'COMPLETED' && !fitnessFeedbackShown) {
+    if (trip?.status === 'COMPLETED' && !fitnessFeedbackShown) {
       // 检查是否已提交过该行程的反馈（使用 localStorage 缓存）
       const feedbackKey = `fitness_feedback_submitted_${id}`;
       const alreadySubmitted = localStorage.getItem(feedbackKey);
@@ -1906,6 +1698,7 @@ export default function TripDetailPage() {
                 onNavigateToBudget={() => {
                   setActiveTab('budget');
                 }}
+                onExpandToPlanDetails={() => setActiveTab('plan')}
               />
             ) : (
               // ✅ 弱化上方提示，只显示简单的占位
@@ -1931,7 +1724,7 @@ export default function TripDetailPage() {
             )}
             
             {/* 🆕 Auto 综合 - 弱化为图标按钮 */}
-            {trip.status === 'PLANNING' && (() => {
+                  {trip?.status === 'PLANNING' && (() => {
               // 过滤出高优先级建议（severity === 'blocker'）
               const blockerSuggestions = suggestions.filter(s => s.severity === 'blocker');
               const hasBlockerSuggestions = blockerSuggestions.length > 0;
@@ -1987,7 +1780,7 @@ export default function TripDetailPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {/* ✅ 已取消状态下隐藏编辑、修改状态、分享、协作者 */}
-                {trip.status !== 'CANCELLED' && (
+                {trip?.status !== 'CANCELLED' && (
                   <>
                     <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
                       <Edit className="w-4 h-4 mr-2" />
@@ -2064,6 +1857,10 @@ export default function TripDetailPage() {
                     <DropdownMenuItem onClick={() => setCollaboratorsDialogOpen(true)}>
                       <Users className="w-4 h-4 mr-2" />
                       协作者
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setOptimizationFeedbackDialogOpen(true)}>
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      行程反馈
                     </DropdownMenuItem>
                   </>
                 )}
@@ -2287,9 +2084,9 @@ export default function TripDetailPage() {
       {/* 主体分区（顶部 Tab 4 个） */}
       <div className="flex-1 overflow-hidden flex flex-col">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <div className="border-b bg-white px-4 sm:px-6 shadow-sm">
+          <div className="relative z-10 border-b bg-white px-4 sm:px-6 shadow-sm flex-shrink-0">
         <TabsList className="h-11">
-              <TabsTrigger value="overview">
+              <TabsTrigger value="overview" className="cursor-pointer">
                 <Eye className="w-4 h-4 mr-2" />
                 总览
               </TabsTrigger>
@@ -2298,14 +2095,14 @@ export default function TripDetailPage() {
                 规划
               </TabsTrigger>
               {/* ✅ 根据行程状态显示"执行"tab：仅在 IN_PROGRESS 或 COMPLETED 时显示 */}
-              {(trip.status === 'IN_PROGRESS' || trip.status === 'COMPLETED') && (
+              {(trip?.status === 'IN_PROGRESS' || trip?.status === 'COMPLETED') && (
                 <TabsTrigger value="execute">
                   <Play className="w-4 h-4 mr-2" />
                   执行
                 </TabsTrigger>
               )}
               {/* ✅ 根据行程状态显示"复盘"tab：仅在 COMPLETED 时显示 */}
-              {trip.status === 'COMPLETED' && (
+              {trip?.status === 'COMPLETED' && (
                 <TabsTrigger value="insights">
                   <BarChart3 className="w-4 h-4 mr-2" />
                   复盘
@@ -2346,7 +2143,7 @@ export default function TripDetailPage() {
                             onViewBudget={() => {
                               setActiveTab('budget');
                             }}
-                            onViewItinerary={trip.status === 'PLANNING' ? () => {
+                            onViewItinerary={trip?.status === 'PLANNING' ? () => {
                               // ✅ 只有规划中状态才能跳转到规划工作台
                               navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}`);
                             } : undefined}
@@ -2357,16 +2154,16 @@ export default function TripDetailPage() {
                                 assistantCenterElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                               }
                             }}
-                            onAddItem={trip.status !== 'CANCELLED' ? () => {
+                            onAddItem={trip?.status !== 'CANCELLED' ? () => {
                               // ✅ 已取消状态下不允许添加行程项
                               setSelectedDayId(day.id);
                               setCreateItemDialogOpen(true);
                             } : undefined}
-                            onQuickPlan={trip.status === 'PLANNING' ? () => {
+                            onQuickPlan={trip?.status === 'PLANNING' ? () => {
                               // ✅ 只有规划中状态才能快速规划
                               navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}&mode=quick`);
                             } : undefined}
-                            onViewRecommendations={trip.status === 'PLANNING' ? () => {
+                            onViewRecommendations={trip?.status === 'PLANNING' ? () => {
                               // ✅ 只有规划中状态才能查看推荐
                               navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}&tab=recommendations`);
                             } : undefined}
@@ -2411,7 +2208,7 @@ export default function TripDetailPage() {
 
 
                 {/* 助手中心 - 已取消状态下隐藏 */}
-                {trip.status !== 'CANCELLED' && (
+                {trip?.status !== 'CANCELLED' && (
                   <div data-assistant-center>
                     <AssistantCenter
                       suggestions={suggestions}
@@ -2560,7 +2357,7 @@ export default function TripDetailPage() {
                   </div>
                   
                   {/* 按钮组 - 已取消状态下不显示 */}
-                  {trip.status !== 'CANCELLED' && (
+                  {trip?.status !== 'CANCELLED' && (
                     <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
                       {/* 主按钮：创建第一个行程项 */}
                       <Button
@@ -2582,7 +2379,7 @@ export default function TripDetailPage() {
                       </Button>
                       
                       {/* 次按钮：进入规划工作台 - 仅规划中状态显示 */}
-                      {trip.status === 'PLANNING' && (
+                      {trip?.status === 'PLANNING' && (
                         <Button
                           size="lg"
                           variant="outline"
@@ -2600,22 +2397,7 @@ export default function TripDetailPage() {
             </Card>
           ) : (
             <>
-              {/* 🆕 综合视图（固定显示在顶部） */}
-              {trip.status !== 'CANCELLED' && (
-                <AutoOverview
-                  trip={trip}
-                  overallMetrics={overallMetrics}
-                  abuData={abuData}
-                  drDreData={drDreData}
-                  neptuneData={neptuneData}
-                  onViewClick={(view) => {
-                    // 点击视角卡片时，切换到对应的Tab
-                    setPlanViewTab(view);
-                  }}
-                />
-              )}
-
-              {/* 🆕 合规规则卡片 - 暂时禁用后端调用 */}
+              {/* 方案A 二段式：问题与改进 + 智能优化（常驻展开） */}
               {/* {trip && trip.destination && (
                 <ComplianceRulesCard
                   tripId={id!}
@@ -2624,13 +2406,44 @@ export default function TripDetailPage() {
                 />
               )} */}
 
-              {/* 🆕 3个视角Tab切换 - 优化后的样式 */}
-              {trip.status !== 'CANCELLED' && (
+              {/* 方案A 二段式：无问题时仅显示智能优化；有问题时显示问题与改进 + 智能优化 */}
+              {trip?.status !== 'CANCELLED' && (hasPlanIssues || trip?.status === 'PLANNING') && (
+                <div className="space-y-4">
+                {/* 无问题且 PLANNING：直接显示智能优化，不显示 Tab 栏 */}
+                {!hasPlanIssues && trip?.status === 'PLANNING' ? (
+                  <OptimizeTabContent tripId={id!} trip={trip} onTripRefetch={loadTrip} />
+                ) : (
+                <Tabs value={planDetailTab} onValueChange={(v) => {
+                  setPlanDetailTab(v as 'issues' | 'optimize');
+                }} className="w-full">
+                  <TabsList className={cn(
+                    "grid w-full h-11 bg-muted/50 rounded-lg p-1",
+                    trip?.status === 'PLANNING' ? "grid-cols-2" : "grid-cols-1"
+                  )}>
+                    <TabsTrigger
+                      value="issues"
+                      className="flex items-center justify-center gap-2 rounded-md px-4 py-2 text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-semibold"
+                    >
+                      <Shield className="w-4 h-4" />
+                      问题与改进
+                    </TabsTrigger>
+                    {trip?.status === 'PLANNING' && (
+                      <TabsTrigger
+                        value="optimize"
+                        className="flex items-center justify-center gap-2 rounded-md px-4 py-2 text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-semibold"
+                      >
+                        <Zap className="w-4 h-4" />
+                        智能优化
+                      </TabsTrigger>
+                    )}
+                  </TabsList>
+
+                  {/* 问题与改进：安全 | 节奏 | 修复 */}
+                  <TabsContent value="issues" className="mt-4">
                 <Tabs value={planViewTab} onValueChange={(v) => {
-                  console.log('[TripDetail] planViewTab 切换:', { from: planViewTab, to: v });
                   setPlanViewTab(v as typeof planViewTab);
                 }} className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 h-11 bg-muted/50 rounded-lg p-1">
+                  <TabsList className="grid w-full grid-cols-3 h-11 bg-muted/30 rounded-lg p-1">
                     <TabsTrigger 
                       value="abu" 
                       className={cn(
@@ -2714,34 +2527,6 @@ export default function TripDetailPage() {
                     >
                       <RefreshCw className="w-4 h-4" />
                       修复
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="optimize" 
-                      className={cn(
-                        'flex items-center justify-center gap-2 relative',
-                        'transition-all duration-200 ease-in-out',
-                        'rounded-md px-4 py-2',
-                        // 未激活状态
-                        'text-muted-foreground',
-                        'hover:text-foreground hover:bg-muted/80',
-                        // 激活状态
-                        'data-[state=active]:bg-primary/20',
-                        'data-[state=active]:text-primary',
-                        'data-[state=active]:font-semibold',
-                        'data-[state=active]:shadow-sm',
-                        // 底部指示器
-                        'data-[state=active]:after:absolute',
-                        'data-[state=active]:after:bottom-0',
-                        'data-[state=active]:after:left-1/2',
-                        'data-[state=active]:after:-translate-x-1/2',
-                        'data-[state=active]:after:w-8',
-                        'data-[state=active]:after:h-0.5',
-                        'data-[state=active]:after:bg-primary',
-                        'data-[state=active]:after:rounded-full'
-                      )}
-                    >
-                      <Zap className="w-4 h-4" />
-                      优化
                     </TabsTrigger>
                   </TabsList>
 
@@ -2843,7 +2628,12 @@ export default function TripDetailPage() {
 
                   {/* 修复视角 */}
                   <TabsContent value="neptune" className="mt-4">
-                    {neptuneData ? (
+                    {decisionLogsLoading || personaAlertsLoading ? (
+                      <div className="flex items-center justify-center p-8">
+                        <Spinner className="w-6 h-6" />
+                        <span className="ml-2">加载修复数据...</span>
+                      </div>
+                    ) : (
                       <NeptuneView 
                         trip={trip} 
                         neptuneData={neptuneData}
@@ -2876,19 +2666,20 @@ export default function TripDetailPage() {
                           ]);
                         }}
                       />
-                    ) : (
-                      <div className="flex items-center justify-center p-8">
-                        <Spinner className="w-6 h-6" />
-                        <span className="ml-2">加载修复数据...</span>
-                      </div>
                     )}
                   </TabsContent>
-
-                  {/* V2 优化视角 */}
-                  <TabsContent value="optimize" className="mt-4">
-                    <OptimizeTabContent tripId={id!} trip={trip} />
-                  </TabsContent>
                 </Tabs>
+                  </TabsContent>
+
+                  {/* 智能优化（仅 PLANNING 时显示） */}
+                  {trip?.status === 'PLANNING' && (
+                    <TabsContent value="optimize" className="mt-4">
+                      <OptimizeTabContent tripId={id!} trip={trip} onTripRefetch={loadTrip} />
+                    </TabsContent>
+                  )}
+                </Tabs>
+                )}
+                </div>
               )}
             </>
           )}
@@ -3201,6 +2992,32 @@ export default function TripDetailPage() {
           open={collaboratorsDialogOpen}
           onOpenChange={setCollaboratorsDialogOpen}
         />
+      )}
+
+      {/* 行程反馈对话框 (V2 优化) */}
+      {id && (
+        <Dialog open={optimizationFeedbackDialogOpen} onOpenChange={setOptimizationFeedbackDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>行程反馈</DialogTitle>
+            </DialogHeader>
+            {user?.id ? (
+              <FeedbackForm
+                userId={user.id}
+                tripId={id}
+                totalDays={trip?.TripDay?.length ?? 7}
+                onSubmit={async (req) => {
+                  await submitFeedbackMutation.mutateAsync(req);
+                  setOptimizationFeedbackDialogOpen(false);
+                }}
+                onCancel={() => setOptimizationFeedbackDialogOpen(false)}
+                isSubmitting={submitFeedbackMutation.isPending}
+              />
+            ) : (
+              <p className="text-muted-foreground py-6 text-center">请先登录后再提交反馈</p>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* 创建行程项对话框 */}

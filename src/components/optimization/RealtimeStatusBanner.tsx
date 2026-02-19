@@ -94,8 +94,8 @@ function WeatherBlock({
   weather: RealtimeStateResponse['weather'];
   compact?: boolean;
 }) {
-  const visConfig = VISIBILITY_CONFIG[weather.visibility];
-  const VisIcon = visConfig.icon;
+  const visConfig = VISIBILITY_CONFIG[weather.visibility as VisibilityLevel] ?? VISIBILITY_CONFIG.MODERATE;
+  const VisIcon = visConfig?.icon ?? Eye;
 
   return (
     <div className={cn(

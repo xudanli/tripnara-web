@@ -69,9 +69,11 @@ type RiskLevel = keyof typeof RISK_LEVEL_CONFIG;
 
 /** 根据下行风险计算风险等级 */
 function getRiskLevel(downsideRisk: number): RiskLevel {
-  if (downsideRisk < 0.1) return 'low';
-  if (downsideRisk < 0.25) return 'medium';
-  if (downsideRisk < 0.5) return 'high';
+  const v = Number(downsideRisk);
+  if (Number.isNaN(v) || v < 0) return 'medium'; // 无效值按中等处理
+  if (v < 0.1) return 'low';
+  if (v < 0.25) return 'medium';
+  if (v < 0.5) return 'high';
   return 'critical';
 }
 
@@ -337,6 +339,12 @@ export interface RiskAssessmentCardProps {
   className?: string;
 }
 
+/** 安全格式化为百分比，避免 NaN */
+function formatPct(value: number | undefined): string {
+  const v = Number(value);
+  return Number.isNaN(v) ? '—' : `${Math.round(v * 100)}%`;
+}
+
 export function RiskAssessmentCard({
   assessment,
   compact = false,
@@ -382,43 +390,50 @@ export function RiskAssessmentCard({
           <MetricCard
             icon={Target}
             label="期望效用"
-            value={`${Math.round(assessment.expectedUtility * 100)}%`}
-            color={getFeasibilityColor(assessment.expectedUtility)}
+            value={formatPct(assessment.expectedUtility)}
+            color={getFeasibilityColor(Number(assessment.expectedUtility) || 0)}
             tooltip="Monte Carlo 模拟计算的期望效用值"
           />
           <MetricCard
             icon={Shield}
             label="可行概率"
-            value={`${Math.round(assessment.feasibilityProbability * 100)}%`}
-            color={getFeasibilityColor(assessment.feasibilityProbability)}
+            value={formatPct(assessment.feasibilityProbability)}
+            color={getFeasibilityColor(Number(assessment.feasibilityProbability) || 0)}
             tooltip="计划成功执行的概率"
           />
           <MetricCard
             icon={TrendingDown}
             label="下行风险"
-            value={`${Math.round(assessment.downsideRisk * 100)}%`}
+            value={formatPct(assessment.downsideRisk)}
             color={riskConfig.color}
             tooltip="效用低于阈值的概率"
           />
           <MetricCard
             icon={Gauge}
             label="置信区间"
-            value={`±${Math.round((assessment.confidenceInterval.upper - assessment.confidenceInterval.lower) * 50)}%`}
+            value={assessment.confidenceInterval ? (() => {
+              const lo = Number(assessment.confidenceInterval.lower);
+              const hi = Number(assessment.confidenceInterval.upper);
+              const range = hi - lo;
+              return Number.isNaN(range) ? '—' : `±${Math.round(range * 50)}%`;
+            })() : '—'}
             subValue="95% CI"
             tooltip="效用值的不确定性范围"
           />
         </div>
 
-        {/* 置信区间可视化 */}
-        {!compact && (
-          <div className="mt-6 p-4 rounded-lg bg-muted/30">
-            <ConfidenceIntervalBar
-              lower={assessment.confidenceInterval.lower}
-              upper={assessment.confidenceInterval.upper}
-              expected={assessment.expectedUtility}
-            />
-          </div>
-        )}
+        {/* 置信区间可视化（需有效数值，避免 NaN） */}
+        {!compact && assessment.confidenceInterval && (() => {
+          const lower = Number(assessment.confidenceInterval.lower);
+          const upper = Number(assessment.confidenceInterval.upper);
+          const expected = Number(assessment.expectedUtility);
+          if (Number.isNaN(lower) || Number.isNaN(upper) || Number.isNaN(expected)) return null;
+          return (
+            <div className="mt-6 p-4 rounded-lg bg-muted/30">
+              <ConfidenceIntervalBar lower={lower} upper={upper} expected={expected} />
+            </div>
+          );
+        })()}
 
         {/* 风险因素 */}
         {showFactors && assessment.riskFactors && assessment.riskFactors.length > 0 && (

@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { tripsApi } from '@/api/trips';
 import type { ReplaceItineraryItemRequest, ReplaceItineraryItemResponse, TravelStyle } from '@/types/trip';
+import { formatOpeningHoursFromObject } from '@/utils/openingHoursFormatter';
 import { AlertCircle } from 'lucide-react';
 
 interface ReplaceItineraryItemDialogProps {
@@ -199,7 +200,10 @@ export function ReplaceItineraryItemDialog({
                 {result.newItem.evidence && (
                   <div className="text-xs mt-2 space-y-1">
                     {result.newItem.evidence.openingHours && (
-                      <div>营业时间: {result.newItem.evidence.openingHours}</div>
+                      <div>营业时间: {typeof result.newItem.evidence.openingHours === 'string'
+                        ? result.newItem.evidence.openingHours
+                        : formatOpeningHoursFromObject(result.newItem.evidence.openingHours)}
+                      </div>
                     )}
                     {result.newItem.evidence.rating && (
                       <div>评分: {result.newItem.evidence.rating}</div>

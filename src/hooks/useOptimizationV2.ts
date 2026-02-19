@@ -20,7 +20,8 @@ import type {
   FieldReportRequest,
   RoutePlanDraft,
 } from '@/types/optimization-v2';
-import type { WorldModelContext } from '@/types/strategy';
+import type { WorldModelContext } from '@/types/optimization-v2';
+import { getDefaultWorldModelContext } from '@/utils/world-context-builder';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ==================== Query Keys ====================
@@ -197,11 +198,32 @@ export function useRemoveTeamMember(teamId: string) {
 
 /**
  * 团队协商
+ *
+ * 请求体必须包含 plan (RoutePlanDraft，需含 tripId) 和 world (WorldModelContext)。
+ * 若 plan 缺 tripId 会从 tripId 参数补全；若 world 缺失会使用默认上下文。
  */
 export function useTeamNegotiation(teamId: string) {
   return useMutation({
-    mutationFn: (params: { plan: RoutePlanDraft; world: WorldModelContext }) =>
-      teamApi.negotiate(teamId, params.plan, params.world),
+    mutationFn: (params: {
+      plan?: RoutePlanDraft | null;
+      world?: WorldModelContext | null;
+      tripId?: string;
+    }) => {
+      const tripId = params.tripId ?? (params.plan?.tripId as string | undefined);
+      const plan: RoutePlanDraft =
+        params.plan && typeof params.plan === 'object' && Array.isArray(params.plan.days)
+          ? { ...params.plan, tripId: params.plan.tripId || tripId || '' }
+          : { tripId: tripId || '', days: [], metadata: {} };
+      const world: WorldModelContext =
+        params.world &&
+        typeof params.world === 'object' &&
+        params.world.physical &&
+        params.world.human &&
+        params.world.routeDirection
+          ? params.world
+          : getDefaultWorldModelContext();
+      return teamApi.negotiate(teamId, plan, world);
+    },
   });
 }
 
@@ -230,15 +252,47 @@ export function useTeamConstraints(teamId: string | undefined) {
 // ==================== 实时状态 Hooks ====================
 
 /**
+ * 初始化实时状态
+ */
+export function useInitializeRealtimeState() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: { tripId: string; weather?: { temperatureC?: number; windSpeedMs?: number; precipitationProbability?: number }; human?: { fatigueLevel?: number; altitudeAdaptation?: number }; roads?: Array<{ roadId: string; status: 'OPEN' | 'RESTRICTED' | 'CLOSED'; accessProbability?: number }> }) => 
+      realtimeApi.initializeState(request),
+    onSuccess: (_, variables) => {
+      // 初始化成功后，刷新状态查询
+      queryClient.invalidateQueries({ queryKey: realtimeKeys.state(variables.tripId) });
+    },
+  });
+}
+
+/**
+ * 检查实时状态是否存在
+ */
+export function useRealtimeStateExists(tripId: string | undefined) {
+  return useQuery({
+    queryKey: [...realtimeKeys.state(tripId ?? ''), 'exists'],
+    queryFn: () => realtimeApi.checkStateExists(tripId!),
+    enabled: !!tripId,
+    staleTime: 30_000, // 30 秒
+  });
+}
+
+/**
  * 获取当前状态
+ * @param tripId 行程 ID
+ * @param options.refetchInterval 刷新间隔（默认 60 秒）
+ * @param options.enabled 是否启用
+ * @param options.autoInit 状态不存在时是否自动初始化（默认 true，推荐）
  */
 export function useRealtimeState(tripId: string | undefined, options?: {
   refetchInterval?: number;
   enabled?: boolean;
+  autoInit?: boolean;
 }) {
   return useQuery({
     queryKey: realtimeKeys.state(tripId ?? ''),
-    queryFn: () => realtimeApi.getState(tripId!),
+    queryFn: () => realtimeApi.getState(tripId!, options?.autoInit ?? true),
     enabled: !!tripId && (options?.enabled !== false),
     refetchInterval: options?.refetchInterval ?? 60_000, // 默认 1 分钟刷新
   });
@@ -246,11 +300,14 @@ export function useRealtimeState(tripId: string | undefined, options?: {
 
 /**
  * 预测未来状态
+ * @param tripId 行程 ID
+ * @param hoursAhead 预测未来小时数（默认 24）
+ * @param autoInit 状态不存在时是否自动初始化（默认 true）
  */
-export function usePredictedState(tripId: string | undefined, hoursAhead: number = 24) {
+export function usePredictedState(tripId: string | undefined, hoursAhead: number = 24, autoInit: boolean = true) {
   return useQuery({
     queryKey: realtimeKeys.prediction(tripId ?? '', hoursAhead),
-    queryFn: () => realtimeApi.predictState(tripId!, hoursAhead),
+    queryFn: () => realtimeApi.predictState(tripId!, hoursAhead, autoInit),
     enabled: !!tripId,
     staleTime: 10 * 60 * 1000, // 10 分钟
   });
@@ -368,24 +425,36 @@ export function useFullOptimizationFlow() {
   
   const runFullFlow = useCallback(async (
     plan: RoutePlanDraft,
-    world: WorldModelContext
+    world: WorldModelContext,
+    tripId?: string
   ) => {
     // 1. 评估原计划
     const evaluation = await evaluate.mutateAsync({ plan, world });
     
-    // 2. 优化计划
-    const optimized = await optimize.mutateAsync({ plan, world });
-    
-    // 3. 风险评估
-    const risk = await assessRisk.mutateAsync({ 
-      plan: optimized.optimizedPlan, 
-      world 
+    // 2. 优化计划（传 tripId 供后端校验/加载）
+    const effectiveTripId = tripId ?? plan.tripId;
+    const optimized = await optimize.mutateAsync({
+      plan,
+      world,
+      ...(effectiveTripId && { tripId: effectiveTripId, trip_id: effectiveTripId }),
     });
     
-    // 4. 协商决策
+    // 后续步骤使用优化后计划，若无则回退至原计划（确保 plan 必填）
+    const planForDownstream =
+      optimized.optimizedPlan ?? optimized.originalPlan ?? plan;
+    
+    // 3. 风险评估（传 tripId 供后端校验/加载）
+    const risk = await assessRisk.mutateAsync({ 
+      plan: planForDownstream, 
+      world,
+      ...(effectiveTripId && { tripId: effectiveTripId, trip_id: effectiveTripId }),
+    });
+    
+    // 4. 协商决策（传 tripId 供后端校验/加载）
     const negotiation = await negotiate.mutateAsync({ 
-      plan: optimized.optimizedPlan, 
-      world 
+      plan: planForDownstream, 
+      world,
+      ...(effectiveTripId && { tripId: effectiveTripId, trip_id: effectiveTripId }),
     });
     
     return {

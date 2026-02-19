@@ -45,7 +45,7 @@ import {
   useNegotiation, 
   useRiskAssessment,
 } from '@/hooks/useOptimizationV2';
-import type { RoutePlanDraft } from '@/types/optimization-v2';
+import type { RoutePlanDraft, WorldModelContext as WorldModelContextV2 } from '@/types/optimization-v2';
 
 /**
  * 将字符串风险等级转换为风险评分 (0-100)
@@ -846,58 +846,70 @@ function V2OptimizeTab({
   const negotiationMutation = useNegotiation();
   const riskMutation = useRiskAssessment();
 
-  // 将 schedule 转换为 RoutePlanDraft
+  // 将 schedule 转换为 RoutePlanDraft (匹配 API 文档格式)
   const planDraft = useMemo((): RoutePlanDraft | null => {
     if (!schedule || !tripId) return null;
     
+    // 将日程项转换为路段
+    const items = schedule.items || [];
+    const segments: Array<{ from: string; to: string; distanceKm?: number }> = [];
+    for (let i = 0; i < items.length - 1; i++) {
+      const from = items[i].placeName || '未知地点';
+      const to = items[i + 1].placeName || '未知地点';
+      if (from !== to) {
+        segments.push({ from, to });
+      }
+    }
+    // 如果没有路段，添加默认
+    if (segments.length === 0 && items.length > 0) {
+      const placeName = items[0].placeName || '未知地点';
+      segments.push({ from: placeName, to: placeName, distanceKm: 0 });
+    }
+
     return {
       tripId: tripId,
       routeDirectionId: undefined,
-      segments: [{
-        id: `segment-${date}`,
-        dayIndex: 0,
+      days: [{
+        dayNumber: 1,
         date: date,
-        items: (schedule.items || []).map((item, index) => ({
-          id: `item-${index}`,
-          placeId: item.placeId || undefined,
-          name: item.placeName || '未命名',
-          type: item.type === 'ACTIVITY' ? 'ACTIVITY' : 
-                item.type === 'REST' ? 'REST' : 
-                item.type === 'MEAL_ANCHOR' || item.type === 'MEAL_FLOATING' ? 'MEAL' : 'ACTIVITY',
-          startTime: item.startTime || undefined,
-          endTime: item.endTime || undefined,
-        })),
+        segments: segments,
       }],
+      metadata: {
+        totalDays: 1,
+        startDate: date,
+        endDate: date,
+      },
     };
   }, [schedule, tripId, date]);
 
-  // 构建 WorldModelContext
-  const worldContext = useMemo((): WorldModelContext => {
-    const dateObj = new Date(date);
+  // 构建 WorldModelContextV2 (匹配 API 文档格式)
+  const worldContext = useMemo((): WorldModelContextV2 => {
     return {
       physical: {
-        demEvidence: [],
-        roadStates: [],
-        hazardZones: [],
-        ferryStates: [],
-        countryCode: 'IS',
-        month: dateObj.getMonth() + 1,
+        weather: {
+          temperature: 10,
+          windSpeed: 5,
+          precipitation: 0.2,
+        },
+        terrain: {
+          elevation: 100,
+          gradient: 5,
+        },
+        hazards: [],
       },
       human: {
+        fitnessLevel: 0.7,
+        currentFatigue: 0.2,
         maxDailyAscentM: 800,
-        rollingAscent3DaysM: 2000,
-        maxSlopePct: 30,
-        weatherRiskWeight: 0.3,
-        bufferDayBias: 'MEDIUM',
-        riskTolerance: 'MEDIUM',
+        riskTolerance: 0.5,
       },
       routeDirection: {
         id: tripId || 'what-if',
-        nameCN: `What-If 分析 - ${date}`,
-        countryCode: 'IS',
+        philosophy: { scenic: true },
+        constraints: { maxDailyDrivingHours: 8 },
       },
     };
-  }, [tripId, date]);
+  }, [tripId]);
 
   const handleEvaluate = async () => {
     if (!planDraft) {
@@ -1024,6 +1036,7 @@ function V2OptimizeTab({
       {negotiationMutation.data && (
         <NegotiationResultCard
           result={negotiationMutation.data}
+          tripId={tripId ?? undefined}
           compact
         />
       )}

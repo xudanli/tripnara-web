@@ -17,6 +17,7 @@ export { RecommendationGrid } from './RecommendationGrid';
 export { RecommendationCarousel } from './RecommendationCarousel';
 export { QuickActions } from './QuickActions';
 export { HotelList } from './HotelList';
+export { AccommodationList } from './AccommodationList';
 export { RestaurantList } from './RestaurantList';
 export { WeatherDisplay } from './WeatherDisplay';
 export { SearchResults } from './SearchResults';

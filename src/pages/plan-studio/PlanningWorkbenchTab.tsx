@@ -21,7 +21,9 @@ import {
   useRiskAssessment,
 } from '@/hooks/useOptimizationV2';
 import type { RoutePlanDraft } from '@/types/optimization-v2';
-import type { WorldModelContext } from '@/types/strategy';
+import { tripDetailToRoutePlanDraft } from '@/utils/plan-converters';
+import { buildWorldModelContext } from '@/utils/world-context-builder';
+import { useFitnessContext } from '@/contexts/FitnessContext';
 import {
   Collapsible,
   CollapsibleContent,
@@ -2035,57 +2037,17 @@ function V2OptimizeSection({
   const evaluateMutation = useEvaluatePlan();
   const negotiationMutation = useNegotiation();
   const riskMutation = useRiskAssessment();
+  const { profile: fitnessProfile } = useFitnessContext();
 
-  // 将 result 转换为 RoutePlanDraft
-  const planDraft = useMemo((): RoutePlanDraft => {
-    return {
-      tripId: tripId,
-      routeDirectionId: trip.destination?.toLowerCase().replace(/\s+/g, '-') || undefined,
-      segments: (trip.TripDay || []).map((day, index) => ({
-        id: day.id,
-        dayIndex: index,
-        date: day.date,
-        items: (day.ItineraryItem || []).map(item => ({
-          id: item.id,
-          placeId: item.placeId || undefined,
-          name: item.Place?.nameCN || item.Place?.nameEN || item.note || '活动',
-          type: item.type === 'TRANSIT' ? 'TRANSPORT' : 
-                item.type === 'REST' ? 'REST' :
-                item.type === 'MEAL_ANCHOR' || item.type === 'MEAL_FLOATING' ? 'MEAL' : 'ACTIVITY',
-          startTime: item.startTime || undefined,
-          endTime: item.endTime || undefined,
-        })),
-      })),
-    };
-  }, [trip, tripId]);
-
-  // 构建 WorldModelContext
-  const worldContext = useMemo((): WorldModelContext => {
-    const startDate = trip.startDate ? new Date(trip.startDate) : new Date();
-    return {
-      physical: {
-        demEvidence: [],
-        roadStates: [],
-        hazardZones: [],
-        ferryStates: [],
-        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
-        month: startDate.getMonth() + 1,
-      },
-      human: {
-        maxDailyAscentM: 800,
-        rollingAscent3DaysM: 2000,
-        maxSlopePct: 30,
-        weatherRiskWeight: 0.3,
-        bufferDayBias: 'MEDIUM',
-        riskTolerance: 'MEDIUM',
-      },
-      routeDirection: {
-        id: tripId,
-        nameCN: trip.name || '规划方案',
-        countryCode: trip.destination?.split(',')[0]?.trim() || 'IS',
-      },
-    };
-  }, [trip, tripId]);
+  // 使用转换工具构建 plan / world
+  const planDraft = useMemo(
+    () => tripDetailToRoutePlanDraft(trip),
+    [trip]
+  );
+  const worldContext = useMemo(
+    () => buildWorldModelContext(trip, { fitnessProfile }),
+    [trip, fitnessProfile]
+  );
 
   const handleEvaluate = async () => {
     try {
@@ -2196,6 +2158,7 @@ function V2OptimizeSection({
             {negotiationMutation.data && (
               <NegotiationResultCard
                 result={negotiationMutation.data}
+                tripId={tripId}
                 compact
               />
             )}

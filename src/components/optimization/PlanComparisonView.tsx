@@ -37,14 +37,25 @@ import {
 
 // ==================== 配置 ====================
 
-const DIMENSION_LABELS: Record<string, { label: string; description: string }> = {
+/** 8 维展示配置（兼容 weight key 与 breakdown key） */
+const DIMENSION_DISPLAY: Record<string, { label: string; description: string }> = {
   safety: { label: '安全', description: '路线安全性评估' },
+  safetyScore: { label: '安全', description: '路线安全性评估' },
   experience: { label: '体验', description: '旅行体验质量' },
+  experienceScore: { label: '体验', description: '旅行体验质量' },
   philosophy: { label: '哲学', description: '与旅行理念的契合度' },
+  philosophyScore: { label: '哲学', description: '与旅行理念的契合度' },
   timeSlack: { label: '余量', description: '时间缓冲充裕度' },
+  timeSlackScore: { label: '余量', description: '时间缓冲充裕度' },
   fatigueRisk: { label: '疲劳', description: '疲劳风险控制' },
+  fatigueRiskScore: { label: '疲劳', description: '疲劳风险控制' },
   weatherRisk: { label: '天气', description: '天气风险应对' },
+  weatherRiskScore: { label: '天气', description: '天气风险应对' },
+  budgetRisk: { label: '预算', description: '预算合理性' },
+  budgetScore: { label: '预算', description: '预算合理性' },
   budget: { label: '预算', description: '预算合理性' },
+  crowdAvoidance: { label: '避流', description: '人流避开程度' },
+  crowdScore: { label: '避流', description: '人流避开程度' },
   crowd: { label: '避流', description: '人流避开程度' },
 };
 
@@ -138,7 +149,7 @@ function DimensionComparisonRow({
   scoreB: number;
   winner: 'A' | 'B' | 'EQUAL';
 }) {
-  const config = DIMENSION_LABELS[dimension] || { label: dimension, description: '' };
+  const config = DIMENSION_DISPLAY[dimension] || { label: dimension, description: '' };
   const diff = scoreA - scoreB;
   const percentA = Math.round(scoreA * 100);
   const percentB = Math.round(scoreB * 100);
@@ -257,7 +268,7 @@ function DimensionBarChart({
   return (
     <div className="space-y-3">
       {dimensions.map(([key, data]) => {
-        const config = DIMENSION_LABELS[key] || { label: key };
+        const config = DIMENSION_DISPLAY[key] || { label: key };
         const maxScore = Math.max(data.a, data.b);
         const scaleA = maxScore > 0 ? (data.a / maxScore) * 100 : 0;
         const scaleB = maxScore > 0 ? (data.b / maxScore) * 100 : 0;
@@ -465,5 +476,4 @@ export {
   DimensionComparisonRow,
   TotalScoreComparison,
   DimensionBarChart,
-  DIMENSION_LABELS,
 };

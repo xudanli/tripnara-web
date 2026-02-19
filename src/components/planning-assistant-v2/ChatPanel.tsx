@@ -129,7 +129,15 @@ export function ChatPanel({ sessionId, userId, context, destination, tripInfo, c
           )}
           
           {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+            <MessageBubble
+              key={message.id}
+              message={message}
+              onSendMessage={sendMessage}
+              isLastAssistantMessage={
+                message.role === 'assistant' &&
+                messages.filter((m) => m.role === 'assistant').pop()?.id === message.id
+              }
+            />
           ))}
           
           {/* 快捷操作按钮（仅在消息为空时显示） */}

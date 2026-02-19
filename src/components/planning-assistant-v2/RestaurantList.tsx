@@ -1,12 +1,18 @@
 /**
  * Planning Assistant V2 - 餐厅列表组件
+ * 渐进式披露：默认展示前 4 条，可展开全部；列表区域固定高度 + 内部滚动
  */
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Utensils, Star, MapPin, Phone, Globe } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Utensils, Star, MapPin, Phone, Globe, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Restaurant } from '@/api/planning-assistant-v2';
+
+const INITIAL_VISIBLE = 4;
+const LIST_MAX_HEIGHT = 320;
 
 interface RestaurantListProps {
   restaurants: Restaurant[];
@@ -14,13 +20,24 @@ interface RestaurantListProps {
 }
 
 export function RestaurantList({ restaurants, className }: RestaurantListProps) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!restaurants || restaurants.length === 0) {
     return null;
   }
 
+  const total = restaurants.length;
+  const visibleCount = expanded ? total : Math.min(INITIAL_VISIBLE, total);
+  const hasMore = total > INITIAL_VISIBLE && !expanded;
+  const visibleRestaurants = restaurants.slice(0, visibleCount);
+
   return (
-    <div className={cn('mt-4 space-y-3', className)}>
-      {restaurants.map((restaurant) => (
+    <div className={cn('mt-4', className)}>
+      <div
+        className="space-y-3 overflow-y-auto pr-1"
+        style={{ maxHeight: LIST_MAX_HEIGHT }}
+      >
+        {visibleRestaurants.map((restaurant) => (
         <Card key={restaurant.placeId} className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between">
@@ -80,7 +97,19 @@ export function RestaurantList({ restaurants, className }: RestaurantListProps) 
             )}
           </CardContent>
         </Card>
-      ))}
+        ))}
+      </div>
+      {hasMore && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full mt-2 text-muted-foreground hover:text-foreground"
+          onClick={() => setExpanded(true)}
+        >
+          <ChevronDown className="w-4 h-4 mr-1" />
+          展开全部 {total} 个
+        </Button>
+      )}
     </div>
   );
 }

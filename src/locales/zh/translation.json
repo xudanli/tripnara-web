@@ -418,11 +418,53 @@
   },
   "tripViews": {
     "abu": {
+      "safetyStatus": "安全状态",
+      "allItemsGood": "所有行程项状态良好",
+      "noFixNeeded": "无需修复，可以放心前往 ✨",
+      "loadingSafetyData": "加载安全数据...",
+      "dateFormat": "yyyy年MM月dd日",
       "status": {
         "executable": "可执行",
         "needConfirm": "需确认",
         "blocked": "禁止"
       },
+      "redlineSummary": {
+        "title": "红线摘要",
+        "description": "最关键的风险项，点击可定位到对应行程项"
+      },
+      "riskLevel": {
+        "high": "高",
+        "medium": "中",
+        "low": "低",
+        "highRisk": "高风险",
+        "mediumRisk": "中风险",
+        "lowRisk": "低风险"
+      },
+      "hardConstraintViolation": "硬约束违反",
+      "affectedDays": "影响天数",
+      "mustVisit": "必游",
+      "riskDetails": {
+        "title": "风险详情",
+        "subtitle": "的风险评估与证据"
+      },
+      "itemInfo": {
+        "title": "行程项信息",
+        "location": "地点",
+        "time": "时间",
+        "type": "类型"
+      },
+      "noRisk": {
+        "title": "无风险",
+        "description": "该行程项已通过安全检查，无已知风险。"
+      },
+      "riskType": "风险类型",
+      "rejectReason": "拒绝原因",
+      "reasonCodes": "原因码",
+      "evidenceRefs": "证据引用",
+      "affectedScope": "影响范围",
+      "affectedDatesCount": "影响 {{count}} 个日期",
+      "suggestedAction": "建议动作",
+      "mustFixNeptune": "必须修复（跳转到 Neptune）",
       "violations": {
         "nightHikeRisk": "夜间徒步风险",
         "bufferInsufficient": "缓冲时间不足",

@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { itineraryItemsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { CreateItineraryItemRequest, ItineraryItemType, TripDay } from '@/types/trip';
+import { formatValidationMessage } from '@/utils/openingHoursFormatter';
 import type { PlaceWithDistance } from '@/types/places-routes';
 import {
   Dialog,
@@ -276,7 +277,9 @@ export function AddItineraryItemDialog({
       if (validation) {
         // 检查是否有错误
         if (validation.errors && validation.errors.length > 0) {
-          const errorMessages = validation.errors.map(e => e.message).join('\n');
+          const errorMessages = validation.errors
+            .map(e => formatValidationMessage(e.message, e.details))
+            .join('\n');
           setError(errorMessages);
           setValidationResult({
             errors: validation.errors,
@@ -358,7 +361,7 @@ export function AddItineraryItemDialog({
         // 如果有警告但已创建成功，显示提示
         if (result.warnings && result.warnings.length > 0) {
           toast.warning(`行程项已添加，但有 ${result.warnings.length} 个警告`, {
-            description: result.warnings[0].message,
+            description: formatValidationMessage(result.warnings[0].message, result.warnings[0].details),
           });
         }
       }
@@ -673,7 +676,7 @@ export function AddItineraryItemDialog({
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-red-800">{err.message}</p>
+                      <p className="text-sm font-medium text-red-800">{formatValidationMessage(err.message, err.details)}</p>
                       {err.suggestions && err.suggestions.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {err.suggestions.map((suggestion, sIdx) => (
@@ -698,7 +701,7 @@ export function AddItineraryItemDialog({
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-yellow-800">{warning.message}</p>
+                      <p className="text-sm font-medium text-yellow-800">{formatValidationMessage(warning.message, warning.details)}</p>
                       {warning.suggestions && warning.suggestions.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {warning.suggestions.map((suggestion, sIdx) => (
@@ -739,7 +742,7 @@ export function AddItineraryItemDialog({
                 <div key={idx} className="rounded-lg bg-blue-50 border border-blue-200 p-3">
                   <div className="flex items-start gap-2">
                     <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-800">{info.message}</p>
+                    <p className="text-sm text-blue-800">{formatValidationMessage(info.message, info.details)}</p>
                   </div>
                 </div>
               ))}
