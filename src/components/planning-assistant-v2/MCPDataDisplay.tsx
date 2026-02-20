@@ -8,20 +8,32 @@ import { RecommendationCarousel } from './RecommendationCarousel';
 import { HotelList } from './HotelList';
 import { AccommodationList } from './AccommodationList';
 import { RestaurantList } from './RestaurantList';
+import { RailRouteList } from './RailRouteList';
+import { FlightList } from './FlightList';
 import { WeatherDisplay } from './WeatherDisplay';
 import { SearchResults } from './SearchResults';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plane, Train, Languages, DollarSign, Image as ImageIcon } from 'lucide-react';
+import { Plane, Languages, DollarSign, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { TripDetail } from '@/types/trip';
 import type { ChatMessage } from '@/hooks/useChatV2';
 
 interface MCPDataDisplayProps {
   message: ChatMessage;
+  tripId?: string;
+  tripInfo?: TripDetail;
+  onAddToTripSuccess?: () => void;
   className?: string;
 }
 
-export function MCPDataDisplay({ message, className }: MCPDataDisplayProps) {
+export function MCPDataDisplay({
+  message,
+  tripId,
+  tripInfo,
+  onAddToTripSuccess,
+  className,
+}: MCPDataDisplayProps) {
   const { routing } = message;
 
   // 住宿混合列表：routing.target === 'accommodation' 或 accommodations 存在时展示
@@ -29,6 +41,9 @@ export function MCPDataDisplay({ message, className }: MCPDataDisplayProps) {
     return (
       <AccommodationList
         accommodations={message.accommodations}
+        tripId={tripId}
+        tripInfo={tripInfo}
+        onAddToTripSuccess={onAddToTripSuccess}
         className={cn('mt-3', className)}
       />
     );
@@ -92,34 +107,13 @@ export function MCPDataDisplay({ message, className }: MCPDataDisplayProps) {
     case 'flight':
       if (message.flights && message.flights.length > 0) {
         return (
-          <div className={cn('mt-3 space-y-3', className)}>
-            {message.flights.map((flight: any, index: number) => (
-              <Card key={index} className="hover:shadow-md transition-shadow">
-                <CardContent>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 flex-shrink-0">
-                      <Plane className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{flight.origin}</span>
-                        <span className="text-muted-foreground">→</span>
-                        <span className="font-medium">{flight.destination}</span>
-                      </div>
-                      <div className="flex items-center gap-4 mt-2">
-                        <span className="text-xs text-muted-foreground">{flight.duration}</span>
-                        {flight.price && (
-                          <span className="text-base font-semibold text-primary">
-                            {flight.price.amount} {flight.price.currency}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <FlightList
+            flights={message.flights}
+            tripId={tripId}
+            tripInfo={tripInfo}
+            onAddToTripSuccess={onAddToTripSuccess}
+            className={cn('mt-3', className)}
+          />
         );
       }
       break;
@@ -127,34 +121,13 @@ export function MCPDataDisplay({ message, className }: MCPDataDisplayProps) {
     case 'rail':
       if (message.railRoutes && message.railRoutes.length > 0) {
         return (
-          <div className={cn('mt-3 space-y-3', className)}>
-            {message.railRoutes.map((route: any, index: number) => (
-              <Card key={index} className="hover:shadow-md transition-shadow">
-                <CardContent>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 flex-shrink-0">
-                      <Train className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{route.origin}</span>
-                        <span className="text-muted-foreground">→</span>
-                        <span className="font-medium">{route.destination}</span>
-                      </div>
-                      <div className="flex items-center gap-4 mt-2">
-                        <span className="text-xs text-muted-foreground">{route.duration}</span>
-                        {route.price && (
-                          <span className="text-base font-semibold text-primary">
-                            {route.price.amount} {route.price.currency}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <RailRouteList
+            routes={message.railRoutes}
+            tripId={tripId}
+            tripInfo={tripInfo}
+            onAddToTripSuccess={onAddToTripSuccess}
+            className={cn('mt-3', className)}
+          />
         );
       }
       break;

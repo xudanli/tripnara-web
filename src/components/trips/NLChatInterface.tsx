@@ -1242,10 +1242,10 @@ export default function NLChatInterface({
   const [autoSubmitCountdown, setAutoSubmitCountdown] = useState<number | null>(null);
   const [autoSubmitTimerId, setAutoSubmitTimerId] = useState<NodeJS.Timeout | null>(null);
   const [autoSubmitCancelId, setAutoSubmitCancelId] = useState<string | null>(null);
-  // 🆕 防重复提交：记录正在自动提交的消息ID，避免重复触发
-  const [autoSubmittingMessageId, setAutoSubmittingMessageId] = useState<string | null>(null);
-  // 🆕 防重复提交：记录最近提交的消息ID，避免重复提交
-  const [lastSubmittedMessageId, setLastSubmittedMessageId] = useState<string | null>(null);
+  // 🆕 防重复提交：记录正在自动提交的消息ID，避免重复触发（用 ref 实现同步检查）
+  const autoSubmittingMessageIdRef = useRef<string | null>(null);
+  // 🆕 防重复提交：记录最近提交的消息内容，避免重复提交（用 ref 实现同步检查）
+  const lastSubmittedContentRef = useRef<string | null>(null);
   
   // 首次使用状态（简化版）
   const [isFirstTime, setIsFirstTime] = useState(() => {
@@ -1884,21 +1884,19 @@ export default function NLChatInterface({
   ) => {
     if (!text.trim() || isLoading) return;
 
-    // 🆕 防重复提交：检查是否刚刚提交过相同的消息
+    // 🆕 防重复提交：用 ref 同步检查，避免 state 异步导致的重复
     const messageId = `user-${Date.now()}`;
     const messageContent = text.trim();
     
-    // 如果最近2秒内提交过相同内容的消息，忽略本次提交
-    if (lastSubmittedMessageId && messageContent === lastSubmittedMessageId) {
-      console.warn('[NLChatInterface] 检测到重复提交，已忽略:', messageContent);
+    if (lastSubmittedContentRef.current === messageContent) {
+      console.warn('[NLChatInterface] 检测到重复提交，已忽略:', messageContent.substring(0, 30));
       return;
     }
-    
-    // 🆕 记录本次提交的消息内容，用于防重复检查
-    setLastSubmittedMessageId(messageContent);
-    // 2秒后清除记录，允许用户再次提交相同内容
+    lastSubmittedContentRef.current = messageContent;
     setTimeout(() => {
-      setLastSubmittedMessageId(prev => prev === messageContent ? null : prev);
+      if (lastSubmittedContentRef.current === messageContent) {
+        lastSubmittedContentRef.current = null;
+      }
     }, 2000);
 
     // 🆕 批量保存检查：发送消息前确保所有答案已保存
@@ -1986,27 +1984,8 @@ export default function NLChatInterface({
             questionAnswers = extractedAnswers;
             console.log('[NLChatInterface] 从文本中提取到答案:', questionAnswers);
             
-            // 🆕 P0: 添加答案识别反馈 - 显示提取到的答案
-            const extractedCount = Object.keys(extractedAnswers).length;
-            const answerPreview = Object.entries(extractedAnswers)
-              .slice(0, 3) // 只显示前3个答案
-              .map(([questionId, answer]) => {
-                const question = latestMessage.clarificationQuestions?.find(q => q.id === questionId);
-                const answerText = formatAnswerValue(answer);
-                return question ? `${question.text}: ${answerText}` : null;
-              })
-              .filter(Boolean)
-              .join('；');
-            
-            // 显示答案识别反馈消息
-            const feedbackMessageId = `answer-feedback-${Date.now()}`;
-            const feedbackMessage: ChatMessage = {
-              id: feedbackMessageId,
-              role: 'assistant',
-              content: `✅ 已识别到 ${extractedCount} 个答案：${answerPreview}${extractedCount > 3 ? '...' : ''}`,
-              timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, feedbackMessage]);
+            // 🆕 P1: 不再添加「已识别」反馈，避免与后端 plannerReply 中的确认文案重复
+            // 答案已通过 clarificationAnswers 正确传递，后端会返回确认
           }
         }
       }
@@ -3169,10 +3148,9 @@ export default function NLChatInterface({
                   });
                   
                   // 🐛 只有所有问题（包括必填和非必填）都回答后才自动提交
-                  // 🆕 防重复提交：检查是否已经在自动提交中
-                  if (allQuestionsAnswered && allRequiredAnswered && !autoSubmittingMessageId) {
-                    // 🆕 标记当前消息正在自动提交，防止重复触发
-                    setAutoSubmittingMessageId(msg.id);
+                  // 🆕 防重复提交：用 ref 同步检查，避免 state 异步导致重复触发
+                  if (allQuestionsAnswered && allRequiredAnswered && !autoSubmittingMessageIdRef.current) {
+                    autoSubmittingMessageIdRef.current = msg.id;
                     
                     // 🐛 保存答案引用，确保在 setTimeout 回调中能访问到最新的答案
                     // 🆕 使用 fieldName 构建 finalAnswers（包含条件输入字段）
@@ -3271,7 +3249,7 @@ export default function NLChatInterface({
                         setAutoSubmitCountdown(null);
                         setAutoSubmitTimerId(null);
                         setAutoSubmitCancelId(null);
-                        setAutoSubmittingMessageId(null); // 🆕 清除自动提交标记
+                        autoSubmittingMessageIdRef.current = null;
                         clearInterval(countdownInterval);
                         
                         return null;
@@ -3279,7 +3257,7 @@ export default function NLChatInterface({
                     }, 1500); // 延长到 1.5 秒，让用户看到答案预览
                     
                     setAutoSubmitTimerId(submitTimer);
-                  } else if (autoSubmittingMessageId === msg.id) {
+                  } else if (autoSubmittingMessageIdRef.current === msg.id) {
                     // 🆕 如果已经在自动提交中，跳过（防止重复触发）
                     console.log('[NLChatInterface] 消息已在自动提交中，跳过重复触发');
                   }
@@ -3311,7 +3289,7 @@ export default function NLChatInterface({
                         setAutoSubmitCountdown(null);
                         setAutoSubmitTimerId(null);
                         setAutoSubmitCancelId(null);
-                        setAutoSubmittingMessageId(null); // 🆕 清除自动提交标记
+                        autoSubmittingMessageIdRef.current = null;
                       }}
                       className="text-xs h-7 px-2"
                     >
@@ -3327,7 +3305,7 @@ export default function NLChatInterface({
                         setAutoSubmitCountdown(null);
                         setAutoSubmitTimerId(null);
                         setAutoSubmitCancelId(null);
-                        setAutoSubmittingMessageId(null); // 🆕 清除自动提交标记
+                        autoSubmittingMessageIdRef.current = null;
                         // TODO: 实现立即提交逻辑（需要保存 finalAnswers 和 finalQuestions 的引用）
                       }}
                       className="text-xs h-7 px-2 bg-black hover:bg-gray-800"

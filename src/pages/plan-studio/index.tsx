@@ -73,7 +73,7 @@ function PlanStudioPageContent() {
   const [hasTrips, setHasTrips] = useState(false);
   const [tripExists, setTripExists] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [refreshKey] = useState(0); // 用于触发子组件刷新
+  const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
   const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
   const [highlightFindingId, setHighlightFindingId] = useState<string | undefined>(undefined);
   
@@ -119,6 +119,13 @@ function PlanStudioPageContent() {
     
     // 不再需要切换 personaMode，三人格由系统自动调用
   };
+
+  // 监听「加入行程」等操作，刷新 ScheduleTab（右侧助手添加住宿/火车后）
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('plan-studio:schedule-refresh', handler);
+    return () => window.removeEventListener('plan-studio:schedule-refresh', handler);
+  }, []);
 
 
   // 加载国家信息

@@ -25,10 +25,12 @@ interface ChatPanelProps {
   };
   destination?: string; // 当前选定的目的地，用于快捷操作
   tripInfo?: TripDetail; // 行程详细信息，用于上下文感知和显示
+  tripId?: string; // 行程 ID，用于加入行程等操作
+  onAddToTripSuccess?: () => void; // 加入行程成功后的回调
   className?: string;
 }
 
-export function ChatPanel({ sessionId, userId, context, destination, tripInfo, className }: ChatPanelProps) {
+export function ChatPanel({ sessionId, userId, context, destination, tripInfo, tripId, onAddToTripSuccess, className }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -137,6 +139,9 @@ export function ChatPanel({ sessionId, userId, context, destination, tripInfo, c
                 message.role === 'assistant' &&
                 messages.filter((m) => m.role === 'assistant').pop()?.id === message.id
               }
+              tripId={tripId}
+              tripInfo={tripInfo}
+              onAddToTripSuccess={onAddToTripSuccess}
             />
           ))}
           

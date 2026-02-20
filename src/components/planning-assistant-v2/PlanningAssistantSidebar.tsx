@@ -48,6 +48,7 @@ export function PlanningAssistantSidebar({
   const [countryCode, setCountryCode] = useState<string | null>(null);
   const [tripInfo, setTripInfo] = useState<TripDetail | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(false);
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
   
   // 🆕 规划工作台上下文（用于接收来自左侧的提问）
   // 注意：可能不在 PlanStudioProvider 上下文中，需要安全处理
@@ -108,7 +109,7 @@ export function PlanningAssistantSidebar({
     };
 
     loadTrip();
-  }, [tripId]);
+  }, [tripId, refetchTrigger]);
 
   // 🆕 注册打开助手抽屉的回调
   useEffect(() => {
@@ -183,6 +184,10 @@ export function PlanningAssistantSidebar({
         tripInfo={tripInfo || undefined}
         onSendMessageReady={(sendMessage) => {
           sendMessageRef.current = sendMessage;
+        }}
+        onAddToTripSuccess={() => {
+          setRefetchTrigger((t) => t + 1);
+          window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
         }}
       />
     </div>

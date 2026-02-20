@@ -52,6 +52,13 @@ export interface ChatMessage {
     data: any;
   }>;
   suggestions?: string[];
+  /** 建议操作（如铁路查询缺日期时的「明天」「后天」），点击发送 label/labelCN */
+  suggestedActions?: Array<{
+    action?: string;
+    label: string;
+    labelCN?: string;
+    primary?: boolean;
+  }>;
 }
 
 export interface UseChatV2Return {
@@ -124,6 +131,7 @@ export function useChatV2(
         // 其他字段
         actions: data.actions,
         suggestions: data.suggestions,
+        suggestedActions: data.suggestedActions,
       };
       setMessages((prev) => [...prev, aiMessage]);
       

@@ -1417,6 +1417,12 @@ export interface CreateItineraryItemRequest {
   startTime: string;
   endTime: string;
   note?: string;
+  /** 自定义展示名称（无 placeId 时，如铁路路线） */
+  placeName?: string;
+  /** 外部链接（预订页等，用于行程项展示「预订」链接） */
+  externalUrl?: string;
+  /** 元数据（如 source: 'rail', isOvernightRail, lineName） */
+  metadata?: Record<string, unknown>;
   // 校验相关字段
   forceCreate?: boolean;       // 强制创建，忽略 WARNING 级别校验
   ignoreWarnings?: string[];  // 忽略的警告类型列表

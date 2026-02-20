@@ -174,8 +174,8 @@ export default function AgentChatSidebar({
   return (
     <aside
       className={cn(
-        'bg-white border-l border-gray-200 flex flex-col h-full transition-all duration-300 ease-in-out',
-        // 当使用 ResizablePanel 时，宽度由 Panel 控制，不需要设置固定宽度
+        'bg-white border-l border-gray-200 flex flex-col h-full transition-all duration-300 ease-in-out flex-shrink-0',
+        isExpanded ? 'w-[400px] min-w-[400px]' : 'w-14 min-w-[3.5rem]',
         className
       )}
     >

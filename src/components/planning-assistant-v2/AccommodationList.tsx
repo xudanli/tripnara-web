@@ -1,26 +1,44 @@
 /**
  * Planning Assistant V2 - 住宿混合列表（酒店 + Airbnb）
  * 渐进式披露：默认展示前 4 条，可展开全部；列表区域固定高度 + 内部滚动
+ * 支持「加入行程」：需传入 tripId、tripInfo
  */
 
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Star, Building2, Home, ExternalLink, ChevronDown } from 'lucide-react';
+import { MapPin, Star, Building2, Home, ExternalLink, ChevronDown, Navigation, CalendarPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Accommodation } from '@/api/planning-assistant-v2';
+import type { TripDetail } from '@/types/trip';
+import { AddAccommodationToTripDialog } from './AddAccommodationToTripDialog';
 
 const INITIAL_VISIBLE = 4;
 const LIST_MAX_HEIGHT = 320;
 
 interface AccommodationListProps {
   accommodations: Accommodation[];
+  /** 行程 ID，有则显示「加入行程」按钮 */
+  tripId?: string;
+  /** 行程详情（含 TripDay），有则支持加入行程 */
+  tripInfo?: TripDetail;
+  /** 加入行程成功后的回调（如刷新日程） */
+  onAddToTripSuccess?: () => void;
   className?: string;
 }
 
-export function AccommodationList({ accommodations, className }: AccommodationListProps) {
+export function AccommodationList({
+  accommodations,
+  tripId,
+  tripInfo,
+  onAddToTripSuccess,
+  className,
+}: AccommodationListProps) {
   const [expanded, setExpanded] = useState(false);
+  const [addDialogItem, setAddDialogItem] = useState<Accommodation | null>(null);
+
+  const canAddToTrip = Boolean(tripId && tripInfo?.TripDay?.length);
 
   if (!accommodations || accommodations.length === 0) {
     return null;
@@ -77,6 +95,18 @@ export function AccommodationList({ accommodations, className }: AccommodationLi
                       {item.address}
                     </p>
                   )}
+                  {(item.distanceKm != null || item.nearestPlaceName) && (
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                      <Navigation className="w-3 h-3 flex-shrink-0" />
+                      {item.distanceKm != null && item.nearestPlaceName
+                        ? `距${item.nearestPlaceName} ${item.distanceKm.toFixed(1)}km`
+                        : item.distanceKm != null
+                        ? `距当日行程点 ${item.distanceKm.toFixed(1)}km`
+                        : item.nearestPlaceName
+                        ? `近${item.nearestPlaceName}`
+                        : null}
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 mt-2 flex-wrap">
                     {item.rating != null && (
                       <span className="text-xs flex items-center gap-1">
@@ -97,17 +127,30 @@ export function AccommodationList({ accommodations, className }: AccommodationLi
                     )}
                   </div>
                 </div>
-                {item.url && (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2 self-start"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    查看
-                  </a>
-                )}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {item.url && (
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      查看
+                    </a>
+                  )}
+                  {canAddToTrip && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setAddDialogItem(item)}
+                    >
+                      <CalendarPlus className="w-3.5 h-3.5 mr-1" />
+                      加入行程
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -125,6 +168,17 @@ export function AccommodationList({ accommodations, className }: AccommodationLi
           <ChevronDown className="w-4 h-4 mr-1" />
           展开全部 {total} 个
         </Button>
+      )}
+
+      {addDialogItem && tripId && tripInfo && (
+        <AddAccommodationToTripDialog
+          open={!!addDialogItem}
+          onOpenChange={(open) => !open && setAddDialogItem(null)}
+          accommodation={addDialogItem}
+          tripId={tripId}
+          tripInfo={tripInfo}
+          onSuccess={onAddToTripSuccess}
+        />
       )}
     </div>
   );

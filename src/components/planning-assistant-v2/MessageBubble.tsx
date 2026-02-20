@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import type { TripDetail } from '@/types/trip';
 import type { ChatMessage } from '@/hooks/useChatV2';
 import { MCPDataDisplay } from './MCPDataDisplay';
 
@@ -16,6 +17,9 @@ interface MessageBubbleProps {
   message: ChatMessage;
   onSendMessage?: (text: string) => void | Promise<void>;
   isLastAssistantMessage?: boolean;
+  tripId?: string;
+  tripInfo?: TripDetail;
+  onAddToTripSuccess?: () => void;
 }
 
 /** 澄清提示：当需要用户补充信息时显示；HOTEL_DATES 时展示日期选择器 */
@@ -143,12 +147,21 @@ function getClarificationHint(type: string): string | null {
       return '例如：冰岛、东京、巴黎';
     case 'DATES':
       return '例如：3月1日到7日、下周';
+    case 'CLARIFYING_RAIL_DATES':
+      return '点击下方快捷选项或输入日期';
     default:
       return null;
   }
 }
 
-export function MessageBubble({ message, onSendMessage, isLastAssistantMessage }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  onSendMessage,
+  isLastAssistantMessage,
+  tripId,
+  tripInfo,
+  onAddToTripSuccess,
+}: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -204,20 +217,47 @@ export function MessageBubble({ message, onSendMessage, isLastAssistantMessage }
         )}
 
         {/* MCP 服务数据展示（推荐、酒店、餐厅、天气等） */}
-        {!isUser && <MCPDataDisplay message={message} />}
+        {!isUser && (
+          <MCPDataDisplay
+            message={message}
+            tripId={tripId}
+            tripInfo={tripInfo}
+            onAddToTripSuccess={onAddToTripSuccess}
+          />
+        )}
 
-        {/* 建议操作 */}
-        {!isUser && message.suggestions && message.suggestions.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {message.suggestions.map((suggestion, idx) => (
-              <button
-                key={idx}
-                className="text-xs px-3 py-1.5 bg-background border border-input rounded-md hover:bg-accent transition-colors"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
+        {/* 建议操作：suggestedActions（如铁路日期「明天」「后天」）或 suggestions，点击发送对应消息 */}
+        {!isUser && onSendMessage && (
+          message.suggestedActions && message.suggestedActions.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {message.suggestedActions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onSendMessage(action.labelCN || action.label)}
+                  className={cn(
+                    'text-xs px-3 py-1.5 rounded-md transition-colors',
+                    action.primary
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      : 'bg-background border border-input hover:bg-accent'
+                  )}
+                >
+                  {action.labelCN || action.label}
+                </button>
+              ))}
+            </div>
+          ) : message.suggestions && message.suggestions.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {message.suggestions.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onSendMessage(suggestion)}
+                  className="text-xs px-3 py-1.5 bg-background border border-input rounded-md hover:bg-accent transition-colors"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          ) : null
         )}
 
         {/* 时间戳 */}

@@ -1493,13 +1493,17 @@ export const itineraryItemsApi = {
   /**
    * 获取所有行程项
    * GET /itinerary-items
+   * @param costCategory 可选，按费用分类筛选（如 ACCOMMODATION 用于检查当天是否已有住宿）
    */
-  getAll: async (tripDayId?: string, forceRefresh?: boolean): Promise<ItineraryItemDetail[]> => {
-    const params: any = tripDayId ? { tripDayId } : {};
-    // 如果需要强制刷新，添加时间戳避免缓存
-    if (forceRefresh) {
-      params._t = Date.now();
-    }
+  getAll: async (
+    tripDayId?: string,
+    forceRefresh?: boolean,
+    costCategory?: CostCategory
+  ): Promise<ItineraryItemDetail[]> => {
+    const params: Record<string, string | number> = {};
+    if (tripDayId) params.tripDayId = tripDayId;
+    if (costCategory) params.costCategory = costCategory;
+    if (forceRefresh) params._t = Date.now();
     const response = await apiClient.get<ApiResponseWrapper<ItineraryItemDetail[]>>(
       '/itinerary-items',
       {

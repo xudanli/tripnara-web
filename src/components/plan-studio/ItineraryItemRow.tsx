@@ -160,11 +160,12 @@ export default function ItineraryItemRow({
 
   // ==================== 基础字段提取 ====================
   // 优先显示中文名称，如果 nameCN 为空字符串或未定义，则使用 nameEN
+  // 无 Place 时（如从推荐加入的自定义住宿）：用 note 首行作为名称
   const name = (place?.nameCN && place.nameCN.trim()) 
     ? place.nameCN 
     : (place?.nameEN && place.nameEN.trim()) 
       ? place.nameEN 
-      : item.type || '未知地点';
+      : (item.note?.split('\n')[0]?.trim()) || item.type || '未知地点';
   const category = (place?.category || item.type || '').toUpperCase();
   // 使用目的地时区显示时间
   const startTime = formatTimeInTimezone(item.startTime);

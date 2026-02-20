@@ -142,6 +142,13 @@ export interface ChatResponse {
     data: any;
   }>;
   suggestions?: string[];
+  /** 建议操作（如铁路查询缺日期时的「明天」「后天」），点击时以 label/labelCN 作为 message 再次调用 */
+  suggestedActions?: Array<{
+    action?: string;
+    label: string;
+    labelCN?: string;
+    primary?: boolean;
+  }>;
 }
 
 // ==================== 推荐类型 ====================
@@ -379,6 +386,10 @@ export interface Accommodation {
   photos?: string[];
   checkIn?: string;
   checkOut?: string;
+  /** 距当天最近行程点的距离（公里），有 tripId+checkIn 时计算 */
+  distanceKm?: number;
+  /** 最近的行程点名称 */
+  nearestPlaceName?: string;
   /** 原始数据（调试用） */
   raw?: Record<string, unknown>;
 }
