@@ -510,6 +510,8 @@ export interface JourneyState {
     totalBudget: number;
   };
   lastUpdated: string;
+  /** 行程是否已完成：phase 为 POST_TRIP，或 endDate 已过，或 status 为 COMPLETED */
+  isCompleted?: boolean;
 }
 
 /**
@@ -547,6 +549,9 @@ export interface JourneyAssistantResponse {
   
   // 建议操作
   suggestedActions?: SuggestedAction[];
+  
+  /** 当搜索医院/药店等需要定位时，若未提供坐标，后端返回此字段提示前端 */
+  needsLocation?: boolean;
   
   // V2.1 新增：降级信息
   degradation?: DegradationInfo;
@@ -611,6 +616,21 @@ export interface NearbySearchRequest {
   context?: {
     currentLocation?: Location;
   };
+}
+
+/**
+ * 快捷操作项（后端返回格式）
+ * GET /agent/journey-assistant/quick-actions 使用
+ */
+export interface QuickActionResponseItem {
+  id: string;
+  label: string;
+  prompt: string;
+  icon?: string; // 图标名，如 'utensils' | 'coffee' | 'shopping' | 'hospital'
+}
+
+export interface QuickActionsResponse {
+  items: QuickActionResponseItem[];
 }
 
 // ==================== 规划助手 API ====================
@@ -814,5 +834,22 @@ export const journeyAssistantApi = {
       data
     );
     return response.data;
+  },
+
+  /**
+   * 获取快捷操作（可选接口）
+   * GET /agent/journey-assistant/trips/:tripId/quick-actions
+   * 后端可根据行程目的地、用户偏好等返回个性化快捷操作。
+   * 若接口未实现或失败，前端使用 DEFAULT_QUICK_ACTIONS 兜底。
+   */
+  getQuickActions: async (tripId: string): Promise<QuickActionsResponse | null> => {
+    try {
+      const response = await apiClient.get<QuickActionsResponse>(
+        `/agent/journey-assistant/trips/${tripId}/quick-actions`
+      );
+      return response.data;
+    } catch {
+      return null;
+    }
   },
 };

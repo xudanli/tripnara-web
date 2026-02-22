@@ -62,6 +62,8 @@ interface ItineraryItemRowProps {
   onAskNara?: (item: ItineraryItem, question: string) => void;
   /** 搜索附近 - 打开附近地点搜索对话框 */
   onSearchNearby?: (item: ItineraryItem, category?: PlaceCategory) => void;
+  /** 是否高亮（证据点击时用于在行程中高亮对应行程项） */
+  highlighted?: boolean;
 }
 
 // 类别图标映射
@@ -114,6 +116,7 @@ export default function ItineraryItemRow({
   onApplyPatch,
   onAskNara,
   onSearchNearby,
+  highlighted,
 }: ItineraryItemRowProps) {
   const { t } = useTranslation();
   const place = item.Place;
@@ -661,7 +664,11 @@ export default function ItineraryItemRow({
   return (
     <>
     <div
-      className={`p-3 border rounded-lg hover:border-primary transition-colors group cursor-pointer ${abuFields ? getStatusColor(abuFields.status) : ''}`}
+      className={cn(
+        'p-3 border rounded-lg hover:border-primary transition-colors group cursor-pointer',
+        abuFields ? getStatusColor(abuFields.status) : '',
+        highlighted && 'border-primary bg-primary/5 ring-1 ring-primary/20'
+      )}
       onClick={handleOpenDetail}
     >
         <div className="flex items-start gap-3">

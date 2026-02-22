@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Plane, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatDayDate } from '@/utils/format';
 
 /** 从原始航班数据提取展示信息 */
 function getFlightInfo(raw: any) {
@@ -194,7 +195,7 @@ export function AddFlightToTripDialog({
               <SelectContent>
                 {days.map((d, idx) => (
                   <SelectItem key={d.id} value={d.id}>
-                    第 {idx + 1} 天 · {d.date}
+                    第 {idx + 1} 天 · {formatDayDate(d.date)}
                   </SelectItem>
                 ))}
               </SelectContent>

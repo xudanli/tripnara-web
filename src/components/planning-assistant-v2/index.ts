@@ -19,6 +19,7 @@ export { QuickActions } from './QuickActions';
 export { HotelList } from './HotelList';
 export { AccommodationList } from './AccommodationList';
 export { RestaurantList } from './RestaurantList';
+export { CarRentalList } from './CarRentalList';
 export { WeatherDisplay } from './WeatherDisplay';
 export { SearchResults } from './SearchResults';
 export { MCPDataDisplay } from './MCPDataDisplay';

@@ -14,6 +14,7 @@ import { itineraryItemsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { CreateItineraryItemRequest, ItineraryItemType, TripDay } from '@/types/trip';
 import { formatValidationMessage } from '@/utils/openingHoursFormatter';
+import { formatDayDate } from '@/utils/format';
 import type { PlaceWithDistance } from '@/types/places-routes';
 import {
   Dialog,
@@ -63,7 +64,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
-import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time-validation';
 import { useItineraryValidation, getDefaultCostCategory, formatCostCategory } from '@/hooks';
 import { AlertTriangle, Info, AlertCircle, DollarSign } from 'lucide-react';
 import type { CostCategory } from '@/types/trip';
@@ -239,20 +239,6 @@ export function AddItineraryItemDialog({
       return;
     }
 
-    // ✅ 前端基础校验：检查时间重叠（严格阻止，不允许边界重叠）
-    const existingItems = tripDay.ItineraryItem || [];
-    const overlaps = checkTimeOverlap(
-      { startTime: startDateTime, endTime: endDateTime },
-      existingItems,
-      false // 不允许边界重叠（严格模式）
-    );
-
-    if (overlaps.length > 0) {
-      setError(formatTimeOverlapError(overlaps));
-      setValidationResult(null);
-      return;
-    }
-
     // ✅ 后端预校验（包含交通时间、距离等智能校验）
     setSubmitting(true);
     setError(null);
@@ -397,7 +383,7 @@ export function AddItineraryItemDialog({
             添加行程项
           </DialogTitle>
           <DialogDescription>
-            添加到 {tripDay.date} - 第{tripDay.dayNumber}天
+            添加到 {formatDayDate(tripDay.date)} - 第{tripDay.dayNumber}天
           </DialogDescription>
         </DialogHeader>
 

@@ -29,7 +29,14 @@ import {
   type ExpertCitation,
   type DegradationInfo,
 } from '@/api/assistant';
+import {
+  DEFAULT_QUICK_ACTIONS,
+  QUICK_ACTION_ICON_MAP,
+  type QuickActionItem,
+} from '@/constants/journey-assistant';
+import { getCurrentPosition } from '@/utils/geo';
 import { handleApiError } from '@/utils/errorHandler';
+import { toast } from 'sonner';
 
 /**
  * 消息类型
@@ -85,6 +92,9 @@ export interface UseJourneyAssistantReturn {
   currentSearchResults: SearchResults | null;
   currentSuggestedActions: SuggestedAction[] | null;
   
+  // 快捷操作（可来自后端，未实现时使用默认配置）
+  quickActions: QuickActionItem[];
+  
   // 方法
   sendMessage: (message: string, location?: Location) => Promise<JourneyAssistantResponse | null>;
   fetchStatus: () => Promise<JourneyState | null>;
@@ -133,6 +143,9 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
   const [currentSearchResults, setCurrentSearchResults] = useState<SearchResults | null>(null);
   const [currentSuggestedActions, setCurrentSuggestedActions] = useState<SuggestedAction[] | null>(null);
   
+  // 快捷操作（后端可覆盖，默认使用 DEFAULT_QUICK_ACTIONS）
+  const [quickActions, setQuickActions] = useState<QuickActionItem[]>(DEFAULT_QUICK_ACTIONS);
+  
   // 用于生成消息 ID
   const messageIdRef = useRef(0);
   const generateMessageId = () => `journey-msg-${Date.now()}-${++messageIdRef.current}`;
@@ -154,31 +167,70 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     setCurrentSearchResults(response.searchResults || null);
     setCurrentSuggestedActions(response.suggestedActions || null);
     
-    // 更新提醒（如果有）
-    if (response.reminders) {
+    // 更新提醒（如果有，且为数组）
+    if (Array.isArray(response.reminders)) {
       setReminders(response.reminders);
     }
     
-    // 创建助手消息
-    const assistantMessage: JourneyMessage = {
-      id: generateMessageId(),
-      role: 'assistant',
-      content: response.messageCN || response.message || '',
-      timestamp: new Date(),
-      journeyState: response.journeyState,
-      reminders: response.reminders,
-      event: response.event,
-      options: response.options,
-      adjustmentResult: response.adjustmentResult,
-      searchResults: response.searchResults,
-      suggestedActions: response.suggestedActions,
-      // V2.1 新增字段
-      sections: response.sections,
-      citations: response.citations,
-      degradation: response.degradation,
-    };
+    // 当需要定位时，添加「授权位置并重试」按钮（使用上一条用户消息作为重试 prompt）
+    let suggestedActions = response.suggestedActions;
+    if (response.needsLocation) {
+      setMessages((prev) => {
+        const lastUserMsg = [...prev].reverse().find((m) => m.role === 'user');
+        const retryPrompt = lastUserMsg?.content?.trim();
+        if (retryPrompt) {
+          suggestedActions = [
+            {
+              action: `retry_with_location:${encodeURIComponent(retryPrompt)}`,
+              label: 'Retry with location',
+              labelCN: '授权位置并重试',
+              primary: true,
+            },
+            ...(response.suggestedActions || [])];
+        }
+        const assistantMessage: JourneyMessage = {
+          id: generateMessageId(),
+          role: 'assistant',
+          content: response.messageCN || response.message || '',
+          timestamp: new Date(),
+          journeyState: response.journeyState,
+          reminders: response.reminders,
+          event: response.event,
+          options: response.options,
+          adjustmentResult: response.adjustmentResult,
+          searchResults: response.searchResults,
+          suggestedActions,
+          sections: response.sections,
+          citations: response.citations,
+          degradation: response.degradation,
+        };
+        return [...prev, assistantMessage];
+      });
+    } else {
+      const assistantMessage: JourneyMessage = {
+        id: generateMessageId(),
+        role: 'assistant',
+        content: response.messageCN || response.message || '',
+        timestamp: new Date(),
+        journeyState: response.journeyState,
+        reminders: response.reminders,
+        event: response.event,
+        options: response.options,
+        adjustmentResult: response.adjustmentResult,
+        searchResults: response.searchResults,
+        suggestedActions: response.suggestedActions,
+        sections: response.sections,
+        citations: response.citations,
+        degradation: response.degradation,
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+    }
     
-    setMessages(prev => [...prev, assistantMessage]);
+    if (response.needsLocation) {
+      toast.warning('请允许获取位置权限后重试', {
+        description: '找医院、找药店需要您的位置才能搜索附近地点',
+      });
+    }
     
     return response;
   }, []);
@@ -210,8 +262,9 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     
     try {
       const data = await journeyAssistantApi.getReminders(tripId);
-      setReminders(data);
-      return data;
+      const safeData = Array.isArray(data) ? data : [];
+      setReminders(safeData);
+      return safeData;
     } catch (err) {
       console.error('Failed to fetch reminders:', err);
       return [];
@@ -412,11 +465,29 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     // 根据 action.action 执行不同操作
     const actionType = action.action;
     
-    if (actionType.startsWith('navigate_')) {
+    if (actionType.startsWith('retry_with_location:')) {
+      const prompt = decodeURIComponent(actionType.replace('retry_with_location:', ''));
+      let loc: { lat: number; lng: number } | undefined;
+      try {
+        loc = await getCurrentPosition();
+      } catch {
+        toast.warning('无法获取位置', {
+          description: '请允许浏览器访问您的位置，或在系统设置中开启定位权限',
+        });
+        return;
+      }
+      await nearbySearch(prompt, loc);
+    } else if (actionType.startsWith('navigate_')) {
       // 导航操作
       await sendMessage(`导航到 ${action.labelCN || action.label}`);
     } else if (actionType === 'find_hospital') {
-      await nearbySearch('找最近的医院');
+      let loc: { lat: number; lng: number } | undefined;
+      try {
+        loc = await getCurrentPosition();
+      } catch {
+        // 定位失败仍发送，后端会返回 needsLocation 提示
+      }
+      await nearbySearch('找最近的医院', loc);
     } else if (actionType === 'call_police') {
       // 这个应该触发打电话，由 UI 层处理
       console.log('Call police action');
@@ -451,6 +522,25 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     }
   }, [autoFetchReminders, tripId, fetchReminders]);
   
+  // 获取快捷操作（后端可选实现，失败时使用默认配置）
+  useEffect(() => {
+    if (!tripId) return;
+    journeyAssistantApi.getQuickActions(tripId).then((res) => {
+      if (res?.items?.length) {
+        const mapped: QuickActionItem[] = res.items.map((item) => {
+          const IconComponent = item.icon ? QUICK_ACTION_ICON_MAP[item.icon] : null;
+          return {
+            id: item.id,
+            label: item.label,
+            prompt: item.prompt,
+            icon: IconComponent ?? DEFAULT_QUICK_ACTIONS[0]!.icon,
+          };
+        });
+        setQuickActions(mapped);
+      }
+    });
+  }, [tripId]);
+  
   // 轮询状态更新
   useEffect(() => {
     if (!tripId || !pollInterval) return;
@@ -477,6 +567,9 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     currentOptions,
     currentSearchResults,
     currentSuggestedActions,
+    
+    // 快捷操作（可来自后端）
+    quickActions,
     
     // 方法
     sendMessage,

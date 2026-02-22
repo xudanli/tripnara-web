@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { formatDayDate } from '@/utils/format';
 import { Calendar, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Accommodation } from '@/api/planning-assistant-v2';
@@ -58,7 +59,7 @@ interface AddAccommodationToTripDialogProps {
 function parsePriceToNumber(price?: string): number | undefined {
   if (!price) return undefined;
   const match = price.match(/[\d,]+(?:\.\d+)?/);
-  return match ? parseFloat(match.replace(/,/g, '')) : undefined;
+  return match ? parseFloat(match[0].replace(/,/g, '')) : undefined;
 }
 
 export function AddAccommodationToTripDialog({
@@ -202,7 +203,7 @@ export function AddAccommodationToTripDialog({
               <SelectContent>
                 {days.map((d, idx) => (
                   <SelectItem key={d.id} value={d.id}>
-                    第 {idx + 1} 天 · {d.date}
+                    第 {idx + 1} 天 · {formatDayDate(d.date)}
                   </SelectItem>
                 ))}
               </SelectContent>

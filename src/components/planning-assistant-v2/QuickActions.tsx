@@ -5,7 +5,7 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { Hotel, Utensils, Cloud, Plane, Train, Search, Home } from 'lucide-react';
+import { Hotel, Utensils, Cloud, Plane, Train, Search, Home, Camera, Car } from 'lucide-react';
 import { generateQuickActionMessage } from '@/utils/planning-assistant-helpers';
 
 interface QuickActionsProps {
@@ -13,6 +13,8 @@ interface QuickActionsProps {
   destination?: string;
   disabled?: boolean;
   className?: string;
+  /** 拍照识别 POI 推荐（与 onAction 不同，需选择图片并获取位置） */
+  onVisionAction?: () => void;
 }
 
 const quickActions = [
@@ -53,10 +55,22 @@ const quickActions = [
     description: '铁路查询',
   },
   {
+    icon: Car,
+    label: '租车服务',
+    action: 'car' as const,
+    description: '搜索租车',
+  },
+  {
     icon: Search,
     label: '搜索信息',
     action: 'search' as const,
     description: '网上搜索',
+  },
+  {
+    icon: Camera,
+    label: '拍照识别',
+    action: 'vision' as const,
+    description: '拍照识别附近 POI',
   },
 ];
 
@@ -65,14 +79,19 @@ export function QuickActions({
   destination,
   disabled = false,
   className,
+  onVisionAction,
 }: QuickActionsProps) {
   const handleAction = (action: typeof quickActions[0]['action']) => {
+    if (action === 'vision') {
+      onVisionAction?.();
+      return;
+    }
     const message = generateQuickActionMessage(action, destination);
     onAction(message);
   };
 
   return (
-    <div className={`flex flex-wrap gap-2 ${className || ''}`}>
+    <div className={`flex flex-nowrap gap-2 overflow-x-auto pb-1 -mx-1 scrollbar-thin ${className || ''}`}>
       {quickActions.map(({ icon: Icon, label, action, description }) => (
         <Button
           key={action}
@@ -80,11 +99,11 @@ export function QuickActions({
           size="sm"
           onClick={() => handleAction(action)}
           disabled={disabled}
-          className="h-auto py-2 px-3 flex items-center gap-2"
+          className="h-8 px-3 flex items-center gap-2 flex-shrink-0 rounded-xl text-xs font-medium hover:bg-primary/5 hover:border-primary/30 transition-colors"
           title={description}
         >
-          <Icon className="w-4 h-4" />
-          <span className="text-xs">{label}</span>
+          <Icon className="w-3.5 h-3.5 shrink-0" />
+          <span>{label}</span>
         </Button>
       ))}
     </div>

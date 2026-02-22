@@ -58,7 +58,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
-import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time-validation';
 import { getDefaultCostCategory } from '@/hooks';
 import { DollarSign } from 'lucide-react';
 import type { CostCategory } from '@/types/trip';
@@ -840,46 +839,6 @@ export function EnhancedAddItineraryItemDialog({
       return;
     }
 
-    // ✅ 检查时间重叠（严格阻止，不允许边界重叠）
-    const existingItems = (tripDay.ItineraryItem || []).map(item => ({
-      id: item.id,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      note: item.note || undefined,
-      type: item.type,
-      Place: item.Place ? {
-        nameCN: item.Place.nameCN || undefined,
-        nameEN: item.Place.nameEN || undefined,
-      } : undefined,
-    }));
-    
-    console.log('[EnhancedAddItineraryItemDialog] 检查时间重叠:', {
-      newItem: {
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
-      },
-      existingItems: existingItems.map(item => ({
-        id: item.id,
-        startTime: item.startTime,
-        endTime: item.endTime,
-        startDate: new Date(item.startTime).toISOString(),
-        endDate: new Date(item.endTime).toISOString(),
-        name: item.Place?.nameCN || item.Place?.nameEN || '未知',
-      })),
-    });
-    
-    const overlaps = checkTimeOverlap(
-      { startTime: startDateTime, endTime: endDateTime },
-      existingItems,
-      false // 不允许边界重叠（严格模式）
-    );
-
-    if (overlaps.length > 0) {
-      console.warn('[EnhancedAddItineraryItemDialog] ⚠️ 检测到时间重叠:', overlaps);
-      setError(formatTimeOverlapError(overlaps));
-      return;
-    }
-
     setSubmitting(true);
     setError(null);
 
@@ -972,46 +931,6 @@ export function EnhancedAddItineraryItemDialog({
 
     if (endDateTime <= startDateTime) {
       setError('结束时间必须晚于开始时间');
-      return;
-    }
-
-    // ✅ 检查时间重叠（严格阻止，不允许边界重叠）
-    const existingItems = (tripDay.ItineraryItem || []).map(item => ({
-      id: item.id,
-      startTime: item.startTime,
-      endTime: item.endTime,
-      note: item.note || undefined,
-      type: item.type,
-      Place: item.Place ? {
-        nameCN: item.Place.nameCN || undefined,
-        nameEN: item.Place.nameEN || undefined,
-      } : undefined,
-    }));
-    
-    console.log('[EnhancedAddItineraryItemDialog] 检查时间重叠 (手动添加):', {
-      newItem: {
-        startTime: startDateTime.toISOString(),
-        endTime: endDateTime.toISOString(),
-      },
-      existingItems: existingItems.map(item => ({
-        id: item.id,
-        startTime: item.startTime,
-        endTime: item.endTime,
-        startDate: new Date(item.startTime).toISOString(),
-        endDate: new Date(item.endTime).toISOString(),
-        name: item.Place?.nameCN || item.Place?.nameEN || '未知',
-      })),
-    });
-    
-    const overlaps = checkTimeOverlap(
-      { startTime: startDateTime, endTime: endDateTime },
-      existingItems,
-      false // 不允许边界重叠（严格模式）
-    );
-
-    if (overlaps.length > 0) {
-      console.warn('[EnhancedAddItineraryItemDialog] ⚠️ 检测到时间重叠 (手动添加):', overlaps);
-      setError(formatTimeOverlapError(overlaps));
       return;
     }
 

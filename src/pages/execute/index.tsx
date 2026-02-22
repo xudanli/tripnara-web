@@ -14,12 +14,9 @@ import {
   MapPin,
   Clock,
   AlertCircle,
-  CheckCircle2,
   SkipForward,
   RotateCcw,
-  ArrowRight,
   Navigation,
-  Wifi,
   ChevronDown,
   ChevronUp,
   ClipboardList,
@@ -37,10 +34,12 @@ import {
 import SpotlightTour from '@/components/onboarding/SpotlightTour';
 import type { TourStep } from '@/components/onboarding/SpotlightTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
 import { WeatherCard } from '@/components/weather/WeatherCard';
 import { cn } from '@/lib/utils';
 import { FallbackSolutionPreviewDialog } from '@/components/execute/FallbackSolutionPreviewDialog';
 import { ReorderScheduleDialog } from '@/components/execute/ReorderScheduleDialog';
+import { ExecuteItineraryTimeline } from '@/components/execute/ExecuteItineraryTimeline';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
@@ -52,6 +51,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 // ⚠️ 改进：提取常量配置，减少硬编码
 const EXECUTE_CONFIG = {
@@ -101,10 +105,13 @@ export default function ExecutePage() {
   
   const { state: onboardingState, completeTour, completeStep } = useOnboarding();
   const [showExecuteTour, setShowExecuteTour] = useState(false);
+  const [realtimeCollapsibleOpen, setRealtimeCollapsibleOpen] = useState(false);
+  const [lowPriorityRemindersOpen, setLowPriorityRemindersOpen] = useState(false);
 
   const { data: realtimeState, refetch: refetchRealtime, isFetching: realtimeFetching } = useRealtimeState(tripId ?? undefined);
   const { data: predictedState } = usePredictedState(tripId ?? undefined, 24);
   const submitFieldReportMutation = useSubmitFieldReport();
+  const { width: assistantSidebarWidth } = useAssistantSidebar();
 
   // ⚠️ 重要：所有 useMemo 必须在任何条件返回之前调用
   // 获取天气位置：优先使用用户当前位置，其次使用行程项坐标，最后使用目的地国家默认坐标
@@ -460,7 +467,7 @@ export default function ExecutePage() {
           advanceHours: EXECUTE_CONFIG.REMINDER_ADVANCE_HOURS,
         },
       });
-      setReminders(result.uiOutput.reminders || []);
+      setReminders(Array.isArray(result?.uiOutput?.reminders) ? result.uiOutput.reminders : []);
     } catch (err: any) {
       console.error('[Execute Page] Failed to load reminders:', err);
       
@@ -675,6 +682,47 @@ export default function ExecutePage() {
     }
   };
 
+  // 打开下一步导航（Google Maps）
+  const handleOpenNavigation = () => {
+    if (!nextStop) return;
+    let place: any = null;
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let activityName: string | null = null;
+    if (tripState?.nextStop?.Place) {
+      place = tripState.nextStop.Place;
+      lat = place.latitude || place.lat || place.location?.lat;
+      lng = place.longitude || place.lng || place.location?.lng;
+    }
+    const allItems = trip?.TripDay?.flatMap(day => day.ItineraryItem || []) || [];
+    let matchingItem: any = null;
+    if (nextStop?.itemId) {
+      matchingItem = allItems.find(item => item.id === nextStop.itemId);
+      activityName = matchingItem?.note ?? null;
+    }
+    if (!place && nextStop?.placeId) {
+      matchingItem = matchingItem || allItems.find(item => item.Place?.id === nextStop.placeId);
+      if (matchingItem?.Place) {
+        place = matchingItem.Place;
+        if (!activityName) activityName = matchingItem.note ?? null;
+      }
+    }
+    if (place && (!lat || !lng)) {
+      lat = (place as any).latitude || (place as any).metadata?.location?.lat || (place as any).lat;
+      lng = (place as any).longitude || (place as any).metadata?.location?.lng || (place as any).lng;
+    }
+    if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+      const destination = `${lat},${lng}`;
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`);
+    } else {
+      if (!place) {
+        toast.error('无法获取目的地坐标', { description: '行程数据中缺少地点信息', duration: 5000 });
+      } else {
+        toast.error('无法获取目的地坐标', { description: '地点数据中缺少坐标字段', duration: 5000 });
+      }
+    }
+  };
+
   // ⚠️ 新增：加载关键证据
   const loadPlaceEvidence = async () => {
     if (!nextStop?.placeId) return;
@@ -839,40 +887,30 @@ export default function ExecutePage() {
         }}
       />
 
-      {/* A. 顶部条（12/12） */}
-      <div className="border-b bg-white px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{trip.destination || '执行模式'}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              {currentDay && (
-                <span className="text-sm text-muted-foreground">
-                  {format(new Date(currentDay.date), 'yyyy-MM-dd')}
-                </span>
-              )}
-              <span className="text-sm text-muted-foreground">
-                {format(new Date(), 'HH:mm')}
-              </span>
-            </div>
+      {/* A. 顶部条（精简）：行程名 | 日期/时间 | 状态 | 天气(compact) | 实地报告 */}
+      <div className="border-b bg-white px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold truncate">{trip.destination || '执行模式'}</h1>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+            {currentDay && (
+              <span>{format(new Date(currentDay.date), 'MM-dd')}</span>
+            )}
+            <span>{format(new Date(), 'HH:mm')}</span>
           </div>
-          <Badge variant={status === 'On track' ? 'default' : 'destructive'}>
+          <Badge variant={status === 'On track' ? 'default' : 'destructive'} className="shrink-0">
             {status === 'On track' ? 'On Track' : 'Needs Repair'}
           </Badge>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Wifi className="h-4 w-4" />
-            <span>在线</span>
-          </div>
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setFieldReportDialogOpen(true)}
+            className="h-8"
           >
-            <ClipboardList className="h-4 w-4 mr-1" />
-            实地报告
+            <ClipboardList className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">实地报告</span>
           </Button>
-          {/* 天气卡片 */}
           {weatherLocation && (
             <WeatherCard
               location={weatherLocation.location}
@@ -888,404 +926,225 @@ export default function ExecutePage() {
       {/* 主内容区 */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-12 gap-6 max-w-7xl mx-auto">
-          {/* 实时状态横幅 + 预测 */}
-          {tripId && (
-            <div className="col-span-12 space-y-2">
-              {realtimeState && (
-                <RealtimeStatusBanner
-                  state={realtimeState}
-                  connected
-                  onRefresh={() => refetchRealtime()}
-                  refreshing={realtimeFetching}
-                  collapsible
-                  compact
-                />
-              )}
-              {predictedState && (
-                <Card className="p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">未来 24h 预测</span>
-                    <Badge variant="outline">
-                      可行概率 {Math.round(predictedState.feasibility.probability * 100)}%
-                    </Badge>
-                  </div>
-                  {predictedState.feasibility.riskFactors.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      风险因素: {predictedState.feasibility.riskFactors.join(', ')}
-                    </p>
-                  )}
-                </Card>
-              )}
-            </div>
-          )}
-          {/* B. 主卡片：Next Step（8/12） */}
-          <div className="col-span-12 lg:col-span-8 space-y-6">
-            {nextStop ? (
-              <Card className="border-primary" data-tour="next-step">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ArrowRight className="h-5 w-5" />
-                    下一步
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <MapPin className="h-5 w-5 text-primary" />
-                      <h3 className="text-xl font-semibold">
-                        {formatPlaceName(nextStop.placeName, nextStop.Place)}
-                      </h3>
+          {/* 可折叠区：实时状态 + 24h 预测（默认收起，降低认知负荷） */}
+          {tripId && (realtimeState || predictedState) && (
+            <Collapsible open={realtimeCollapsibleOpen} onOpenChange={setRealtimeCollapsibleOpen} className="col-span-12">
+              <Card className="overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-sm font-medium">实时状态 · 24h 预测</span>
+                    <div className="flex items-center gap-2">
+                      {predictedState && (
+                        <Badge variant="outline" className="text-xs">
+                          可行 {Math.round(predictedState.feasibility.probability * 100)}%
+                        </Badge>
+                      )}
+                      {realtimeCollapsibleOpen ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
-                    {nextStop.startTime && (
-                      <div className="flex items-center gap-4 text-sm mb-2">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-4 w-4" />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="border-t px-4 py-3 space-y-2">
+                    {realtimeState && (
+                      <RealtimeStatusBanner
+                        state={realtimeState}
+                        connected
+                        onRefresh={() => refetchRealtime()}
+                        refreshing={realtimeFetching}
+                        compact
+                      />
+                    )}
+                    {predictedState && (
+                      <Card className="p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">未来 24h 预测</span>
+                          <Badge variant="outline">
+                            可行概率 {Math.round(predictedState.feasibility.probability * 100)}%
+                          </Badge>
+                        </div>
+                        {predictedState.feasibility.riskFactors.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            风险因素: {predictedState.feasibility.riskFactors.join(', ')}
+                          </p>
+                        )}
+                      </Card>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          )}
+          {/* B. 主区：行程时间线 + 下一步快捷操作（8/12） */}
+          <div className="col-span-12 lg:col-span-8 space-y-6">
+            <ExecuteItineraryTimeline
+              trip={trip}
+              tripState={tripState}
+              todaySchedule={todaySchedule}
+              formatPlaceName={formatPlaceName}
+              findPlaceById={findPlaceById}
+            />
+            {nextStop && (
+              <Card className="border-primary" data-tour="next-step">
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-primary" />
+                      <span className="font-medium">
+                        {formatPlaceName(nextStop.placeName, nextStop.Place)}
+                      </span>
+                      {nextStop.startTime && (
+                        <span className="text-sm text-muted-foreground">
                           {format(new Date(nextStop.startTime), 'HH:mm')}
                         </span>
-                        {nextStop.estimatedArrivalTime && (
-                          <>
-                            <span className="text-muted-foreground">
-                              预计到达: {format(new Date(nextStop.estimatedArrivalTime), 'HH:mm')}
-                            </span>
-                            <Badge variant="outline">缓冲: {EXECUTE_CONFIG.BUFFER_MINUTES}分钟</Badge>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-sm">
-                      <span className="font-medium">为什么是现在：</span>
-                      依据时间窗/交通/策略
-                    </p>
-                  </div>
-
-                  {/* 关键证据（可折叠） */}
-                  <div className="space-y-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={async () => {
-                        if (!showEvidence && nextStop?.placeId) {
-                          await loadPlaceEvidence();
-                        }
-                        setShowEvidence(!showEvidence);
-                      }}
-                      className="w-full justify-between"
-                      disabled={evidenceLoading}
-                    >
-                      <span>关键证据</span>
-                      {showEvidence ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </Button>
-                    {showEvidence && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2 text-sm">
-                        {evidenceLoading ? (
-                          <div className="flex items-center justify-center py-2">
-                            <Spinner className="w-4 h-4" />
-                            <span className="ml-2 text-xs">加载中...</span>
-                          </div>
-                        ) : placeEvidence?.evidence ? (
-                          <>
-                            {placeEvidence.evidence.businessHours && (
-                              <div>
-                                <span className="font-medium">营业时间：</span>
-                                <span className="text-muted-foreground">
-                                  {placeEvidence.evidence.businessHours.open} - {placeEvidence.evidence.businessHours.close}
-                                </span>
-                              </div>
-                            )}
-                            {placeEvidence.evidence.roadClosure && (
-                              <div>
-                                <span className="font-medium">封路信息：</span>
-                                <span className="text-muted-foreground">
-                                  {placeEvidence.evidence.roadClosure.hasClosure 
-                                    ? placeEvidence.evidence.roadClosure.closures?.[0]?.reason || '有封路'
-                                    : '无'}
-                                </span>
-                              </div>
-                            )}
-                            {placeEvidence.evidence.weatherWindow && (
-                              <div>
-                                <span className="font-medium">天气窗口：</span>
-                                <span className="text-muted-foreground">
-                                  {placeEvidence.evidence.weatherWindow.description}
-                                </span>
-                              </div>
-                            )}
-                            {!placeEvidence.evidence.businessHours && 
-                             !placeEvidence.evidence.roadClosure && 
-                             !placeEvidence.evidence.weatherWindow && (
-                              <div className="text-muted-foreground text-xs">
-                                暂无关键证据信息
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="text-muted-foreground text-xs">
-                            暂无关键证据信息
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <Button 
-                    className="w-full" 
-                    variant="outline"
-                    onClick={() => {
-                      // ⚠️ 改进：优先使用 tripState.nextStop.Place（后端应返回完整 Place 信息）
-                      // 如果后端返回了完整的 Place 信息，直接使用
-                      // 否则从 trip 数据中查找对应的 Place
-                      // ⚠️ 导航应该使用活动名称（行程项的 note），而不是地点名称
-                      let place: any = null;
-                      let lat: number | null = null;
-                      let lng: number | null = null;
-                      let activityName: string | null = null; // 活动名称
-                      
-                      console.log('[Execute Page] 开始导航 - 查找坐标和活动名称:', {
-                        nextStop,
-                        itemId: nextStop?.itemId,
-                        hasTripStatePlace: !!(tripState?.nextStop as any)?.Place,
-                        tripStateNextStop: tripState?.nextStop,
-                        tripDaysCount: trip?.TripDay?.length,
-                      });
-                      
-                      // 1. 优先使用 tripState.nextStop.Place（如果后端已返回）
-                      if (tripState?.nextStop?.Place) {
-                        place = tripState.nextStop.Place;
-                        // 支持多种坐标字段格式
-                        lat = place.latitude || place.lat || place.location?.lat;
-                        lng = place.longitude || place.lng || place.location?.lng;
-                        console.log('[Execute Page] 使用 tripState.nextStop.Place:', { lat, lng, place });
-                      }
-                      
-                      // 2. 从 trip 数据中查找对应的行程项（用于获取活动名称和坐标）
-                      const allItems = trip?.TripDay?.flatMap(day => day.ItineraryItem || []) || [];
-                      let matchingItem: any = null;
-                      
-                      // 优先通过 itemId 查找行程项（用于获取活动名称）
-                      if (nextStop?.itemId) {
-                        matchingItem = allItems.find(item => item.id === nextStop.itemId);
-                        if (matchingItem) {
-                          // 获取活动名称（note 字段）
-                          activityName = matchingItem.note || null;
-                          console.log('[Execute Page] 找到行程项，活动名称:', { 
-                            itemId: matchingItem.id, 
-                            note: matchingItem.note,
-                            activityName 
-                          });
-                        }
-                      }
-                      
-                      // 3. 如果还没有找到 Place，通过 placeId 查找
-                      if (!place && nextStop?.placeId) {
-                        matchingItem = matchingItem || allItems.find(item => item.Place?.id === nextStop.placeId);
-                        if (matchingItem?.Place) {
-                          place = matchingItem.Place;
-                          // 如果没有活动名称，使用地点名称作为后备
-                          if (!activityName) {
-                            activityName = matchingItem.note || null;
-                          }
-                        }
-                        
-                        console.log('[Execute Page] 从 trip 数据中查找:', {
-                          nextStopPlaceId: nextStop?.placeId,
-                          allItemsCount: allItems.length,
-                          matchingItem: matchingItem ? { id: matchingItem.id, placeId: matchingItem.placeId, note: matchingItem.note } : null,
-                          place: place ? { id: place.id, nameCN: place.nameCN } : null,
-                          activityName,
-                        });
-                      }
-                      
-                      // 4. 如果还没有坐标，从 Place 中提取
-                      if (place && (!lat || !lng)) {
-                        lat = (place as any).latitude || (place as any).metadata?.location?.lat || (place as any).lat;
-                        lng = (place as any).longitude || (place as any).metadata?.location?.lng || (place as any).lng;
-                        console.log('[Execute Page] 提取坐标:', { lat, lng, placeKeys: Object.keys(place) });
-                      }
-                      
-                      if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                        console.log('[Execute Page] 坐标获取成功，打开导航:', { 
-                          lat, 
-                          lng, 
-                          activityName,
-                          placeName: place?.nameCN || place?.nameEN || nextStop?.placeName 
-                        });
-                        
-                        // ⚠️ 重要：优先使用坐标进行导航，确保导航到正确的位置
-                        // Google Maps 的 destination 参数可以接受坐标或名称
-                        // 使用坐标可以避免同名地点导致的导航错误（如跳转到错误的国家）
-                        // 可以同时提供名称作为显示信息，但坐标是主要导航目标
-                        const destinationName = activityName || 
-                                               (place?.nameCN && place?.nameEN ? `${place.nameCN} ${place.nameEN}` : null) ||
-                                               place?.nameCN || 
-                                               place?.nameEN || 
-                                               nextStop?.placeName || 
-                                               null;
-                        
-                        // ⚠️ 优先使用坐标，确保导航到正确位置
-                        // 如果同时有坐标和名称，使用坐标作为主要导航目标
-                        // 这样可以避免 Google Maps 解析名称时找到错误的地址
-                        const destination = `${lat},${lng}`;
-                        
-                        console.log('[Execute Page] 使用坐标进行导航:', { 
-                          lat, 
-                          lng,
-                          activityName, 
-                          placeName: place?.nameCN || place?.nameEN,
-                          destinationName,
-                          note: '使用坐标确保导航到正确位置，避免同名地点错误'
-                        });
-                        
-                        // 打开Google Maps导航（使用坐标）
-                        const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
-                        console.log('[Execute Page] 导航URL:', mapsUrl);
-                        window.open(mapsUrl);
-                      } else {
-                        console.error('[Execute Page] 无法获取坐标:', {
-                          nextStop,
-                          tripStateNextStop: tripState?.nextStop,
-                          hasPlace: !!place,
-                          placeKeys: place ? Object.keys(place) : [],
-                          placeLatitude: place?.latitude,
-                          placeLongitude: place?.longitude,
-                          placeLat: (place as any)?.lat,
-                          placeLng: (place as any)?.lng,
-                          tripDaysCount: trip?.TripDay?.length,
-                          extractedLat: lat,
-                          extractedLng: lng,
-                        });
-                        
-                        // ⚠️ 改进：根据是否有Place数据提供不同的错误提示
-                        if (!place) {
-                          toast.error('无法获取目的地坐标', {
-                            description: '行程数据中缺少地点信息，请确认后端已返回 nextStop.Place 数据',
-                            duration: 5000,
-                          });
-                        } else if (!lat && !lng) {
-                          toast.error('无法获取目的地坐标', {
-                            description: '地点数据中缺少坐标字段（latitude/longitude），请确认后端已返回坐标信息',
-                            duration: 5000,
-                          });
-                        } else {
-                          toast.error('无法获取目的地坐标', {
-                            description: '坐标数据格式不正确，请检查后端返回的坐标字段',
-                            duration: 5000,
-                          });
-                        }
-                      }
-                    }}
-                  >
-                    <Navigation className="w-4 h-4 mr-2" />
-                    开始导航
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="py-12">
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="mb-4 opacity-50">
-                      <CheckCircle2 className="w-16 h-16 text-green-500" strokeWidth={1.5} />
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground font-medium mb-1">暂无下一步操作</p>
-                    <p className="text-xs text-muted-foreground">所有任务已完成</p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          if (!showEvidence && nextStop?.placeId) {
+                            await loadPlaceEvidence();
+                          }
+                          setShowEvidence(!showEvidence);
+                        }}
+                        disabled={evidenceLoading}
+                      >
+                        {showEvidence ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        关键证据
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleOpenNavigation}>
+                        <Navigation className="w-4 h-4 mr-2" />
+                        导航
+                      </Button>
+                    </div>
                   </div>
+                  {showEvidence && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2 text-sm">
+                      {evidenceLoading ? (
+                        <div className="flex items-center justify-center py-2">
+                          <Spinner className="w-4 h-4" />
+                          <span className="ml-2 text-xs">加载中...</span>
+                        </div>
+                      ) : placeEvidence?.evidence ? (
+                        <>
+                          {placeEvidence.evidence.businessHours && (
+                            <div>
+                              <span className="font-medium">营业时间：</span>
+                              <span className="text-muted-foreground">
+                                {placeEvidence.evidence.businessHours.open} - {placeEvidence.evidence.businessHours.close}
+                              </span>
+                            </div>
+                          )}
+                          {placeEvidence.evidence.roadClosure && (
+                            <div>
+                              <span className="font-medium">封路信息：</span>
+                              <span className="text-muted-foreground">
+                                {placeEvidence.evidence.roadClosure.hasClosure 
+                                  ? placeEvidence.evidence.roadClosure.closures?.[0]?.reason || '有封路'
+                                  : '无'}
+                              </span>
+                            </div>
+                          )}
+                          {placeEvidence.evidence.weatherWindow && (
+                            <div>
+                              <span className="font-medium">天气窗口：</span>
+                              <span className="text-muted-foreground">
+                                {placeEvidence.evidence.weatherWindow.description}
+                              </span>
+                            </div>
+                          )}
+                          {!placeEvidence.evidence.businessHours && 
+                           !placeEvidence.evidence.roadClosure && 
+                           !placeEvidence.evidence.weatherWindow && (
+                            <div className="text-muted-foreground text-xs">暂无关键证据信息</div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-muted-foreground text-xs">暂无关键证据信息</div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
           </div>
 
-          {/* C. 右侧：Today Timeline + Reminders（4/12） */}
+          {/* C. 右侧：提醒（4/12）- 仅展示 urgent/high，其余折叠 */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
-            {/* 提醒卡片 */}
-            {reminders.length > 0 && (
-              <Card className="border-yellow-200 bg-yellow-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-yellow-600" />
-                    提醒
-                  </CardTitle>
-                  <CardDescription>重要提醒事项</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {reminders.map((reminder) => {
-                      const priorityColors = {
-                        urgent: 'bg-red-100 border-red-300 text-red-800',
-                        high: 'bg-orange-100 border-orange-300 text-orange-800',
-                        medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-                        low: 'bg-blue-100 border-blue-300 text-blue-800',
-                      };
-                      return (
-                        <div
-                          key={reminder.id}
-                          className={`p-3 border rounded-lg ${priorityColors[reminder.priority] || priorityColors.medium}`}
-                        >
-                          <div className="font-medium text-sm mb-1">{reminder.title}</div>
-                          <div className="text-xs opacity-90">{reminder.message}</div>
-                          {reminder.triggerTime && (
-                            <div className="text-xs opacity-70 mt-1">
-                              {format(new Date(reminder.triggerTime), 'MM-dd HH:mm')}
+            {Array.isArray(reminders) && reminders.length > 0 && (() => {
+              const priorityColors: Record<string, string> = {
+                urgent: 'bg-red-100 border-red-300 text-red-800',
+                high: 'bg-orange-100 border-orange-300 text-orange-800',
+                medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
+                low: 'bg-blue-100 border-blue-300 text-blue-800',
+              };
+              const highPriority = reminders.filter(r => r.priority === 'urgent' || r.priority === 'high');
+              const lowPriority = reminders.filter(r => r.priority === 'medium' || r.priority === 'low');
+              const renderReminder = (reminder: Reminder) => (
+                <div
+                  key={reminder.id}
+                  className={`p-3 border rounded-lg ${priorityColors[reminder.priority] || priorityColors.medium}`}
+                >
+                  <div className="font-medium text-sm mb-1">{reminder.title}</div>
+                  <div className="text-xs opacity-90">{reminder.message}</div>
+                  {reminder.triggerTime && (
+                    <div className="text-xs opacity-70 mt-1">
+                      {format(new Date(reminder.triggerTime), 'MM-dd HH:mm')}
+                    </div>
+                  )}
+                </div>
+              );
+              return (
+                <Card className="border-yellow-200 bg-yellow-50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5 text-yellow-600" />
+                      提醒
+                    </CardTitle>
+                    <CardDescription>
+                      {highPriority.length > 0 ? '高优先级提醒' : '提醒事项'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {highPriority.length > 0 ? highPriority.map(renderReminder) : reminders.map(renderReminder)}
+                      {lowPriority.length > 0 && (
+                        <Collapsible open={lowPriorityRemindersOpen} onOpenChange={setLowPriorityRemindersOpen} className="mt-2">
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground">
+                              <span>其余 {lowPriority.length} 条提醒</span>
+                              {lowPriorityRemindersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="space-y-2 mt-2 pt-2 border-t border-yellow-200">
+                              {lowPriority.map(renderReminder)}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card>
-              <CardHeader>
-                <CardTitle>今日时间线</CardTitle>
-                <CardDescription>只显示今天</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {todaySchedule?.schedule?.items ? (
-                  <div className="space-y-2">
-                    {todaySchedule.schedule.items.map((item, idx) => {
-                      const isCurrent = tripState?.currentItemId === item.placeId.toString();
-                      const isNext = nextStop?.itemId === item.placeId.toString();
-                      return (
-                        <div
-                          key={idx}
-                          className={`p-3 border rounded-lg ${
-                            isCurrent ? 'bg-primary/10 border-primary' : isNext ? 'bg-yellow-50 border-yellow-200' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="font-medium">
-                                {formatPlaceName(item.placeName, findPlaceById(item.placeId))}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {/^\d{2}:\d{2}$/.test(item.startTime) ? item.startTime : format(new Date(item.startTime), 'HH:mm')} - {/^\d{2}:\d{2}$/.test(item.endTime) ? item.endTime : format(new Date(item.endTime), 'HH:mm')}
-                              </div>
-                            </div>
-                            {isCurrent && <Badge className="bg-primary">当前</Badge>}
-                            {isNext && <Badge variant="outline">下一站</Badge>}
-                            {!isCurrent && !isNext && <Badge variant="outline">待执行</Badge>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <Clock className="w-12 h-12 text-gray-300 mb-3" strokeWidth={1.5} />
-                    <p className="text-sm text-muted-foreground font-medium mb-1">暂无今日安排</p>
-                    <p className="text-xs text-muted-foreground">今天没有计划的活动</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </div>
         </div>
 
-        {/* D. 固定动作栏（底部/右下浮层） */}
-        <div className="fixed bottom-6 right-6 z-50" data-tour="quick-actions">
+        {/* D. 固定动作栏（底部/右下浮层）- 右侧有行程助手时自动左移避免遮挡 */}
+        <div
+          className="fixed bottom-6 z-50"
+          style={{ right: assistantSidebarWidth > 0 ? `calc(${assistantSidebarWidth}px + 1.5rem)` : '1.5rem' }}
+          data-tour="quick-actions"
+        >
           <Card className="shadow-lg">
             <CardContent className="p-4">
               <div className="grid grid-cols-2 gap-2">

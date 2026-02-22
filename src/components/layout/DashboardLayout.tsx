@@ -5,15 +5,17 @@ import MobileBottomNav from './MobileBottomNav';
 import EvidenceDrawer from './EvidenceDrawer';
 // ConversationHistorySidebar 已移除 - Dashboard 页面不再显示对话历史
 // DashboardTopBar 已删除 - 顶部导航栏已移除
-import AgentChatFab from '@/components/agent/AgentChatFab';
 import AgentChatSidebar from '@/components/agent/AgentChatSidebar';
 import MainSidebar from './MainSidebar';
-import { NLConversationProvider, useNLConversation } from '@/contexts/NLConversationContext';
+import { AssistantSidebarProvider } from '@/contexts/AssistantSidebarContext';
+import { NLConversationProvider } from '@/contexts/NLConversationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { tripsApi } from '@/api/trips';
-import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/sonner';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Compass } from 'lucide-react';
 import type { EntryPoint } from '@/api/agent';
 import type { TripDetail } from '@/types/trip';
 
@@ -25,6 +27,9 @@ interface DrawerContextType {
   setDrawerTab: (tab: 'evidence' | 'risk' | 'decision') => void;
   highlightItemId?: string;
   setHighlightItemId: (id?: string) => void;
+  /** 高亮的行程项 ID 列表（证据点击时用于在时间轴中高亮） */
+  highlightItineraryItemIds: string[];
+  setHighlightItineraryItemIds: (ids: string[]) => void;
 }
 
 export const DrawerContext = createContext<DrawerContextType | undefined>(undefined);
@@ -43,6 +48,7 @@ export default function DashboardLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'evidence' | 'risk' | 'decision'>('evidence');
   const [highlightItemId, setHighlightItemId] = useState<string | undefined>();
+  const [highlightItineraryItemIds, setHighlightItineraryItemIds] = useState<string[]>([]);
   // 从 localStorage 读取初始状态，与 AgentChatSidebar 保持一致
   const [sidebarExpanded, setSidebarExpanded] = useState(() => {
     const saved = localStorage.getItem('agent-sidebar-expanded');
@@ -53,10 +59,11 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
+  const isMobile = useIsMobile();
 
   // 从当前路径或查询参数提取 tripId
   const tripIdMatch = location.pathname.match(/\/trips\/([^/]+)/);
-  const queryTripId = searchParams.get('tripId');
+  const queryTripId = searchParams.get('tripId') || searchParams.get('tripid');
   const activeTripId = tripIdMatch ? tripIdMatch[1] : queryTripId;
   
   // 在 Dashboard 页面时，加载最近行程用于显示上下文侧边栏
@@ -154,6 +161,8 @@ export default function DashboardLayout() {
     setDrawerTab,
     highlightItemId,
     setHighlightItemId,
+    highlightItineraryItemIds,
+    setHighlightItineraryItemIds,
   };
 
   // 🐛 修复：即使未认证，也要渲染 Context Provider，避免子组件报错
@@ -176,12 +185,15 @@ export default function DashboardLayout() {
           setDrawerTab={setDrawerTab}
           highlightItemId={highlightItemId}
           setHighlightItemId={setHighlightItemId}
+          highlightItineraryItemIds={highlightItineraryItemIds}
+          setHighlightItineraryItemIds={setHighlightItineraryItemIds}
           sidebarExpanded={sidebarExpanded}
           setSidebarExpanded={setSidebarExpanded}
           activeTrip={activeTrip}
           activeTripId={activeTripId}
           entryPoint={entryPoint}
           isDashboardPage={isDashboardPage}
+          isMobile={isMobile}
         />
       </NLConversationProvider>
     </DrawerContext.Provider>
@@ -195,12 +207,15 @@ function DashboardLayoutInner({
   setDrawerTab,
   highlightItemId,
   setHighlightItemId,
+  highlightItineraryItemIds,
+  setHighlightItineraryItemIds,
   sidebarExpanded,
   setSidebarExpanded,
   activeTrip,
   activeTripId,
   entryPoint,
   isDashboardPage,
+  isMobile,
 }: {
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
@@ -208,17 +223,30 @@ function DashboardLayoutInner({
   setDrawerTab: (tab: 'evidence' | 'risk' | 'decision') => void;
   highlightItemId: string | undefined;
   setHighlightItemId: (id: string | undefined) => void;
+  highlightItineraryItemIds: string[];
+  setHighlightItineraryItemIds: (ids: string[]) => void;
   sidebarExpanded: boolean;
   setSidebarExpanded: (expanded: boolean) => void;
   activeTrip: TripDetail | null;
   activeTripId: string | null | undefined;
   entryPoint: EntryPoint | undefined;
   isDashboardPage: boolean;
+  isMobile: boolean;
 }) {
   const location = useLocation();
   const isPlanStudioPage = location.pathname.includes('/plan-studio');
+  const [assistantSheetOpen, setAssistantSheetOpen] = useState(false);
+  const showAssistantArea = (location.pathname.includes('/plan-studio') || location.pathname.includes('/execute')) && !isDashboardPage;
+  // 侧边栏宽度：展开 400px，收起 56px（w-14）
+  const assistantSidebarWidth = sidebarExpanded ? 400 : 56;
 
   return (
+    <AssistantSidebarProvider
+      value={{
+        expanded: showAssistantArea && sidebarExpanded && !isMobile,
+        width: showAssistantArea && !isMobile ? assistantSidebarWidth : 0,
+      }}
+    >
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
         {/* 顶部导航栏已删除 */}
 
@@ -240,16 +268,43 @@ function DashboardLayoutInner({
               </main>
             </div>
             
-            {/* 🆕 规划工作台右侧 AI 助手抽屉 - Dashboard 页面不显示 */}
-            {location.pathname.includes('/plan-studio') && !isDashboardPage && (
-              <AgentChatSidebar
-                activeTripId={activeTripId}
-                onSystem2Response={() => {
-                  // 行程更新后的回调
-                }}
-                entryPoint={entryPoint}
-                onExpandedChange={setSidebarExpanded}
-              />
+            {/* 🆕 规划工作台、执行页面右侧 AI 助手 - 桌面端内联，移动端 FAB+Sheet */}
+            {showAssistantArea && (
+              <>
+                {/* 桌面端：内联侧边栏；移动端隐藏（用 FAB+Sheet） */}
+                <div className={isMobile ? 'hidden' : 'hidden lg:flex'}>
+                  <AgentChatSidebar
+                    activeTripId={activeTripId}
+                    onSystem2Response={() => {}}
+                    entryPoint={entryPoint}
+                    onExpandedChange={setSidebarExpanded}
+                  />
+                </div>
+                {/* 移动端：FAB + Sheet */}
+                {isMobile && (
+                  <>
+                    <Button
+                      size="icon"
+                      className="fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg lg:hidden"
+                      onClick={() => setAssistantSheetOpen(true)}
+                      title="打开助手"
+                    >
+                      <Compass className="h-6 w-6" />
+                    </Button>
+                    <Sheet open={assistantSheetOpen} onOpenChange={setAssistantSheetOpen}>
+                      <SheetContent side="right" className="w-full max-w-md p-0">
+                        <AgentChatSidebar
+                          activeTripId={activeTripId}
+                          onSystem2Response={() => {}}
+                          entryPoint={entryPoint}
+                          forceExpanded
+                          onClose={() => setAssistantSheetOpen(false)}
+                        />
+                      </SheetContent>
+                    </Sheet>
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -262,6 +317,11 @@ function DashboardLayoutInner({
             tripId={activeTripId}
             activeTab={drawerTab}
             highlightItemId={highlightItemId}
+            onEvidenceClick={(evidence) => {
+              if (evidence.affectedItemIds?.length) {
+                setHighlightItineraryItemIds(evidence.affectedItemIds);
+              }
+            }}
           />
         </div>
 
@@ -271,6 +331,7 @@ function DashboardLayoutInner({
         {/* Toast 通知组件 */}
         <Toaster position="top-right" richColors />
       </div>
+    </AssistantSidebarProvider>
   );
 }
 

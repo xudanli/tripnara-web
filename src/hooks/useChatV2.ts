@@ -43,6 +43,7 @@ export interface ChatMessage {
   searchResults?: any[]; // 搜索结果
   flights?: any[]; // 航班列表
   railRoutes?: any[]; // 铁路路线列表
+  carRentals?: any[]; // 租车列表
   translation?: any; // 翻译结果
   currencyConversion?: any; // 货币转换结果
   images?: any[]; // 图片列表
@@ -59,13 +60,30 @@ export interface ChatMessage {
     labelCN?: string;
     primary?: boolean;
   }>;
+  /** 编排 UI 状态（phase、progress、message 等） */
+  ui_state?: {
+    phase?: string;
+    ui_status?: string;
+    progress_percent?: number;
+    message?: string;
+    requires_user_action?: boolean;
+    current_step_detail?: string;
+  };
+  /** 编排结果（gate_result、decision_log 等） */
+  orchestrationResult?: {
+    state?: any;
+    itinerary?: any;
+    gate_result?: { result?: string; reason?: string; warnings?: string[]; [key: string]: any };
+    decision_log?: any[];
+    decisionState?: any;
+  };
 }
 
 export interface UseChatV2Return {
   messages: ChatMessage[];
   isLoading: boolean;
   error: Error | null;
-  sendMessage: (message: string) => Promise<void>;
+  sendMessage: (message: string, imageUrls?: string[]) => Promise<void>;
   clearMessages: () => void;
 }
 
@@ -78,6 +96,7 @@ export function useChatV2(
   context?: {
     tripId?: string;
     countryCode?: string;
+    userCountryCode?: string; // 用户所在国家，用于住宿搜索语言映射（CN→zh、JP→ja 等）
     currentLocation?: { lat: number; lng: number };
     timezone?: string;
   }
@@ -125,6 +144,7 @@ export function useChatV2(
         searchResults: data.searchResults,
         flights: data.flights,
         railRoutes: data.railRoutes,
+        carRentals: data.carRentals,
         translation: data.translation,
         currencyConversion: data.currencyConversion,
         images: data.images,
@@ -132,6 +152,8 @@ export function useChatV2(
         actions: data.actions,
         suggestions: data.suggestions,
         suggestedActions: data.suggestedActions,
+        ui_state: data.ui_state,
+        orchestrationResult: data.orchestrationResult,
       };
       setMessages((prev) => [...prev, aiMessage]);
       
@@ -181,22 +203,22 @@ export function useChatV2(
   });
 
   const sendMessage = useCallback(
-    async (message: string) => {
+    async (message: string, imageUrls?: string[]) => {
       if (!sessionId || !message.trim()) return;
 
       const requestContext = context ? {
         tripId: context.tripId,
         countryCode: context.countryCode,
+        userCountryCode: context.userCountryCode,
         currentLocation: context.currentLocation,
         timezone: context.timezone,
       } : undefined;
 
-      // 调试日志：记录发送的消息和上下文
-      console.log('[useChatV2] 发送消息:', {
-        message: message.trim(),
-        context: requestContext,
-        hasContext: !!requestContext,
-      });
+      if (requestContext?.tripId) {
+        console.log('[useChatV2] 发送消息，context.tripId:', requestContext.tripId);
+      } else if (context) {
+        console.log('[useChatV2] 发送消息，context 无 tripId:', { countryCode: context.countryCode });
+      }
 
       await sendMessageMutation.mutateAsync({
         sessionId,
@@ -204,6 +226,7 @@ export function useChatV2(
         userId,
         language: 'zh',
         context: requestContext,
+        ...(imageUrls?.length ? { imageUrls } : {}),
       });
     },
     [sessionId, userId, context, sendMessageMutation]

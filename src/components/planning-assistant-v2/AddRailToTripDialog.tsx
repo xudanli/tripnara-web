@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Train, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatDayDate } from '@/utils/format';
 import type { RailRouteItem } from './RailRouteList';
 
 function getTrainLegs(legs?: RailRouteItem['legs']) {
@@ -224,7 +225,7 @@ export function AddRailToTripDialog({
               <SelectContent>
                 {days.map((d, idx) => (
                   <SelectItem key={d.id} value={d.id}>
-                    第 {idx + 1} 天 · {d.date}
+                    第 {idx + 1} 天 · {formatDayDate(d.date)}
                   </SelectItem>
                 ))}
               </SelectContent>

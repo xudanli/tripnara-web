@@ -56,6 +56,7 @@ export type {
   SearchResult,
   Flight,
   RailRoute,
+  CarRental,
   TranslationResult,
   CurrencyConversion,
   ImageResult,

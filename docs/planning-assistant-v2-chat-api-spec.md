@@ -98,6 +98,17 @@ interface SuggestedActionDto {
 
 **前端用法**：用户点击建议操作时，将 `label` 或 `labelCN`（根据当前语言）作为 `message` 再次调用 chat 接口，**必须保持同一 `sessionId`**。
 
+### 3.5 编排相关字段（可选）
+
+当后端走编排流程（如 route_and_run）时，响应中可能包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ui_state` | object | 编排 UI 状态（phase、progress_percent、message、current_step_detail） |
+| `orchestrationResult` | object | 编排结果（state、gate_result、decision_log、decisionState） |
+
+详见 [DSO/编排 API 说明](./api/dso-orchestration.md)。前端会展示 OrchestrationProgressCard。
+
 ---
 
 ## 4. 按路由目标的响应字段

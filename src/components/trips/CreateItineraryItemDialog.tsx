@@ -24,7 +24,6 @@ import { MapPin, Calendar, Clock, Mountain, Utensils, Coffee, Car, Hotel, Sparkl
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { checkTimeOverlap, formatTimeOverlapError } from '@/utils/itinerary-time-validation';
 import { formatValidationMessage } from '@/utils/openingHoursFormatter';
 import { useItineraryValidation, getDefaultCostCategory } from '@/hooks';
 import { AlertTriangle, Info, AlertCircle, DollarSign } from 'lucide-react';
@@ -233,33 +232,6 @@ export function CreateItineraryItemDialog({
         setError('结束时间必须晚于开始时间');
         setLoading(false);
         return;
-      }
-
-      // ✅ 前端基础校验：检查时间重叠（严格阻止，不允许边界重叠）
-      if (currentDay && currentDay.ItineraryItem) {
-        const existingItems = (currentDay.ItineraryItem || []).map(item => ({
-          id: item.id,
-          startTime: item.startTime,
-          endTime: item.endTime,
-          note: item.note || undefined,
-          type: item.type,
-          Place: item.Place ? {
-            nameCN: item.Place.nameCN || undefined,
-            nameEN: item.Place.nameEN || undefined,
-          } : undefined,
-        }));
-        const overlaps = checkTimeOverlap(
-          { startTime: startDateTime, endTime: endDateTime },
-          existingItems,
-          false // 不允许边界重叠（严格模式）
-        );
-
-        if (overlaps.length > 0) {
-          setError(formatTimeOverlapError(overlaps));
-          setValidationResult(null);
-          setLoading(false);
-          return;
-        }
       }
 
       // ✅ 后端预校验（包含交通时间、距离等智能校验）

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { decisionApi } from '@/api/decision';
+import { decisionAdapter } from '@/api/decision-adapter';
 import { planningWorkbenchApi } from '@/api/planning-workbench';
 import { tripsApi } from '@/api/trips';
 import PlanVariantsComparison from '@/components/constraints/PlanVariantsComparison';
@@ -109,7 +109,7 @@ export default function PlanVariantsPage() {
         },
       };
 
-      const result = await decisionApi.generateMultiplePlans({
+      const result = await decisionAdapter.generateMultiplePlans({
         state,
         constraints,
       });

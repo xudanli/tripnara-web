@@ -12,7 +12,7 @@ import type { ChatResponse, RoutingTarget } from '@/api/planning-assistant-v2';
  * 根据操作类型生成明确的消息内容，确保路由正确
  */
 export function generateQuickActionMessage(
-  action: 'hotel' | 'airbnb' | 'accommodation' | 'restaurant' | 'weather' | 'flight' | 'rail' | 'search',
+  action: 'hotel' | 'airbnb' | 'accommodation' | 'restaurant' | 'weather' | 'flight' | 'rail' | 'car' | 'search',
   destination?: string
 ): string {
   const messages: Record<string, string> = {
@@ -24,6 +24,7 @@ export function generateQuickActionMessage(
     weather: destination ? `${destination}天气怎么样` : '天气怎么样',
     flight: '搜索航班',
     rail: '查询火车',
+    car: destination ? `搜索${destination}的租车` : '搜索租车',
     search: destination ? `搜索${destination}信息` : '搜索信息',
   };
 
@@ -85,6 +86,7 @@ export function extractResponseData(response: ChatResponse): {
   searchResults?: any[];
   flights?: any[];
   railRoutes?: any[];
+  carRentals?: any[];
   recommendations?: any[];
   plans?: any[];
 } {
@@ -98,6 +100,7 @@ export function extractResponseData(response: ChatResponse): {
     searchResults: response.searchResults,
     flights: response.flights,
     railRoutes: response.railRoutes,
+    carRentals: response.carRentals,
     recommendations: response.recommendations,
     plans: response.plans,
   };
@@ -116,6 +119,7 @@ export function hasResponseData(response: ChatResponse): boolean {
     data.searchResults?.length ||
     data.flights?.length ||
     data.railRoutes?.length ||
+    data.carRentals?.length ||
     data.recommendations?.length ||
     data.plans?.length
   );

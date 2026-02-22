@@ -24,7 +24,15 @@ export function normalizeClarificationQuestion(
     inputType = 'multiple_choice';
   }
   
-  const options = q.options || [];
+  // type === 'boolean' 且未配置 options 时，自动补充默认选项
+  const DEFAULT_BOOLEAN_OPTIONS = [
+    { value: 'true', label: '是' },
+    { value: 'false', label: '否' },
+  ] as const;
+  let options = q.options || [];
+  if (inputType === 'boolean' && (!Array.isArray(options) || options.length === 0)) {
+    options = [...DEFAULT_BOOLEAN_OPTIONS];
+  }
   
   // 透传 conditionalInputs；若后端未提供，则根据选项语义注入 fallback
   let conditionalInputs: ConditionalInputField[] | undefined = q.conditionalInputs;

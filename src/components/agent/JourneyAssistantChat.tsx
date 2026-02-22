@@ -19,6 +19,7 @@ import type {
   ExpertCitation,
   DegradationInfo,
 } from '@/api/assistant';
+import type { TripDetail } from '@/types/trip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -36,10 +37,6 @@ import {
   Loader2,
   AlertTriangle,
   Navigation,
-  Utensils,
-  Coffee,
-  ShoppingBag,
-  Hospital,
   Shield,
   Bell,
   Plane,
@@ -54,8 +51,11 @@ import {
   Info,
   FileText,
   Zap,
+  ShoppingBag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { JOURNEY_ASSISTANT_CONFIG, type QuickActionItem } from '@/constants/journey-assistant';
+import { getCurrentPosition, NEEDS_LOCATION_PROMPT_PATTERN } from '@/utils/geo';
 import { formatCurrency } from '@/utils/format';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -66,6 +66,8 @@ interface JourneyAssistantChatProps {
   onScheduleChange?: () => void;
   className?: string;
   compact?: boolean; // 紧凑模式，用于侧边栏
+  /** 执行页场景：隐藏今日/提醒 tab，主区已有，减少重复 */
+  hideScheduleAndRemindersTabs?: boolean;
 }
 
 /**
@@ -107,12 +109,16 @@ const REMINDER_ICONS: Record<string, React.ElementType> = {
 /**
  * 状态概览卡片
  */
-function StatusOverview({ state }: { state: JourneyState }) {
+function StatusOverview({ state, currency = 'CNY' }: { state: JourneyState; currency?: string }) {
   const phaseConfig = PHASE_CONFIG[state.phase];
   const PhaseIcon = phaseConfig.icon;
+  const completed = state.isCompleted ?? state.phase === 'POST_TRIP';
 
   return (
-    <Card className="border-none shadow-none bg-gradient-to-br from-primary/5 to-primary/10">
+    <Card className={cn(
+      "border-none shadow-none",
+      completed ? "bg-muted/50 opacity-90" : "bg-gradient-to-br from-primary/5 to-primary/10"
+    )}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -120,7 +126,12 @@ function StatusOverview({ state }: { state: JourneyState }) {
               <PhaseIcon className="w-4 h-4 text-white" />
             </div>
             <div>
-              <div className="text-sm font-medium">{phaseConfig.label}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{phaseConfig.label}</span>
+                {completed && (
+                  <Badge variant="secondary" className="text-xs font-normal">已完成</Badge>
+                )}
+              </div>
               <div className="text-xs text-muted-foreground">
                 第 {state.currentDay} 天 / 共 {state.totalDays} 天
               </div>
@@ -233,7 +244,8 @@ function RemindersList({
   reminders: Reminder[];
   onAction: (action: SuggestedAction) => void;
 }) {
-  if (reminders.length === 0) {
+  const safeReminders = Array.isArray(reminders) ? reminders : [];
+  if (safeReminders.length === 0) {
     return (
       <div className="text-center py-6 text-muted-foreground text-sm">
         <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -244,7 +256,7 @@ function RemindersList({
 
   return (
     <div className="space-y-2">
-      {reminders.map((reminder) => {
+      {safeReminders.map((reminder) => {
         const Icon = REMINDER_ICONS[reminder.type] || Bell;
         return (
           <div
@@ -445,25 +457,22 @@ function SearchResultsPanel({
 }
 
 /**
- * 快捷操作按钮
+ * 快捷操作按钮（使用可配置的 quickActions，来自常量或后端 API）
  */
 function QuickActions({ 
+  actions,
   onAction 
 }: { 
+  actions: QuickActionItem[];
   onAction: (prompt: string) => void;
 }) {
-  const actions = [
-    { icon: Utensils, label: '附近美食', prompt: '附近有什么好吃的' },
-    { icon: Coffee, label: '找咖啡', prompt: '附近有咖啡厅吗' },
-    { icon: ShoppingBag, label: '购物', prompt: '附近有什么购物的地方' },
-    { icon: Hospital, label: '找药店', prompt: '最近的药店在哪里' },
-  ];
-
+  if (!actions.length) return null;
+  const cols = Math.min(actions.length, 4);
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {actions.map(({ icon: Icon, label, prompt }) => (
+    <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      {actions.map(({ id, icon: Icon, label, prompt }) => (
         <Button
-          key={label}
+          key={id}
           variant="outline"
           size="sm"
           className="h-auto py-2 flex-col gap-1"
@@ -581,6 +590,7 @@ export default function JourneyAssistantChat({
   onScheduleChange,
   className,
   compact = false,
+  hideScheduleAndRemindersTabs = false,
 }: JourneyAssistantChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -588,39 +598,46 @@ export default function JourneyAssistantChat({
   const [activeTab, setActiveTab] = useState<'chat' | 'schedule' | 'reminders'>('chat');
   const [currency, setCurrency] = useState<string>('CNY'); // 🆕 货币状态
   
-  // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币
+  const [trip, setTrip] = useState<TripDetail | null>(null);
+
+  // 加载行程与货币：用于状态概览兜底（当 journey 助手 API 返回 mock 数据时，用真实行程数据）
   useEffect(() => {
-    const loadCurrency = async () => {
-      if (!tripId) return;
+    if (!tripId) return;
+    const load = async () => {
       try {
-        // 优先从预算约束获取货币
+        const t = await tripsApi.getById(tripId);
+        setTrip(t);
+      } catch {
+        setTrip(null);
+      }
+    };
+    load();
+  }, [tripId]);
+
+  // 加载货币信息
+  useEffect(() => {
+    if (!tripId) return;
+    const loadCurrency = async () => {
+      try {
         const constraint = await tripsApi.getBudgetConstraint(tripId);
         if (constraint.budgetConstraint.currency) {
           setCurrency(constraint.budgetConstraint.currency);
           return;
         }
-      } catch {
-        // 如果获取预算约束失败，尝试从目的地获取
-      }
-      
-      // 其次从目的地获取货币策略
+      } catch {}
       try {
-        const trip = await tripsApi.getById(tripId);
-        if (trip.destination) {
+        const t = await tripsApi.getById(tripId);
+        if (t.destination) {
           const { countriesApi } = await import('@/api/countries');
-          const currencyStrategy = await countriesApi.getCurrencyStrategy(trip.destination);
+          const currencyStrategy = await countriesApi.getCurrencyStrategy(t.destination);
           if (currencyStrategy?.currencyCode) {
             setCurrency(currencyStrategy.currencyCode);
             return;
           }
         }
-      } catch {
-        // 如果获取失败，保持默认值 CNY
-      }
-      
+      } catch {}
       setCurrency('CNY');
     };
-    
     loadCurrency();
   }, [tripId]);
 
@@ -630,11 +647,65 @@ export default function JourneyAssistantChat({
     reminders,
     loading,
     error,
+    quickActions,
     sendMessage,
     emergency,
     executeAction,
     nearbySearch,
   } = useJourneyAssistant({ tripId, userId });
+
+  // 状态概览：有 trip 时用行程 API 真实数据，避免 journey 助手返回 mock；无 trip 时用 journeyState
+  const displayState = ((): JourneyState | null => {
+    const base = journeyState;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const computeIsCompleted = (t?: TripDetail | null, b?: JourneyState | null): boolean => {
+      if (t?.status === 'COMPLETED') return true;
+      if (t?.endDate && t.endDate < todayStr) return true;
+      if (b?.phase === 'POST_TRIP') return true;
+      return b?.isCompleted ?? false;
+    };
+    if (trip) {
+      const days = trip.TripDay || [];
+      const allItems = days.flatMap((d) => d.ItineraryItem || []);
+      const totalItems = trip.statistics?.totalItems ?? allItems.length;
+      const totalBudget = trip.totalBudget ?? trip.statistics?.totalBudget ?? 0;
+      const spentBudget = trip.statistics?.budgetUsed ?? 0;
+      const currentDayIdx = days.findIndex((d) => d.date?.slice(0, 10) === todayStr);
+      const currentDay = currentDayIdx >= 0 ? currentDayIdx + 1 : 1;
+      return {
+        ...(base || {
+          tripId: trip.id,
+          userId,
+          phase: 'ON_TRIP' as JourneyPhase,
+          todaySchedule: [],
+          upcomingReminders: [],
+          activeEvents: [],
+          lastUpdated: new Date().toISOString(),
+        }),
+        tripId: trip.id,
+        userId,
+        phase: base?.phase ?? 'ON_TRIP',
+        currentDay,
+        totalDays: days.length || 1,
+        currentDate: todayStr,
+        todaySchedule: base?.todaySchedule ?? [],
+        upcomingReminders: base?.upcomingReminders ?? [],
+        activeEvents: base?.activeEvents ?? [],
+        stats: {
+          completedActivities: base?.stats?.completedActivities ?? 0,
+          totalActivities: totalItems || 1,
+          spentBudget,
+          totalBudget: totalBudget || 1,
+        },
+        lastUpdated: new Date().toISOString(),
+        isCompleted: computeIsCompleted(trip, base),
+      };
+    }
+    if (base) {
+      return { ...base, isCompleted: computeIsCompleted(null, base) };
+    }
+    return null;
+  })();
 
   // 自动滚动到底部
   useEffect(() => {
@@ -669,9 +740,17 @@ export default function JourneyAssistantChat({
     }
   }, []);
 
-  // 处理快捷操作
+  // 处理快捷操作（找医院/找药店需先获取用户坐标）
   const handleQuickAction = useCallback(async (prompt: string) => {
-    await nearbySearch(prompt);
+    let location: { lat: number; lng: number } | undefined;
+    if (NEEDS_LOCATION_PROMPT_PATTERN.test(prompt)) {
+      try {
+        location = await getCurrentPosition();
+      } catch {
+        // 用户拒绝或定位失败，仍可发送，后端会返回 needsLocation 提示
+      }
+    }
+    await nearbySearch(prompt, location);
   }, [nearbySearch]);
 
   // 处理紧急求助
@@ -681,39 +760,41 @@ export default function JourneyAssistantChat({
 
   return (
     <div className={cn("flex flex-col h-full bg-background", className)}>
-      {/* 状态概览（仅在有状态时显示） */}
-      {journeyState && !compact && (
+      {/* 状态概览（优先 journey API，无则用行程 API 兜底） */}
+      {displayState && !compact && (
         <div className="p-3 border-b">
-          <StatusOverview state={journeyState} />
+          <StatusOverview state={displayState} currency={currency} />
         </div>
       )}
 
-      {/* Tab 切换 */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-3 mx-3 mt-2">
-          <TabsTrigger value="chat" className="text-xs">
-            <MessageCircle className="w-3 h-3 mr-1" />
-            对话
-          </TabsTrigger>
-          <TabsTrigger value="schedule" className="text-xs">
-            <Calendar className="w-3 h-3 mr-1" />
-            今日
-          </TabsTrigger>
-          <TabsTrigger value="reminders" className="text-xs">
-            <Bell className="w-3 h-3 mr-1" />
-            提醒
-            {reminders.length > 0 && (
-              <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-xs">
-                {reminders.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
+      {/* Tab 切换（执行页隐藏今日/提醒，主区已有） */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
+        {!hideScheduleAndRemindersTabs && (
+          <TabsList className="grid grid-cols-3 mx-3 mt-2">
+            <TabsTrigger value="chat" className="text-xs">
+              <MessageCircle className="w-3 h-3 mr-1" />
+              对话
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="text-xs">
+              <Calendar className="w-3 h-3 mr-1" />
+              今日
+            </TabsTrigger>
+            <TabsTrigger value="reminders" className="text-xs">
+              <Bell className="w-3 h-3 mr-1" />
+              提醒
+              {Array.isArray(reminders) && reminders.length > 0 && (
+                <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-xs">
+                  {reminders.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        )}
 
         {/* 对话内容 */}
-        <TabsContent value="chat" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden">
+        <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 mt-0 data-[state=inactive]:hidden">
           {/* 消息区域 */}
-          <ScrollArea ref={scrollRef} className="flex-1 p-3">
+          <ScrollArea ref={scrollRef} className="flex-1 min-h-0 p-3">
             <div className="space-y-4">
               {messages.length === 0 ? (
                 <div className="text-center py-8">
@@ -722,7 +803,7 @@ export default function JourneyAssistantChat({
                     我是你的旅途助手 🧭<br />
                     有任何问题随时问我
                   </p>
-                  <QuickActions onAction={handleQuickAction} />
+                  <QuickActions actions={quickActions} onAction={handleQuickAction} />
                 </div>
               ) : (
                 <>
@@ -755,20 +836,24 @@ export default function JourneyAssistantChat({
           {/* 快捷操作（有消息时） */}
           {messages.length > 0 && (
             <div className="px-3 py-2 border-t">
-              <QuickActions onAction={handleQuickAction} />
+              <QuickActions actions={quickActions} onAction={handleQuickAction} />
             </div>
           )}
         </TabsContent>
 
-        {/* 今日日程 */}
-        <TabsContent value="schedule" className="flex-1 mt-0 p-3 overflow-auto data-[state=inactive]:hidden">
-          <TodaySchedule items={journeyState?.todaySchedule || []} />
-        </TabsContent>
+        {/* 今日日程（执行页隐藏） */}
+        {!hideScheduleAndRemindersTabs && (
+          <TabsContent value="schedule" className="flex-1 mt-0 p-3 overflow-auto data-[state=inactive]:hidden">
+            <TodaySchedule items={journeyState?.todaySchedule || []} />
+          </TabsContent>
+        )}
 
-        {/* 提醒列表 */}
-        <TabsContent value="reminders" className="flex-1 mt-0 p-3 overflow-auto data-[state=inactive]:hidden">
-          <RemindersList reminders={reminders} onAction={executeAction} />
-        </TabsContent>
+        {/* 提醒列表（执行页隐藏） */}
+        {!hideScheduleAndRemindersTabs && (
+          <TabsContent value="reminders" className="flex-1 mt-0 p-3 overflow-auto data-[state=inactive]:hidden">
+            <RemindersList reminders={reminders} onAction={executeAction} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* 错误提示 */}
@@ -778,18 +863,20 @@ export default function JourneyAssistantChat({
         </div>
       )}
 
-      {/* 紧急求助按钮 */}
-      <div className="px-3 py-2 border-t">
-        <Button
-          variant="destructive"
-          size="sm"
-          className="w-full"
-          onClick={handleEmergency}
-        >
-          <AlertCircle className="w-4 h-4 mr-2" />
-          紧急求助
-        </Button>
-      </div>
+      {/* 紧急求助按钮（可通过 JOURNEY_ASSISTANT_CONFIG 配置） */}
+      {JOURNEY_ASSISTANT_CONFIG.showEmergencyButton && (
+        <div className="px-3 py-2 border-t">
+          <Button
+            variant="destructive"
+            size="sm"
+            className="w-full"
+            onClick={handleEmergency}
+          >
+            <AlertCircle className="w-4 h-4 mr-2" />
+            紧急求助
+          </Button>
+        </div>
+      )}
 
       {/* 输入区域 */}
       <div className="border-t p-3">

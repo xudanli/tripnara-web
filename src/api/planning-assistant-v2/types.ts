@@ -61,6 +61,8 @@ export interface ChatRequestContext {
   timezone?: string;
   tripId?: string; // 行程ID。规划工作台场景下必需（当 context.tripId 或 context.countryCode 存在时）
   countryCode?: string; // 国家代码（ISO 3166-1 alpha-2，如 "IS"、"JP"）。规划工作台场景下必需（当 context.tripId 或 context.countryCode 存在时）
+  /** 用户所在国家代码（ISO 3166-1 alpha-2，如 "CN"）。用于住宿搜索语言映射：CN/TW/HK/MO→zh，JP→ja，KR→ko 等 */
+  userCountryCode?: string;
 }
 
 export interface ChatRequest {
@@ -69,6 +71,8 @@ export interface ChatRequest {
   userId?: string;
   language?: 'en' | 'zh';
   context?: ChatRequestContext; // 请求上下文信息
+  /** 图片 URL 列表（base64 data URL 或上传后的 URL） */
+  imageUrls?: string[];
 }
 
 // 路由目标类型（支持所有 MCP 服务）
@@ -84,6 +88,7 @@ export type RoutingTarget =
   | 'search'
   | 'flight'
   | 'rail'
+  | 'carRental'
   | 'translate'
   | 'currency'
   | 'image'
@@ -133,6 +138,7 @@ export interface ChatResponse {
   searchResults?: SearchResult[]; // 搜索结果（当 routing.target === "search" 时包含）
   flights?: Flight[]; // 航班列表（当 routing.target === "flight" 时包含）
   railRoutes?: RailRoute[]; // 铁路路线列表（当 routing.target === "rail" 时包含）
+  carRentals?: CarRental[]; // 租车列表（当 routing.target === "carRental" 时包含）
   translation?: TranslationResult; // 翻译结果（当 routing.target === "translate" 时包含）
   currencyConversion?: CurrencyConversion; // 货币转换结果（当 routing.target === "currency" 时包含）
   images?: ImageResult[]; // 图片列表（当 routing.target === "image" 时包含）
@@ -149,6 +155,23 @@ export interface ChatResponse {
     labelCN?: string;
     primary?: boolean;
   }>;
+  /** 编排 UI 状态（当后端走 route_and_run 或编排流程时返回） */
+  ui_state?: {
+    phase?: string;
+    ui_status?: string;
+    progress_percent?: number;
+    message?: string;
+    requires_user_action?: boolean;
+    current_step_detail?: string;
+  };
+  /** 编排结果（state、gate_result、decision_log、decisionState） */
+  orchestrationResult?: {
+    state?: any;
+    itinerary?: any;
+    gate_result?: { result?: string; reason?: string; warnings?: string[]; [key: string]: any };
+    decision_log?: any[];
+    decisionState?: any;
+  };
 }
 
 // ==================== 推荐类型 ====================
@@ -484,6 +507,23 @@ export interface RailRoute {
   };
   departureTime?: string;
   arrivalTime?: string;
+}
+
+// 租车数据（Booking.com 等）
+export interface CarRental {
+  id?: string;
+  vehicleName?: string;
+  vehicleType?: string;
+  supplierName?: string;
+  price?: { amount: number; currency: string };
+  totalPrice?: number;
+  currency?: string;
+  pickupLocation?: string;
+  dropoffLocation?: string;
+  pickupDate?: string;
+  dropoffDate?: string;
+  bookingUrl?: string;
+  [key: string]: unknown;
 }
 
 // 翻译结果

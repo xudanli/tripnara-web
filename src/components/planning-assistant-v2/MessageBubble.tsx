@@ -12,6 +12,7 @@ import { zhCN } from 'date-fns/locale';
 import type { TripDetail } from '@/types/trip';
 import type { ChatMessage } from '@/hooks/useChatV2';
 import { MCPDataDisplay } from './MCPDataDisplay';
+import { OrchestrationProgressCard } from './OrchestrationProgressCard';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -20,6 +21,8 @@ interface MessageBubbleProps {
   tripId?: string;
   tripInfo?: TripDetail;
   onAddToTripSuccess?: () => void;
+  /** 规划工作台：不展示执行阶段编排进度（PLAN_GEN/REPAIR 等属于 route_and_run） */
+  hideExecutionOrchestration?: boolean;
 }
 
 /** 澄清提示：当需要用户补充信息时显示；HOTEL_DATES 时展示日期选择器 */
@@ -158,6 +161,7 @@ export function MessageBubble({
   message,
   onSendMessage,
   isLastAssistantMessage,
+  hideExecutionOrchestration,
   tripId,
   tripInfo,
   onAddToTripSuccess,
@@ -206,6 +210,14 @@ export function MessageBubble({
             {message.content || '(空消息)'}
           </div>
         </div>
+
+        {/* 编排进度：仅执行阶段 Agent 展示；规划工作台不涉及 route_and_run */}
+        {!isUser && !hideExecutionOrchestration && (message.ui_state || message.orchestrationResult) && (
+          <OrchestrationProgressCard
+            ui_state={message.ui_state}
+            orchestrationResult={message.orchestrationResult}
+          />
+        )}
 
         {/* 澄清提示：需要用户补充信息时显示；最后一条时展示可交互的日期选择器 */}
         {!isUser && message.clarificationNeeded && (

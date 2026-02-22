@@ -170,6 +170,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const setDrawerOpen = drawerContext?.setDrawerOpen ?? (() => {});
   const setDrawerTab = drawerContext?.setDrawerTab ?? (() => {});
   const setHighlightItemId = drawerContext?.setHighlightItemId ?? (() => {});
+  const highlightItineraryItemIds = drawerContext?.highlightItineraryItemIds ?? [];
   
   // 准备度相关状态
   const [readinessData, setReadinessData] = useState<ScoreBreakdownResponse | null>(null);
@@ -622,10 +623,22 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
     });
   }, [setOnApplySuggestion, trip, tripId, loadTrip]);
 
-  const handleFixConflict = (conflictType: string, dayDate: string) => {
-    setDrawerTab('risk');
+  const handleFixConflict = (conflict: PlanStudioConflict | string, dayDate: string) => {
     setDrawerOpen(true);
-    setHighlightItemId(`${conflictType}-${dayDate}`);
+    // 字符串为前端计算的冲突（无完整结构），走风险 tab
+    if (typeof conflict === 'string') {
+      setDrawerTab('risk');
+      setHighlightItemId(`${conflict}-${dayDate}`);
+      return;
+    }
+    // 有 evidenceIds 时（如闭园风险）切换到证据 tab 并高亮对应证据
+    if (conflict.evidenceIds && conflict.evidenceIds.length > 0) {
+      setDrawerTab('evidence');
+      setHighlightItemId(conflict.evidenceIds[0]);
+    } else {
+      setDrawerTab('risk');
+      setHighlightItemId(`${conflict.type}-${dayDate}`);
+    }
   };
 
   const handleDeleteItem = (itemId: string, placeName: string) => {
@@ -1065,7 +1078,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                             size="sm"
                             variant="ghost"
                             className="ml-auto h-6 text-xs"
-                            onClick={() => handleFixConflict(conflict.id, day.date)}
+                            onClick={() => handleFixConflict(conflict, day.date)}
                           >
                             {t('planStudio.scheduleTab.fix')}
                           </Button>
@@ -1157,6 +1170,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                             timezone={getTimezoneByCountry(trip?.destination || '')}
                             placeImages={item.Place?.id ? placeImagesMap.get(item.Place.id) : undefined}
                             defaultWeatherLocation={defaultWeatherLocation}
+                            highlighted={highlightItineraryItemIds.includes(item.id)}
                             onEdit={(item) => handleEditItem(item.id)}
                             onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                             onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -1232,6 +1246,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                                   timezone={getTimezoneByCountry(trip?.destination || '')}
                                   placeImages={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
                                   defaultWeatherLocation={defaultWeatherLocation}
+                                  highlighted={highlightItineraryItemIds.includes(fullItem.id)}
                                   onEdit={(item) => handleEditItem(item.id)}
                                   onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
                                   onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
@@ -1704,7 +1719,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                           ? 'border-amber-200 bg-amber-50/50'
                           : 'border-blue-200 bg-blue-50/50'
                       )}
-                      onClick={() => handleFixConflict(conflict.id, conflict.affectedDays[0] || '')}
+                      onClick={() => handleFixConflict(conflict, conflict.affectedDays[0] || '')}
                     >
                       {/* 标题和严重程度 */}
                       <div className="flex items-start justify-between gap-2 mb-1">

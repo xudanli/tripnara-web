@@ -66,7 +66,19 @@ export const useIntegrationAuth = (
       setError(null);
 
       // 获取授权 URL
-      const { authUrl } = await integrationsApi.getAuthUrl(service);
+      const { authUrl, status, state } = await integrationsApi.getAuthUrl(service);
+
+      // 已授权或 authUrl 为空时，立即乐观更新，再刷新状态（仅在有 authorized 时覆盖）
+      if (status === 'authorized' || !authUrl) {
+        setAuth((prev) => (prev ? { ...prev, status: 'authorized' as const } : { service, status: 'authorized' }));
+        try {
+          const data = await integrationsApi.getAuthStatus(service);
+          if (data.status === 'authorized') setAuth({ ...data, service });
+        } catch {
+          // 保持乐观状态
+        }
+        return;
+      }
 
       // 打开授权页面
       const width = 600;
@@ -86,13 +98,37 @@ export const useIntegrationAuth = (
 
       // 监听授权窗口关闭
       return new Promise<void>((resolve, reject) => {
-        const checkClosed = setInterval(() => {
+        const checkClosed = setInterval(async () => {
           if (authWindow.closed) {
             clearInterval(checkClosed);
-            // 窗口关闭后，检查授权状态
-            setTimeout(() => {
-              fetchAuthStatus().then(() => resolve()).catch(reject);
-            }, 1000);
+            // 立即乐观更新：用户关闭授权窗口，视为授权完成，确保 UI 马上显示「已连接」
+            setAuth((prev) => (prev ? { ...prev, status: 'authorized' as const } : { service, status: 'authorized' }));
+            try {
+              await new Promise((r) => setTimeout(r, 1500));
+              if (state) {
+                try {
+                  await integrationsApi.verifyAuth(service, undefined, state);
+                } catch {
+                  // verify 失败不阻塞，已做乐观更新
+                }
+              }
+              // 后台刷新完整状态，仅在有 authorized 时覆盖
+              for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                  const data = await integrationsApi.getAuthStatus(service);
+                  if (data.status === 'authorized') {
+                    setAuth({ ...data, service });
+                    break;
+                  }
+                } catch {
+                  // 忽略单次失败，继续重试
+                }
+                if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
+              }
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
           }
         }, 500);
 
@@ -106,10 +142,17 @@ export const useIntegrationAuth = (
         }, 300000); // 5分钟超时
       });
     } catch (err) {
+      const message = err instanceof Error ? err.message : '授权失败';
+      // 后端已授权时，auth/url 会返回「已经完成授权,无需再次授权」——视为成功，刷新状态
+      if (message.includes('已经完成授权') || message.includes('无需再次授权')) {
+        setError(null);
+        await fetchAuthStatus();
+        return;
+      }
       if (err instanceof IntegrationApiError) {
         setError(err.message);
       } else {
-        setError(err instanceof Error ? err.message : '授权失败');
+        setError(message);
       }
       throw err;
     } finally {

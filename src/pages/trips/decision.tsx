@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { decisionApi } from '@/api/decision';
+import { decisionAdapter } from '@/api/decision-adapter';
 import { tripsApi } from '@/api/trips';
 import { routeDirectionsApi } from '@/api/route-directions';
 import type {
@@ -202,7 +202,7 @@ export default function DecisionPage() {
     try {
       setLoading(true);
       setError(null);
-      const result = await decisionApi.validateSafety({
+      const result = await decisionAdapter.validateSafety({
         tripId: tripId || undefined,
         plan,
         worldContext,
@@ -242,7 +242,7 @@ export default function DecisionPage() {
         setError('请提供行程ID');
         return;
       }
-      const result = await decisionApi.adjustPacing({
+      const result = await decisionAdapter.adjustPacing({
         tripId,
         plan,
         worldContext,
@@ -282,7 +282,7 @@ export default function DecisionPage() {
         setError('请提供行程ID');
         return;
       }
-      const result = await decisionApi.replaceNodes({
+      const result = await decisionAdapter.replaceNodes({
         tripId,
         plan,
         worldContext,

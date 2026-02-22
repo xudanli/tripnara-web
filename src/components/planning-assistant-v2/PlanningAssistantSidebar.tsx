@@ -13,9 +13,10 @@
  * - 自动生成关于行程项的问题并发送给 AI
  */
 
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { PlanningAssistant } from './PlanningAssistant';
 import { tripsApi } from '@/api/trips';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 import type { TripDetail } from '@/types/trip';
 import type { SelectedContext } from '@/contexts/PlanStudioContext';
 import PlanStudioContext from '@/contexts/PlanStudioContext';
@@ -26,6 +27,8 @@ interface PlanningAssistantSidebarProps {
   tripId?: string | null;
   className?: string;
   onTripUpdate?: () => void;
+  /** 通知父组件清空函数已准备好（供标题栏按钮调用） */
+  onClearReady?: (clear: () => void) => void;
 }
 
 /**
@@ -44,11 +47,19 @@ export function PlanningAssistantSidebar({
   tripId,
   className,
   onTripUpdate,
+  onClearReady,
 }: PlanningAssistantSidebarProps) {
   const [countryCode, setCountryCode] = useState<string | null>(null);
   const [tripInfo, setTripInfo] = useState<TripDetail | null>(null);
   const [isLoadingTrip, setIsLoadingTrip] = useState(false);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
+
+  // 用户偏好：用于住宿搜索语言映射（userCountryCode: CN→zh、JP→ja 等）
+  const { preferences } = useUserPreferences();
+  const userCountryCode = useMemo(
+    () => preferences?.residencyCountry || preferences?.nationality || null,
+    [preferences?.residencyCountry, preferences?.nationality]
+  );
   
   // 🆕 规划工作台上下文（用于接收来自左侧的提问）
   // 注意：可能不在 PlanStudioProvider 上下文中，需要安全处理
@@ -181,10 +192,12 @@ export function PlanningAssistantSidebar({
         userId={userId}
         tripId={tripId || undefined}
         countryCode={countryCode || undefined}
+        userCountryCode={userCountryCode ?? undefined}
         tripInfo={tripInfo || undefined}
         onSendMessageReady={(sendMessage) => {
           sendMessageRef.current = sendMessage;
         }}
+        onClearReady={onClearReady}
         onAddToTripSuccess={() => {
           setRefetchTrigger((t) => t + 1);
           window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));

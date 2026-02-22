@@ -100,7 +100,7 @@ const TRAVELER_TAGS = [
 
 // 集成授权卡片组件
 interface IntegrationCardProps {
-  service: 'google-calendar' | 'browserbase' | 'airbnb';
+  service: 'google-calendar' | 'browserbase';
   title: string;
   description: string;
   iconSrc: string;
@@ -1271,13 +1271,6 @@ export default function SettingsPage() {
                     </div>
                     <Button variant="outline" disabled>即将推出</Button>
                   </div>
-                  <IntegrationCard
-                    service="airbnb"
-                    title="Airbnb"
-                    description="同步住宿预订信息到行程"
-                    iconSrc="/images/personas/airbnb.png"
-                    iconAlt="Airbnb"
-                  />
                 </CardContent>
               </Card>
             </TabsContent>

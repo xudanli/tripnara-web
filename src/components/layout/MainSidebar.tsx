@@ -274,9 +274,13 @@ export default function MainSidebar({ className }: MainSidebarProps) {
     navigate(path);
   };
   
-  // 处理行程点击：统一跳转到行程详情页
+  // 处理行程点击：规划中行程跳转到规划工作台，其他跳转到行程详情页
   const handleTripClick = (tripId: string, status?: TripStatus) => {
-    navigate(`/dashboard/trips/${tripId}`);
+    if (status === 'PLANNING') {
+      navigate(`/dashboard/plan-studio?tripId=${tripId}`);
+    } else {
+      navigate(`/dashboard/trips/${tripId}`);
+    }
   };
   
   // 获取行程显示名称

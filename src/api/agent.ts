@@ -242,18 +242,38 @@ export interface ClarificationInfo {
 }
 
 /**
+ * 编排 UI 状态（由 DSO/OrchestratorState 派生）
+ * 用于展示进度、当前步骤、状态
+ */
+export interface OrchestrationUiState {
+  phase?: OrchestrationStep;
+  ui_status?: UIStatus;
+  progress_percent?: number;
+  message?: string;
+  requires_user_action?: boolean;
+  /** 当前步骤详情（如「正在评估行程可行性...」） */
+  current_step_detail?: string;
+}
+
+/**
+ * 编排结果（OrchestratorState 投影）
+ */
+export interface OrchestrationResult {
+  state?: any;
+  itinerary?: any;
+  gate_result?: GateResult;
+  decision_log?: DecisionLogEntry[];
+  /** DSO 原始对象，用于 RLHF、分析、调试（含 confidence、history、decisionMeta） */
+  decisionState?: any;
+}
+
+/**
  * 路由并执行响应
  */
 export interface RouteAndRunResponse {
   request_id: string;
   route: RouteDecision;
-  ui_state?: {
-    phase?: OrchestrationStep;
-    ui_status?: UIStatus;
-    progress_percent?: number;
-    message?: string;
-    requires_user_action?: boolean;
-  };
+  ui_state?: OrchestrationUiState;
   result: {
     status: ResultStatus;
     answer_text: string;
@@ -279,12 +299,7 @@ export interface RouteAndRunResponse {
       candidates?: any[];
       evidence?: any[];
       robustness?: number | null;
-      orchestrationResult?: {
-        state?: any;
-        itinerary?: any;
-        gate_result?: GateResult;
-        decision_log?: DecisionLogEntry[];
-      };
+      orchestrationResult?: OrchestrationResult;
       [key: string]: any;
     };
   };

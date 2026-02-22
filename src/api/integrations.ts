@@ -2,7 +2,7 @@ import apiClient from './client';
 
 /**
  * 第三方集成授权 API
- * 文档位置: 参考 MCP 服务前端授权集成决策文档
+ * 响应格式：{ success: true, data: T }
  */
 
 // ==================== 类型定义 ====================
@@ -10,7 +10,7 @@ import apiClient from './client';
 /**
  * 集成服务类型
  */
-export type IntegrationService = 'google-calendar' | 'browserbase' | 'airbnb';
+export type IntegrationService = 'google-calendar' | 'browserbase';
 
 /**
  * 授权状态
@@ -34,6 +34,8 @@ export interface IntegrationAuth {
 export interface AuthUrlResponse {
   authUrl: string;
   state?: string; // OAuth state 参数
+  status?: AuthStatus; // 已授权时后端可能返回 status: 'authorized'
+  message?: string;
 }
 
 /**
@@ -60,8 +62,15 @@ export class IntegrationApiError extends Error {
 
 // ==================== API 方法 ====================
 
+/** 后端标准响应格式 */
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+}
+
 /**
  * 集成授权 API
+ * 响应格式：{ success: true, data: T }
  */
 export const integrationsApi = {
   /**
@@ -69,10 +78,12 @@ export const integrationsApi = {
    */
   async getAuthStatus(service: IntegrationService): Promise<IntegrationAuth> {
     try {
-      const response = await apiClient.get<IntegrationAuth>(
+      const response = await apiClient.get<ApiResponse<Partial<IntegrationAuth>>>(
         `/integrations/${service}/auth/status`
       );
-      return response.data;
+      const raw = response.data;
+      const data = raw?.success && raw?.data != null ? raw.data : (raw as any);
+      return { service, status: 'unauthorized', ...data } as IntegrationAuth;
     } catch (error: any) {
       if (error.response) {
         const statusCode = error.response.status;
@@ -92,10 +103,17 @@ export const integrationsApi = {
    */
   async getAuthUrl(service: IntegrationService): Promise<AuthUrlResponse> {
     try {
-      const response = await apiClient.get<AuthUrlResponse>(
+      const response = await apiClient.get<ApiResponse<AuthUrlResponse>>(
         `/integrations/${service}/auth/url`
       );
-      return response.data;
+      const raw = response.data;
+      const data = raw?.success && raw?.data != null ? raw.data : (raw as any);
+      return {
+        authUrl: data?.authUrl ?? data?.authorizationUrl ?? '',
+        state: data?.state,
+        status: data?.status,
+        message: data?.message,
+      } as AuthUrlResponse;
     } catch (error: any) {
       if (error.response) {
         const statusCode = error.response.status;
@@ -118,11 +136,13 @@ export const integrationsApi = {
     state?: string
   ): Promise<AuthVerifyResponse> {
     try {
-      const response = await apiClient.post<AuthVerifyResponse>(
+      const response = await apiClient.post<ApiResponse<AuthVerifyResponse>>(
         `/integrations/${service}/auth/verify`,
         { code, state }
       );
-      return response.data;
+      const raw = response.data;
+      const data = raw?.success && raw?.data != null ? raw.data : (raw as any);
+      return { success: true, status: data?.status ?? 'authorized', message: data?.message } as AuthVerifyResponse;
     } catch (error: any) {
       if (error.response) {
         const statusCode = error.response.status;
@@ -163,7 +183,6 @@ export const integrationsApi = {
       const services: IntegrationService[] = [
         'google-calendar',
         'browserbase',
-        'airbnb',
       ];
       const promises = services.map((service) =>
         this.getAuthStatus(service).catch(() => ({

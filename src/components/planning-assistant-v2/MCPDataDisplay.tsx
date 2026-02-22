@@ -9,6 +9,7 @@ import { HotelList } from './HotelList';
 import { AccommodationList } from './AccommodationList';
 import { RestaurantList } from './RestaurantList';
 import { RailRouteList } from './RailRouteList';
+import { CarRentalList } from './CarRentalList';
 import { FlightList } from './FlightList';
 import { WeatherDisplay } from './WeatherDisplay';
 import { SearchResults } from './SearchResults';
@@ -126,6 +127,17 @@ export function MCPDataDisplay({
             tripId={tripId}
             tripInfo={tripInfo}
             onAddToTripSuccess={onAddToTripSuccess}
+            className={cn('mt-3', className)}
+          />
+        );
+      }
+      break;
+
+    case 'carRental':
+      if (message.carRentals && message.carRentals.length > 0) {
+        return (
+          <CarRentalList
+            rentals={message.carRentals}
             className={cn('mt-3', className)}
           />
         );

@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Home, CheckCircle2, XCircle, Clock, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatOpeningHoursFromObject } from '@/utils/openingHoursFormatter';
 
 interface OpeningHoursData {
   mon?: string;
@@ -225,9 +226,17 @@ export default function BusinessHoursCard({
 
     // 优先使用 weekday/weekend
     if (hoursData.weekday && hoursData.weekend) {
-      // ✅ 确保 weekday 和 weekend 是字符串
-      const weekdayStr = typeof hoursData.weekday === 'string' ? hoursData.weekday : String(hoursData.weekday || '');
-      const weekendStr = typeof hoursData.weekend === 'string' ? hoursData.weekend : String(hoursData.weekend || '');
+      // ✅ 确保 weekday 和 weekend 是字符串；对象类型用 formatter 避免 [object Object]
+      const weekdayStr = typeof hoursData.weekday === 'string'
+        ? hoursData.weekday
+        : typeof hoursData.weekday === 'object' && hoursData.weekday !== null
+          ? formatOpeningHoursFromObject(hoursData.weekday)
+          : String(hoursData.weekday || '');
+      const weekendStr = typeof hoursData.weekend === 'string'
+        ? hoursData.weekend
+        : typeof hoursData.weekend === 'object' && hoursData.weekend !== null
+          ? formatOpeningHoursFromObject(hoursData.weekend)
+          : String(hoursData.weekend || '');
       
       // 工作日
       ['mon', 'tue', 'wed', 'thu', 'fri'].forEach(dayKey => {
@@ -248,8 +257,12 @@ export default function BusinessHoursCard({
         });
       });
     } else if (hoursData.weekday) {
-      // ✅ 确保 weekday 是字符串
-      const weekdayStr = typeof hoursData.weekday === 'string' ? hoursData.weekday : String(hoursData.weekday || '');
+      // ✅ 确保 weekday 是字符串；对象类型用 formatter 避免 [object Object]
+      const weekdayStr = typeof hoursData.weekday === 'string'
+        ? hoursData.weekday
+        : typeof hoursData.weekday === 'object' && hoursData.weekday !== null
+          ? formatOpeningHoursFromObject(hoursData.weekday)
+          : String(hoursData.weekday || '');
       
       // 只有工作日数据，应用到所有工作日
       ['mon', 'tue', 'wed', 'thu', 'fri'].forEach(dayKey => {
@@ -265,8 +278,12 @@ export default function BusinessHoursCard({
       for (const dayKey of dayOrder) {
         const hoursValue = hoursData[dayKey];
         if (hoursValue) {
-          // ✅ 确保转换为字符串
-          const hoursStr = typeof hoursValue === 'string' ? hoursValue : String(hoursValue || '');
+          // ✅ 确保转换为字符串；对象类型（如 { open, close }）用 formatter 避免 [object Object]
+          const hoursStr = typeof hoursValue === 'string'
+            ? hoursValue
+            : typeof hoursValue === 'object' && hoursValue !== null
+              ? formatOpeningHoursFromObject(hoursValue)
+              : String(hoursValue || '');
           // 处理 "24 Hours" 格式
           const displayHours = hoursStr === '24 Hours' ? '24小时' : hoursStr;
           allDayHours.push({
@@ -426,21 +443,21 @@ export default function BusinessHoursCard({
           </div>
         </div>
 
-        {/* 当前状态 */}
+        {/* 当前状态（实时状态，行程日是否营业以行程时间为准） */}
         {currentStatus && (
           <div className="flex items-center gap-2 pt-2 border-t">
             {currentStatus.isOpen ? (
               <>
                 <CheckCircle2 className="w-4 h-4 text-green-600" />
                 <span className="text-xs text-green-700">
-                  状态：营业中（当前时间在范围内）
+                  实时状态：营业中
                 </span>
               </>
             ) : (
               <>
                 <XCircle className="w-4 h-4 text-gray-500" />
                 <span className="text-xs text-muted-foreground">
-                  状态：已休息（当前时间不在营业范围内）
+                  实时状态：已休息（行程日是否营业请参考上方营业时间）
                 </span>
               </>
             )}

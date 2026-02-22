@@ -17,13 +17,16 @@ interface PlanningAssistantProps {
   userId?: string;
   tripId?: string | null;
   countryCode?: string | null;
+  /** 用户所在国家代码（如 CN），用于住宿搜索语言映射 */
+  userCountryCode?: string | null;
   tripInfo?: TripDetail; // 行程详细信息，用于上下文感知
   className?: string;
-  onSendMessageReady?: (sendMessage: (message: string) => Promise<void>) => void; // 🆕 通知父组件 sendMessage 已准备好
+  onSendMessageReady?: (sendMessage: (message: string) => Promise<void>) => void; // 通知父组件 sendMessage 已准备好
+  onClearReady?: (clear: () => void) => void; // 通知父组件清空函数已准备好（供标题栏按钮调用）
   onAddToTripSuccess?: () => void; // 住宿等加入行程成功后的回调（如刷新日程）
 }
 
-export function PlanningAssistant({ userId, tripId, countryCode, tripInfo, className, onSendMessageReady, onAddToTripSuccess }: PlanningAssistantProps) {
+export function PlanningAssistant({ userId, tripId, countryCode, userCountryCode, tripInfo, className, onSendMessageReady, onClearReady, onAddToTripSuccess }: PlanningAssistantProps) {
   const {
     sessionId,
     sessionState,
@@ -32,13 +35,14 @@ export function PlanningAssistant({ userId, tripId, countryCode, tripInfo, class
     deleteSession,
   } = usePlanningSessionV2(userId);
 
-  const { messages, sendMessage, isLoading: chatLoading } = useChatV2(
+  const { messages, sendMessage, clearMessages, isLoading: chatLoading } = useChatV2(
     sessionId,
     userId,
-    tripId || countryCode
+    tripId || countryCode || userCountryCode
       ? {
           tripId: tripId || undefined,
           countryCode: countryCode || undefined,
+          userCountryCode: userCountryCode || undefined,
         }
       : undefined
   );
@@ -98,11 +102,14 @@ export function PlanningAssistant({ userId, tripId, countryCode, tripInfo, class
           <ChatPanel
             sessionId={sessionId}
             userId={userId}
+            clearMessages={clearMessages}
+            onClearReady={onClearReady}
             context={
-              tripId || countryCode
+              tripId || countryCode || userCountryCode
                 ? {
                     tripId: tripId || undefined,
                     countryCode: countryCode || undefined,
+                    userCountryCode: userCountryCode || undefined,
                   }
                 : undefined
             }

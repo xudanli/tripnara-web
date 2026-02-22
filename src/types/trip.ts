@@ -1151,6 +1151,8 @@ export interface PlanStudioConflict {
   description: string;
   affectedDays: string[];
   affectedItemIds: string[];
+  /** 关联的证据 ID 列表，用于在证据列表中高亮；闭园风险时 evidenceIds[0] 与 evidence.id 一一对应 */
+  evidenceIds?: string[];
   suggestions?: ConflictSuggestion[];
 }
 
@@ -2411,6 +2413,8 @@ export interface EvidenceItem {
   poiId?: string;
   day?: number; // 1-based
   severity?: EvidenceSeverity;
+  /** 关联的行程项 ID 列表，用于在行程时间轴中高亮对应行程项 */
+  affectedItemIds?: string[];
   metadata?: Record<string, any>;
   
   // 🆕 P0修复：证据增强字段（v1.2.0）

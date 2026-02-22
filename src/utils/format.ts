@@ -7,6 +7,18 @@ export const formatDate = (date: string | Date): string => {
   });
 };
 
+/** 将日期格式化为 yyyy-MM-dd，兼容 string | Date，避免显示原始 ISO */
+export const formatDayDate = (date: string | Date | undefined): string => {
+  if (date == null) return '—';
+  const dateStr = typeof date === 'string' ? date : (date instanceof Date ? date.toISOString() : '');
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toISOString().slice(0, 10);
+  } catch {
+    return dateStr.slice(0, 10) || '—';
+  }
+};
+
 export const formatCurrency = (
   amount: number, 
   currency: string = 'CNY', 

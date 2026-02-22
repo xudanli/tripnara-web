@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { agentApi } from '@/api/agent';
 import { tripsApi } from '@/api/trips';
-import type { RouteAndRunRequest, RouteAndRunResponse, RouteType, UIStatus, LLMProvider, EntryPoint, DecisionLogEntry } from '@/api/agent';
+import type { RouteAndRunRequest, RouteAndRunResponse, RouteType, UIStatus, LLMProvider, EntryPoint, DecisionLogEntry, OrchestrationUiState, OrchestrationResult } from '@/api/agent';
 import type { TripInsightResponse, TripInsightFinding } from '@/api/trips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,7 @@ import {
 import { Send, Bot, User, ChevronRight, CheckCircle2, XCircle, Loader2, Zap, Infinity, MapPin, Utensils, Search, Calendar, RotateCw, Brain, Compass, Target, Lightbulb, ClipboardCheck, Clock, Route, AlertTriangle, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import { OrchestrationProgressCard } from '@/components/planning-assistant-v2/OrchestrationProgressCard';
 import { toast } from 'sonner';
 import { needsApproval, extractApprovalId } from '@/utils/approval';
 import { normalizeToNewFormat } from '@/utils/decision-log-migrator';
@@ -291,6 +292,10 @@ interface Message {
   };
   decisionLog?: DecisionLogEntry[];  // 使用新的决策日志格式
   mode?: 'fast' | 'slow';
+  /** 编排 UI 状态（phase、progress、message 等） */
+  ui_state?: OrchestrationUiState;
+  /** 编排结果（state、gate_result、decision_log、decisionState） */
+  orchestrationResult?: OrchestrationResult;
 }
 
 /**
@@ -594,6 +599,10 @@ function MessageBubble({ message, mode, onRetry }: { message: Message; mode?: 'f
         
         {!isUser && !isError && (
           <>
+            <OrchestrationProgressCard
+              ui_state={message.ui_state}
+              orchestrationResult={message.orchestrationResult}
+            />
             <RouteInfoCard routeInfo={message.routeInfo} routeType={message.routeType} />
             <DecisionLogCard decisionLog={message.decisionLog} />
           </>
@@ -817,8 +826,11 @@ export default function AgentChat({ activeTripId, onSystem2Response, className, 
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
       
       // 规范化决策日志格式（支持新旧格式）
-      const rawDecisionLog = response.explain?.decision_log || [];
-      const decisionLog: DecisionLogEntry[] = rawDecisionLog.map((entry: any) => 
+      // 优先使用 orchestrationResult.decision_log，其次 explain.decision_log
+      const rawDecisionLog = response.result.payload?.orchestrationResult?.decision_log
+        ?? response.explain?.decision_log
+        ?? [];
+      const decisionLog: DecisionLogEntry[] = rawDecisionLog.map((entry: any) =>
         normalizeToNewFormat(entry, response.request_id)
       );
       
@@ -902,6 +914,9 @@ export default function AgentChat({ activeTripId, onSystem2Response, className, 
         uiStatus = (response.route.ui_hint.status || 'done') as UIStatus;
       }
 
+      // 优先使用 ui_state 中的 ui_status（编排进度），其次 route.ui_hint
+      const finalUiStatus = response.ui_state?.ui_status ?? uiStatus;
+
       // 移除思考中的消息，添加实际回复
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
@@ -912,7 +927,7 @@ export default function AgentChat({ activeTripId, onSystem2Response, className, 
             role: 'assistant',
             content: messageContent,
             timestamp: new Date(),
-            status: uiStatus,
+            status: finalUiStatus,
             routeType,
             routeInfo: {
               confidence: response.route.confidence,
@@ -922,6 +937,8 @@ export default function AgentChat({ activeTripId, onSystem2Response, className, 
             },
             decisionLog: decisionLog.length > 0 ? decisionLog : undefined,
             mode,
+            ui_state: response.ui_state,
+            orchestrationResult: response.result.payload?.orchestrationResult,
           },
         ];
       });

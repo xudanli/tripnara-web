@@ -17,6 +17,8 @@ interface EvidenceDrawerProps {
   tripId?: string | null;
   activeTab?: 'evidence' | 'risk' | 'decision';
   highlightItemId?: string; // 用于高亮特定项
+  /** 点击证据时回调，用于在行程时间轴中高亮 evidence.affectedItemIds */
+  onEvidenceClick?: (evidence: EvidenceItemType) => void;
 }
 
 // EvidenceItem 类型已从 @/types/trip 导入
@@ -50,6 +52,7 @@ export default function EvidenceDrawer({
   tripId,
   activeTab = 'evidence',
   highlightItemId,
+  onEvidenceClick,
 }: EvidenceDrawerProps) {
   const [currentTab, setCurrentTab] = useState<'evidence' | 'risk' | 'decision'>(activeTab);
   const [decisionLogItems, setDecisionLogItems] = useState<DecisionLogEntry[]>([]);
@@ -375,19 +378,27 @@ export default function EvidenceDrawer({
                       }
                       
                       return (
-                        <BusinessHoursCard
+                        <div
                           key={item.id}
-                          title={placeName}
-                          description={item.description || ''}
-                          day={item.day}
-                          severity={item.severity}
-                          source={item.source}
-                          timestamp={item.timestamp}
-                          link={item.link}
-                          className={cn(
-                            highlightItemId === item.id && 'border-primary bg-primary/5'
-                          )}
-                        />
+                          role={onEvidenceClick ? 'button' : undefined}
+                          tabIndex={onEvidenceClick ? 0 : undefined}
+                          onClick={() => onEvidenceClick?.(item)}
+                          onKeyDown={(e) => onEvidenceClick && (e.key === 'Enter' || e.key === ' ') && onEvidenceClick(item)}
+                          className={onEvidenceClick ? 'cursor-pointer' : undefined}
+                        >
+                          <BusinessHoursCard
+                            title={placeName}
+                            description={item.description || ''}
+                            day={item.day}
+                            severity={item.severity}
+                            source={item.source}
+                            timestamp={item.timestamp}
+                            link={item.link}
+                            className={cn(
+                              highlightItemId === item.id && 'border-primary bg-primary/5'
+                            )}
+                          />
+                        </div>
                       );
                     }
                     
@@ -399,6 +410,7 @@ export default function EvidenceDrawer({
                           'cursor-pointer hover:border-primary transition-colors',
                           highlightItemId === item.id && 'border-primary bg-primary/5'
                         )}
+                        onClick={() => onEvidenceClick?.(item)}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-start gap-3">
