@@ -49,3 +49,21 @@ export const PACING_FACTOR_LABELS = {
   SLOW: '慢节奏',
 } as const;
 
+// 交通方式（优化接口）
+export const TRAVEL_MODE_OPTIONS = [
+  { value: undefined, label: '自动（根据人员组成）' },
+  { value: 'TRANSIT' as const, label: '公交' },
+  { value: 'WALKING' as const, label: '步行' },
+  { value: 'DRIVING' as const, label: '自驾' },
+] as const;
+
+// 行程 travelMode 映射到优化接口 defaultTravelMode
+export const TRIP_TRAVEL_MODE_MAP: Record<string, 'TRANSIT' | 'WALKING' | 'DRIVING'> = {
+  self_drive: 'DRIVING',
+  public_transit: 'TRANSIT',
+  walking: 'WALKING',
+  DRIVING: 'DRIVING',
+  TRANSIT: 'TRANSIT',
+  WALKING: 'WALKING',
+};
+

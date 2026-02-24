@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { BudgetTabSkeleton } from '@/components/plan-studio/BudgetTabSkeleton';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -251,11 +252,7 @@ export default function BudgetTab({ tripId }: BudgetTabProps) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <BudgetTabSkeleton />;
   }
 
   const currency = trip?.budgetConfig?.currency || 'CNY';
@@ -348,9 +345,7 @@ export default function BudgetTab({ tripId }: BudgetTabProps) {
         {/* 费用汇总 */}
         <TabsContent value="overview" className="space-y-4">
           {loadingSummary ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner className="w-8 h-8" />
-            </div>
+            <BudgetTabSkeleton />
           ) : costSummary ? (
             <>
               {/* 分类汇总 */}
@@ -436,9 +431,7 @@ export default function BudgetTab({ tripId }: BudgetTabProps) {
         {/* 未支付项 */}
         <TabsContent value="unpaid" className="space-y-4">
           {loadingUnpaid ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner className="w-8 h-8" />
-            </div>
+            <BudgetTabSkeleton />
           ) : unpaidItems.length > 0 ? (
             <Card>
               <CardHeader>
@@ -506,9 +499,7 @@ export default function BudgetTab({ tripId }: BudgetTabProps) {
         {/* 决策日志 */}
         <TabsContent value="log" className="space-y-4">
           {loadingLog ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner className="w-8 h-8" />
-            </div>
+            <BudgetTabSkeleton />
           ) : decisionLog && decisionLog.items && decisionLog.items.length > 0 ? (
             <Card>
               <CardHeader>

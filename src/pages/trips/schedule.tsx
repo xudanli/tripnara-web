@@ -5,6 +5,8 @@ import type { ScheduleResponse, ActionHistory } from '@/types/trip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SchedulePageSkeleton } from '@/components/trips/SchedulePageSkeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Clock, MapPin, Save, Undo2, Redo2, History } from 'lucide-react';
@@ -155,11 +157,7 @@ export default function TripSchedulePage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <SchedulePageSkeleton />;
   }
 
   if (error) {
@@ -298,8 +296,13 @@ export default function TripSchedulePage() {
           </CardHeader>
           <CardContent>
             {historyLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Spinner className="w-6 h-6" />
+              <div className="space-y-3 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 border rounded-lg">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 flex-1" />
+                  </div>
+                ))}
               </div>
             ) : actionHistory.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">

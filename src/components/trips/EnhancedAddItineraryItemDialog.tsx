@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 // ScrollArea 已移除，使用原生 overflow-y-auto 实现滚动
@@ -80,6 +81,19 @@ interface EnhancedAddItineraryItemDialogProps {
   initialCategory?: PlaceCategory | 'all';
   /** 行程项ID（用于基于行程项搜索附近POI） */
   itemId?: string;
+  /** 插入用餐模式：预填用餐类型、时间和备注（如午餐 12:00-13:00、晚餐 18:00-19:00） */
+  initialInsertMeal?: {
+    itemType: ItineraryItemType;
+    startTime: string;
+    endTime: string;
+    note?: string; // '午餐' | '晚餐' 等
+  };
+  /** @deprecated 使用 initialInsertMeal 替代 */
+  initialInsertLunch?: {
+    itemType: ItineraryItemType;
+    startTime: string;
+    endTime: string;
+  };
 }
 
 interface ItemTypeOption {
@@ -222,6 +236,8 @@ export function EnhancedAddItineraryItemDialog({
   initialLocation,
   initialCategory,
   itemId,
+  initialInsertMeal,
+  initialInsertLunch,
 }: EnhancedAddItineraryItemDialogProps) {
   const { t } = useTranslation();
   
@@ -322,7 +338,19 @@ export function EnhancedAddItineraryItemDialog({
   // 打开时重置表单或设置初始状态
   useEffect(() => {
     if (open) {
-      if (initialSearchMode && initialLocation) {
+      const insertMeal = initialInsertMeal ?? (initialInsertLunch ? { ...initialInsertLunch, note: '午餐' as string } : null);
+      if (insertMeal) {
+        // 插入用餐模式：预填用餐类型、时间和备注，直接进入配置页
+        setItemType(insertMeal.itemType);
+        setStartTime(insertMeal.startTime);
+        setEndTime(insertMeal.endTime);
+        setNote(insertMeal.note ?? '午餐');
+        setViewMode('configure');
+        setSelectedCategory('RESTAURANT');
+        setSelectedPlace(null);
+        setSearchMode('search');
+        setError(null);
+      } else if (initialSearchMode && initialLocation) {
         // 如果提供了初始搜索模式和位置，设置它们
         setSearchMode(initialSearchMode);
         setUserLocation(initialLocation);
@@ -334,7 +362,7 @@ export function EnhancedAddItineraryItemDialog({
         resetForm();
       }
     }
-  }, [open, resetForm, initialSearchMode, initialLocation, initialCategory]);
+  }, [open, resetForm, initialSearchMode, initialLocation, initialCategory, initialInsertMeal, initialInsertLunch]);
 
   // 搜索地点
   const handleSearch = useCallback(async (query: string, mode: SearchMode, category: PlaceCategory | 'all') => {
@@ -1105,9 +1133,9 @@ export function EnhancedAddItineraryItemDialog({
               {/* 搜索结果 - 固定最大高度实现滚动 */}
               <div className="max-h-[calc(85vh-280px)] overflow-y-auto px-6">
                 {searching ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Spinner className="w-6 h-6" />
-                    <span className="ml-2 text-sm text-muted-foreground">搜索中...</span>
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <LogoLoading size={32} />
+                    <span className="text-sm text-muted-foreground">搜索中...</span>
                   </div>
                 ) : searchResults.length > 0 ? (
                   <div className="space-y-2 pb-4">

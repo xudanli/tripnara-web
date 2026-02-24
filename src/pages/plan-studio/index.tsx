@@ -31,6 +31,7 @@ import {
 import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
 import type { PipelineStatus, PipelineStage, TripListItem, TripDetail } from '@/types/trip';
 import { countriesApi } from '@/api/countries';
@@ -548,12 +549,10 @@ function PlanStudioPageContent() {
     navigate('/dashboard/trips/new?experience=' + experienceType);
   };
 
-  // 加载中状态
+  // 加载中状态（使用 Logo 加载动画，符合 TripNARA 品牌与决策感）
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Spinner className="w-8 h-8" />
-      </div>
+      <LogoLoading size={56} fullScreen />
     );
   }
 

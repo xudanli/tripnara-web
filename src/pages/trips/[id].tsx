@@ -39,6 +39,8 @@ import {
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
+import { TripDetailSkeleton } from '@/components/trips/TripDetailSkeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -200,9 +202,7 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
     return (
       <Card>
         <CardContent className="py-12">
-          <div className="flex items-center justify-center">
-            <Spinner className="w-8 h-8" />
-          </div>
+          <LogoLoading size={40} />
         </CardContent>
       </Card>
     );
@@ -1471,11 +1471,7 @@ export default function TripDetailPage() {
 
   // ⚠️ 以下是早期返回，所有 hooks 必须在这之前调用
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <TripDetailSkeleton />;
   }
 
   if (error || !trip) {
@@ -2542,9 +2538,9 @@ export default function TripDetailPage() {
                         }}
                       />
                     ) : (personaAlertsLoading || decisionLogsLoading) ? (
-                      <div className="flex items-center justify-center p-8">
-                        <Spinner className="w-6 h-6" />
-                        <span className="ml-2">加载安全数据...</span>
+                      <div className="flex flex-col items-center justify-center p-8 gap-2">
+                        <LogoLoading size={32} />
+                        <span className="text-sm text-muted-foreground">加载安全数据...</span>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center p-8">
@@ -2611,9 +2607,9 @@ export default function TripDetailPage() {
                         />
                       ) : tripMetricsLoading ? (
                       // tripMetrics 正在加载中
-                      <div className="flex items-center justify-center p-8">
-                        <Spinner className="w-6 h-6" />
-                        <span className="ml-2">加载节奏数据...</span>
+                      <div className="flex flex-col items-center justify-center p-8 gap-2">
+                        <LogoLoading size={32} />
+                        <span className="text-sm text-muted-foreground">加载节奏数据...</span>
                       </div>
                     ) : (
                       <div className="flex items-center justify-center p-8">
@@ -2629,9 +2625,9 @@ export default function TripDetailPage() {
                   {/* 修复视角 */}
                   <TabsContent value="neptune" className="mt-4">
                     {decisionLogsLoading || personaAlertsLoading ? (
-                      <div className="flex items-center justify-center p-8">
-                        <Spinner className="w-6 h-6" />
-                        <span className="ml-2">加载修复数据...</span>
+                      <div className="flex flex-col items-center justify-center p-8 gap-2">
+                        <LogoLoading size={32} />
+                        <span className="text-sm text-muted-foreground">加载修复数据...</span>
                       </div>
                     ) : (
                       <NeptuneView 
@@ -2840,7 +2836,7 @@ export default function TripDetailPage() {
         <TabsContent value="recap" className="space-y-4">
           {recapLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Spinner className="w-8 h-8" />
+              <LogoLoading size={40} />
             </div>
           ) : recapReport ? (
             <div className="space-y-4">

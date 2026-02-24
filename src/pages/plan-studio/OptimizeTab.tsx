@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { tripsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import type { TripDetail } from '@/types/trip';
 import type { OptimizeRouteRequest, OptimizeRouteResponse } from '@/types/itinerary-optimization';
+import { TRIP_TRAVEL_MODE_MAP } from '@/constants/itinerary-optimization';
 import { toast } from 'sonner';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
@@ -102,6 +103,14 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
       const startDate = new Date(firstDay.date);
       const endDate = new Date(trip.endDate);
 
+      // 从行程设置推导优化配置（与行程设置联动）
+      const travelers = trip.pacingConfig?.travelers ?? [];
+      const hasChildren = travelers.some((t) => t.type === 'CHILD');
+      const hasElderly = travelers.some((t) => t.type === 'ELDERLY');
+      const rawMode = trip.metadata?.travelMode ?? trip.metadata?.defaultTravelMode;
+      const defaultTravelMode = rawMode ? TRIP_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
+      const transportPreferences = hasElderly ? { lessWalking: true } : undefined;
+
       // 构建优化请求
       const request: OptimizeRouteRequest = {
         placeIds,
@@ -110,7 +119,13 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           startTime: new Date(startDate.setHours(9, 0, 0, 0)).toISOString(),
           endTime: new Date(endDate.setHours(18, 0, 0, 0)).toISOString(),
           pacingFactor: 1.0, // 标准节奏
+          hasChildren,
+          hasElderly,
+          defaultTravelMode,
+          transportPreferences,
         },
+        tripId,
+        dayId: firstDay.id,
       };
 
       // 1. 先调用优化接口
@@ -186,6 +201,12 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
               </>
             )}
           </Button>
+
+          <Link to={`/dashboard/trips/optimize?tripId=${tripId}`}>
+            <Button variant="outline" className="w-full" size="sm">
+              前往完整优化页（可选地点、交通方式等）
+            </Button>
+          </Link>
           
           <p className="text-xs text-muted-foreground">
             {t('planStudio.optimizeTab.description')}

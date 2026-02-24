@@ -2,6 +2,7 @@ import { useState, useEffect, useContext, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -782,7 +783,7 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Spinner className="w-5 h-5" />
+                  <LogoLoading size={48} />
                   <div>
                     <p className="font-medium">{loadingStage || '正在处理...'}</p>
                     <p className="text-xs text-muted-foreground mt-1">

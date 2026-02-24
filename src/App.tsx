@@ -102,13 +102,13 @@ function App() {
           <Route path="trips/generate" element={<GenerateTripPage />} />
           <Route path="trips/collected" element={<CollectedTripsPage />} />
           <Route path="trips/featured" element={<FeaturedTripsPage />} />
+          <Route path="trips/optimize" element={<TripOptimizePage />} />
+          <Route path="trips/decision" element={<TripDecisionPage />} />
+          <Route path="trips/what-if" element={<TripWhatIfPage />} />
           <Route path="trips/:id" element={<TripDetailPage />} />
           <Route path="trips/:id/budget" element={<TripBudgetPage />} />
           <Route path="trips/:id/schedule" element={<TripSchedulePage />} />
           <Route path="trips/:id/review" element={<TripReviewPage />} />
-          <Route path="trips/optimize" element={<TripOptimizePage />} />
-          <Route path="trips/decision" element={<TripDecisionPage />} />
-          <Route path="trips/what-if" element={<TripWhatIfPage />} />
           <Route path="plan-studio" element={<PlanStudioPage />} />
           <Route path="trips/:tripId/plan-variants" element={<PlanVariantsPage />} />
           <Route path="execute" element={<ExecutePage />} />

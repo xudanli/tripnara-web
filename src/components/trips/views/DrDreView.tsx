@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Brain, TrendingUp, Clock, Activity, Lock, RefreshCw, BarChart3, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import type { DrDreViewData } from '@/utils/trip-data-extractors';
 import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
@@ -184,9 +185,9 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
   if (!drDreData) {
     console.log('[DrDreView] drDreData 为 null，显示加载状态');
     return (
-      <div className="flex items-center justify-center p-8">
-        <Spinner className="w-8 h-8" />
-        <span className="ml-2">加载节奏数据...</span>
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <LogoLoading size={40} />
+        <span>加载节奏数据...</span>
       </div>
     );
   }

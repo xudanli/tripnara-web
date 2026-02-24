@@ -163,6 +163,7 @@ export interface SearchPlacesResponse {
 
 export interface SemanticSearchParams {
   q: string;
+  countryCode?: string; // 国家代码：IS=冰岛，JP=日本，CN=中国
   lat?: number;
   lng?: number;
   radius?: number;

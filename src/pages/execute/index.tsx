@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import {
   MapPin,
   Clock,
@@ -818,11 +819,7 @@ export default function ExecutePage() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <LogoLoading size={48} fullScreen />;
   }
 
   if (!tripId || !trip) {
@@ -1303,7 +1300,7 @@ export default function ExecutePage() {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                <Spinner className="w-8 h-8 mx-auto mb-2" />
+                <LogoLoading size={40} className="mb-2" />
                 <p>正在生成修复方案...</p>
               </div>
             )}

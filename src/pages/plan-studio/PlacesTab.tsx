@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { PlacesSearchSkeleton } from '@/components/plan-studio/PlacesSearchSkeleton';
 import {
   Dialog,
   DialogContent,
@@ -494,9 +495,7 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
 
           {/* 搜索结果 */}
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner className="w-8 h-8" />
-            </div>
+            <PlacesSearchSkeleton count={5} className="py-4" />
           ) : results.length > 0 ? (
             <div className="space-y-3">
               {results.map((place) => (

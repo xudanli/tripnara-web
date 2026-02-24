@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Spinner } from '@/components/ui/spinner';
+import { BudgetMonitorCardSkeleton } from './BudgetPageSkeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Activity, ExternalLink, Settings2, AlertTriangle } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
@@ -59,22 +59,7 @@ export default function BudgetMonitorCard({
   };
 
   if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Activity className="w-5 h-5" />
-            实时预算监控
-          </CardTitle>
-          <CardDescription>今日支出与预算使用情况</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Spinner className="w-6 h-6" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <BudgetMonitorCardSkeleton />;
   }
 
   if (error || !monitor) {

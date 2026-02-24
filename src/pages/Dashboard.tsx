@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import WelcomeModal from '@/components/onboarding/WelcomeModal';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import NLChatInterface from '@/components/trips/NLChatInterface';
@@ -68,11 +68,7 @@ export default function DashboardPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <LogoLoading size={48} fullScreen />;
   }
 
   return (

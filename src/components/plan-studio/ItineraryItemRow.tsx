@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { DateTime } from 'luxon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, X, ChevronLeft, ChevronRight, Utensils, Hotel, Coffee, Fuel } from 'lucide-react';
+import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, X, ChevronLeft, ChevronRight, Utensils, Hotel, Coffee, Fuel, Compass, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import type { ItineraryItem, BookingStatus } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import type { PlaceImageInfo } from '@/types/place-image';
@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
+import { toast } from 'sonner';
 
 interface ItineraryItemRowProps {
   item: ItineraryItem;
@@ -661,6 +662,20 @@ export default function ItineraryItemRow({
     setImageViewerOpen(true);
   };
 
+  // 打开地图导航（Google Maps）
+  const handleOpenNavigation = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const coords = getPlaceCoordinates;
+    if (coords && !isNaN(coords.lat) && !isNaN(coords.lng)) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`);
+    } else {
+      toast.error('无法获取目的地坐标', {
+        description: '该地点缺少坐标信息，无法打开导航',
+        duration: 5000,
+      });
+    }
+  };
+
   return (
     <>
     <div
@@ -977,6 +992,26 @@ export default function ItineraryItemRow({
 
         {/* 右侧：操作按钮 */}
         <div className="flex-shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {/* 导航按钮 */}
+          {getPlaceCoordinates && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+                    onClick={handleOpenNavigation}
+                  >
+                    <Compass className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>导航</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {/* 问 NARA 按钮 - Logo 图标 */}
           {onAskNara && place && (
             <TooltipProvider>
@@ -998,10 +1033,15 @@ export default function ItineraryItemRow({
             </TooltipProvider>
           )}
           
-          {/* 更多操作下拉菜单 */}
+          {/* 更多操作下拉菜单（Fitts's Law: 44×44px 触控目标） */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-11 w-11 min-h-[44px] min-w-[44px] p-0"
+                aria-label={t('planStudio.scheduleTab.moreActions', { defaultValue: '更多操作' })}
+              >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1088,28 +1128,35 @@ export default function ItineraryItemRow({
                 </>
               )}
               {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(item)}>
+                <DropdownMenuItem onClick={() => onEdit(item)} className="min-h-[44px] cursor-pointer">
+                  <Pencil className="w-4 h-4 mr-2" />
                   {t('planStudio.scheduleTab.actions.edit')}
                 </DropdownMenuItem>
               )}
               {onReplace && (
-                <DropdownMenuItem onClick={() => onReplace(item)}>
+                <DropdownMenuItem onClick={() => onReplace(item)} className="min-h-[44px] cursor-pointer">
+                  <RefreshCw className="w-4 h-4 mr-2" />
                   {t('planStudio.scheduleTab.actions.replace')}
                 </DropdownMenuItem>
               )}
               {neptuneFields && onApplyPatch && (
-                <DropdownMenuItem onClick={() => onApplyPatch(item)}>
+                <DropdownMenuItem onClick={() => onApplyPatch(item)} className="min-h-[44px] cursor-pointer">
                   <Wrench className="w-4 h-4 mr-2" />
                   {t('tripViews.neptune.applyFix')}
                 </DropdownMenuItem>
               )}
               {onDelete && (
-                <DropdownMenuItem 
-                  className="text-red-600"
-                  onClick={() => onDelete(item)}
-                >
-                  {t('planStudio.scheduleTab.actions.delete')}
-                </DropdownMenuItem>
+                <>
+                  <div className="h-px bg-slate-200 my-1" />
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600 min-h-[44px] cursor-pointer"
+                    onClick={() => onDelete(item)}
+                    aria-label={t('planStudio.scheduleTab.actions.delete', { defaultValue: '删除' })}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {t('planStudio.scheduleTab.actions.delete')}
+                  </DropdownMenuItem>
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

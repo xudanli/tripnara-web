@@ -1130,6 +1130,8 @@ export interface Conflict {
 export type ConflictType = 
   | 'TIME_CONFLICT'           // 时间冲突
   | 'LUNCH_WINDOW'            // 午餐时间窗过短
+  | 'MISSING_LUNCH'           // 未安排午餐
+  | 'MISSING_DINNER'          // 未安排晚餐
   | 'FATIGUE_EXCEEDED'        // 体力超标
   | 'BUFFER_INSUFFICIENT'     // 缓冲不足
   | 'CLOSURE_RISK'            // 闭园风险
@@ -2581,10 +2583,18 @@ export interface ApplyOptimizationRequest {
   };
 }
 
+/** 因不营业等原因被跳过的地点 */
+export interface ApplyOptimizationSkippedItem {
+  placeId: number;
+  reason: string;
+}
+
 export interface ApplyOptimizationResponse {
   success: boolean;
   appliedItems: number;
   modifiedDays: string[];
+  /** 因不营业等原因被跳过的地点（仅在有被跳过项时返回） */
+  skipped?: ApplyOptimizationSkippedItem[];
   preview?: {
     changes: Array<{
       dayId: string;

@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
+import { ReadinessPageSkeleton } from '@/components/readiness/ReadinessPageSkeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -1529,11 +1531,7 @@ export default function ReadinessPage() {
     : (readinessData?.blockers || []).slice(0, 3);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <ReadinessPageSkeleton />;
   }
 
   if (!tripId || !trip || !readinessData) {
@@ -2029,7 +2027,7 @@ export default function ReadinessPage() {
                   <CardContent>
                     {loadingCapabilityPacks ? (
                       <div className="flex items-center justify-center py-8">
-                        <Spinner className="w-6 h-6" />
+                        <LogoLoading size={32} />
                       </div>
                     ) : (evaluatedPacks.length > 0 || capabilityPacks.length > 0) ? (
                       <div className="space-y-4">
@@ -2783,7 +2781,7 @@ export default function ReadinessPage() {
                         
                         {loadingEvidence ? (
                           <div className="flex items-center justify-center py-8">
-                            <Spinner className="w-6 h-6" />
+                            <LogoLoading size={32} />
                           </div>
                         ) : evidenceData.length > 0 ? (
                           <div className="space-y-3">

@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import type { AbuViewData } from '@/utils/trip-data-extractors';
 import {
   normalizeGateStatus,
@@ -37,9 +38,9 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
   // 如果数据未加载完成，显示加载状态
   if (!abuData) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Spinner className="w-8 h-8" />
-        <span className="ml-2">{t('tripViews.abu.loadingSafetyData')}</span>
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <LogoLoading size={40} />
+        <span>{t('tripViews.abu.loadingSafetyData')}</span>
       </div>
     );
   }

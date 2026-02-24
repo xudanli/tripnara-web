@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { EvidenceDrawerSkeleton } from './EvidenceDrawerSkeleton';
 import { X, FileText, AlertTriangle, History, ExternalLink, Clock, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
@@ -347,9 +348,7 @@ export default function EvidenceDrawer({
               {/* Evidence Tab */}
               <TabsContent value="evidence" className="mt-0 space-y-3">
                 {loadingEvidence ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner className="w-6 h-6" />
-                  </div>
+                  <EvidenceDrawerSkeleton count={5} />
                 ) : evidenceItems.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     暂无证据数据
@@ -472,9 +471,7 @@ export default function EvidenceDrawer({
               {/* Risk Tab */}
               <TabsContent value="risk" className="mt-0 space-y-3">
                 {loadingPersonaAlerts ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner className="w-6 h-6" />
-                  </div>
+                  <EvidenceDrawerSkeleton count={5} />
                 ) : riskItems.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     暂无风险提示
@@ -546,9 +543,7 @@ export default function EvidenceDrawer({
               {/* Decision Log Tab */}
               <TabsContent value="decision" className="mt-0 space-y-3">
                 {loadingDecisionLog ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Spinner className="w-6 h-6" />
-                  </div>
+                  <EvidenceDrawerSkeleton count={5} />
                 ) : convertedDecisionLogItems.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     暂无决策记录

@@ -158,6 +158,23 @@
       height: 0;
     }
   }
+
+  /* TripNARA Logo 加载动效：克制、专业、状态解释（Quiet confidence） */
+  @keyframes logo-loading-pulse {
+    0%, 100% {
+      opacity: 0.5;
+      transform: scale(0.96);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.04);
+    }
+  }
+}
+
+/* Logo 加载动画工具类（避免 Tailwind 任意值解析问题） */
+.logo-loading-pulse {
+  animation: logo-loading-pulse 2s ease-in-out infinite;
 }
 
 :root {

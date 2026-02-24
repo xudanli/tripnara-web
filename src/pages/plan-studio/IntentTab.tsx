@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
+import { IntentTabSkeleton } from '@/components/plan-studio/IntentTabSkeleton';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -467,11 +468,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <IntentTabSkeleton />;
   }
 
   return (

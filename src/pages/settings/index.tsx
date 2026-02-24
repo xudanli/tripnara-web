@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -526,7 +527,7 @@ export default function SettingsPage() {
                 <Card>
                   <CardContent className="py-12">
                     <div className="flex items-center justify-center">
-                      <Spinner className="w-8 h-8" />
+                      <LogoLoading size={40} />
                     </div>
                   </CardContent>
                 </Card>
@@ -625,7 +626,7 @@ export default function SettingsPage() {
                 <Card>
                   <CardContent className="py-12">
                     <div className="flex items-center justify-center">
-                      <Spinner className="w-8 h-8" />
+                      <LogoLoading size={40} />
                     </div>
                   </CardContent>
                 </Card>
@@ -1052,7 +1053,7 @@ export default function SettingsPage() {
                 <CardContent>
                   {fitnessLoading ? (
                     <div className="flex items-center justify-center py-8">
-                      <Spinner className="w-8 h-8" />
+                      <LogoLoading size={40} />
                     </div>
                   ) : (
                     <FitnessProfileCard

@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Spinner } from '@/components/ui/spinner';
+import { BudgetOverviewCardSkeleton } from './BudgetPageSkeleton';
 import { Wallet, Settings2, ExternalLink, AlertTriangle } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import type { BudgetSummary } from '@/types/trip';
@@ -79,21 +79,7 @@ export default function BudgetOverviewCard({
   };
 
   if (loading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Wallet className="w-5 h-5" />
-            预算概览
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Spinner className="w-6 h-6" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <BudgetOverviewCardSkeleton />;
   }
 
   if (error || !budget) {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { placesApi } from '@/api/places';
-import type { Place as TripPlace } from '@/types/trip';
+import { tripsApi } from '@/api/trips';
 import type {
   OptimizeRouteRequest,
   OptimizeRouteResponse,
@@ -14,6 +14,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -32,11 +39,16 @@ import { zhCN } from 'date-fns/locale';
 import {
   PACING_FACTOR,
   DEFAULT_TIMES,
-  PLACE_RECOMMENDATIONS,
   TIME_FORMAT,
   INTENSITY_LABELS,
   PACING_FACTOR_LABELS,
+  TRAVEL_MODE_OPTIONS,
+  TRIP_TRAVEL_MODE_MAP,
 } from '@/constants/itinerary-optimization';
+import type { OptimizeTravelMode } from '@/types/itinerary-optimization';
+import type { TripDetail } from '@/types/trip';
+
+type PlaceOption = { id: number; nameCN?: string; nameEN?: string; category?: string; reason?: string };
 
 export default function TripOptimizePage() {
   const navigate = useNavigate();
@@ -49,26 +61,57 @@ export default function TripOptimizePage() {
   const [humanizedDescription, setHumanizedDescription] = useState<string | null>(null);
   const [humanizing, setHumanizing] = useState(false);
 
-  // 地点数据
-  const [places, setPlaces] = useState<TripPlace[]>([]);
-  const [placesLoading, setPlacesLoading] = useState(true);
-  const [placesError, setPlacesError] = useState<string | null>(null);
+  // 行程数据（有 tripId 时加载）
+  const [trip, setTrip] = useState<TripDetail | null>(null);
 
-  // 地点选择
-  const [selectedPlaceIds, setSelectedPlaceIds] = useState<number[]>([]);
+  // 行程地点（按日期，来自 ItineraryItem）
+  const tripPlacesForDate = (dateStr: string): PlaceOption[] => {
+    if (!trip?.TripDay) return [];
+    const day = trip.TripDay.find((d) => d.date === dateStr || d.date?.startsWith?.(dateStr));
+    if (!day?.ItineraryItem) return [];
+    return day.ItineraryItem
+      .filter((item) => item.placeId && item.Place)
+      .map((item) => ({
+        id: item.placeId!,
+        nameCN: item.Place!.nameCN,
+        nameEN: item.Place!.nameEN ?? undefined,
+        category: item.Place!.category as string | undefined,
+      }));
+  };
+
+  // 语义搜索（添加更多地点）
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<PlaceOption[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  // 已选地点（用于优化）
+  const [selectedPlaces, setSelectedPlaces] = useState<PlaceOption[]>([]);
+
+  // 行程国家代码（用于语义搜索）
+  const [countryCode, setCountryCode] = useState<string | undefined>(undefined);
 
   // 配置表单
   const today = format(new Date(), 'yyyy-MM-dd');
   const defaultStartTime = `${String(DEFAULT_TIMES.START_HOUR).padStart(2, '0')}:${String(DEFAULT_TIMES.START_MINUTE).padStart(2, '0')}`;
   const defaultEndTime = `${String(DEFAULT_TIMES.END_HOUR).padStart(2, '0')}:${String(DEFAULT_TIMES.END_MINUTE).padStart(2, '0')}`;
   
-  const [config, setConfig] = useState<OptimizeRouteConfig>({
+  const [config, setConfig] = useState<OptimizeRouteConfig & {
+    transportPreferences: { lessWalking: boolean; avoidHighways: boolean; avoidTolls: boolean };
+  }>({
     date: today,
     startTime: `${today}T${defaultStartTime}:${TIME_FORMAT.ISO_SUFFIX}`,
     endTime: `${today}T${defaultEndTime}:${TIME_FORMAT.ISO_SUFFIX}`,
     pacingFactor: PACING_FACTOR.DEFAULT,
     hasChildren: false,
     hasElderly: false,
+    defaultTravelMode: undefined,
+    transportPreferences: {
+      lessWalking: false,
+      avoidHighways: false,
+      avoidTolls: false,
+    },
     lunchWindow: {
       start: DEFAULT_TIMES.LUNCH_START,
       end: DEFAULT_TIMES.LUNCH_END,
@@ -80,42 +123,107 @@ export default function TripOptimizePage() {
     useVRPTW: false,
   });
 
-  // 加载地点列表
+  // 加载行程：地点、countryCode、预填配置
   useEffect(() => {
-    const loadPlaces = async () => {
+    if (!tripId) return;
+    const loadTrip = async () => {
       try {
-        setPlacesLoading(true);
-        setPlacesError(null);
-        const params: any = {
-          limit: PLACE_RECOMMENDATIONS.DEFAULT_LIMIT,
-        };
-        
-        // 如果有tripId，使用tripId获取推荐地点
-        if (tripId) {
-          params.tripId = tripId;
-        }
-        
-        const data = await placesApi.getRecommendations(params);
-        setPlaces(data);
-      } catch (err: any) {
-        setPlacesError(err.message || '加载地点列表失败');
-        console.error('Failed to load places:', err);
-      } finally {
-        setPlacesLoading(false);
+        const data = await tripsApi.getById(tripId);
+        setTrip(data);
+        setCountryCode(data.destination || undefined);
+        const firstDay = data.TripDay?.[0];
+        const firstDate = firstDay?.date ?? config.date;
+        const places = firstDay
+          ? (firstDay.ItineraryItem ?? [])
+              .filter((item) => item.placeId && item.Place)
+              .map((item) => ({
+                id: item.placeId!,
+                nameCN: item.Place!.nameCN,
+                nameEN: item.Place!.nameEN ?? undefined,
+                category: item.Place!.category as string | undefined,
+              }))
+          : [];
+        setSelectedPlaces(places);
+        setConfig((prev) => {
+          const updates: Partial<typeof prev> = { date: firstDate };
+          const travelers = data.pacingConfig?.travelers ?? [];
+          const hasChild = travelers.some((t) => t.type === 'CHILD');
+          const hasElder = travelers.some((t) => t.type === 'ELDERLY');
+          updates.hasChildren = hasChild;
+          updates.hasElderly = hasElder;
+          if (hasElder) {
+            updates.transportPreferences = {
+              ...prev.transportPreferences,
+              lessWalking: true,
+            };
+          }
+          const rawMode = data.metadata?.travelMode ?? data.metadata?.defaultTravelMode;
+          const mappedMode = rawMode ? TRIP_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
+          if (mappedMode) updates.defaultTravelMode = mappedMode;
+          return { ...prev, ...updates };
+        });
+      } catch {
+        // 忽略
       }
     };
-
-    loadPlaces();
+    loadTrip();
   }, [tripId]);
 
-  const handlePlaceToggle = (placeId: number) => {
-    setSelectedPlaceIds((prev) =>
-      prev.includes(placeId) ? prev.filter((id) => id !== placeId) : [...prev, placeId]
-    );
+  // 日期变化时：当日行程地点 + 保留搜索添加的
+  useEffect(() => {
+    if (!tripId || !trip) return;
+    const dayPlaces = tripPlacesForDate(config.date);
+    setSelectedPlaces((prev) => {
+      const dayIds = new Set(dayPlaces.map((p) => p.id));
+      const fromSearch = prev.filter((p) => !dayIds.has(p.id));
+      return [...dayPlaces, ...fromSearch];
+    });
+  }, [config.date, tripId, trip]);
+
+  const handleSearchPlaces = async () => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      setSearchLoading(true);
+      setSearchError(null);
+      const res = await placesApi.semanticSearchPlaces({
+        q,
+        countryCode,
+        limit: 20,
+      });
+      setSearchResults(res?.results ?? []);
+    } catch (err: any) {
+      setSearchError(err.message || '搜索失败');
+      setSearchResults([]);
+      console.error('Semantic search error:', err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleTogglePlace = (place: PlaceOption, checked: boolean) => {
+    if (checked) {
+      if (selectedPlaces.some((p) => p.id === place.id)) return;
+      setSelectedPlaces((prev) => [...prev, place]);
+    } else {
+      setSelectedPlaces((prev) => prev.filter((p) => p.id !== place.id));
+    }
+  };
+
+  const handleAddPlace = (place: PlaceOption) => {
+    if (selectedPlaces.some((p) => p.id === place.id)) return;
+    setSelectedPlaces((prev) => [...prev, place]);
+  };
+
+  const handleRemovePlace = (placeId: number) => {
+    setSelectedPlaces((prev) => prev.filter((p) => p.id !== placeId));
   };
 
   const handleOptimize = async () => {
-    if (selectedPlaceIds.length === 0) {
+    if (selectedPlaces.length === 0) {
       setError('请至少选择一个地点');
       return;
     }
@@ -132,12 +240,9 @@ export default function TripOptimizePage() {
       let endDateTime = config.endTime;
 
       // 如果时间格式不完整，补充完整
-      // ✅ 安全地处理 startDateTime
-      const startDateTimeStr = typeof startDateTime === 'string' 
-        ? startDateTime 
-        : startDateTime instanceof Date 
-          ? startDateTime.toISOString()
-          : String(startDateTime);
+      const startDateTimeStr = typeof startDateTime === 'string'
+        ? startDateTime
+        : String(startDateTime);
       
       if (!startDateTimeStr.includes('T') || !startDateTimeStr.endsWith('Z')) {
         const timePart = startDateTimeStr.includes('T')
@@ -146,12 +251,9 @@ export default function TripOptimizePage() {
         startDateTime = `${dateStr}T${timePart}:${TIME_FORMAT.ISO_SUFFIX}`;
       }
 
-      // ✅ 安全地处理 endDateTime
-      const endDateTimeStr = typeof endDateTime === 'string' 
-        ? endDateTime 
-        : endDateTime instanceof Date 
-          ? endDateTime.toISOString()
-          : String(endDateTime);
+      const endDateTimeStr = typeof endDateTime === 'string'
+        ? endDateTime
+        : String(endDateTime);
       
       if (!endDateTimeStr.includes('T') || !endDateTimeStr.endsWith('Z')) {
         const timePart = endDateTimeStr.includes('T')
@@ -160,14 +262,36 @@ export default function TripOptimizePage() {
         endDateTime = `${dateStr}T${timePart}:${TIME_FORMAT.ISO_SUFFIX}`;
       }
 
+      let dayId = '';
+      if (tripId) {
+        const trip = await tripsApi.getById(tripId);
+        const matchingDay = trip.TripDay?.find(
+          (d) => d.date === dateStr || d.date?.startsWith?.(dateStr)
+        );
+        dayId = matchingDay?.id ?? trip.TripDay?.[0]?.id ?? '';
+      }
+
+      const prefs = config.transportPreferences;
+      const transportPreferences = prefs
+        ? (Object.fromEntries(
+            Object.entries(prefs).filter(([, v]) => v === true)
+          ) as OptimizeRouteConfig['transportPreferences'])
+        : undefined;
+
       const request: OptimizeRouteRequest = {
-        placeIds: selectedPlaceIds,
+        placeIds: selectedPlaces.map((p) => p.id),
         config: {
           ...config,
           date: dateStr,
           startTime: startDateTime,
           endTime: endDateTime,
+          defaultTravelMode: config.defaultTravelMode,
+          transportPreferences: transportPreferences && Object.keys(transportPreferences).length > 0
+            ? transportPreferences
+            : undefined,
         },
+        tripId: tripId ?? '',
+        dayId,
       };
 
       const result = await itineraryOptimizationApi.optimize(request);
@@ -243,45 +367,166 @@ export default function TripOptimizePage() {
                 <MapPin className="w-5 h-5" />
                 选择地点
               </CardTitle>
-              <CardDescription>选择需要优化的地点（至少选择一个）</CardDescription>
+              <CardDescription>
+                {tripId
+                  ? `勾选要参与优化的地点（${config.date} 当天行程）`
+                  : '搜索并添加地点后开始优化'}
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 max-h-96 overflow-y-auto">
-              {placesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Spinner className="w-6 h-6" />
-                </div>
-              ) : placesError ? (
-                <div className="text-sm text-red-600 py-4">{placesError}</div>
-              ) : places.length === 0 ? (
-                <div className="text-sm text-muted-foreground py-4 text-center">
-                  暂无可用地点
-                </div>
-              ) : (
-                <>
-                  {places.map((place) => (
-                    <div key={place.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`place-${place.id}`}
-                        checked={selectedPlaceIds.includes(place.id)}
-                        onCheckedChange={() => handlePlaceToggle(place.id)}
-                      />
-                      <Label
-                        htmlFor={`place-${place.id}`}
-                        className="flex-1 cursor-pointer font-normal"
-                      >
-                        {place.nameCN || place.nameEN || `地点 ${place.id}`}
-                        <Badge variant="outline" className="ml-2 text-xs">
-                          {place.category}
-                        </Badge>
-                      </Label>
+            <CardContent className="space-y-3">
+              {/* 有 tripId：展示当日行程地点 */}
+              {tripId && trip && (() => {
+                const dayPlaces = tripPlacesForDate(config.date);
+                if (dayPlaces.length === 0) {
+                  return (
+                    <div className="text-sm text-muted-foreground py-2">
+                      {config.date} 暂无行程项，可点击下方「添加更多地点」搜索
                     </div>
-                  ))}
-                  {selectedPlaceIds.length > 0 && (
-                    <div className="pt-2 border-t text-sm text-muted-foreground">
-                      已选择 {selectedPlaceIds.length} 个地点
+                  );
+                }
+                return (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">行程地点</div>
+                    {dayPlaces.map((place) => (
+                      <div key={place.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`trip-place-${place.id}`}
+                          checked={selectedPlaces.some((p) => p.id === place.id)}
+                          onCheckedChange={(checked) => handleTogglePlace(place, checked === true)}
+                        />
+                        <Label
+                          htmlFor={`trip-place-${place.id}`}
+                          className="flex-1 cursor-pointer font-normal"
+                        >
+                          {place.nameCN || place.nameEN || `地点 ${place.id}`}
+                          {place.category && (
+                            <Badge variant="outline" className="ml-2 text-xs">{place.category}</Badge>
+                          )}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* 添加更多地点：语义搜索 */}
+              <div className="pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setSearchExpanded((v) => !v)}
+                >
+                  {searchExpanded ? '收起搜索' : '添加更多地点'}
+                </Button>
+                {searchExpanded && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="冰岛瀑布、适合拍照的景点..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearchPlaces()}
+                      />
+                      <Button onClick={handleSearchPlaces} disabled={searchLoading}>
+                        {searchLoading ? <Spinner className="w-4 h-4" /> : '搜索'}
+                      </Button>
+                    </div>
+                    {searchError && (
+                      <div className="text-sm text-red-600">{searchError}</div>
+                    )}
+                    {searchResults.length > 0 && (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {searchResults.map((place) => (
+                          <div key={place.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium">{place.nameCN || place.nameEN || `地点 ${place.id}`}</span>
+                              {place.category && (
+                                <Badge variant="outline" className="ml-2 text-xs">{place.category}</Badge>
+                              )}
+                              {place.reason && (
+                                <div className="text-xs text-muted-foreground truncate">{place.reason}</div>
+                              )}
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleAddPlace(place)}
+                              disabled={selectedPlaces.some((p) => p.id === place.id)}
+                            >
+                              {selectedPlaces.some((p) => p.id === place.id) ? '已选' : '添加'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 无 tripId：仅展示搜索 */}
+              {!tripId && (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="冰岛瀑布、适合拍照的景点..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearchPlaces()}
+                    />
+                    <Button onClick={handleSearchPlaces} disabled={searchLoading}>
+                      {searchLoading ? <Spinner className="w-4 h-4" /> : '搜索'}
+                    </Button>
+                  </div>
+                  {searchError && (
+                    <div className="text-sm text-red-600">{searchError}</div>
+                  )}
+                  {searchResults.length > 0 && (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {searchResults.map((place) => (
+                        <div key={place.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium">{place.nameCN || place.nameEN || `地点 ${place.id}`}</span>
+                            {place.category && (
+                              <Badge variant="outline" className="ml-2 text-xs">{place.category}</Badge>
+                            )}
+                            {place.reason && (
+                              <div className="text-xs text-muted-foreground truncate">{place.reason}</div>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAddPlace(place)}
+                            disabled={selectedPlaces.some((p) => p.id === place.id)}
+                          >
+                            {selectedPlaces.some((p) => p.id === place.id) ? '已选' : '添加'}
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </>
+                </div>
+              )}
+
+              {/* 已选列表 */}
+              {selectedPlaces.length > 0 && (
+                <div className="pt-2 border-t space-y-2">
+                  <div className="text-sm font-medium">已选 ({selectedPlaces.length})</div>
+                  {selectedPlaces.map((place) => (
+                    <div key={place.id} className="flex items-center justify-between gap-2 py-1.5 text-sm border rounded px-2">
+                      <div className="flex-1 min-w-0">
+                        <span>{place.nameCN || place.nameEN || `地点 ${place.id}`}</span>
+                        {place.category && (
+                          <Badge variant="outline" className="ml-2 text-xs">{place.category}</Badge>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => handleRemovePlace(place.id)}>
+                        移除
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -314,12 +559,9 @@ export default function TripOptimizePage() {
                   type="time"
                   value={
                     (() => {
-                      // ✅ 安全地处理 config.startTime
-                      const startTimeStr = typeof config.startTime === 'string' 
-                        ? config.startTime 
-                        : config.startTime instanceof Date 
-                          ? config.startTime.toISOString()
-                          : String(config.startTime || '');
+                      const startTimeStr = typeof config.startTime === 'string'
+                        ? config.startTime
+                        : String(config.startTime || '');
                       return startTimeStr.includes('T')
                         ? startTimeStr.split('T')[1]?.slice(0, 5) || defaultStartTime
                         : defaultStartTime;
@@ -341,12 +583,9 @@ export default function TripOptimizePage() {
                   type="time"
                   value={
                     (() => {
-                      // ✅ 安全地处理 config.endTime
-                      const endTimeStr = typeof config.endTime === 'string' 
-                        ? config.endTime 
-                        : config.endTime instanceof Date 
-                          ? config.endTime.toISOString()
-                          : String(config.endTime || '');
+                      const endTimeStr = typeof config.endTime === 'string'
+                        ? config.endTime
+                        : String(config.endTime || '');
                       return endTimeStr.includes('T')
                         ? endTimeStr.split('T')[1]?.slice(0, 5) || defaultEndTime
                         : defaultEndTime;
@@ -406,9 +645,17 @@ export default function TripOptimizePage() {
                   <Checkbox
                     id="hasElderly"
                     checked={config.hasElderly}
-                    onCheckedChange={(checked) =>
-                      setConfig({ ...config, hasElderly: checked === true })
-                    }
+                    onCheckedChange={(checked) => {
+                      const hasElderly = checked === true;
+                      setConfig({
+                        ...config,
+                        hasElderly,
+                        // 带老人时自动勾选「少步行」
+                        transportPreferences: hasElderly
+                          ? { ...config.transportPreferences, lessWalking: true }
+                          : config.transportPreferences,
+                      });
+                    }}
                   />
                   <Label htmlFor="hasElderly" className="flex items-center gap-2 font-normal">
                     <UserCog className="w-4 h-4" />
@@ -416,6 +663,102 @@ export default function TripOptimizePage() {
                   </Label>
                 </div>
               </div>
+
+              {/* 交通方式 */}
+              <div className="space-y-2">
+                <Label>交通方式</Label>
+                <Select
+                  value={config.defaultTravelMode ?? 'auto'}
+                  onValueChange={(v) =>
+                    setConfig({
+                      ...config,
+                      defaultTravelMode: v === 'auto' ? undefined : (v as OptimizeTravelMode),
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="自动（根据人员组成）" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRAVEL_MODE_OPTIONS.map((opt) => (
+                      <SelectItem
+                        key={opt.value ?? 'auto'}
+                        value={opt.value ?? 'auto'}
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  不选择时，后端根据「带小孩/带老人」自动选择：带老人→公交+少步行，带小孩→自驾，无特殊→公交
+                </p>
+              </div>
+
+              {/* 交通偏好：少步行（适合老人） */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="lessWalking"
+                  checked={config.transportPreferences?.lessWalking}
+                  onCheckedChange={(checked) =>
+                    setConfig({
+                      ...config,
+                      transportPreferences: {
+                        ...config.transportPreferences,
+                        lessWalking: checked === true,
+                      },
+                    })
+                  }
+                />
+                <Label htmlFor="lessWalking" className="font-normal">
+                  少步行（适合老人）
+                </Label>
+              </div>
+
+              {/* 自驾偏好：仅在选择自驾时显示 */}
+              {config.defaultTravelMode === 'DRIVING' && (
+                <div className="space-y-2 pl-6 border-l-2 border-muted">
+                  <Label className="text-sm">自驾偏好</Label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="avoidHighways"
+                        checked={config.transportPreferences?.avoidHighways}
+                        onCheckedChange={(checked) =>
+                          setConfig({
+                            ...config,
+                            transportPreferences: {
+                              ...config.transportPreferences,
+                              avoidHighways: checked === true,
+                            },
+                          })
+                        }
+                      />
+                      <Label htmlFor="avoidHighways" className="font-normal">
+                        不走高速
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="avoidTolls"
+                        checked={config.transportPreferences?.avoidTolls}
+                        onCheckedChange={(checked) =>
+                          setConfig({
+                            ...config,
+                            transportPreferences: {
+                              ...config.transportPreferences,
+                              avoidTolls: checked === true,
+                            },
+                          })
+                        }
+                      />
+                      <Label htmlFor="avoidTolls" className="font-normal">
+                        避免收费
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 午餐时间窗 */}
               <div className="space-y-2">
@@ -486,7 +829,7 @@ export default function TripOptimizePage() {
               {/* 优化按钮 */}
               <Button
                 onClick={handleOptimize}
-                disabled={loading || selectedPlaceIds.length === 0}
+                disabled={loading || selectedPlaces.length === 0}
                 className="w-full"
                 size="lg"
               >
@@ -524,7 +867,7 @@ export default function TripOptimizePage() {
                       <div>
                         <div className="text-sm text-muted-foreground">快乐值总分</div>
                         <div className="text-3xl font-bold text-primary">
-                          {optimizedResult.happinessScore.toFixed(1)}
+                          {(optimizedResult.happinessScore ?? 0).toFixed(1)}
                         </div>
                       </div>
                       <Button
@@ -547,25 +890,25 @@ export default function TripOptimizePage() {
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">兴趣分</div>
                         <div className="text-lg font-semibold text-green-600">
-                          +{optimizedResult.scoreBreakdown.interestScore}
+                          +{(optimizedResult.scoreBreakdown?.interestScore ?? 0)}
                         </div>
                       </div>
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">距离惩罚</div>
                         <div className="text-lg font-semibold text-red-600">
-                          -{optimizedResult.scoreBreakdown.distancePenalty.toFixed(1)}
+                          -{(optimizedResult.scoreBreakdown?.distancePenalty ?? 0).toFixed(1)}
                         </div>
                       </div>
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">疲劳惩罚</div>
                         <div className="text-lg font-semibold text-red-600">
-                          -{optimizedResult.scoreBreakdown.tiredPenalty.toFixed(1)}
+                          -{(optimizedResult.scoreBreakdown?.tiredPenalty ?? 0).toFixed(1)}
                         </div>
                       </div>
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">聚类奖励</div>
                         <div className="text-lg font-semibold text-green-600">
-                          +{optimizedResult.scoreBreakdown.clusteringBonus.toFixed(1)}
+                          +{(optimizedResult.scoreBreakdown?.clusteringBonus ?? 0).toFixed(1)}
                         </div>
                       </div>
                     </div>
@@ -583,8 +926,9 @@ export default function TripOptimizePage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {optimizedResult.schedule.map((scheduleItem, index) => {
-                      const node = optimizedResult.nodes[scheduleItem.nodeIndex];
+                    {(optimizedResult.schedule ?? []).map((scheduleItem, index) => {
+                      const node = optimizedResult.nodes?.[scheduleItem.nodeIndex];
+                      if (!node) return null;
                       return (
                         <div
                           key={index}
@@ -636,8 +980,8 @@ export default function TripOptimizePage() {
                             {node.location && (
                               <div className="text-xs text-muted-foreground flex items-center gap-1">
                                 <MapPin className="w-3 h-3" />
-                                坐标: {node.location.lat.toFixed(4)},{' '}
-                                {node.location.lng.toFixed(4)}
+                                坐标: {(node.location?.lat ?? 0).toFixed(4)},{' '}
+                                {(node.location?.lng ?? 0).toFixed(4)}
                               </div>
                             )}
                           </div>

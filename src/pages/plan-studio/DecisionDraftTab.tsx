@@ -14,6 +14,7 @@ import { useDecisionDraft } from '@/hooks/useDecisionDraft';
 import type { UserMode } from '@/types/decision-draft';
 import { ExternalLink, FileText } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 
 interface DecisionDraftTabProps {
   draftId?: string;
@@ -89,7 +90,7 @@ export default function DecisionDraftTab({
     return (
       <Card className="p-6">
         <div className="flex items-center justify-center py-12">
-          <Spinner className="w-8 h-8" />
+          <LogoLoading size={40} />
         </div>
       </Card>
     );

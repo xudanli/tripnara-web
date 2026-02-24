@@ -15,6 +15,16 @@ export type DataType =
 
 // ==================== 接口 1: 优化路线 ====================
 
+/** 优化接口支持的交通方式 */
+export type OptimizeTravelMode = 'TRANSIT' | 'WALKING' | 'DRIVING';
+
+/** 交通偏好（可选，用于老人/自驾等场景） */
+export interface TransportPreferences {
+  lessWalking?: boolean;   // 少步行（适合老人）
+  avoidHighways?: boolean; // 不走高速
+  avoidTolls?: boolean;    // 避免收费
+}
+
 export interface OptimizeRouteConfig {
   date: string; // ISO 8601 date: YYYY-MM-DD
   startTime: string; // ISO 8601 datetime
@@ -22,6 +32,10 @@ export interface OptimizeRouteConfig {
   pacingFactor?: number; // 1.0 = 标准, 1.5 = 慢节奏, 0.7 = 快节奏
   hasChildren?: boolean;
   hasElderly?: boolean;
+  /** 交通方式：不传则后端根据 hasChildren/hasElderly 自动选择 */
+  defaultTravelMode?: OptimizeTravelMode;
+  /** 交通偏好：仅传有值的字段 */
+  transportPreferences?: TransportPreferences;
   lunchWindow?: {
     start: string; // HH:mm
     end: string; // HH:mm
@@ -36,6 +50,10 @@ export interface OptimizeRouteConfig {
 export interface OptimizeRouteRequest {
   placeIds: number[];
   config: OptimizeRouteConfig;
+  /** 行程 UUID，应用优化结果时必需 */
+  tripId: string;
+  /** TripDay 的 UUID，指定要优化的日期 */
+  dayId: string;
 }
 
 export interface PlaceNode {

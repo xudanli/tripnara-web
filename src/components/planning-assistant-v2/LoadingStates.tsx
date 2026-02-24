@@ -5,15 +5,16 @@
 import { Loader2, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import { cn } from '@/lib/utils';
 
 /**
- * 加载动画组件
+ * 加载动画组件（统一使用 Logo 圆环加载）
  */
 export function LoadingSpinner({ className }: { className?: string }) {
   return (
     <div className={cn('flex items-center justify-center', className)}>
-      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <LogoLoading size={32} />
     </div>
   );
 }
@@ -119,12 +120,12 @@ export function ProgressLoading({
 }
 
 /**
- * 全屏加载状态
+ * 全屏加载状态（统一使用 Logo 圆环加载）
  */
 export function FullScreenLoading({ message }: { message?: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-full space-y-4">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <LogoLoading size={48} />
       {message && <p className="text-sm text-muted-foreground">{message}</p>}
     </div>
   );

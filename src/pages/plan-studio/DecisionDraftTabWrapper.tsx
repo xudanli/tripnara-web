@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { planningWorkbenchApi } from '@/api/planning-workbench';
 import DecisionDraftTab from './DecisionDraftTab';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface DecisionDraftTabWrapperProps {
@@ -71,7 +72,7 @@ export default function DecisionDraftTabWrapper({ tripId }: DecisionDraftTabWrap
     return (
       <Card className="p-6">
         <div className="flex items-center justify-center py-12">
-          <Spinner className="w-8 h-8" />
+          <LogoLoading size={40} />
         </div>
       </Card>
     );

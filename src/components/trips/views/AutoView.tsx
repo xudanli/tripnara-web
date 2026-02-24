@@ -19,6 +19,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import { EmptyStateCard } from '@/components/ui/empty-state-images';
 import { getPersonaIconColorClasses, getPersonaBackgroundClasses } from '@/lib/persona-colors';
 import AbuView from './AbuView';
@@ -30,7 +31,6 @@ import type {
   DrDreViewData, 
   NeptuneViewData 
 } from '@/utils/trip-data-extractors';
-import { Spinner } from '@/components/ui/spinner';
 
 interface AutoViewProps {
   trip: TripDetail;
@@ -157,9 +157,9 @@ export default function AutoView({
   // 如果数据未加载完成，显示加载状态
   if (!overallMetrics && !abuData && !drDreData && !neptuneData) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Spinner className="w-8 h-8" />
-        <span className="ml-2">加载综合数据...</span>
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <LogoLoading size={40} />
+        <span>加载综合数据...</span>
       </div>
     );
   }

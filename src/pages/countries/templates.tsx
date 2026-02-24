@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreateTripFromTemplateDialog } from '@/components/trips/CreateTripFromTemplateDialog';
@@ -314,7 +315,7 @@ export default function CountryTemplatesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Spinner className="w-8 h-8" />
+        <LogoLoading size={40} />
       </div>
     );
   }

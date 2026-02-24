@@ -10,6 +10,7 @@ import { Loader2, ArrowLeft } from 'lucide-react';
 import type { PlanVariant, ConstraintDSL } from '@/types/constraints';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 
 export default function PlanVariantsPage() {
   const { tripId } = useParams<{ tripId: string }>();
@@ -215,7 +216,7 @@ export default function PlanVariantsPage() {
       {loading && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Spinner className="w-8 h-8 mb-4" />
+            <LogoLoading size={40} className="mb-4" />
             <p className="text-muted-foreground">正在生成方案，请稍候...</p>
             <p className="text-sm text-muted-foreground mt-2">
               这可能需要 10-30 秒

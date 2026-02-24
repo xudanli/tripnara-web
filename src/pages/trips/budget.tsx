@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { BudgetPageSkeleton, BudgetSectionSkeleton } from '@/components/trips/BudgetPageSkeleton';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -498,11 +499,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
+    return <BudgetPageSkeleton />;
   }
 
   if (error || !budget) {
@@ -516,14 +513,6 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   }
 
   const usagePercent = budget ? (budget.totalSpent / budget.totalBudget) * 100 : 0;
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Spinner className="w-8 h-8" />
-      </div>
-    );
-  }
 
   if (error || !budget) {
     return (
@@ -775,7 +764,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
         <TabsContent value="details" className="space-y-4">
           {detailsLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Spinner className="w-8 h-8" />
+              <BudgetSectionSkeleton />
             </div>
           ) : details ? (
             <Card>
@@ -818,7 +807,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
         <TabsContent value="trends" className="space-y-4">
           {trendsLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Spinner className="w-8 h-8" />
+              <BudgetSectionSkeleton />
             </div>
           ) : trends ? (
             <>
@@ -884,7 +873,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
         <TabsContent value="statistics" className="space-y-4">
           {statisticsLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Spinner className="w-8 h-8" />
+              <BudgetSectionSkeleton />
             </div>
           ) : statistics ? (
             <>
@@ -974,7 +963,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
         <TabsContent value="monitor" className="space-y-4">
           {monitorLoading ? (
             <div className="flex items-center justify-center h-64">
-              <Spinner className="w-8 h-8" />
+              <BudgetSectionSkeleton />
             </div>
           ) : monitor ? (
             <>
@@ -1048,7 +1037,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
 
           {loadingConstraint ? (
             <div className="flex items-center justify-center py-8">
-              <Spinner className="w-8 h-8" />
+              <BudgetSectionSkeleton />
             </div>
           ) : (
             <div className="space-y-6 py-4">

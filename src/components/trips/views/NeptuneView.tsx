@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
+import { LogoLoading } from '@/components/common/LogoLoading';
 import type { NeptuneViewData } from '@/utils/trip-data-extractors';
 import { tripsApi } from '@/api/trips';
 import { toast } from 'sonner';
@@ -36,12 +37,12 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
   // 如果数据未加载完成，显示加载状态
   if (!neptuneData) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Spinner className="w-8 h-8" />
-        <span className="ml-2">加载修复数据...</span>
+      <div className="flex flex-col items-center justify-center p-8 gap-3">
+        <LogoLoading size={40} />
+        <span>加载修复数据...</span>
       </div>
     );
-    }
+  }
 
   // 使用真实数据
   const repairs = neptuneData.repairs || [];
