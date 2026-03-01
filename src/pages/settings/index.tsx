@@ -44,6 +44,7 @@ import {
   WearableConnectionCard,
   AcclimatizationCard,
 } from '@/components/fitness';
+import { LearningProgressCard } from '@/components/decision';
 
 // 可选的景点类型
 const ATTRACTION_TYPES = [
@@ -88,6 +89,13 @@ const ACCOMMODATION_OPTIONS = [
   { value: 'BUDGET', label: '经济' },
   { value: 'COMFORTABLE', label: '舒适' },
   { value: 'LUXURY', label: '豪华' },
+];
+
+// 出行方式选项
+const TRAVEL_MODE_OPTIONS = [
+  { value: 'PUBLIC_TRANSIT', label: '🚇 公共交通', description: '地铁、公交、火车等' },
+  { value: 'DRIVING', label: '🚗 自驾', description: '租车或自有车辆' },
+  { value: 'MIXED', label: '🔄 混合', description: '根据情况灵活选择' },
 ];
 
 // 旅行者标签选项
@@ -294,6 +302,7 @@ export default function SettingsPage() {
       pace: undefined,
       budget: undefined,
       accommodation: undefined,
+      travelMode: undefined,
     },
   });
 
@@ -368,6 +377,7 @@ export default function SettingsPage() {
           pace: preferences.travelPreferences?.pace,
           budget: preferences.travelPreferences?.budget,
           accommodation: preferences.travelPreferences?.accommodation,
+          travelMode: preferences.travelPreferences?.travelMode,
         },
       });
     }
@@ -1018,8 +1028,43 @@ export default function SettingsPage() {
                           ))}
                         </RadioGroup>
                       </div>
+
+                      {/* 出行方式 */}
+                      <div className="space-y-3">
+                        <Label>默认出行方式</Label>
+                        <p className="text-xs text-muted-foreground">
+                          用于行程评估时的默认交通方式，影响时间和距离的合理性判断
+                        </p>
+                        <RadioGroup
+                          value={formData.travelPreferences?.travelMode}
+                          onValueChange={(value: 'DRIVING' | 'PUBLIC_TRANSIT' | 'MIXED') =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              travelPreferences: { ...prev.travelPreferences, travelMode: value },
+                            }))
+                          }
+                        >
+                          {TRAVEL_MODE_OPTIONS.map((option) => (
+                            <div key={option.value} className="flex items-center space-x-2">
+                              <RadioGroupItem value={option.value} id={`travelMode-${option.value}`} />
+                              <Label
+                                htmlFor={`travelMode-${option.value}`}
+                                className="font-normal cursor-pointer"
+                              >
+                                <span>{option.label}</span>
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  {option.description}
+                                </span>
+                              </Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </div>
                     </CardContent>
                   </Card>
+
+                  {/* 系统学习进度 - 展示AI对用户偏好的学习情况 */}
+                  <LearningProgressCard />
 
                   {/* 提交按钮 */}
                   <div className="flex justify-end">

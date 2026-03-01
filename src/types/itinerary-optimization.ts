@@ -59,6 +59,8 @@ export interface OptimizeRouteRequest {
 export interface PlaceNode {
   id: number;
   name: string;
+  nameCN?: string;
+  nameEN?: string;
   category: string;
   location: {
     lat: number;
@@ -109,12 +111,32 @@ export interface Zone {
   radius: number;
 }
 
+/** 优化接口返回的冲突摘要 */
+export interface OptimizeConflictSummary {
+  before: number;
+  after: number;
+  resolved: number;
+  hasNew: boolean;
+}
+
+/** 优化接口返回的冲突详情 */
+export interface OptimizeConflictsDetail {
+  total: number;
+  conflicts: Array<Record<string, unknown>>;
+}
+
 export interface OptimizeRouteResponse {
   nodes: PlaceNode[];
   schedule: ScheduleItem[];
   happinessScore: number;
   scoreBreakdown: ScoreBreakdown;
   zones?: Zone[];
+  /** 冲突摘要（新增） */
+  conflictSummary?: OptimizeConflictSummary;
+  /** 优化前冲突详情（新增） */
+  conflictsBefore?: OptimizeConflictsDetail;
+  /** 优化后冲突详情（新增） */
+  conflictsAfter?: OptimizeConflictsDetail;
 }
 
 // ==================== 接口 2: 自然语言转参数 ====================

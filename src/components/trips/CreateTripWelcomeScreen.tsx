@@ -28,11 +28,11 @@ interface CreateTripWelcomeScreenProps {
 // 示例卡片数据（结果导向）
 const exampleCards = [
   {
-    id: 'japan-cherry',
-    emoji: '🌸',
-    title: '日本樱花季行程',
-    subtitle: '7 天 · 关东/关西 · 亲子友好',
-    prompt: '3 月和家人去日本 7 天，节奏轻松，想看樱花',
+    id: 'nz-south-island',
+    emoji: '🏔️',
+    title: '新西兰南岛自驾',
+    subtitle: '10 天 · 皇后镇/米尔福德峡湾 · 自驾游',
+    prompt: '想去新西兰南岛自驾 10 天，看雪山湖泊',
   },
   {
     id: 'iceland-aurora',

@@ -1,204 +1,288 @@
 /**
- * 决策引擎 API 类型定义
- * 对应 PRD: docs/api/decision-engine-prd.md
+ * 决策引擎 API 类型定义（用户端）
+ * 基于 API 文档 v1 规范
  */
 
-// ==================== 世界状态 ====================
+// ==================== 通用类型 ====================
 
-export interface DecisionEngineContext {
-  destination: string;
-  startDate: string; // ISO date
-  durationDays: number;
-  preferences?: {
-    pace?: 'relaxed' | 'moderate' | 'intense';
-    riskTolerance?: 'low' | 'medium' | 'high';
+export type DecisionStatus = 'pending' | 'completed' | 'failed';
+export type FeedbackType = 'rating' | 'implicit';
+export type ExplanationDetailLevel = 'brief' | 'standard' | 'detailed';
+export type ExplanationLanguage = 'zh' | 'en';
+export type TrendDirection = 'stable' | 'increasing' | 'decreasing';
+
+// ==================== 用户偏好 ====================
+
+export interface UserPreferences {
+  safety: number;
+  experienceDensity: number;
+  budgetSensitivity: number;
+}
+
+export interface DecisionConstraints {
+  maxBudget?: number;
+  mustInclude?: string[];
+  mustExclude?: string[];
+}
+
+export interface DecisionOptions {
+  includeExplanation?: boolean;
+  maxAlternatives?: number;
+  language?: ExplanationLanguage;
+}
+
+// ==================== 决策请求/响应 ====================
+
+export interface CreateDecisionRequest {
+  tripId: string;
+  preferences: UserPreferences;
+  constraints?: DecisionConstraints;
+  options?: DecisionOptions;
+}
+
+export interface PlanItem {
+  id: string;
+  name?: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: string;
+  location?: {
+    name: string;
+    lat: number;
+    lng: number;
+  };
+  type?: string;
+  cost?: number;
+}
+
+export interface SelectedPlan {
+  id: string;
+  items: PlanItem[];
+  utility: number;
+  totalDuration: string;
+  estimatedCost: number;
+}
+
+export interface AlternativePlan {
+  id: string;
+  utility: number;
+  summary: string;
+}
+
+export interface KeyFactor {
+  name: string;
+  contribution: '正向' | '负向' | 'positive' | 'negative';
+  description: string;
+  importance?: string;
+  value?: string;
+  icon?: string;
+}
+
+export interface DecisionExplanation {
+  summary: string;
+  keyFactors: KeyFactor[];
+}
+
+export interface CreateDecisionResponse {
+  decisionId: string;
+  status: DecisionStatus;
+  selectedPlan: SelectedPlan;
+  alternatives: AlternativePlan[];
+  explanation?: DecisionExplanation;
+  confidence: number;
+  processingTime: number;
+}
+
+export interface DecisionMetadata {
+  processingTime: number;
+  samplesUsed: number;
+  constraintsChecked: number;
+}
+
+export interface DecisionDetail {
+  decisionId: string;
+  status: DecisionStatus;
+  createdAt: string;
+  selectedPlan: SelectedPlan;
+  explanation?: DecisionExplanation;
+  metadata: DecisionMetadata;
+}
+
+// ==================== 方案切换 ====================
+
+export interface SelectPlanRequest {
+  planId: string;
+  reason?: string;
+}
+
+export interface SelectPlanResponse {
+  success: boolean;
+  selectedPlanId: string;
+}
+
+// ==================== 反馈 ====================
+
+export interface DecisionFeedbackRequest {
+  type: FeedbackType;
+  rating?: number;
+  comment?: string;
+  selectedOption?: string;
+  context?: {
+    completedTrip?: boolean;
+    weatherCondition?: string;
     [key: string]: unknown;
   };
+}
+
+export interface DecisionFeedbackResponse {
+  feedbackId: string;
+  received: boolean;
+  message: string;
+}
+
+export interface PreferenceFeedbackRequest {
+  type: 'implicit';
+  action: string;
+  attractionId?: string;
+  tripId?: string;
+  timestamp: string;
   [key: string]: unknown;
 }
 
-export interface DecisionEngineState {
-  context: DecisionEngineContext;
-  candidatesByDate?: Record<string, unknown[]>;
-  [key: string]: unknown;
+// ==================== 解释 ====================
+
+export interface Tradeoff {
+  dimensions: string;
+  explanation: string;
+  recommendation: string;
 }
 
-// ==================== 计划结构 ====================
-
-export interface PlanDay {
-  date?: string;
-  slots?: PlanSlot[];
-  [key: string]: unknown;
+export interface ConstraintStatus {
+  name: string;
+  status: 'satisfied' | 'violated' | 'not_applicable';
+  explanation: string;
 }
 
-export interface PlanSlot {
-  id?: string;
-  [key: string]: unknown;
-}
-
-export interface DecisionEnginePlan {
-  version?: string;
-  days: PlanDay[];
-  [key: string]: unknown;
-}
-
-// ==================== 决策日志 ====================
-
-export interface DecisionEngineLog {
-  runId?: string;
-  explanation?: string;
-  strategyMix?: Array<{ persona: string; weight?: number }>;
-  [key: string]: unknown;
-}
-
-// ==================== 生成计划 ====================
-
-export interface GeneratePlanRequest {
-  tripId: string;
-  state: DecisionEngineState;
-}
-
-export interface GeneratePlanResponseData {
-  plan: DecisionEnginePlan;
-  log: DecisionEngineLog;
-}
-
-// ==================== 修复计划 ====================
-
-export type RepairTrigger = 'weather_update' | 'closure' | 'hazard' | string;
-
-export interface RepairPlanRequest {
-  tripId: string;
-  state: DecisionEngineState;
-  plan: DecisionEnginePlan;
-  trigger: RepairTrigger;
-}
-
-export interface RepairPlanResponseData {
-  plan: DecisionEnginePlan;
-  log: DecisionEngineLog;
-  triggers?: string[];
-  changedSlotIds?: string[];
-}
-
-// ==================== 安全校验 ====================
-
-export interface ValidateSafetyRequest {
-  tripId: string;
-  plan: DecisionEnginePlan;
-  worldContext: Record<string, unknown>;
-}
-
-export interface SafetyViolationItem {
-  code?: string;
-  message?: string;
-  segmentId?: string;
-  [key: string]: unknown;
-}
-
-export interface AlternativeRouteItem {
-  routeId?: string;
-  description: string;
-  plan?: DecisionEnginePlan;
-  changes?: string[];
-  [key: string]: unknown;
-}
-
-export interface ValidateSafetyResponseData {
-  allowed: boolean;
-  violations: SafetyViolationItem[];
-  alternativeRoutes?: AlternativeRouteItem[];
-}
-
-// ==================== 约束校验 ====================
-
-export interface CheckConstraintsRequest {
-  state: DecisionEngineState;
-  plan: DecisionEnginePlan;
-}
-
-export interface ConstraintViolationItem {
-  code?: string;
-  severity?: 'error' | 'warning' | 'info';
-  message?: string;
-  [key: string]: unknown;
-}
-
-export interface InfeasibilityExplanation {
-  feasible?: boolean;
-  reasons?: Array<{ constraint: string; description: string }>;
-  summary?: string;
-  [key: string]: unknown;
-}
-
-export interface CheckConstraintsResponseData {
-  feasible: boolean;
-  violations: ConstraintViolationItem[];
-  infeasibilityExplanation?: InfeasibilityExplanation | null;
-}
-
-// ==================== 多方案生成 ====================
-
-export interface GenerateMultiplePlansRequest {
-  state: DecisionEngineState;
-  constraints?: {
-    hard_constraints?: Record<string, unknown>;
-    soft_constraints?: Record<string, unknown>;
-  };
-  count?: number;
-}
-
-export interface PlanVariantItem {
-  id: string;
-  plan: DecisionEnginePlan;
-  score?: Record<string, number>;
-  tradeoffs?: Array<{ constraint?: string; sacrificed?: string; reason?: string }>;
-  [key: string]: unknown;
-}
-
-export interface GenerateMultiplePlansResponseData {
-  variants: PlanVariantItem[];
-  log: DecisionEngineLog;
-}
-
-// ==================== 决策解释 ====================
-
-export interface ExplainPlanRequest {
-  plan: DecisionEnginePlan;
-  log?: DecisionEngineLog;
-  violations?: ConstraintViolationItem[];
-}
-
-export interface ExplainSlot {
-  slotId?: string;
-  reason?: string;
-  [key: string]: unknown;
-}
-
-export interface ExplainPlanResponseData {
+export interface RiskAssessment {
+  level: 'low' | 'medium' | 'high';
   summary: string;
-  whyThisPlan: string[];
-  slots: ExplainSlot[];
-  violations: ConstraintViolationItem[];
+  factors: Array<{
+    name: string;
+    severity: string;
+    description: string;
+  }>;
 }
 
-// ==================== 通用响应包装 ====================
-
-export interface DecisionEngineSuccessResponse<T> {
-  success: true;
-  data: T;
-  message?: string;
+export interface Recommendation {
+  action: string;
+  reasoning: string[];
+  caveats: string[];
+  nextSteps: string[];
 }
 
-export interface DecisionEngineErrorResponse {
-  success: false;
-  error: {
-    code: string | number;
-    message: string;
-    details?: unknown;
+export interface DetailedExplanation {
+  summary: string;
+  keyFactors: Array<{
+    name: string;
+    importance: string;
+    value: string;
+    description: string;
+    icon?: string;
+  }>;
+  tradeoffs: Tradeoff[];
+  constraints: ConstraintStatus[];
+  riskAssessment: RiskAssessment;
+  recommendation: Recommendation;
+}
+
+export interface NaturalLanguageExplanation {
+  text: string;
+}
+
+// ==================== 历史记录 ====================
+
+export interface DecisionHistoryQuery {
+  page?: number;
+  pageSize?: number;
+  tripId?: string;
+  status?: DecisionStatus;
+  from?: string;
+  to?: string;
+}
+
+export interface DecisionHistoryItem {
+  decisionId: string;
+  tripId: string;
+  status: DecisionStatus;
+  utility: number;
+  createdAt: string;
+  summary: string;
+}
+
+export interface Pagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+}
+
+export interface DecisionHistoryResponse {
+  items: DecisionHistoryItem[];
+  pagination: Pagination;
+}
+
+export interface PreferenceConfidence {
+  confidence: number;
+  trend: TrendDirection;
+}
+
+export interface LearningProgress {
+  totalInteractions: number;
+  preferenceLearned: {
+    safety: PreferenceConfidence;
+    experienceDensity: PreferenceConfidence;
+    budgetSensitivity: PreferenceConfidence;
+    [key: string]: PreferenceConfidence;
   };
+  recommendationAccuracy: number;
+  improvementRate: string;
 }
 
-export type DecisionEngineApiResponse<T> =
-  | DecisionEngineSuccessResponse<T>
-  | DecisionEngineErrorResponse;
+// ==================== WebSocket ====================
+
+export type WebSocketMessageType = 
+  | 'subscribe'
+  | 'unsubscribe'
+  | 'progress'
+  | 'completed'
+  | 'error';
+
+export interface WebSocketSubscribeMessage {
+  type: 'subscribe';
+  channel: string;
+  decisionId?: string;
+}
+
+export interface WebSocketProgressMessage {
+  type: 'progress';
+  stage: string;
+  progress: number;
+}
+
+export interface WebSocketCompletedMessage {
+  type: 'completed';
+  decisionId: string;
+  utility: number;
+}
+
+export interface WebSocketErrorMessage {
+  type: 'error';
+  code: string;
+  message: string;
+}
+
+export type WebSocketMessage =
+  | WebSocketSubscribeMessage
+  | WebSocketProgressMessage
+  | WebSocketCompletedMessage
+  | WebSocketErrorMessage;

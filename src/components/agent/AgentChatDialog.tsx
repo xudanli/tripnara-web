@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Minimize2, Maximize2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AgentChat from './AgentChat';
-import { NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
+import Logo from '@/components/common/Logo';
 
 interface AgentChatDialogProps {
   open: boolean;
@@ -43,7 +43,7 @@ export default function AgentChatDialog({
         <div className="bg-background border rounded-lg shadow-lg p-3">
           <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <NaraAgentChatting size={16} color="currentColor" highlightColor="currentColor" className="text-primary" />
+            <Logo variant="icon" size={16} />
             <div className="flex flex-col">
               <span className="text-sm font-medium">Nara</span>
               <span className="text-xs text-muted-foreground">你的智能旅行副驾驶</span>
@@ -111,7 +111,7 @@ export default function AgentChatDialog({
         {/* 自定义头部栏 */}
         <div className="flex-shrink-0 border-b px-4 py-3 flex items-center justify-between bg-background">
           <div className="flex items-center gap-2">
-            <NaraAgentChatting size={20} color="currentColor" highlightColor="currentColor" className="text-primary" />
+            <Logo variant="icon" size={20} />
             <div className="flex flex-col">
               <span className="text-lg font-semibold">Nara</span>
               <span className="text-xs text-muted-foreground">你的智能旅行副驾驶</span>

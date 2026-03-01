@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Calendar, DollarSign, Download, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
+import { toDateOnly } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function SharedTripPage() {
@@ -230,7 +231,7 @@ export default function SharedTripPage() {
                 <Input
                   id="import-startDate"
                   type="date"
-                  value={importData.startDate}
+                  value={toDateOnly(importData.startDate) || importData.startDate}
                   onChange={(e) =>
                     setImportData({ ...importData, startDate: e.target.value })
                   }
@@ -242,7 +243,7 @@ export default function SharedTripPage() {
                 <Input
                   id="import-endDate"
                   type="date"
-                  value={importData.endDate}
+                  value={toDateOnly(importData.endDate) || importData.endDate}
                   onChange={(e) =>
                     setImportData({ ...importData, endDate: e.target.value })
                   }

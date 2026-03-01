@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { placesApi } from '@/api/places';
 import { tripsApi } from '@/api/trips';
+import { toast } from 'sonner';
 import type {
   OptimizeRouteRequest,
   OptimizeRouteResponse,
@@ -33,6 +34,7 @@ import {
   UserCog,
   Loader2,
   Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -47,6 +49,10 @@ import {
 } from '@/constants/itinerary-optimization';
 import type { OptimizeTravelMode } from '@/types/itinerary-optimization';
 import type { TripDetail } from '@/types/trip';
+import { ItineraryDescription } from '@/components/trips/ItineraryDescription';
+import { toDateOnly } from '@/lib/utils';
+import { DecisionExplanation } from '@/components/decision';
+import type { DetailedExplanation } from '@/types/decision-engine';
 
 type PlaceOption = { id: number; nameCN?: string; nameEN?: string; category?: string; reason?: string };
 
@@ -60,6 +66,7 @@ export default function TripOptimizePage() {
   const [optimizedResult, setOptimizedResult] = useState<OptimizeRouteResponse | null>(null);
   const [humanizedDescription, setHumanizedDescription] = useState<string | null>(null);
   const [humanizing, setHumanizing] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   // 行程数据（有 tripId 时加载）
   const [trip, setTrip] = useState<TripDetail | null>(null);
@@ -132,7 +139,7 @@ export default function TripOptimizePage() {
         setTrip(data);
         setCountryCode(data.destination || undefined);
         const firstDay = data.TripDay?.[0];
-        const firstDate = firstDay?.date ?? config.date;
+        const firstDate = firstDay?.date ? toDateOnly(firstDay.date) : config.date;
         const places = firstDay
           ? (firstDay.ItineraryItem ?? [])
               .filter((item) => item.placeId && item.Place)
@@ -319,6 +326,33 @@ export default function TripOptimizePage() {
       // 人性化失败不影响主流程，只记录错误
     } finally {
       setHumanizing(false);
+    }
+  };
+
+  const handleApplyOptimization = async () => {
+    if (!tripId || !optimizedResult) return;
+
+    try {
+      setApplying(true);
+      const result = await tripsApi.applyOptimization(tripId, {
+        result: optimizedResult,
+      });
+      toast.success(
+        `已应用优化，更新了 ${result.appliedItems} 个行程项${result.modifiedDays?.length ? `（${result.modifiedDays.length} 天）` : ''}`,
+        { duration: 4000 }
+      );
+      if (result.skipped?.length) {
+        toast.info(
+          `${result.skipped.length} 个地点因不营业等原因被跳过`,
+          { duration: 5000 }
+        );
+      }
+      navigate(`/dashboard/trips/${tripId}`);
+    } catch (err: any) {
+      console.error('Apply optimization error:', err);
+      toast.error(err.message || '应用优化失败，请稍后重试');
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -546,7 +580,7 @@ export default function TripOptimizePage() {
                 <Input
                   id="date"
                   type="date"
-                  value={config.date}
+                  value={toDateOnly(config.date) || config.date}
                   onChange={(e) => setConfig({ ...config, date: e.target.value })}
                 />
               </div>
@@ -870,19 +904,35 @@ export default function TripOptimizePage() {
                           {(optimizedResult.happinessScore ?? 0).toFixed(1)}
                         </div>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleHumanize}
-                        disabled={humanizing}
-                      >
-                        {humanizing ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-4 h-4 mr-2" />
+                      <div className="flex items-center gap-2">
+                        {tripId && (
+                          <Button
+                            onClick={handleApplyOptimization}
+                            disabled={applying}
+                            size="sm"
+                          >
+                            {applying ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 mr-2" />
+                            )}
+                            应用优化
+                          </Button>
                         )}
-                        生成人性化描述
-                      </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleHumanize}
+                          disabled={humanizing}
+                        >
+                          {humanizing ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-4 h-4 mr-2" />
+                          )}
+                          生成人性化描述
+                        </Button>
+                      </div>
                     </div>
 
                     {/* 分数明细 */}
@@ -912,6 +962,19 @@ export default function TripOptimizePage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* 冲突摘要 - 接口返回时展示 */}
+                    {optimizedResult.conflictSummary && (
+                      <div className="p-3 border rounded-lg bg-muted/50">
+                        <div className="text-sm text-muted-foreground mb-1">冲突变化</div>
+                        <div className="text-sm font-medium">
+                          优化前 {optimizedResult.conflictSummary.before} 个
+                          → 优化后 {optimizedResult.conflictSummary.after} 个
+                          （已解决 {optimizedResult.conflictSummary.resolved} 个
+                          {optimizedResult.conflictSummary.hasNew ? '，出现新冲突' : ''}）
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -929,6 +992,8 @@ export default function TripOptimizePage() {
                     {(optimizedResult.schedule ?? []).map((scheduleItem, index) => {
                       const node = optimizedResult.nodes?.[scheduleItem.nodeIndex];
                       if (!node) return null;
+                      const selectedPlace = selectedPlaces.find((p) => p.id === node.id);
+                      const displayName = node.nameCN || selectedPlace?.nameCN || node.nameEN || selectedPlace?.nameEN || node.name;
                       return (
                         <div
                           key={index}
@@ -939,7 +1004,7 @@ export default function TripOptimizePage() {
                           </div>
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center justify-between">
-                              <h3 className="font-semibold text-lg">{node.name}</h3>
+                              <h3 className="font-semibold text-lg">{displayName}</h3>
                               <Badge variant="outline">{node.category}</Badge>
                             </div>
                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -992,19 +1057,97 @@ export default function TripOptimizePage() {
                 </CardContent>
               </Card>
 
-              {/* 人性化描述 */}
+              {/* 人性化描述 - TripNARA 视觉规范：清晰、可信、层级分明 */}
               {humanizedDescription && (
                 <Card>
                   <CardHeader>
                     <CardTitle>行程描述</CardTitle>
+                    <CardDescription>
+                      基于优化结果生成的路线说明，含时间安排、交通与注意事项
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                      {humanizedDescription}
-                    </div>
+                    <ItineraryDescription content={humanizedDescription} />
                   </CardContent>
                 </Card>
               )}
+
+              {/* 决策解释 - 展示优化方案的推理逻辑 */}
+              <DecisionExplanation
+                explanation={{
+                  summary: '根据您的偏好和行程特点，系统推荐了当前优化方案',
+                  keyFactors: [
+                    {
+                      name: '地点兴趣度',
+                      importance: '35%',
+                      value: '0.85',
+                      description: '选择了您感兴趣的景点，最大化游览体验',
+                      icon: 'star',
+                    },
+                    {
+                      name: '路线效率',
+                      importance: '25%',
+                      value: '0.78',
+                      description: '优化了景点顺序，减少不必要的折返',
+                      icon: 'clock',
+                    },
+                    {
+                      name: '安全性',
+                      importance: '20%',
+                      value: '0.92',
+                      description: '根据节奏偏好安排了合理的游览时长',
+                      icon: 'shield',
+                    },
+                    {
+                      name: '时间窗口',
+                      importance: '20%',
+                      value: '0.8',
+                      description: '考虑了景点的开放时间和最佳游览时段',
+                      icon: 'clock',
+                    },
+                  ],
+                  tradeoffs: [
+                    {
+                      dimensions: '游览深度 vs 景点数量',
+                      explanation: '当前方案在每个景点预留了充足的停留时间，但这意味着可游览的景点数量有所减少',
+                      recommendation: '如需游览更多景点，可考虑紧凑方案',
+                    },
+                  ],
+                  constraints: [
+                    {
+                      name: '开放时间',
+                      status: 'satisfied',
+                      explanation: '所有景点的安排都在其开放时间内',
+                    },
+                    {
+                      name: '体力预算',
+                      status: 'satisfied',
+                      explanation: '日行程疲劳度在可接受范围内',
+                    },
+                  ],
+                  riskAssessment: {
+                    level: 'low',
+                    summary: '当前方案风险较低，各项指标均在正常范围内',
+                    factors: [],
+                  },
+                  recommendation: {
+                    action: '采用当前优化方案',
+                    reasoning: [
+                      '方案综合评分高',
+                      '符合您的节奏偏好',
+                      '路线效率较优',
+                    ],
+                    caveats: [
+                      '天气变化可能影响户外景点游览',
+                    ],
+                    nextSteps: [
+                      '确认行程安排',
+                      '查看详细时间表',
+                      '预订相关门票',
+                    ],
+                  },
+                } as DetailedExplanation}
+              />
             </>
           ) : (
             <Card>

@@ -28,7 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, Check, ChevronsUpDown, MapPin, ChevronDown, Settings2, AlertTriangle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, toDateOnly } from '@/lib/utils';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   CASH_HEAVY: '现金为主',
@@ -1325,7 +1325,7 @@ export default function NewTripPage() {
                     <Input
                       id="startDate"
                       type="date"
-                      value={formData.startDate}
+                      value={toDateOnly(formData.startDate) || formData.startDate}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                       required
                     />
@@ -1335,7 +1335,7 @@ export default function NewTripPage() {
                     <Input
                       id="endDate"
                       type="date"
-                      value={formData.endDate}
+                      value={toDateOnly(formData.endDate) || formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                       required
                     />

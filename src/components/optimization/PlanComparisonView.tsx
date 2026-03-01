@@ -37,26 +37,33 @@ import {
 
 // ==================== 配置 ====================
 
-/** 8 维展示配置（兼容 weight key 与 breakdown key） */
+/** 8 维展示配置 */
 const DIMENSION_DISPLAY: Record<string, { label: string; description: string }> = {
+  // weights 字段
   safety: { label: '安全', description: '路线安全性评估' },
+  experienceDensity: { label: '体验密度', description: '旅行体验质量' },
+  philosophyAlignment: { label: '哲学契合', description: '与旅行理念的契合度' },
+  timeSlack: { label: '时间余量', description: '时间缓冲充裕度' },
+  fatigueRisk: { label: '疲劳风险', description: '疲劳风险控制' },
+  weatherRisk: { label: '天气风险', description: '天气风险应对' },
+  budgetOverrun: { label: '预算超支', description: '预算合理性' },
+  pacingVariance: { label: '节奏波动', description: '节奏稳定性' },
+  // breakdown 字段
   safetyScore: { label: '安全', description: '路线安全性评估' },
-  experience: { label: '体验', description: '旅行体验质量' },
   experienceScore: { label: '体验', description: '旅行体验质量' },
-  philosophy: { label: '哲学', description: '与旅行理念的契合度' },
   philosophyScore: { label: '哲学', description: '与旅行理念的契合度' },
-  timeSlack: { label: '余量', description: '时间缓冲充裕度' },
-  timeSlackScore: { label: '余量', description: '时间缓冲充裕度' },
-  fatigueRisk: { label: '疲劳', description: '疲劳风险控制' },
-  fatigueRiskScore: { label: '疲劳', description: '疲劳风险控制' },
-  weatherRisk: { label: '天气', description: '天气风险应对' },
-  weatherRiskScore: { label: '天气', description: '天气风险应对' },
-  budgetRisk: { label: '预算', description: '预算合理性' },
-  budgetScore: { label: '预算', description: '预算合理性' },
+  timeSlackScore: { label: '时间余量', description: '时间缓冲充裕度' },
+  fatigueRiskPenalty: { label: '疲劳风险', description: '疲劳风险控制' },
+  weatherRiskPenalty: { label: '天气风险', description: '天气风险应对' },
+  budgetOverrunPenalty: { label: '预算超支', description: '预算合理性' },
+  pacingVariancePenalty: { label: '节奏波动', description: '节奏稳定性' },
+  // weightedScores 字段
+  experience: { label: '体验', description: '旅行体验质量' },
+  philosophy: { label: '哲学', description: '与旅行理念的契合度' },
+  fatigue: { label: '疲劳', description: '疲劳风险控制' },
+  weather: { label: '天气', description: '天气风险应对' },
   budget: { label: '预算', description: '预算合理性' },
-  crowdAvoidance: { label: '避流', description: '人流避开程度' },
-  crowdScore: { label: '避流', description: '人流避开程度' },
-  crowd: { label: '避流', description: '人流避开程度' },
+  pacing: { label: '节奏', description: '节奏稳定性' },
 };
 
 // ==================== 子组件 ====================

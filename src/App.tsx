@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import WebsiteLayout from './components/layout/WebsiteLayout';
 import DashboardLayout from './components/layout/DashboardLayout';
@@ -56,6 +56,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Legacy DashboardLayout has been replaced by the new DashboardLayout component
+
+/** 将 /trips/:id 重定向到 /dashboard/trips/:id，保留 id 参数 */
+function RedirectTripsId() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/dashboard/trips/${id}` : '/dashboard/trips'} replace />;
+}
 
 function App() {
   return (
@@ -132,6 +138,8 @@ function App() {
 
         {/* Legacy routes redirect to dashboard */}
         <Route path="/trips" element={<Navigate to="/dashboard/trips" replace />} />
+        <Route path="/trips/optimize" element={<Navigate to="/dashboard/trips/optimize" replace />} />
+        <Route path="/trips/:id" element={<RedirectTripsId />} />
         <Route path="/places" element={<Navigate to="/dashboard/places" replace />} />
         <Route path="/hotels" element={<Navigate to="/dashboard/hotels" replace />} />
         </Routes>

@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { Send, User, ExternalLink, Brain, History } from 'lucide-react';
-import { NaraAgentIcon, NaraAgentThinking, NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
+import Logo from '@/components/common/Logo';
 import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { toast } from 'sonner';
@@ -272,7 +272,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
     <Card className="sticky top-4 h-[calc(100vh-2rem)] flex flex-col">
       <CardHeader className="flex-shrink-0">
         <CardTitle className="flex items-center gap-2">
-          <NaraAgentChatting size={20} color="currentColor" highlightColor="currentColor" className="text-primary" />
+          <Logo variant="icon" size={20} />
           智能助手
         </CardTitle>
         <CardDescription>
@@ -286,7 +286,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
             {messages.length === 0 ? (
               <div className="text-center text-sm text-muted-foreground py-8">
                 <div className="flex justify-center mb-2">
-                  <NaraAgentChatting size={32} color="currentColor" highlightColor="currentColor" className="text-muted-foreground" />
+                  <Logo variant="icon" size={32} />
                 </div>
                 <p>有什么可以帮助你的吗？</p>
                 <p className="text-xs mt-2">你可以问我关于行程规划的任何问题</p>
@@ -295,13 +295,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
               messages.map((message) => {
                 // 根据消息状态选择合适的插画
                 const getAgentIcon = () => {
-                  if (!message.status || message.status === 'done' || message.status === 'failed') {
-                    return <NaraAgentIcon size={16} color="currentColor" className="text-primary" />;
-                  }
-                  if (message.status === 'thinking' || message.status === 'browsing' || message.status === 'verifying' || message.status === 'repairing') {
-                    return <NaraAgentThinking size={16} color="currentColor" highlightColor="currentColor" className="text-primary" />;
-                  }
-                  return <NaraAgentChatting size={16} color="currentColor" highlightColor="currentColor" className="text-primary" />;
+                  return <Logo variant="icon" size={16} />;
                 };
 
                 return (
@@ -349,7 +343,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 text-xs px-2"
-                                onClick={() => navigate(`/trips/${activeTripId}`)}
+                                onClick={() => navigate(`/dashboard/trips/${activeTripId}`)}
                               >
                                 查看详情 <ExternalLink className="w-3 h-3 ml-1" />
                               </Button>
@@ -389,7 +383,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
             {loading && (
               <div className="flex gap-3 justify-start">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <NaraAgentThinking size={16} color="currentColor" highlightColor="currentColor" className="text-primary" />
+                  <Logo variant="icon" size={16} />
                 </div>
                 <div className="bg-muted rounded-lg px-4 py-2">
                   <Spinner className="w-4 h-4" />

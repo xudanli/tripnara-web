@@ -61,10 +61,14 @@ export default function DashboardLayout() {
   const { isAuthenticated } = useAuth();
   const isMobile = useIsMobile();
 
-  // 从当前路径或查询参数提取 tripId
+  // 从当前路径或查询参数提取 tripId（排除保留路径：optimize、new、generate 等）
   const tripIdMatch = location.pathname.match(/\/trips\/([^/]+)/);
   const queryTripId = searchParams.get('tripId') || searchParams.get('tripid');
-  const activeTripId = tripIdMatch ? tripIdMatch[1] : queryTripId;
+  const rawTripId = tripIdMatch ? tripIdMatch[1] : queryTripId;
+  const RESERVED_TRIP_PATHS = ['optimize', 'new', 'generate', 'decision', 'what-if', 'collected', 'featured'];
+  const activeTripId = rawTripId && !RESERVED_TRIP_PATHS.includes(rawTripId) && !rawTripId.startsWith(':')
+    ? rawTripId
+    : queryTripId || null;
   
   // 在 Dashboard 页面时，加载最近行程用于显示上下文侧边栏
   const isDashboardPage = location.pathname === '/dashboard';
@@ -136,8 +140,8 @@ export default function DashboardLayout() {
       return 'execute';
     }
     
-    // 行程详情页
-    if (tripIdMatch && !path.includes('/trips/new') && !path.includes('/trips/generate')) {
+    // 行程详情页（仅当路径为有效行程 ID 时，排除 optimize/new/generate 等）
+    if (activeTripId && tripIdMatch && !path.includes('/trips/new') && !path.includes('/trips/generate')) {
       return 'trip_detail_page';
     }
     
@@ -152,7 +156,7 @@ export default function DashboardLayout() {
     }
     
     return undefined;
-  }, [location.pathname, tripIdMatch]);
+  }, [location.pathname, tripIdMatch, activeTripId]);
 
   const drawerContextValue: DrawerContextType = {
     drawerOpen,

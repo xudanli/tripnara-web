@@ -9,62 +9,74 @@
 // ==================== 效用函数权重 ====================
 
 /**
- * 8 维目标函数权重配置
+ * 8 维目标函数权重配置（请求用）
  * 所有权重之和应为 1.0
  */
 export interface ObjectiveFunctionWeights {
   /** 安全权重 (默认 0.25) */
   safety: number;
-  /** 体验权重 (默认 0.20) */
-  experience: number;
+  /** 体验密度权重 (默认 0.20) */
+  experienceDensity: number;
   /** 哲学契合度权重 (默认 0.15) */
-  philosophy: number;
+  philosophyAlignment: number;
   /** 时间余量权重 (默认 0.10) */
   timeSlack: number;
   /** 疲劳风险权重 (默认 0.10) */
   fatigueRisk: number;
   /** 天气风险权重 (默认 0.10) */
   weatherRisk: number;
-  /** 预算风险权重 (默认 0.05) */
-  budgetRisk: number;
-  /** 避人流权重 (默认 0.05) */
-  crowdAvoidance: number;
+  /** 预算超支权重 (默认 0.05) */
+  budgetOverrun: number;
+  /** 节奏波动权重 (默认 0.05) */
+  pacingVariance: number;
 }
 
 /** 默认权重配置 */
 export const DEFAULT_WEIGHTS: ObjectiveFunctionWeights = {
   safety: 0.25,
-  experience: 0.20,
-  philosophy: 0.15,
+  experienceDensity: 0.20,
+  philosophyAlignment: 0.15,
   timeSlack: 0.10,
   fatigueRisk: 0.10,
   weatherRisk: 0.10,
-  budgetRisk: 0.05,
-  crowdAvoidance: 0.05,
+  budgetOverrun: 0.05,
+  pacingVariance: 0.05,
 };
 
 /** 8 维统一配置：权重 key -> 展示 label（用于权重滑块、雷达图、对比图等） */
 export const DIMENSION_LABELS: Record<keyof ObjectiveFunctionWeights, string> = {
   safety: '安全',
-  experience: '体验',
-  philosophy: '哲学',
-  timeSlack: '余量',
-  fatigueRisk: '疲劳',
-  weatherRisk: '天气',
-  budgetRisk: '预算',
-  crowdAvoidance: '避流',
+  experienceDensity: '体验密度',
+  philosophyAlignment: '哲学契合',
+  timeSlack: '时间余量',
+  fatigueRisk: '疲劳风险',
+  weatherRisk: '天气风险',
+  budgetOverrun: '预算超支',
+  pacingVariance: '节奏波动',
 };
 
-/** breakdown 的 key -> 权重的 key 映射（API 返回 budgetScore/crowdScore，权重用 budgetRisk/crowdAvoidance） */
+/** breakdown 的 key -> 权重的 key 映射 */
 export const BREAKDOWN_TO_WEIGHT_KEY: Record<string, keyof ObjectiveFunctionWeights> = {
   safetyScore: 'safety',
-  experienceScore: 'experience',
-  philosophyScore: 'philosophy',
+  experienceScore: 'experienceDensity',
+  philosophyScore: 'philosophyAlignment',
   timeSlackScore: 'timeSlack',
-  fatigueRiskScore: 'fatigueRisk',
-  weatherRiskScore: 'weatherRisk',
-  budgetScore: 'budgetRisk',
-  crowdScore: 'crowdAvoidance',
+  fatigueRiskPenalty: 'fatigueRisk',
+  weatherRiskPenalty: 'weatherRisk',
+  budgetOverrunPenalty: 'budgetOverrun',
+  pacingVariancePenalty: 'pacingVariance',
+};
+
+/** weightedScores 的 key -> 权重的 key 映射 */
+export const WEIGHTED_TO_WEIGHT_KEY: Record<string, keyof ObjectiveFunctionWeights> = {
+  safety: 'safety',
+  experience: 'experienceDensity',
+  philosophy: 'philosophyAlignment',
+  timeSlack: 'timeSlack',
+  fatigue: 'fatigueRisk',
+  weather: 'weatherRisk',
+  budget: 'budgetOverrun',
+  pacing: 'pacingVariance',
 };
 
 // ==================== 世界模型上下文 (V2) ====================
@@ -191,25 +203,39 @@ export interface EvaluatePlanRequest {
 
 /**
  * 评估响应
+ * POST /v2/user/optimization/evaluate
  */
 export interface EvaluatePlanResponse {
   /** 总效用值 (0-1) */
   totalUtility: number;
-  /** 各维度得分 */
+  /** 效用分解 */
   breakdown: {
     safetyScore: number;
     experienceScore: number;
     philosophyScore: number;
     timeSlackScore: number;
-    fatigueRiskScore: number;
-    weatherRiskScore: number;
-    budgetScore: number;
-    crowdScore: number;
+    fatigueRiskPenalty: number;
+    weatherRiskPenalty: number;
+    budgetOverrunPenalty: number;
+    pacingVariancePenalty: number;
   };
+  /** 加权分数 */
+  weightedScores: {
+    safety: number;
+    experience: number;
+    philosophy: number;
+    timeSlack: number;
+    fatigue: number;
+    weather: number;
+    budget: number;
+    pacing: number;
+  };
+  /** 约束满足情况 */
+  constraints?: Record<string, unknown>;
   /** 实际使用的权重；缺省时前端用默认值 */
   weightsUsed?: ObjectiveFunctionWeights;
   /** 评估时间 */
-  timestamp: string;
+  timestamp?: string;
 }
 
 /**
@@ -262,13 +288,52 @@ export interface OptimizationChange {
 
 /**
  * 优化响应
+ * POST /v2/user/optimization/optimize
  */
 export interface OptimizePlanResponse {
-  originalPlan: RoutePlanDraft;
-  optimizedPlan: RoutePlanDraft;
-  changes: OptimizationChange[];
-  finalUtility: number;
-  processingTimeMs: number;
+  /** 优化后的计划 */
+  plan: RoutePlanDraft | null;
+  /** 是否允许继续 */
+  allowed: boolean;
+  /** 最终动作 */
+  finalAction: 'ALLOW' | 'REJECT' | 'ADJUST' | 'REPLACE';
+  /** 目标函数评估 */
+  objectiveEvaluation?: Record<string, unknown>;
+  /** Abu 安全评估 */
+  abuResult?: Record<string, unknown>;
+  /** Dre 优化结果 */
+  dreResult?: Record<string, unknown>;
+  /** Neptune 修复结果 */
+  neptuneResult?: Record<string, unknown>;
+  /** 优化摘要 */
+  summary: {
+    originalUtility: number;
+    finalUtility: number;
+    improvementPct: number;
+    safetyScore: number;
+    constraintSatisfaction: number;
+    confidence: number;
+  };
+  /** 需用户确认的点 */
+  userJudgmentPoints?: Array<{
+    id: string;
+    question: string;
+    options: string[];
+    recommendation: string;
+  }>;
+  /** 决策日志 */
+  logs: DecisionLogEntry[];
+}
+
+/**
+ * 决策日志条目
+ */
+export interface DecisionLogEntry {
+  timestamp?: string;
+  actor?: string;
+  action?: string;
+  reason?: string;
+  details?: Record<string, unknown>;
 }
 
 // ==================== 风险评估 ====================
@@ -298,23 +363,39 @@ export interface RiskFactor {
 
 /**
  * 风险评估响应
+ * POST /v2/user/optimization/risk-assessment
  */
 export interface RiskAssessmentResponse {
   /** 期望效用 */
   expectedUtility: number;
-  /** 95% 置信区间 */
+  /** 可行性概率 */
+  feasibilityProbability: number;
+  /** 置信区间 */
   confidenceInterval: {
     lower: number;
     upper: number;
+    level: number;
   };
-  /** 可行概率 P(feasible) */
-  feasibilityProbability: number;
-  /** 下行风险 P(U < threshold) */
+  /** 各维度期望值 */
+  dimensionExpectations: {
+    safety: number;
+    experience: number;
+    philosophy: number;
+    timeSlack: number;
+    fatigueRisk: number;
+    weatherRisk: number;
+    budgetOverrun: number;
+    pacingVariance: number;
+  };
+  /** 风险指标 */
+  riskMetrics: {
+    downRiskProbability: number;
+    worstCase: number;
+    bestCase: number;
+    volatility: number;
+  };
+  /** 下行风险 */
   downsideRisk: number;
-  /** 风险因素列表 */
-  riskFactors: RiskFactor[];
-  /** 建议 */
-  recommendation: string;
 }
 
 // ==================== 三守护者协商 ====================
@@ -349,7 +430,7 @@ export interface NegotiationRequest {
 
 /**
  * 协商响应
- * POST /api/v2/user/optimization/negotiation
+ * POST /v2/user/optimization/negotiation
  */
 export interface NegotiationResponse {
   /** 决策结果：批准 / 附条件批准 / 拒绝 / 需人工决策 */
@@ -382,6 +463,14 @@ export interface NegotiationResponse {
     /** 弃权票数 */
     abstain: number;
   };
+  /** 疲劳预测（按天） */
+  fatiguePrediction?: Array<{
+    dayIndex: number;
+    fatigueScore: number;
+    riskLevel: string;
+    recommendation: string;
+    confidence?: number;
+  }>;
 }
 
 // ==================== 反馈系统 ====================

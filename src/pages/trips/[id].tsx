@@ -98,6 +98,8 @@ import { formatCurrency } from '@/utils/format';
 // V2 优化组件
 import { OptimizationDashboard, FeedbackForm } from '@/components/optimization';
 import { useSubmitFeedback } from '@/hooks/useOptimizationV2';
+// 决策引擎组件
+import { DecisionFeedbackForm } from '@/components/decision';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Dialog,
@@ -503,15 +505,26 @@ export default function TripDetailPage() {
     return countryCodes.includes('IS');
   }, [trip?.destination]);
 
+  // 无效的行程 ID（保留路径或路由占位符）→ 重定向到行程列表
+  const RESERVED_TRIP_PATHS = ['optimize', 'new', 'generate', 'decision', 'what-if', 'collected', 'featured'];
+  const isInvalidTripId = !id || RESERVED_TRIP_PATHS.includes(id) || id.startsWith(':');
+
+  useEffect(() => {
+    if (isInvalidTripId) {
+      navigate('/dashboard/trips', { replace: true });
+      return;
+    }
+  }, [id, isInvalidTripId, navigate]);
+
   useEffect(() => {
     console.log('[TripDetail] useEffect 执行:', { id, hasId: !!id, idType: typeof id });
-    if (id) {
+    if (id && !isInvalidTripId) {
       console.log('[TripDetail] useEffect: id存在，准备调用loadTrip');
       loadTrip();
     } else {
-      console.warn('[TripDetail] useEffect: id为空，不调用loadTrip');
+      console.warn('[TripDetail] useEffect: id为空或无效，不调用loadTrip');
     }
-  }, [id]);
+  }, [id, isInvalidTripId]);
 
   // 处理从其他页面传递过来的状态（如侧边栏的操作）
   useEffect(() => {
@@ -2764,7 +2777,7 @@ export default function TripDetailPage() {
           </TabsContent>
 
           <TabsContent value="insights" className="mt-0">
-            <div className="p-6">
+            <div className="p-6 space-y-6">
             <Card>
               <CardHeader>
                   <CardTitle>复盘报告</CardTitle>
@@ -2818,6 +2831,16 @@ export default function TripDetailPage() {
                   </Button>
               </CardContent>
             </Card>
+
+            {/* 决策反馈 - 帮助系统学习用户偏好 */}
+            {id && (
+              <DecisionFeedbackForm
+                decisionId={id}
+                onSuccess={() => {
+                  toast.success('感谢您的反馈，这将帮助我们提供更好的推荐');
+                }}
+              />
+            )}
           </div>
         </TabsContent>
 

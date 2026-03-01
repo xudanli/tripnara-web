@@ -47,15 +47,15 @@ export const itineraryOptimizationApi = {
   /**
    * 优化路线（节奏感算法）
    * POST /itinerary-optimization/optimize
-   * 接口 47: 使用 4 维平衡算法优化路线顺序，生成最优的行程安排
-   * 算法特性：空间聚类、节奏控制、生物钟锚定、容错与留白
+   * 响应结构：{ success, data: { optimization: RouteSolution, applied } }
+   * 前端使用 data.optimization（含 happinessScore、scoreBreakdown、nodes、schedule）
    */
   optimize: async (data: OptimizeRouteRequest): Promise<OptimizeRouteResponse> => {
-    const response = await apiClient.post<ApiResponseWrapper<OptimizeRouteResponse>>(
-      '/itinerary-optimization/optimize',
-      data
-    );
-    return handleResponse(response);
+    const response = await apiClient.post<
+      ApiResponseWrapper<{ optimization: OptimizeRouteResponse; applied?: unknown }>
+    >('/itinerary-optimization/optimize', data);
+    const raw = handleResponse(response);
+    return raw?.optimization ?? raw;
   },
 
   /**

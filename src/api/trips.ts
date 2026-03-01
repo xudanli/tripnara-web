@@ -80,6 +80,10 @@ import type {
   CreateTripShareRequest,
   NearbyPoiItem,
   ConflictsResponse,
+  ResolveConflictsRequest,
+  ResolveConflictsResponse,
+  AssessTripRequest,
+  AssessTripResponse,
   UpdateIntentRequest,
   IntentResponse,
   DayMetricsResponse,
@@ -1208,6 +1212,36 @@ export const tripsApi = {
     const response = await apiClient.get<ApiResponseWrapper<ConflictsResponse>>(
       `/trips/${id}/conflicts`,
       { params }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 一键解决冲突
+   * POST /trips/:id/conflicts/resolve
+   */
+  resolveConflicts: async (
+    id: string,
+    data: ResolveConflictsRequest = {}
+  ): Promise<ResolveConflictsResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<ResolveConflictsResponse>>(
+      `/trips/${id}/conflicts/resolve`,
+      data
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 每日行程合理性评估
+   * POST /trips/:id/assess
+   */
+  assessTrip: async (
+    id: string,
+    data: AssessTripRequest = {}
+  ): Promise<AssessTripResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<AssessTripResponse>>(
+      `/trips/${id}/assess`,
+      data
     );
     return handleResponse(response);
   },

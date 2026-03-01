@@ -232,8 +232,11 @@ export function OptimizationDashboard({
         ...(tripId && { tripId, trip_id: tripId }),
       });
       setOptimized(result);
-      onOptimized?.(result.optimizedPlan);
-      toast.success(`优化完成，效用提升 ${Math.round((result.finalUtility - (evaluation?.totalUtility ?? 0)) * 100)}%`);
+      if (result.plan) {
+        onOptimized?.(result.plan);
+      }
+      const improvementPct = result.summary?.improvementPct ?? 0;
+      toast.success(`优化完成，效用提升 ${Math.round(improvementPct)}%`);
     } catch (error) {
       toast.error('优化失败');
     }
@@ -242,7 +245,7 @@ export function OptimizationDashboard({
   /** 执行协商 */
   const handleNegotiate = async () => {
     try {
-      const targetPlan = optimized?.optimizedPlan ?? plan;
+      const targetPlan = optimized?.plan ?? plan;
       const result = await negotiationMutation.mutateAsync({
         plan: targetPlan,
         world,
@@ -258,7 +261,7 @@ export function OptimizationDashboard({
   /** 执行风险评估 */
   const handleRiskAssessment = async () => {
     try {
-      const targetPlan = optimized?.optimizedPlan ?? plan;
+      const targetPlan = optimized?.plan ?? plan;
       const result = await riskMutation.mutateAsync({
         plan: targetPlan,
         world,
@@ -304,7 +307,7 @@ export function OptimizationDashboard({
   const handleTeamNegotiate = async () => {
     if (!effectiveTeamId) return;
     try {
-      const targetPlan = optimized?.optimizedPlan ?? plan;
+      const targetPlan = optimized?.plan ?? plan;
       const result = await teamNegotiationMutation.mutateAsync({
         plan: targetPlan,
         world,
@@ -319,11 +322,11 @@ export function OptimizationDashboard({
 
   /** 方案对比（原计划 vs 优化后） */
   const handleCompare = async () => {
-    if (!optimized) return;
+    if (!optimized?.plan) return;
     try {
       const result = await compareMutation.mutateAsync({
         planA: plan,
-        planB: optimized.optimizedPlan,
+        planB: optimized.plan,
         world,
       });
       setComparison(result);
@@ -341,7 +344,9 @@ export function OptimizationDashboard({
       setOptimized(result.optimization);
       setRiskAssessment(result.riskAssessment);
       setNegotiation(result.negotiation);
-      onOptimized?.(result.optimization.optimizedPlan);
+      if (result.optimization.plan) {
+        onOptimized?.(result.optimization.plan);
+      }
       toast.success('完整优化流程完成');
     } catch (error) {
       toast.error('优化流程失败');
@@ -580,15 +585,14 @@ export function OptimizationDashboard({
                 evaluation={evaluation}
                 compareEvaluation={optimized ? {
                   ...evaluation,
-                  totalUtility: optimized.finalUtility,
-                  // 简化示例，实际需要完整的 breakdown
+                  totalUtility: optimized.summary?.finalUtility ?? evaluation.totalUtility,
                 } : undefined}
                 title="原计划评估"
                 showWeights
               />
               {optimized && (
                 <>
-                  {(optimized.changes || []).length === 0 ? (
+                  {!optimized.plan ? (
                     <Card className="lg:col-span-2">
                       <CardContent className="py-8 text-center">
                         <p className="text-muted-foreground">当前计划已较优</p>
@@ -597,19 +601,19 @@ export function OptimizationDashboard({
                   ) : (
                     <PlanEvaluationCard
                       evaluation={{
-                        totalUtility: optimized.finalUtility ?? evaluation.totalUtility,
+                        totalUtility: optimized.summary?.finalUtility ?? evaluation.totalUtility,
                         breakdown: evaluation.breakdown,
+                        weightedScores: evaluation.weightedScores,
                         weightsUsed: evaluation.weightsUsed,
-                        timestamp: new Date().toISOString(),
                       }}
                       title="优化后计划"
-                      description={`优化耗时 ${optimized.processingTimeMs || 0}ms，共 ${(optimized.changes || []).length} 项变更`}
+                      description={`效用提升 ${optimized.summary?.improvementPct?.toFixed(1) ?? 0}%，共 ${optimized.logs?.length ?? 0} 项变更`}
                     />
                   )}
-                  {(optimized.changes || []).length > 0 && (
+                  {optimized.plan && (
                   <div className="lg:col-span-2 flex flex-wrap justify-center gap-3">
                     <Button
-                      onClick={() => onOptimized?.(optimized.optimizedPlan)}
+                      onClick={() => optimized.plan && onOptimized?.(optimized.plan)}
                       className="gap-2"
                     >
                       <Zap className="h-4 w-4" />
@@ -634,12 +638,12 @@ export function OptimizationDashboard({
                             evaluationA={evaluation}
                             evaluationB={{
                               ...evaluation,
-                              totalUtility: optimized.finalUtility,
+                              totalUtility: optimized.summary?.finalUtility ?? evaluation.totalUtility,
                             }}
                             labelA="原计划"
                             labelB="优化后"
                             onSelectPlan={(p) => {
-                              if (p === 'B') onOptimized?.(optimized.optimizedPlan);
+                              if (p === 'B' && optimized.plan) onOptimized?.(optimized.plan);
                               setCompareDialogOpen(false);
                             }}
                           />

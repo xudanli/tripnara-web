@@ -334,6 +334,8 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
       'PACING_ISSUE': '节奏问题',
       'FATIGUE_WARNING': '疲劳警告',
       'BUFFER_INSUFFICIENT': '缓冲不足',
+      'TRANSPORT_INSUFFICIENT': '交通不足',
+      'DUPLICATE_ITEM': '行程项重复',
       'ADJUST': '需要调整',
       'PACING_ADJUSTMENT': '节奏调整',
       '疲劳度过高': '疲劳度过高',

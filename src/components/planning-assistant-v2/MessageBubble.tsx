@@ -3,8 +3,9 @@
  */
 
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { User, Sparkles, MessageCircle, CalendarIcon } from 'lucide-react';
+import { cn, toDateOnly } from '@/lib/utils';
+import { User, MessageCircle, CalendarIcon } from 'lucide-react';
+import Logo from '@/components/common/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
@@ -38,8 +39,8 @@ function ClarificationPrompt({
   className?: string;
 }) {
   const suggestedDates = clarificationNeeded.suggestedDates;
-  const [checkIn, setCheckIn] = useState(suggestedDates?.checkIn ?? '');
-  const [checkOut, setCheckOut] = useState(suggestedDates?.checkOut ?? '');
+  const [checkIn, setCheckIn] = useState(() => toDateOnly(suggestedDates?.checkIn) ?? '');
+  const [checkOut, setCheckOut] = useState(() => toDateOnly(suggestedDates?.checkOut) ?? '');
 
   const hint = getClarificationHint(clarificationNeeded.type);
   const text = clarificationNeeded.messageCN || clarificationNeeded.message;
@@ -109,7 +110,7 @@ function ClarificationPrompt({
               <label className="text-xs font-medium text-amber-800 block mb-1">入住</label>
               <Input
                 type="date"
-                value={checkIn}
+                value={toDateOnly(checkIn) || checkIn}
                 onChange={(e) => setCheckIn(e.target.value)}
                 min={today}
                 className="h-8 text-xs border-amber-300 bg-white"
@@ -119,7 +120,7 @@ function ClarificationPrompt({
               <label className="text-xs font-medium text-amber-800 block mb-1">退房</label>
               <Input
                 type="date"
-                value={checkOut}
+                value={toDateOnly(checkOut) || checkOut}
                 onChange={(e) => setCheckOut(e.target.value)}
                 min={checkIn || today}
                 className="h-8 text-xs border-amber-300 bg-white"
@@ -181,13 +182,13 @@ export function MessageBubble({
           'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
           isUser
             ? 'bg-primary text-primary-foreground'
-            : 'bg-gradient-to-br from-violet-500 to-purple-600 text-white'
+            : 'bg-white'
         )}
       >
         {isUser ? (
           <User className="w-4 h-4" />
         ) : (
-          <Sparkles className="w-4 h-4" />
+          <Logo variant="icon" size={24} />
         )}
       </div>
 

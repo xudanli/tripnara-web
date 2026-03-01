@@ -81,7 +81,6 @@ export const optimizationApi = {
   /**
    * 一键优化计划
    * 后端需要 plan+world 或 tripId/trip_id，此处确保传 tripId 以兼容后端校验
-   * 响应映射：后端可能返回 plan/logs/summary.finalUtility，映射为 optimizedPlan/changes/finalUtility
    */
   async optimize(request: OptimizePlanRequest): Promise<OptimizePlanResponse> {
     const tripId = request.tripId ?? request.trip_id ?? request.plan?.tripId;
@@ -89,19 +88,11 @@ export const optimizationApi = {
       ...request,
       ...(tripId ? { tripId, trip_id: tripId } : {}),
     });
-    const { data } = await apiClient.post<Record<string, unknown>>(
+    const { data } = await apiClient.post<OptimizePlanResponse>(
       `${API_BASE}/optimization/optimize`,
       body
     );
-    const raw = data as Record<string, unknown>;
-    const rawFinalUtility = Number(raw.finalUtility ?? (raw.summary as Record<string, unknown>)?.finalUtility ?? 0);
-    return {
-      originalPlan: (raw.originalPlan ?? request.plan) as OptimizePlanResponse['originalPlan'],
-      optimizedPlan: (raw.optimizedPlan ?? raw.plan) as OptimizePlanResponse['optimizedPlan'],
-      changes: (raw.changes ?? raw.logs ?? []) as OptimizePlanResponse['changes'],
-      finalUtility: Number.isNaN(rawFinalUtility) ? 0 : rawFinalUtility,
-      processingTimeMs: Number(raw.processingTimeMs ?? 0),
-    };
+    return data;
   },
 
   /**

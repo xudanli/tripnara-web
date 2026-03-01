@@ -440,8 +440,7 @@ export function useFullOptimizationFlow() {
     });
     
     // 后续步骤使用优化后计划，若无则回退至原计划（确保 plan 必填）
-    const planForDownstream =
-      optimized.optimizedPlan ?? optimized.originalPlan ?? plan;
+    const planForDownstream = optimized.plan ?? plan;
     
     // 3. 风险评估（传 tripId 供后端校验/加载）
     const risk = await assessRisk.mutateAsync({ 

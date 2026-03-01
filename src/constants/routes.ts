@@ -1,7 +1,7 @@
 export const ROUTES = {
   HOME: '/',
   TRIPS: '/trips',
-  TRIP_DETAIL: (id: string) => `/trips/${id}`,
+  TRIP_DETAIL: (id: string) => `/dashboard/trips/${id}`,
   PLACES: '/places',
   PLACE_DETAIL: (id: string) => `/places/${id}`,
   HOTELS: '/hotels',

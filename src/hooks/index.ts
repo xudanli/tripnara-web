@@ -134,3 +134,17 @@ export {
   teamKeys,
   realtimeKeys,
 } from './useOptimizationV2';
+
+// 决策引擎
+export {
+  useCreateDecision,
+  useDecision,
+  useDecisionExplanation,
+  useNaturalExplanation,
+  useAlternativePlan,
+  useSelectPlan,
+  useSubmitFeedback as useSubmitDecisionFeedback,
+  useDecisionHistory,
+  useLearningProgress,
+  usePreferenceFeedback,
+} from './useDecisions';

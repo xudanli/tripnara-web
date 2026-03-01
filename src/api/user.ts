@@ -20,6 +20,8 @@ export interface UserPreferences {
     pace?: 'LEISURE' | 'MODERATE' | 'FAST';
     budget?: 'LOW' | 'MEDIUM' | 'HIGH';
     accommodation?: 'BUDGET' | 'COMFORTABLE' | 'LUXURY';
+    /** 默认出行方式（用户级别偏好） */
+    travelMode?: 'DRIVING' | 'PUBLIC_TRANSIT' | 'MIXED';
   };
   other?: Record<string, any>;
 }

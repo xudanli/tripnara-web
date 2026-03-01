@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Clock, MapPin, Save, Undo2, Redo2, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/utils/format';
+import { toDateOnly } from '@/lib/utils';
 
 export default function TripSchedulePage() {
   const { id } = useParams<{ id: string }>();
@@ -186,7 +187,7 @@ export default function TripSchedulePage() {
             <Input
               id="date"
               type="date"
-              value={date}
+              value={toDateOnly(date) || date}
               onChange={(e) => setDate(e.target.value)}
               className="w-48"
             />

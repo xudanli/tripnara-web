@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { ScheduleTabSkeleton } from '@/components/plan-studio/ScheduleTabSkeleton';
 import { LogoLoading } from '@/components/common/LogoLoading';
-import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info, ClipboardCheck, ExternalLink, Calendar, Zap } from 'lucide-react';
+import { EmptyStateCard } from '@/components/ui/empty-state-images';
+import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info, ClipboardCheck, ExternalLink, Calendar, Zap, Copy, CheckCircle2, XCircle, Lightbulb } from 'lucide-react';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { tripPlannerApi } from '@/api/trip-planner';
@@ -48,6 +49,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import {
   getGateStatusClasses,
@@ -207,6 +209,33 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const [searchNearbyItem, setSearchNearbyItem] = useState<ItineraryItem | null>(null);
   const [searchNearbyDay, setSearchNearbyDay] = useState<TripDetail['TripDay'][0] | null>(null);
   const [searchNearbyCategory, setSearchNearbyCategory] = useState<PlaceCategory | 'all' | undefined>(undefined);
+  
+  // 重复项冲突对话框状态
+  const [duplicateConflictDialogOpen, setDuplicateConflictDialogOpen] = useState(false);
+  const [duplicateConflict, setDuplicateConflict] = useState<{
+    conflict: PlanStudioConflict;
+    affectedItems: Array<{ id: string; placeName: string; dayDate: string; dayIndex: number }>;
+  } | null>(null);
+  const [removingDuplicate, setRemovingDuplicate] = useState(false);
+
+  // 一键解决冲突对话框状态
+  const [resolveConflictsDialogOpen, setResolveConflictsDialogOpen] = useState(false);
+  const [resolveConflictsPreview, setResolveConflictsPreview] = useState<{
+    autoResolvable: Array<{ conflictId: string; description: string; strategy: string }>;
+    needManual: Array<{ conflictId: string; description: string; reason: string }>;
+  } | null>(null);
+  const [loadingResolvePreview, setLoadingResolvePreview] = useState(false);
+  const [executingResolve, setExecutingResolve] = useState(false);
+
+  // 行程合理性评估状态
+  const [assessmentDialogOpen, setAssessmentDialogOpen] = useState(false);
+  const [assessmentResult, setAssessmentResult] = useState<import('@/types/trip').AssessTripResponse | null>(null);
+  const [loadingAssessment, setLoadingAssessment] = useState(false);
+  const [assessmentTravelMode, setAssessmentTravelMode] = useState<import('@/types/trip').AssessmentTravelMode>(
+    // @ts-expect-error - 使用字符串初始化枚举值
+    'PUBLIC_TRANSIT'
+  );
+  const [savingTravelMode, setSavingTravelMode] = useState(false);
 
   // 收集所有地点信息用于批量加载图片（使用 useMemo 避免每次渲染都创建新数组）
   // 使用稳定的依赖：基于 place IDs 的字符串，而不是整个 Map 对象
@@ -755,6 +784,41 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       }
     }
 
+    // 行程项重复 → 打开重复项处理对话框
+    const isDuplicateItemConflict = (c: typeof conflict) => {
+      if (typeof c === 'string') return c.includes('重复');
+      const type = (c as { type?: string }).type;
+      return type === 'DUPLICATE_ITEM';
+    };
+    if (isDuplicateItemConflict(conflict) && trip?.TripDay?.length) {
+      const planConflict = conflict as PlanStudioConflict;
+      const affectedItemIds = planConflict.affectedItemIds || [];
+      
+      // 收集受影响行程项的详细信息
+      const affectedItems: Array<{ id: string; placeName: string; dayDate: string; dayIndex: number }> = [];
+      affectedItemIds.forEach(itemId => {
+        trip.TripDay.forEach((day, dayIndex) => {
+          const normalizedDate = day.date.includes('T') ? day.date.split('T')[0] : day.date;
+          const items = itineraryItemsMap.get(day.date) || itineraryItemsMap.get(normalizedDate) || [];
+          const item = items.find(i => i.id === itemId);
+          if (item) {
+            affectedItems.push({
+              id: item.id,
+              placeName: item.Place?.nameCN || item.Place?.nameEN || item.note || '未知地点',
+              dayDate: day.date,
+              dayIndex: dayIndex + 1,
+            });
+          }
+        });
+      });
+      
+      if (affectedItems.length > 0) {
+        setDuplicateConflict({ conflict: planConflict, affectedItems });
+        setDuplicateConflictDialogOpen(true);
+        return;
+      }
+    }
+
     setDrawerOpen(true);
     // 字符串为前端计算的冲突（无完整结构），走风险 tab
     if (typeof conflict === 'string') {
@@ -776,6 +840,170 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
     } else {
       setDrawerTab('risk');
       setHighlightItemId(`${planConflict.type}-${dayDate}`);
+    }
+  };
+
+  // 可自动解决的冲突类型
+  const AUTO_RESOLVABLE_TYPES = ['TIME_CONFLICT', 'TRANSPORT_INSUFFICIENT', 'BUFFER_INSUFFICIENT', 'DUPLICATE_ITEM', 'CLOSURE_RISK'];
+  
+  // 计算可自动解决的冲突数量
+  const autoResolvableConflicts = useMemo(() => {
+    return conflicts.filter(c => AUTO_RESOLVABLE_TYPES.includes(c.type));
+  }, [conflicts]);
+
+  // 打开一键解决冲突预览
+  const handleOpenResolveConflicts = async () => {
+    if (autoResolvableConflicts.length === 0) {
+      toast.info('当前没有可自动解决的冲突');
+      return;
+    }
+    
+    setLoadingResolvePreview(true);
+    setResolveConflictsDialogOpen(true);
+    
+    try {
+      // 调用预览接口
+      const result = await tripsApi.resolveConflicts(tripId, { dryRun: true });
+      
+      const autoResolvable = result.results
+        .filter(r => r.resolved)
+        .map(r => ({
+          conflictId: r.conflictId,
+          description: r.description,
+          strategy: r.strategy,
+        }));
+      
+      const needManual = result.results
+        .filter(r => !r.resolved)
+        .map(r => ({
+          conflictId: r.conflictId,
+          description: r.description,
+          reason: r.failureReason || '需要手动处理',
+        }));
+      
+      setResolveConflictsPreview({ autoResolvable, needManual });
+    } catch (err: any) {
+      console.error('获取冲突解决预览失败:', err);
+      toast.error(err.message || '获取预览失败');
+      setResolveConflictsDialogOpen(false);
+    } finally {
+      setLoadingResolvePreview(false);
+    }
+  };
+
+  // 执行一键解决冲突
+  const handleExecuteResolveConflicts = async () => {
+    setExecutingResolve(true);
+    
+    try {
+      const result = await tripsApi.resolveConflicts(tripId, { dryRun: false });
+      
+      if (result.resolvedCount > 0) {
+        toast.success(`已解决 ${result.resolvedCount} 个冲突`, {
+          description: result.skippedCount > 0 ? `${result.skippedCount} 个冲突需要手动处理` : undefined,
+        });
+      } else if (result.skippedCount > 0) {
+        toast.info(`${result.skippedCount} 个冲突需要手动处理`);
+      }
+      
+      // 关闭对话框并刷新数据
+      setResolveConflictsDialogOpen(false);
+      setResolveConflictsPreview(null);
+      await loadTrip({ silent: true });
+    } catch (err: any) {
+      console.error('一键解决冲突失败:', err);
+      toast.error(err.message || '解决冲突失败');
+    } finally {
+      setExecutingResolve(false);
+    }
+  };
+
+  // 触发行程合理性评估
+  const handleAssessTrip = async (travelMode?: import('@/types/trip').AssessmentTravelMode) => {
+    setLoadingAssessment(true);
+    setAssessmentDialogOpen(true);
+    
+    try {
+      const result = await tripsApi.assessTrip(tripId, {
+        travelMode: travelMode || assessmentTravelMode,
+      });
+      setAssessmentResult(result);
+    } catch (err: any) {
+      console.error('行程评估失败:', err);
+      toast.error(err.message || '评估失败，请稍后重试');
+      setAssessmentDialogOpen(false);
+    } finally {
+      setLoadingAssessment(false);
+    }
+  };
+
+  // 保存出行方式到行程意图
+  const handleSaveTravelMode = async (mode: import('@/types/trip').AssessmentTravelMode) => {
+    setSavingTravelMode(true);
+    try {
+      await tripsApi.updateIntent(tripId, {
+        pacingConfig: {
+          travelMode: mode as import('@/types/trip').IntentTravelMode,
+        },
+      });
+      toast.success('出行方式已保存');
+    } catch (err: any) {
+      console.error('保存出行方式失败:', err);
+      toast.error(err.message || '保存失败');
+    } finally {
+      setSavingTravelMode(false);
+    }
+  };
+
+  // 获取评估等级的样式
+  const getGradeStyle = (grade: string) => {
+    switch (grade) {
+      case 'EXCELLENT':
+        return { bg: 'bg-green-100', text: 'text-green-700', label: '优秀' };
+      case 'GOOD':
+        return { bg: 'bg-blue-100', text: 'text-blue-700', label: '良好' };
+      case 'FAIR':
+        return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '合格' };
+      case 'POOR':
+        return { bg: 'bg-orange-100', text: 'text-orange-700', label: '待改进' };
+      case 'BAD':
+        return { bg: 'bg-red-100', text: 'text-red-700', label: '不合理' };
+      default:
+        return { bg: 'bg-gray-100', text: 'text-gray-700', label: grade };
+    }
+  };
+
+  // 获取评估状态的样式 (V2)
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'REASONABLE':
+        return { bg: 'bg-green-100', text: 'text-green-700', icon: '✅', label: '合理' };
+      case 'NEEDS_ATTENTION':
+        return { bg: 'bg-amber-100', text: 'text-amber-700', icon: '⚠️', label: '需关注' };
+      case 'HAS_ISSUES':
+        return { bg: 'bg-red-100', text: 'text-red-700', icon: '❌', label: '有问题' };
+      case 'UNPLANNED':
+        return { bg: 'bg-gray-100', text: 'text-gray-500', icon: '📋', label: '待规划' };
+      default:
+        return { bg: 'bg-gray-100', text: 'text-gray-700', icon: '❓', label: status };
+    }
+  };
+
+  // 获取日程类型的标签 (V2)
+  const getDayTypeLabel = (dayType: string) => {
+    switch (dayType) {
+      case 'TOURING_DAY':
+        return '游览日';
+      case 'REST_DAY':
+        return '休息日';
+      case 'ARRIVAL_DAY':
+        return '抵达日';
+      case 'DEPARTURE_DAY':
+        return '离开日';
+      case 'UNPLANNED':
+        return '待规划';
+      default:
+        return dayType;
     }
   };
 
@@ -1061,17 +1289,47 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         
         if (applyResult.success) {
           const skipped = applyResult.skipped;
-          if (skipped && skipped.length > 0) {
-            toast.success(
-              `优化完成！已应用 ${applyResult.appliedItems || 0} 个行程项`,
-              {
-                description: `以下地点因不营业等原因未被加入：${skipped.map((s) => s.reason).join('；')}`,
-                duration: 8000,
+          // 从行程数据构建 placeId -> 中文名 映射（优先中文）
+          const placeIdToNameCN = new Map<number, string>();
+          for (const day of trip.TripDay ?? []) {
+            for (const it of day.ItineraryItem ?? []) {
+              if (it.placeId && it.Place && (it.Place.nameCN || it.Place.nameEN)) {
+                placeIdToNameCN.set(it.placeId, (it.Place.nameCN && it.Place.nameCN.trim()) ? it.Place.nameCN : (it.Place.nameEN || ''));
               }
-            );
-          } else {
-            toast.success(`优化完成！已应用 ${applyResult.appliedItems || 0} 个行程项`);
+            }
           }
+          const placeNames = (optimizeResult.schedule ?? [])
+            .map((item) => {
+              const node = optimizeResult.nodes?.[item.nodeIndex];
+              if (!node) return '';
+              const fromTrip = placeIdToNameCN.get(node.id);
+              return fromTrip || node.nameCN || node.nameEN || node.name;
+            })
+            .filter(Boolean);
+          const orderSummary = placeNames.length > 0
+            ? placeNames.slice(0, 5).join(' → ') + (placeNames.length > 5 ? ` 等${placeNames.length}处` : '')
+            : '';
+          const scoreStr = optimizeResult.happinessScore != null
+            ? `快乐值 ${optimizeResult.happinessScore.toFixed(0)} 分`
+            : '';
+          const summary = optimizeResult.conflictSummary;
+          const conflictStr = summary
+            ? `冲突 ${summary.before} → ${summary.after}（解决 ${summary.resolved}${summary.hasNew ? '，有新冲突' : ''}）`
+            : '';
+          const descParts: string[] = [];
+          if (orderSummary) descParts.push(`新顺序：${orderSummary}`);
+          if (scoreStr) descParts.push(scoreStr);
+          if (conflictStr) descParts.push(conflictStr);
+          if (skipped && skipped.length > 0) {
+            descParts.push(`以下地点因不营业等原因未加入：${skipped.map((s) => s.reason).join('；')}`);
+          }
+          toast.success(
+            `优化完成！已按路线顺序重新排列 ${applyResult.appliedItems || 0} 个行程项`,
+            {
+              description: descParts.join(' · '),
+              duration: 10000,
+            }
+          );
         } else {
           toast.warning('优化完成，但应用结果时出错：响应格式不正确');
         }
@@ -1553,9 +1811,16 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                       }
                       
                       return (
-                      <div className="text-center py-8 text-muted-foreground text-sm">
-                        该日暂无安排
-                      </div>
+                        <div className="py-4">
+                          <EmptyStateCard
+                            type="no-arrangements"
+                            title="该日暂无安排"
+                            description="点击下方按钮添加景点、美食或活动，开始规划这一天的行程"
+                            imageWidth={100}
+                            imageHeight={100}
+                            className="py-4"
+                          />
+                        </div>
                       );
                     })()}
                     
@@ -1584,10 +1849,31 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         {/* 行程健康度摘要卡片 */}
         <Card data-tour="schedule-health">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <span className="text-lg">🐻‍❄️</span>
-              行程健康度
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <span className="text-lg">🐻‍❄️</span>
+                行程健康度
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => handleAssessTrip()}
+                disabled={loadingAssessment}
+              >
+                {loadingAssessment ? (
+                  <>
+                    <Spinner className="w-3 h-3 mr-1" />
+                    评估中...
+                  </>
+                ) : (
+                  <>
+                    <ClipboardCheck className="w-3 h-3 mr-1" />
+                    评估合理性
+                  </>
+                )}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* 三人格评估状态 */}
@@ -1841,7 +2127,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         })()}
 
         {/* 行程路线优化入口 - 始终显示 */}
-        <Link to={`/dashboard/trips/optimize?tripId=${tripId}`}>
+        <Link to={`/dashboard/trips/optimize?tripId=${tripId}`} className="block">
           <Card className="cursor-pointer hover:shadow-md transition-all border-dashed">
             <CardContent className="pt-4 pb-4">
               <div className="flex items-center gap-2 text-sm">
@@ -1855,13 +2141,29 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
 
         {/* 冲突列表 - 仅在有冲突时显示 */}
         {conflicts.length > 0 && (
-          <Card data-tour="schedule-conflicts">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                冲突列表
-                <Badge variant="destructive" className="ml-auto">{conflicts.length}</Badge>
-              </CardTitle>
+          <Card data-tour="schedule-conflicts" className="mt-4">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  冲突列表
+                  <Badge variant="destructive">{conflicts.length}</Badge>
+                </CardTitle>
+                {autoResolvableConflicts.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5"
+                    onClick={handleOpenResolveConflicts}
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    一键解决
+                    <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">
+                      {autoResolvableConflicts.length}
+                    </Badge>
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -1910,6 +2212,9 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                           {conflict.type === 'SEASONAL_CONFLICT' && (
                             <Calendar className="h-4 w-4 text-amber-600 flex-shrink-0" />
                           )}
+                          {conflict.type === 'DUPLICATE_ITEM' && (
+                            <Copy className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                          )}
                           <div className="text-sm font-semibold text-gray-900">{conflict.title}</div>
                         </div>
                         <Badge 
@@ -1946,17 +2251,26 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                       {conflict.suggestions && conflict.suggestions.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-gray-200">
                           <div className="text-xs font-medium text-gray-700 mb-1">建议：</div>
-                          <ul className="text-xs text-gray-600 space-y-0.5">
+                          <div className="flex flex-wrap gap-1.5">
                             {conflict.suggestions.slice(0, 2).map((suggestion, idx) => (
-                              <li key={idx} className="flex items-start gap-1">
-                                <span className="text-gray-400">•</span>
-                                <span>{suggestion.action}</span>
-                              </li>
+                              <Button
+                                key={idx}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs px-2.5 bg-white hover:bg-gray-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // 直接触发冲突处理（打开对应的对话框）
+                                  handleFixConflict(conflict, conflict.affectedDays[0] || '');
+                                }}
+                              >
+                                {suggestion.action}
+                              </Button>
                             ))}
                             {conflict.suggestions.length > 2 && (
-                              <li className="text-gray-400 text-xs">还有 {conflict.suggestions.length - 2} 条建议...</li>
+                              <span className="text-gray-400 text-xs self-center ml-1">+{conflict.suggestions.length - 2}</span>
                             )}
-                          </ul>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1970,6 +2284,9 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         {/* CTA - 仅在有冲突时显示 */}
         {conflicts.length > 0 && (
           <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              根据距离、交通时间与节奏重新排列当日行程顺序，减少往返、降低疲劳
+            </p>
             <Button 
               className="w-full" 
               data-tour="schedule-optimize" 
@@ -2208,7 +2525,499 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
           initialCategory={searchNearbyCategory}
         />
       )}
+
+      {/* 重复项冲突处理对话框 */}
+      <Dialog open={duplicateConflictDialogOpen} onOpenChange={(open) => {
+        setDuplicateConflictDialogOpen(open);
+        if (!open) {
+          setDuplicateConflict(null);
+          setRemovingDuplicate(false);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Copy className="h-5 w-5 text-amber-500" />
+              处理重复行程项
+            </DialogTitle>
+            <DialogDescription>
+              {duplicateConflict?.conflict.description || '发现重复的行程项，请选择处理方式'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicateConflict && (
+            <div className="space-y-4 py-4">
+              {/* 受影响的行程项列表 */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">重复的行程项：</Label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {duplicateConflict.affectedItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-3 border rounded-lg bg-gray-50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          第 {item.dayIndex} 天
+                        </Badge>
+                        <span className="text-sm font-medium">{item.placeName}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={removingDuplicate}
+                        onClick={async () => {
+                          setRemovingDuplicate(true);
+                          try {
+                            await itineraryItemsApi.delete(item.id);
+                            toast.success(`已删除「${item.placeName}」（第 ${item.dayIndex} 天）`);
+                            setDuplicateConflictDialogOpen(false);
+                            setDuplicateConflict(null);
+                            await loadTrip({ silent: true });
+                          } catch (err: any) {
+                            toast.error(err.message || '删除失败');
+                          } finally {
+                            setRemovingDuplicate(false);
+                          }
+                        }}
+                      >
+                        {removingDuplicate ? <Spinner className="w-3 h-3" /> : '移除'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* 提示信息 */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs text-amber-800">
+                  <strong>提示：</strong>点击「移除」可删除对应天的行程项。如果您希望保留所有行程项，可以直接关闭此对话框。
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDuplicateConflictDialogOpen(false);
+                setDuplicateConflict(null);
+              }}
+              disabled={removingDuplicate}
+            >
+              保留全部
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 一键解决冲突预览对话框 */}
+      <Dialog open={resolveConflictsDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setResolveConflictsDialogOpen(false);
+          setResolveConflictsPreview(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-amber-500" />
+              一键解决冲突
+            </DialogTitle>
+            <DialogDescription>
+              预览将要执行的操作，确认后将自动解决可处理的冲突
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingResolvePreview ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
+              <Spinner className="w-6 h-6" />
+              <span className="text-sm text-muted-foreground">正在分析冲突...</span>
+            </div>
+          ) : resolveConflictsPreview ? (
+            <div className="space-y-4 py-2">
+              {/* 可自动解决的冲突 */}
+              {resolveConflictsPreview.autoResolvable.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-green-700">
+                    <ClipboardCheck className="h-4 w-4" />
+                    将自动解决 {resolveConflictsPreview.autoResolvable.length} 个冲突：
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {resolveConflictsPreview.autoResolvable.map((item) => (
+                      <div
+                        key={item.conflictId}
+                        className="flex items-start gap-2 p-2 bg-green-50 border border-green-200 rounded text-xs"
+                      >
+                        <span className="text-green-600 mt-0.5">✓</span>
+                        <div className="flex-1">
+                          <div className="text-gray-800">{item.description}</div>
+                          <div className="text-gray-500 mt-0.5">策略：{item.strategy}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 需手动处理的冲突 */}
+              {resolveConflictsPreview.needManual.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                    <AlertTriangle className="h-4 w-4" />
+                    以下 {resolveConflictsPreview.needManual.length} 个冲突需要手动处理：
+                  </div>
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {resolveConflictsPreview.needManual.map((item) => (
+                      <div
+                        key={item.conflictId}
+                        className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs"
+                      >
+                        <span className="text-amber-600 mt-0.5">⚠</span>
+                        <div className="flex-1">
+                          <div className="text-gray-800">{item.description}</div>
+                          <div className="text-gray-500 mt-0.5">{item.reason}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 无可解决冲突 */}
+              {resolveConflictsPreview.autoResolvable.length === 0 && (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                  <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm text-gray-600">当前所有冲突都需要手动处理</p>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setResolveConflictsDialogOpen(false);
+                setResolveConflictsPreview(null);
+              }}
+              disabled={executingResolve}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleExecuteResolveConflicts}
+              disabled={executingResolve || loadingResolvePreview || !resolveConflictsPreview?.autoResolvable.length}
+            >
+              {executingResolve ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  执行中...
+                </>
+              ) : (
+                <>
+                  确认执行
+                  {resolveConflictsPreview?.autoResolvable.length ? (
+                    <Badge variant="secondary" className="ml-1.5">
+                      {resolveConflictsPreview.autoResolvable.length}
+                    </Badge>
+                  ) : null}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 行程合理性评估对话框 V2 */}
+      <AssessmentDialog 
+        open={assessmentDialogOpen}
+        onOpenChange={(open) => {
+          if (!loadingAssessment) {
+            setAssessmentDialogOpen(open);
+            if (!open) setAssessmentResult(null);
+          }
+        }}
+        loading={loadingAssessment}
+        result={assessmentResult}
+        getGradeStyle={getGradeStyle}
+        getStatusStyle={getStatusStyle}
+        getDayTypeLabel={getDayTypeLabel}
+        travelMode={assessmentTravelMode}
+        onTravelModeChange={setAssessmentTravelMode}
+        onReassess={handleAssessTrip}
+        onSaveTravelMode={handleSaveTravelMode}
+        savingTravelMode={savingTravelMode}
+      />
     </>
+  );
+}
+
+// 行程评估对话框组件 V2
+function AssessmentDialog({
+  open,
+  onOpenChange,
+  loading,
+  result,
+  getGradeStyle,
+  getStatusStyle,
+  getDayTypeLabel,
+  travelMode,
+  onTravelModeChange,
+  onReassess,
+  onSaveTravelMode,
+  savingTravelMode,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  loading: boolean;
+  result: import('@/types/trip').AssessTripResponse | null;
+  getGradeStyle: (grade: string) => { bg: string; text: string; label: string };
+  getStatusStyle: (status: string) => { bg: string; text: string; icon: string; label: string };
+  getDayTypeLabel: (dayType: string) => string;
+  travelMode: import('@/types/trip').AssessmentTravelMode;
+  onTravelModeChange: (mode: import('@/types/trip').AssessmentTravelMode) => void;
+  onReassess: (mode?: import('@/types/trip').AssessmentTravelMode) => void;
+  onSaveTravelMode: (mode: import('@/types/trip').AssessmentTravelMode) => void;
+  savingTravelMode: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardCheck className="h-5 w-5 text-blue-500" />
+            行程合理性评估
+          </DialogTitle>
+          <DialogDescription>
+            基于七大维度评估每日行程的合理性
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="flex-1 overflow-y-auto py-4">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <Spinner className="w-8 h-8" />
+              <p className="text-sm text-muted-foreground">正在评估行程...</p>
+            </div>
+          ) : result ? (
+            <div className="space-y-6">
+              {/* 出行方式选择 */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">出行方式</span>
+                  <Select
+                    value={travelMode}
+                    onValueChange={(value) => {
+                      onTravelModeChange(value as import('@/types/trip').AssessmentTravelMode);
+                    }}
+                  >
+                    <SelectTrigger className="w-[130px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PUBLIC_TRANSIT">🚇 公共交通</SelectItem>
+                      <SelectItem value="DRIVING">🚗 自驾</SelectItem>
+                      <SelectItem value="MIXED">🔄 混合</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => onSaveTravelMode(travelMode)}
+                    disabled={loading || savingTravelMode}
+                  >
+                    {savingTravelMode ? '保存中...' : '保存为默认'}
+                  </Button>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => onReassess(travelMode)}
+                  disabled={loading}
+                >
+                  重新评估
+                </Button>
+              </div>
+
+              {/* 整体评估摘要 */}
+              <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-indigo-50">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">整体合理率</span>
+                    {result.overallGrade && (
+                      <Badge className={cn(
+                        "text-xs",
+                        getGradeStyle(result.overallGrade).bg,
+                        getGradeStyle(result.overallGrade).text
+                      )}>
+                        {getGradeStyle(result.overallGrade).label}
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="text-2xl font-bold text-blue-600">
+                    {result.overallReasonableRate}%
+                  </span>
+                </div>
+                
+                {/* 进度条 */}
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      result.overallReasonableRate >= 75 ? 'bg-green-500' :
+                      result.overallReasonableRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                    )}
+                    style={{ width: `${result.overallReasonableRate}%` }}
+                  />
+                </div>
+                
+                {/* 四态统计 V2 */}
+                <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
+                  <div className="flex items-center gap-1 text-green-700">
+                    <span>✅</span>
+                    <span>{result.reasonableDays} 合理</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-amber-700">
+                    <span>⚠️</span>
+                    <span>{result.needsAttentionDays ?? 0} 需关注</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-red-700">
+                    <span>❌</span>
+                    <span>{result.hasIssuesDays ?? 0} 有问题</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <span>📋</span>
+                    <span>{result.unplannedDays ?? 0} 待规划</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 整体建议 */}
+              {result.topSuggestions && result.topSuggestions.length > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Lightbulb className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-amber-800">主要建议</p>
+                      <ul className="text-xs text-amber-700 space-y-1">
+                        {result.topSuggestions.slice(0, 3).map((suggestion, idx) => (
+                          <li key={idx}>• {suggestion}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 每日详情 V2 */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-gray-700">每日评估</h4>
+                {result.days.map((day) => {
+                  const statusStyle = getStatusStyle(day.status);
+                  const isUnplanned = day.status === 'UNPLANNED';
+                  
+                  return (
+                    <Collapsible key={day.date} disabled={isUnplanned}>
+                      <CollapsibleTrigger className="w-full" disabled={isUnplanned}>
+                        <div className={cn(
+                          "flex items-center justify-between p-3 rounded-lg border transition-colors",
+                          isUnplanned ? 'border-dashed border-gray-300 bg-gray-50' :
+                          day.status === 'REASONABLE' ? 'border-gray-200 hover:bg-gray-50' :
+                          day.status === 'NEEDS_ATTENTION' ? 'border-amber-200 bg-amber-50/50 hover:bg-amber-50' :
+                          'border-red-200 bg-red-50/50 hover:bg-red-50'
+                        )}>
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-start">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{day.date}</span>
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                                  {getDayTypeLabel(day.dayType)}
+                                </Badge>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {isUnplanned ? '暂无活动安排' : `${day.activityCount} 个活动 · ${day.activeDurationHours.toFixed(1)}h`}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isUnplanned ? (
+                              <Badge variant="outline" className="text-xs text-gray-500">
+                                {statusStyle.icon} {statusStyle.label}
+                              </Badge>
+                            ) : (
+                              <>
+                                <Badge className={cn("text-xs", statusStyle.bg, statusStyle.text)}>
+                                  {day.overallScore}分
+                                </Badge>
+                                <span className="text-base">{statusStyle.icon}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </CollapsibleTrigger>
+                      {!isUnplanned && day.dimensions && (
+                        <CollapsibleContent>
+                          <div className="mt-2 ml-2 p-3 bg-gray-50 rounded-lg space-y-3">
+                            {/* 维度评分 */}
+                            <div className="grid grid-cols-2 gap-2">
+                              {day.dimensions.map((dim) => (
+                                <div 
+                                  key={dim.dimension}
+                                  className={cn(
+                                    "flex items-center justify-between p-2 rounded text-xs",
+                                    dim.passed ? 'bg-white' : 'bg-red-50'
+                                  )}
+                                >
+                                  <span className="text-gray-600">{dim.name}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={cn(
+                                      "font-medium",
+                                      dim.passed ? 'text-gray-900' : 'text-red-600'
+                                    )}>{dim.score}</span>
+                                    {dim.passed ? (
+                                      <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                    ) : (
+                                      <XCircle className="w-3 h-3 text-red-500" />
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {/* 问题和建议 */}
+                            {day.topSuggestion && (
+                              <div className="flex items-start gap-2 p-2 bg-amber-50 rounded text-xs">
+                                <Lightbulb className="w-3 h-3 text-amber-600 mt-0.5 flex-shrink-0" />
+                                <span className="text-amber-800">{day.topSuggestion}</span>
+                              </div>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      )}
+                    </Collapsible>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+          >
+            关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

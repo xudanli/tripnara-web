@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import AgentChatDialog from './AgentChatDialog';
-import { NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
+import Logo from '@/components/common/Logo';
 
 interface AgentChatFabProps {
   activeTripId?: string | null;
@@ -26,7 +26,7 @@ export default function AgentChatFab({ activeTripId, onSystem2Response }: AgentC
           onClick={() => setOpen(true)}
           title="打开 Nara"
         >
-          <NaraAgentChatting size={24} color="currentColor" highlightColor="currentColor" className="text-primary-foreground" />
+          <Logo variant="icon" size={24} />
         </Button>
       </div>
 

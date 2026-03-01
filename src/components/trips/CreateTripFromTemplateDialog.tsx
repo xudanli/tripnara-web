@@ -15,7 +15,7 @@ import type { Country } from '@/types/country';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { CheckCircle2, ChevronsUpDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, toDateOnly } from '@/lib/utils';
 
 interface CreateTripFromTemplateDialogProps {
   templateId: number;
@@ -349,7 +349,7 @@ export function CreateTripFromTemplateDialog({
               <Input
                 id="startDate"
                 type="date"
-                value={formData.startDate}
+                value={toDateOnly(formData.startDate) || formData.startDate}
                 onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
               />
             </div>
@@ -358,7 +358,7 @@ export function CreateTripFromTemplateDialog({
               <Input
                 id="endDate"
                 type="date"
-                value={formData.endDate}
+                value={toDateOnly(formData.endDate) || formData.endDate}
                 onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
               />
             </div>

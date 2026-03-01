@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { cn, toDateOnly } from '@/lib/utils';
 
 export interface ClarificationQuestionCardProps {
   question: ClarificationQuestion;
@@ -123,7 +123,7 @@ export function ClarificationQuestionCard({
       }
       case 'date': {
         // Use native date input (already used in existing codebase).
-        const dateValue = typeof value === 'string' ? value : '';
+        const dateValue = typeof value === 'string' ? toDateOnly(value) || value : '';
         return (
           <Input
             type="date"

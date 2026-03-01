@@ -7,7 +7,6 @@ import AgentChat from './AgentChat';
 import PlanningAssistantChat from './PlanningAssistantChat';
 import JourneyAssistantChat from './JourneyAssistantChat';
 import { PlanningAssistantSidebar } from '@/components/planning-assistant-v2/PlanningAssistantSidebar';
-import { NaraAgentChatting } from '@/components/illustrations/AgentIllustrations';
 import Logo from '@/components/common/Logo';
 import type { EntryPoint } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
@@ -55,7 +54,8 @@ function getSidebarConfig(entryPoint?: EntryPoint, hasTrip?: boolean) {
       return {
         title: 'Nara',
         subtitle: '智能旅行副驾驶',
-        icon: null, // 使用 NaraAgentChatting
+        icon: null, // 使用 Logo 组件
+        useLogo: true,
         iconBgClass: '',
         iconTextClass: 'text-primary',
         component: 'legacy' as const,
@@ -207,12 +207,7 @@ export default function AgentChatSidebar({
                       <IconComponent className={cn('w-4 h-4', config.iconTextClass)} />
                     </div>
                   ) : (
-                    <NaraAgentChatting
-                      size={28}
-                      color="currentColor"
-                      highlightColor="currentColor"
-                      className="text-primary"
-                    />
+                    <Logo variant="icon" size={28} />
                   )}
                 </button>
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
@@ -282,11 +277,7 @@ export default function AgentChatSidebar({
             ) : IconComponent ? (
               <IconComponent className={cn('w-5 h-5', config.iconTextClass)} />
             ) : (
-              <NaraAgentChatting
-                size={24}
-                color="currentColor"
-                highlightColor="currentColor"
-              />
+              <Logo variant="icon" size={24} />
             )}
           </Button>
         )}

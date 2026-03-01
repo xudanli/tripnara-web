@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { HelpCircle, CalendarIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, toDateOnly } from '@/lib/utils';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { NLClarificationQuestion, ConditionalInputField } from '@/types/trip';
@@ -479,7 +479,7 @@ export function NLClarificationQuestionCard({
       }
       
       case 'date': {
-        const dateValue = typeof value === 'string' ? value : '';
+        const dateValue = typeof value === 'string' ? toDateOnly(value) || value : '';
         return (
           <Input
             type="date"
@@ -561,7 +561,7 @@ export function NLClarificationQuestionCard({
       }
 
       case 'date': {
-        const dateValue = typeof inputValue === 'string' ? inputValue : '';
+        const dateValue = typeof inputValue === 'string' ? toDateOnly(inputValue) || inputValue : '';
         return (
           <div className="mt-3 space-y-1.5">
             <Label className="text-xs font-medium text-slate-700">

@@ -35,11 +35,23 @@ export interface Traveler {
 
 // ==================== 行程配置 ====================
 
+/** 出行方式（影响评估阈值） */
+export enum IntentTravelMode {
+  /** 自驾 - 更宽松的交通/地理阈值 */
+  DRIVING = 'DRIVING',
+  /** 公共交通 - 标准阈值 */
+  PUBLIC_TRANSIT = 'PUBLIC_TRANSIT',
+  /** 混合 - 介于两者之间 */
+  MIXED = 'MIXED',
+}
+
 export interface PacingConfig {
   travelers: Traveler[];
   maxDailyActivities?: number;
   restIntervalHours?: number;
-  level?: string;
+  level?: 'relaxed' | 'standard' | 'tight';
+  /** 出行方式（持久化设置，影响评估阈值） */
+  travelMode?: IntentTravelMode;
   /** 驾驶疲劳偏好（用于驾驶时间安全评估，2-15-8 法则；来自 UserTravelProfile.extendedProfile） */
   drivingFatiguePreferences?: DrivingFatiguePreferences;
 }
@@ -1137,7 +1149,9 @@ export type ConflictType =
   | 'CLOSURE_RISK'            // 闭园风险
   | 'ACCESSIBILITY_MISMATCH'  // 无障碍不匹配
   | 'TRANSPORT_TOO_LONG'      // 交通过长
-  | 'SEASONAL_CONFLICT';      // 季节性冲突
+  | 'TRANSPORT_INSUFFICIENT'  // 交通不足
+  | 'SEASONAL_CONFLICT'       // 季节性冲突
+  | 'DUPLICATE_ITEM';         // 行程项重复：同一地点在同一天被安排多次
 
 export interface ConflictSuggestion {
   action: string;
@@ -1162,6 +1176,158 @@ export interface ConflictsResponse {
   tripId: string;
   conflicts: PlanStudioConflict[];
   total: number;
+}
+
+// ==================== 一键解决冲突 ====================
+
+/** 解决冲突策略 */
+export type ResolveStrategy = 'AUTO' | 'SHIFT_LATER' | 'SHORTEN_DURATION' | 'REMOVE_ITEM' | 'SKIP';
+
+/** 一键解决冲突请求 */
+export interface ResolveConflictsRequest {
+  /** 指定要解决的冲突 ID（不填则处理所有） */
+  conflictIds?: string[];
+  /** 按冲突类型过滤 */
+  conflictTypes?: ConflictType[];
+  /** 最低严重程度过滤 */
+  minSeverity?: 'HIGH' | 'MEDIUM' | 'LOW';
+  /** 指定日期 */
+  date?: string;
+  /** 预览模式（只返回操作，不实际修改） */
+  dryRun?: boolean;
+  /** 解决策略 */
+  strategy?: ResolveStrategy;
+}
+
+/** 单个冲突解决结果 */
+export interface ResolveConflictResult {
+  conflictId: string;
+  conflictType: string;
+  resolved: boolean;
+  strategy: string;
+  description: string;
+  affectedItemIds?: string[];
+  changes?: Array<{
+    itemId: string;
+    field: string;
+    oldValue: string;
+    newValue: string;
+  }>;
+  failureReason?: string;
+}
+
+/** 一键解决冲突响应 */
+export interface ResolveConflictsResponse {
+  tripId: string;
+  dryRun: boolean;
+  results: ResolveConflictResult[];
+  resolvedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  totalProcessed: number;
+  remainingConflicts?: PlanStudioConflict[];
+}
+
+// ==================== 每日行程合理性评估 V2 ====================
+
+/** 评估等级 */
+export type AssessmentGrade = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'BAD';
+
+/** 评估维度 */
+export type AssessmentDimension = 'TIMING' | 'DENSITY' | 'MEALS' | 'PHYSICAL' | 'TRANSPORT' | 'GEOGRAPHY' | 'BUFFER';
+
+/** 节奏偏好 */
+export type PacingPreference = 'relaxed' | 'normal' | 'intensive';
+
+/** 评估出行方式（别名，与 IntentTravelMode 相同） */
+export type AssessmentTravelMode = IntentTravelMode;
+export const AssessmentTravelMode = IntentTravelMode;
+
+/** 日程类型 */
+export type DayType = 
+  | 'UNPLANNED'      // 无任何活动，待规划
+  | 'REST_DAY'       // 只有酒店/住宿，休息日
+  | 'ARRIVAL_DAY'    // 首日且活动≤2
+  | 'DEPARTURE_DAY'  // 末日且活动≤2
+  | 'TOURING_DAY';   // 其他情况，游览日
+
+/** 评估状态（三态） */
+export type AssessmentStatus = 
+  | 'REASONABLE'       // ≥75分，合理
+  | 'NEEDS_ATTENTION'  // 50-74分，需关注
+  | 'HAS_ISSUES'       // <50分，有问题
+  | 'UNPLANNED';       // 待规划（无分数）
+
+/** 行程评估请求 */
+export interface AssessTripRequest {
+  /** 指定日期列表（不填则评估所有日期） */
+  dates?: string[];
+  /** 用户体力等级 (1-5, 默认3) */
+  fitnessLevel?: number;
+  /** 是否有儿童同行 */
+  hasChildren?: boolean;
+  /** 是否有老人同行 */
+  hasElderly?: boolean;
+  /** 节奏偏好 */
+  pacingPreference?: PacingPreference;
+  /** 出行方式（默认 PUBLIC_TRANSIT），影响评估阈值 */
+  travelMode?: AssessmentTravelMode;
+}
+
+/** 维度评估结果 */
+export interface DimensionAssessment {
+  dimension: AssessmentDimension;
+  name: string;
+  score: number;
+  grade: AssessmentGrade;
+  passed: boolean;
+  description: string;
+  issues?: string[];
+  suggestions?: string[];
+}
+
+/** 单日评估结果 V2 */
+export interface DayAssessment {
+  date: string;
+  /** 日程类型 */
+  dayType: DayType;
+  /** 评估状态 */
+  status: AssessmentStatus;
+  activityCount: number;
+  activeDurationHours: number;
+  /** 综合得分，未规划时为 null */
+  overallScore: number | null;
+  overallGrade?: AssessmentGrade;
+  /** @deprecated 使用 status 代替 */
+  isReasonable?: boolean;
+  /** 维度评估，未规划时不返回 */
+  dimensions?: DimensionAssessment[];
+  criticalIssueCount?: number;
+  warningCount?: number;
+  summary?: string;
+  topSuggestion?: string;
+}
+
+/** 行程评估响应 V2 */
+export interface AssessTripResponse {
+  tripId: string;
+  totalDays: number;
+  /** ✅ 合理天数 */
+  reasonableDays: number;
+  /** ⚠️ 需关注天数 */
+  needsAttentionDays: number;
+  /** ❌ 有问题天数 */
+  hasIssuesDays: number;
+  /** 📋 待规划天数 */
+  unplannedDays: number;
+  /** @deprecated 使用细分字段代替 */
+  unreasonableDays?: number;
+  /** 整体合理率（仅计算已规划日期） */
+  overallReasonableRate: number;
+  overallGrade?: AssessmentGrade;
+  days: DayAssessment[];
+  summary?: string;
+  topSuggestions?: string[];
 }
 
 export interface SyncOfflineChangesResponse {
@@ -2504,6 +2670,8 @@ export interface UpdateIntentRequest {
     maxDailyActivities?: number;
     restIntervalHours?: number;
     level?: 'relaxed' | 'standard' | 'tight';
+    /** 出行方式（持久化设置） */
+    travelMode?: IntentTravelMode;
   };
   preferences?: string[];
   constraints?: {
