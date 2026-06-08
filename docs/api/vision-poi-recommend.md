@@ -100,6 +100,13 @@ curl -X POST http://localhost:3000/api/vision/poi-recommend \
 
 ## 四、前端使用
 
+### 4.1 上传入口
+
+- **规划助手**：点击输入框旁的「拍照识别」图标 → 选择图片文件
+- **流程**：选图 → 获取定位（需授权）→ 调用 `POST /vision/poi-recommend` → 弹窗展示 OCR 结果 + 附近 POI
+
+### 4.2 代码示例
+
 ```typescript
 import { visionApi } from '@/api/vision';
 
@@ -114,3 +121,27 @@ const result = await visionApi.poiRecommend(
 // 获取能力（上传前校验）
 const caps = await visionApi.getCapabilities();
 ```
+
+---
+
+## 五、常见问题：上传不同图片但显示数据都一样
+
+**现象**：无论上传什么图片，OCR 结果和 POI 列表都相同（如始终显示「东京塔」等）。
+
+**原因**：后端默认使用 **MockOcrProvider**，会返回固定的测试数据，不依赖图片内容。
+
+**对应关系**：
+
+| OCR 提供者   | 行为                     | 配置方式 |
+|-------------|--------------------------|----------|
+| MockOcrProvider | 固定文本，用于联调/演示   | 默认     |
+| GoogleOcrProvider | 真实 OCR，按图片内容识别 | 需配置 `GOOGLE_VISION_API_KEY` |
+
+**解决方案**：在后端环境变量中配置 Google Vision API Key，并切换为 GoogleOcrProvider，例如：
+
+```bash
+# .env 或部署环境变量
+GOOGLE_VISION_API_KEY=your_google_vision_api_key
+```
+
+具体切换逻辑请参考后端 Vision 服务的实现（如通过环境变量选择 OCR 提供者）。

@@ -9,34 +9,50 @@ import {
   TrendingUp,
   AlertTriangle,
   Bookmark,
-  Download,
   ArrowRight,
 } from 'lucide-react';
 import type { RouteDirection } from '@/types/places-routes';
+import {
+  listEstimatedDays,
+  listReadinessScore,
+  listStartPointLabel,
+  listTotalDistanceKm,
+} from '@/lib/hiking-trail-detail-ui';
+import { TrailOfflineDownloadButton } from './TrailOfflineDownloadButton';
+import { isTrailBookmarked, toggleTrailBookmark } from '@/lib/trail-bookmarks';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface TrailCardProps {
   trail: RouteDirection;
   readinessScore?: number;
-  onBookmark?: (trailId: number) => void;
-  onDownload?: (trailId: number) => void;
   className?: string;
 }
 
 export function TrailCard({
   trail,
   readinessScore,
-  onBookmark,
-  onDownload,
   className,
 }: TrailCardProps) {
   const navigate = useNavigate();
+  const [bookmarked, setBookmarked] = useState(() => isTrailBookmarked(trail.id));
 
-  const getReadinessScore = (): number => {
-    if (readinessScore !== undefined) return readinessScore;
-    // 模拟可走指数计算
+  const handleBookmark = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    void toggleTrailBookmark(trail.id)
+      .then((next) => {
+        setBookmarked(next);
+        toast.success(next ? '已收藏路线' : '已取消收藏');
+      })
+      .catch((err) => toast.error((err as Error).message || '收藏操作失败'));
+  };
+
+  const getReadinessScore = (): number | null => {
+    const fromApi = readinessScore ?? listReadinessScore(trail);
+    if (fromApi != null) return fromApi;
     const month = new Date().getMonth() + 1;
     const isBestMonth = trail.seasonality?.bestMonths?.includes(month);
-    return isBestMonth ? 80 + Math.floor(Math.random() * 20) : 60 + Math.floor(Math.random() * 20);
+    return isBestMonth ? 85 : 65;
   };
 
   const getRiskTags = (): string[] => {
@@ -50,6 +66,9 @@ export function TrailCard({
   };
 
   const score = getReadinessScore();
+  const distanceKm = listTotalDistanceKm(trail);
+  const estimatedDays = listEstimatedDays(trail);
+  const startLabel = listStartPointLabel(trail);
   const risks = getRiskTags();
 
   return (
@@ -61,21 +80,26 @@ export function TrailCard({
         <div className="flex justify-between items-start">
           <div className="flex-1">
             <CardTitle className="text-lg mb-1">{trail.nameCN}</CardTitle>
-            <CardDescription className="flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              {trail.countryCode} · {trail.regions?.[0] || ''}
+            <CardDescription className="flex flex-col gap-0.5">
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                {trail.countryCode} · {trail.regions?.[0] || ''}
+              </span>
+              {startLabel ? (
+                <span className="text-xs">起点 {startLabel}</span>
+              ) : null}
             </CardDescription>
           </div>
           <div className="flex gap-1">
             <Button
               variant="ghost"
               size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onBookmark?.(trail.id);
-              }}
+              onClick={handleBookmark}
+              title={bookmarked ? '取消收藏' : '收藏'}
             >
-              <Bookmark className="h-4 w-4" />
+              <Bookmark
+                className={`h-4 w-4 ${bookmarked ? 'fill-amber-500 text-amber-500' : ''}`}
+              />
             </Button>
           </div>
         </div>
@@ -101,7 +125,13 @@ export function TrailCard({
           </div>
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4 text-muted-foreground" />
-            <span>待计算</span>
+            <span>
+              {distanceKm != null
+                ? `${distanceKm.toFixed(0)} km`
+                : estimatedDays != null
+                  ? `${estimatedDays} 天`
+                  : '—'}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
@@ -109,25 +139,26 @@ export function TrailCard({
           </div>
         </div>
 
-        {/* 可走指数 */}
-        <div className="mb-3">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-muted-foreground">可走指数</span>
-            <span className="text-sm font-semibold">{score}</span>
+        {score != null && (
+          <div className="mb-3">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs text-muted-foreground">可走指数</span>
+              <span className="text-sm font-semibold">{score}</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full ${
+                  score >= 80
+                    ? 'bg-green-500'
+                    : score >= 60
+                    ? 'bg-yellow-500'
+                    : 'bg-red-500'
+                }`}
+                style={{ width: `${score}%` }}
+              />
+            </div>
           </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className={`h-full ${
-                score >= 80
-                  ? 'bg-green-500'
-                  : score >= 60
-                  ? 'bg-yellow-500'
-                  : 'bg-red-500'
-              }`}
-              style={{ width: `${score}%` }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* 风险标签 */}
         {risks.length > 0 && (
@@ -153,16 +184,7 @@ export function TrailCard({
             查看详情
             <ArrowRight className="h-3 w-3 ml-1" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDownload?.(trail.id);
-            }}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+          <TrailOfflineDownloadButton routeDirectionId={trail.id} iconOnly />
         </div>
       </CardContent>
     </Card>

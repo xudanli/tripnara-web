@@ -14,6 +14,17 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from 'recharts';
+
+// 参考图1的雷达图样式：蓝色填充、顶点数值
+const RADAR_STYLE = {
+  stroke: '#3b82f6',
+  fill: '#3b82f6',
+  fillOpacity: 0.35,
+  strokeWidth: 2,
+  gridStroke: '#e5e7eb',
+  tickFill: '#6b7280',
+  valueLabelFill: '#3b82f6',
+};
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -131,11 +142,13 @@ function DimensionRow({
   score,
   weight,
   showWeight = false,
+  compact = false,
 }: {
   dimension: DimensionKey;
   score: number;
   weight?: number;
   showWeight?: boolean;
+  compact?: boolean;
 }) {
   const config = DIMENSION_CONFIG[dimension];
   const Icon = config.icon;
@@ -143,33 +156,38 @@ function DimensionRow({
   const percentage = Number.isNaN(s) ? 0 : Math.round(Math.max(0, Math.min(1, s)) * 100);
   
   return (
-    <div className="flex items-center gap-3 py-1.5">
+    <div className={cn('flex items-center', compact ? 'py-0.5 gap-1.5' : 'py-1.5 gap-3')}>
       <div
-        className="flex h-8 w-8 items-center justify-center rounded-lg"
+        className={cn(
+          'flex items-center justify-center rounded',
+          compact ? 'h-5 w-5' : 'h-8 w-8 rounded-lg'
+        )}
         style={{ backgroundColor: `${config.color}20` }}
       >
-        <Icon className="h-4 w-4" style={{ color: config.color }} />
+        <Icon className={cn(compact ? 'h-3 w-3' : 'h-4 w-4')} style={{ color: config.color }} />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-medium">{config.label}</span>
-          <div className="flex items-center gap-2">
+        <div className={cn('flex items-center justify-between', !compact && 'mb-1')}>
+          <span className={cn(compact ? 'text-xs' : 'text-sm font-medium')}>{config.label}</span>
+          <div className="flex items-center gap-1.5">
             {showWeight && weight !== undefined && !Number.isNaN(weight) && (
-              <span className="text-xs text-muted-foreground">
-                权重 {Math.round(weight * 100)}%
+              <span className="text-[10px] text-muted-foreground">
+                {Math.round(weight * 100)}%
               </span>
             )}
-            <span className="text-sm font-semibold tabular-nums">{percentage}%</span>
+            <span className={cn('font-semibold tabular-nums', compact ? 'text-xs' : 'text-sm')}>{percentage}%</span>
           </div>
         </div>
-        <Progress 
-          value={percentage} 
-          className="h-1.5"
-          style={{ 
-            ['--tw-bg-opacity' as string]: 0.2,
-            backgroundColor: `${config.color}20`,
-          }}
-        />
+        {!compact && (
+          <Progress 
+            value={percentage} 
+            className="h-1.5"
+            style={{ 
+              ['--tw-bg-opacity' as string]: 0.2,
+              backgroundColor: `${config.color}20`,
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -272,23 +290,23 @@ export function PlanEvaluationCard({
 
   return (
     <Card className={cn('overflow-hidden', className)}>
-      <CardHeader className={cn(compact && 'pb-2')}>
+      <CardHeader className={cn(compact ? 'p-3 pb-2' : '')}>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className={cn(compact && 'text-base')}>{title}</CardTitle>
-            {description && <CardDescription>{description}</CardDescription>}
+            <CardTitle className={cn(compact ? 'text-sm' : '')}>{title}</CardTitle>
+            {description && <CardDescription className={cn(compact && 'text-xs')}>{description}</CardDescription>}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold tabular-nums">
+          <div className="flex items-center gap-1.5">
+            <span className={cn('font-bold tabular-nums', compact ? 'text-lg' : 'text-2xl')}>
               {Number.isNaN(Number(evaluation.totalUtility)) ? '—' : Math.round((evaluation.totalUtility ?? 0) * 100)}
             </span>
-            <span className="text-sm text-muted-foreground">/ 100</span>
+            <span className={cn('text-muted-foreground', compact ? 'text-xs' : 'text-sm')}>/ 100</span>
             <UtilityBadge value={Number(evaluation.totalUtility) || 0} />
           </div>
         </div>
         {compareEvaluation && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-sm text-muted-foreground">相比原方案：</span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-muted-foreground">相比原方案：</span>
             <ComparisonIndicator 
               currentValue={evaluation.totalUtility} 
               compareValue={compareEvaluation.totalUtility} 
@@ -297,58 +315,82 @@ export function PlanEvaluationCard({
         )}
       </CardHeader>
 
-      <CardContent className={cn(compact && 'pt-0')}>
+      <CardContent className={cn(compact ? 'p-3 pt-0' : '')}>
         <div className={cn(
-          'grid gap-6',
+          'grid items-center',
+          compact ? 'gap-4 grid-cols-[200px_1fr]' : 'gap-6',
           showRadar && !compact ? 'lg:grid-cols-2' : ''
         )}>
           {/* 雷达图 */}
           {showRadar && (
-            <div className={cn('w-full', compact ? 'h-48' : 'h-64')}>
+            <div className={cn('w-full aspect-square', compact ? 'max-h-[200px]' : 'h-64')}>
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-                  <PolarGrid stroke="hsl(var(--border))" />
+                <RadarChart data={radarData} cx="50%" cy="50%" outerRadius={compact ? '72%' : '70%'}>
+                  <PolarGrid stroke={RADAR_STYLE.gridStroke} gridType="polygon" />
                   <PolarAngleAxis 
                     dataKey="dimension" 
-                    tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fontSize: compact ? 11 : 12, fill: RADAR_STYLE.tickFill }}
                   />
                   <PolarRadiusAxis 
                     angle={30} 
                     domain={[0, 100]} 
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 9, fill: RADAR_STYLE.tickFill }}
                     tickCount={5}
+                    axisLine={true}
+                    stroke={RADAR_STYLE.gridStroke}
                   />
                   {compareEvaluation && (
                     <Radar
                       name="原方案"
                       dataKey="compareScore"
-                      stroke="hsl(var(--muted-foreground))"
-                      fill="hsl(var(--muted-foreground))"
-                      fillOpacity={0.1}
+                      stroke="#9ca3af"
+                      fill="#9ca3af"
+                      fillOpacity={0.08}
                       strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      connectNulls
                     />
                   )}
                   <Radar
                     name="当前方案"
                     dataKey="score"
-                    stroke="hsl(var(--primary))"
-                    fill="hsl(var(--primary))"
-                    fillOpacity={0.3}
+                    stroke={RADAR_STYLE.stroke}
+                    fill={RADAR_STYLE.fill}
+                    fillOpacity={RADAR_STYLE.fillOpacity}
+                    strokeWidth={RADAR_STYLE.strokeWidth}
+                    connectNulls
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    dot={({ cx, cy, payload }) => {
+                      const score = payload?.payload?.score ?? payload?.value;
+                      if (score == null) return null;
+                      return (
+                        <g key={`dot-${payload?.index ?? 0}`}>
+                          <circle cx={cx} cy={cy} r={3} fill={RADAR_STYLE.stroke} />
+                          <text
+                            x={cx}
+                            y={(cy ?? 0) - 10}
+                            textAnchor="middle"
+                            fill={RADAR_STYLE.valueLabelFill}
+                            fontSize={compact ? 9 : 10}
+                            fontWeight={500}
+                          >
+                            {Math.round(Number(score))}
+                          </text>
+                        </g>
+                      );
+                    }}
                   />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
                       const data = payload[0].payload;
                       return (
-                        <div className="rounded-lg border bg-background px-3 py-2 shadow-lg">
+                        <div className="rounded border bg-background px-2 py-1 shadow text-xs">
                           <p className="font-medium">{data.dimension}</p>
-                          <p className="text-sm text-primary">
-                            当前: {data.score}%
-                          </p>
+                          <p className="text-primary">当前: {data.score}%</p>
                           {data.compareScore !== undefined && (
-                            <p className="text-sm text-muted-foreground">
-                              原方案: {data.compareScore}%
-                            </p>
+                            <p className="text-muted-foreground">原方案: {data.compareScore}%</p>
                           )}
                         </div>
                       );
@@ -360,7 +402,7 @@ export function PlanEvaluationCard({
           )}
 
           {/* 维度列表 */}
-          <div className={cn('space-y-1', compact && 'space-y-0')}>
+          <div className={cn(compact ? 'space-y-0' : 'space-y-1')}>
             {Object.keys(DIMENSION_CONFIG).map((key) => (
               <DimensionRow
                 key={key}
@@ -368,19 +410,10 @@ export function PlanEvaluationCard({
                 score={evaluation.breakdown?.[key as DimensionKey] ?? 0}
                 weight={getWeight(key as DimensionKey)}
                 showWeight={showWeights}
+                compact={compact}
               />
             ))}
           </div>
-        </div>
-
-        {/* 评估时间 */}
-        <div className="mt-4 pt-4 border-t text-xs text-muted-foreground">
-          评估时间: {evaluation.timestamp
-            ? (() => {
-                const d = new Date(evaluation.timestamp);
-                return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN');
-              })()
-            : '—'}
         </div>
       </CardContent>
     </Card>

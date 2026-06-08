@@ -17,8 +17,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { executionApi, type ReorderResponse } from '@/api/execution';
 import { toast } from 'sonner';
 import { GripVertical, Clock } from 'lucide-react';
-import { format } from 'date-fns';
-import type { ScheduleItem } from '@/types/trip';
+import { formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';
 import { cn } from '@/lib/utils';
 
 interface ReorderScheduleDialogProps {
@@ -166,7 +165,7 @@ export function ReorderScheduleDialog({
                 <div className="font-medium">{item.placeName}</div>
                 <div className="text-sm text-muted-foreground flex items-center gap-2">
                   <Clock className="w-3 h-3" />
-                  {format(new Date(item.startTime), 'HH:mm')} - {format(new Date(item.endTime), 'HH:mm')}
+                  {formatScheduleTimeRange(item.startTime, item.endTime)}
                 </div>
               </div>
               <div className="flex flex-col gap-1">

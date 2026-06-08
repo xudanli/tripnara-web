@@ -27,9 +27,11 @@ import ApprovalDialog from '@/components/trips/ApprovalDialog';
 
 interface IntentTabProps {
   tripId: string;
+  /** 紧凑模式（用于弹窗） */
+  compact?: boolean;
 }
 
-export default function IntentTab({ tripId }: IntentTabProps) {
+export default function IntentTab({ tripId, compact = false }: IntentTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -472,10 +474,10 @@ export default function IntentTab({ tripId }: IntentTabProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={compact ? 'space-y-3' : 'space-y-6'}>
       <Card data-tour="hard-constraints">
         <Collapsible open={constraintsOpen} onOpenChange={setConstraintsOpen}>
-          <CardHeader className="pb-3 border-b">
+          <CardHeader className={compact ? 'pb-2 border-b' : 'pb-3 border-b'}>
             <CollapsibleTrigger asChild>
               <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
                 <div className="flex-1">
@@ -491,8 +493,8 @@ export default function IntentTab({ tripId }: IntentTabProps) {
             </CollapsibleTrigger>
           </CardHeader>
           <CollapsibleContent>
-            <CardContent className="space-y-4 pt-4">
-          <div className="grid grid-cols-2 gap-4">
+            <CardContent className={compact ? 'space-y-3 pt-2' : 'space-y-4 pt-4'}>
+          <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-2 gap-4'}>
             <div className="space-y-2">
               <Label>{t('planStudio.intentTab.dailyWalkLimit')}</Label>
               <Input
@@ -515,7 +517,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
           </div>
 
           {/* 预算约束详细设置 */}
-          <div className="space-y-4 pt-4 border-t">
+          <div className={compact ? 'space-y-3 pt-2 border-t' : 'space-y-4 pt-4 border-t'}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Label className="text-base font-semibold">{t('planStudio.intentTab.budgetConstraintDetails')}</Label>
@@ -544,7 +546,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className={compact ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-2 gap-4'}>
               <div className="space-y-2">
                 <Label>货币单位</Label>
                 <Select value={budgetCurrency} disabled>
@@ -662,7 +664,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className={compact ? 'flex items-center space-x-3' : 'flex items-center space-x-4'}>
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="earlyRiser"
@@ -681,7 +683,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className={compact ? 'space-y-1' : 'space-y-2'}>
             <Label>{t('planStudio.intentTab.mustPlaces')}</Label>
             <div className="space-y-2">
               {/* 已选择的地点列表 */}
@@ -762,7 +764,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className={compact ? 'space-y-1' : 'space-y-2'}>
             <Label>{t('planStudio.intentTab.avoidPlaces')}</Label>
             <div className="space-y-2">
               {/* 已选择的地点列表 */}
@@ -848,7 +850,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
       </Card>
 
       <Card>
-        <CardHeader className="pb-3 border-b">
+        <CardHeader className={compact ? 'pb-2 border-b' : 'pb-3 border-b'}>
           <CardTitle className="text-xl font-semibold">{t('planStudio.intentTab.planningStrategyTitle')}</CardTitle>
           <CardDescription>{t('planStudio.intentTab.planningStrategyDescription')}</CardDescription>
         </CardHeader>
@@ -866,7 +868,7 @@ export default function IntentTab({ tripId }: IntentTabProps) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end items-center pt-4 border-t gap-3">
+      <div className={compact ? 'flex justify-end items-center pt-2 border-t gap-2' : 'flex justify-end items-center pt-4 border-t gap-3'}>
         <Button 
           variant="outline" 
           onClick={() => window.history.back()}

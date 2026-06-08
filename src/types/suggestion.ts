@@ -3,7 +3,7 @@
  * 用于承载三人格（Abu/Dr.Dre/Neptune）的输出
  */
 
-export type PersonaType = 'abu' | 'drdre' | 'neptune';
+export type PersonaType = 'abu' | 'drdre' | 'neptune' | 'user_action';
 export type SuggestionScope = 'trip' | 'day' | 'item' | 'segment';
 export type SuggestionSeverity = 'info' | 'warn' | 'blocker';
 export type SuggestionStatus = 'new' | 'seen' | 'applied' | 'dismissed';
@@ -79,6 +79,9 @@ export interface Suggestion {
       params?: Record<string, any>;
     };
     
+    /** 编排/审计用枚举；勿拼进用户正文，调试模式单独展示 */
+    reasonCodes?: string[];
+
     // Neptune相关
     repairType?: 'replace' | 'reschedule' | 'remove' | 'add';
     alternatives?: Array<{

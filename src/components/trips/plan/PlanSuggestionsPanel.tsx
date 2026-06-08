@@ -207,7 +207,13 @@ export default function PlanSuggestionsPanel({
                         </Badge>
                         {suggestion.persona && (
                           <Badge variant="secondary" className="text-xs">
-                            {suggestion.persona === 'abu' ? 'Abu' : suggestion.persona === 'drdre' ? 'Dr.Dre' : 'Neptune'}
+                            {suggestion.persona === 'abu'
+                              ? 'Abu'
+                              : suggestion.persona === 'drdre'
+                                ? 'Dr.Dre'
+                                : suggestion.persona === 'user_action'
+                                  ? '系统'
+                                  : 'Neptune'}
                           </Badge>
                         )}
                       </div>

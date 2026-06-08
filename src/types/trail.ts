@@ -148,21 +148,26 @@ export interface HikePlan extends BaseEntity {
 
 export interface PrepChecklist {
   id: string;
-  category: 'essential' | 'clothing' | 'safety' | 'navigation' | 'food' | 'shelter';
+  /** 后端如 gear / documents；未知 category 原样展示 */
+  category: string;
   items: ChecklistItem[];
 }
 
 export interface ChecklistItem {
   id: string;
   name: string;
+  nameCN?: string;
   required: boolean;
   checked: boolean;
-  reason?: string; // 为什么需要（基于温度、风险等）
+  reason?: string;
 }
 
 export interface PrepPermit {
   id: string;
   name: string;
+  nameCN?: string;
+  /** 与 hikingDetail.permits.titleZh 对齐 */
+  titleZh?: string;
   required: boolean;
   obtained: boolean;
   bookingUrl?: string;
@@ -172,7 +177,7 @@ export interface PrepPermit {
 }
 
 export interface PrepTransport {
-  type: 'drive' | 'bus' | 'shuttle' | 'other';
+  type: 'drive' | 'bus' | 'shuttle' | 'transit' | 'mixed' | 'other';
   toTrailhead: {
     method: string;
     details?: string;
@@ -182,7 +187,8 @@ export interface PrepTransport {
   fromTrailhead: {
     method: string;
     details?: string;
-    lastDeparture?: string; // HH:mm
+    lastDeparture?: string;
+    suggestedDepartTime?: string;
   };
 }
 
@@ -267,13 +273,33 @@ export interface TrailRepairSuggestion {
   };
 }
 
+export type TrailEventThreshold = {
+  metric: string;
+  value: number;
+  current: number;
+};
+
 export interface TrailEvent {
   id: string;
-  type: 'arrival' | 'departure' | 'rest' | 'skip' | 'replace' | 'risk' | 'turnaround';
-  timestamp: string; // ISO datetime
+  type:
+    | 'arrival'
+    | 'departure'
+    | 'rest'
+    | 'skip'
+    | 'replace'
+    | 'risk'
+    | 'turnaround'
+    /** 服务端根据 GPS 与路线 polyline 自动写入/移除 */
+    | 'route';
+  /** ISO datetime（服务端可能用 `at`） */
+  timestamp: string;
   location?: Coordinates;
   segmentId?: string;
   notes?: string;
+  /** 服务端 live-state 事件文案 */
+  message?: string;
+  noteZh?: string;
+  threshold?: TrailEventThreshold;
   audioNote?: string; // 语音备注 URL
 }
 

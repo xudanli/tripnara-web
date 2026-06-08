@@ -23,7 +23,8 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { EmptyExecuteIllustration } from '@/components/illustrations';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
+import { formatScheduleTime } from '@/lib/itinerary-item-card-format';
 import { toast } from 'sonner';
 import {
   Sheet,
@@ -68,6 +69,16 @@ const EXECUTE_CONFIG = {
   BUFFER_MINUTES: 15,
   WEATHER_REFRESH_INTERVAL: 5 * 60 * 1000, // 5分钟
 } as const;
+
+function formatDisplayDate(value: string, pattern: string): string {
+  const d = new Date(value.includes('T') ? value : `${value}T12:00:00`);
+  return isValid(d) ? format(d, pattern) : value;
+}
+
+function formatDisplayDateTime(value: string, pattern: string): string {
+  const d = new Date(value);
+  return isValid(d) ? format(d, pattern) : value;
+}
 
 export default function ExecutePage() {
   const [searchParams] = useSearchParams();
@@ -183,6 +194,22 @@ export default function ExecutePage() {
     const countryCode = trip.destination.split(',')[0]?.trim().toUpperCase();
     return countryCode === 'IS';
   }, [trip?.destination]);
+
+  const itemIdMap = useMemo(() => {
+    const map = new Map<number, string>();
+    if (!trip?.TripDay || !tripState?.currentDayId) {
+      return map;
+    }
+    const currentDay = trip.TripDay.find(day => day.id === tripState.currentDayId);
+    if (currentDay?.ItineraryItem) {
+      currentDay.ItineraryItem.forEach(item => {
+        if (item.placeId) {
+          map.set(item.placeId, item.id);
+        }
+      });
+    }
+    return map;
+  }, [trip, tripState?.currentDayId]);
 
   useEffect(() => {
     if (tripId) {
@@ -890,7 +917,7 @@ export default function ExecutePage() {
           <h1 className="text-xl sm:text-2xl font-bold truncate">{trip.destination || '执行模式'}</h1>
           <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
             {currentDay && (
-              <span>{format(new Date(currentDay.date), 'MM-dd')}</span>
+              <span>{formatDisplayDate(currentDay.date, 'MM-dd')}</span>
             )}
             <span>{format(new Date(), 'HH:mm')}</span>
           </div>
@@ -998,7 +1025,7 @@ export default function ExecutePage() {
                       </span>
                       {nextStop.startTime && (
                         <span className="text-sm text-muted-foreground">
-                          {format(new Date(nextStop.startTime), 'HH:mm')}
+                          {formatScheduleTime(nextStop.startTime)}
                         </span>
                       )}
                     </div>
@@ -1094,7 +1121,7 @@ export default function ExecutePage() {
                   <div className="text-xs opacity-90">{reminder.message}</div>
                   {reminder.triggerTime && (
                     <div className="text-xs opacity-70 mt-1">
-                      {format(new Date(reminder.triggerTime), 'MM-dd HH:mm')}
+                      {formatDisplayDateTime(reminder.triggerTime, 'MM-dd HH:mm')}
                     </div>
                   )}
                 </div>
@@ -1358,19 +1385,7 @@ export default function ExecutePage() {
           tripId={tripId!}
           dayId={tripState.currentDayId}
           items={todaySchedule.schedule.items}
-          itemIdMap={useMemo(() => {
-            // 构建 placeId 到 itemId 的映射
-            const map = new Map<number, string>();
-            const currentDay = trip.TripDay?.find(day => day.id === tripState.currentDayId);
-            if (currentDay?.ItineraryItem) {
-              currentDay.ItineraryItem.forEach(item => {
-                if (item.placeId) {
-                  map.set(item.placeId, item.id);
-                }
-              });
-            }
-            return map;
-          }, [trip, tripState.currentDayId])}
+          itemIdMap={itemIdMap}
           open={showReorderDialog}
           onOpenChange={setShowReorderDialog}
           onSuccess={async (result) => {

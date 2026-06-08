@@ -28,13 +28,13 @@ import {
   ArrowLeft,
   MapPin,
   Clock,
-  Zap,
   TrendingUp,
   Baby,
   UserCog,
   Loader2,
   Sparkles,
   CheckCircle2,
+  Zap,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -46,6 +46,7 @@ import {
   PACING_FACTOR_LABELS,
   TRAVEL_MODE_OPTIONS,
   TRIP_TRAVEL_MODE_MAP,
+  INTENT_TRAVEL_MODE_MAP,
 } from '@/constants/itinerary-optimization';
 import type { OptimizeTravelMode } from '@/types/itinerary-optimization';
 import type { TripDetail } from '@/types/trip';
@@ -285,6 +286,17 @@ export default function TripOptimizePage() {
           ) as OptimizeRouteConfig['transportPreferences'])
         : undefined;
 
+      let defaultTravelMode = config.defaultTravelMode;
+      if (!defaultTravelMode && tripId) {
+        try {
+          const intent = await tripsApi.getIntent(tripId);
+          const rawMode = intent.pacingConfig?.travelMode;
+          defaultTravelMode = rawMode ? INTENT_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
+        } catch {
+          // 忽略
+        }
+      }
+
       const request: OptimizeRouteRequest = {
         placeIds: selectedPlaces.map((p) => p.id),
         config: {
@@ -292,7 +304,7 @@ export default function TripOptimizePage() {
           date: dateStr,
           startTime: startDateTime,
           endTime: endDateTime,
-          defaultTravelMode: config.defaultTravelMode,
+          defaultTravelMode,
           transportPreferences: transportPreferences && Object.keys(transportPreferences).length > 0
             ? transportPreferences
             : undefined,
@@ -382,6 +394,32 @@ export default function TripOptimizePage() {
           </div>
         </div>
       </div>
+
+      {/* 提示：前往行程详情页使用智能优化 */}
+      {tripId && (
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Zap className="w-5 h-5 text-primary" />
+                <div>
+                  <p className="font-medium">需要智能优化？</p>
+                  <p className="text-sm text-muted-foreground">
+                    在行程详情页顶部使用「AI 自动优化」，或进入规划工作台调整行程
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/dashboard/trips/${tripId}`)}
+              >
+                前往行程详情
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50">

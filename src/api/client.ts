@@ -1,5 +1,22 @@
-import axios from 'axios';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { CONFIG } from '@/constants/config';
+import { setLastAgentRequestId } from '@/lib/agent-request-context';
+import { mapDecisionEngineUserMessage } from '@/lib/decision-engine-error-map';
+import {
+  computeBusyRetryDelayMs,
+  handleStalePlanVersionConflict,
+  parseTripOrchestrationConflictBody,
+  sleep,
+  STALE_PLAN_VERSION_CODE,
+  toastTripOrchestrationBusyExhausted,
+  toastTripOrchestrationBusyWaiting,
+  TRIP_ORCHESTRATION_BUSY_CODE,
+} from '@/lib/trip-orchestration-conflict';
+import {
+  resolveHttpErrorUserMessage,
+  resolveLocalizedErrorMessage,
+  type TripnaraHttpError,
+} from '@/types/http-error';
 
 // 声明全局类型，支持从 config.js 读取配置
 declare global {
@@ -47,9 +64,98 @@ const apiClient = axios.create({
   },
 });
 
+function readConfigHeader(config: { headers?: unknown }, name: string): string | undefined {
+  const headers = config.headers;
+  if (!headers || typeof headers !== 'object') return undefined;
+  const getter = (headers as { get?: (key: string) => unknown }).get;
+  const names = [name, name.toLowerCase()];
+  if (typeof getter === 'function') {
+    for (const n of names) {
+      const v = getter.call(headers, n);
+      if (v != null && String(v).trim()) return String(v).trim();
+    }
+    return undefined;
+  }
+  const h = headers as Record<string, unknown>;
+  for (const n of names) {
+    const v = h[n];
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+  return undefined;
+}
+
+function classifyTripnaraApiKind(url: string | undefined): 'agent' | 'decision_engine' | 'default' {
+  const u = url || '';
+  if (u.includes('/agent/') || u.startsWith('agent/')) return 'agent';
+  if (u.includes('/decision-engine') || u.includes('decision-engine/')) return 'decision_engine';
+  return 'default';
+}
+
+function isRouteAndRunUrl(url: string | undefined): boolean {
+  const u = url || '';
+  return u.includes('/agent/route_and_run');
+}
+
+async function handleTripOrchestration409(
+  error: AxiosError,
+  originalRequest: InternalAxiosRequestConfig
+): Promise<unknown> {
+  const status = error.response?.status;
+  const body = parseTripOrchestrationConflictBody(error.response?.data);
+  if (status !== 409 || !body?.code) return null;
+
+  if (body.code === TRIP_ORCHESTRATION_BUSY_CODE) {
+    const n = originalRequest.__busyRetryCount ?? 0;
+    if (n < 3) {
+      if (n === 0) toastTripOrchestrationBusyWaiting();
+      originalRequest.__busyRetryCount = n + 1;
+      await sleep(computeBusyRetryDelayMs(n));
+      return apiClient(originalRequest);
+    }
+    toastTripOrchestrationBusyExhausted();
+    const busyErr = new Error(body.message?.trim() || '行程保存繁忙，请稍后再试') as TripnaraHttpError;
+    busyErr.code = TRIP_ORCHESTRATION_BUSY_CODE;
+    busyErr.response = error.response;
+    busyErr.config = originalRequest;
+    attachTripnaraDiagnostics(busyErr, originalRequest);
+    return Promise.reject(busyErr);
+  }
+
+  if (body.code === STALE_PLAN_VERSION_CODE) {
+    await handleStalePlanVersionConflict(body);
+    const staleErr = new Error(body.message?.trim() || '行程版本已过期，请刷新后重试') as TripnaraHttpError;
+    staleErr.code = STALE_PLAN_VERSION_CODE;
+    staleErr.response = error.response;
+    staleErr.config = originalRequest;
+    attachTripnaraDiagnostics(staleErr, originalRequest);
+    return Promise.reject(staleErr);
+  }
+
+  return null;
+}
+
+function attachTripnaraDiagnostics(
+  err: TripnaraHttpError,
+  config: InternalAxiosRequestConfig | undefined,
+  extras?: { decisionEngineCode?: string }
+): void {
+  if (!config) return;
+  const rid = readConfigHeader(config, 'X-Request-Id');
+  if (rid) {
+    err.requestId = rid;
+    if (config.tripnaraApiKind === 'agent') {
+      setLastAgentRequestId(rid);
+    }
+  }
+  if (extras?.decisionEngineCode) {
+    err.decisionEngineCode = extras.decisionEngineCode;
+  }
+}
+
 // Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
+    config.tripnaraApiKind = classifyTripnaraApiKind(config.url || '');
     // Add auth token if available (从 sessionStorage 读取)
     const accessToken = sessionStorage.getItem('accessToken');
     
@@ -94,7 +200,12 @@ apiClient.interceptors.request.use(
         console.warn('[API Client] ⚠️ 请求需要认证但未找到 accessToken:', config.url);
       }
     }
-    
+
+    const outgoingRid = readConfigHeader(config, 'X-Request-Id');
+    if (config.tripnaraApiKind === 'agent' && outgoingRid) {
+      setLastAgentRequestId(outgoingRid);
+    }
+
     return config;
   },
   (error) => {
@@ -132,7 +243,10 @@ apiClient.interceptors.response.use(
         const errorData = (response.data as any)?.error;
         // 防御性检查：确保 error 对象存在
         const errorCode = errorData?.code || 'UNKNOWN_ERROR';
-        const errorMessage = errorData?.message || (errorData ? '请求失败' : '服务器返回了无效的错误格式');
+        const errorMessage =
+          resolveLocalizedErrorMessage(errorData?.message) ||
+          resolveLocalizedErrorMessage(errorData?.error) ||
+          (errorData ? '请求失败' : '服务器返回了无效的错误格式');
         
         // 如果是 UNAUTHORIZED 错误，需要特殊处理（即使状态码是 201）
         if (errorCode === 'UNAUTHORIZED' || errorMessage.includes('登录') || errorMessage.includes('认证')) {
@@ -150,14 +264,15 @@ apiClient.interceptors.response.use(
           }
           
           // 创建一个类似 401 的错误对象，触发认证流程
-          const authError = new Error(errorMessage) as any;
+          const authError = new Error(errorMessage) as TripnaraHttpError;
           authError.response = {
             status: 401, // 强制设置为 401，触发认证处理
             data: response.data,
           };
           authError.config = response.config;
           authError.code = 'UNAUTHORIZED';
-          
+          attachTripnaraDiagnostics(authError, response.config);
+
           // 跳转到错误处理流程
           return Promise.reject(authError);
         }
@@ -192,14 +307,22 @@ apiClient.interceptors.response.use(
           });
         }
         
-        const businessError = new Error(errorMessage) as any;
+        const isDecision = response.config.tripnaraApiKind === 'decision_engine';
+        const displayMessage = isDecision
+          ? mapDecisionEngineUserMessage(errorCode, errorMessage)
+          : errorMessage;
+
+        const businessError = new Error(displayMessage) as TripnaraHttpError;
         businessError.response = {
           status: response.status,
           data: response.data,
         };
         businessError.config = response.config;
         businessError.code = errorCode;
-        
+        attachTripnaraDiagnostics(businessError, response.config, {
+          decisionEngineCode: isDecision ? errorCode : undefined,
+        });
+
         return Promise.reject(businessError);
       }
     }
@@ -302,6 +425,19 @@ apiClient.interceptors.response.use(
       }
     }
 
+    if (
+      isRouteAndRunUrl(originalRequest.url) &&
+      error.response?.status === 409
+    ) {
+      const orchestrationOutcome = await handleTripOrchestration409(
+        error as AxiosError,
+        originalRequest
+      );
+      if (orchestrationOutcome !== null) {
+        return orchestrationOutcome;
+      }
+    }
+
     // 忽略 AbortError（请求被取消是正常行为，如组件卸载）
     if (error?.name === 'AbortError' || 
         error?.code === 'ERR_CANCELED' || 
@@ -314,9 +450,7 @@ apiClient.interceptors.response.use(
     // 处理其他错误
     if (error.response) {
       // 后端错误格式: { statusCode, message, error }
-      const errorData = error.response.data;
-      const errorMessage = errorData?.message || errorData?.error || '请求失败';
-      error.message = errorMessage;
+      error.message = resolveHttpErrorUserMessage(error.response.data);
     } else if (error.request) {
       // 请求已发送但没有收到响应
       if (error.code === 'ECONNABORTED') {
@@ -355,6 +489,23 @@ apiClient.interceptors.response.use(
       // 请求配置错误
       console.error('[API Client] ❌ 请求配置错误:', error);
       error.message = error.message || '请求失败';
+    }
+
+    if (error.config) {
+      const te = error as TripnaraHttpError;
+      attachTripnaraDiagnostics(te, error.config);
+      if (error.config.tripnaraApiKind === 'decision_engine' && error.response?.data) {
+        const d = error.response.data as {
+          error?: { code?: string; message?: string };
+          message?: string;
+        };
+        const c = d?.error?.code;
+        const m = (d?.error?.message || d?.message || error.message) as string;
+        if (c && typeof c === 'string') {
+          te.decisionEngineCode = c;
+          error.message = mapDecisionEngineUserMessage(c, m || String(error.message));
+        }
+      }
     }
 
     return Promise.reject(error);

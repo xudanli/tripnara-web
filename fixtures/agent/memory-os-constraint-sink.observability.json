@@ -1,0 +1,18 @@
+{
+  "observability": {
+    "latency_ms": 8420,
+    "router_ms": 120,
+    "system_mode": "SYSTEM2",
+    "memory_contract": {
+      "revision": "rev-mem-2026-06-04T08:00:00Z",
+      "loaded": true,
+      "layers": ["L0", "L1", "L2"],
+      "constraint_sink": {
+        "hydrated": true,
+        "applied_keys": ["destination", "pace", "guardian_debate_intent_hint"],
+        "patch_ids": ["patch-trip-001", "patch-trip-002"],
+        "overridden_by_request_keys": []
+      }
+    }
+  }
+}

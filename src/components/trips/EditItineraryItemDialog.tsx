@@ -609,39 +609,43 @@ export function EditItineraryItemDialog({
                     </Select>
                   </div>
                   
-                  <div className="space-y-1">
-                    <Label htmlFor="bookingConfirmation" className="text-xs">预订确认号</Label>
-                    <Input
-                      id="bookingConfirmation"
-                      placeholder="如：ABC123456"
-                      value={formData.bookingConfirmation || ''}
-                      onChange={(e) => setFormData({ ...formData, bookingConfirmation: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <Label htmlFor="bookingUrl" className="text-xs flex items-center gap-1">
-                      <Link2 className="w-3 h-3" />
-                      预订链接
-                    </Label>
-                    <Input
-                      id="bookingUrl"
-                      type="url"
-                      placeholder="https://booking.com/xxx"
-                      value={formData.bookingUrl || ''}
-                      onChange={(e) => setFormData({ ...formData, bookingUrl: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <Label htmlFor="bookedAt" className="text-xs">预订时间</Label>
-                    <Input
-                      id="bookedAt"
-                      type="datetime-local"
-                      value={formData.bookedAt || ''}
-                      onChange={(e) => setFormData({ ...formData, bookedAt: e.target.value })}
-                    />
-                  </div>
+                  {formData.bookingStatus === 'BOOKED' && (
+                    <>
+                      <div className="space-y-1">
+                        <Label htmlFor="bookingConfirmation" className="text-xs">预订确认号</Label>
+                        <Input
+                          id="bookingConfirmation"
+                          placeholder="如：ABC123456"
+                          value={formData.bookingConfirmation || ''}
+                          onChange={(e) => setFormData({ ...formData, bookingConfirmation: e.target.value })}
+                        />
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <Label htmlFor="bookingUrl" className="text-xs flex items-center gap-1">
+                          <Link2 className="w-3 h-3" />
+                          预订链接
+                        </Label>
+                        <Input
+                          id="bookingUrl"
+                          type="url"
+                          placeholder="https://booking.com/xxx"
+                          value={formData.bookingUrl || ''}
+                          onChange={(e) => setFormData({ ...formData, bookingUrl: e.target.value })}
+                        />
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <Label htmlFor="bookedAt" className="text-xs">预订时间</Label>
+                        <Input
+                          id="bookedAt"
+                          type="datetime-local"
+                          value={formData.bookedAt || ''}
+                          onChange={(e) => setFormData({ ...formData, bookedAt: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

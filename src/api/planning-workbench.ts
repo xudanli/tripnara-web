@@ -92,6 +92,12 @@ export interface ExecutePlanningWorkbenchRequest {
   tripId?: string;           // 行程 ID（可选，用于关联现有行程）
   existingPlanState?: any;   // 现有 PlanState（可选，用于增量更新）
   userAction?: UserAction;   // 用户操作
+  /** commit：选中的骨架方案 id */
+  selectedOptionId?: string;
+  /** compare / commit（服务端未缓存方案集时） */
+  skeletonOptions?: PlanSkeletonSet;
+  /** 内部扩展（tripRunId、userId、异步进度等），一般无需传 */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -157,6 +163,7 @@ export interface DrDrePersonaOutput {
   explanation: string;
   evidence: EvidenceItem[];
   recommendations?: RecommendationItem[];
+  confirmations?: string[];
 }
 
 /**
@@ -170,6 +177,7 @@ export interface NeptunePersonaOutput {
   explanation: string;
   evidence: EvidenceItem[];
   recommendations?: RecommendationItem[];
+  confirmations?: string[];
 }
 
 /**
@@ -195,13 +203,94 @@ export interface ConsolidatedDecision {
   nextSteps: string[];
 }
 
+/** 健康度档位（内部能力输出，可放高级页） */
+export type WorkbenchHealthBand = 'healthy' | 'warning' | 'critical';
+
+export interface OptionComparisonEntry {
+  optionId: string;
+  /** 各维度 0–100 分 */
+  scores?: Record<string, number>;
+  summary?: string;
+}
+
+export interface OptionComparison {
+  options?: OptionComparisonEntry[];
+  recommendation?: {
+    optionId: string;
+    reason: string;
+  };
+}
+
+export interface SkeletonPoi {
+  name?: string;
+  nameEn?: string;
+  category?: string;
+  coordinates?: { lat: number; lng: number };
+  rating?: number;
+  [key: string]: unknown;
+}
+
+export interface PlanSkeleton {
+  id: string;
+  name: string;
+  dayThemes?: Array<{ day: number; theme: string; description?: string }>;
+  anchors?: Array<{
+    day: number;
+    location: string;
+    activity: string;
+    priority: 'anchor' | 'core' | 'optional';
+  }>;
+  transferDays?: Array<{ day: number; from: string; to: string; mode?: string }>;
+  pois?: Array<{
+    day: number;
+    accommodation?: SkeletonPoi;
+    restaurants?: Array<{ meal: 'breakfast' | 'lunch' | 'dinner'; poi: SkeletonPoi }>;
+    attractions?: SkeletonPoi[];
+  }>;
+  rationale?: {
+    philosophy?: string;
+    tradeoffs?: string[];
+    strengths?: string[];
+    weaknesses?: string[];
+  };
+}
+
+export interface PlanSkeletonSet {
+  options: PlanSkeleton[];
+  recommendation?: {
+    optionId: string;
+    reason: string;
+  };
+}
+
 /**
- * UI 输出
+ * 后端 PersonaShellOutput：`uiOutput.personas` 可为整个人格外壳（内含 personas.abu 等）。
+ */
+export interface PersonaShellOutput {
+  personas: PersonasOutput;
+  consolidatedDecision: ConsolidatedDecision;
+  timestamp: string;
+}
+
+/**
+ * UI 输出（execute / compare / adjust 等返回的 uiOutput 经 {@link normalizeWorkbenchUiOutput} 后为扁平结构）
  */
 export interface UIOutput {
   personas: PersonasOutput;
   consolidatedDecision: ConsolidatedDecision;
   timestamp: string;
+  /** 方案骨架（偏大，可懒加载 / 调试） */
+  skeletonOptions?: PlanSkeletonSet;
+  /** 多方案对比 */
+  comparison?: OptionComparison;
+  /** 预算 / 节奏 / 可行性 */
+  health?: {
+    budget: WorkbenchHealthBand;
+    pace: WorkbenchHealthBand;
+    feasibility: WorkbenchHealthBand;
+  };
+  /** 流程级待确认项 */
+  confirmations?: string[];
 }
 
 /**
@@ -219,6 +308,10 @@ export interface PlanState {
   evidence_refs: any[];
   decision_log_refs: any[];
   status: 'DRAFT' | 'PROPOSED' | 'NEED_CONFIRM' | 'LOCKED';
+  /** 世界模型（体量大，避免主列表全量渲染） */
+  world?: Record<string, unknown>;
+  /** 服务端扩展桶，勿假设固定 key */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -412,6 +505,138 @@ export interface AdjustPlanResponse {
   changes: PlanChange[];
 }
 
+const FALLBACK_CONSOLIDATED_DECISION: ConsolidatedDecision = {
+  status: 'NEED_CONFIRM',
+  summary: '',
+  nextSteps: [],
+};
+
+function isPersonaShellOutput(value: unknown): value is PersonaShellOutput {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  const inner = v.personas;
+  if (!inner || typeof inner !== 'object') return false;
+  const innerObj = inner as Record<string, unknown>;
+  const hasTriplet =
+    'abu' in innerObj || 'drdre' in innerObj || 'neptune' in innerObj;
+  return (
+    hasTriplet &&
+    v.consolidatedDecision !== undefined &&
+    typeof v.consolidatedDecision === 'object'
+  );
+}
+
+/**
+ * 将后端 `uiOutput` 归一为扁平结构（兼容 `personas` 为 {@link PersonaShellOutput} 的嵌套形态）。
+ */
+export function normalizeWorkbenchUiOutput(raw: unknown): UIOutput {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const personasField = r.personas;
+
+  let personas: PersonasOutput;
+  let consolidatedDecision: ConsolidatedDecision;
+  let timestamp: string;
+
+  if (isPersonaShellOutput(personasField)) {
+    const shell = personasField;
+    personas = shell.personas ?? { abu: null, drdre: null, neptune: null };
+    consolidatedDecision =
+      shell.consolidatedDecision ?? FALLBACK_CONSOLIDATED_DECISION;
+    timestamp =
+      typeof shell.timestamp === 'string' && shell.timestamp.length > 0
+        ? shell.timestamp
+        : new Date().toISOString();
+  } else {
+    personas =
+      (personasField as PersonasOutput | undefined) ?? {
+        abu: null,
+        drdre: null,
+        neptune: null,
+      };
+    consolidatedDecision =
+      (r.consolidatedDecision as ConsolidatedDecision | undefined) ??
+      FALLBACK_CONSOLIDATED_DECISION;
+    timestamp =
+      typeof r.timestamp === 'string' && r.timestamp.length > 0
+        ? r.timestamp
+        : new Date().toISOString();
+  }
+
+  return {
+    personas,
+    consolidatedDecision,
+    timestamp,
+    skeletonOptions: r.skeletonOptions as PlanSkeletonSet | undefined,
+    comparison: r.comparison as OptionComparison | undefined,
+    health: r.health as UIOutput['health'],
+    confirmations: Array.isArray(r.confirmations)
+      ? (r.confirmations as unknown[]).filter((x): x is string => typeof x === 'string')
+      : undefined,
+  };
+}
+
+export function normalizeExecutePlanningWorkbenchResponse(
+  res: ExecutePlanningWorkbenchResponse
+): ExecutePlanningWorkbenchResponse {
+  return {
+    planState: res.planState,
+    uiOutput: normalizeWorkbenchUiOutput(res.uiOutput),
+  };
+}
+
+/** 合并流程级、门控与人格侧的待确认文案（去重保序） */
+export function mergeWorkbenchConfirmations(
+  result: Pick<ExecutePlanningWorkbenchResponse, 'planState' | 'uiOutput'>
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const pushOne = (s?: string) => {
+    const t = s?.trim();
+    if (!t || seen.has(t)) return;
+    seen.add(t);
+    out.push(t);
+  };
+  const pushMany = (xs?: string[]) => xs?.forEach(pushOne);
+
+  pushMany(result.uiOutput.confirmations);
+  const gate = result.planState?.gate as { requiredUserConfirmations?: string[] } | undefined;
+  pushMany(gate?.requiredUserConfirmations);
+
+  pushMany(result.uiOutput.personas.abu?.confirmations);
+  pushMany(result.uiOutput.personas.drdre?.confirmations);
+  pushMany(result.uiOutput.personas.neptune?.confirmations);
+
+  return out;
+}
+
+function normalizePlanDetail(raw: PlanDetail): PlanDetail {
+  return {
+    ...raw,
+    uiOutput: normalizeWorkbenchUiOutput(raw.uiOutput),
+  };
+}
+
+function normalizeTripWorkbench(raw: TripWorkbench): TripWorkbench {
+  if (!raw.currentPlan) return raw;
+  return {
+    ...raw,
+    currentPlan: {
+      ...raw.currentPlan,
+      uiOutput: normalizeWorkbenchUiOutput(raw.currentPlan.uiOutput),
+    },
+  };
+}
+
+function normalizeComparePlansResponse(raw: ComparePlansResponse): ComparePlansResponse {
+  return {
+    ...raw,
+    plans: raw.plans.map((p) => ({
+      ...p,
+      uiOutput: normalizeWorkbenchUiOutput(p.uiOutput),
+    })),
+  };
+}
+
 /**
  * 成功响应包装
  */
@@ -429,6 +654,7 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -641,19 +867,20 @@ export const planningWorkbenchApi = {
 
       // 处理包装在 ApiResponseWrapper 中的响应
       const wrappedResponse = handleResponse(response);
+      const normalized = normalizeExecutePlanningWorkbenchResponse(wrappedResponse);
       console.log('[Planning Workbench API] 解析后的响应:', {
-        planId: wrappedResponse.planState?.plan_id,
-        planVersion: wrappedResponse.planState?.plan_version,
-        status: wrappedResponse.planState?.status,
+        planId: normalized.planState?.plan_id,
+        planVersion: normalized.planState?.plan_version,
+        status: normalized.planState?.status,
         personas: {
-          abu: wrappedResponse.uiOutput?.personas?.abu?.verdict,
-          drdre: wrappedResponse.uiOutput?.personas?.drdre?.verdict,
-          neptune: wrappedResponse.uiOutput?.personas?.neptune?.verdict,
+          abu: normalized.uiOutput?.personas?.abu?.verdict,
+          drdre: normalized.uiOutput?.personas?.drdre?.verdict,
+          neptune: normalized.uiOutput?.personas?.neptune?.verdict,
         },
-        consolidatedDecision: wrappedResponse.uiOutput?.consolidatedDecision?.status,
+        consolidatedDecision: normalized.uiOutput?.consolidatedDecision?.status,
       });
 
-      return wrappedResponse;
+      return normalized;
     } catch (error: any) {
       console.error('[Planning Workbench API] execute 请求失败:', {
         error,
@@ -830,7 +1057,7 @@ export const planningWorkbenchApi = {
         workbenchStatus: wrappedResponse.workbenchStatus,
       });
 
-      return wrappedResponse;
+      return normalizeTripWorkbench(wrappedResponse);
     } catch (error: any) {
       console.error('[Planning Workbench API] getTripWorkbench 请求失败:', {
         error,
@@ -949,7 +1176,7 @@ export const planningWorkbenchApi = {
         status: wrappedResponse.status,
       });
 
-      return wrappedResponse;
+      return normalizePlanDetail(wrappedResponse);
     } catch (error: any) {
       console.error('[Planning Workbench API] getPlan 请求失败:', {
         error,
@@ -1005,7 +1232,7 @@ export const planningWorkbenchApi = {
         hasSummary: !!wrappedResponse.summary,
       });
 
-      return wrappedResponse;
+      return normalizeComparePlansResponse(wrappedResponse);
     } catch (error: any) {
       console.error('[Planning Workbench API] comparePlans 请求失败:', {
         error,
@@ -1065,7 +1292,10 @@ export const planningWorkbenchApi = {
         changesCount: wrappedResponse.changes.length,
       });
 
-      return wrappedResponse;
+      return {
+        ...wrappedResponse,
+        uiOutput: normalizeWorkbenchUiOutput(wrappedResponse.uiOutput),
+      };
     } catch (error: any) {
       console.error('[Planning Workbench API] adjustPlan 请求失败:', {
         error,

@@ -67,3 +67,10 @@ export const TRIP_TRAVEL_MODE_MAP: Record<string, 'TRANSIT' | 'WALKING' | 'DRIVI
   WALKING: 'WALKING',
 };
 
+/** intent pacingConfig.travelMode (IntentTravelMode) 映射到 OptimizeRouteConfig.defaultTravelMode */
+export const INTENT_TRAVEL_MODE_MAP: Record<string, 'TRANSIT' | 'WALKING' | 'DRIVING'> = {
+  WALK: 'WALKING',
+  DRIVE: 'DRIVING',
+  MIXED: 'TRANSIT',
+};
+

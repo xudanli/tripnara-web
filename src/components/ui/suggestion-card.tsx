@@ -16,15 +16,13 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import type { Suggestion, SuggestionAction, EvidenceLink } from '@/types/suggestion';
-import { 
-  Shield, 
-  Activity, 
-  RefreshCw, 
-  ExternalLink, 
+import {
+  ExternalLink,
   AlertTriangle,
   Info,
   ChevronRight,
 } from 'lucide-react';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 
 export interface SuggestionCardProps {
   /**
@@ -51,22 +49,6 @@ export interface SuggestionCardProps {
    * 查看证据回调
    */
   onViewEvidence?: (evidence: EvidenceLink[]) => void;
-}
-
-/**
- * 获取三人格图标
- */
-function getPersonaIcon(persona: Suggestion['persona']) {
-  switch (persona) {
-    case 'abu':
-      return Shield;
-    case 'drdre':
-      return Activity;
-    case 'neptune':
-      return RefreshCw;
-    default:
-      return Info;
-  }
 }
 
 /**
@@ -130,7 +112,6 @@ export function SuggestionCard({
   onAction,
   onViewEvidence,
 }: SuggestionCardProps) {
-  const PersonaIcon = getPersonaIcon(suggestion.persona);
   const personaColors = getPersonaColorClasses(suggestion.persona);
   const severityConfig = getSeverityConfig(suggestion.severity);
   const SeverityIcon = severityConfig.icon;
@@ -165,8 +146,8 @@ export function SuggestionCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 flex-1">
             {/* 三人格图标 */}
-            <div className={cn('p-2 rounded-md border', personaColors)}>
-              <PersonaIcon className="w-4 h-4" />
+            <div className={cn('rounded-md border p-1', personaColors)}>
+              <PersonaAvatar persona={suggestion.persona} size={32} withBackground />
             </div>
             
             <div className="flex-1 min-w-0">

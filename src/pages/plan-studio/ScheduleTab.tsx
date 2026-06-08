@@ -8,15 +8,18 @@ import { Spinner } from '@/components/ui/spinner';
 import { ScheduleTabSkeleton } from '@/components/plan-studio/ScheduleTabSkeleton';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import { EmptyStateCard } from '@/components/ui/empty-state-images';
-import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Shield, Activity, Wrench, Info, ClipboardCheck, ExternalLink, Calendar, Zap, Copy, CheckCircle2, XCircle, Lightbulb } from 'lucide-react';
+import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Info, ClipboardCheck, ExternalLink, Calendar, Zap, Copy, CheckCircle2, XCircle, Lightbulb } from 'lucide-react';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
+import { TripPersonaHealthRow } from '@/components/plan-studio/TripPersonaHealthRow';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { tripPlannerApi } from '@/api/trip-planner';
-import { readinessApi, type ScoreBreakdownResponse } from '@/api/readiness';
+import { readinessApi, type ScoreBreakdownResponse, type RiskWarningsResponse } from '@/api/readiness';
 import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict, DayTravelInfoResponse, PersonaAlert } from '@/types/trip';
+import { sortItineraryItemsForDisplay } from '@/lib/itinerary-item-sort';
 import type { SuggestionStats } from '@/types/suggestion';
 import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
-import { TRIP_TRAVEL_MODE_MAP } from '@/constants/itinerary-optimization';
+import { INTENT_TRAVEL_MODE_MAP } from '@/constants/itinerary-optimization';
 import type { PlaceCategory } from '@/types/places-routes';
 import { format } from 'date-fns';
 import { DrawerContext } from '@/components/layout/DashboardLayout';
@@ -62,7 +65,23 @@ import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
 import { TravelSegmentIndicator, TravelSummary } from '@/components/plan-studio/TravelSegmentIndicator';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { usePlaceImages } from '@/hooks/usePlaceImages';
+import { useAuth } from '@/hooks/useAuth';
 import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudioContext';
+import { ItineraryAdjustScheduleDayPreview } from '@/components/plan-studio/ItineraryAdjustScheduleDayPreview';
+import { scheduleDayMatchesItineraryAdjustScope } from '@/lib/itinerary-adjust-response';
+import { getPersonaAlertUserBody } from '@/lib/persona-alert-display';
+import {
+  canEditSlotTiming,
+  canRunRouteRecalculation,
+  getSegmentEditorDegradation,
+  guardStructuralEditOrToast,
+} from '@/lib/world-model-guards';
+import { SegmentEditorDegradedShell } from '@/components/planning/SegmentEditorDegradedShell';
+import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
+import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
+import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
+import { isEmbeddedHikingTrip } from '@/lib/trip-hiking';
+import { EmbeddedHikingStatusBar, EmbeddedHikingDayRail } from '@/components/hiking';
 
 interface ScheduleTabProps {
   tripId: string;
@@ -72,15 +91,35 @@ interface ScheduleTabProps {
 
 export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer }: ScheduleTabProps) {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
+  const freezeRouteSelection = worldModelGuards?.freeze_route_selection === true;
+  const segmentDegradation = useMemo(
+    () => getSegmentEditorDegradation(worldModelGuards),
+    [worldModelGuards]
+  );
+  const scheduleTimelineRef = useRef<HTMLDivElement>(null);
   
   // 左右联动上下文 - 使用 useContext 直接访问（可能为 null）
   const planStudioContext = useContext(PlanStudioContext);
+  const itineraryAdjustDraftPreview = planStudioContext?.itineraryAdjustDraftPreview ?? null;
   
   // 🚀 使用 ref 存储 context，避免在依赖项中使用导致循环
   const planStudioContextRef = useRef(planStudioContext);
   useEffect(() => {
     planStudioContextRef.current = planStudioContext;
   }, [planStudioContext]);
+
+  useEffect(() => {
+    if (!itineraryAdjustDraftPreview) return;
+    const t = window.setTimeout(() => {
+      const el = scheduleTimelineRef.current?.querySelector(
+        '[data-itinerary-adjust-draft-preview]'
+      );
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [itineraryAdjustDraftPreview]);
   
   // 从 context 中解构需要的 actions（使用 useMemo 稳定对象引用）
   const planStudioActions = useMemo(() => {
@@ -109,8 +148,13 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
     setPendingApprovalId(null);
   };
   const [trip, setTrip] = useState<TripDetail | null>(null);
+  const embeddedHiking = useEmbeddedHikingTrip(trip);
+  const showEmbeddedUi =
+    isEmbeddedHikingEnabled() && embeddedHiking.embedded && isEmbeddedHikingTrip(trip);
   const [schedules, setSchedules] = useState<Map<string, ScheduleResponse>>(new Map());
   const [loading, setLoading] = useState(true);
+  /** 首次加载完成后，refreshKey 触发的刷新不再切回全屏骨架屏 */
+  const hasLoadedScheduleOnceRef = useRef(false);
   
   // 🆕 检测未保存的时间轴改动
   // 🚀 性能优化：使用 useRef 存储 schedules 和 context，避免无限循环
@@ -180,6 +224,8 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   
   // 准备度相关状态
   const [readinessData, setReadinessData] = useState<ScoreBreakdownResponse | null>(null);
+  /** GET /readiness/risk-warnings：侧边栏「风险」条数与 summary.totalRisks 对齐，勿用 /score 的 risks 统计 */
+  const [tripRiskWarnings, setTripRiskWarnings] = useState<RiskWarningsResponse | null>(null);
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   
   // 对话框状态
@@ -197,13 +243,13 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   const [deletingItem, setDeletingItem] = useState<{ id: string; placeName: string } | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const [addingBuffers, setAddingBuffers] = useState(false);
-  
+
   // 添加行程项对话框状态
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
   const [addItemDay, setAddItemDay] = useState<TripDetail['TripDay'][0] | null>(null);
   /** 插入用餐模式：预填用餐类型、时间和备注（午餐/晚餐） */
   const [addItemInsertMeal, setAddItemInsertMeal] = useState<{ itemType: 'MEAL_ANCHOR' | 'MEAL_FLOATING'; startTime: string; endTime: string; note?: string } | null>(null);
-  
+
   // 搜索附近对话框状态
   const [searchNearbyDialogOpen, setSearchNearbyDialogOpen] = useState(false);
   const [searchNearbyItem, setSearchNearbyItem] = useState<ItineraryItem | null>(null);
@@ -330,9 +376,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
     // 从 ItineraryItem 转换为 ScheduleItem（保留 id 在 metadata 中）
     const convertItineraryItemsToScheduleItems = (items: ItineraryItemDetail[]): ScheduleItem[] => {
       // 后端已经按 startTime 排序返回，前端也做一次排序以确保一致性
-      return items
-        .filter(item => item.startTime && item.endTime)
-        .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+      return sortItineraryItemsForDisplay(items.filter((item) => item.startTime && item.endTime))
         .map((item) => ({
           startTime: formatTime(item.startTime),
           endTime: formatTime(item.endTime),
@@ -421,26 +465,8 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
               checkoutItems: checkoutItems.length,
             });
             
-            // 后端已经按 startTime 排序返回，前端也做一次排序以确保一致性
-            // 🆕 对于退房项，使用 endTime 进行排序（因为退房项显示的是退房时间）
-            const sortedItems = [...dayItems].sort((a, b) => {
-              // 如果都是退房项，按 endTime 排序
-              const aIsCheckout = a.crossDayInfo?.displayMode === 'checkout' || a.crossDayInfo?.isCheckoutItem;
-              const bIsCheckout = b.crossDayInfo?.displayMode === 'checkout' || b.crossDayInfo?.isCheckoutItem;
-              
-              if (aIsCheckout && bIsCheckout) {
-                return (a.endTime || '').localeCompare(b.endTime || '');
-              }
-              // 如果只有一个是退房项，退房项排在后面（因为退房时间通常较晚）
-              if (aIsCheckout && !bIsCheckout) {
-                return 1;
-              }
-              if (!aIsCheckout && bIsCheckout) {
-                return -1;
-              }
-              // 都不是退房项，按 startTime 排序
-              return (a.startTime || '').localeCompare(b.startTime || '');
-            });
+            // displaySortIndex 优先（0=退房置顶）；否则退房置顶 + 时间轴
+            const sortedItems = sortItineraryItemsForDisplay(dayItems);
             itemsMap.set(day.date, sortedItems);
           } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
             // 回退：使用 trip 数据中的 ItineraryItem
@@ -497,15 +523,23 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       }
     } catch (err) {
       console.error('Failed to load trip:', err);
+      toast.error('加载行程失败，请稍后重试');
     } finally {
       if (!silent) setLoading(false);
+      hasLoadedScheduleOnceRef.current = true;
     }
   }, [tripId]); // 🚀 移除 planStudioContext 依赖，避免无限循环
 
+  useEffect(() => {
+    hasLoadedScheduleOnceRef.current = false;
+    setLoading(true);
+  }, [tripId]);
+
   // 在 loadTrip 定义后使用它
   useEffect(() => {
-    loadTrip();
-  }, [tripId, refreshKey, loadTrip]); // 当 refreshKey 变化时也刷新
+    const silent = hasLoadedScheduleOnceRef.current;
+    void loadTrip({ silent });
+  }, [tripId, refreshKey, loadTrip]); // refreshKey：静默刷新，避免整页骨架屏闪回
 
   const loadMetricsAndConflicts = async (tripId: string, tripData?: TripDetail) => {
     try {
@@ -526,15 +560,24 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         // 静默失败，健康度卡片将显示默认状态
       }
       
-      // 加载准备度数据（用于准备度入口卡片）
-      // 使用 getScoreBreakdown API，它返回更完整的数据（分数、findings、risks）
+      // 准备度卡片：分数/summary 来自 /score；风险条数来自 /readiness/risk-warnings（与文档一致）
       try {
         setLoadingReadiness(true);
-        const readiness = await readinessApi.getScoreBreakdown(tripId);
+        const lang = (i18n.language || 'en').startsWith('zh') ? 'zh' : 'en';
+        const [readiness, riskWarn] = await Promise.all([
+          readinessApi.getScoreBreakdown(tripId),
+          readinessApi.getRiskWarnings(tripId, {
+            lang,
+            userId: user?.id,
+            includeCapabilityPackHazards: true,
+          }).catch(() => null),
+        ]);
         setReadinessData(readiness);
+        setTripRiskWarnings(riskWarn);
       } catch (readinessErr) {
         console.error('Failed to load readiness data:', readinessErr);
-        // 静默失败，准备度卡片将显示默认状态
+        setReadinessData(null);
+        setTripRiskWarnings(null);
       } finally {
         setLoadingReadiness(false);
       }
@@ -707,19 +750,12 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       return;
     }
 
-    // 未安排午餐/晚餐 → 打开插入用餐弹窗
+    // 午晚餐缺失：仅响应后端显式 type（后端已不再产出 LUNCH_MISSING/DINNER_MISSING 类时，此处自然不再触发）
     const isMissingMealConflict = (c: typeof conflict): 'lunch' | 'dinner' | null => {
-      if (typeof c === 'string') {
-        if (c.includes('午餐') && c.includes('未安排')) return 'lunch';
-        if (c.includes('晚餐') && c.includes('未安排')) return 'dinner';
-        return null;
-      }
+      if (typeof c === 'string') return null;
       const type = (c as { type?: string }).type;
-      const title = (c as { title?: string }).title ?? '';
-      const desc = (c as { description?: string }).description ?? '';
-      const text = `${title} ${desc}`;
-      if (type === 'MISSING_LUNCH' || /未安排.*午餐|午餐.*未安排/.test(text)) return 'lunch';
-      if (type === 'MISSING_DINNER' || /未安排.*晚餐|晚餐.*未安排/.test(text)) return 'dinner';
+      if (type === 'MISSING_LUNCH' || type === 'LUNCH_MISSING') return 'lunch';
+      if (type === 'MISSING_DINNER' || type === 'DINNER_MISSING') return 'dinner';
       return null;
     };
     const missingMeal = isMissingMealConflict(conflict);
@@ -729,12 +765,13 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       const normalizedDate = resolvedDayDate.includes('T') ? resolvedDayDate.split('T')[0] : resolvedDayDate;
       const targetDay = trip.TripDay.find(d => d.date === resolvedDayDate || d.date === normalizedDate || (d.date.split?.('T')[0]) === normalizedDate);
       if (targetDay) {
-        const items = itineraryItemsMap.get(resolvedDayDate) || itineraryItemsMap.get(normalizedDate);
         const isDinner = missingMeal === 'dinner';
+        if (!guardStructuralEditOrToast(worldModelGuards)) return;
+        const items = itineraryItemsMap.get(resolvedDayDate) || itineraryItemsMap.get(normalizedDate);
         let startTime = isDinner ? '18:00' : '12:00';
         let endTime = isDinner ? '19:00' : '13:00';
         if (items?.length) {
-          const sortedItems = [...items].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+          const sortedItems = sortItineraryItemsForDisplay(items);
           const prevItem = sortedItems[sortedItems.length - 1];
           if (prevItem?.endTime) {
             const end = new Date(prevItem.endTime);
@@ -750,7 +787,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       }
     }
 
-    // 午餐时间窗过短 → 打开插入午餐弹窗
+    // 午餐时间窗过短 → 引导智能体
     const isLunchWindowConflict = (c: typeof conflict) => {
       if (typeof c === 'string') return c.includes('午餐');
       const type = (c as { type?: string }).type;
@@ -763,11 +800,12 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       const normalizedDate = resolvedDayDate.includes('T') ? resolvedDayDate.split('T')[0] : resolvedDayDate;
       const targetDay = trip.TripDay.find(d => d.date === resolvedDayDate || d.date === normalizedDate || (d.date.split?.('T')[0]) === normalizedDate);
       if (targetDay) {
+        if (!guardStructuralEditOrToast(worldModelGuards)) return;
         const items = itineraryItemsMap.get(resolvedDayDate) || itineraryItemsMap.get(normalizedDate);
         let startTime = '12:00';
         let endTime = '13:00';
         if (affectedItemIds?.length && items?.length) {
-          const sortedItems = [...items].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+          const sortedItems = sortItineraryItemsForDisplay(items);
           const prevIdx = sortedItems.findIndex(i => i.id === affectedItemIds[0]);
           const prevItem = prevIdx >= 0 ? sortedItems[prevIdx] : null;
           if (prevItem?.endTime) {
@@ -1008,12 +1046,14 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   };
 
   const handleDeleteItem = (itemId: string, placeName: string) => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
     setDeletingItem({ id: itemId, placeName });
     setDeleteDialogOpen(true);
   };
 
   const confirmDeleteItem = async () => {
     if (!deletingItem) return;
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
 
     const itemToDelete = deletingItem;
     
@@ -1041,6 +1081,10 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   };
 
   const handleEditItem = async (itemId: string) => {
+    if (!canEditSlotTiming(worldModelGuards)) {
+      toast.error(worldModelGuards?.banner_message_zh ?? '当前阶段不可编辑行程时间');
+      return;
+    }
     try {
       const item = await itineraryItemsApi.getById(itemId);
       setEditingItem(item);
@@ -1052,42 +1096,71 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   };
 
   const handleReplaceItem = (itemId: string, placeName: string) => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
     setReplacingItem({ id: itemId, placeName });
     setReplaceDialogOpen(true);
   };
 
   const handleSearchNearby = (item: ItineraryItem, category?: PlaceCategory) => {
-    // 找到 item 对应的 day
-    const day = trip?.TripDay?.find(d => 
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
+
+    const day = trip?.TripDay?.find(d =>
       d.ItineraryItem?.some(i => i.id === item.id)
     );
-    
+
     if (!day) {
       toast.error('无法找到对应的行程日期');
       return;
     }
-    
+
     const place = item.Place;
     if (!place) {
       toast.error('该地点没有地点信息，无法搜索附近');
       return;
     }
-    
-    // 检查坐标（支持多种格式）
-    const hasCoordinates = 
+
+    const hasCoordinates =
       (place.latitude !== undefined && place.longitude !== undefined) ||
       (place.lat !== undefined && place.lng !== undefined);
-    
+
     if (!hasCoordinates) {
       toast.error('该地点没有坐标信息，无法搜索附近');
       return;
     }
-    
+
     setSearchNearbyItem(item);
     setSearchNearbyDay(day);
     setSearchNearbyCategory(category);
     setSearchNearbyDialogOpen(true);
   };
+
+  const handleOpenAddItem = (day: TripDetail['TripDay'][0]) => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
+    setAddItemInsertMeal(null);
+    setAddItemDay(day);
+    setAddItemDialogOpen(true);
+  };
+
+  const handleAdjustSlotTiming = useCallback(() => {
+    scheduleTimelineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const firstDay = trip?.TripDay?.[0];
+    if (!firstDay) {
+      toast.info('请先在日程中添加站点，再微调各站时间');
+      return;
+    }
+    const normalized = firstDay.date.includes('T') ? firstDay.date.split('T')[0] : firstDay.date;
+    const dayItems =
+      itineraryItemsMap.get(firstDay.date) ||
+      itineraryItemsMap.get(normalized) ||
+      firstDay.ItineraryItem ||
+      [];
+    const first = dayItems[0];
+    if (first?.id) {
+      void handleEditItem(first.id);
+    } else {
+      toast.info('点击各行程项菜单中的「微调时间」即可调整开始/结束时间');
+    }
+  }, [trip, itineraryItemsMap]);
 
   const handleReplaceSuccess = async (result: ReplaceItineraryItemResponse) => {
     if (!replacingItem) return;
@@ -1114,6 +1187,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
   };
 
   const handleMoveItem = async (itemId: string, currentDayId: string) => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
     try {
       const item = await itineraryItemsApi.getById(itemId);
       setMovingItem({ id: itemId, currentDayId });
@@ -1137,6 +1211,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       toast.error(t('planStudio.scheduleTab.moveMissingFields'));
       return;
     }
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
 
     try {
       setMoving(true);
@@ -1179,6 +1254,12 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       toast.error('暂无行程数据');
       return;
     }
+    if (!canRunRouteRecalculation(worldModelGuards)) {
+      toast.info(
+        worldModelGuards?.banner_message_zh ?? '路线选择已冻结，请仅微调各站时间'
+      );
+      return;
+    }
 
     try {
       setOptimizing(true);
@@ -1209,8 +1290,14 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
       const travelers = trip.pacingConfig?.travelers ?? [];
       const hasChildren = travelers.some((t) => t.type === 'CHILD');
       const hasElderly = travelers.some((t) => t.type === 'ELDERLY');
-      const rawMode = trip.metadata?.travelMode ?? trip.metadata?.defaultTravelMode;
-      const defaultTravelMode = rawMode ? TRIP_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
+      let defaultTravelMode: 'TRANSIT' | 'WALKING' | 'DRIVING' | undefined;
+      try {
+        const intent = await tripsApi.getIntent(tripId);
+        const rawMode = intent.pacingConfig?.travelMode;
+        defaultTravelMode = rawMode ? INTENT_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
+      } catch {
+        defaultTravelMode = undefined;
+      }
       const transportPreferences = hasElderly ? { lessWalking: true } : undefined;
 
       // 构建优化请求
@@ -1400,9 +1487,31 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
 
   return (
     <>
+      {showEmbeddedUi ? (
+        <EmbeddedHikingStatusBar
+          tripId={tripId}
+          phase={embeddedHiking.phase}
+          phaseHintZh={embeddedHiking.phaseHintZh}
+          segmentCount={embeddedHiking.segments.length}
+          plans={embeddedHiking.plans}
+        />
+      ) : null}
       <div className="grid grid-cols-12 gap-6">
         {/* 左（8/12）：Day Timeline */}
-        <div className="col-span-12 lg:col-span-8 space-y-6" data-tour="schedule-timeline">
+        <div
+          ref={scheduleTimelineRef}
+          className="col-span-12 lg:col-span-8 space-y-6"
+          data-tour="schedule-timeline"
+        >
+        <SegmentEditorDegradedShell
+          variant="toolbar"
+          degradation={segmentDegradation}
+          onAdjustSlotTiming={
+            segmentDegradation.isTopologyLocked && segmentDegradation.timingEditable
+              ? handleAdjustSlotTiming
+              : undefined
+          }
+        >
         {trip && trip.TripDay && Array.isArray(trip.TripDay) ? trip.TripDay.map((day, idx) => {
           const schedule = schedules.get(day.date);
           const items = schedule?.schedule?.items || [];
@@ -1436,9 +1545,16 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
           const dayDate = new Date(day.date);
           const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
           const weekday = weekdays[dayDate.getUTCDay()];
+
+          const showAdjustDraftPreview =
+            itineraryAdjustDraftPreview != null &&
+            scheduleDayMatchesItineraryAdjustScope(
+              day.date,
+              itineraryAdjustDraftPreview.scopeDateIso
+            );
           
           return (
-            <Card key={day.id}>
+            <Card key={day.id} className={showAdjustDraftPreview ? 'ring-1 ring-amber-300/60' : undefined}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -1459,6 +1575,29 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {showAdjustDraftPreview && itineraryAdjustDraftPreview ? (
+                    <ItineraryAdjustScheduleDayPreview
+                      preview={itineraryAdjustDraftPreview}
+                      dayDate={day.date}
+                    />
+                  ) : null}
+                  {showAdjustDraftPreview && items.length > 0 ? (
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                      当前正式行程（确认后将更新）
+                    </p>
+                  ) : null}
+                  <div className={showAdjustDraftPreview ? 'opacity-50 pointer-events-none' : undefined}>
+                  {showEmbeddedUi && trip ? (
+                    <EmbeddedHikingDayRail
+                      trip={trip}
+                      tripDay={day}
+                      dayDate={day.date}
+                      dayIndex={idx}
+                      segments={embeddedHiking.segments}
+                      plans={embeddedHiking.plans}
+                      resolvePlan={embeddedHiking.planForSegment}
+                    />
+                  ) : null}
                   {/* 交通信息摘要 */}
                   {(() => {
                     const travelSummary = dayTravelInfoMap.get(normalizedDate)?.summary || dayTravelInfoMap.get(day.date)?.summary;
@@ -1599,10 +1738,36 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                             placeImages={item.Place?.id ? placeImagesMap.get(item.Place.id) : undefined}
                             defaultWeatherLocation={defaultWeatherLocation}
                             highlighted={highlightItineraryItemIds.includes(item.id)}
-                            onEdit={(item) => handleEditItem(item.id)}
-                            onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
-                            onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
-                            onSearchNearby={handleSearchNearby}
+                            structureLocked={segmentDegradation.structureReadOnly}
+                            editTimingOnly={
+                              segmentDegradation.isTopologyLocked && segmentDegradation.timingEditable
+                            }
+                            onEdit={
+                              segmentDegradation.timingEditable
+                                ? (item) => handleEditItem(item.id)
+                                : undefined
+                            }
+                            onDelete={
+                              segmentDegradation.structureReadOnly
+                                ? undefined
+                                : (item) =>
+                                    handleDeleteItem(
+                                      item.id,
+                                      item.Place?.nameCN || item.Place?.nameEN || ''
+                                    )
+                            }
+                            onReplace={
+                              segmentDegradation.structureReadOnly
+                                ? undefined
+                                : (item) =>
+                                    handleReplaceItem(
+                                      item.id,
+                                      item.Place?.nameCN || item.Place?.nameEN || ''
+                                    )
+                            }
+                            onSearchNearby={
+                              segmentDegradation.structureReadOnly ? undefined : handleSearchNearby
+                            }
                             onApplyPatch={(_item) => {
                               // 应用补丁功能 - 现在通过自动触发机制处理
                               toast.info(t('planStudio.scheduleTab.applyPatchNotImplemented'));
@@ -1675,10 +1840,36 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                                   placeImages={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
                                   defaultWeatherLocation={defaultWeatherLocation}
                                   highlighted={highlightItineraryItemIds.includes(fullItem.id)}
-                                  onEdit={(item) => handleEditItem(item.id)}
-                                  onDelete={(item) => handleDeleteItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
-                                  onReplace={(item) => handleReplaceItem(item.id, item.Place?.nameCN || item.Place?.nameEN || '')}
-                                  onSearchNearby={handleSearchNearby}
+                                  structureLocked={segmentDegradation.structureReadOnly}
+                                  editTimingOnly={
+                                    segmentDegradation.isTopologyLocked && segmentDegradation.timingEditable
+                                  }
+                                  onEdit={
+                                    segmentDegradation.timingEditable
+                                      ? (item) => handleEditItem(item.id)
+                                      : undefined
+                                  }
+                                  onDelete={
+                                    segmentDegradation.structureReadOnly
+                                      ? undefined
+                                      : (item) =>
+                                          handleDeleteItem(
+                                            item.id,
+                                            item.Place?.nameCN || item.Place?.nameEN || ''
+                                          )
+                                  }
+                                  onReplace={
+                                    segmentDegradation.structureReadOnly
+                                      ? undefined
+                                      : (item) =>
+                                          handleReplaceItem(
+                                            item.id,
+                                            item.Place?.nameCN || item.Place?.nameEN || ''
+                                          )
+                                  }
+                                  onSearchNearby={
+                                    segmentDegradation.structureReadOnly ? undefined : handleSearchNearby
+                                  }
                                   onAskNara={planStudioActions ? (item, question) => {
                                     // 计算当天统计
                                     const dayStats = {
@@ -1815,7 +2006,11 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                           <EmptyStateCard
                             type="no-arrangements"
                             title="该日暂无安排"
-                            description="点击下方按钮添加景点、美食或活动，开始规划这一天的行程"
+                            description={
+                              segmentDegradation.structureReadOnly
+                                ? '可通过右侧智能体添加景点、美食或活动'
+                                : '点击下方「添加行程项」，或通过右侧智能体添加'
+                            }
                             imageWidth={100}
                             imageHeight={100}
                             className="py-4"
@@ -1823,25 +2018,25 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                         </div>
                       );
                     })()}
-                    
-                    {/* 添加行程项按钮 */}
-                    <Button
-                      variant="outline"
-                      className="w-full mt-4 border-dashed hover:border-primary hover:bg-primary/5 transition-colors"
-                      onClick={() => {
-                        setAddItemDay(day);
-                        setAddItemDialogOpen(true);
-                      }}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      添加行程项
-                    </Button>
+
+                    {!segmentDegradation.structureReadOnly && (
+                      <Button
+                        variant="outline"
+                        className="w-full mt-4 border-dashed hover:border-primary hover:bg-primary/5 transition-colors"
+                        onClick={() => handleOpenAddItem(day)}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        添加行程项
+                      </Button>
+                    )}
+                  </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
           );
         }) : null}
+        </SegmentEditorDegradedShell>
       </div>
 
       {/* 右（4/12）：健康度卡片 + 冲突列表 */}
@@ -1849,11 +2044,26 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         {/* 行程健康度摘要卡片 */}
         <Card data-tour="schedule-health">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-base flex items-center gap-2">
-                <span className="text-lg">🐻‍❄️</span>
+                <PersonaAvatar persona="ABU" size={24} />
                 行程健康度
               </CardTitle>
+              <div className="flex items-center gap-2">
+              {planStudioContext?.openPlanGate ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    planStudioContext.openPlanGate({
+                      autoGenerate: planStudioContext.hasUnsavedScheduleChanges,
+                    })
+                  }
+                >
+                  方案预览
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
                 size="sm"
@@ -1873,86 +2083,73 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                   </>
                 )}
               </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* 三人格评估状态 */}
-            <div className="space-y-3">
-              {/* Abu - 安全 */}
+            {/* 三人格评估状态（品牌头像） */}
+            <div className="space-y-4">
               {(() => {
-                const abuWarnings = personaAlerts.filter(a => a.persona === 'ABU' && a.severity === 'warning').length;
-                const abuInfos = personaAlerts.filter(a => a.persona === 'ABU' && a.severity === 'info').length;
-                const abuStatus = abuWarnings > 0 ? 'warning' : abuInfos > 0 ? 'info' : 'success';
+                const abuWarnings = personaAlerts.filter(
+                  (a) => a.persona === 'ABU' && a.severity === 'warning'
+                ).length;
+                const abuInfos = personaAlerts.filter(
+                  (a) => a.persona === 'ABU' && a.severity === 'info'
+                ).length;
+                const abuStatus =
+                  abuWarnings > 0 ? 'warning' : abuInfos > 0 ? 'info' : 'success';
                 return (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Shield className={cn(
-                        "h-4 w-4",
-                        abuStatus === 'warning' ? 'text-red-500' : 
-                        abuStatus === 'info' ? 'text-amber-500' : 'text-green-500'
-                      )} />
-                      <span className="text-sm font-medium">Abu (安全)</span>
-                    </div>
-                    <Badge variant={abuStatus === 'warning' ? 'destructive' : abuStatus === 'info' ? 'secondary' : 'outline'} className={cn(
-                      "text-xs",
-                      abuStatus === 'success' && 'bg-green-50 text-green-700 border-green-200'
-                    )}>
-                      {abuStatus === 'warning' ? `${abuWarnings} 风险` : 
-                       abuStatus === 'info' ? `${abuInfos} 提醒` : '✓ 通过'}
-                    </Badge>
-                  </div>
+                  <TripPersonaHealthRow
+                    persona="ABU"
+                    statusTone={abuStatus}
+                    statusLabel={
+                      abuStatus === 'warning'
+                        ? `${abuWarnings} 风险`
+                        : abuStatus === 'info'
+                          ? `${abuInfos} 提醒`
+                          : '通过'
+                    }
+                  />
                 );
               })()}
-              
-              {/* Dr.Dre - 节奏 */}
+
               {(() => {
                 const drDreTotal = suggestionStats?.byPersona?.drdre?.total || 0;
                 const drDreBlockers = suggestionStats?.byPersona?.drdre?.bySeverity?.blocker || 0;
-                const drDreStatus = drDreBlockers > 0 ? 'warning' : drDreTotal > 0 ? 'info' : 'success';
+                const drDreStatus =
+                  drDreBlockers > 0 ? 'warning' : drDreTotal > 0 ? 'info' : 'success';
                 return (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Activity className={cn(
-                        "h-4 w-4",
-                        drDreStatus === 'warning' ? 'text-red-500' : 
-                        drDreStatus === 'info' ? 'text-amber-500' : 'text-green-500'
-                      )} />
-                      <span className="text-sm font-medium">Dr.Dre (节奏)</span>
-                    </div>
-                    <Badge variant={drDreStatus === 'warning' ? 'destructive' : drDreStatus === 'info' ? 'secondary' : 'outline'} className={cn(
-                      "text-xs",
-                      drDreStatus === 'success' && 'bg-green-50 text-green-700 border-green-200'
-                    )}>
-                      {drDreStatus === 'warning' ? `${drDreBlockers} 阻塞` : 
-                       drDreStatus === 'info' ? `${drDreTotal} 建议` : '✓ 良好'}
-                    </Badge>
-                  </div>
+                  <TripPersonaHealthRow
+                    persona="DR_DRE"
+                    statusTone={drDreStatus}
+                    statusLabel={
+                      drDreStatus === 'warning'
+                        ? `${drDreBlockers} 阻塞`
+                        : drDreStatus === 'info'
+                          ? `${drDreTotal} 建议`
+                          : '良好'
+                    }
+                  />
                 );
               })()}
-              
-              {/* Neptune - 完整 */}
+
               {(() => {
                 const neptuneTotal = suggestionStats?.byPersona?.neptune?.total || 0;
                 const neptuneBlockers = suggestionStats?.byPersona?.neptune?.bySeverity?.blocker || 0;
-                const neptuneStatus = neptuneBlockers > 0 ? 'warning' : neptuneTotal > 0 ? 'info' : 'success';
+                const neptuneStatus =
+                  neptuneBlockers > 0 ? 'warning' : neptuneTotal > 0 ? 'info' : 'success';
                 return (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Wrench className={cn(
-                        "h-4 w-4",
-                        neptuneStatus === 'warning' ? 'text-red-500' : 
-                        neptuneStatus === 'info' ? 'text-amber-500' : 'text-green-500'
-                      )} />
-                      <span className="text-sm font-medium">Neptune (完整)</span>
-                    </div>
-                    <Badge variant={neptuneStatus === 'warning' ? 'destructive' : neptuneStatus === 'info' ? 'secondary' : 'outline'} className={cn(
-                      "text-xs",
-                      neptuneStatus === 'success' && 'bg-green-50 text-green-700 border-green-200'
-                    )}>
-                      {neptuneStatus === 'warning' ? `${neptuneBlockers} 问题` : 
-                       neptuneStatus === 'info' ? `${neptuneTotal} 优化` : '✓ 完整'}
-                    </Badge>
-                  </div>
+                  <TripPersonaHealthRow
+                    persona="NEPTUNE"
+                    statusTone={neptuneStatus}
+                    statusLabel={
+                      neptuneStatus === 'warning'
+                        ? `${neptuneBlockers} 问题`
+                        : neptuneStatus === 'info'
+                          ? `${neptuneTotal} 优化`
+                          : '完整'
+                    }
+                  />
                 );
               })()}
             </div>
@@ -1966,9 +2163,10 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                     <span className="font-medium text-foreground">
                       {personaAlerts[0].name}：
                     </span>
-                    {personaAlerts[0].message.length > 50 
-                      ? personaAlerts[0].message.slice(0, 50) + '...' 
-                      : personaAlerts[0].message}
+                    {(() => {
+                      const preview = getPersonaAlertUserBody(personaAlerts[0]);
+                      return preview.length > 50 ? `${preview.slice(0, 50)}...` : preview;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1980,15 +2178,15 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
         {(() => {
           // 计算状态：分数 < 60 为红色，60-80 为琥珀色，>= 80 为绿色
           const score = readinessData?.score?.overall ?? 0;
-          // ✅ 统一状态映射：blocker, must, should, optional, risks
+          // ✅ 统一状态映射：blocker, must, should；风险条数来自 risk-warnings
           const blockers = readinessData?.summary?.blockers ?? 0;
           // ⚠️ 兼容旧字段：warnings → must, suggestions → should
           const must = readinessData?.summary?.must ?? readinessData?.summary?.warnings ?? 0;
           const should = readinessData?.summary?.should ?? readinessData?.summary?.suggestions ?? 0;
-          const optional = readinessData?.summary?.optional ?? 0;
-          const totalRisks = (readinessData?.summary?.highRisks ?? 0) + 
-                            (readinessData?.summary?.mediumRisks ?? 0) + 
-                            (readinessData?.summary?.lowRisks ?? 0);
+          const totalRisks =
+            tripRiskWarnings != null
+              ? tripRiskWarnings.summary?.totalRisks ?? tripRiskWarnings.risks?.length ?? 0
+              : null;
           
           const isBlocked = blockers > 0 || score < 60;
           const hasWarnings = must > 0 || (score >= 60 && score < 80);
@@ -2082,9 +2280,11 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                       {/* 风险项 */}
                       <div className={cn(
                         'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                        totalRisks > 0 ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-600'
+                        (totalRisks ?? 0) > 0 ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-600'
                       )}>
-                        <span className="font-medium">{totalRisks}</span>
+                        <span className="font-medium">
+                          {totalRisks !== null ? totalRisks : '—'}
+                        </span>
                         <span>风险</span>
                       </div>
                     </div>
@@ -2126,18 +2326,28 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
           );
         })()}
 
-        {/* 行程路线优化入口 - 始终显示 */}
-        <Link to={`/dashboard/trips/optimize?tripId=${tripId}`} className="block">
-          <Card className="cursor-pointer hover:shadow-md transition-all border-dashed">
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-2 text-sm">
-                <Zap className="h-4 w-4 text-amber-500" />
-                <span className="font-medium">行程路线优化</span>
-                <span className="text-muted-foreground text-xs">可选地点、交通方式等</span>
+        {/* 行程路线优化入口 - 双入口：智能优化(规划Tab) + 经典配置 */}
+        <Card className="border-dashed">
+          <CardContent className="pt-4 pb-4 space-y-2">
+            <Link to={`/dashboard/trips/${tripId}?tab=planning`} className="block">
+              <div className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer">
+                <div className="flex items-center gap-2 text-sm">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  <span className="font-medium">智能优化</span>
+                  <span className="text-muted-foreground text-xs">AI 驱动的全方位优化</span>
+                </div>
+                <Badge variant="secondary" className="text-xs">推荐</Badge>
               </div>
-            </CardContent>
-          </Card>
-        </Link>
+            </Link>
+            <Link to={`/dashboard/trips/optimize?tripId=${tripId}`} className="block">
+              <div className="flex items-center gap-2 text-sm p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-muted-foreground">经典配置</span>
+                <span className="text-muted-foreground text-xs">手动选择地点、交通方式</span>
+              </div>
+            </Link>
+          </CardContent>
+        </Card>
 
         {/* 冲突列表 - 仅在有冲突时显示 */}
         {conflicts.length > 0 && (
@@ -2291,7 +2501,12 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
               className="w-full" 
               data-tour="schedule-optimize" 
               onClick={handleRunOptimize}
-              disabled={optimizing}
+              disabled={optimizing || !canRunRouteRecalculation(worldModelGuards)}
+              title={
+                freezeRouteSelection
+                  ? worldModelGuards?.banner_message_zh ?? '路线已锁定，仅可微调时间'
+                  : undefined
+              }
             >
               {optimizing ? (
                 <>
@@ -2317,9 +2532,9 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
                 t('planStudio.scheduleTab.autoAddBuffers')
               )}
             </Button>
-            <Link to={`/dashboard/trips/optimize?tripId=${tripId}`}>
+            <Link to={`/dashboard/trips/${tripId}?tab=planning`}>
               <Button variant="ghost" className="w-full text-sm" size="sm">
-                完整配置优化
+                智能优化（高级选项）
               </Button>
             </Link>
           </div>
@@ -2509,17 +2724,15 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
           initialLocation={(() => {
             const place = searchNearbyItem.Place;
             if (!place) return undefined;
-            
-            // 优先使用标准格式
+
             if (place.latitude !== undefined && place.longitude !== undefined) {
               return { lat: place.latitude, lng: place.longitude };
             }
-            
-            // 使用兼容格式
+
             if (place.lat !== undefined && place.lng !== undefined) {
               return { lat: place.lat, lng: place.lng };
             }
-            
+
             return undefined;
           })()}
           initialCategory={searchNearbyCategory}

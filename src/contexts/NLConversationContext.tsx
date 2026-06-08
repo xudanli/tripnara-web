@@ -1,6 +1,9 @@
 /**
- * 自然语言对话上下文
- * 用于管理对话会话状态，支持会话切换
+ * NL 建行程会话（trips `nl-conversation` API + NLConversationContextService）
+ *
+ * 与 `POST /api/agent/route_and_run` 的 AgentChat 会话模型分离：
+ * - NL：`nl_conversation_session`、服务端持久化 messages
+ * - Agent：内存/localStorage 气泡 + `conversation_context.recent_messages` 短窗
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';

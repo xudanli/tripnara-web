@@ -14,11 +14,13 @@ import type { TripDetail } from '@/types/trip';
 import type { ChatMessage } from '@/hooks/useChatV2';
 import { MCPDataDisplay } from './MCPDataDisplay';
 import { OrchestrationProgressCard } from './OrchestrationProgressCard';
+import { PlanningPipelineProgress } from '@/components/agent/PlanningPipelineProgress';
 
 interface MessageBubbleProps {
   message: ChatMessage;
   onSendMessage?: (text: string) => void | Promise<void>;
   isLastAssistantMessage?: boolean;
+  sessionId?: string | null;
   tripId?: string;
   tripInfo?: TripDetail;
   onAddToTripSuccess?: () => void;
@@ -163,6 +165,7 @@ export function MessageBubble({
   onSendMessage,
   isLastAssistantMessage,
   hideExecutionOrchestration,
+  sessionId,
   tripId,
   tripInfo,
   onAddToTripSuccess,
@@ -212,11 +215,16 @@ export function MessageBubble({
           </div>
         </div>
 
+        {!isUser && message.asyncTaskPending ? (
+          <PlanningPipelineProgress compact className="mt-2" />
+        ) : null}
+
         {/* 编排进度：仅执行阶段 Agent 展示；规划工作台不涉及 route_and_run */}
         {!isUser && !hideExecutionOrchestration && (message.ui_state || message.orchestrationResult) && (
           <OrchestrationProgressCard
             ui_state={message.ui_state}
             orchestrationResult={message.orchestrationResult}
+            preferZhLabels
           />
         )}
 
@@ -234,6 +242,7 @@ export function MessageBubble({
           <MCPDataDisplay
             message={message}
             tripId={tripId}
+            sessionId={sessionId ?? undefined}
             tripInfo={tripInfo}
             onAddToTripSuccess={onAddToTripSuccess}
           />

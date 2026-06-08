@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAssistantDrawerRightOffset } from '@/hooks/use-assistant-drawer-offset';
 import { tripsApi } from '@/api/trips';
 import { readinessApi } from '@/api/readiness';
 import type { TripDetail } from '@/types/trip';
@@ -25,6 +26,8 @@ import {
 } from '@/utils/packing-list-inference';
 import { useAutoFetchEvidence } from '@/hooks';
 import { useAuth } from '@/hooks/useAuth'; // 🆕 获取用户ID
+import { countNestedFindingItems } from '@/lib/readiness-nested-counts';
+import { isCoverageGapFindingId } from '@/lib/readiness-coverage-gap';
 
 interface ReadinessDrawerProps {
   open: boolean;
@@ -41,6 +44,7 @@ export default function ReadinessDrawer({
   tripId,
   highlightFindingId,
 }: ReadinessDrawerProps) {
+  const assistantRightOffset = useAssistantDrawerRightOffset();
   const { t, i18n } = useTranslation();
   const { user } = useAuth(); // 🆕 获取当前用户信息
   
@@ -134,26 +138,30 @@ export default function ReadinessDrawer({
     }
   }, [tripId, open]);
 
-  // 计算 gate 状态 - 优先使用 scoreBreakdown 的数据
+  // 计算 gate：阻塞/必须优先与清单同源（嵌套 findings）；无树时再退回 score.summary
   const gateStatus: GateStatus = (() => {
-    // 优先使用 scoreBreakdown 的分数判断
+    const nested = countNestedFindingItems(readinessResult);
+    const useNestedTree = !!(readinessResult?.findings && readinessResult.findings.length > 0);
+
     if (scoreBreakdown?.score?.overall !== undefined) {
       const score = scoreBreakdown.score.overall;
-      const blockers = scoreBreakdown.summary?.blockers ?? 0;
-      // ✅ 统一状态映射：使用 must 字段，兼容 warnings
-      const must = scoreBreakdown.summary?.must ?? scoreBreakdown.summary?.warnings ?? 0;
-      
-      // 有阻塞项时，无论分数如何都显示 BLOCK
+      const blockers = useNestedTree
+        ? nested.blockers
+        : scoreBreakdown.summary?.blockers ?? 0;
+      const must = useNestedTree
+        ? nested.must
+        : scoreBreakdown.summary?.must ?? scoreBreakdown.summary?.warnings ?? 0;
+
       if (blockers > 0) return 'BLOCK';
-      
-      // 没有阻塞项，但分数低或有必须项时，显示 WARN
       if (score < 60 || must > 0) return 'WARN';
-      
-      // 分数 >= 60 且没有必须项时，显示 PASS
       return 'PASS';
     }
-    // 回退到 readinessResult
     if (readinessResult) {
+      if (useNestedTree) {
+        if (nested.blockers > 0) return 'BLOCK';
+        if (nested.must > 0) return 'WARN';
+        return 'PASS';
+      }
       if (readinessResult.summary.totalBlockers > 0) return 'BLOCK';
       if (readinessResult.summary.totalMust > 0) return 'WARN';
       return 'PASS';
@@ -220,7 +228,8 @@ export default function ReadinessDrawer({
       setTrip(tripData);
       setScoreBreakdown(scoreData);
       setCoverageMapData(coverageData);
-      
+      setRiskWarnings(riskWarningsData);
+
       if (readinessData) {
         console.log('✅ [ReadinessDrawer] 数据加载成功:', {
           findingsCount: readinessData.findings?.length || 0,
@@ -285,6 +294,7 @@ export default function ReadinessDrawer({
       console.error('Failed to load readiness data:', err);
       setReadinessResult(null);
       setScoreBreakdown(null);
+      setRiskWarnings(null);
       // 不在初始加载时显示错误，避免干扰用户体验
       // 只在手动刷新时显示错误（已在 handleRefresh 中处理）
     } finally {
@@ -620,6 +630,8 @@ export default function ReadinessDrawer({
 
   // 增强消息显示：如果消息包含地点名称且coverageMapData有数据，显示具体的缺失证据类型
   const enhanceMessage = (message: string, item: ReadinessFindingItem): string => {
+    // 后端已在 message 中带行程上下文且提供 tripScope 时，不再前端拼接，避免与主文案重复
+    if (item.tripScope || isCoverageGapFindingId(item.id)) return message;
     // 如果消息包含"缺少证据覆盖"，尝试从coverageMapData获取具体信息
     if (message.includes('缺少证据覆盖') && coverageMapData?.pois) {
       // 尝试从消息中提取地点名称（通常在"缺少证据覆盖"之前）
@@ -638,6 +650,7 @@ export default function ReadinessDrawer({
   
   // ✅ 获取缺失的证据类型列表（用于在 UI 中显示 Badge）
   const getMissingEvidenceTypes = (item: ReadinessFindingItem): EvidenceType[] => {
+    if (item.tripScope || isCoverageGapFindingId(item.id)) return [];
     // 如果消息包含"缺少证据覆盖"，尝试从coverageMapData获取具体信息
     if (item.message.includes('缺少证据覆盖') && coverageMapData?.pois) {
       const placeMatch = item.message.match(/(.+?)缺少证据覆盖/);
@@ -657,9 +670,10 @@ export default function ReadinessDrawer({
   return (
     <div
       className={cn(
-        'fixed right-0 top-0 h-full w-[480px] bg-white border-l border-gray-200 shadow-xl z-50 transition-transform duration-300',
+        'fixed top-0 h-full w-[480px] max-w-[min(480px,calc(100vw-3.5rem))] bg-white border-l border-gray-200 shadow-xl z-40 transition-transform duration-300',
         open ? 'translate-x-0' : 'translate-x-full'
       )}
+      style={{ right: assistantRightOffset }}
     >
       <div className="h-full flex flex-col">
         {/* 顶部汇总区（使用新组件） */}
@@ -667,6 +681,7 @@ export default function ReadinessDrawer({
           scoreBreakdown={scoreBreakdown}
           gateStatus={gateStatus}
           readinessResult={readinessResult}
+          riskWarnings={riskWarnings}
         />
         
         {/* 操作按钮（使用新组件） */}
@@ -724,43 +739,8 @@ export default function ReadinessDrawer({
                       findingsWithShould: readinessResult.findings.filter(f => f.should && f.should.length > 0).length,
                     });
                   }
-                  
-                  // 如果没有findings数据，但scoreBreakdown有数据，从scoreBreakdown构建
-                  if (allItems.length === 0 && scoreBreakdown?.findings && scoreBreakdown.findings.length > 0) {
-                    console.log('⚠️ [ReadinessDrawer] readinessResult.findings 为空，尝试使用 scoreBreakdown.findings');
-                    scoreBreakdown.findings.forEach(f => {
-                      // ✅ 统一类型映射：warning → must, suggestion → should，同时支持新类型
-                      const level = f.type === 'blocker' ? 'blocker' : 
-                                   f.type === 'warning' ? 'must' : 
-                                   f.type === 'suggestion' ? 'should' :
-                                   f.type === 'must' ? 'must' :
-                                   f.type === 'should' ? 'should' :
-                                   f.type === 'optional' ? 'optional' :
-                                   'should'; // 默认值
-                      const tempItem = {
-                        message: f.message,
-                        category: f.category,
-                      } as ReadinessFindingItem;
-                      const missingEvidenceTypes = getMissingEvidenceTypes(tempItem);
-                      allItems.push({
-                        item: {
-                          message: enhanceMessage(f.message, tempItem),
-                          id: f.id,
-                          category: f.category,
-                          severity: f.severity,
-                          level: level as 'blocker' | 'must' | 'should' | 'optional',
-                          actionRequired: f.actionRequired,
-                          // 保留关联信息
-                          affectedDays: f.affectedDays,
-                          // ✅ 添加缺失的证据类型信息
-                          missingEvidenceTypes,
-                        } as ReadinessFindingItem & { affectedDays?: number[]; missingEvidenceTypes?: EvidenceType[] },
-                        category: f.category,
-                        level,
-                      });
-                    });
-                  }
-                  
+                  // 清单项仅来自 GET /readiness/trip/:id 的聚合 findings，勿用 GET .../score 的扁平 findings 回填，避免两套 shape 混去重
+
                   if (allItems.length === 0) {
                     return null;
                   }
@@ -777,12 +757,11 @@ export default function ReadinessDrawer({
                     if (!itemsByCategory[category]) {
                       itemsByCategory[category] = { blockers: [], must: [], should: [], optional: [] };
                     }
-                    // 增强消息显示
+                    // 增强消息显示（有 tripScope 时跳过猜地点 / Badge，避免与后端 identifyGaps 文案打架）
                     const missingEvidenceTypes = getMissingEvidenceTypes(item);
                     const enhancedItem = {
                       ...item,
                       message: enhanceMessage(item.message, item),
-                      // ✅ 添加缺失的证据类型信息，供 ChecklistSection 显示 Badge
                       missingEvidenceTypes,
                     } as ReadinessFindingItem & { missingEvidenceTypes?: EvidenceType[] };
                     // 将 'blocker' 映射到 'blockers'
@@ -824,6 +803,7 @@ export default function ReadinessDrawer({
                             tripStartDate={tripStartDate}
                             trip={trip as any} // 类型兼容性处理
                             tripId={tripId || undefined}
+                            onViewBlockerSolution={(blockerId) => void handleViewSolution(blockerId)}
                             onFindingUpdated={async (findingId, updatedFinding) => {
                               // 重新加载数据以反映更新
                               await loadData();
@@ -886,51 +866,22 @@ export default function ReadinessDrawer({
                   );
                 })()}
 
-                {/* 风险概览 - 与准备度页面保持一致，使用 RiskCard 组件 */}
-                {/* ✅ 收集所有风险：readinessResult.risks + findings中的risks + scoreBreakdown.risks */}
+                {/* 风险：与 risk-warnings 一致；成功加载该接口后仅用其 risks，勿与 GET .../score 的 risks 混用 */}
                 {(() => {
-                  // 🆕 优先使用增强版风险预警数据
                   const allRisks: EnhancedRisk[] = [];
-                  
-                  // 1. 🆕 优先使用增强版风险预警 API 的数据（包含 typeLabel, typeIcon, category 等）
-                  if (riskWarnings?.risks && riskWarnings.risks.length > 0) {
-                    allRisks.push(...riskWarnings.risks);
-                    console.log('✅ [ReadinessDrawer] 使用增强版风险预警数据:', {
-                      count: riskWarnings.risks.length,
-                      risks: riskWarnings.risks.map(r => ({
-                        id: r.id,
-                        typeLabel: r.typeLabel,
-                        typeIcon: r.typeIcon,
-                        category: r.category,
-                        severityLabel: r.severityLabel,
-                      })),
-                    });
+                  if (riskWarnings != null) {
+                    allRisks.push(...(riskWarnings.risks ?? []));
                   } else {
-                    // 2. 回退到 readinessResult.risks（顶层风险）
-                    if (readinessResult?.risks && readinessResult.risks.length > 0) {
+                    if (readinessResult?.risks?.length) {
                       allRisks.push(...(readinessResult.risks as EnhancedRisk[]));
                     }
-                    
-                    // 3. 从 readinessResult.findings 中收集每个 finding 的 risks
-                    if (readinessResult?.findings && readinessResult.findings.length > 0) {
+                    if (readinessResult?.findings?.length) {
                       readinessResult.findings.forEach(finding => {
-                        if (finding.risks && finding.risks.length > 0) {
+                        if (finding.risks?.length) {
                           allRisks.push(...(finding.risks as EnhancedRisk[]));
                         }
                       });
                     }
-                    
-                    // 4. 从 scoreBreakdown.risks 收集（如果没有其他来源）
-                    if (allRisks.length === 0 && scoreBreakdown?.risks && scoreBreakdown.risks.length > 0) {
-                      allRisks.push(...(scoreBreakdown.risks as EnhancedRisk[]));
-                    }
-                    
-                    console.log('⚠️ [ReadinessDrawer] 使用旧格式风险数据（增强版 API 未返回数据）:', {
-                      readinessResultRisks: readinessResult?.risks?.length || 0,
-                      findingsRisks: readinessResult?.findings?.reduce((sum, f) => sum + (f.risks?.length || 0), 0) || 0,
-                      scoreBreakdownRisks: scoreBreakdown?.risks?.length || 0,
-                      finalRisks: allRisks.length,
-                    });
                   }
                   
                   if (allRisks.length === 0) return null;
@@ -940,7 +891,7 @@ export default function ReadinessDrawer({
                     <h3 className="text-sm font-semibold">{t('dashboard.readiness.page.risks')}</h3>
                     <div className="space-y-3">
                         {allRisks.map((risk, index) => (
-                        <RiskCard key={index} risk={risk} />
+                        <RiskCard key={index} risk={risk} trip={trip} />
                       ))}
                     </div>
                     {/* 🆕 显示所有官方来源汇总 */}

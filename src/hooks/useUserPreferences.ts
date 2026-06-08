@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { userApi, type UserProfile, type UserPreferences, UserProfileApiError } from '@/api/user';
+import { sanitizeUserPreferences } from '@/lib/legacy-companion-odyssey-cleanup';
 import { useAuth } from './useAuth';
 
 /**
@@ -28,7 +29,12 @@ export const useUserPreferences = (autoFetch = true) => {
       setLoading(true);
       setError(null);
       const data = await userApi.getProfile();
-      setProfile(data);
+      setProfile({
+        ...data,
+        preferences: data.preferences
+          ? sanitizeUserPreferences(data.preferences)
+          : data.preferences,
+      });
     } catch (err) {
       if (err instanceof UserProfileApiError) {
         if (err.code === 'UNAUTHORIZED') {
@@ -52,9 +58,20 @@ export const useUserPreferences = (autoFetch = true) => {
     try {
       setUpdating(true);
       setUpdateError(null);
-      const data = await userApi.updateProfile(preferences);
-      setProfile(data);
-      return data;
+      const payload = sanitizeUserPreferences(preferences);
+      const data = await userApi.updateProfile(payload);
+      setProfile({
+        ...data,
+        preferences: data.preferences
+          ? sanitizeUserPreferences(data.preferences)
+          : data.preferences,
+      });
+      return {
+        ...data,
+        preferences: data.preferences
+          ? sanitizeUserPreferences(data.preferences)
+          : data.preferences,
+      };
     } catch (err) {
       if (err instanceof UserProfileApiError) {
         if (err.code === 'UNAUTHORIZED') {

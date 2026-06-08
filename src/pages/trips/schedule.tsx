@@ -105,7 +105,7 @@ export default function TripSchedulePage() {
     try {
       setHistoryLoading(true);
       const history = await tripsApi.getActions(id, date);
-      setActionHistory(history);
+      setActionHistory(Array.isArray(history) ? history : []);
     } catch (err) {
       console.error('Failed to load action history:', err);
     } finally {
@@ -247,7 +247,13 @@ export default function TripSchedulePage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {schedule.schedule.items.map((item, index) => (
+              {(schedule.schedule.items ?? []).length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  当日暂无行程时段。若行程详情里该日已有安排，请让后端在日程接口里返回非空的{' '}
+                  <span className="font-medium text-foreground/80">items</span> 列表。
+                </p>
+              ) : null}
+              {(schedule.schedule.items ?? []).map((item, index) => (
                 <div key={index} className="flex items-start gap-4 p-4 border rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -274,7 +280,12 @@ export default function TripSchedulePage() {
               <div className="mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">总时长</span>
-                  <span>{schedule.schedule.totalDuration} 分钟</span>
+                  <span>
+                    {typeof schedule.schedule.totalDuration === 'number' &&
+                    !Number.isNaN(schedule.schedule.totalDuration)
+                      ? `${schedule.schedule.totalDuration} 分钟`
+                      : '—'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-sm mt-2">
                   <span className="text-muted-foreground">总费用</span>

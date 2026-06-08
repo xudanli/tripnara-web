@@ -4,9 +4,11 @@ import type { TripDetail, PersonaAlert } from '@/types/trip';
 import { tripsApi } from '@/api/trips';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Shield, Activity, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { getPersonaAlertUserBody } from '@/lib/persona-alert-display';
 
 interface PersonaAlertsSectionProps {
   activeTrip: TripDetail | null;
@@ -98,6 +100,13 @@ export default function PersonaAlertsSection({ activeTrip }: PersonaAlertsSectio
           title: 'text-persona-neptune-foreground',
           accent: 'text-persona-neptune-accent',
         };
+      case 'USER_ACTION':
+        return {
+          bg: 'bg-slate-50 border-slate-200',
+          icon: 'text-slate-700',
+          title: 'text-slate-800',
+          accent: 'text-slate-600',
+        };
       default:
         return {
           bg: 'bg-muted/50 border-border/60',
@@ -105,19 +114,6 @@ export default function PersonaAlertsSection({ activeTrip }: PersonaAlertsSectio
           title: 'text-foreground',
           accent: 'text-muted-foreground',
         };
-    }
-  };
-
-  const getPersonaIcon = (persona: string) => {
-    switch (persona) {
-      case 'ABU':
-        return <Shield className="w-5 h-5" />;
-      case 'DR_DRE':
-        return <Activity className="w-5 h-5" />;
-      case 'NEPTUNE':
-        return <RefreshCw className="w-5 h-5" />;
-      default:
-        return null;
     }
   };
 
@@ -129,6 +125,8 @@ export default function PersonaAlertsSection({ activeTrip }: PersonaAlertsSectio
         return '🎧';
       case 'NEPTUNE':
         return '🌊';
+      case 'USER_ACTION':
+        return '📋';
       default:
         return '';
     }
@@ -209,7 +207,11 @@ export default function PersonaAlertsSection({ activeTrip }: PersonaAlertsSectio
                     styles.bg.replace('bg-', 'border-'),
                     styles.icon
                   )}>
-                    {getPersonaIcon(alert.persona)}
+                    {alert.persona === 'USER_ACTION' ? (
+                      <ClipboardList className="w-5 h-5" />
+                    ) : (
+                      <PersonaAvatar persona={alert.persona} size={28} />
+                    )}
                   </div>
 
                   {/* 内容区域 */}
@@ -231,7 +233,7 @@ export default function PersonaAlertsSection({ activeTrip }: PersonaAlertsSectio
                     
                     {/* 文案 - 保持安静、理性、陪伴的语气 */}
                     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line mb-3">
-                      {alert.message}
+                      {getPersonaAlertUserBody(alert)}
                     </p>
                     
                     <Button

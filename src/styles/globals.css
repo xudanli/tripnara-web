@@ -138,6 +138,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-intake-axis-i: var(--intake-axis-i);
+  --color-intake-axis-e: var(--intake-axis-e);
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 
@@ -289,6 +291,11 @@
   --risk-very-high: #F44336;
   --risk-very-high-bg: #FFEBEE;
   --risk-very-high-border: #FFCDD2;
+
+  /* Intake / Odyssey 体验面 — 映射人格轴，不引入独立色板 */
+  --intake-axis-i: var(--persona-dre-foreground);
+  --intake-axis-e: var(--persona-abu-accent);
+  --intake-shimmer: var(--muted-foreground);
 }
 
 .dark {
@@ -391,6 +398,10 @@
   --risk-very-high: #E57373;
   --risk-very-high-bg: oklch(0.28 0.05 25);
   --risk-very-high-border: oklch(0.38 0.08 25);
+
+  --intake-axis-i: var(--persona-dre-foreground);
+  --intake-axis-e: var(--persona-abu-accent);
+  --intake-shimmer: var(--muted-foreground);
 }
 
 @layer base {
@@ -403,6 +414,12 @@
 }
 
 /* ==================== 状态转换动效 ==================== */
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
 
 @keyframes gate-status-transition {
   from {
@@ -468,6 +485,44 @@
 .confirm-panel-error {
   animation: confirm-panel-shake 0.5s ease-in-out;
 }
+
+/* ==================== 规划师思考动效（插画风格） ==================== */
+
+@keyframes planner-route-draw {
+  0% {
+    stroke-dashoffset: 50;
+  }
+  60% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes planner-dot-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+.planner-route-draw {
+  stroke-dasharray: 60;
+  animation: planner-route-draw 2s ease-in-out infinite;
+}
+
+.planner-dot-pulse {
+  animation: planner-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.planner-dot-pulse-delay-1 { animation-delay: 0.2s; }
+.planner-dot-pulse-delay-2 { animation-delay: 0.4s; }
+.planner-dot-pulse-delay-3 { animation-delay: 0.6s; }
 
 /* ==================== AI 助手侧边栏样式 ==================== */
 

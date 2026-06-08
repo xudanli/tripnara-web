@@ -10,6 +10,7 @@ export { chatApi } from './chat';
 export { recommendationsApi } from './recommendations';
 export { plansApi } from './plans';
 export { tripsApi } from './trips';
+export { accommodationsApi } from './accommodations';
 
 // API 客户端
 export { default as planningAssistantV2Client } from './client';
@@ -50,6 +51,8 @@ export type {
   SuggestionsResponse,
   // MCP 服务数据类型
   Hotel,
+  Accommodation,
+  ItineraryHintZh,
   AirbnbListing,
   Restaurant,
   WeatherInfo,

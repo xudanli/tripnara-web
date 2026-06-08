@@ -21,6 +21,16 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -146,15 +156,15 @@ function MemberCard({
       {!readonly && (
         <div className="flex items-center gap-1">
           {onEdit && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(member)}>
+            <Button variant="ghost" size="icon" className="min-h-[44px] min-w-[44px] h-11 w-11" onClick={() => onEdit(member)}>
               <Settings className="h-4 w-4" />
             </Button>
           )}
           {onRemove && !isLeader && (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 text-destructive hover:text-destructive"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="min-h-[44px] min-w-[44px] h-11 w-11 text-destructive hover:text-destructive"
               onClick={() => onRemove(member.userId)}
             >
               <Trash2 className="h-4 w-4" />
@@ -424,6 +434,127 @@ function AddMemberDialog({
   );
 }
 
+/** 编辑成员对话框（Phase 3 设计文档） */
+function EditMemberDialog({
+  open,
+  onOpenChange,
+  member,
+  onSave,
+  isSubmitting,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  member: TeamMember | null;
+  onSave: (updated: TeamMember) => void;
+  isSubmitting?: boolean;
+}) {
+  const [name, setName] = React.useState('');
+  const [role, setRole] = React.useState<MemberRole>('MEMBER');
+  const [fitness, setFitness] = React.useState<FitnessLevelType>('INTERMEDIATE');
+  const [experience, setExperience] = React.useState<ExperienceLevelType>('SOME_EXPERIENCE');
+  const [weight, setWeight] = React.useState([0.5]);
+
+  React.useEffect(() => {
+    if (member) {
+      setName(member.displayName);
+      setRole((member.role as MemberRole) ?? 'MEMBER');
+      setFitness((member.fitnessLevel as FitnessLevelType) ?? 'INTERMEDIATE');
+      setExperience((member.experienceLevel as ExperienceLevelType) ?? 'SOME_EXPERIENCE');
+      setWeight([member.decisionWeight ?? 0.5]);
+    }
+  }, [member]);
+
+  const handleSave = () => {
+    if (!member || !name.trim()) return;
+    onSave({
+      ...member,
+      displayName: name.trim(),
+      role,
+      fitnessLevel: fitness,
+      experienceLevel: experience,
+      decisionWeight: weight[0],
+    });
+    onOpenChange(false);
+  };
+
+  if (!member) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>编辑成员</DialogTitle>
+          <DialogDescription>
+            修改成员的角色、体能等级与决策权重
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="edit-name">姓名</Label>
+            <Input
+              id="edit-name"
+              placeholder="请输入成员姓名"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label>角色</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as MemberRole)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLE_CONFIG).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        <config.icon className={cn('h-4 w-4', config.color)} />
+                        <span>{config.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>体能等级</Label>
+              <Select value={fitness} onValueChange={(v) => setFitness(v as FitnessLevelType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FITNESS_LEVEL_CONFIG).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>经验等级</Label>
+            <Select value={experience} onValueChange={(v) => setExperience(v as ExperienceLevelType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(EXPERIENCE_LEVEL_CONFIG).map(([key, config]) => (
+                  <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>决策权重</Label>
+              <span className="text-sm text-muted-foreground">{Math.round(weight[0] * 100)}%</span>
+            </div>
+            <Slider value={weight} onValueChange={setWeight} max={1} step={0.05} className="py-2" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>取消</Button>
+          <Button onClick={handleSave} disabled={!name.trim() || isSubmitting}>保存</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ==================== 主组件 ====================
 
 export interface TeamManagementPanelProps {
@@ -447,6 +578,12 @@ export interface TeamManagementPanelProps {
   loading?: boolean;
   /** 自定义类名 */
   className?: string;
+  /** 外部控制添加成员弹窗（用于空成员引导等） */
+  openAddMember?: boolean;
+  /** 添加成员弹窗关闭回调 */
+  onOpenAddMemberChange?: (open: boolean) => void;
+  /** 编辑成员提交中（用于禁用保存按钮） */
+  isEditMemberPending?: boolean;
 }
 
 export function TeamManagementPanel({
@@ -460,8 +597,15 @@ export function TeamManagementPanel({
   readonly = false,
   loading = false,
   className,
+  openAddMember,
+  onOpenAddMemberChange,
+  isEditMemberPending = false,
 }: TeamManagementPanelProps) {
-  const [showAddDialog, setShowAddDialog] = React.useState(false);
+  const [internalAddDialog, setInternalAddDialog] = React.useState(false);
+  const showAddDialog = openAddMember !== undefined ? openAddMember : internalAddDialog;
+  const setShowAddDialog = onOpenAddMemberChange ?? setInternalAddDialog;
+  const [memberToRemove, setMemberToRemove] = React.useState<{ userId: string; displayName: string } | null>(null);
+  const [memberToEdit, setMemberToEdit] = React.useState<TeamMember | null>(null);
   const [expandedSections, setExpandedSections] = React.useState({
     members: true,
     constraints: true,
@@ -515,7 +659,7 @@ export function TeamManagementPanel({
   const leader = team.members.find(m => m.role === 'LEADER');
 
   return (
-    <Card className={className}>
+    <Card className={className} data-team-management-panel>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -577,8 +721,8 @@ export function TeamManagementPanel({
                     key={member.userId}
                     member={member}
                     isLeader={member.role === 'LEADER'}
-                    onEdit={onEditMember}
-                    onRemove={onRemoveMember}
+                    onEdit={onEditMember ? (m) => setMemberToEdit(m) : undefined}
+                    onRemove={onRemoveMember ? (userId) => setMemberToRemove({ userId, displayName: member.displayName }) : undefined}
                     readonly={readonly}
                     displayWeightPercent={
                       contribMap.has(member.userId) ? contribMap.get(member.userId)
@@ -669,6 +813,48 @@ export function TeamManagementPanel({
           onOpenChange={setShowAddDialog}
           onAdd={onAddMember}
         />
+      )}
+
+      {/* 编辑成员对话框（Phase 3） */}
+      {onEditMember && (
+        <EditMemberDialog
+          open={!!memberToEdit}
+          onOpenChange={(open) => !open && setMemberToEdit(null)}
+          member={memberToEdit}
+          onSave={(updated) => {
+            onEditMember(updated);
+            setMemberToEdit(null);
+          }}
+          isSubmitting={isEditMemberPending}
+        />
+      )}
+
+      {/* 移除成员二次确认（HCI 设计文档 Phase 2） */}
+      {onRemoveMember && (
+        <AlertDialog open={!!memberToRemove} onOpenChange={(open) => !open && setMemberToRemove(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>移出团队成员</AlertDialogTitle>
+              <AlertDialogDescription>
+                确定将 <strong>{memberToRemove?.displayName}</strong> 移出团队？移出后可重新邀请加入。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (memberToRemove) {
+                    onRemoveMember(memberToRemove.userId);
+                    setMemberToRemove(null);
+                  }
+                }}
+              >
+                确定移出
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </Card>
   );

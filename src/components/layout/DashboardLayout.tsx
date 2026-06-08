@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, useMemo, useEffect } from 'react';
+import { useState, createContext, useContext, useMemo, useEffect, useCallback } from 'react';
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 // SidebarNavigation 已删除 - 所有功能通过对话界面访问
 import MobileBottomNav from './MobileBottomNav';
@@ -6,11 +6,18 @@ import EvidenceDrawer from './EvidenceDrawer';
 // ConversationHistorySidebar 已移除 - Dashboard 页面不再显示对话历史
 // DashboardTopBar 已删除 - 顶部导航栏已移除
 import AgentChatSidebar from '@/components/agent/AgentChatSidebar';
+import { AssistantResizableWorkspace } from '@/components/layout/AssistantResizableWorkspace';
 import MainSidebar from './MainSidebar';
+import {
+  AGENT_SIDEBAR_WIDTH,
+  clampAgentSidebarWidth,
+  readAgentSidebarWidth,
+  writeAgentSidebarWidth,
+} from '@/lib/agent-sidebar-layout';
 import { AssistantSidebarProvider } from '@/contexts/AssistantSidebarContext';
 import { NLConversationProvider } from '@/contexts/NLConversationContext';
 import { useAuth } from '@/hooks/useAuth';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsLgUp, useIsMobile } from '@/hooks/use-mobile';
 import { tripsApi } from '@/api/trips';
 import { Toaster } from '@/components/ui/sonner';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -18,15 +25,26 @@ import { Button } from '@/components/ui/button';
 import { Compass } from 'lucide-react';
 import type { EntryPoint } from '@/api/agent';
 import type { TripDetail } from '@/types/trip';
+import { ReputationGlobalPrompt } from '@/features/match-square';
 
 // Context for drawer control
 interface DrawerContextType {
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
-  drawerTab: 'evidence' | 'risk' | 'decision';
-  setDrawerTab: (tab: 'evidence' | 'risk' | 'decision') => void;
+  drawerTab: 'evidence' | 'risk' | 'decision' | 'memory';
+  setDrawerTab: (tab: 'evidence' | 'risk' | 'decision' | 'memory') => void;
   highlightItemId?: string;
   setHighlightItemId: (id?: string) => void;
+  highlightPatchId?: string;
+  setHighlightPatchId: (id?: string) => void;
+  memoryConstraintSink: import('@/features/route-and-run/types/observability').MemoryContractConstraintSink | null;
+  setMemoryConstraintSink: (
+    sink: import('@/features/route-and-run/types/observability').MemoryContractConstraintSink | null
+  ) => void;
+  constraintSinkDecisionLog: import('@/lib/extract-memory-contract').ConstraintSinkDecisionLogEvidence | null;
+  setConstraintSinkDecisionLog: (
+    evidence: import('@/lib/extract-memory-contract').ConstraintSinkDecisionLogEvidence | null
+  ) => void;
   /** 高亮的行程项 ID 列表（证据点击时用于在时间轴中高亮） */
   highlightItineraryItemIds: string[];
   setHighlightItineraryItemIds: (ids: string[]) => void;
@@ -42,12 +60,22 @@ export const useDrawer = () => {
   return context;
 };
 
+/** 可选：Agent 等子树未挂载 Drawer 时不抛错 */
+export const useDrawerOptional = () => useContext(DrawerContext);
+
 export default function DashboardLayout() {
   // 移动端菜单已删除，不再需要状态
   // const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerTab, setDrawerTab] = useState<'evidence' | 'risk' | 'decision'>('evidence');
+  const [drawerTab, setDrawerTab] = useState<'evidence' | 'risk' | 'decision' | 'memory'>('evidence');
   const [highlightItemId, setHighlightItemId] = useState<string | undefined>();
+  const [highlightPatchId, setHighlightPatchId] = useState<string | undefined>();
+  const [memoryConstraintSink, setMemoryConstraintSink] = useState<
+    import('@/features/route-and-run/types/observability').MemoryContractConstraintSink | null
+  >(null);
+  const [constraintSinkDecisionLog, setConstraintSinkDecisionLog] = useState<
+    import('@/lib/extract-memory-contract').ConstraintSinkDecisionLogEvidence | null
+  >(null);
   const [highlightItineraryItemIds, setHighlightItineraryItemIds] = useState<string[]>([]);
   // 从 localStorage 读取初始状态，与 AgentChatSidebar 保持一致
   const [sidebarExpanded, setSidebarExpanded] = useState(() => {
@@ -165,6 +193,12 @@ export default function DashboardLayout() {
     setDrawerTab,
     highlightItemId,
     setHighlightItemId,
+    highlightPatchId,
+    setHighlightPatchId,
+    memoryConstraintSink,
+    setMemoryConstraintSink,
+    constraintSinkDecisionLog,
+    setConstraintSinkDecisionLog,
     highlightItineraryItemIds,
     setHighlightItineraryItemIds,
   };
@@ -189,6 +223,12 @@ export default function DashboardLayout() {
           setDrawerTab={setDrawerTab}
           highlightItemId={highlightItemId}
           setHighlightItemId={setHighlightItemId}
+          highlightPatchId={highlightPatchId}
+          setHighlightPatchId={setHighlightPatchId}
+          memoryConstraintSink={memoryConstraintSink}
+          setMemoryConstraintSink={setMemoryConstraintSink}
+          constraintSinkDecisionLog={constraintSinkDecisionLog}
+          setConstraintSinkDecisionLog={setConstraintSinkDecisionLog}
           highlightItineraryItemIds={highlightItineraryItemIds}
           setHighlightItineraryItemIds={setHighlightItineraryItemIds}
           sidebarExpanded={sidebarExpanded}
@@ -211,6 +251,12 @@ function DashboardLayoutInner({
   setDrawerTab,
   highlightItemId,
   setHighlightItemId,
+  highlightPatchId,
+  setHighlightPatchId,
+  memoryConstraintSink,
+  setMemoryConstraintSink,
+  constraintSinkDecisionLog,
+  setConstraintSinkDecisionLog,
   highlightItineraryItemIds,
   setHighlightItineraryItemIds,
   sidebarExpanded,
@@ -223,10 +269,20 @@ function DashboardLayoutInner({
 }: {
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
-  drawerTab: 'evidence' | 'risk' | 'decision';
-  setDrawerTab: (tab: 'evidence' | 'risk' | 'decision') => void;
+  drawerTab: 'evidence' | 'risk' | 'decision' | 'memory';
+  setDrawerTab: (tab: 'evidence' | 'risk' | 'decision' | 'memory') => void;
   highlightItemId: string | undefined;
   setHighlightItemId: (id: string | undefined) => void;
+  highlightPatchId: string | undefined;
+  setHighlightPatchId: (id: string | undefined) => void;
+  memoryConstraintSink: import('@/features/route-and-run/types/observability').MemoryContractConstraintSink | null;
+  setMemoryConstraintSink: (
+    sink: import('@/features/route-and-run/types/observability').MemoryContractConstraintSink | null
+  ) => void;
+  constraintSinkDecisionLog: import('@/lib/extract-memory-contract').ConstraintSinkDecisionLogEvidence | null;
+  setConstraintSinkDecisionLog: (
+    evidence: import('@/lib/extract-memory-contract').ConstraintSinkDecisionLogEvidence | null
+  ) => void;
   highlightItineraryItemIds: string[];
   setHighlightItineraryItemIds: (ids: string[]) => void;
   sidebarExpanded: boolean;
@@ -238,11 +294,28 @@ function DashboardLayoutInner({
   isMobile: boolean;
 }) {
   const location = useLocation();
-  const isPlanStudioPage = location.pathname.includes('/plan-studio');
+  const { isAuthenticated } = useAuth();
   const [assistantSheetOpen, setAssistantSheetOpen] = useState(false);
+  const [assistantWidth, setAssistantWidth] = useState(() => readAgentSidebarWidth());
+  const isLgUp = useIsLgUp();
   const showAssistantArea = (location.pathname.includes('/plan-studio') || location.pathname.includes('/execute')) && !isDashboardPage;
-  // 侧边栏宽度：展开 400px，收起 56px（w-14）
-  const assistantSidebarWidth = sidebarExpanded ? 400 : 56;
+  const useDesktopAssistantLayout = showAssistantArea && !isMobile && isLgUp;
+
+  const handleAssistantPanelResize = useCallback(
+    (panelSize: { inPixels: number }) => {
+      const px = clampAgentSidebarWidth(panelSize.inPixels);
+      setAssistantWidth(px);
+      writeAgentSidebarWidth(px);
+    },
+    []
+  );
+
+  const assistantSidebarWidth =
+    showAssistantArea && !isMobile
+      ? sidebarExpanded
+        ? assistantWidth
+        : AGENT_SIDEBAR_WIDTH.COLLAPSED
+      : 0;
 
   return (
     <AssistantSidebarProvider
@@ -251,63 +324,70 @@ function DashboardLayoutInner({
         width: showAssistantArea && !isMobile ? assistantSidebarWidth : 0,
       }}
     >
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
+    <div className="fixed inset-0 z-0 flex flex-col overflow-hidden bg-gray-50">
         {/* 顶部导航栏已删除 */}
 
         {/* 移动端菜单按钮和侧边栏已删除 - 使用底部导航栏 MobileBottomNav */}
 
         {/* 主内容区域 */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* 🆕 左侧主导航栏（混合模式） */}
-          <div className="hidden lg:block">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* 左侧主导航：固定视口高度，仅内部 ScrollArea 滚动 */}
+          <div className="hidden lg:flex h-full max-h-screen shrink-0 overflow-hidden">
             <MainSidebar />
           </div>
 
-          {/* 主内容区和右侧侧边栏 */}
-          <div className="flex-1 flex h-full">
-            {/* 主内容区 */}
-            <div className="flex-1 h-full overflow-hidden transition-all duration-300">
-              <main className="h-full overflow-y-auto pb-16 lg:pb-0">
-                <Outlet />
-              </main>
-            </div>
-            
-            {/* 🆕 规划工作台、执行页面右侧 AI 助手 - 桌面端内联，移动端 FAB+Sheet */}
-            {showAssistantArea && (
-              <>
-                {/* 桌面端：内联侧边栏；移动端隐藏（用 FAB+Sheet） */}
-                <div className={isMobile ? 'hidden' : 'hidden lg:flex'}>
+          {/* 主内容区 + 可拖拽智能体（仅 lg+ 分栏，避免 hidden lg:flex 吞掉整页） */}
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+            {useDesktopAssistantLayout ? (
+              <AssistantResizableWorkspace
+                className="flex-1 min-w-0 h-full"
+                sidebarExpanded={sidebarExpanded}
+                assistantWidth={assistantWidth}
+                onAssistantResize={handleAssistantPanelResize}
+                main={
+                  <main className="h-full min-h-0 overflow-y-auto overscroll-y-contain pb-16 lg:pb-0">
+                    <Outlet />
+                  </main>
+                }
+                renderAssistantSidebar={(expanded) => (
                   <AgentChatSidebar
                     activeTripId={activeTripId}
                     onSystem2Response={() => {}}
                     entryPoint={entryPoint}
                     onExpandedChange={setSidebarExpanded}
+                    layoutExpanded={expanded}
                   />
-                </div>
-                {/* 移动端：FAB + Sheet */}
-                {isMobile && (
-                  <>
-                    <Button
-                      size="icon"
-                      className="fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg lg:hidden"
-                      onClick={() => setAssistantSheetOpen(true)}
-                      title="打开助手"
-                    >
-                      <Compass className="h-6 w-6" />
-                    </Button>
-                    <Sheet open={assistantSheetOpen} onOpenChange={setAssistantSheetOpen}>
-                      <SheetContent side="right" className="w-full max-w-md p-0">
-                        <AgentChatSidebar
-                          activeTripId={activeTripId}
-                          onSystem2Response={() => {}}
-                          entryPoint={entryPoint}
-                          forceExpanded
-                          onClose={() => setAssistantSheetOpen(false)}
-                        />
-                      </SheetContent>
-                    </Sheet>
-                  </>
                 )}
+              />
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-16 lg:pb-0">
+                  <Outlet />
+                </main>
+              </div>
+            )}
+
+            {showAssistantArea && isMobile && (
+              <>
+                <Button
+                  size="icon"
+                  className="fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full shadow-lg lg:hidden"
+                  onClick={() => setAssistantSheetOpen(true)}
+                  title="打开助手"
+                >
+                  <Compass className="h-6 w-6" />
+                </Button>
+                <Sheet open={assistantSheetOpen} onOpenChange={setAssistantSheetOpen}>
+                  <SheetContent side="right" className="w-full max-w-md p-0">
+                    <AgentChatSidebar
+                      activeTripId={activeTripId}
+                      onSystem2Response={() => {}}
+                      entryPoint={entryPoint}
+                      forceExpanded
+                      onClose={() => setAssistantSheetOpen(false)}
+                    />
+                  </SheetContent>
+                </Sheet>
               </>
             )}
           </div>
@@ -321,6 +401,9 @@ function DashboardLayoutInner({
             tripId={activeTripId}
             activeTab={drawerTab}
             highlightItemId={highlightItemId}
+            highlightPatchId={highlightPatchId}
+            memoryConstraintSink={memoryConstraintSink}
+            constraintSinkDecisionLog={constraintSinkDecisionLog}
             onEvidenceClick={(evidence) => {
               if (evidence.affectedItemIds?.length) {
                 setHighlightItineraryItemIds(evidence.affectedItemIds);
@@ -334,6 +417,9 @@ function DashboardLayoutInner({
 
         {/* Toast 通知组件 */}
         <Toaster position="top-right" richColors />
+
+        {/* Reputation OS — 48h 行后互评全局弹窗 */}
+        <ReputationGlobalPrompt enabled={isAuthenticated} />
       </div>
     </AssistantSidebarProvider>
   );

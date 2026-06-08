@@ -184,6 +184,10 @@ export interface FitnessProfile {
   recommendedDailyDistanceKm: number;
   completedTripCount: number;
   ageInfo?: AgeInfo;
+  /** 最长连续徒步天数档位 0–4（徒步详情 longestHike query） */
+  longestHikeDays?: number;
+  /** 部分后端字段名 */
+  longestHike?: number;
 }
 
 /** 问卷提交结果 */

@@ -69,15 +69,35 @@ export interface CheckReadinessDto {
 }
 
 /**
+ * 覆盖缺口（identifyGaps）结构化锚点：与 coverage-gap:* id、时间轴 segment、地图 POI 对齐。
+ * message 已由后端带上行程上下文时，前端优先直接展示 message，tripScope 用于跳转 / 弱展示证据。
+ */
+export interface ReadinessTripScope {
+  kind: 'segment' | 'poi';
+  /** 行程内第几天（1-based） */
+  day?: number;
+  segmentId?: string;
+  fromPoi?: { id?: string; name?: string };
+  toPoi?: { id?: string; name?: string };
+  distanceKm?: number;
+  /** 与 coverage-gap / findings id 对齐 */
+  id?: string;
+  gapId?: string;
+}
+
+/**
  * ReadinessFindingItem 接口
  * 根据后端 API 文档定义（v2.0.0）
  */
 export interface ReadinessFindingItem {
-  id: string;                          // 规则ID
+  /** 稳定 id；覆盖缺口项常为 `coverage-gap:${gapId}`，与 solutions / 地图缺口对齐 */
+  id: string;
   category: ReadinessCategory;         // 分类
   severity: RuleSeverity;              // 严重程度（low, medium, high）
   level: ActionLevel;                  // 优先级级别（blocker, must, should, optional）
-  message: string;                     // 消息描述
+  message: string;                     // 消息描述（identifyGaps 已含行程上下文时可直出）
+  /** 结构化锚点（路段 / POI 缺口），可选 */
+  tripScope?: ReadinessTripScope;
   tasks?: Array<{                      // 任务列表
     title: string;
     dueOffsetDays?: number;            // 相对出发日期的偏移天数（负数表示提前）
@@ -139,28 +159,30 @@ export interface ReadinessFinding {
 }
 
 /**
- * Risk 接口
- * 根据后端 API 文档定义
- */
-export interface Risk {
-  type: string;                        // 风险类型（如 'altitude', 'terrain', 'weather'）
-  severity: 'low' | 'medium' | 'high';
-  message: string;                     // 风险消息描述（后端使用 message）
-  mitigation?: string[];               // 应对措施列表（后端使用 mitigation，单数形式）
-  emergencyContacts?: string[];         // 紧急联系方式（如果有）
-  // 以下字段为兼容旧版本保留
-  summary?: string;                    // 兼容旧字段（等同于 message）
-  mitigations?: string[];              // 兼容旧字段（等同于 mitigation）
-}
-
-/**
- * 受影响的POI信息
+ * 受影响的 POI（findings[].risks、affectedPois、风险增强卡片共用）
  */
 export interface AffectedPoi {
   id: string;
   name: string;
   nameCN?: string;
-  day?: number;  // 影响的天数（1-based）
+  day?: number; // 行程内天数（1-based）
+}
+
+/**
+ * Risk 接口（含顶层 risks、findings[].risks；摘要可为多段「本行程相关地点」）
+ */
+export interface Risk {
+  type: string;
+  severity: 'low' | 'medium' | 'high';
+  message: string;
+  mitigation?: string[];
+  emergencyContacts?: string[];
+  summary?: string;
+  mitigations?: string[];
+  /** 影响说明（后端语义；勿用前端占位句覆盖） */
+  impact?: string;
+  /** 与行程相关的 POI 列表（Chip / 跳转） */
+  affectedPois?: AffectedPoi[];
 }
 
 /**
@@ -478,9 +500,8 @@ export interface EnhancedRisk extends Risk {
   severityLabel?: string;                // 🆕 严重程度中文显示（`高`/`中`/`低`）
   severityLabelEn?: string;             // 🆕 严重程度英文显示
   description?: string;                 // 🆕 详细说明（当前与message相同）
-  impact?: string;                      // 🆕 影响说明
+  /** impact / affectedPois 见基类 Risk */
   mitigationDetails?: MitigationDetail[]; // 🆕 详细缓解建议（包含优先级）
-  affectedPois?: AffectedPoi[];         // 🆕 影响的POI列表（包含名称、天数）
   sourceType?: 'readiness' | 'capability_pack';  // 来源类型
   sourcePackType?: CapabilityPackType | string;  // 能力包类型（当 sourceType='capability_pack' 时）
   originalSeverity?: 'low' | 'medium' | 'high';   // 🆕 原始严重程度（AI增强前）
@@ -984,7 +1005,7 @@ export const readinessApi = {
     blockerId: string
   ): Promise<{ blockerId: string; blockerMessage: string; solutions: any[] }> => {
     const response = await apiClient.get<ApiResponseWrapper<{ blockerId: string; blockerMessage: string; solutions: any[] }>>(
-      `/readiness/trip/${tripId}/blockers/${blockerId}/solutions`
+      `/readiness/trip/${encodeURIComponent(tripId)}/blockers/${encodeURIComponent(blockerId)}/solutions`
     );
     return handleResponse(response);
   },
@@ -999,7 +1020,7 @@ export const readinessApi = {
     reason?: string
   ): Promise<{ findingId: string; marked: boolean; reason?: string; markedAt: string }> => {
     const response = await apiClient.post<ApiResponseWrapper<{ findingId: string; marked: boolean; reason?: string; markedAt: string }>>(
-      `/readiness/trip/${tripId}/findings/${findingId}/mark-not-applicable`,
+      `/readiness/trip/${encodeURIComponent(tripId)}/findings/${encodeURIComponent(findingId)}/mark-not-applicable`,
       { reason }
     );
     return handleResponse(response);
@@ -1014,7 +1035,7 @@ export const readinessApi = {
     findingId: string
   ): Promise<{ findingId: string; marked: boolean }> => {
     const response = await apiClient.delete<ApiResponseWrapper<{ findingId: string; marked: boolean }>>(
-      `/readiness/trip/${tripId}/findings/${findingId}/mark-not-applicable`
+      `/readiness/trip/${encodeURIComponent(tripId)}/findings/${encodeURIComponent(findingId)}/mark-not-applicable`
     );
     return handleResponse(response);
   },
@@ -1030,7 +1051,7 @@ export const readinessApi = {
     note?: string
   ): Promise<{ findingId: string; added: boolean; reminderDate?: string; note?: string; addedAt: string }> => {
     const response = await apiClient.post<ApiResponseWrapper<{ findingId: string; added: boolean; reminderDate?: string; note?: string; addedAt: string }>>(
-      `/readiness/trip/${tripId}/findings/${findingId}/add-to-later`,
+      `/readiness/trip/${encodeURIComponent(tripId)}/findings/${encodeURIComponent(findingId)}/add-to-later`,
       { reminderDate, note }
     );
     return handleResponse(response);
@@ -1045,7 +1066,7 @@ export const readinessApi = {
     findingId: string
   ): Promise<{ findingId: string; removed: boolean }> => {
     const response = await apiClient.delete<ApiResponseWrapper<{ findingId: string; removed: boolean }>>(
-      `/readiness/trip/${tripId}/findings/${findingId}/remove-from-later`
+      `/readiness/trip/${encodeURIComponent(tripId)}/findings/${encodeURIComponent(findingId)}/remove-from-later`
     );
     return handleResponse(response);
   },
@@ -1683,7 +1704,7 @@ export interface ScoreData {
   buffers: number;
 }
 
-/** 准备度发现项 */
+/** 准备度发现项（扁平 /score；覆盖缺口项 id 常为 coverage-gap:*，可与树形 findings 对齐） */
 export interface ScoreFinding {
   id: string;
   /** ✅ v1.7.0统一：使用标准类型 must 和 should，同时兼容 warning 和 suggestion */
@@ -1693,6 +1714,8 @@ export interface ScoreFinding {
   severity: 'high' | 'medium' | 'low';
   affectedDays?: number[];
   actionRequired?: string;
+  /** 与树形 findings 一致的可选锚点（扁平 /score 里来自覆盖缺口的项） */
+  tripScope?: ReadinessTripScope;
 }
 
 /** 准备度风险项 */

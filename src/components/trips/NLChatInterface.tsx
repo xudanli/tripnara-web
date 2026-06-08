@@ -6,6 +6,8 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import type { 
@@ -13,9 +15,12 @@ import type {
   ConversationContext,
   PlannerResponseBlock,
   NLClarificationQuestion,
+  ThinkingProcess,
+  ProgressStep,
 } from '@/types/trip';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
 import { NLClarificationQuestionCard } from './NLClarificationQuestionCard';
+import { getConditionalInputStorageKey, getTriggeredConditionalInputs } from '@/utils/nl-conversation-adapter';
 import { StructuredContentTypewriter } from './StructuredContentTypewriter';
 import ConversationGuide from './ConversationGuide';
 import { CreateTripWelcomeScreen } from './CreateTripWelcomeScreen';
@@ -48,7 +53,12 @@ import {
   Loader2,
   ArrowRight,
   Plus,
-  Sparkles,
+  Compass,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Brain,
+  Square,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
@@ -68,6 +78,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { PlannerThinkingLoading } from '@/components/common/PlannerThinkingLoading';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 // ==================== 辅助函数 ====================
 // 注意：normalizeClarificationQuestions 已移至 @/utils/nl-conversation-adapter
@@ -102,23 +114,115 @@ function formatAnswerValue(answer: any): string {
   return String(answer);
 }
 
+/**
+ * 「已识别」回显（可选展示）：
+ * - 默认不展示（避免噪音/重复）
+ * - 如需展示，应尽量使用选项的 label（与上方按钮文案一致），而不是内部 value（如 ISK/summer/high）
+ */
+const SHOW_RECOGNIZED_PREVIEW = import.meta.env.VITE_SHOW_NL_RECOGNIZED_PREVIEW === 'true';
+
+function formatRecognizedAnswer(question: NLClarificationQuestion, answer: any): string {
+  if (answer === null || answer === undefined || answer === '') return '';
+
+  const normalizeScalar = (v: any): string => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object' && !Array.isArray(v)) {
+      // 展示层：优先 label，缺失再 fallback 到 value
+      return String((v as any).label ?? (v as any).value ?? v).trim();
+    }
+    return String(v).trim();
+  };
+
+  const optionTexts: Array<{ value: string; label: string }> = (question.options || []).map((opt: any) => {
+    if (typeof opt === 'string') return { value: opt, label: opt };
+    const value = String(opt?.value ?? opt?.label ?? opt).trim();
+    const label = String(opt?.label ?? opt?.value ?? opt).trim();
+    return { value, label };
+  });
+
+  const mapOne = (raw: any): string => {
+    const v = normalizeScalar(raw);
+    if (!v) return '';
+    // 有 options 时：优先匹配 label/value，最终展示 label
+    if (optionTexts.length > 0) {
+      const matched = optionTexts.find((o) => o.label === v) || optionTexts.find((o) => o.value === v);
+      return matched?.label || v;
+    }
+    // 无 options / 纯文本输入：直接展示（已经是 label>value 的标量归一化结果）
+    return v;
+  };
+
+  if (Array.isArray(answer)) {
+    return answer.map(mapOne).filter(Boolean).join('、');
+  }
+  if (question.inputType === 'boolean') {
+    return answer ? '是' : '否';
+  }
+  return mapOne(answer);
+}
+
+type QuestionAnswerLabelsShape =
+  | Array<{ questionId?: string; label: string; fieldName?: string; value?: any }>
+  | Record<string, { label?: string; value?: any }>;
+
+function lookupAnswerLabel(
+  labels: QuestionAnswerLabelsShape | undefined,
+  questionId: string,
+  fieldKey: string
+): string | undefined {
+  if (!labels) return undefined;
+
+  // 1) 后端常见：对象映射（key 可能是 fieldName 或 questionId）
+  if (!Array.isArray(labels) && typeof labels === 'object') {
+    const byField = (labels as any)[fieldKey]?.label;
+    if (typeof byField === 'string' && byField.trim()) return byField.trim();
+    const byQid = (labels as any)[questionId]?.label;
+    if (typeof byQid === 'string' && byQid.trim()) return byQid.trim();
+    return undefined;
+  }
+
+  // 2) 兼容：数组形式
+  if (Array.isArray(labels)) {
+    const hit =
+      labels.find((x) => x.questionId === questionId) ||
+      labels.find((x) => x.fieldName && x.fieldName === fieldKey);
+    const label = hit?.label?.trim();
+    return label ? label : undefined;
+  }
+
+  return undefined;
+}
+
+function getAnswerLabelOverride(
+  message: { questionAnswerLabels?: QuestionAnswerLabelsShape } | undefined,
+  question: NLClarificationQuestion,
+  fieldKey: string
+): string | undefined {
+  return lookupAnswerLabel(message?.questionAnswerLabels, question.id, fieldKey);
+}
+
 function generateConfirmationMessage(
   questions: NLClarificationQuestion[],
-  answers: Record<string, string | string[] | number | boolean | null>
+  answers: Record<string, string | string[] | number | boolean | null>,
+  questionAnswerLabels?: QuestionAnswerLabelsShape
 ): string {
   const answerTexts: string[] = [];
   
   questions.forEach((q) => {
-    const answer = answers[q.id];
+    const fieldKey = q.metadata?.fieldName || q.id;
+    const answer = answers[fieldKey] ?? answers[q.id];
     if (answer === null || answer === undefined || answer === '') return;
     
     let answerText = '';
-    if (q.inputType === 'multiple_choice' && Array.isArray(answer)) {
-      answerText = answer.map(item => formatAnswerValue(item)).join('、');
+    const labelOverride = lookupAnswerLabel(questionAnswerLabels, q.id, fieldKey);
+
+    if (labelOverride) {
+      answerText = labelOverride;
     } else if (q.inputType === 'boolean') {
       answerText = answer ? '是' : '否';
     } else {
-      answerText = formatAnswerValue(answer);
+      // fallback：用问题 options 做 value->label 映射，避免出现 summer/high/couple
+      answerText = formatRecognizedAnswer(q, answer);
     }
     
     // 根据问题类型生成简洁的确认文本
@@ -138,6 +242,39 @@ function generateConfirmationMessage(
   return answerTexts.length > 0 ? answerTexts.join('，') : '已确认';
 }
 
+/** 从 questions + questionAnswers 构建 finalAnswers（含条件输入） */
+function buildFinalAnswers(
+  questions: NLClarificationQuestion[],
+  questionAnswers: Record<string, string | string[] | number | boolean | null> | undefined
+): Record<string, string | string[] | number | boolean | null> {
+  const finalAnswers: Record<string, string | string[] | number | boolean | null> = {};
+  if (!questionAnswers) return finalAnswers;
+  questions.forEach((q) => {
+    const fieldKey = q.metadata?.fieldName || q.id;
+    const answer = questionAnswers[fieldKey] ?? questionAnswers[q.id];
+    if (answer !== null && answer !== undefined) {
+      finalAnswers[fieldKey] = answer;
+    }
+    if (q.conditionalInputs?.length) {
+      const selectedValue = typeof answer === 'string' ? answer : String(answer);
+      q.conditionalInputs.forEach((ci) => {
+        const matches =
+          ci.triggerValue === selectedValue ||
+          selectedValue.includes(ci.triggerValue) ||
+          ci.triggerValue.includes(selectedValue);
+        if (matches) {
+          const storageKey = getConditionalInputStorageKey(q.id, fieldKey, ci);
+          const condAns = questionAnswers[storageKey];
+          if (condAns !== null && condAns !== undefined) {
+            finalAnswers[storageKey] = condAns;
+          }
+        }
+      });
+    }
+  });
+  return finalAnswers;
+}
+
 // ==================== 类型定义 ====================
 
 interface ChatMessage {
@@ -146,7 +283,6 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   // AI 消息特有
-  suggestedQuestions?: string[];
   parsedParams?: ParsedTripParams;
   showConfirmCard?: boolean;
   // 🆕 需要用户确认创建行程
@@ -157,6 +293,8 @@ interface ChatMessage {
   clarificationQuestions?: NLClarificationQuestion[];
   // 问题回答状态（用于追踪已回答的问题）
   questionAnswers?: Record<string, string | string[] | number | boolean | null>;
+  // 🆕 展示层回显 label（优先于 questionAnswers 原始 value）
+  questionAnswerLabels?: QuestionAnswerLabelsShape;
   // 🆕 Gate 警告和 Critical 字段阻止标记
   gateBlocked?: boolean;
   blockedByCriticalFields?: boolean;
@@ -178,6 +316,14 @@ interface ChatMessage {
   // 🆕 约束冲突检测
   conflicts?: Conflict[];
   conflictRunId?: string; // 冲突检测的 runId，用于反馈
+  // 🆕 思考过程与进展步骤
+  thinkingProcess?: ThinkingProcess;
+  progressSteps?: ProgressStep[];
+  /** 阶段指示器（如 硬约束确认 1/4） */
+  phaseIndicator?: { phase: number; phaseName: string; progress: string; totalPhases: number };
+  // 🆕 用户终止后的重试提示
+  isCancelledNotice?: boolean;
+  retryPayload?: { text: string; answers?: Record<string, string | string[] | number | boolean | null> };
 }
 
 interface NLChatInterfaceProps {
@@ -188,6 +334,61 @@ interface NLChatInterfaceProps {
 }
 
 // ==================== 子组件 ====================
+
+/**
+ * `plannerReply` / 无 blocks 时的降级正文：按 **Markdown** 渲染（粗体、有序/无序列表、链接等）。
+ * 与后端约定：正文可使用 GitHub Flavored Markdown（`remark-gfm`）。
+ */
+function NlAssistantMarkdown({ text, className }: { text: string; className?: string }) {
+  const t = text.trim();
+  if (!t) return null;
+  return (
+    <div className={cn('nl-planner-markdown prose prose-sm max-w-none text-gray-900', className)}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+          ol: ({ children }) => (
+            <ol className="my-2 list-decimal space-y-1.5 pl-5 marker:font-normal marker:text-slate-500">
+              {children}
+            </ol>
+          ),
+          ul: ({ children }) => (
+            <ul className="my-2 list-disc space-y-1.5 pl-5 marker:text-slate-500">{children}</ul>
+          ),
+          li: ({ children }) => <li className="leading-relaxed [&>p]:mb-1">{children}</li>,
+          strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+          em: ({ children }) => <em className="italic text-gray-800">{children}</em>,
+          h1: ({ children }) => <h1 className="mb-2 text-base font-semibold text-gray-900">{children}</h1>,
+          h2: ({ children }) => <h2 className="mb-2 text-sm font-semibold text-gray-900">{children}</h2>,
+          h3: ({ children }) => <h3 className="mb-1 text-sm font-semibold text-gray-900">{children}</h3>,
+          code: ({ className: codeClass, children, ...props }) =>
+            codeClass ? (
+              <code className={cn(codeClass, 'block rounded-md bg-slate-100 p-2 text-xs')} {...props}>
+                {children}
+              </code>
+            ) : (
+              <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[13px]" {...props}>
+                {children}
+              </code>
+            ),
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              className="font-medium text-blue-600 underline underline-offset-2"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {t}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 /**
  * 打字机效果 Hook
@@ -233,19 +434,143 @@ function useTypewriter(text: string, enabled: boolean, speed: number = 30) {
 }
 
 /**
- * 打字指示器
+ * 思考过程可折叠框（图二：进展步骤放入折叠内容内）
  */
-function TypingIndicator() {
+function ThinkingProcessCollapsible({
+  summary,
+  content,
+  progressSteps,
+  phaseIndicator,
+}: ThinkingProcess & { progressSteps?: ProgressStep[]; phaseIndicator?: { phaseName: string; progress: string } }) {
+  const hasContent = content || (progressSteps && progressSteps.length > 0);
+  const [open, setOpen] = useState(!!progressSteps?.length); // 有进展步骤时默认展开
   return (
-    <div className="flex items-center gap-1 px-4 py-2">
-      <div className="flex gap-1">
-        <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:0ms]" />
-        <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:150ms]" />
-        <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:300ms]" />
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="rounded-lg border border-slate-200 bg-slate-50/80 overflow-hidden">
+        <CollapsibleTrigger
+          className={cn(
+            "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors",
+            hasContent && "hover:bg-slate-100/80"
+          )}
+        >
+          <span className="flex items-center gap-2 text-slate-600">
+            <Brain className="w-4 h-4 text-slate-500 flex-shrink-0" />
+            {summary}
+            {phaseIndicator && (
+              <span className="text-slate-500 font-normal">
+                · {phaseIndicator.phaseName} {phaseIndicator.progress}
+              </span>
+            )}
+          </span>
+          {hasContent && (
+            open ? (
+              <ChevronUp className="w-4 h-4 text-slate-500 flex-shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0" />
+            )
+          )}
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="border-t border-slate-100 px-3 pb-3 pt-3 space-y-2">
+            {content && (
+              <div className="text-xs text-slate-500 leading-relaxed whitespace-pre-wrap">
+                {content}
+              </div>
+            )}
+            {progressSteps && progressSteps.length > 0 && (
+              (() => {
+                let lastCompletedIndex = -1;
+                for (let i = progressSteps.length - 1; i >= 0; i--) {
+                  if (progressSteps[i].status === 'completed') {
+                    lastCompletedIndex = i;
+                    break;
+                  }
+                }
+                return (
+                  <div className="space-y-1.5">
+                    {progressSteps.map((step, idx) => (
+                      <ProgressStepItem
+                        key={step.id ?? `step-${idx}`}
+                        step={step}
+                        isHighlighted={idx === lastCompletedIndex && step.status === 'completed'}
+                      />
+                    ))}
+                  </div>
+                );
+              })()
+            )}
+          </div>
+        </CollapsibleContent>
       </div>
-      <span className="text-sm text-muted-foreground ml-2">规划师正在思考...</span>
+    </Collapsible>
+  );
+}
+
+/**
+ * 进展步骤项（图二：绿色完成 / 蓝色加载 / 可选高亮）
+ */
+function ProgressStepItem({ step, isHighlighted }: { step: ProgressStep; isHighlighted?: boolean }) {
+  const { label, detail, status = 'completed', icon } = step;
+  const isCompleted = status === 'completed';
+  const isRunning = status === 'running';
+  const isFailed = status === 'failed';
+  const isPending = status === 'pending';
+
+  let IconComponent = CheckCircle2;
+  if (icon === 'search') {
+    IconComponent = Search;
+  } else if (icon === 'loading' || isRunning) {
+    IconComponent = Loader2;
+  } else if (icon === 'check' || isCompleted) {
+    IconComponent = CheckCircle2;
+  } else if (isFailed) {
+    IconComponent = AlertTriangle;
+  }
+
+  const iconColor = isCompleted ? 'text-green-600' : isRunning ? 'text-blue-500' : isFailed ? 'text-red-500' : 'text-slate-400';
+  const iconBg = isCompleted ? 'bg-green-50' : isRunning ? 'bg-blue-50' : isFailed ? 'bg-red-50' : 'bg-slate-100';
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm",
+        isHighlighted && "bg-blue-50/80"
+      )}
+    >
+      <div className={cn("flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full", iconBg)}>
+        {icon === 'search' && isCompleted ? (
+          <span className="relative flex items-center justify-center">
+            <Search className="w-3.5 h-3.5 text-slate-500" />
+            <CheckCircle2 className="w-2.5 h-2.5 text-green-500 absolute -right-0.5 -top-0.5" />
+          </span>
+        ) : (
+          <IconComponent
+            className={cn(
+              'w-3.5 h-3.5',
+              iconColor,
+              isRunning && 'animate-spin'
+            )}
+          />
+        )}
+      </div>
+      <span className={cn(
+        "text-slate-700",
+        isCompleted && "text-slate-600",
+        isFailed && "text-red-600",
+        isPending && "text-slate-500"
+      )}>
+        {label}
+        {detail && <span className="text-slate-500 ml-1">{detail}</span>}
+      </span>
     </div>
   );
+}
+
+/**
+ * 打字指示器 - 插画风格「规划师正在思考」动效（与 Agent 入口 / 行程生成页共用组件）
+ */
+function TypingIndicator() {
+  return <PlannerThinkingLoading />;
 }
 
 /**
@@ -253,28 +578,56 @@ function TypingIndicator() {
  */
 function MessageBubble({ 
   message, 
-  onQuickReply,
   onConfirm,
   onEdit,
   isLatest,
   isNewMessage,
   onQuestionAnswer,
   onSendMessage,
+  onConditionalSubmit, // 🆕 条件输入 submitLabel 按钮：PUT 后 POST 继续对话
   onOpenConflictDialog, // 🆕 打开冲突检测弹窗的回调
+  hideConfirmButton, // 🆕 当黄条「确认选择并继续」显示时，隐藏卡片内「确认并继续」
   currency = 'CNY', // 🆕 货币代码
 }: { 
   message: ChatMessage;
-  onQuickReply?: (text: string) => void;
   onConfirm?: () => void;
   onEdit?: () => void;
   isLatest?: boolean;
   isNewMessage?: boolean;  // 是否是刚收到的新消息（用于打字机效果）
   onQuestionAnswer?: (questionId: string, value: string | string[] | number | boolean | null) => void;
-  onSendMessage?: (text: string) => void;  // 🆕 用于发送消息（替代方案选择）
+  onSendMessage?: (text: string, answers?: Record<string, string | string[] | number | boolean | null>) => void;  // 🆕 用于发送消息（含可选答案）
+  onConditionalSubmit?: (question: NLClarificationQuestion, answers: Record<string, string | string[] | number | boolean | null>) => void | Promise<void>;
   onOpenConflictDialog?: (conflicts: Conflict[], runId?: string) => void; // 🆕 打开冲突检测弹窗
+  hideConfirmButton?: boolean;
   currency?: string; // 🆕 货币代码
 }) {
   const isUser = message.role === 'user';
+
+  // 🆕 用户终止后的重试提示卡片
+  if (message.isCancelledNotice && message.retryPayload) {
+    return (
+      <div className="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 flex-row">
+        <div className="flex-shrink-0 mt-1">
+          <div className="w-5 h-5 flex items-center justify-center text-slate-600">
+            <Compass className="w-4 h-4" strokeWidth={2} />
+          </div>
+        </div>
+        <div className="flex flex-col flex-1 items-start">
+          <div className="px-4 py-3 rounded-2xl bg-gray-100 border border-gray-200 text-sm text-gray-700 inline-flex items-center gap-2 max-w-[85%]">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span>消息已被用户取消。</span>
+            <button
+              type="button"
+              onClick={() => onSendMessage?.(message.retryPayload!.text, message.retryPayload!.answers)}
+              className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+            >
+              重试
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   // AI 消息使用打字机效果（仅新消息）
   const enableTypewriter = !isUser && isNewMessage === true;
@@ -297,7 +650,14 @@ function MessageBubble({
   
   // 综合打字状态
   const isTyping = hasStructuredContent ? isStructuredTyping : isTextTyping;
-  
+
+  /** 结构化打字过长时解除锁定，避免快捷追问永远不出现 */
+  useEffect(() => {
+    if (!hasStructuredContent || !isStructuredTyping) return;
+    const tid = window.setTimeout(() => setIsStructuredTyping(false), 45000);
+    return () => window.clearTimeout(tid);
+  }, [hasStructuredContent, isStructuredTyping, message.id]);
+
   // 🐛 检查该消息的所有澄清问题是否都已回答（用于弱化显示）
   const allQuestionsAnswered = !isUser && message.clarificationQuestions && message.clarificationQuestions.length > 0
     ? message.clarificationQuestions.every(q => {
@@ -318,12 +678,11 @@ function MessageBubble({
       "flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300",
       isUser ? "flex-row-reverse" : "flex-row"
     )}>
-      {/* 🆕 Gemini风格：AI消息使用小图标，用户消息不显示图标 */}
+      {/* 🆕 AI消息标识图标 - 使用指南针（契合旅行规划场景） */}
       {!isUser && (
         <div className="flex-shrink-0 mt-1">
-          {/* 蓝色小图标（类似Gemini的钻石图标） */}
-          <div className="w-5 h-5 flex items-center justify-center text-blue-600">
-            <Sparkles className="w-4 h-4" strokeWidth={2.5} />
+          <div className="w-5 h-5 flex items-center justify-center text-slate-600">
+            <Compass className="w-4 h-4" strokeWidth={2} />
           </div>
         </div>
       )}
@@ -359,6 +718,18 @@ function MessageBubble({
             ? "bg-gray-200 text-gray-900 rounded-tr-sm" 
             : "bg-white text-gray-900 rounded-tl-sm border border-gray-100"
         )}>
+          {/* 🆕 思考过程（可折叠，图二：进展步骤放入折叠内容内） */}
+          {!isUser && (message.thinkingProcess || (message.progressSteps && message.progressSteps.length > 0)) && (
+            <div className="mb-3">
+              <ThinkingProcessCollapsible
+                summary={message.thinkingProcess?.summary ?? '思考了一会儿'}
+                content={message.thinkingProcess?.content ?? ''}
+                progressSteps={message.progressSteps}
+                phaseIndicator={message.phaseIndicator}
+              />
+            </div>
+          )}
+          {/* 有 responseBlocks 时正文仅以块为准（paragraph/summary_card 等），不再重复渲染 plannerReply → message.content */}
           {/* 🆕 结构化内容渲染（优先，支持打字机效果） */}
           {!isUser && message.responseBlocks && message.responseBlocks.length > 0 ? (
             isNewMessage && enableTypewriter ? (
@@ -391,6 +762,7 @@ function MessageBubble({
                     >
                       <ResponseBlockRenderer 
                         block={block} 
+                        allBlocks={message.responseBlocks}
                       />
                     </div>
                   );
@@ -405,16 +777,19 @@ function MessageBubble({
               </div>
             )
           ) : (
-            /* 🆕 Gemini风格：降级：普通文本渲染 - 更清晰的文本样式 */
-            <div className="whitespace-pre-wrap leading-relaxed text-gray-900">
-              <div className="prose prose-sm max-w-none">
-                {textToShow.split('\n').map((line, idx) => (
-                  <p key={idx} className="mb-2 last:mb-0">
-                    {line || '\u00A0'}
-                  </p>
-                ))}
-              </div>
-              {/* 打字光标 */}
+            /* 无 responseBlocks：正文可为 Markdown（与后端 plannerReply 约定一致）；打字中用纯行拆分避免半截 ** */
+            <div className="leading-relaxed text-gray-900">
+              {enableTypewriter && isTextTyping ? (
+                <div className="prose prose-sm max-w-none">
+                  {textToShow.split('\n').map((line, idx) => (
+                    <p key={idx} className="mb-2 last:mb-0">
+                      {line || '\u00A0'}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <NlAssistantMarkdown text={textToShow} />
+              )}
               {isTyping && (
                 <span className="inline-block w-0.5 h-4 bg-blue-600 ml-0.5 animate-pulse" />
               )}
@@ -538,6 +913,7 @@ function MessageBubble({
                   alternativeText = `我选择：${alternative.label}`;
                 }
                 
+                
                 // 自动发送消息
                 onSendMessage?.(alternativeText);
               }}
@@ -589,8 +965,66 @@ function MessageBubble({
           (() => {
             // 优先使用 clarificationQuestions 数组
             if (message.clarificationQuestions && message.clarificationQuestions.length > 0) {
+              const params = message.parsedParams;
+              const hasKeyInfo = params && (params.destination || params.startDate || params.endDate || (params.totalBudget != null && params.totalBudget > 0));
+              const hasSummaryCardInBlocks = message.responseBlocks?.some(b => b.type === 'summary_card' && (b as any).summary?.destination);
+              const showKeyInfoFallback = hasKeyInfo && !hasSummaryCardInBlocks;
+
               return (
                 <div className="mt-5 w-full max-w-[95%]">
+                  {/* 🆕 关键信息摘要：当 responseBlocks 中无 summary_card 时，用 parsedParams 展示目的地/出行时间/返程时间/预算 */}
+                  {showKeyInfoFallback && params && (
+                    <Card className="mb-4 border-slate-200 bg-slate-50/50">
+                      <CardContent className="p-4">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                          {params.destination && (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-slate-500">目的地</span>
+                              <div className="flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                <span className="text-slate-800 font-medium">{params.destinationName || params.destination}</span>
+                              </div>
+                            </div>
+                          )}
+                          {(params.startDate || (params as any).duration) && (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-slate-500">出行时间</span>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                <span className="text-slate-800">
+                                  {params.startDate
+                                    ? new Date(params.startDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+                                    : (params as any).duration}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {params.endDate && (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-slate-500">返程时间</span>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                <span className="text-slate-800">
+                                  {new Date(params.endDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {params.totalBudget != null && params.totalBudget > 0 && (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-slate-500">预算</span>
+                              <div className="flex items-center gap-2">
+                                <Wallet className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                <span className="text-slate-800">
+                                  {formatCurrency(params.totalBudget, (params as any).currency || 'CNY')}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                   {/* 🆕 P0: 问题分组展示 - 使用 group 字段进行分组（符合 Miller's Law） */}
                   {(() => {
                     const filteredQuestions = (message.clarificationQuestions || []).filter(
@@ -640,6 +1074,14 @@ function MessageBubble({
                       // 直接显示所有问题，不分组
                       return (
                         <div className="space-y-3">
+                          <div className="mb-3">
+                            <p className="text-xs font-medium text-slate-600 mb-1">
+                              需要确认以下信息
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              这些信息将帮助我们为您规划更精准的行程
+                            </p>
+                          </div>
                           {filteredQuestions.map((question) => {
                             const fieldKey = question.metadata?.fieldName || question.id;
                             const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[question.id] ?? null;
@@ -653,9 +1095,14 @@ function MessageBubble({
                                   onChange={(value) => {
                                     onQuestionAnswer?.(fieldKey, value);
                                   }}
+                                  onAnswer={(key, value) => {
+                                    onQuestionAnswer?.(key, value);
+                                  }}
+                                  onConditionalSubmit={onConditionalSubmit}
+                                  conditionalInputAnswers={message.questionAnswers}
                                   disabled={false}
                                 />
-                                {isAnswered && (
+                                {SHOW_RECOGNIZED_PREVIEW && isAnswered && (
                                   <>
                                     <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
                                       <CheckCircle2 className="w-3 h-3 text-white" />
@@ -664,7 +1111,9 @@ function MessageBubble({
                                       <div className="flex items-center gap-1">
                                         <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
                                         <span className="font-medium">已识别：</span>
-                                        <span className="flex-1">{formatAnswerValue(answer)}</span>
+                                        <span className="flex-1">
+                                          {getAnswerLabelOverride(message, question, fieldKey) ?? formatRecognizedAnswer(question, answer)}
+                                        </span>
                                       </div>
                                     </div>
                                   </>
@@ -672,6 +1121,26 @@ function MessageBubble({
                               </div>
                             );
                           })}
+                          {/* 🆕 紧凑模式：确认并继续按钮（黄条显示时隐藏，避免重复） */}
+                          {!hideConfirmButton && (
+                            <div className="pt-3 border-t mt-4">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  const allAnswers = buildFinalAnswers(filteredQuestions, message.questionAnswers);
+                                  const confirmText = generateConfirmationMessage(
+                                    filteredQuestions,
+                                    allAnswers,
+                                    message.questionAnswerLabels
+                                  );
+                                  onSendMessage?.(confirmText, allAnswers);
+                                }}
+                                className="w-full text-xs bg-slate-900 hover:bg-slate-800"
+                              >
+                                确认并继续
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -786,9 +1255,14 @@ function MessageBubble({
                                     onChange={(value) => {
                                       onQuestionAnswer?.(fieldKey, value);
                                     }}
+                                    onAnswer={(key, value) => {
+                                      onQuestionAnswer?.(key, value);
+                                    }}
+                                    onConditionalSubmit={onConditionalSubmit}
+                                    conditionalInputAnswers={message.questionAnswers}
                                     disabled={false}
                                   />
-                                  {isAnswered && (
+                                  {SHOW_RECOGNIZED_PREVIEW && isAnswered && (
                                     <>
                                       <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
                                         <CheckCircle2 className="w-3 h-3 text-white" />
@@ -797,7 +1271,9 @@ function MessageBubble({
                                         <div className="flex items-center gap-1">
                                           <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
                                           <span className="font-medium">已识别：</span>
-                                          <span className="flex-1">{formatAnswerValue(answer)}</span>
+                                          <span className="flex-1">
+                                            {getAnswerLabelOverride(message, question, fieldKey) ?? formatRecognizedAnswer(question, answer)}
+                                          </span>
                                         </div>
                                       </div>
                                     </>
@@ -810,7 +1286,7 @@ function MessageBubble({
                         
                         {/* 🆕 P0: 补充问题组（optional group）- 最多3个，可折叠 */}
                         {optionalQuestions.length > 0 && (
-                          <details className="space-y-3">
+                          <details className="space-y-3" open>
                             <summary className="cursor-pointer text-sm font-semibold text-slate-600 hover:text-slate-800 mb-2 flex items-center gap-2 list-none">
                               <Plus className="w-4 h-4" />
                               <span>补充问题 ({optionalQuestions.length})</span>
@@ -819,6 +1295,9 @@ function MessageBubble({
                               </Badge>
                               <span className="text-xs text-muted-foreground ml-auto">（可跳过）</span>
                             </summary>
+                            <p className="text-xs text-muted-foreground mt-1 mb-2">
+                              可选问题可跳过，输入「已确认」或点击「跳过」后进入下一步
+                            </p>
                             <div className="space-y-3 mt-2">
                               {optionalQuestions.map((question) => {
                                 const fieldKey = question.metadata?.fieldName || question.id;
@@ -833,9 +1312,14 @@ function MessageBubble({
                                       onChange={(value) => {
                                         onQuestionAnswer?.(fieldKey, value);
                                       }}
+                                      onAnswer={(key, value) => {
+                                        onQuestionAnswer?.(key, value);
+                                      }}
+                                      onConditionalSubmit={onConditionalSubmit}
+                                      conditionalInputAnswers={message.questionAnswers}
                                       disabled={false}
                                     />
-                                    {isAnswered && (
+                                    {SHOW_RECOGNIZED_PREVIEW && isAnswered && (
                                       <>
                                         <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
                                           <CheckCircle2 className="w-3 h-3 text-white" />
@@ -844,7 +1328,9 @@ function MessageBubble({
                                           <div className="flex items-center gap-1">
                                             <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
                                             <span className="font-medium">已识别：</span>
-                                            <span className="flex-1">{formatAnswerValue(answer)}</span>
+                                            <span className="flex-1">
+                                              {getAnswerLabelOverride(message, question, fieldKey) ?? formatRecognizedAnswer(question, answer)}
+                                            </span>
                                           </div>
                                         </div>
                                       </>
@@ -856,36 +1342,61 @@ function MessageBubble({
                           </details>
                         )}
                         
-                        {/* 🆕 P0: 跳过补充问题按钮 */}
-                        {optionalQuestions.length > 0 && (
-                          <div className="pt-2 border-t">
+                        {/* 🆕 P0: 操作按钮 - 有可选时显示两个，仅必需时显示一个（黄条显示时隐藏，避免重复） */}
+                        {!hideConfirmButton && (optionalQuestions.length > 0 ? (
+                          <div className="pt-3 border-t space-y-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                const allQuestions = [...requiredQuestions, ...optionalQuestions];
+                                const allAnswers = buildFinalAnswers(allQuestions, message.questionAnswers);
+                                const confirmText = generateConfirmationMessage(
+                                  allQuestions,
+                                  allAnswers,
+                                  message.questionAnswerLabels
+                                );
+                                onSendMessage?.(confirmText, allAnswers);
+                              }}
+                              className="w-full text-xs bg-slate-900 hover:bg-slate-800"
+                            >
+                              确认并继续
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => {
-                                // 跳过补充问题，只提交必需问题的答案
-                                const requiredAnswers: Record<string, string | string[] | number | boolean | null> = {};
-                                requiredQuestions.forEach(q => {
-                                  const fieldKey = q.metadata?.fieldName || q.id;
-                                  const answer = message.questionAnswers?.[fieldKey] ?? message.questionAnswers?.[q.id];
-                                  if (answer !== null && answer !== undefined && answer !== '') {
-                                    requiredAnswers[fieldKey] = answer;
-                                  }
-                                });
-                                
-                                // 生成确认消息并发送
+                                const requiredAnswers = buildFinalAnswers(requiredQuestions, message.questionAnswers);
                                 const confirmText = generateConfirmationMessage(
                                   requiredQuestions,
-                                  requiredAnswers
+                                  requiredAnswers,
+                                  message.questionAnswerLabels
                                 );
-                                onSendMessage?.(confirmText);
+                                onSendMessage?.(confirmText, requiredAnswers);
                               }}
                               className="w-full text-xs"
                             >
-                              跳过补充问题，仅提交必需答案
+                              跳过，仅提交必需答案
                             </Button>
                           </div>
-                        )}
+                        ) : (
+                          <div className="pt-3 border-t">
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                const requiredAnswers = buildFinalAnswers(requiredQuestions, message.questionAnswers);
+                                const confirmText = generateConfirmationMessage(
+                                  requiredQuestions,
+                                  requiredAnswers,
+                                  message.questionAnswerLabels
+                                );
+                                onSendMessage?.(confirmText, requiredAnswers);
+                              }}
+                              className="w-full text-xs bg-slate-900 hover:bg-slate-800"
+                            >
+                              确认并继续
+                            </Button>
+                          </div>
+                        ))}
                       </div>
                     );
                   })()}
@@ -936,28 +1447,28 @@ function MessageBubble({
                               question={question}
                               value={answer}
                               onChange={(value) => {
-                                // 🆕 传递 fieldName 而不是 questionId
                                 onQuestionAnswer?.(fieldKey, value);
                               }}
+                              onAnswer={(key, value) => {
+                                onQuestionAnswer?.(key, value);
+                              }}
+                              onConditionalSubmit={onConditionalSubmit}
+                              conditionalInputAnswers={message.questionAnswers}
                               disabled={false}
                             />
                             {/* 已回答状态指示 */}
-                            {isAnswered && (
+                            {SHOW_RECOGNIZED_PREVIEW && isAnswered && (
                               <>
                                 <div className="absolute -top-2 -right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-white z-10">
                                   <CheckCircle2 className="w-3 h-3 text-white" />
                                 </div>
-                                {/* 🆕 P0: 答案识别反馈 - 显示答案预览 */}
+                                {/* 🆕 P0: 答案识别反馈 - 显示答案预览（默认隐藏，可通过 VITE_SHOW_NL_RECOGNIZED_PREVIEW 开启） */}
                                 <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md text-xs text-green-800 animate-in fade-in slide-in-from-top-1 duration-300">
                                   <div className="flex items-center gap-1">
                                     <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
                                     <span className="font-medium">已识别：</span>
                                     <span className="flex-1">
-                                      {Array.isArray(answer) 
-                                        ? answer.join('、') 
-                                        : typeof answer === 'number' 
-                                          ? answer.toString() 
-                                          : String(answer)}
+                                      {getAnswerLabelOverride(message, question, fieldKey) ?? formatRecognizedAnswer(question, answer)}
                                     </span>
                                   </div>
                                 </div>
@@ -967,6 +1478,26 @@ function MessageBubble({
                         );
                       })}
                     </div>
+                    {/* 🆕 question_card 路径：确认并继续按钮（黄条显示时隐藏，避免重复） */}
+                    {!hideConfirmButton && (
+                      <div className="pt-3 border-t mt-4">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const allAnswers = buildFinalAnswers(questionsToRender, message.questionAnswers);
+                            const confirmText = generateConfirmationMessage(
+                              questionsToRender,
+                              allAnswers,
+                              message.questionAnswerLabels
+                            );
+                            onSendMessage?.(confirmText, allAnswers);
+                          }}
+                          className="w-full text-xs bg-slate-900 hover:bg-slate-800"
+                        >
+                          确认并继续
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -975,64 +1506,6 @@ function MessageBubble({
             return null;
           })()
         )}
-
-        {/* 快捷回复选项 - 仅 AI 消息且是最新消息且打字完成时显示 */}
-        {/* 🐛 如果有澄清问题卡片，不显示快捷回复按钮（避免混淆） */}
-        {/* 🆕 优化：限制快捷回复按钮数量（符合 Miller's Law 和 Hick's Law） */}
-        {!isUser && message.suggestedQuestions && message.suggestedQuestions.length > 0 && isLatest && !isTyping && 
-         (!message.clarificationQuestions || message.clarificationQuestions.length === 0) && (
-          <div className="flex flex-wrap gap-1.5 mt-2.5 animate-in fade-in duration-300">
-            {/* 🆕 最多显示4个快捷回复按钮，超过时折叠 */}
-            {message.suggestedQuestions.slice(0, 4).map((question, idx) => (
-              <Button
-                key={idx}
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "rounded-full text-xs h-7 px-3 min-w-fit whitespace-nowrap hover:bg-slate-100 hover:border-slate-300",
-                  "animate-in fade-in slide-in-from-bottom-1 duration-300",
-                  "flex-shrink-0" // 防止按钮被压缩
-                )}
-                style={{ 
-                  animationDelay: `${idx * 80}ms`,
-                  whiteSpace: 'nowrap', // 强制不换行
-                  wordBreak: 'keep-all', // 防止中文字符被拆分
-                }}
-                onClick={() => onQuickReply?.(question)}
-              >
-                <span className="whitespace-nowrap">{question}</span>
-              </Button>
-            ))}
-            {/* 🆕 如果超过4个，显示"查看更多"按钮 */}
-            {message.suggestedQuestions.length > 4 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "rounded-full text-xs h-7 px-3 min-w-fit whitespace-nowrap hover:bg-slate-100 hover:border-slate-300",
-                  "animate-in fade-in slide-in-from-bottom-1 duration-300",
-                  "flex-shrink-0 text-muted-foreground"
-                )}
-                style={{ 
-                  animationDelay: `${4 * 80}ms`,
-                }}
-                onClick={() => {
-                  // 🆕 展开所有快捷回复（可以通过状态控制，或直接发送所有问题）
-                  // 这里简化处理：显示剩余的问题
-                  const remainingQuestions = message.suggestedQuestions!.slice(4);
-                  // 可以显示一个下拉菜单或弹窗，让用户选择
-                  // 或者直接发送第一个剩余问题
-                  if (remainingQuestions.length > 0) {
-                    onQuickReply?.(remainingQuestions[0]);
-                  }
-                }}
-              >
-                <span className="whitespace-nowrap">查看更多 ({message.suggestedQuestions.length - 4})</span>
-              </Button>
-            )}
-          </div>
-        )}
-
 
         {/* 信息确认卡片 - 打字完成后显示 */}
         {!isUser && message.showConfirmCard && message.parsedParams && isLatest && !isTyping && (
@@ -1087,46 +1560,71 @@ function TripSummaryCard({
 
   return (
     <Card className={cn(
-      "w-full max-w-md border-2 animate-in fade-in zoom-in-95 duration-300",
+      "w-full max-w-md border-2 animate-in fade-in zoom-in-95 duration-300 overflow-hidden",
       hasInferredFields ? "border-amber-200 bg-amber-50/30" : "border-green-200 bg-green-50/30",
       className
     )}>
-      <CardContent className="p-4 space-y-4">
-        {/* 标题 */}
-        <div className="flex items-center gap-2">
-          {hasInferredFields ? (
-            <>
-              <AlertTriangle className="w-4 h-4 text-amber-600" />
-              <span className="text-sm font-medium text-amber-800">请确认以下信息</span>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium text-green-800">已理解您的需求</span>
-            </>
-          )}
+      <CardContent className="p-0">
+        {/* 🆕 品牌化头部：Logo + 状态横幅 */}
+        <div className={cn(
+          "flex items-center gap-3 px-4 py-3",
+          hasInferredFields ? "bg-amber-50/80" : "bg-blue-50/80"
+        )}>
+          <Logo variant="icon" size={36} className="flex-shrink-0 opacity-90" />
+          <div className={cn(
+            "flex-1 flex items-center gap-2 min-w-0 rounded-lg px-3 py-2",
+            hasInferredFields ? "bg-amber-100/80 border border-amber-200" : "bg-blue-100/80 border border-blue-200"
+          )}>
+            {hasInferredFields ? (
+              <>
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span className="text-sm font-medium text-amber-800 truncate">请确认以下信息</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                <span className="text-sm font-medium text-green-800 truncate">已理解您的需求，准备创建行程</span>
+              </>
+            )}
+          </div>
         </div>
-
+        <div className="p-4 space-y-4 pt-4">
         {/* 信息网格 */}
         <div className="grid grid-cols-2 gap-3 text-sm">
           {/* 目的地 */}
           {params.destination && (
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <span className="font-medium">{params.destination}</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted-foreground">目的地</span>
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-muted-foreground" />
+                <span className="font-medium">{params.destination}</span>
+              </div>
             </div>
           )}
 
-          {/* 日期 */}
-          {params.startDate && params.endDate && (
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <span>
-                {new Date(params.startDate).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
-                {' - '}
-                {new Date(params.endDate).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
-                {days && <span className="text-muted-foreground"> ({days}天)</span>}
-              </span>
+          {/* 出行时间 */}
+          {params.startDate && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted-foreground">出行时间</span>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <span>
+                  {new Date(params.startDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+              </div>
+            </div>
+          )}
+          {/* 返程时间 */}
+          {params.endDate && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted-foreground">返程时间</span>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <span>
+                  {new Date(params.endDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  {days && <span className="text-muted-foreground"> ({days}天)</span>}
+                </span>
+              </div>
             </div>
           )}
 
@@ -1144,16 +1642,19 @@ function TripSummaryCard({
 
           {/* 预算 */}
           {params.totalBudget && (
-            <div className="flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-muted-foreground" />
-              <span>
-                {formatCurrency(params.totalBudget, currency)}
-                {params.inferredFields?.includes('totalBudget') && (
-                  <Badge variant="outline" className="ml-1 text-xs text-amber-600 border-amber-300">
-                    推断
-                  </Badge>
-                )}
-              </span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted-foreground">预算</span>
+              <div className="flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-muted-foreground" />
+                <span>
+                  {formatCurrency(params.totalBudget, currency)}
+                  {params.inferredFields?.includes('totalBudget') && (
+                    <Badge variant="outline" className="ml-1 text-xs text-amber-600 border-amber-300">
+                      推断
+                    </Badge>
+                  )}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -1196,6 +1697,7 @@ function TripSummaryCard({
             <CheckCircle2 className="w-4 h-4 mr-1" />
             确认创建
           </Button>
+        </div>
         </div>
       </CardContent>
     </Card>
@@ -1246,6 +1748,16 @@ export default function NLChatInterface({
   const autoSubmittingMessageIdRef = useRef<string | null>(null);
   // 🆕 防重复提交：记录最近提交的消息内容，避免重复提交（用 ref 实现同步检查）
   const lastSubmittedContentRef = useRef<string | null>(null);
+  // 🆕 是否已在最新对话位置（用于控制「定位到最新」按钮显隐）
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  // 🆕 用户终止：AbortController，用于取消正在进行的 NL 请求
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // 🆕 多选问题：不自动提交，需用户点击「确认选择」后才提交
+  const [pendingMultiChoiceConfirm, setPendingMultiChoiceConfirm] = useState<{
+    messageId: string;
+    finalAnswers: Record<string, string | string[] | number | boolean | null>;
+    finalQuestions: import('@/types/trip').NLClarificationQuestion[];
+  } | null>(null);
   
   // 首次使用状态（简化版）
   const [isFirstTime, setIsFirstTime] = useState(() => {
@@ -1447,12 +1959,12 @@ export default function NLChatInterface({
                 role: msg.role,
                 content: msg.content,
                 timestamp: new Date(msg.timestamp),
-                suggestedQuestions: msg.metadata?.suggestedQuestions,
                 parsedParams: msg.metadata?.parsedParams,
                 showConfirmCard: msg.metadata?.showConfirmCard,
                 responseBlocks: msg.metadata?.responseBlocks,
                 clarificationQuestions,
                 questionAnswers: msg.metadata?.questionAnswers || {},
+                questionAnswerLabels: msg.metadata?.questionAnswerLabels,
                 // 🆕 恢复 AI 决策逻辑相关字段
                 personaInfo: msg.metadata?.personaInfo,
                 recommendedRoutes: msg.metadata?.recommendedRoutes,
@@ -1463,6 +1975,11 @@ export default function NLChatInterface({
                 blockedByCriticalFields: msg.metadata?.blockedByCriticalFields,
                 gateWarningMessage: msg.metadata?.gateWarningMessage,
                 alternatives: msg.metadata?.alternatives,
+                // 🆕 恢复思考过程与进展步骤
+                thinkingProcess: (msg.metadata as { thinkingProcess?: ThinkingProcess })?.thinkingProcess,
+                progressSteps: (msg.metadata as { progressSteps?: ProgressStep[] })?.progressSteps,
+                phaseIndicator: (msg.metadata as { phaseIndicator?: ChatMessage['phaseIndicator'] })
+                  ?.phaseIndicator,
               };
             });
             setMessages(restoredMessages);
@@ -1527,12 +2044,43 @@ export default function NLChatInterface({
     };
   }, [handleNewConversation]);
 
-  // 自动滚动到底部
+  // 自动滚动到底部（Radix ScrollArea 的滚动发生在 Viewport 上）
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const root = scrollRef.current;
+    if (!root) return;
+    const viewport = root.querySelector<HTMLDivElement>('[data-radix-scroll-area-viewport]');
+    const scrollEl = viewport ?? root;
+    scrollEl.scrollTop = scrollEl.scrollHeight;
+    setIsAtBottom(true); // 自动滚动后视为在最新位置
   }, [messages, isLoading]);
+
+  // 监听滚动位置：用户向上滚动时显示「定位到最新」按钮
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const viewport = root.querySelector<HTMLDivElement>('[data-radix-scroll-area-viewport]');
+    const scrollEl = viewport ?? root;
+    const THRESHOLD = 80; // 距离底部 80px 内视为「在最新」
+
+    const checkAtBottom = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollEl;
+      const atBottom = scrollHeight - scrollTop - clientHeight <= THRESHOLD;
+      setIsAtBottom(atBottom);
+    };
+
+    scrollEl.addEventListener('scroll', checkAtBottom, { passive: true });
+    checkAtBottom(); // 初次检查
+    return () => scrollEl.removeEventListener('scroll', checkAtBottom);
+  }, [messages.length]); // 消息变化时重新绑定（viewport 可能重建）
+
+  // 定位到最新对话内容（Radix ScrollArea 的滚动发生在 Viewport 上）
+  const scrollToBottom = useCallback(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const viewport = root.querySelector<HTMLDivElement>('[data-radix-scroll-area-viewport]');
+    const scrollEl = viewport ?? root;
+    scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: 'smooth' });
+  }, []);
 
   // 恢复会话（页面加载时）
   useEffect(() => {
@@ -1576,7 +2124,11 @@ export default function NLChatInterface({
             
             // 恢复会话
             setSessionId(conversation.sessionId);
-            
+            localStorage.setItem('nl_conversation_session', conversation.sessionId);
+            window.dispatchEvent(new CustomEvent('nl-conversation-session-updated', {
+              detail: { sessionId: conversation.sessionId },
+            }));
+
             // 恢复对话历史
             const restoredMessages: ChatMessage[] = conversation.messages.map((msg: {
               id: string;
@@ -1584,7 +2136,6 @@ export default function NLChatInterface({
               content: string;
               timestamp: string;
               metadata?: {
-                suggestedQuestions?: string[];
                 parsedParams?: ParsedTripParams;
                 showConfirmCard?: boolean;
                 responseBlocks?: PlannerResponseBlock[];
@@ -1607,6 +2158,8 @@ export default function NLChatInterface({
                   actionParams?: Record<string, any>;
                   buttonText?: string;
                 }>;
+                thinkingProcess?: ThinkingProcess;
+                progressSteps?: ProgressStep[];
               };
             }) => {
               // 🐛 恢复时也需要转换 clarificationQuestions 格式，确保与新消息格式一致
@@ -1631,7 +2184,6 @@ export default function NLChatInterface({
                 content: msg.content,
                 timestamp: new Date(msg.timestamp),
                 // 从 metadata 中恢复其他字段
-                suggestedQuestions: msg.metadata?.suggestedQuestions,
                 parsedParams: msg.metadata?.parsedParams,
                 showConfirmCard: msg.metadata?.showConfirmCard,
                 responseBlocks: msg.metadata?.responseBlocks,
@@ -1647,6 +2199,11 @@ export default function NLChatInterface({
                 blockedByCriticalFields: msg.metadata?.blockedByCriticalFields,
                 gateWarningMessage: msg.metadata?.gateWarningMessage,
                 alternatives: msg.metadata?.alternatives,
+                // 🆕 恢复思考过程与进展步骤
+                thinkingProcess: (msg.metadata as { thinkingProcess?: ThinkingProcess })?.thinkingProcess,
+                progressSteps: (msg.metadata as { progressSteps?: ProgressStep[] })?.progressSteps,
+                phaseIndicator: (msg.metadata as { phaseIndicator?: ChatMessage['phaseIndicator'] })
+                  ?.phaseIndicator,
               };
             });
             setMessages(restoredMessages);
@@ -1842,40 +2399,38 @@ export default function NLChatInterface({
     return Object.keys(normalizedAnswers).length > 0 ? normalizedAnswers : questionAnswers;
   }, [messages]);
 
-  // 🆕 批量保存检查：确保所有答案已保存
-  const ensureAllAnswersSaved = useCallback(async (messageId: string, answers: Record<string, string | string[] | number | boolean | null>) => {
-    if (!sessionId || !messageId) return;
-    
+  // 🆕 批量保存检查：确保所有答案已保存；若 PUT 返回 nextClarificationQuestions 则一并处理并返回响应，供 sendMessage 决定是否中止发送
+  const ensureAllAnswersSaved = useCallback(async (
+    messageId: string,
+    answers: Record<string, string | string[] | number | boolean | null>
+  ): Promise<{ nextClarificationQuestions?: any[]; plannerResponseBlocks?: any[] } | null> => {
+    if (!sessionId || !messageId) return null;
+
     const savedAnswers = savedQuestionAnswers.get(messageId) || new Set();
-    const unsavedQuestionIds = Object.keys(answers).filter(qId => !savedAnswers.has(qId));
-    
-    if (unsavedQuestionIds.length > 0) {
-      // 批量保存未保存的答案
-      const unsavedAnswers: Record<string, string | string[] | number | boolean | null> = {};
-      unsavedQuestionIds.forEach(qId => {
-        unsavedAnswers[qId] = answers[qId];
+    const unsavedQuestionIds = Object.keys(answers).filter((qId) => !savedAnswers.has(qId));
+
+    if (unsavedQuestionIds.length === 0) return null;
+
+    const unsavedAnswers: Record<string, string | string[] | number | boolean | null> = {};
+    unsavedQuestionIds.forEach((qId) => {
+      unsavedAnswers[qId] = answers[qId];
+    });
+
+    try {
+      const response = await tripsApi.updateMessageQuestionAnswers(sessionId, messageId, unsavedAnswers);
+      setSavedQuestionAnswers((prev) => {
+        const newMap = new Map(prev);
+        if (!newMap.has(messageId)) newMap.set(messageId, new Set());
+        unsavedQuestionIds.forEach((qId) => newMap.get(messageId)!.add(qId));
+        return newMap;
       });
-      
-      try {
-        await tripsApi.updateMessageQuestionAnswers(sessionId, messageId, unsavedAnswers);
-        // 标记为已保存
-        setSavedQuestionAnswers(prev => {
-          const newMap = new Map(prev);
-          if (!newMap.has(messageId)) {
-            newMap.set(messageId, new Set());
-          }
-          unsavedQuestionIds.forEach(qId => {
-            newMap.get(messageId)!.add(qId);
-          });
-          return newMap;
-        });
-        console.log('[NLChatInterface] 批量保存答案成功:', unsavedQuestionIds);
-      } catch (err) {
-        console.warn('[NLChatInterface] 批量保存答案失败:', err);
-        // 不阻止发送消息，但记录错误
-      }
+      console.log('[NLChatInterface] 批量保存答案成功:', unsavedQuestionIds);
+      return response || null;
+    } catch (err) {
+      console.warn('[NLChatInterface] 批量保存答案失败:', err);
+      return null;
     }
-  }, [sessionId, savedQuestionAnswers]);
+  }, [sessionId]);
 
   // 发送消息
   const sendMessage = useCallback(async (
@@ -1883,6 +2438,9 @@ export default function NLChatInterface({
     providedAnswers?: Record<string, string | string[] | number | boolean | null>
   ) => {
     if (!text.trim() || isLoading) return;
+
+    // 🆕 发送新消息时清除多选题待确认状态
+    setPendingMultiChoiceConfirm(null);
 
     // 🆕 防重复提交：用 ref 同步检查，避免 state 异步导致的重复
     const messageId = `user-${Date.now()}`;
@@ -1899,10 +2457,28 @@ export default function NLChatInterface({
       }
     }, 2000);
 
-    // 🆕 批量保存检查：发送消息前确保所有答案已保存
+    // 🆕 批量保存检查：发送消息前确保所有答案已保存；若 PUT 返回 nextClarificationQuestions 则更新消息并中止发送
     const latestMessage = messages[messages.length - 1];
     if (latestMessage && latestMessage.role === 'assistant' && latestMessage.id && latestMessage.questionAnswers) {
-      await ensureAllAnswersSaved(latestMessage.id, latestMessage.questionAnswers);
+      const putResponse = await ensureAllAnswersSaved(latestMessage.id, latestMessage.questionAnswers);
+      if (putResponse?.nextClarificationQuestions?.length) {
+        const normalized = normalizeClarificationQuestions(putResponse.nextClarificationQuestions);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === latestMessage.id
+              ? {
+                  ...m,
+                  clarificationQuestions: [...(m.clarificationQuestions || []), ...normalized],
+                  responseBlocks: [
+                    ...(m.responseBlocks || []),
+                    ...(putResponse.plannerResponseBlocks || []),
+                  ],
+                }
+              : m
+          )
+        );
+        return;
+      }
     }
 
     const userMessage: ChatMessage = {
@@ -1917,16 +2493,20 @@ export default function NLChatInterface({
     setIsLoading(true);
     setError(null);
 
+    // 🆕 创建 AbortController，支持用户随时终止
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // 在 try 外声明，便于 catch 中（用户终止时）用于 retryPayload
+    let questionAnswers: Record<string, string | string[] | number | boolean | null> =
+      providedAnswers || collectQuestionAnswers();
+
     try {
       // 🆕 尝试构建上下文包（如果可能）
       // 从用户文本或 latestParams 中提取目的地信息
       const destinationCountry = latestParams?.destination?.split(',')[0]?.trim().toUpperCase();
       const contextPackageId = await buildContextForNL(text.trim(), destinationCountry);
 
-      // 🐛 收集当前消息的问题答案
-      // 如果提供了 providedAnswers（自动提交时），优先使用；否则从 messages 中收集
-      let questionAnswers = providedAnswers || collectQuestionAnswers();
-      
       // 🆕 如果 questionAnswers 为空，尝试从用户输入的文本中提取答案
       // 这可以处理用户直接在输入框输入答案的情况
       if (Object.keys(questionAnswers).length === 0) {
@@ -1955,18 +2535,22 @@ export default function NLChatInterface({
                 // 根据问题类型处理答案
                 if (question.inputType === 'multiple_choice' && question.options) {
                   // 多选：尝试匹配选项
-                  const matchedOptions = question.options.filter(opt => 
-                    answerText.includes(opt) || opt.includes(answerText)
-                  );
+                  const toOptText = (opt: string | { value: string; label: string }) =>
+                    typeof opt === 'string' ? opt : (opt.label || opt.value);
+                  const matchedOptions = question.options
+                    .map(toOptText)
+                    .filter(optText => answerText.includes(optText) || optText.includes(answerText));
                   if (matchedOptions.length > 0) {
                     extractedAnswers[fieldKey] = matchedOptions;
                     break;
                   }
                 } else if (question.inputType === 'single_choice' && question.options) {
                   // 单选：尝试匹配选项
-                  const matchedOption = question.options.find(opt => 
-                    answerText === opt || answerText.includes(opt) || opt.includes(answerText)
-                  );
+                  const toOptText = (opt: string | { value: string; label: string }) =>
+                    typeof opt === 'string' ? opt : (opt.label || opt.value);
+                  const matchedOption = question.options
+                    .map(toOptText)
+                    .find(optText => answerText === optText || answerText.includes(optText) || optText.includes(answerText));
                   if (matchedOption) {
                     extractedAnswers[fieldKey] = matchedOption;
                     break;
@@ -2042,7 +2626,8 @@ export default function NLChatInterface({
         }),
       };
 
-      const response = await tripsApi.createFromNL(requestData);
+      // Trips NL v2：解析阶段引入可行性预检（Ontology + Solver pre-check）
+      const response = await tripsApi.createFromNLv2(requestData, { signal: controller.signal });
       
       // 🐛 调试：打印后端返回的完整响应
       console.log('[NLChatInterface] 后端返回的完整响应:', {
@@ -2055,7 +2640,6 @@ export default function NLChatInterface({
           ? (response.clarificationQuestions.length > 0 ? typeof response.clarificationQuestions[0] : 'empty array')
           : typeof response.clarificationQuestions,
         questionCardBlocks: response.plannerResponseBlocks?.filter(block => block.type === 'question_card'),
-        suggestedQuestions: response.suggestedQuestions,
       });
       
       // 🆕 保存会话ID（如果返回了新的会话ID）
@@ -2186,6 +2770,7 @@ export default function NLChatInterface({
         }
         
         const alternatives = response.alternatives || [];
+        const plannerVoice = response.plannerReply?.trim() ?? '';
         
         // 🐛 调试：Gate 预检查相关数据
         if (gateBlocked) {
@@ -2196,7 +2781,7 @@ export default function NLChatInterface({
             alternatives,
             plannerResponseBlocks: response.plannerResponseBlocks,
             extractedMessage: extractGateWarningMessage(response.plannerResponseBlocks || []),
-            plannerReply: response.plannerReply?.substring(0, 200), // 只显示前200字符
+            plannerReply: plannerVoice.substring(0, 200), // 只显示前200字符
           });
         }
         
@@ -2246,22 +2831,31 @@ export default function NLChatInterface({
           console.warn('[NLChatInterface] ⚠️ 没有 sessionId 和 lastMessageId，使用临时ID:', messageId);
         }
         
+        // v2：若物理不可行，优先展示 feasibility 冲突原因
+        const feasibilityConflictMessage =
+          response.feasibility?.isPossible === false
+            ? response.feasibility?.conflictReason?.message
+            : null;
+        const clarificationContent =
+          feasibilityConflictMessage && feasibilityConflictMessage.trim().length > 0
+            ? `${feasibilityConflictMessage}${plannerVoice ? `\n\n${plannerVoice}` : ''}`
+            : (plannerVoice || '让我更了解一下您的需求...');
+
         const aiMessage: ChatMessage = {
           id: messageId,
           role: 'assistant',
-          content: response.plannerReply || '让我更了解一下您的需求...',
+          content: clarificationContent,
           timestamp: new Date(),
           // 🆕 结构化内容块（优先）
           responseBlocks: response.plannerResponseBlocks,
           // 🆕 结构化澄清问题
           clarificationQuestions,
-          suggestedQuestions: response.suggestedQuestions || (
-            Array.isArray(response.clarificationQuestions) && response.clarificationQuestions.length > 0 && typeof response.clarificationQuestions[0] === 'string'
-              ? (response.clarificationQuestions as string[])
-              : undefined
-          ),
-          parsedParams: response.partialParams,
+          parsedParams: {
+            ...response.partialParams,
+            ...(response.destinationName && { destinationName: response.destinationName }),
+          },
           questionAnswers: {},  // 🐛 清空所有旧答案，每次新问题都是全新的开始
+          questionAnswerLabels: (response as any).questionAnswerLabels ?? (response as any).metadata?.questionAnswerLabels,
           // 🆕 Gate 警告和 Critical 字段阻止标记
           gateBlocked,
           blockedByCriticalFields,
@@ -2273,6 +2867,10 @@ export default function NLChatInterface({
           blockedBySafetyPrinciple: response.blockedBySafetyPrinciple,
           decisionResult: response.decisionResult,
           blockedByDecisionMatrix: response.blockedByDecisionMatrix,
+          // 🆕 思考过程与进展步骤
+          thinkingProcess: response.thinkingProcess,
+          progressSteps: response.progressSteps,
+          phaseIndicator: response.phaseIndicator,
         };
         setMessages(prev => [...prev, aiMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
@@ -2360,17 +2958,24 @@ export default function NLChatInterface({
           }
         }
       } else if (response.trip) {
-        // 行程创建成功
+        // 行程创建成功：补充 intent 默认值（创建时可能缺失 travelMode、dailyWalkLimit 等）
+        tripsApi.supplementIntentAfterCreate(response.trip.id).catch(() => {});
         const messageId = `ai-${Date.now()}`;
         const successMessage: ChatMessage = {
           id: messageId,
           role: 'assistant',
-          content: response.message || '太棒了！我已经为您创建好行程了 🎉',
+          content:
+            response.message ||
+            response.plannerReply?.trim() ||
+            '太棒了！我已经为您创建好行程了 🎉',
           timestamp: new Date(),
           // 🐛 如果有 responseBlocks，也显示结构化内容
           responseBlocks: response.plannerResponseBlocks,
           parsedParams: response.parsedParams,
           showConfirmCard: false, // 直接创建成功，不需要确认卡片
+          thinkingProcess: response.thinkingProcess,
+          progressSteps: response.progressSteps,
+          phaseIndicator: response.phaseIndicator,
         };
         setMessages(prev => [...prev, successMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
@@ -2406,7 +3011,7 @@ export default function NLChatInterface({
           // 🆕 显示 Toast 提示，让用户明确知道需要等待
           // 使用 info 类型，因为这是信息性提示而非成功提示
           toast.info('行程创建成功', {
-            description: '正在后台生成行程规划点，预计需要 2-5 分钟，请稍候',
+            description: response.message ?? '正在后台生成行程规划点，预计需要 2-5 分钟，请稍候',
             duration: 6000, // 延长显示时间，让用户有足够时间阅读
             action: {
               label: '查看行程',
@@ -2416,9 +3021,9 @@ export default function NLChatInterface({
             },
           });
         } else {
-          // 如果没有后台生成，显示成功提示
+          // 如果没有后台生成，显示成功提示（优先展示接口返回的 message）
           toast.success('行程创建成功', {
-            description: '正在跳转到规划工作台...',
+            description: response.message ?? '正在跳转到规划工作台...',
             duration: 2000,
           });
         }
@@ -2451,7 +3056,9 @@ export default function NLChatInterface({
           const confirmMessage: ChatMessage = {
             id: messageId,
             role: 'assistant',
-            content: response.plannerReply || '我已经理解了您的需求！请确认以下信息是否正确：',
+            content:
+              response.plannerReply?.trim() ||
+              '我已经理解了您的需求！请确认以下信息是否正确：',
             timestamp: new Date(),
             // 🐛 如果有 responseBlocks，也显示结构化内容
             responseBlocks: response.plannerResponseBlocks,
@@ -2459,6 +3066,9 @@ export default function NLChatInterface({
             showConfirmCard: response.showConfirmCard !== false, // 🆕 使用后端返回的 showConfirmCard，默认为 true
             needsConfirmation: response.needsConfirmation, // 🆕 保存 needsConfirmation 标记
             blockedByCriticalFields: false, // 明确标记未阻止
+            thinkingProcess: response.thinkingProcess,
+            progressSteps: response.progressSteps,
+            phaseIndicator: response.phaseIndicator,
           };
           setMessages(prev => [...prev, confirmMessage]);
           setNewMessageId(messageId);  // 触发打字机效果
@@ -2472,11 +3082,13 @@ export default function NLChatInterface({
         const aiMessage: ChatMessage = {
           id: messageId,
           role: 'assistant',
-          content: response.plannerReply || '让我为您规划行程...',
+          content: response.plannerReply?.trim() || '让我为您规划行程...',
           timestamp: new Date(),
           responseBlocks: response.plannerResponseBlocks,
-          suggestedQuestions: response.suggestedQuestions,
           parsedParams: response.partialParams,
+          thinkingProcess: response.thinkingProcess,
+          progressSteps: response.progressSteps,
+          phaseIndicator: response.phaseIndicator,
         };
         setMessages(prev => [...prev, aiMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
@@ -2486,15 +3098,36 @@ export default function NLChatInterface({
         }
       }
     } catch (err: any) {
+      // 🆕 用户终止：静默处理，不展示错误
+      const isAborted =
+        err?.name === 'AbortError' ||
+        err?.message?.includes('abort') ||
+        err?.message?.includes('canceled') ||
+        err?.code === 'ERR_CANCELED';
+      if (isAborted) {
+        console.log('[NLChatInterface] 用户已终止');
+        // 追加「消息已被用户取消。重试」提示卡片
+        const cancelledMessage: ChatMessage = {
+          id: `cancelled-${Date.now()}`,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          isCancelledNotice: true,
+          retryPayload: { text: text.trim(), answers: questionAnswers },
+        };
+        setMessages((prev) => [...prev, cancelledMessage]);
+        return;
+      }
+
       // 处理认证错误
-      const isUnauthorized = 
+      const isUnauthorized =
         err.code === 'UNAUTHORIZED' ||
         err.message?.includes('登录') ||
         err.message?.includes('认证') ||
         err.message?.includes('需要登录') ||
         err.response?.status === 401 ||
         err.response?.data?.error?.code === 'UNAUTHORIZED';
-      
+
       if (isUnauthorized) {
         console.warn('[NLChatInterface] 检测到认证错误，尝试刷新 token...');
         
@@ -2531,7 +3164,7 @@ export default function NLChatInterface({
               }),
             };
             
-            const retryResponse = await tripsApi.createFromNL(retryRequestData);
+            const retryResponse = await tripsApi.createFromNLv2(retryRequestData);
             
             // 🆕 保存会话ID
             if (retryResponse.sessionId && retryResponse.sessionId !== sessionId) {
@@ -2545,7 +3178,8 @@ export default function NLChatInterface({
               const aiMessage: ChatMessage = {
                 id: messageId,
                 role: 'assistant',
-                content: retryResponse.plannerReply || '让我更了解一下您的需求...',
+                content:
+                  retryResponse.plannerReply?.trim() || '让我更了解一下您的需求...',
                 timestamp: new Date(),
                 // 🆕 结构化内容块（优先）
                 responseBlocks: retryResponse.plannerResponseBlocks,
@@ -2555,13 +3189,11 @@ export default function NLChatInterface({
                       ? undefined  // 字符串数组，使用向后兼容方式
                       : normalizeClarificationQuestions(retryResponse.clarificationQuestions as any[]))  // 结构化数组（已转换）
                   : undefined,
-                suggestedQuestions: retryResponse.suggestedQuestions || (
-                  Array.isArray(retryResponse.clarificationQuestions) && typeof retryResponse.clarificationQuestions[0] === 'string'
-                    ? (retryResponse.clarificationQuestions as string[])
-                    : undefined
-                ),
                 parsedParams: retryResponse.partialParams,
                 questionAnswers: {},  // 🐛 清空所有旧答案，每次新问题都是全新的开始（产品决策）
+                thinkingProcess: retryResponse.thinkingProcess,
+                progressSteps: retryResponse.progressSteps,
+                phaseIndicator: retryResponse.phaseIndicator,
               };
               setMessages(prev => [...prev, aiMessage]);
               setNewMessageId(messageId);
@@ -2630,8 +3262,16 @@ export default function NLChatInterface({
       console.error('NL Chat error:', err);
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   }, [isLoading, navigate, onTripCreated, refreshToken, buildContextForNL, latestParams, currentContextPackage, sessionId, conversationContext, collectQuestionAnswers]);
+
+  // 🆕 用户终止当前对话轮次
+  const handleTerminate = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
 
   // 监听快捷命令事件
   useEffect(() => {
@@ -2648,11 +3288,6 @@ export default function NLChatInterface({
     return () => {
       window.removeEventListener('nl-chat-command', handleCommand as EventListener);
     };
-  }, [sendMessage]);
-
-  // 快捷回复
-  const handleQuickReply = useCallback((text: string) => {
-    sendMessage(text);
   }, [sendMessage]);
 
   // 确认创建行程
@@ -2744,6 +3379,7 @@ export default function NLChatInterface({
       console.log('[NLChatInterface] 确认创建API响应:', response);
 
       if (response.trip) {
+        tripsApi.supplementIntentAfterCreate(response.trip.id).catch(() => {});
         const messageId = `ai-${Date.now()}`;
         const successMessage: ChatMessage = {
           id: messageId,
@@ -2770,13 +3406,19 @@ export default function NLChatInterface({
           onTripCreated(response.trip.id);
         }
 
+        // 展示接口返回的 message
+        toast.success('行程创建成功', {
+          description: response.message ?? '正在为您跳转到规划工作台...',
+          duration: 2000,
+        });
+
         // 🆕 后台生成状态提示
         if (response.generatingItems) {
           const generatingMessageId = `ai-generating-${Date.now()}`;
           const generatingMessage: ChatMessage = {
             id: generatingMessageId,
             role: 'assistant',
-            content: '正在后台生成行程规划点，预计需要 2-5 分钟，请稍后刷新查看',
+            content: response.message ?? '正在后台生成行程规划点，预计需要 2-5 分钟，请稍后刷新查看',
             timestamp: new Date(),
           };
           setMessages(prev => [...prev, generatingMessage]);
@@ -2887,6 +3529,11 @@ export default function NLChatInterface({
             });
             
             if (retryResponse.trip) {
+              tripsApi.supplementIntentAfterCreate(retryResponse.trip.id).catch(() => {});
+              toast.success('行程创建成功', {
+                description: retryResponse.message ?? '正在为您跳转到规划工作台...',
+                duration: 2000,
+              });
               const messageId = `ai-${Date.now()}`;
               const successMessage: ChatMessage = {
                 id: messageId,
@@ -2944,12 +3591,6 @@ export default function NLChatInterface({
       role: 'assistant',
       content: '好的，请告诉我您想修改哪些信息？或者您可以直接输入完整的新需求。',
       timestamp: new Date(),
-      suggestedQuestions: [
-        '修改日期',
-        '修改预算',
-        '修改人数',
-        '重新描述需求',
-      ],
     };
     setMessages(prev => [...prev, editMessage]);
     setNewMessageId(messageId);  // 触发打字机效果
@@ -2958,8 +3599,26 @@ export default function NLChatInterface({
   // 处理提交
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    sendMessage(inputValue);
+    const trimmed = inputValue.trim();
+    // 🆕 指令：创建新行程/新建对话（不发给后端，直接重置本地会话）
+    if (/^(创建新行程|新建行程|新建对话|开启新行程|开始新行程)$/.test(trimmed)) {
+      setInputValue('');
+      cancelPendingAutoSubmit();
+      handleNewConversation();
+      return;
+    }
+    sendMessage(trimmed);
   };
+
+  const cancelPendingAutoSubmit = useCallback(() => {
+    if (autoSubmitTimerId) {
+      clearTimeout(autoSubmitTimerId);
+    }
+    setAutoSubmitCountdown(null);
+    setAutoSubmitTimerId(null);
+    setAutoSubmitCancelId(null);
+    autoSubmittingMessageIdRef.current = null;
+  }, [autoSubmitTimerId]);
 
   // 🆕 如果没有消息，显示优化后的欢迎界面
   if (messages.length === 0 && !isLoading) {
@@ -3021,12 +3680,82 @@ export default function NLChatInterface({
             <MessageBubble
               key={msg.id}
               message={msg}
-              onQuickReply={handleQuickReply}
               onConfirm={handleConfirmCreate}
               onEdit={handleEdit}
               isLatest={idx === messages.length - 1}
               isNewMessage={msg.id === newMessageId}
               onSendMessage={sendMessage}
+              hideConfirmButton={pendingMultiChoiceConfirm?.messageId === msg.id}
+              onConditionalSubmit={async (_question, answers) => {
+                if (!sessionId || !msg.id) return;
+                const response = await tripsApi.updateMessageQuestionAnswers(sessionId, msg.id, answers);
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msg.id
+                      ? { ...m, questionAnswers: { ...(m.questionAnswers || {}), ...answers } }
+                      : m
+                  )
+                );
+                if (response?.nextClarificationQuestions?.length) {
+                  const normalized = normalizeClarificationQuestions(response.nextClarificationQuestions);
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === msg.id
+                        ? {
+                            ...m,
+                            clarificationQuestions: [...(m.clarificationQuestions || []), ...normalized],
+                            responseBlocks: [
+                              ...(m.responseBlocks || []),
+                              ...(response.plannerResponseBlocks || []),
+                            ],
+                          }
+                        : m
+                    )
+                  );
+                } else if (response?.plannerResponseBlocks?.length) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === msg.id
+                        ? {
+                            ...m,
+                            responseBlocks: [...(m.responseBlocks || []), ...(response.plannerResponseBlocks || [])],
+                          }
+                        : m
+                    )
+                  );
+                }
+                if (response?.messages?.length) {
+                  const mapped = response.messages.map((bm: any) => ({
+                    id: bm.id,
+                    role: bm.role,
+                    content: bm.content,
+                    timestamp: new Date(bm.timestamp),
+                    parsedParams: bm.metadata?.parsedParams,
+                    showConfirmCard: bm.metadata?.showConfirmCard,
+                    responseBlocks: bm.metadata?.responseBlocks,
+                    clarificationQuestions: bm.metadata?.clarificationQuestions
+                      ? normalizeClarificationQuestions(bm.metadata.clarificationQuestions)
+                      : undefined,
+                    questionAnswers: bm.metadata?.questionAnswers || {},
+                    personaInfo: bm.metadata?.personaInfo,
+                    recommendedRoutes: bm.metadata?.recommendedRoutes,
+                    blockedBySafetyPrinciple: bm.metadata?.blockedBySafetyPrinciple,
+                    decisionResult: bm.metadata?.decisionResult,
+                    blockedByDecisionMatrix: bm.metadata?.blockedByDecisionMatrix,
+                    gateBlocked: bm.metadata?.gateBlocked,
+                    blockedByCriticalFields: bm.metadata?.blockedByCriticalFields,
+                    gateWarningMessage: bm.metadata?.gateWarningMessage,
+                    alternatives: bm.metadata?.alternatives,
+                    thinkingProcess: bm.metadata?.thinkingProcess,
+                    progressSteps: bm.metadata?.progressSteps,
+                  }));
+                  setMessages((prev) => {
+                    const existingIds = new Set(prev.map((x) => x.id));
+                    const toAppend = mapped.filter((x: any) => !existingIds.has(x.id));
+                    return toAppend.length ? [...prev, ...toAppend] : prev;
+                  });
+                }
+              }}
               currency={currency}
               onOpenConflictDialog={(conflicts, runId) => {
                 // 🆕 打开冲突检测弹窗
@@ -3057,14 +3786,9 @@ export default function NLChatInterface({
                 
                 // 🆕 2. 调用后端 API（显式更新）
                 if (sessionId && msg.id && updatedMessage) {
-                  // 异步更新后端，不阻塞 UI
                   tripsApi.updateMessageQuestionAnswers(sessionId, msg.id, {
                     [fieldKey]: value,
-                  }).catch(err => {
-                    console.warn('[NLChatInterface] 更新问题答案失败:', err);
-                    // 如果更新失败，标记为未保存（可选：显示错误提示）
-                  }).then(() => {
-                    // 🆕 标记为已保存
+                  }).then((response: { nextClarificationQuestions?: any[]; plannerResponseBlocks?: any[] }) => {
                     setSavedQuestionAnswers(prev => {
                       const newMap = new Map(prev);
                       if (!newMap.has(msg.id)) {
@@ -3073,6 +3797,34 @@ export default function NLChatInterface({
                       newMap.get(msg.id)!.add(fieldKey);
                       return newMap;
                     });
+                    // 🆕 若后端返回 nextClarificationQuestions（如「其他需要修改」缺 confirm_inferred_info_other），追加到当前消息；并用 plannerResponseBlocks 渲染提示
+                    if (response?.nextClarificationQuestions && Array.isArray(response.nextClarificationQuestions) && response.nextClarificationQuestions.length > 0) {
+                      const normalized = normalizeClarificationQuestions(response.nextClarificationQuestions);
+                      setMessages((prev) =>
+                        prev.map((m) =>
+                          m.id === msg.id
+                            ? {
+                                ...m,
+                                clarificationQuestions: [...(m.clarificationQuestions || []), ...normalized],
+                                responseBlocks: [
+                                  ...(m.responseBlocks || []),
+                                  ...(response.plannerResponseBlocks || []),
+                                ],
+                              }
+                            : m
+                        )
+                      );
+                    } else if (response?.plannerResponseBlocks?.length) {
+                      setMessages((prev) =>
+                        prev.map((m) =>
+                          m.id === msg.id
+                            ? { ...m, responseBlocks: [...(m.responseBlocks || []), ...(response.plannerResponseBlocks || [])] }
+                            : m
+                        )
+                      );
+                    }
+                  }).catch((err) => {
+                    console.warn('[NLChatInterface] 更新问题答案失败:', err);
                   });
                 }
                 
@@ -3089,22 +3841,20 @@ export default function NLChatInterface({
                       return Array.isArray(answer) && answer.length > 0;
                     }
                     
-                    // 🆕 HCI优化：检查条件输入字段是否已填写（如果触发）
-                    if (q.conditionalInputs && q.conditionalInputs.length > 0) {
-                      const selectedValue = typeof answer === 'string' ? answer : String(answer);
-                      const triggeredInput = q.conditionalInputs.find(ci => ci.triggerValue === selectedValue);
-                      if (triggeredInput && triggeredInput.required) {
-                        const conditionalFieldKey = `${fieldKey}_${triggeredInput.triggerValue}`;
-                        const conditionalAnswer = updatedMessage?.questionAnswers?.[conditionalFieldKey];
-                        if (!conditionalAnswer || conditionalAnswer === '') {
+                    // HCI优化：检查条件输入字段是否已填写（使用与 NLClarificationQuestionCard 一致的匹配逻辑）
+                    const triggeredInputs = getTriggeredConditionalInputs(q, answer);
+                    for (const triggeredInput of triggeredInputs) {
+                      if (!triggeredInput.required) continue;
+                      const storageKey = getConditionalInputStorageKey(q.id, fieldKey, triggeredInput);
+                      const conditionalAnswer = updatedMessage?.questionAnswers?.[storageKey];
+                      if (!conditionalAnswer || conditionalAnswer === '' ||
+                          (Array.isArray(conditionalAnswer) && conditionalAnswer.length === 0)) {
+                        return false;
+                      }
+                      if (triggeredInput.inputType === 'date_range' && typeof conditionalAnswer === 'object') {
+                        const rangeValue = conditionalAnswer as { startDate?: string; endDate?: string };
+                        if (!rangeValue.startDate || !rangeValue.endDate) {
                           return false;
-                        }
-                        // 日期范围验证：确保 startDate 和 endDate 都存在
-                        if (triggeredInput.inputType === 'date_range' && typeof conditionalAnswer === 'object') {
-                          const rangeValue = conditionalAnswer as { startDate?: string; endDate?: string };
-                          if (!rangeValue.startDate || !rangeValue.endDate) {
-                            return false;
-                          }
                         }
                       }
                     }
@@ -3124,22 +3874,20 @@ export default function NLChatInterface({
                       return Array.isArray(answer) && answer.length > 0;
                     }
                     
-                    // 🆕 HCI优化：检查条件输入字段是否已填写（如果触发）
-                    if (q.conditionalInputs && q.conditionalInputs.length > 0) {
-                      const selectedValue = typeof answer === 'string' ? answer : String(answer);
-                      const triggeredInput = q.conditionalInputs.find(ci => ci.triggerValue === selectedValue);
-                      if (triggeredInput && triggeredInput.required) {
-                        const conditionalFieldKey = `${fieldKey}_${triggeredInput.triggerValue}`;
-                        const conditionalAnswer = updatedMessage?.questionAnswers?.[conditionalFieldKey];
-                        if (!conditionalAnswer || conditionalAnswer === '') {
+                    // HCI优化：使用与 NLClarificationQuestionCard 一致的 trigger 匹配
+                    const triggeredInputs = getTriggeredConditionalInputs(q, answer);
+                    for (const triggeredInput of triggeredInputs) {
+                      if (!triggeredInput.required) continue;
+                      const storageKey = getConditionalInputStorageKey(q.id, fieldKey, triggeredInput);
+                      const conditionalAnswer = updatedMessage?.questionAnswers?.[storageKey];
+                      if (!conditionalAnswer || conditionalAnswer === '' ||
+                          (Array.isArray(conditionalAnswer) && conditionalAnswer.length === 0)) {
+                        return false;
+                      }
+                      if (triggeredInput.inputType === 'date_range' && typeof conditionalAnswer === 'object') {
+                        const rangeValue = conditionalAnswer as { startDate?: string; endDate?: string };
+                        if (!rangeValue.startDate || !rangeValue.endDate) {
                           return false;
-                        }
-                        // 日期范围验证：确保 startDate 和 endDate 都存在
-                        if (triggeredInput.inputType === 'date_range' && typeof conditionalAnswer === 'object') {
-                          const rangeValue = conditionalAnswer as { startDate?: string; endDate?: string };
-                          if (!rangeValue.startDate || !rangeValue.endDate) {
-                            return false;
-                          }
                         }
                       }
                     }
@@ -3147,13 +3895,22 @@ export default function NLChatInterface({
                     return true;
                   });
                   
+                  // 🆕 「其他需要修改」：需等待后端返回 nextClarificationQuestions 并填写 confirm_inferred_info_other，否则不自动提交
+                  const hasOtherNeedModify = Object.values(updatedMessage?.questionAnswers || {}).some((v) => {
+                    const s = typeof v === 'string' ? v : Array.isArray(v) ? v.join('') : String(v || '');
+                    return /其他需要修改|其他.*修改/.test(s);
+                  });
+                  const hasConfirmInferredOther = (updatedMessage?.questionAnswers?.confirm_inferred_info_other ?? '') !== '';
+                  if (hasOtherNeedModify && !hasConfirmInferredOther) {
+                    // 等待 PUT 返回 nextClarificationQuestions 并让用户填写
+                    return;
+                  }
+
                   // 🐛 只有所有问题（包括必填和非必填）都回答后才自动提交
                   // 🆕 防重复提交：用 ref 同步检查，避免 state 异步导致重复触发
+                  const hasMultipleChoice = updatedMessage.clarificationQuestions.some(q => q.inputType === 'multiple_choice');
                   if (allQuestionsAnswered && allRequiredAnswered && !autoSubmittingMessageIdRef.current) {
-                    autoSubmittingMessageIdRef.current = msg.id;
-                    
-                    // 🐛 保存答案引用，确保在 setTimeout 回调中能访问到最新的答案
-                    // 🆕 使用 fieldName 构建 finalAnswers（包含条件输入字段）
+                    // 🆕 构建 finalAnswers（包含条件输入字段）
                     const finalAnswers: Record<string, string | string[] | number | boolean | null> = {};
                     if (updatedMessage && updatedMessage.clarificationQuestions) {
                       updatedMessage.clarificationQuestions.forEach(q => {
@@ -3163,31 +3920,54 @@ export default function NLChatInterface({
                           finalAnswers[fieldKey] = answer;
                         }
                         
-                        // 🆕 HCI优化：收集条件输入字段的值
-                        if (q.conditionalInputs && q.conditionalInputs.length > 0) {
-                          const selectedValue = typeof answer === 'string' ? answer : String(answer);
-                          q.conditionalInputs.forEach(conditionalInput => {
-                            if (conditionalInput.triggerValue === selectedValue) {
-                              const conditionalFieldKey = `${fieldKey}_${conditionalInput.triggerValue}`;
-                              const conditionalAnswer = updatedMessage?.questionAnswers?.[conditionalFieldKey];
-                              if (conditionalAnswer !== null && conditionalAnswer !== undefined) {
-                                finalAnswers[conditionalFieldKey] = conditionalAnswer;
-                              }
-                            }
-                          });
-                        }
+                        // HCI优化：收集条件输入字段的值（与 getTriggeredConditionalInputs 一致）
+                        const triggered = getTriggeredConditionalInputs(q, answer ?? null);
+                        triggered.forEach((conditionalInput) => {
+                          const storageKey = getConditionalInputStorageKey(q.id, fieldKey, conditionalInput);
+                          const conditionalAnswer = updatedMessage?.questionAnswers?.[storageKey];
+                          if (conditionalAnswer !== null && conditionalAnswer !== undefined) {
+                            finalAnswers[storageKey] = conditionalAnswer;
+                          }
+                        });
                       });
                     }
                     const finalQuestions = updatedMessage?.clarificationQuestions ? [...updatedMessage.clarificationQuestions] : [];
                     
-                    // 🆕 P1: 答案预览 - 显示所有答案摘要
+                    // 🆕 多选题：不自动提交，等待用户点击「确认选择并继续」
+                    if (hasMultipleChoice) {
+                      setPendingMultiChoiceConfirm({
+                        messageId: msg.id,
+                        finalAnswers,
+                        finalQuestions,
+                      });
+                      return;
+                    }
+                    
+                    autoSubmittingMessageIdRef.current = msg.id;
+                    
+                    // 🆕 P1: 答案预览 - 显示所有答案摘要（优先使用 options 中的 label）
                     const answerSummary = finalQuestions
                       .map(q => {
-                        // 🆕 使用 fieldName 或 questionId（向后兼容）
                         const fieldKey = q.metadata?.fieldName || q.id;
                         const answer = finalAnswers[fieldKey] ?? finalAnswers[q.id];
                         if (answer === null || answer === undefined || answer === '') return null;
-                        const answerText = formatAnswerValue(answer);
+                        const opts = q.options || [];
+                        const getLabel = (val: any) => {
+                          const v = typeof val === 'object' ? (val?.value ?? val?.label) : val;
+                          const opt = opts.find((o: any) => {
+                            if (typeof o === 'object' && o !== null) {
+                              return (o.value ?? o.label) === v;
+                            }
+                            return o === v;
+                          });
+                          if (opt === undefined) return null;
+                          return typeof opt === 'object' && opt !== null
+                            ? (opt.label ?? opt.value ?? '')
+                            : String(opt);
+                        };
+                        const answerText = Array.isArray(answer)
+                          ? answer.map((v) => getLabel(v) ?? formatAnswerValue(v)).join('、')
+                          : (getLabel(answer) ?? formatAnswerValue(answer));
                         return `${q.text}: ${answerText}`;
                       })
                       .filter(Boolean)
@@ -3235,7 +4015,8 @@ export default function NLChatInterface({
                         // 🆕 执行自动提交
                         const confirmText = generateConfirmationMessage(
                           finalQuestions,
-                          finalAnswers
+                          finalAnswers,
+                          updatedMessage?.questionAnswerLabels
                         );
                         console.log('[NLChatInterface] 自动提交确认消息:', confirmText);
                         console.log('[NLChatInterface] 提交的答案:', finalAnswers);
@@ -3265,6 +4046,47 @@ export default function NLChatInterface({
               }}
             />
           ))}
+          
+          {/* 🆕 多选题确认：用户需点击「确认选择并继续」后才提交 */}
+          {pendingMultiChoiceConfirm && (
+            <div className="px-4 py-3">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-bottom-1 duration-300">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-amber-900">
+                    您已选择多项，请确认后继续
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPendingMultiChoiceConfirm(null)}
+                      className="text-xs h-7 px-2"
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const { finalAnswers, finalQuestions } = pendingMultiChoiceConfirm;
+                        const confirmText = generateConfirmationMessage(
+                          finalQuestions,
+                          finalAnswers,
+                          pendingMultiChoiceConfirm.messageId
+                            ? messages.find((m) => m.id === pendingMultiChoiceConfirm.messageId)?.questionAnswerLabels
+                            : undefined
+                        );
+                        sendMessage(confirmText, finalAnswers);
+                        setPendingMultiChoiceConfirm(null);
+                      }}
+                      className="text-xs h-7 px-2 bg-black hover:bg-gray-800"
+                    >
+                      确认选择并继续
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* 🆕 自动提交倒计时提示（符合反馈原则）- 在消息流末尾显示 */}
           {autoSubmitCountdown !== null && autoSubmitCountdown > 0 && (
@@ -3354,6 +4176,28 @@ export default function NLChatInterface({
         </div>
       )}
 
+      {/* 定位到最新对话按钮（仅在用户向上滚动时显示；已在最新时不显示） */}
+      {messages.length > 0 && !isAtBottom && (
+        <div className="flex justify-center py-3 border-t border-gray-200 bg-white/95 backdrop-blur-sm">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={scrollToBottom}
+            className={cn(
+              'h-9 px-4 rounded-full gap-1.5',
+              'border-gray-300 bg-white text-gray-700',
+              'hover:bg-gray-50 hover:border-gray-400',
+              'shadow-sm transition-all duration-200'
+            )}
+            aria-label="定位到最新对话"
+          >
+            <ChevronDown className="w-4 h-4" />
+            <span className="text-xs font-medium">回到底部</span>
+          </Button>
+        </div>
+      )}
+
       {/* 🆕 Gemini风格：输入区域 - 大输入框，带工具按钮 */}
       <form onSubmit={handleSubmit} className="border-t bg-white">
         {/* 对话引导（首次使用或快捷命令） */}
@@ -3375,10 +4219,10 @@ export default function NLChatInterface({
             {/* Gemini风格：统一的输入条容器 - 更大更突出 */}
             <div className={cn(
               'flex items-center gap-2',
-              'bg-white rounded-2xl shadow-sm',
+              'bg-white rounded-2xl',
               'border border-gray-200',
               'transition-all duration-200',
-              'hover:shadow-md focus-within:shadow-md focus-within:border-black/50'
+              'focus-within:border-black/50'
             )}>
               {/* 🆕 左侧工具按钮（类似Gemini的+和工具图标） */}
               <div className="flex items-center gap-1 px-3">
@@ -3398,6 +4242,8 @@ export default function NLChatInterface({
                 ref={inputRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
+                onFocus={cancelPendingAutoSubmit}
+                onMouseDown={cancelPendingAutoSubmit}
                 placeholder="例如：3 月和家人去日本 7 天，节奏轻松"
                 disabled={isLoading || isCreating}
                 className={cn(
@@ -3410,28 +4256,43 @@ export default function NLChatInterface({
                 )}
               />
               
-              {/* 🆕 右侧按钮组 */}
+              {/* 🆕 右侧按钮：加载中为终止，否则为发送 */}
               <div className="flex items-center gap-1 px-3">
-                {/* 发送按钮 */}
-                <Button 
-                  type="submit" 
-                  disabled={!inputValue.trim() || isLoading || isCreating}
-                  className={cn(
-                    'h-9 w-9 p-0 flex-shrink-0',
-                    'bg-black hover:bg-gray-800',
-                    'text-white rounded-lg',
-                    'transition-all duration-200',
-                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2'
-                  )}
-                  aria-label="发送消息"
-                >
-                  {isLoading || isCreating ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <ArrowRight className="w-5 h-5" />
-                  )}
-                </Button>
+                {isLoading && !isCreating ? (
+                  <Button
+                    type="button"
+                    onClick={handleTerminate}
+                    className={cn(
+                      'h-9 w-9 p-0 flex-shrink-0 rounded-lg',
+                      'bg-black hover:bg-gray-800 text-white',
+                      'transition-all duration-200',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2'
+                    )}
+                    aria-label="终止"
+                  >
+                    <Square className="w-4 h-4 fill-current" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    disabled={!inputValue.trim() || isCreating}
+                    className={cn(
+                      'h-9 w-9 p-0 flex-shrink-0',
+                      'bg-black hover:bg-gray-800',
+                      'text-white rounded-lg',
+                      'transition-all duration-200',
+                      'disabled:opacity-50 disabled:cursor-not-allowed',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2'
+                    )}
+                    aria-label="发送消息"
+                  >
+                    {isCreating ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <ArrowRight className="w-5 h-5" />
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
             {/* 🆕 Gemini风格：降低心理负担的文案 */}

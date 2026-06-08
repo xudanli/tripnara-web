@@ -151,7 +151,8 @@
       "intent": "Intent & Constraints",
       "places": "Places",
       "schedule": "Schedule",
-      "workbench": "Decision Evaluation",
+      "workbench": "Plan preview & submit",
+      "planGate": "Plan preview & submit",
       "bookings": "Bookings"
     },
     "noTrip": "Please select a trip first",
@@ -326,6 +327,17 @@
       "abuGateResult": "Abu Gate Result",
       "passed": "Passed",
       "rejected": "Rejected",
+      "noTripData": "No trip data available",
+      "noPlaces": "No places to optimize",
+      "optimizeSuccess": "Optimization successful",
+      "optimizeFailed": "Optimization failed",
+      "optimizeComplete": "Optimization Complete",
+      "happinessScore": "Happiness Score",
+      "optimizedSchedule": "Optimized Schedule",
+      "scoreBreakdown": "Score Breakdown",
+      "interestScore": "Interest Score",
+      "distancePenalty": "Distance Penalty",
+      "clusteringBonus": "Clustering Bonus",
       "workbenchHint": {
         "title": "Need to evaluate your plan?",
         "description": "After optimization, go to the \"Decision Evaluation\" tab to view comprehensive persona assessments including safety, pacing, and alternative suggestions.",
@@ -1121,8 +1133,8 @@
     }
   },
   "login": {
-    "title": "Login to TripNARA",
-    "joinTitle": "Login to TripNARA",
+    "title": "Login",
+    "joinTitle": "Login",
     "startPlanning": "Start Your Smart Planning",
     "email": "Email",
     "emailPlaceholder": "Enter your email",

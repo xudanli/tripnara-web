@@ -2,8 +2,13 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ScoreBreakdownResponse, ReadinessCheckResult } from '@/api/readiness';
+import type {
+  ScoreBreakdownResponse,
+  ReadinessCheckResult,
+  RiskWarningsResponse,
+} from '@/api/readiness';
 import { gateStatusTokens as designTokens, typographyTokens, spacingTokens } from '@/utils/design-tokens';
+import { countNestedFindingItems } from '@/lib/readiness-nested-counts';
 
 type GateStatus = 'BLOCK' | 'WARN' | 'PASS';
 
@@ -11,6 +16,8 @@ interface ReadinessDrawerHeaderProps {
   scoreBreakdown: ScoreBreakdownResponse | null;
   gateStatus: GateStatus;
   readinessResult: ReadinessCheckResult | null;
+  /** GET /readiness/risk-warnings：顶部「风险」数字以此 summary.totalRisks 为准，勿用 /score 内 risks 条数混用 */
+  riskWarnings?: RiskWarningsResponse | null;
 }
 
 // GateStatus 视觉 Token（使用统一设计 Token）
@@ -33,6 +40,7 @@ export default function ReadinessDrawerHeader({
   scoreBreakdown,
   gateStatus,
   readinessResult,
+  riskWarnings,
 }: ReadinessDrawerHeaderProps) {
   const { t } = useTranslation();
   
@@ -84,17 +92,30 @@ export default function ReadinessDrawerHeader({
       {/* 层级2：关键统计（次要优先级） */}
       {/* ✅ 显示4个状态：阻塞、必须、建议、风险 */}
       {(() => {
-        // 计算统计数据
-        const blockers = scoreBreakdown?.summary?.blockers ?? readinessResult?.summary?.totalBlockers ?? 0;
-        // ✅ 统一状态映射：使用 must 字段，兼容 warnings
-        const must = scoreBreakdown?.summary?.must ?? scoreBreakdown?.summary?.warnings ?? readinessResult?.summary?.totalMust ?? 0;
-        // ✅ 统一状态映射：使用 should 字段，兼容 suggestions
-        const should = scoreBreakdown?.summary?.should ?? scoreBreakdown?.summary?.suggestions ?? readinessResult?.summary?.totalShould ?? 0;
-        // ✅ 计算风险数量：从 readinessResult.risks 或 scoreBreakdown.risks
-        const risks = readinessResult?.risks?.length ?? 
-                      readinessResult?.findings?.reduce((sum, f) => sum + (f.risks?.length || 0), 0) ??
-                      scoreBreakdown?.risks?.length ?? 
-                      readinessResult?.summary?.totalRisks ?? 0;
+        // 清单只渲染 findings[].blockers / must / …；顶部数字在有聚合树时与之对齐，避免 /score 的 summary 与树结构不一致（例如阻塞只记在扁平统计里）
+        const nested = countNestedFindingItems(readinessResult);
+        const useNestedTree = !!(readinessResult?.findings && readinessResult.findings.length > 0);
+        const blockers = useNestedTree
+          ? nested.blockers
+          : scoreBreakdown?.summary?.blockers ?? readinessResult?.summary?.totalBlockers ?? 0;
+        const must = useNestedTree
+          ? nested.must
+          : scoreBreakdown?.summary?.must ??
+            scoreBreakdown?.summary?.warnings ??
+            readinessResult?.summary?.totalMust ??
+            0;
+        const should = useNestedTree
+          ? nested.should
+          : scoreBreakdown?.summary?.should ??
+            scoreBreakdown?.summary?.suggestions ??
+            readinessResult?.summary?.totalShould ??
+            0;
+        // 风险条数：优先 risk-warnings 接口的 summary.totalRisks；勿与 GET .../score 返回的 risks 数组混算
+        const risks =
+          riskWarnings != null
+            ? riskWarnings.summary?.totalRisks ?? riskWarnings.risks?.length ?? 0
+            : (readinessResult?.risks?.length ?? 0) +
+                (readinessResult?.findings?.reduce((sum, f) => sum + (f.risks?.length || 0), 0) ?? 0);
 
         return (
           <div className={cn(spacingTokens.drawerPadding, spacingTokens.drawerPaddingBottomSmall)}>

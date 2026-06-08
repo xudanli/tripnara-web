@@ -20,6 +20,10 @@ import type {
   NegotiationResponse,
   SubmitFeedbackRequest,
   SubmitFeedbackResponse,
+  TradeoffDwellRequest,
+  TradeoffDwellResponse,
+  RecordOutcomeCaptureRequest,
+  RecordOutcomeCaptureResponse,
   UserPreferencesResponse,
   // 团队
   CreateTeamRequest,
@@ -28,6 +32,12 @@ import type {
   TeamNegotiationResponse,
   TeamWeightsResponse,
   TeamConstraintsResponse,
+  CreateTeamInviteRequest,
+  CreateTeamInviteResponse,
+  TeamInviteInfo,
+  JoinTeamInviteRequest,
+  JoinTeamInviteResponse,
+  TeamInviteListResponse,
   // 实时状态
   InitializeRealtimeStateRequest,
   InitializeRealtimeStateResponse,
@@ -148,6 +158,32 @@ export const optimizationApi = {
     const { data } = await apiClient.post<SubmitFeedbackResponse>(
       `${API_BASE}/optimization/feedback`,
       request
+    );
+    return data;
+  },
+
+  /**
+   * 权衡对比停留：失焦或确认选择时上报纠结时长（与 correlationId 串联）
+   */
+  async tradeoffDwell(request: TradeoffDwellRequest): Promise<TradeoffDwellResponse> {
+    const body = toPlainBody(request);
+    const { data } = await apiClient.post<TradeoffDwellResponse>(
+      `${API_BASE}/optimization/tradeoff-dwell`,
+      body
+    );
+    return data;
+  },
+
+  /**
+   * Outcome 捕获：附带 rlhfJsonEval（contextSnapshot、utilityWeights、可选 modification）
+   */
+  async recordOutcomeCapture(
+    request: RecordOutcomeCaptureRequest
+  ): Promise<RecordOutcomeCaptureResponse> {
+    const body = toPlainBody(request);
+    const { data } = await apiClient.post<RecordOutcomeCaptureResponse>(
+      `${API_BASE}/optimization/record-outcome-capture`,
+      body
     );
     return data;
   },
@@ -293,6 +329,61 @@ export const teamApi = {
   async getConstraints(teamId: string): Promise<TeamConstraintsResponse> {
     const { data } = await apiClient.get<TeamConstraintsResponse>(
       `${API_BASE}/team/${teamId}/constraints`
+    );
+    return data;
+  },
+
+  /**
+   * 生成邀请链接（需认证）
+   */
+  async createInvite(
+    teamId: string,
+    request?: CreateTeamInviteRequest
+  ): Promise<CreateTeamInviteResponse> {
+    const { data } = await apiClient.post<CreateTeamInviteResponse>(
+      `${API_BASE}/team/${teamId}/invites`,
+      request ?? {}
+    );
+    return data;
+  },
+
+  /**
+   * 列出有效邀请（需认证）
+   */
+  async listInvites(teamId: string): Promise<TeamInviteListResponse> {
+    const { data } = await apiClient.get<TeamInviteListResponse>(
+      `${API_BASE}/team/${teamId}/invites`
+    );
+    return data;
+  },
+
+  /**
+   * 撤销邀请（需认证）
+   */
+  async revokeInvite(teamId: string, token: string): Promise<{ success: boolean }> {
+    const { data } = await apiClient.delete<{ success: boolean }>(
+      `${API_BASE}/team/${teamId}/invites/${encodeURIComponent(token)}`
+    );
+    return data;
+  },
+
+  /**
+   * 获取邀请信息（公开，无需认证）
+   */
+  async getInviteInfo(token: string): Promise<TeamInviteInfo> {
+    const { data } = await apiClient.get<TeamInviteInfo>(
+      `/v2/team/invites/${encodeURIComponent(token)}`
+    );
+    return data;
+  },
+
+  /**
+   * 通过邀请加入团队（公开，无需认证）
+   */
+  async joinByInvite(token: string, request: JoinTeamInviteRequest): Promise<JoinTeamInviteResponse> {
+    const { data } = await apiClient.post<JoinTeamInviteResponse>(
+      `/v2/team/invites/${encodeURIComponent(token)}/join`,
+      request
     );
     return data;
   },

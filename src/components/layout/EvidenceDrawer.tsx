@@ -5,19 +5,38 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { EvidenceDrawerSkeleton } from './EvidenceDrawerSkeleton';
+import type { MemoryContractConstraintSink } from '@/features/route-and-run/types/observability';
+import type { ConstraintSinkDecisionLogEvidence } from '@/lib/extract-memory-contract';
+import { isConstraintSinkEnabled } from '@/lib/memory-feature';
+import { MEMORY_CONSOLE_UI_DEFAULT_ZH } from '@/contracts/memory-console-ui-state.v1';
+import { MemoryConstraintSinkPanel } from './MemoryConstraintSinkPanel';
 import { X, FileText, AlertTriangle, History, ExternalLink, Clock, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAssistantDrawerRightOffset } from '@/hooks/use-assistant-drawer-offset';
 import { tripsApi } from '@/api/trips';
 import type { DecisionLogEntry, PersonaAlert, EvidenceItem as EvidenceItemType } from '@/types/trip';
 import BusinessHoursCard from '@/components/trips/BusinessHoursCard';
+import { EvidenceRefsReadable } from '@/lib/evidence-refs-readability';
+import {
+  getTripDecisionEvidenceRefs,
+  OntologyTripDecisionExtras,
+  extractTripDecisionOntologyEvidenceDisplayZh,
+  extractTripDecisionReadinessEvidenceDisplayZh,
+  extractTripDecisionReadinessTechnicalEvidenceRefs,
+} from '@/lib/ontology-decision-display';
 
 interface EvidenceDrawerProps {
   open: boolean;
   onClose: () => void;
   tripId?: string | null;
-  activeTab?: 'evidence' | 'risk' | 'decision';
+  activeTab?: 'evidence' | 'risk' | 'decision' | 'memory';
   highlightItemId?: string; // 用于高亮特定项
+  /** constraint_sink 深链高亮 patch_id */
+  highlightPatchId?: string;
+  /** route_and_run observability.memory_contract.constraint_sink */
+  memoryConstraintSink?: MemoryContractConstraintSink | null;
+  /** explain.decision_log 中的 constraint_sink 依据 */
+  constraintSinkDecisionLog?: ConstraintSinkDecisionLogEvidence | null;
   /** 点击证据时回调，用于在行程时间轴中高亮 evidence.affectedItemIds */
   onEvidenceClick?: (evidence: EvidenceItemType) => void;
 }
@@ -53,9 +72,14 @@ export default function EvidenceDrawer({
   tripId,
   activeTab = 'evidence',
   highlightItemId,
+  highlightPatchId,
+  memoryConstraintSink,
+  constraintSinkDecisionLog,
   onEvidenceClick,
 }: EvidenceDrawerProps) {
-  const [currentTab, setCurrentTab] = useState<'evidence' | 'risk' | 'decision'>(activeTab);
+  const assistantRightOffset = useAssistantDrawerRightOffset();
+  const showMemoryTab = isConstraintSinkEnabled();
+  const [currentTab, setCurrentTab] = useState<'evidence' | 'risk' | 'decision' | 'memory'>(activeTab);
   const [decisionLogItems, setDecisionLogItems] = useState<DecisionLogEntry[]>([]);
   const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
   const [evidenceItems, setEvidenceItems] = useState<EvidenceItemType[]>([]);
@@ -75,6 +99,10 @@ export default function EvidenceDrawer({
       }
     }
   }, [open, tripId, currentTab]);
+
+  useEffect(() => {
+    setCurrentTab(activeTab);
+  }, [activeTab]);
 
   const loadDecisionLog = async () => {
     if (!tripId) return;
@@ -261,9 +289,6 @@ export default function EvidenceDrawer({
   // 将 PersonaAlerts 转换为 RiskItems
   const riskItems: RiskItem[] = personaAlerts.map(convertPersonaAlertToRiskItem);
 
-  // 将 DecisionLogEntries 转换为组件使用的格式
-  const convertedDecisionLogItems: DecisionLogItem[] = decisionLogItems.map(convertDecisionLogItem);
-
   if (!open) {
     return null;
   }
@@ -311,9 +336,10 @@ export default function EvidenceDrawer({
   return (
     <div
       className={cn(
-        'fixed right-0 top-0 h-full w-96 bg-white border-l border-gray-200 shadow-xl z-50 transition-transform duration-300',
+        'fixed top-0 h-full w-96 bg-white border-l border-gray-200 shadow-xl z-40 transition-transform duration-300',
         open ? 'translate-x-0' : 'translate-x-full'
       )}
+      style={{ right: assistantRightOffset }}
     >
       <div className="h-full flex flex-col">
         {/* Header */}
@@ -340,6 +366,12 @@ export default function EvidenceDrawer({
                 <History className="h-4 w-4 mr-2" />
                 决策
               </TabsTrigger>
+              {showMemoryTab ? (
+                <TabsTrigger value="memory" className="flex-1">
+                  <FileText className="h-4 w-4 mr-2" />
+                  {MEMORY_CONSOLE_UI_DEFAULT_ZH.drawer_memory_tab}
+                </TabsTrigger>
+              ) : null}
             </TabsList>
           </div>
 
@@ -544,16 +576,35 @@ export default function EvidenceDrawer({
               <TabsContent value="decision" className="mt-0 space-y-3">
                 {loadingDecisionLog ? (
                   <EvidenceDrawerSkeleton count={5} />
-                ) : convertedDecisionLogItems.length === 0 ? (
+                ) : decisionLogItems.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     暂无决策记录
                   </div>
                 ) : (
-                  convertedDecisionLogItems.map((item) => {
+                  decisionLogItems.map((entry) => {
+                    const item = convertDecisionLogItem(entry);
                     const decisionResult = getDecisionResultDisplay(item.action);
                     const personaInfo = item.persona 
                       ? getPersonaInfo(item.persona === 'abu' ? 'ABU' : item.persona === 'dre' ? 'DR_DRE' : 'NEPTUNE')
                       : null;
+                    const evidenceRefs = getTripDecisionEvidenceRefs(entry);
+                    const ontologyZh = extractTripDecisionOntologyEvidenceDisplayZh(entry);
+                    const readinessZh = extractTripDecisionReadinessEvidenceDisplayZh(entry);
+                    const readinessTechnicalRefs = extractTripDecisionReadinessTechnicalEvidenceRefs(entry);
+                    const meta = entry.metadata as Record<string, unknown> | undefined;
+                    const outputsSummary =
+                      typeof meta?.outputs_summary === 'string' ? meta.outputs_summary.trim() : '';
+                    const summaryHintsReadiness =
+                      outputsSummary.length > 0 && /准备度|Readiness|readiness|就绪/i.test(outputsSummary);
+                    const readinessWired =
+                      (readinessZh?.length ?? 0) > 0 ||
+                      readinessTechnicalRefs.some(
+                        (r) => r.startsWith('readiness_pack_check:') || r.startsWith('readiness:')
+                      ) ||
+                      evidenceRefs.some(
+                        (r) =>
+                          r.trim().startsWith('readiness_pack_check:') || r.trim().startsWith('readiness:')
+                      );
                     return (
                       <Card
                         key={item.id}
@@ -581,18 +632,50 @@ export default function EvidenceDrawer({
                             <span className="font-medium">📝 说明：</span>
                             {item.reason}
                           </div>
+                          {outputsSummary && outputsSummary !== item.reason ? (
+                            <div className="text-xs text-muted-foreground border-l-2 border-primary/20 pl-2">
+                              {outputsSummary}
+                            </div>
+                          ) : null}
 
                           {/* 时间 */}
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             <span>时间：{formatTimestamp(item.timestamp)}</span>
                           </div>
+
+                          {evidenceRefs.length > 0 ||
+                          (ontologyZh?.length ?? 0) > 0 ||
+                          (readinessZh?.length ?? 0) > 0 ||
+                          summaryHintsReadiness ||
+                          readinessWired ||
+                          readinessTechnicalRefs.length > 0 ? (
+                            <EvidenceRefsReadable
+                              refs={evidenceRefs}
+                              ontologyEvidenceDisplayZh={ontologyZh}
+                              readinessEvidenceDisplayZh={readinessZh}
+                              readinessTechnicalEvidenceRefs={readinessTechnicalRefs}
+                              outputsSummary={outputsSummary || null}
+                            />
+                          ) : null}
+                          <OntologyTripDecisionExtras log={entry} />
                         </CardContent>
                       </Card>
                     );
                   })
                 )}
               </TabsContent>
+
+              {showMemoryTab ? (
+                <TabsContent value="memory" className="mt-0 space-y-3">
+                  <MemoryConstraintSinkPanel
+                    sink={memoryConstraintSink}
+                    decisionLogEvidence={constraintSinkDecisionLog}
+                    highlightPatchId={highlightPatchId}
+                    tripId={tripId}
+                  />
+                </TabsContent>
+              ) : null}
             </div>
           </ScrollArea>
         </Tabs>

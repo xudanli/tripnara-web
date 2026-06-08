@@ -60,6 +60,8 @@ export interface BudgetConfig {
   totalBudget: number;
   currency: string;
   dailyBudget?: number;
+  /** Prisma 预算配置里的人数（与 pacingConfig.travelers 二选一或并存；route_and_run preference_profile 优先读此项） */
+  travelers?: Traveler[];
 }
 
 // ==================== 地点类别 ====================
@@ -178,6 +180,8 @@ export interface CrossDayInfo {
     start: string;               // 开始时间标签（如 "入住时间"）
     end: string;                 // 结束时间标签（如 "退房时间"）
   };
+  /** 当天展示序：0 = 退房置顶，1、2、3… = 其余活动（与 GET itinerary-items / trips 对齐） */
+  displaySortIndex?: number;
 }
 
 export interface ItineraryItem {
@@ -213,6 +217,8 @@ export interface ItineraryItem {
   bookedAt?: string | null;                    // 预订时间
   // 跨天信息（后端返回）
   crossDayInfo?: CrossDayInfo | null;          // 跨天显示信息
+  /** 当天展示序（顶层冗余，优先于 crossDayInfo.displaySortIndex） */
+  displaySortIndex?: number;
 }
 
 export interface ItineraryItemDetail extends ItineraryItem {
@@ -240,6 +246,8 @@ export interface TripDay {
   date: string;
   /** ✅ 新增字段（2026-01-29）：当天的主题（从模板的 dayPlans[].theme 获取，或从 trip.metadata.dayThemes[dayNumber] 获取） */
   theme?: string | null;
+  /** GET /trips/:id — 该日历日的徒步卡片；休整日无此字段 */
+  hikingDayCard?: import('@/types/hiking-trail-card').HikingDayCard | null;
   ItineraryItem: ItineraryItem[];
 }
 
@@ -275,6 +283,12 @@ export interface TripDetail extends BaseEntity {
   pipelineStatus?: PipelineStatus;
   activeAlertsCount?: number;
   pendingTasksCount?: number;
+  /** NL 后台生成 POI 行程项中（仅 poi_timeline / NL 创建） */
+  generatingItems?: boolean;
+  /** 详情内容分支：poi_timeline | hiking_primary | skeleton_only */
+  tripContentMode?: import('@/lib/trip-content-mode').TripContentMode;
+  /** GET /trips/:id — 徒步 Trail 按日段总览（如朗格迈维卢尔 4 日） */
+  hikingTrailSegments?: import('@/types/hiking-trail-card').HikingTrailSegment[];
   metadata?: {
     generationProgress?: GenerationProgress;
     /** ✅ 新增字段（2026-01-29）：每日主题映射，key 为天数（1, 2, 3...），value 为主题字符串 */
@@ -293,6 +307,10 @@ export interface TripListItem extends BaseEntity {
   endDate: string;
   status: TripStatus;
   totalBudget: number;
+  /** 徒步形态等扩展（列表 API 可能返回） */
+  metadata?: Record<string, unknown>;
+  generatingItems?: boolean;
+  tripContentMode?: import('@/lib/trip-content-mode').TripContentMode;
   days: Array<{
     id: string;
     date: string;
@@ -328,10 +346,14 @@ export interface CreateTripRequest {
   mustPlaces?: number[];
   // 不想去的地点 POI IDs - 高级用户可在创建时排除
   avoidPlaces?: number[];
+  /** 徒步等扩展 metadata */
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateTripResponse extends BaseEntity {
   id: string;
+  /** 接口返回的提示文案，可直接展示给用户 */
+  message?: string;
   name?: string; // 🆕 行程名称（可选）
   destination: string;
   startDate: string;
@@ -387,6 +409,10 @@ export interface NLConversation {
   createdAt: string;
   updatedAt: string;
   expiresAt: string;
+  /** PUT 更新答案时，若需追问（如「其他需要修改」缺 confirm_inferred_info_other），后端可返回此字段 */
+  nextClarificationQuestions?: any[];
+  /** PUT 更新答案时，后端可返回的提示块，用于渲染提示信息 */
+  plannerResponseBlocks?: PlannerResponseBlock[];
 }
 
 /**
@@ -553,13 +579,23 @@ export interface PlannerResponseBlock {
   // summary_card 类型
   summary?: {
     destination?: string;
-    duration?: string;  // "10天"
-    travelers?: string;  // "双人"
+    startDate?: string;   // 出行时间（ISO 日期）
+    endDate?: string;     // 返程时间（ISO 日期）
+    duration?: string;    // "10天"（当无 startDate/endDate 时使用）
+    travelers?: string;   // "双人"
     budget?: {
       amount: number;
       currency: string;
       details?: string[];  // ["租用四驱车", "住宿", "特色活动", "餐饮"]
     };
+    /** 城市列表（多目的地时） */
+    cities?: string[];
+    /** 各城市天数分配，如 { "杭州": 3, "千岛湖": 1 } 或 [{ city: "杭州", days: 3 }, ...] */
+    dayAllocation?: Record<string, number> | Array<{ city: string; days: number }>;
+    /** 预格式化的天数分配文案，如 "杭州 3 天、千岛湖 1 天"，优先使用 */
+    dayAllocationDisplay?: string;
+    /** 必含景点/POI */
+    mustHavePois?: string[];
   };
   
   // question_card 类型（与 clarificationQuestions 关联）
@@ -598,12 +634,13 @@ export interface PlannerResponseBlock {
 /**
  * 🆕 HCI优化：条件输入字段配置
  * 当用户选择特定选项时，显示后续输入字段
+ * 「补充偏好信息」场景下 paramKey 可为：travelStyle(A–E 五选一)、pace(2–3/3–5/5+)、riskAccepted(夜间自驾、山路等可多选)
  */
 export interface ConditionalInputField {
   /** 触发此输入字段的选项值（当用户选择此选项时显示输入字段） */
   triggerValue: string;
   /** 输入字段类型 */
-  inputType: 'text' | 'date' | 'number' | 'date_range';
+  inputType: 'text' | 'date' | 'number' | 'date_range' | 'single_choice' | 'multiple_choice';
   /** 输入字段标签 */
   label?: string;
   /** 占位符 */
@@ -618,14 +655,36 @@ export interface ConditionalInputField {
   };
   /** 提示文本 */
   hint?: string;
+  /**
+   * 提交时的参数字段名
+   * questionAnswers 的 key 为 {questionId}_{paramKey}，后端会合并到 partialParams.preferences
+   * 同一 triggerValue 可对应多个输入字段，通过 paramKey 区分
+   */
+  paramKey?: string;
+  /** single_choice / multiple_choice 时的选项列表 */
+  options?: (string | { value: string; label: string })[];
+  /** 若提供，在输入框旁渲染提交按钮，点击时 PUT 答案并 POST 继续对话 */
+  submitLabel?: string;
+}
+
+/**
+ * 标准化后的选项格式
+ * 后端可能返回 string[] 或 { value, label }[]，前端统一为 { value, label }
+ */
+export interface ClarificationOption {
+  value: string;
+  label: string;
 }
 
 export interface NLClarificationQuestion {
   id: string;  // 唯一标识，用于关联到 responseBlocks
-  text: string;  // 问题文本
+  text: string;  // 问题文本（后端字段 question）
   inputType: 'boolean' | 'text' | 'single_choice' | 'multiple_choice' | 'number' | 'date';
-  options?: string[];  // 选项（用于 single_choice / multiple_choice）
+  /** 选项：支持 string[] 或 { value, label }[]（API 规范兼容） */
+  options?: (string | ClarificationOption)[];
   required?: boolean;  // 是否必填
+  placeholder?: string;  // 占位符（后端返回）
+  default?: string | string[];  // 默认值（后端返回）
   hint?: string;  // 提示信息
   /**
    * 🆕 P0: 问题分组
@@ -670,6 +729,23 @@ export interface ParsedTripParams {
   };
   needsClarification?: boolean;
   inferredFields?: string[];     // 推断的字段列表，如 ['startDate', 'totalBudget']
+  // 🆕 补充偏好信息（conditionalInputs 收集后可出现在 partialParams）
+  /** 旅行风格 A–E 五选一 */
+  travelStyle?: string;
+  /** 节奏：2–3 / 3–5 / 5+ */
+  pace?: string;
+  /** 风险承受度 */
+  riskTolerance?: string;
+  /** 可接受风险项（夜间自驾、山路等，可多选） */
+  riskAccepted?: string[];
+  /** 出发城市 */
+  departureCity?: string;
+  /** 核心期望 */
+  coreExpectation?: string;
+  /** 希望避免的内容 */
+  whatToAvoid?: string;
+  /** 允许其他扩展字段（与后端 partialParams Record<string, any> 对齐） */
+  [key: string]: any;
 }
 
 /**
@@ -726,6 +802,28 @@ export interface DecisionResult {
   recommendations: string[];   // 建议列表
 }
 
+/** 思考过程（可折叠展示） */
+export interface ThinkingProcess {
+  summary: string;   // 如 "思考了一会儿"
+  content: string;   // 详细推理内容
+}
+
+/** 进展步骤 */
+export interface ProgressStep {
+  id?: string;
+  label: string;     // 如 "已解析自然语言需求"
+  detail?: string;   // 如 "11个内容"
+  status?: 'pending' | 'running' | 'completed' | 'failed';
+  icon?: string;    // 可选：search/check/loading 等
+}
+
+/**
+ * `POST /trips/from-natural-language`（及 v2）解包后的业务体。
+ *
+ * **不要**用通用字段 `reply` / `data.reply` 取规划师话术——响应里通常**没有**这些 key。
+ * - 富文本/结构化展示：优先 **`plannerResponseBlocks`**（按块交给 `ResponseBlockRenderer`）
+ * - 纯文本兜底： **`plannerReply`**
+ */
 export interface CreateTripFromNLResponse {
   // ========== 会话管理 ==========
   /**
@@ -740,6 +838,11 @@ export interface CreateTripFromNLResponse {
    * 前端应使用此ID来更新问题答案，而不是自己生成ID
    */
   lastMessageId?: string;
+  
+  /** 目的地代码（如 NZ、IS） */
+  destination?: string;
+  /** 目的地名称（如 新西兰、冰岛） */
+  destinationName?: string;
   
   // ========== 场景1: 需要澄清（旅行规划师对话）==========
   needsClarification?: boolean;
@@ -817,6 +920,12 @@ export interface CreateTripFromNLResponse {
    * 如果未提供 plannerResponseBlocks，使用此字段
    */
   plannerReply?: string;
+
+  /**
+   * 少数后端版本使用的别名，语义同 {@link plannerReply}。
+   * 前端不读取、不展示（勿与 `plannerReply` 合并）。
+   */
+  reply?: string;
   
   /**
    * 🆕 是否显示确认卡片
@@ -824,7 +933,7 @@ export interface CreateTripFromNLResponse {
    */
   showConfirmCard?: boolean;
   
-  // 建议的快捷回复选项
+  /** 接口可能仍返回；前端不展示快捷 pill，忽略即可 */
   suggestedQuestions?: string[];
   
   // 对话上下文（用于多轮对话）
@@ -833,12 +942,66 @@ export interface CreateTripFromNLResponse {
   /**
    * 🆕 澄清问题列表（结构化）
    * 如果提供，前端将渲染为独立的问题卡片
-   * 如果未提供，使用字符串数组 clarificationQuestions（向后兼容）
+   * 「补充偏好信息」的 conditionalInputs 现可包含：travelStyle(A–E 五选一)、pace(2–3/3–5/5+)、riskAccepted(夜间自驾、山路等可多选)
    */
   clarificationQuestions?: NLClarificationQuestion[] | string[];
+
+  /**
+   * 🆕 澄清问答回显用 label（用户所见文案）
+   * 前端展示答案时应优先使用 label，fallback 才用 questionAnswers 的原始 value。
+   */
+  questionAnswerLabels?: Array<{
+    questionId: string;
+    /** 展示文案（已完成 value->label 映射/合并） */
+    label: string;
+    /** 可选：原始值 */
+    value?: any;
+    /** 可选：对应 fieldName（若后端以 fieldName 归档） */
+    fieldName?: string;
+  }>;
   
-  // 部分解析的参数
+  /**
+   * 部分解析的参数（Record<string, any>，可能多出 travelStyle, pace, riskTolerance, riskAccepted, departureCity, coreExpectation, whatToAvoid）
+   */
   partialParams?: ParsedTripParams;
+
+  /**
+   * 思考过程（可折叠）：{ summary, content }
+   * 文案会根据已收集的 travelStyle、pace、riskTolerance 等更新
+   */
+  thinkingProcess?: ThinkingProcess;
+  /** 进展步骤 [{ id, label, detail, status }] */
+  progressSteps?: ProgressStep[];
+
+  /**
+   * 🆕 v2 可行性预检结果（Ontology + Solver pre-check）
+   * - isPossible=false 时，表示“物理/约束不可行”，应优先展示 conflictReason.message
+   */
+  feasibility?: {
+    isPossible: boolean;
+    conflictReason?: {
+      code: string;
+      message: string;
+      details?: Record<string, any>;
+    };
+    suggestedActions?: string[];
+  };
+
+  /**
+   * 🆕 v2 标记：本次创建链路的生成引擎
+   * 用于 debug/徽标等展示（例如 'SOLVER'）
+   */
+  generationEngine?: 'SOLVER' | string;
+  /**
+   * 阶段指示器（当前对话所处的收集阶段）
+   * 例如：{ phase: 1, phaseName: "硬约束确认", progress: "1/4", totalPhases: 4 }
+   */
+  phaseIndicator?: {
+    phase: number;
+    phaseName: string;
+    progress: string;
+    totalPhases: number;
+  };
 
   // ========== 场景2: 信息完整，创建行程 ==========
   trip?: {
@@ -2348,9 +2511,11 @@ export interface PlanBudgetEvaluationResponse {
 // 三人格提醒
 export interface PersonaAlert {
   id: string;
-  persona: 'ABU' | 'DR_DRE' | 'NEPTUNE';
+  persona: 'ABU' | 'DR_DRE' | 'NEPTUNE' | 'USER_ACTION';
   name: string;
   title: string;
+  /** 面向用户的说明（可与决策日志 explanation 对齐）；有则优先于 message 展示 */
+  explanation?: string;
   message: string;
   severity: 'warning' | 'info' | 'success';
   createdAt: string;
@@ -2360,6 +2525,13 @@ export interface PersonaAlert {
     reasonCodes?: string[];
     [key: string]: any;
   };
+}
+
+/** 决策日志 / 证据中与本体硬锚对齐的快照（与后端 result.ontology_hard_anchor 一致） */
+export interface OntologyHardAnchorSnapshot {
+  matched_node_ids?: string[];
+  labels_zh?: string[];
+  road_status_by_node?: Record<string, unknown>;
 }
 
 // 决策记录
@@ -2372,7 +2544,41 @@ export interface DecisionLogEntry {
   action: string;
   metadata?: {
     reasonCodes?: string[];
+    /** 与编排 `ontology_evidence_display_zh` 同源冗余（行程决策面板直绑 metadata） */
+    ontology_evidence_display_zh?: string;
+    ontologyEvidenceDisplayZh?: string;
+    /** 准备度自然语言说明（与编排 decision_log 根字段同源） */
+    readiness_evidence_display_zh?: string;
+    readinessEvidenceDisplayZh?: string;
+    /** 准备度技术引用（与 evidence_refs 解耦；含 readiness_pack_check: 等） */
+    readiness_technical_evidence_refs?: string[];
+    readinessTechnicalEvidenceRefs?: string[];
+    /** 证据引用（与编排 decision_log.evidence_refs 同源，camel / snake 均兼容） */
     evidenceRefs?: string[];
+    evidence_refs?: string[];
+    ontology_hard_anchor?: OntologyHardAnchorSnapshot;
+    result?: {
+      ontology_hard_anchor?: OntologyHardAnchorSnapshot;
+      ontology_evidence_display_zh?: string;
+      ontologyEvidenceDisplayZh?: string;
+      readiness_evidence_display_zh?: string;
+      readinessEvidenceDisplayZh?: string;
+      readiness_technical_evidence_refs?: string[];
+      readinessTechnicalEvidenceRefs?: string[];
+      payload?: {
+        unified_execution_trace?: Record<string, unknown>;
+        unifiedExecutionTrace?: Record<string, unknown>;
+        [key: string]: unknown;
+      };
+      [key: string]: unknown;
+    };
+    unified_execution_trace?: Record<string, unknown>;
+    unifiedExecutionTrace?: Record<string, unknown>;
+    ontology_hard_anchor_appendix?: Record<string, unknown>;
+    stepsExecuted?: Record<string, unknown>;
+    steps_executed?: Record<string, unknown>;
+    /** 与编排 outputs_summary 对齐时的冗余字段（可选） */
+    outputs_summary?: string;
     [key: string]: any;
   };
 }
@@ -2461,6 +2667,66 @@ export interface PlaceCandidate {
 }
 
 // 行程项草案(包含placeId和时段信息)
+export type TripDraftVerificationStatus =
+  | 'VERIFIED'
+  | 'VERIFIED_WITH_RELAXATION'
+  | 'FAILED'
+  | (string & {});
+
+export type TripDraftRelaxationLevel =
+  | 'NONE'
+  | 'MODERATE'
+  | 'HEAVY'
+  | (string & {});
+
+export interface DraftDecisionTraceRelaxationEvent {
+  type?: 'TIME_COMPRESSION' | (string & {});
+  reason?: string;
+  compressedMin?: number;
+  // 允许后端扩展字段
+  [key: string]: any;
+}
+
+export interface DraftDecisionTraceReplacementCandidate {
+  placeId?: number;
+  placeName?: string;
+  score?: number;
+  reason?: string;
+  breakdown?: Record<string, any>;
+  [key: string]: any;
+}
+
+export interface DraftDecisionTrace {
+  relaxation_event?: DraftDecisionTraceRelaxationEvent;
+  replacementTopK?: DraftDecisionTraceReplacementCandidate[];
+  // 用于 FAILED 审计：slot 级 rejectedTopK 等
+  rejectedTopK?: DraftDecisionTraceReplacementCandidate[];
+  [key: string]: any;
+}
+
+export interface DraftItineraryItemEvidence {
+  openingHours?: string;
+  distance?: number; // 米
+  rating?: number;
+  source?: string;
+
+  // 🆕 停留时间账本（Decision OS）
+  baseStayMin?: number;
+  preferredStayMin?: number;
+  minSafeMin?: number;
+  finalStayMin?: number;
+  compressedMin?: number;
+
+  // 🆕 交通/缓冲（Decision OS）
+  travelFromPrevMin?: number;
+  bufferMin?: number;
+
+  // 🆕 决策证据（Decision OS）
+  decisionTrace?: DraftDecisionTrace;
+
+  [key: string]: any;
+}
+
 export interface DraftItineraryItem {
   placeId: number;
   slot: TimeSlot;
@@ -2468,12 +2734,7 @@ export interface DraftItineraryItem {
   endTime: string; // ISO 8601
   reason: string; // 为什么选这个地点(短句)
   alternatives?: number[]; // 备选placeId列表
-  evidence?: {
-    openingHours?: string;
-    distance?: number; // 米
-    rating?: number;
-    source?: string;
-  };
+  evidence?: DraftItineraryItemEvidence;
 }
 
 // 一天的行程草案
@@ -2497,6 +2758,13 @@ export interface TripDraftResponse {
   metadata?: {
     generationTime?: number; // 毫秒
     llmProvider?: string;
+
+    // 🆕 Decision OS 可审计/可验收字段
+    verificationStatus?: TripDraftVerificationStatus;
+    relaxationLevel?: TripDraftRelaxationLevel;
+    totalCompressedMin?: number;
+    failureReasonCodes?: string[];
+    failureDecisionTraces?: DraftDecisionTrace[];
   };
 }
 
@@ -2508,6 +2776,8 @@ export interface SaveDraftRequest {
     removedItems?: string[]; // 移除的item
     addedItems?: DraftItineraryItem[]; // 新增的item
   };
+  /** 写入行程 metadata（如徒步审计：routeDirectionName + tags） */
+  metadata?: Record<string, unknown>;
 }
 
 // 替换行程项请求

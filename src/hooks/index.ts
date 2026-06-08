@@ -115,6 +115,7 @@ export {
   useDeleteTeam,
   useAddTeamMember,
   useRemoveTeamMember,
+  useUpdateTeamMember,
   useTeamNegotiation,
   useTeamWeights,
   useTeamConstraints,

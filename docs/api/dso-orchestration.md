@@ -128,6 +128,67 @@ interface OrchestrationResult {
 
 前端用于：时间线、快照详情、What-If 模拟等。
 
+### 4.1 鉴权要求（更新）
+
+`/api/v1/decision-replay/*` 从“建议鉴权”升级为 **JWT 必须**。
+
+- 必须携带：`Authorization: Bearer <access_token>`
+- 未携带或 token 无效时：返回 `401`（预期行为）
+
+### 4.2 错误语义与排障优先级
+
+- **401 Unauthorized**
+  - 含义：无 token、token 格式错误、token 过期、签名无效
+  - 结论：鉴权链路生效，优先检查登录态与 token 注入逻辑
+
+- **Cannot GET /api/v1/decision-replay/...**
+  - 含义：请求命中到服务，但对应路由未注册
+  - 优先排查：
+    1. replay 模块是否挂载到主应用（module/controller 未加载）
+    2. 路由前缀是否一致（`/api`、`/v1`、`decision-replay`）
+    3. 请求 method/path 是否写错（如 GET/POST 混用、路径参数缺失）
+
+### 4.3 直接可用调用示例（含 Authorization）
+
+```bash
+# 1) Timeline
+curl -X GET "http://localhost:3000/api/v1/decision-replay/timeline/<tripRunId>" \
+  -H "Authorization: Bearer <access_token>"
+
+# 2) What-if
+curl -X POST "http://localhost:3000/api/v1/decision-replay/what-if" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{
+    "trip_run_id": "<tripRunId>",
+    "assumptions": [
+      { "name": "wind_speed", "value": "high" }
+    ]
+  }'
+
+# 3) Counterfactual
+curl -X POST "http://localhost:3000/api/v1/decision-replay/counterfactual/<tripRunId>" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{
+    "hypothesis": "如果不选择当前方案，准时率是否会提升？"
+  }'
+```
+
+### 4.4 Decision Replay 特别说明
+
+- `v1/decision-replay/*` 挂载 `JwtAuthGuard`，未携带或无效 token 时预期返回 `401`。
+- 若出现 `404 Cannot GET /api/v1/decision-replay/*`，优先检查模块是否注册了 `DecisionReplayController`。
+
+**Decision Replay（带 JWT）**
+
+```bash
+curl "/api/v1/decision-replay/timeline/<tripRunId>" \
+  -H "Authorization: Bearer <user_or_admin_jwt>"
+```
+
+无 token 返回 `401` 属于预期；`404` 通常意味着路由未注册或路径错误。
+
 ---
 
 ## 5. Trips Controller（行程状态）

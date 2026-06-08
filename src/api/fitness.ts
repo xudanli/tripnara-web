@@ -94,9 +94,30 @@ export const fitnessApi = {
   },
 
   /**
-   * 获取用户体能画像
+   * 当前登录用户体能画像（推荐）
+   * GET /api/v1/fitness/profile
+   * 无 `/profile/me` 别名
+   */
+  getCurrentProfile: async (): Promise<FitnessProfile> => {
+    try {
+      const response = await apiClient.get<FitnessProfile>(`${BASE_PATH}/profile`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new FitnessApiError('NOT_FOUND', '用户尚未完成体能评估');
+      }
+      console.error('[FitnessAPI] 获取当前用户体能画像失败:', error);
+      throw new FitnessApiError(
+        error.code || 'FETCH_ERROR',
+        error.message || '获取体能画像失败'
+      );
+    }
+  },
+
+  /**
+   * 获取用户体能画像（仅本人）
    * GET /api/v1/fitness/profile/{userId}
-   * 
+   *
    * @param userId - 用户 ID
    * @returns 体能画像数据
    * @throws 404 - 用户未完成体能评估

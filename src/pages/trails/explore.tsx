@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { routeDirectionsApi } from '@/api/route-directions';
 import type { RouteDirection } from '@/types/places-routes';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,6 +32,10 @@ import {
   List,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { MapboxTrailMap, type MapboxMapMarker } from '@/components/map';
+import { countryCenter, jitterLngLat } from '@/lib/map-geo';
+import { listMapCoordinates, listReadinessScore } from '@/lib/hiking-trail-detail-ui';
+import { filterTrails } from '@/lib/filter-trails';
 
 // 快捷筛选标签
 const QUICK_FILTERS = [
@@ -52,6 +56,7 @@ const DIFFICULTY_OPTIONS = [
 ];
 
 export default function TrailsExplorePage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
@@ -106,6 +111,42 @@ export default function TrailsExplorePage() {
     loadTrails();
   };
 
+  const filteredTrails = useMemo(
+    () =>
+      filterTrails(trails, {
+        searchQuery: searchQuery || searchParams.get('q') || undefined,
+        difficulty: difficulty || undefined,
+        distanceRange,
+        elevationRange,
+        quickTags: selectedFilters.length ? selectedFilters : undefined,
+      }),
+    [
+      trails,
+      searchQuery,
+      searchParams,
+      difficulty,
+      distanceRange,
+      elevationRange,
+      selectedFilters,
+    ]
+  );
+
+  const exploreMapMarkers = useMemo((): MapboxMapMarker[] => {
+    return filteredTrails.map((trail, index) => {
+      const coords = listMapCoordinates(trail);
+      const [lng, lat] = coords
+        ? [coords.lng, coords.lat]
+        : jitterLngLat(countryCenter(trail.countryCode), trail.id ?? index);
+      return {
+        id: String(trail.id),
+        lng,
+        lat,
+        label: coords?.label || trail.nameCN || trail.name,
+        color: '#0f766e',
+      };
+    });
+  }, [filteredTrails]);
+
   const handleQuickFilter = (filter: string) => {
     const newFilters = selectedFilters.includes(filter)
       ? selectedFilters.filter((f) => f !== filter)
@@ -113,12 +154,8 @@ export default function TrailsExplorePage() {
     setSelectedFilters(newFilters);
   };
 
-  const getReadinessScore = (trail: RouteDirection): number => {
-    // 模拟可走指数计算（实际应该调用 Readiness API）
-    const month = new Date().getMonth() + 1;
-    const isBestMonth = trail.seasonality?.bestMonths?.includes(month);
-    const baseScore = isBestMonth ? 80 : 60;
-    return baseScore + Math.floor(Math.random() * 20);
+  const getReadinessScore = (trail: RouteDirection): number | undefined => {
+    return listReadinessScore(trail);
   };
 
   return (
@@ -148,18 +185,23 @@ export default function TrailsExplorePage() {
           <Button onClick={handleSearch}>搜索</Button>
         </div>
 
-        {/* 快捷筛选 */}
-        <div className="flex flex-wrap gap-2">
-          {QUICK_FILTERS.map((filter) => (
-            <Badge
-              key={filter.value}
-              variant={selectedFilters.includes(filter.value) ? 'default' : 'outline'}
-              className="cursor-pointer"
-              onClick={() => handleQuickFilter(filter.value)}
-            >
-              {filter.label}
-            </Badge>
-          ))}
+        {/* 快捷筛选（本地：匹配名称/标签/建议天数，不额外请求后端） */}
+        <div className="space-y-1">
+          <div className="flex flex-wrap gap-2">
+            {QUICK_FILTERS.map((filter) => (
+              <Badge
+                key={filter.value}
+                variant={selectedFilters.includes(filter.value) ? 'default' : 'outline'}
+                className="cursor-pointer"
+                onClick={() => handleQuickFilter(filter.value)}
+              >
+                {filter.label}
+              </Badge>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            标签在已加载的徒步列表内筛选；「1-day / 2-3 days」优先用接口返回的 estimatedDays。
+          </p>
         </div>
 
         {/* 筛选按钮和视图切换 */}
@@ -298,24 +340,30 @@ export default function TrailsExplorePage() {
         </div>
       ) : viewMode === 'list' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {trails.map((trail) => (
+          {filteredTrails.map((trail) => (
             <TrailCard
               key={trail.id}
               trail={trail}
               readinessScore={getReadinessScore(trail)}
-              onBookmark={() => toast.info('已收藏')}
-              onDownload={() => toast.info('离线下载功能开发中')}
             />
           ))}
         </div>
       ) : (
-        <Card className="h-[600px]">
-          <CardContent className="p-0 h-full">
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              地图视图开发中
-            </div>
-          </CardContent>
-        </Card>
+        <MapboxTrailMap
+          height={600}
+          markers={exploreMapMarkers}
+          mapStyle="outdoors"
+          zoom={filteredTrails.length === 1 ? 6 : 4}
+          fitBounds={exploreMapMarkers.length > 0}
+          onMarkerClick={(id) => navigate(`/dashboard/trails/${id}`)}
+          emptyMessage="暂无路线坐标，请切换列表视图"
+        />
+      )}
+
+      {!loading && filteredTrails.length === 0 && trails.length > 0 && (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">没有符合筛选条件的路线</p>
+        </div>
       )}
 
       {!loading && trails.length === 0 && (

@@ -115,7 +115,7 @@ export default function DashboardPage() {
             navigate(`/dashboard/plan-studio?tripId=${tripId}`);
           }}
           showHeader={false}
-          resetOnMount={true} // 🆕 强制重置会话，确保显示新的欢迎界面
+          resetOnMount={false}
         />
       </div>
     </div>

@@ -6,6 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { fitnessApi, FitnessApiError } from '@/api/fitness';
+import { longestHikeFromProfile, clampLongestHike } from '@/lib/longest-hike-resolve';
 import type { 
   QuestionnaireSubmitData, 
   FeedbackSubmitData,
@@ -19,6 +20,62 @@ import { DEFAULT_FITNESS_PROFILE } from '@/constants/fitness';
 import { toast } from 'sonner';
 
 // ==================== Query Keys ====================
+
+function normalizeFitnessDimensions(raw: unknown): FitnessProfile['dimensions'] {
+  const fallback = DEFAULT_FITNESS_PROFILE.dimensions;
+  if (!raw || typeof raw !== 'object') return { ...fallback };
+
+  const record = raw as Record<string, unknown>;
+  const num = (value: unknown, defaultValue: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : defaultValue;
+
+  return {
+    climbingAbility: num(
+      record.climbingAbility ?? record.climbing_ability,
+      fallback.climbingAbility
+    ),
+    endurance: num(record.endurance, fallback.endurance),
+    recoverySpeed: num(record.recoverySpeed ?? record.recovery_speed, fallback.recoverySpeed),
+  };
+}
+
+function normalizeFitnessProfile(
+  profile: FitnessProfile,
+  longestHikeFromSubmit?: number
+): FitnessProfile {
+  const merged: FitnessProfile = {
+    ...DEFAULT_FITNESS_PROFILE,
+    ...profile,
+    dimensions: normalizeFitnessDimensions(profile.dimensions),
+    overallScore:
+      typeof profile.overallScore === 'number'
+        ? profile.overallScore
+        : DEFAULT_FITNESS_PROFILE.overallScore,
+    recommendedDailyAscentM:
+      typeof profile.recommendedDailyAscentM === 'number'
+        ? profile.recommendedDailyAscentM
+        : DEFAULT_FITNESS_PROFILE.recommendedDailyAscentM,
+    recommendedDailyDistanceKm:
+      typeof profile.recommendedDailyDistanceKm === 'number'
+        ? profile.recommendedDailyDistanceKm
+        : DEFAULT_FITNESS_PROFILE.recommendedDailyDistanceKm,
+    completedTripCount:
+      typeof profile.completedTripCount === 'number'
+        ? profile.completedTripCount
+        : DEFAULT_FITNESS_PROFILE.completedTripCount,
+    levelDescription: profile.levelDescription || DEFAULT_FITNESS_PROFILE.levelDescription,
+    confidenceDescription:
+      profile.confidenceDescription || DEFAULT_FITNESS_PROFILE.confidenceDescription,
+  };
+
+  const days =
+    longestHikeFromSubmit ??
+    merged.longestHikeDays ??
+    merged.longestHike ??
+    longestHikeFromProfile(merged);
+  if (days == null) return merged;
+  return { ...merged, longestHikeDays: clampLongestHike(days) };
+}
 
 export const fitnessKeys = {
   all: ['fitness'] as const,
@@ -58,7 +115,7 @@ function getProfileFromLocalStorage(userId: string): FitnessProfile | null {
     
     const parsed = JSON.parse(data);
     console.log('[FitnessQuery] 从本地存储读取体能画像');
-    return parsed.profile;
+    return normalizeFitnessProfile(parsed.profile as FitnessProfile);
   } catch (error) {
     console.warn('[FitnessQuery] 从本地存储读取体能画像失败:', error);
     return null;
@@ -88,9 +145,14 @@ export function useFitnessProfile() {
       if (!user?.id) throw new Error('未登录');
       
       try {
-        // 优先从后端获取
-        const profile = await fitnessApi.getProfile(user.id);
-        // 同步到本地存储（确保数据一致性）
+        let profile: FitnessProfile;
+        try {
+          profile = await fitnessApi.getCurrentProfile();
+        } catch (e) {
+          if (e instanceof FitnessApiError && e.code === 'NOT_FOUND') throw e;
+          profile = await fitnessApi.getProfile(user.id);
+        }
+        profile = normalizeFitnessProfile(profile);
         saveProfileToLocalStorage(user.id, profile);
         return profile;
       } catch (error) {
@@ -142,7 +204,7 @@ export function useFitnessProfileWithDefault(): {
   const isDefault = !data || (error instanceof FitnessApiError && error.code === 'NOT_FOUND');
 
   return {
-    profile: data ?? DEFAULT_FITNESS_PROFILE,
+    profile: data ? normalizeFitnessProfile(data) : DEFAULT_FITNESS_PROFILE,
     isDefault,
     isLoading,
     error: error as Error | null,
@@ -228,16 +290,11 @@ export function useSubmitQuestionnaire() {
         ...answers,
       });
     },
-    onSuccess: (result) => {
-      // 更新缓存的 profile
+    onSuccess: (result, variables) => {
       if (user?.id) {
-        queryClient.setQueryData(
-          fitnessKeys.profile(user.id),
-          result.profile
-        );
-        
-        // 🆕 保存到本地存储（临时方案：确保刷新后数据不丢失）
-        saveProfileToLocalStorage(user.id, result.profile);
+        const profile = normalizeFitnessProfile(result.profile, variables.longestHike);
+        queryClient.setQueryData(fitnessKeys.profile(user.id), profile);
+        saveProfileToLocalStorage(user.id, profile);
       }
       toast.success('体能评估完成！');
     },

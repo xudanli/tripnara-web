@@ -19,6 +19,12 @@ import type {
   ExplainPlanRequest,
   ExplainPlanResponseData,
   DecisionEngineApiResponse,
+  OpsOperationalPolicyConfigV1,
+  RecordRealityOutcomeRequest,
+  RecordRealityOutcomeResult,
+  OpsRealityByTripData,
+  OpsRealityReplayCompareData,
+  DecisionEngineHealthData,
 } from '@/types/decision-engine';
 import type { AdjustPacingRequest, AdjustPacingResponse } from '@/types/strategy';
 import type { ReplaceNodesRequest, ReplaceNodesResponse } from '@/types/strategy';
@@ -35,6 +41,22 @@ function handleResponse<T>(response: { data: DecisionEngineApiResponse<T> }): T 
     throw new Error(err?.message || '请求失败');
   }
   return (response.data as { success: true; data: T }).data;
+}
+
+/** Ops-reality outcome：body 与 x-trip-run-id / x-execution-trace-id / x-request-id 优先级见对齐清单 */
+export type OpsRealityOutcomeTraceHeaders = {
+  tripRunId?: string;
+  executionTraceId?: string;
+  requestId?: string;
+};
+
+function buildOpsTraceHeaders(opts?: OpsRealityOutcomeTraceHeaders): Record<string, string> | undefined {
+  if (!opts) return undefined;
+  const h: Record<string, string> = {};
+  if (opts.tripRunId) h['x-trip-run-id'] = opts.tripRunId;
+  if (opts.executionTraceId) h['x-execution-trace-id'] = opts.executionTraceId;
+  if (opts.requestId) h['x-request-id'] = opts.requestId;
+  return Object.keys(h).length ? h : undefined;
 }
 
 /**
@@ -139,11 +161,56 @@ export async function replaceNodes(
   return handleResponse(response);
 }
 
-/** 服务可用性检查 */
-export async function health(): Promise<{ status: string; [key: string]: unknown }> {
-  const response = await apiClient.get<
-    DecisionEngineApiResponse<{ status: string; [key: string]: unknown }>
-  >(`${BASE_PATH}/health`);
+/** 服务可用性检查（data.capabilities 等） */
+export async function health(): Promise<DecisionEngineHealthData> {
+  const response = await apiClient.get<DecisionEngineApiResponse<DecisionEngineHealthData>>(
+    `${BASE_PATH}/health`
+  );
+  return handleResponse(response);
+}
+
+/**
+ * P-OPS-3：当前生效营运策略 JSON
+ */
+export async function getOperationalPolicy(): Promise<OpsOperationalPolicyConfigV1> {
+  const response = await apiClient.get<DecisionEngineApiResponse<OpsOperationalPolicyConfigV1>>(
+    `${BASE_PATH}/operational-policy`
+  );
+  return handleResponse(response);
+}
+
+/**
+ * P-OPS-2：回填 ops reality outcome（首次）
+ */
+export async function postOpsRealityOutcome(
+  snapshotId: string,
+  body: RecordRealityOutcomeRequest,
+  traceHeaders?: OpsRealityOutcomeTraceHeaders
+): Promise<RecordRealityOutcomeResult> {
+  const headers = buildOpsTraceHeaders(traceHeaders);
+  const response = await apiClient.post<DecisionEngineApiResponse<RecordRealityOutcomeResult>>(
+    `${BASE_PATH}/ops-reality-audit/${encodeURIComponent(snapshotId)}/outcome`,
+    body,
+    headers ? { headers } : undefined
+  );
+  return handleResponse(response);
+}
+
+/** 按 trip 列最近快照（默认最多 20 条，无分页参数） */
+export async function getOpsRealityByTrip(tripId: string): Promise<OpsRealityByTripData> {
+  const response = await apiClient.get<DecisionEngineApiResponse<OpsRealityByTripData>>(
+    `${BASE_PATH}/ops-reality-audit/by-trip/${encodeURIComponent(tripId)}`
+  );
+  return handleResponse(response);
+}
+
+/** 预测 vs 观测指纹比对 */
+export async function getOpsRealityReplayCompare(
+  snapshotId: string
+): Promise<OpsRealityReplayCompareData> {
+  const response = await apiClient.get<DecisionEngineApiResponse<OpsRealityReplayCompareData>>(
+    `${BASE_PATH}/ops-reality-audit/${encodeURIComponent(snapshotId)}/replay-compare`
+  );
   return handleResponse(response);
 }
 
@@ -160,4 +227,8 @@ export const decisionEngineApi = {
   adjustPacing,
   replaceNodes,
   health,
+  getOperationalPolicy,
+  postOpsRealityOutcome,
+  getOpsRealityByTrip,
+  getOpsRealityReplayCompare,
 };

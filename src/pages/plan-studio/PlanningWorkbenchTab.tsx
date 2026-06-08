@@ -1,8 +1,8 @@
-import { useState, useEffect, useContext, useMemo } from 'react';
+import { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { LogoLoading } from '@/components/common/LogoLoading';
+import { PlannerThinkingLoading } from '@/components/common/PlannerThinkingLoading';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -21,7 +21,6 @@ import {
   useNegotiation, 
   useRiskAssessment,
 } from '@/hooks/useOptimizationV2';
-import type { RoutePlanDraft } from '@/types/optimization-v2';
 import { tripDetailToRoutePlanDraft } from '@/utils/plan-converters';
 import { buildWorldModelContext } from '@/utils/world-context-builder';
 import { useFitnessContext } from '@/contexts/FitnessContext';
@@ -31,7 +30,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { planningWorkbenchApi } from '@/api/planning-workbench';
+import { planningWorkbenchApi, mergeWorkbenchConfirmations } from '@/api/planning-workbench';
 import type {
   ExecutePlanningWorkbenchResponse,
   ConsolidatedDecisionStatus,
@@ -65,9 +64,9 @@ import {
   normalizeGateStatus,
 } from '@/lib/gate-status';
 import {
-  getPersonaIcon,
-  getPersonaIconColorClasses,
+  PERSONA_ROLE_LABEL_ZH,
 } from '@/lib/persona-icons';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import ConfirmPanel from '@/components/planning-workbench/ConfirmPanel';
 import {
   Dialog,
@@ -81,15 +80,39 @@ import { format } from 'date-fns';
 import { DecisionCardsGrid } from '@/components/decision-draft';
 import PlanStudioContext from '@/contexts/PlanStudioContext';
 
-interface PlanningWorkbenchTabProps {
-  tripId: string;
+function jsonPreview(obj: unknown, maxChars = 24000): string {
+  try {
+    const s = JSON.stringify(obj, null, 2);
+    if (s.length > maxChars) {
+      return `${s.slice(0, maxChars)}\n… (已截断，共 ${s.length} 字符)`;
+    }
+    return s;
+  } catch {
+    return String(obj);
+  }
 }
 
-export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabProps) {
+interface PlanningWorkbenchTabProps {
+  tripId: string;
+  /** 嵌入方案抽屉（原决策评估 Tab） */
+  embedMode?: boolean;
+  /** 打开时自动触发 execute(generate) */
+  autoGenerateOnOpen?: boolean;
+  /** 提交成功后回调（时间轴刷新等） */
+  onPlanCommitted?: () => void;
+}
+
+export default function PlanningWorkbenchTab({
+  tripId,
+  embedMode = false,
+  autoGenerateOnOpen = false,
+  onPlanCommitted,
+}: PlanningWorkbenchTabProps) {
   const [loading, setLoading] = useState(false);
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [result, setResult] = useState<ExecutePlanningWorkbenchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [advancedWorkbenchOpen, setAdvancedWorkbenchOpen] = useState(false);
   
   // 获取货币单位
   const currency = trip?.budgetConfig?.currency || 'CNY';
@@ -113,14 +136,14 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
   const [compareResult, setCompareResult] = useState<ComparePlansResponse | null>(null);
   const [availablePlans, setAvailablePlans] = useState<TripPlansResponse | null>(null);
   const [budgetEvaluation, setBudgetEvaluation] = useState<PlanBudgetEvaluationResponse | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [loadingBudgetEvaluation, setLoadingBudgetEvaluation] = useState(false);
+  const [, setLoadingBudgetEvaluation] = useState(false);
   const [budgetDecisionLog, setBudgetDecisionLog] = useState<import('@/types/trip').BudgetDecisionLogResponse | null>(null);
   const [budgetLogDialogOpen, setBudgetLogDialogOpen] = useState(false);
   const [loadingBudgetLog, setLoadingBudgetLog] = useState(false);
   
   // 🆕 首次使用引导
   const [showGuide, setShowGuide] = useState(false);
+  const planStudioContext = useContext(PlanStudioContext);
   
   // 🆕 加载进度状态
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -129,6 +152,13 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
   useEffect(() => {
     loadTrip();
   }, [tripId]);
+
+  const autoGenerateStartedRef = useRef(false);
+  useEffect(() => {
+    if (!autoGenerateOnOpen || !trip || autoGenerateStartedRef.current) return;
+    autoGenerateStartedRef.current = true;
+    void handleGenerate();
+  }, [autoGenerateOnOpen, trip]);
 
   // 🆕 检查是否需要显示首次使用引导
   useEffect(() => {
@@ -651,6 +681,9 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
       
       // 🆕 清空当前结果，让标签消失，用户可以重新生成
       setResult(null);
+
+      planStudioContext?.notifyPlanCommitted();
+      onPlanCommitted?.();
     } catch (err: any) {
       console.error('Commit plan failed:', err);
       const errorMessage = err.message || '提交方案失败，请稍后重试';
@@ -755,7 +788,6 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
   }, [loading, trip, result]);
 
   // 🆕 检查是否有未提交的方案或未保存的时间轴改动
-  const planStudioContext = useContext(PlanStudioContext);
   const hasUncommittedPlan = !!result;
   const hasUnsavedScheduleChanges = planStudioContext?.hasUnsavedScheduleChanges || false;
   
@@ -781,18 +813,19 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <LogoLoading size={48} />
-                  <div>
-                    <p className="font-medium">{loadingStage || '正在处理...'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      请稍候，这可能需要一些时间
-                    </p>
-                  </div>
-                </div>
-                <Badge variant="outline">{Math.round(loadingProgress)}%</Badge>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <PlannerThinkingLoading
+                  compact
+                  size={44}
+                  label={loadingStage || undefined}
+                  className="min-w-0 flex-1 px-0 py-0"
+                  textClassName="text-sm font-medium text-foreground"
+                />
+                <Badge variant="outline" className="shrink-0">
+                  {Math.round(loadingProgress)}%
+                </Badge>
               </div>
+              <p className="text-xs text-muted-foreground">请稍候，这可能需要一些时间</p>
               <Progress value={loadingProgress} className="h-2" />
               
               {/* 🆕 骨架屏预览 */}
@@ -815,44 +848,30 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
           {/* 🆕 简化的说明卡片 */}
           <Card>
             <CardHeader>
-              <CardTitle>决策评估</CardTitle>
+              <CardTitle>方案预览与提交</CardTitle>
               <CardDescription>
-                三人格（Abu/Dr.Dre/Neptune）将评估您的行程方案
+                三人格（Abu/Dr.Dre/Neptune）将评估您的行程方案，确认后可提交到时间轴
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* 🆕 简化的三人格介绍（只显示图标和一句话，移动端优化） */}
               <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                <div className="text-center">
-                  {(() => {
-                    const AbuIcon = getPersonaIcon('ABU');
-                    return (
-                      <AbuIcon className={cn('w-10 h-10 mx-auto mb-2', getPersonaIconColorClasses('ABU'))} />
-                    );
-                  })()}
-                  <p className="text-xs font-medium">Abu</p>
-                  <p className="text-xs text-muted-foreground mt-1">安全评估</p>
-                </div>
-                <div className="text-center">
-                  {(() => {
-                    const DrDreIcon = getPersonaIcon('DR_DRE');
-                    return (
-                      <DrDreIcon className={cn('w-10 h-10 mx-auto mb-2', getPersonaIconColorClasses('DR_DRE'))} />
-                    );
-                  })()}
-                  <p className="text-xs font-medium">Dr.Dre</p>
-                  <p className="text-xs text-muted-foreground mt-1">节奏评估</p>
-                </div>
-                <div className="text-center">
-                  {(() => {
-                    const NeptuneIcon = getPersonaIcon('NEPTUNE');
-                    return (
-                      <NeptuneIcon className={cn('w-10 h-10 mx-auto mb-2', getPersonaIconColorClasses('NEPTUNE'))} />
-                    );
-                  })()}
-                  <p className="text-xs font-medium">Neptune</p>
-                  <p className="text-xs text-muted-foreground mt-1">替代方案</p>
-                </div>
+                {(['ABU', 'DR_DRE', 'NEPTUNE'] as const).map((p) => (
+                  <div key={p} className="text-center">
+                    <PersonaAvatar
+                      persona={p}
+                      size={44}
+                      withBackground
+                      className="mx-auto mb-2"
+                    />
+                    <p className="text-xs font-medium">
+                      {p === 'ABU' ? 'Abu' : p === 'DR_DRE' ? 'Dr.Dre' : 'Neptune'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {PERSONA_ROLE_LABEL_ZH[p]}
+                    </p>
+                  </div>
+                ))}
               </div>
               
               {/* 🆕 添加"了解更多"链接 */}
@@ -1342,6 +1361,101 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
             />
           </div>
 
+          {/* 骨架 / 对比 / 健康度 / world：默认折叠，避免主路径渲染大对象 */}
+          {result &&
+            (() => {
+              const hasAdvanced =
+                !!result.uiOutput.skeletonOptions ||
+                !!result.uiOutput.comparison ||
+                !!result.uiOutput.health ||
+                !!result.planState.world ||
+                !!(result.planState.metadata && Object.keys(result.planState.metadata).length > 0);
+              if (!hasAdvanced) return null;
+              const h = result.uiOutput.health;
+              const sk = result.uiOutput.skeletonOptions;
+              return (
+                <Collapsible open={advancedWorkbenchOpen} onOpenChange={setAdvancedWorkbenchOpen}>
+                  <Card className="border-dashed bg-muted/20">
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 p-4 text-left text-sm font-medium hover:bg-muted/40 rounded-t-lg"
+                      >
+                        <span className="flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                          高级与调试（骨架 / 对比 / 健康度 / world）
+                        </span>
+                        {advancedWorkbenchOpen ? (
+                          <ChevronUp className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 shrink-0" />
+                        )}
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="space-y-4 border-t pt-4 text-sm">
+                        {h && (
+                          <div className="flex flex-wrap gap-2">
+                            <span className="text-muted-foreground w-full text-xs">健康度（内部输出）</span>
+                            {(['budget', 'pace', 'feasibility'] as const).map((key) => (
+                              <Badge key={key} variant="outline" className="font-normal">
+                                {key === 'budget' ? '预算' : key === 'pace' ? '节奏' : '可行性'}:{' '}
+                                {h[key]}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        {sk && sk.options?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">方案骨架</p>
+                            {sk.recommendation && (
+                              <p className="text-xs mb-2">
+                                推荐：{sk.recommendation.optionId} — {sk.recommendation.reason}
+                              </p>
+                            )}
+                            <ul className="list-disc pl-5 space-y-1 text-xs">
+                              {sk.options.map((opt) => (
+                                <li key={opt.id}>
+                                  <span className="font-mono">{opt.id}</span> {opt.name}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {result.uiOutput.comparison && (
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">多方案对比（JSON）</p>
+                            <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
+                              {jsonPreview(result.uiOutput.comparison)}
+                            </pre>
+                          </div>
+                        )}
+                        {result.planState.world && (
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">
+                              planState.world（体量大，已截断预览）
+                            </p>
+                            <pre className="max-h-56 overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
+                              {jsonPreview(result.planState.world)}
+                            </pre>
+                          </div>
+                        )}
+                        {result.planState.metadata &&
+                          Object.keys(result.planState.metadata).length > 0 && (
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">planState.metadata</p>
+                              <pre className="max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
+                                {jsonPreview(result.planState.metadata)}
+                              </pre>
+                            </div>
+                          )}
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              );
+            })()}
+
           {/* 🆕 详细信息区 - 标签页化 */}
           <div id="plan-details-section">
             <Tabs defaultValue="preview" className="w-full">
@@ -1528,9 +1642,7 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
                   {/* NEED_CONFIRM 状态：显示确认点清单 */}
                   {normalizeGateStatus(result.uiOutput.consolidatedDecision.status) === 'NEED_CONFIRM' && (
                     <ConfirmPanel
-                      confirmations={
-                        result.uiOutput.personas.abu?.confirmations || []
-                      }
+                      confirmations={mergeWorkbenchConfirmations(result)}
                       riskExplanation={result.uiOutput.consolidatedDecision.summary}
                       decisionStatus="NEED_CONFIRM"
                       onConfirmChange={setAllConfirmationsChecked}
@@ -1577,6 +1689,7 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
                 committing || 
                 (result?.uiOutput.consolidatedDecision && 
                  normalizeGateStatus(result.uiOutput.consolidatedDecision.status) === 'NEED_CONFIRM' &&
+                 mergeWorkbenchConfirmations(result).length > 0 &&
                  !allConfirmationsChecked)
               }
             >
@@ -1924,7 +2037,7 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
       <Dialog open={showGuide} onOpenChange={setShowGuide}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>欢迎使用决策评估</DialogTitle>
+            <DialogTitle>欢迎使用方案预览与提交</DialogTitle>
             <DialogDescription>
               三人格系统将帮助您评估行程方案
             </DialogDescription>
@@ -1970,36 +2083,26 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
             <div className="pt-4 border-t">
               <p className="text-xs font-medium mb-2">三人格介绍：</p>
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="text-center">
-                  {(() => {
-                    const AbuIcon = getPersonaIcon('ABU');
-                    return (
-                      <AbuIcon className={cn('w-6 h-6 mx-auto mb-1', getPersonaIconColorClasses('ABU'))} />
-                    );
-                  })()}
-                  <p className="font-medium">Abu</p>
-                  <p className="text-muted-foreground">安全评估</p>
-                </div>
-                <div className="text-center">
-                  {(() => {
-                    const DrDreIcon = getPersonaIcon('DR_DRE');
-                    return (
-                      <DrDreIcon className={cn('w-6 h-6 mx-auto mb-1', getPersonaIconColorClasses('DR_DRE'))} />
-                    );
-                  })()}
-                  <p className="font-medium">Dr.Dre</p>
-                  <p className="text-muted-foreground">节奏评估</p>
-                </div>
-                <div className="text-center">
-                  {(() => {
-                    const NeptuneIcon = getPersonaIcon('NEPTUNE');
-                    return (
-                      <NeptuneIcon className={cn('w-6 h-6 mx-auto mb-1', getPersonaIconColorClasses('NEPTUNE'))} />
-                    );
-                  })()}
-                  <p className="font-medium">Neptune</p>
-                  <p className="text-muted-foreground">替代方案</p>
-                </div>
+                {(['ABU', 'DR_DRE', 'NEPTUNE'] as const).map((p) => (
+                  <div key={p} className="text-center">
+                    <PersonaAvatar
+                      persona={p}
+                      size={40}
+                      withBackground
+                      className="mx-auto mb-1"
+                    />
+                    <p className="font-medium">
+                      {p === 'ABU' ? 'Abu' : p === 'DR_DRE' ? 'Dr.Dre' : 'Neptune'}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {p === 'ABU'
+                        ? '安全评估'
+                        : p === 'DR_DRE'
+                          ? '节奏评估'
+                          : '替代方案'}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -2025,15 +2128,12 @@ export default function PlanningWorkbenchTab({ tripId }: PlanningWorkbenchTabPro
 }
 
 // V2 优化评估区域组件
-function V2OptimizeSection({ 
-  tripId, 
-  trip, 
-  result 
-}: { 
-  tripId: string; 
+function V2OptimizeSection(props: {
+  tripId: string;
   trip: TripDetail;
   result: ExecutePlanningWorkbenchResponse;
 }) {
+  const { tripId, trip } = props;
   const [isExpanded, setIsExpanded] = useState(false);
   const evaluateMutation = useEvaluatePlan();
   const negotiationMutation = useNegotiation();
@@ -2186,19 +2286,7 @@ function V2OptimizeSection({
 }
 
 // 方案预览内容组件
-function PlanPreviewContent({ 
-  planState, 
-  trip,
-  currentTrip,
-  budgetEvaluation,
-  tripId,
-  onLoadBudgetEvaluation,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onLoadBudgetDecisionLog, // 传递给 PlanPreviewContent，可能被使用
-  onOpenBudgetLogDialog,
-  budgetDecisionLog,
-  currency = 'CNY'
-}: { 
+function PlanPreviewContent(props: { 
   planState: any; 
   trip: TripDetail | null;
   currentTrip: TripDetail | null;
@@ -2210,6 +2298,17 @@ function PlanPreviewContent({
   budgetDecisionLog?: import('@/types/trip').BudgetDecisionLogResponse | null;
   currency?: string;
 }) {
+  const {
+    planState,
+    trip,
+    currentTrip,
+    budgetEvaluation,
+    tripId,
+    onLoadBudgetEvaluation,
+    onOpenBudgetLogDialog,
+    budgetDecisionLog,
+    currency = 'CNY',
+  } = props;
   const [decisionVisualizationOpen, setDecisionVisualizationOpen] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
 
@@ -3036,8 +3135,7 @@ function DEMTerrainAndFatigueView({
 }) {
   const [terrainData, setTerrainData] = useState<GetElevationProfileResponse | null>(null);
   const [loadingTerrain, setLoadingTerrain] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [terrainError, setTerrainError] = useState<string | null>(null); // 保留用于未来错误显示
+  const [, setTerrainError] = useState<string | null>(null);
 
   // 🆕 从 planState 提取路线点并获取 DEM 数据
   useEffect(() => {

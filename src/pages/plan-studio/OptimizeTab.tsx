@@ -1,28 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { ArrowRight, Sparkles } from 'lucide-react';
-// PersonaMode 已移除 - 三人格现在是系统内部工具
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowRight, Sparkles, Zap, Settings2 } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import type { TripDetail } from '@/types/trip';
 import type { OptimizeRouteRequest, OptimizeRouteResponse } from '@/types/itinerary-optimization';
-import { TRIP_TRAVEL_MODE_MAP } from '@/constants/itinerary-optimization';
+import { INTENT_TRAVEL_MODE_MAP } from '@/constants/itinerary-optimization';
 import { toast } from 'sonner';
 import { orchestrator } from '@/services/orchestrator';
 import { useAuth } from '@/hooks/useAuth';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { cn } from '@/lib/utils';
 import {
-  normalizeGateStatus,
   getGateStatusIcon,
-  getGateStatusLabel,
   getGateStatusClasses,
 } from '@/lib/gate-status';
+import { OptimizationWorkbench } from '@/components/optimization';
+import { tripDetailToRoutePlanDraft } from '@/utils/plan-converters';
+import { buildWorldModelContext } from '@/utils/world-context-builder';
+import { useFitnessContext } from '@/contexts/FitnessContext';
+import PlanStudioContext from '@/contexts/PlanStudioContext';
 
 interface OptimizeTabProps {
   tripId: string;
@@ -32,6 +35,10 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'smart' | 'classic'>('smart');
+  
+  // 体能上下文
+  const { profile: fitnessProfile } = useFitnessContext();
   
   // 审批相关状态
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
@@ -51,10 +58,30 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   const [result, setResult] = useState<OptimizeRouteResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // 跳转到决策评估 Tab
+  // 转换为 V2 优化 API 格式
+  const plan = useMemo(() => {
+    if (!trip) return null;
+    return tripDetailToRoutePlanDraft(trip);
+  }, [trip]);
+  
+  const world = useMemo(() => {
+    if (!trip) return null;
+    return buildWorldModelContext(trip, {
+      fitnessProfile,
+    });
+  }, [fitnessProfile, trip]);
+  
+  const planStudioContext = useContext(PlanStudioContext);
+
+  // 打开方案预览与提交抽屉（原决策评估 Tab）
   const handleGoToWorkbench = () => {
+    if (planStudioContext?.openPlanGate) {
+      planStudioContext.openPlanGate();
+      return;
+    }
     const newParams = new URLSearchParams(searchParams);
-    newParams.set('tab', 'workbench');
+    newParams.set('tab', 'schedule');
+    newParams.set('planGate', '1');
     setSearchParams(newParams);
   };
 
@@ -107,8 +134,14 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
       const travelers = trip.pacingConfig?.travelers ?? [];
       const hasChildren = travelers.some((t) => t.type === 'CHILD');
       const hasElderly = travelers.some((t) => t.type === 'ELDERLY');
-      const rawMode = trip.metadata?.travelMode ?? trip.metadata?.defaultTravelMode;
-      const defaultTravelMode = rawMode ? TRIP_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
+      let defaultTravelMode: 'TRANSIT' | 'WALKING' | 'DRIVING' | undefined;
+      try {
+        const intent = await tripsApi.getIntent(tripId);
+        const rawMode = intent.pacingConfig?.travelMode;
+        defaultTravelMode = rawMode ? INTENT_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
+      } catch {
+        defaultTravelMode = undefined;
+      }
       const transportPreferences = hasElderly ? { lessWalking: true } : undefined;
 
       // 构建优化请求
@@ -180,8 +213,47 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
   };
 
 
+  // 处理优化完成
+  const handleOptimized = () => {
+    toast.success('已应用优化方案');
+    loadTrip();
+  };
+
   return (
     <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'smart' | 'classic')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="smart" className="gap-2">
+            <Zap className="h-4 w-4" />
+            智能优化
+          </TabsTrigger>
+          <TabsTrigger value="classic" className="gap-2">
+            <Settings2 className="h-4 w-4" />
+            经典模式
+          </TabsTrigger>
+        </TabsList>
+        
+        {/* 智能优化 Tab - 使用新的 OptimizationWorkbench */}
+        <TabsContent value="smart" className="mt-4">
+          {trip && plan && world ? (
+            <OptimizationWorkbench
+              plan={plan}
+              world={world}
+              tripId={tripId}
+              onOptimized={handleOptimized}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Spinner className="w-6 h-6 mx-auto mb-2" />
+                <p>加载行程数据中...</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
+        {/* 经典优化 Tab - 保留原有功能 */}
+        <TabsContent value="classic" className="mt-4">
       <Card>
         <CardHeader>
           <CardTitle>{t('planStudio.optimizeTab.title')}</CardTitle>
@@ -338,6 +410,8 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           onDecision={handleApprovalComplete}
         />
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

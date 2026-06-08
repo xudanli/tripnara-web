@@ -4,7 +4,7 @@
  * 整合会话管理和对话面板，推荐/方案 tab 已移除
  */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { usePlanningSessionV2 } from '@/hooks/usePlanningSessionV2';
 import { useChatV2 } from '@/hooks/useChatV2';
 import { ChatPanel } from './ChatPanel';
@@ -32,7 +32,7 @@ export function PlanningAssistant({ userId, tripId, countryCode, userCountryCode
     sessionState,
     isLoading: sessionLoading,
     createSession,
-    deleteSession,
+    resetSession,
   } = usePlanningSessionV2(userId);
 
   const { messages, sendMessage, clearMessages, isLoading: chatLoading } = useChatV2(
@@ -63,6 +63,15 @@ export function PlanningAssistant({ userId, tripId, countryCode, userCountryCode
       createSession(userId);
     }
   }, [sessionId, sessionLoading, userId, createSession]);
+
+  const handleClearConversation = useCallback(async () => {
+    clearMessages();
+    await resetSession();
+  }, [clearMessages, resetSession]);
+
+  useEffect(() => {
+    onClearReady?.(handleClearConversation);
+  }, [onClearReady, handleClearConversation]);
 
   // 处理欢迎界面的快速开始
   const handleQuickStart = async (prompt: string) => {
@@ -103,7 +112,6 @@ export function PlanningAssistant({ userId, tripId, countryCode, userCountryCode
             sessionId={sessionId}
             userId={userId}
             clearMessages={clearMessages}
-            onClearReady={onClearReady}
             context={
               tripId || countryCode || userCountryCode
                 ? {

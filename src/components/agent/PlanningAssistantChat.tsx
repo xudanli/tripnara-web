@@ -2,7 +2,7 @@
  * 规划助手聊天组件
  * 
  * 使用新的规划助手 API，提供完整的对话式旅行规划体验
- * 适用页面: /dashboard/trips/new, /dashboard/agent
+ * 适用页面: /dashboard/trips/new（Agent 主能力已迁至规划工作台右侧智能体）
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';

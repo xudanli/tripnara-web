@@ -10,6 +10,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Calendar, MapPin, DollarSign, ThumbsUp, Heart, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
+import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
+import { toast } from 'sonner';
 
 export default function FeaturedTripsPage() {
   const navigate = useNavigate();
@@ -36,8 +38,31 @@ export default function FeaturedTripsPage() {
     }
   };
 
-  const handleTripClick = (tripId: string) => {
-    navigate(`/dashboard/trips/${tripId}`);
+  const [checkingTripId, setCheckingTripId] = useState<string | null>(null);
+
+  const handleTripClick = async (tripId: string) => {
+    if (checkingTripId === tripId) return;
+    setCheckingTripId(tripId);
+    try {
+      const trip = await tripsApi.getById(tripId);
+      if (shouldShowNlItemsGeneratingPlaceholder(trip)) {
+        const progress = trip.metadata?.generationProgress;
+        if (progress?.status === 'failed') {
+          toast.error('行程项生成失败', { description: progress.message || '请稍后重试' });
+        } else {
+          toast.info('行程项生成中', {
+            description: '预计需要 2–5 分钟，请稍后刷新或直接访问行程查看进度',
+          });
+        }
+        return;
+      }
+      navigate(`/dashboard/trips/${tripId}`);
+    } catch (err) {
+      console.error('Failed to check trip before navigation:', err);
+      toast.error('无法加载行程，请重试');
+    } finally {
+      setCheckingTripId(null);
+    }
   };
 
   if (loading) {

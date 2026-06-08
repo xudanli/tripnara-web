@@ -1,18 +1,38 @@
+import { useContext } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { AlertTriangle, MapPin, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { EnhancedRisk } from '@/api/readiness';
+import type { TripDetail } from '@/types/trip';
 import { useTranslation } from 'react-i18next';
+import PlanStudioContext from '@/contexts/PlanStudioContext';
+import { jumpFromAffectedPoi } from '@/lib/plan-studio-readiness-jump';
 
+/**
+ * GET /readiness/risk-warnings 单卡 UI ↔ 字段（lang=zh 时后端已本地化 typeLabel / severityLabel 等）
+ *
+ * | 界面           | 字段 |
+ * | 卡片标题       | typeLabel（中文）；英文界面优先 typeLabelEn，勿用原始 type 当标题 |
+ * | 严重度角标     | severityLabel / severityLabelEn（高·中·低 对应 severity） |
+ * | 分类胶囊       | category（weather|terrain|…）→ 前端短文案映射 |
+ * | 图标           | typeIcon（emoji）；缺省时可按 category/type 降级 |
+ * | 正文           | summary / message（已含行程后缀）；无则再 description / impact |
+ * | 官方来源       | sources[]（authority、title、canonicalUrl…） |
+ * | 整包来源       | 见 RiskWarningsResponse.packSources（抽屉层汇总，非单卡） |
+ */
 interface RiskCardProps {
   risk: EnhancedRisk;
   className?: string;
+  /** 规划工作台内用于 affectedPois 跳转某天/某点 */
+  trip?: TripDetail | null;
 }
 
-export default function RiskCard({ risk, className }: RiskCardProps) {
-  const { t, i18n } = useTranslation();
-  const isZh = i18n.language === 'zh' || i18n.language.startsWith('zh');
+export default function RiskCard({ risk, className, trip }: RiskCardProps) {
+  const { i18n } = useTranslation();
+  const isZh = i18n.language.startsWith('zh');
+  const planStudio = useContext(PlanStudioContext);
   
   // 🐛 调试日志：检查风险数据是否包含增强字段
   if (process.env.NODE_ENV === 'development') {
@@ -58,35 +78,47 @@ export default function RiskCard({ risk, className }: RiskCardProps) {
     : 'medium';
   const { label, className: severityClassName, iconClassName } = severityConfig[severity];
 
-  // 🆕 使用增强字段（如果可用）
-  // ✅ 如果后端返回的是英文类型（如 "WEATHER"），尝试转换为中文
-  const getTypeLabel = () => {
-    if (risk.typeLabel) return risk.typeLabel; // 优先使用后端返回的中文标签
-    
-    // 如果后端没有返回 typeLabel，尝试从 type 推断中文标签
-    const typeToLabel: Record<string, string> = {
-      WEATHER: isZh ? '天气风险' : 'Weather Risk',
-      TERRAIN: isZh ? '地形风险' : 'Terrain Risk',
-      SAFETY: isZh ? '安全风险' : 'Safety Risk',
-      LOGISTICS: isZh ? '后勤风险' : 'Logistics Risk',
-      WATER: isZh ? '水域风险' : 'Water Risk',
-      OTHER: isZh ? '其他风险' : 'Other Risk',
-      weather: isZh ? '天气风险' : 'Weather Risk',
-      terrain: isZh ? '地形风险' : 'Terrain Risk',
-      safety: isZh ? '安全风险' : 'Safety Risk',
-      logistics: isZh ? '后勤风险' : 'Logistics Risk',
-      water: isZh ? '水域风险' : 'Water Risk',
-      other: isZh ? '其他风险' : 'Other Risk',
-    };
-    
-    return typeToLabel[risk.type] || risk.type;
+  const typeToLabelFallback: Record<string, { zh: string; en: string }> = {
+    WEATHER: { zh: '天气风险', en: 'Weather risk' },
+    TERRAIN: { zh: '地形风险', en: 'Terrain risk' },
+    SAFETY: { zh: '安全风险', en: 'Safety risk' },
+    LOGISTICS: { zh: '后勤风险', en: 'Logistics risk' },
+    WATER: { zh: '水域风险', en: 'Water risk' },
+    OTHER: { zh: '其他风险', en: 'Other risk' },
+    weather: { zh: '天气风险', en: 'Weather risk' },
+    terrain: { zh: '地形风险', en: 'Terrain risk' },
+    safety: { zh: '安全风险', en: 'Safety risk' },
+    logistics: { zh: '后勤风险', en: 'Logistics risk' },
+    water: { zh: '水域风险', en: 'Water risk' },
+    other: { zh: '其他风险', en: 'Other risk' },
   };
-  
-  const typeLabel = getTypeLabel();
+
+  /** 标题：禁止把原始 type 直接当标题；中文 typeLabel，英文 typeLabelEn */
+  const typeLabel = isZh
+    ? risk.typeLabel ||
+      (risk.type ? typeToLabelFallback[risk.type]?.zh : undefined) ||
+      risk.typeLabelEn ||
+      risk.type ||
+      ''
+    : risk.typeLabelEn ||
+      (risk.type ? typeToLabelFallback[risk.type]?.en : undefined) ||
+      risk.typeLabel ||
+      risk.type ||
+      '';
+
   const typeIcon = risk.typeIcon || '⚠️';
-  const severityLabel = risk.severityLabel || label;
-  const description = risk.description || risk.message || risk.summary || '';
-  const impact = risk.impact;
+  const severityLabel = isZh
+    ? risk.severityLabel || label
+    : risk.severityLabelEn || label;
+
+  /** 主文案：summary / message（后端已带行程后缀）；缺省时再 description / impact */
+  const bodyText =
+    (risk.summary || risk.message || '').trim() ||
+    (risk.description || '').trim() ||
+    (risk.impact || '').trim();
+  const impactOnly = (risk.impact || '').trim();
+  const showImpactLine =
+    !!impactOnly && impactOnly !== bodyText && !(bodyText.length > 0 && bodyText.includes(impactOnly));
   
   // 🆕 优先使用 mitigationDetails（包含优先级），否则使用 mitigation
   const mitigationDetails = risk.mitigationDetails || [];
@@ -134,10 +166,12 @@ export default function RiskCard({ risk, className }: RiskCardProps) {
                     </Badge>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground">{description}</p>
-                {impact && (
-                  <p className="text-xs text-muted-foreground mt-1">{impact}</p>
-                )}
+                {bodyText ? (
+                  <p className="text-sm text-muted-foreground">{bodyText}</p>
+                ) : null}
+                {showImpactLine ? (
+                  <p className="text-xs text-muted-foreground mt-1">{impactOnly}</p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -146,20 +180,46 @@ export default function RiskCard({ risk, className }: RiskCardProps) {
           {affectedPois.length > 0 && (
             <div className="space-y-1">
               <h4 className="text-xs font-medium text-muted-foreground">
-                {isZh ? '影响的POI' : 'Affected POIs'}:
+                {isZh ? '关联行程点' : 'Affected POIs'}:
               </h4>
               <div className="flex flex-wrap gap-1.5">
-                {affectedPois.map((poi, index) => (
-                  <Badge
-                    key={index}
-                    variant="outline"
-                    className="text-xs bg-blue-50 text-blue-700 border-blue-200"
-                  >
-                    <MapPin className="w-3 h-3 mr-1" />
-                    {isZh && poi.nameCN ? poi.nameCN : poi.name}
-                    {poi.day && ` (${isZh ? '第' : 'Day '}${poi.day}${isZh ? '天' : ''})`}
-                  </Badge>
-                ))}
+                {affectedPois.map((poi, index) => {
+                  const label = `${isZh && poi.nameCN ? poi.nameCN : poi.name}${
+                    poi.day ? ` · ${isZh ? '第' : 'Day '}${poi.day}${isZh ? '天' : ''}` : ''
+                  }`;
+                  const canJump =
+                    !!planStudio &&
+                    !!trip?.TripDay?.length &&
+                    !!poi.day &&
+                    !!poi.id;
+                  const inner = (
+                    <>
+                      <MapPin className="w-3 h-3 mr-1 shrink-0" />
+                      {label}
+                    </>
+                  );
+                  return canJump ? (
+                    <Button
+                      key={poi.id || index}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-auto min-h-7 py-1 px-2 text-xs font-normal bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"
+                      title={isZh ? '在时间轴中查看该天/该点' : 'Focus on timeline'}
+                      onClick={() => jumpFromAffectedPoi(trip!, planStudio!, poi)}
+                    >
+                      {inner}
+                    </Button>
+                  ) : (
+                    <Badge
+                      key={poi.id || index}
+                      variant="outline"
+                      className="text-xs bg-blue-50 text-blue-700 border-blue-200 font-normal py-1 px-2 h-auto"
+                    >
+                      {inner}
+                    </Badge>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { tripsApi } from '@/api/trips';
 import type { TripDetail, GenerationProgress } from '@/types/trip';
+import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface TripPlanningWaitDialogProps {
@@ -19,40 +20,13 @@ interface TripPlanningWaitDialogProps {
   onClose?: () => void;
 }
 
-/**
- * 检查行程是否规划完成
- * 优先使用 generationProgress.status，如果没有则使用其他判断标准
- */
-function isTripPlanningComplete(trip: TripDetail | null): boolean {
+/** Dialog 内使用：NL 生成结束或 completed 才算完成 */
+function isDialogPlanningComplete(trip: TripDetail | null): boolean {
   if (!trip) return false;
-  
-  // 优先检查 generationProgress
   const progress = trip.metadata?.generationProgress;
-  if (progress) {
-    return progress.status === 'completed';
-  }
-  
-  // 如果状态不是 PLANNING，说明已经完成规划
-  if (trip.status !== 'PLANNING') {
-    return true;
-  }
-  
-  // 如果有行程项，说明已经规划完成
-  if (trip.TripDay && trip.TripDay.length > 0) {
-    const hasItems = trip.TripDay.some(day => 
-      day.ItineraryItem && day.ItineraryItem.length > 0
-    );
-    if (hasItems) {
-      return true;
-    }
-  }
-  
-  // 如果统计信息显示有行程项，也认为规划完成
-  if (trip.statistics && trip.statistics.totalItems > 0) {
-    return true;
-  }
-  
-  return false;
+  if (progress?.status === 'completed') return true;
+  if (progress?.status === 'failed') return false;
+  return !shouldShowNlItemsGeneratingPlaceholder(trip);
 }
 
 export default function TripPlanningWaitDialog({
@@ -95,8 +69,8 @@ export default function TripPlanningWaitDialog({
           setProgress(newProgress);
         }
         
-        // 检查是否完成
-        if (isTripPlanningComplete(trip)) {
+        // 检查是否完成（仅 completed 触发回调，failed 不触发）
+        if (isDialogPlanningComplete(trip)) {
           // 规划完成，关闭弹窗并通知父组件
           if (pollTimer) {
             clearTimeout(pollTimer);

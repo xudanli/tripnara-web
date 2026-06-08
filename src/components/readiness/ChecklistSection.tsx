@@ -1,11 +1,15 @@
+import { useContext, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, Scale, Shield, Star, MessageSquare } from 'lucide-react'; // 🎯 添加更多图标用于区分 constraintType
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next'; // 🆕 添加 i18n 支持
-import { useState } from 'react';
 import type { ReadinessFindingItem } from '@/api/readiness';
+import PlanStudioContext from '@/contexts/PlanStudioContext';
+import { jumpFromTripScope } from '@/lib/plan-studio-readiness-jump';
+import { isCoverageGapFindingId } from '@/lib/readiness-coverage-gap';
+import { splitMustTripInvolvesMessage } from '@/lib/readiness-message-split';
 import UserDecisionDialog from './UserDecisionDialog';
 
 interface ChecklistSectionProps {
@@ -17,6 +21,8 @@ interface ChecklistSectionProps {
   trip?: { TripDay?: Array<{ date: string; ItineraryItem?: Array<{ id: string; Place?: { name?: string } | null }> }> } | null; // 行程数据，用于关联活动
   tripId?: string; // 🆕 行程ID，用于用户决策对话框
   onFindingUpdated?: (findingId: string, updatedFinding: any) => void; // 🆕 当用户回答问题后更新finding的回调
+  /** GET .../blockers/:blockerId/solutions 须传列表项 item.id（含 coverage-gap:*），勿用本地占位 id */
+  onViewBlockerSolution?: (blockerId: string) => void;
 }
 
 // 计算截止日期
@@ -31,9 +37,20 @@ function calculateDeadline(offsetDays: number, tripStartDate: string | Date): st
   });
 }
 
-export default function ChecklistSection({ title, items, level, className, tripStartDate, trip, tripId, onFindingUpdated }: ChecklistSectionProps) {
+export default function ChecklistSection({
+  title,
+  items,
+  level,
+  className,
+  tripStartDate,
+  trip,
+  tripId,
+  onFindingUpdated,
+  onViewBlockerSolution,
+}: ChecklistSectionProps) {
   const { t, i18n } = useTranslation(); // 🆕 添加 i18n hook
   const isZh = i18n.language === 'zh' || i18n.language.startsWith('zh');
+  const planStudio = useContext(PlanStudioContext);
   const [selectedDecisionItem, setSelectedDecisionItem] = useState<ReadinessFindingItem | null>(null);
   
   if (!items || items.length === 0) {
@@ -196,17 +213,35 @@ export default function ChecklistSection({ title, items, level, className, tripS
         <div className="space-y-3">
           {items.map((item, index) => {
             const associatedActivities = getAssociatedActivities(item as ReadinessFindingItem & { affectedDays?: number[] });
+            const tripScope = item.tripScope;
+            const withExtras = item as ReadinessFindingItem & { missingEvidenceTypes?: string[] };
+            const showMissingEvidenceBadges =
+              !tripScope &&
+              !isCoverageGapFindingId(item.id) &&
+              !!withExtras.missingEvidenceTypes?.length;
+            const weakenEvidence = !!(tripScope || isCoverageGapFindingId(item.id));
+            const mustSplit =
+              level === 'must' ? splitMustTripInvolvesMessage(item.message) : null;
+            const canJumpSchedule =
+              !!(tripScope?.day && planStudio && trip?.TripDay?.length && (level === 'must' || level === 'blocker'));
             return (
               /* 🎨 统一卡片样式：只有边框，无阴影（符合抽屉轻量原则） */
               /* 🎯 阻塞项 vs 必须项：通过左侧边框和背景来区分 */
-              <div key={index} className={cn(
+              <div
+                key={index}
+                className={cn(
                 'space-y-2 p-3 border rounded-lg',
                 level === 'blocker' 
                   ? 'border-l-4 border-red-600 bg-red-50/30 border-r border-t border-b border-gray-200' // 🎯 阻塞项：左侧红色粗边框 + 浅红背景
                   : level === 'must'
                   ? 'border-l-2 border-amber-300 bg-white border-r border-t border-b border-gray-200' // 🎯 必须项：左侧 amber 细边框 + 白色背景
                   : 'border border-gray-200 bg-white' // 🎯 其他：标准样式
-              )}>
+              )}
+                data-trip-scope={tripScope ? tripScope.kind : undefined}
+                data-trip-day={tripScope?.day}
+                data-segment-id={tripScope?.segmentId}
+                data-coverage-gap-id={tripScope?.gapId ?? tripScope?.id}
+              >
                 {/* 🆕 根据 constraintType 显示不同的图标和标签 */}
                 {(() => {
                   const constraintConfig = getConstraintTypeConfig(item);
@@ -223,12 +258,50 @@ export default function ChecklistSection({ title, items, level, className, tripS
                   }
                   return null;
                 })()}
-                <p className="text-sm">{item.message}</p>
+                <div className="flex flex-col gap-2">
+                  {level === 'must' && mustSplit?.involves ? (
+                    <>
+                      <p className="text-sm">{mustSplit.lead}</p>
+                      <p className="text-xs text-muted-foreground border-l-2 border-muted-foreground/25 pl-2 py-0.5">
+                        <span className="font-medium text-muted-foreground/90">
+                          {isZh ? '行程涉及' : 'Trip context'}
+                        </span>
+                        ：{mustSplit.involves}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm">{mustSplit?.lead ?? item.message}</p>
+                  )}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {level === 'blocker' && item.id && onViewBlockerSolution ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => onViewBlockerSolution(item.id)}
+                      >
+                        {isZh ? '解决方案' : 'Solutions'}
+                      </Button>
+                    ) : null}
+                    {canJumpSchedule ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 h-7 text-xs"
+                        onClick={() => jumpFromTripScope(trip!, planStudio!, item.tripScope!)}
+                      >
+                        {isZh ? '查看行程' : 'View on schedule'}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
                 
-                {/* ✅ 显示缺失的证据类型 Badge */}
-                {(item as any).missingEvidenceTypes && (item as any).missingEvidenceTypes.length > 0 && (
+                {/* 有 tripScope 时主文案已由后端带上下文，不再堆 missing 类型 Badge，避免重复 */}
+                {showMissingEvidenceBadges && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {(item as any).missingEvidenceTypes.map((evidenceType: string, idx: number) => {
+                    {withExtras.missingEvidenceTypes!.map((evidenceType: string, idx: number) => {
                       // 证据类型中文映射
                       const evidenceTypeLabels: Record<string, string> = {
                         opening_hours: '开放时间',
@@ -258,8 +331,8 @@ export default function ChecklistSection({ title, items, level, className, tripS
                   </div>
                 )}
                 
-                {/* 关联的活动信息 */}
-                {associatedActivities.length > 0 && (
+                {/* 关联的活动信息（tripScope 已有天时可选省略；仍保留 affectedDays 兜底） */}
+                {!tripScope && associatedActivities.length > 0 && (
                   <div className="flex items-start gap-2 mt-2 pt-2 border-t border-gray-100">
                     <span className="text-xs text-muted-foreground flex-shrink-0">关联活动:</span>
                     <div className="flex flex-wrap gap-1">
@@ -323,30 +396,46 @@ export default function ChecklistSection({ title, items, level, className, tripS
                   </div>
                 )}
                 
-                {/* Evidence */}
-                {/* 根据后端文档，evidence 是字符串 */}
-                {item.evidence && (
-                  <div className="space-y-1">
-                    <h5 className="text-xs font-medium text-muted-foreground">证据:</h5>
-                    <div className="text-xs text-muted-foreground">
-                      {typeof item.evidence === 'string' 
-                        ? item.evidence 
-                        : Array.isArray(item.evidence) 
-                        ? (item.evidence as unknown as any[]).map((ev: any, evIndex: number) => (
+                {/* Evidence：与 coverage-gap 对齐且有 tripScope 时主文案已够用，引用折叠以免与 message 重复 */}
+                {item.evidence &&
+                  (() => {
+                    const evidenceBody =
+                      typeof item.evidence === 'string' ? (
+                        <span>{item.evidence}</span>
+                      ) : Array.isArray(item.evidence) ? (
+                        (item.evidence as unknown as Array<{ sourceId?: string; sectionId?: string; quote?: string }>).map(
+                          (ev, evIndex: number) => (
                             <div key={evIndex}>
                               {ev.sourceId}
                               {ev.sectionId && ` > ${ev.sectionId}`}
                               {ev.quote && (
-                                <span className="text-muted-foreground/70 italic">
-                                  : "{ev.quote}"
-                                </span>
+                                <span className="text-muted-foreground/70 italic">: "{ev.quote}"</span>
                               )}
                             </div>
-                          ))
-                        : String(item.evidence)}
-                    </div>
-                  </div>
-                )}
+                          )
+                        )
+                      ) : (
+                        String(item.evidence)
+                      );
+                    if (weakenEvidence) {
+                      return (
+                        <details className="group mt-2 rounded-md border border-dashed border-muted-foreground/25 bg-muted/20 px-2 py-1.5">
+                          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground list-none [&::-webkit-details-marker]:hidden">
+                            <span className="underline-offset-2 hover:underline">
+                              {isZh ? '引用来源（可选展开）' : 'Sources (optional)'}
+                            </span>
+                          </summary>
+                          <div className="mt-2 space-y-1 text-xs text-muted-foreground pl-1">{evidenceBody}</div>
+                        </details>
+                      );
+                    }
+                    return (
+                      <div className="space-y-1">
+                        <h5 className="text-xs font-medium text-muted-foreground">{isZh ? '证据' : 'Evidence'}:</h5>
+                        <div className="text-xs text-muted-foreground">{evidenceBody}</div>
+                      </div>
+                    );
+                  })()}
                 
                 {/* Ask User - 需要询问用户的问题 */}
                 {item.askUser && item.askUser.length > 0 && (

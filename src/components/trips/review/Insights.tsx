@@ -4,10 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import {
   Shield,
-  Activity,
-  RefreshCw,
   CheckCircle2,
   Edit,
   ThumbsUp,
@@ -109,9 +108,9 @@ function InsightCard({ insight, onVote, onSaveAnchor }: InsightCardProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const personaConfig = {
-    abu: { icon: Shield, label: 'Abu', color: getPersonaColorClasses('ABU') },
-    dre: { icon: Activity, label: 'Dr.Dre', color: getPersonaColorClasses('DR_DRE') },
-    neptune: { icon: RefreshCw, label: 'Neptune', color: getPersonaColorClasses('NEPTUNE') },
+    abu: { persona: 'ABU' as const, label: 'Abu', color: getPersonaColorClasses('ABU') },
+    dre: { persona: 'DR_DRE' as const, label: 'Dr.Dre', color: getPersonaColorClasses('DR_DRE') },
+    neptune: { persona: 'NEPTUNE' as const, label: 'Neptune', color: getPersonaColorClasses('NEPTUNE') },
   };
 
   const persona = (insight.persona || undefined) as keyof typeof personaConfig | undefined;
@@ -156,8 +155,8 @@ function InsightCard({ insight, onVote, onSaveAnchor }: InsightCardProps) {
             <div className="flex items-center gap-2 mb-2">
               <CardTitle className="text-lg">{insight.title}</CardTitle>
               {personaInfo && (
-                <Badge variant="outline" className={cn('text-xs', personaInfo.color)}>
-                  {personaInfo.icon && <personaInfo.icon className="w-3 h-3 mr-1" />}
+                <Badge variant="outline" className={cn('text-xs gap-1 pr-1.5', personaInfo.color)}>
+                  <PersonaAvatar persona={personaInfo.persona} size={18} />
                   {personaInfo.label}
                 </Badge>
               )}

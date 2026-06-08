@@ -1,17 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useAgentRouteQueryOptions } from '@/lib/agent-route-query';
+import { AgentDebugReplaySheet } from '@/components/agent/AgentDebugReplaySheet';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { PanelRightClose, PanelRightOpen, Sparkles, Compass, Bot, RefreshCw } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, Sparkles, Compass, RefreshCw } from 'lucide-react';
 import AgentChat from './AgentChat';
-import PlanningAssistantChat from './PlanningAssistantChat';
 import JourneyAssistantChat from './JourneyAssistantChat';
-import { PlanningAssistantSidebar } from '@/components/planning-assistant-v2/PlanningAssistantSidebar';
 import Logo from '@/components/common/Logo';
 import type { EntryPoint } from '@/api/agent';
 import { useAuth } from '@/hooks/useAuth';
-import { useContext } from 'react';
 import PlanStudioContext from '@/contexts/PlanStudioContext';
+import type { SelectedContext } from '@/contexts/PlanStudioContext';
+import { buildPlanStudioAssistantQuestion } from '@/lib/plan-studio-assistant-question';
+import { syncTripDataAfterAgentMutation } from '@/lib/agent-trip-sync';
+import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
 
 // localStorage key for sidebar state
 const SIDEBAR_STATE_KEY = 'agent-sidebar-expanded';
@@ -26,6 +31,8 @@ interface AgentChatSidebarProps {
   forceExpanded?: boolean;
   /** Sheet 模式下的关闭回调 */
   onClose?: () => void;
+  /** 由 ResizablePanel 控制宽度时为 true，侧栏占满父容器 */
+  layoutExpanded?: boolean;
 }
 
 // 根据入口点获取侧边栏配置
@@ -33,8 +40,8 @@ function getSidebarConfig(entryPoint?: EntryPoint, hasTrip?: boolean) {
   switch (entryPoint) {
     case 'planning_workbench':
       return {
-        title: hasTrip ? 'NARA' : '规划助手',
-        subtitle: hasTrip ? '智能行程规划' : '智能行程规划专家',
+        title: hasTrip ? '智能体' : '规划助手',
+        subtitle: hasTrip ? '已关联当前行程' : '统一入口 · route_and_run',
         icon: null, // 使用 Logo 组件
         useLogo: true,
         iconBgClass: '',
@@ -71,9 +78,13 @@ export default function AgentChatSidebar({
   onExpandedChange,
   forceExpanded = false,
   onClose,
+  layoutExpanded = false,
 }: AgentChatSidebarProps) {
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const agentRouteOpts = useAgentRouteQueryOptions();
+  const isPlanStudioAgent = entryPoint === 'planning_workbench';
   const [clearMessagesFn, setClearMessagesFn] = useState<(() => void) | null>(null);
 
   // 规划工作台场景：若父级未传 activeTripId，从 URL ?tripId= 读取作为 fallback
@@ -112,6 +123,64 @@ export default function AgentChatSidebar({
     }
   }, [planStudioContext, openAssistant]);
 
+  /** 自 /dashboard/agent 重定向时自动展开侧栏 */
+  useEffect(() => {
+    if (!isPlanStudioAgent || !agentRouteOpts.shouldOpenAgentPanel) return;
+    setIsExpanded(true);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('agentOpen');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [isPlanStudioAgent, agentRouteOpts.shouldOpenAgentPanel, setSearchParams]);
+
+  const toggleAgentDebugMode = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (next.get('mode')?.toLowerCase() === 'debug') {
+          next.delete('mode');
+        } else {
+          next.set('mode', 'debug');
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
+
+  const sendMessageRef = useRef<((message: string) => void | Promise<void>) | null>(null);
+
+  useEffect(() => {
+    if (entryPoint !== 'planning_workbench' || !planStudioContext?.setOnAskAssistant) return;
+
+    planStudioContext.setOnAskAssistant((question: string, context: SelectedContext) => {
+      const fullQuestion = buildPlanStudioAssistantQuestion(question, context);
+      if (sendMessageRef.current) {
+        void sendMessageRef.current(fullQuestion);
+      } else {
+        console.warn('[AgentChatSidebar] 智能体 sendMessage 尚未就绪');
+      }
+    });
+  }, [entryPoint, planStudioContext]);
+
+  const handlePlanStudioSystem2Response = useCallback(async () => {
+    onSystem2Response?.();
+    const tid = sanitizeRouteRunTripId(effectiveTripId);
+    try {
+      await syncTripDataAfterAgentMutation(queryClient, tid ?? undefined, 'plan-studio-agent');
+    } catch (e) {
+      console.error('[AgentChatSidebar] sync after System2 failed', e);
+      toast.error('行程数据刷新失败，请稍后手动刷新页面');
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+    }
+  }, [onSystem2Response, queryClient, effectiveTripId]);
+
   const config = getSidebarConfig(entryPoint, !!effectiveTripId);
   const IconComponent = config.icon;
   const useLogo = 'useLogo' in config && config.useLogo;
@@ -120,24 +189,23 @@ export default function AgentChatSidebar({
   const renderAssistant = () => {
     switch (config.component) {
       case 'planning':
-        // 如果有 tripId，使用 Planning Assistant V2（支持优化已创建行程）
-        if (effectiveTripId) {
-          return (
-            <PlanningAssistantSidebar
-              userId={user?.id}
-              tripId={effectiveTripId}
-              className="h-full"
-              onTripUpdate={onSystem2Response}
-              onClearReady={(fn) => setClearMessagesFn(() => fn)}
-            />
-          );
-        }
-        // 没有 tripId 时，使用 Planning Assistant V2（用于创建新行程）
+        // 原 /dashboard/agent 全量能力：行程副驾驶 + URL 调试/传感器参数
         return (
-          <PlanningAssistantSidebar
-            userId={user?.id}
+          <AgentChat
+            activeTripId={effectiveTripId}
+            entryPoint={entryPoint}
+            attachActiveTripSummaryContext={Boolean(
+              effectiveTripId && !agentRouteOpts.routeContextType?.trim()
+            )}
+            pageMode={isPlanStudioAgent ? agentRouteOpts.pageMode : 'user'}
+            routeContextType={isPlanStudioAgent ? agentRouteOpts.routeContextType : undefined}
+            enableLiveTools={isPlanStudioAgent ? agentRouteOpts.enableLiveTools : undefined}
+            intentFlags={isPlanStudioAgent ? agentRouteOpts.intentFlags : undefined}
+            onSystem2Response={handlePlanStudioSystem2Response}
             className="h-full"
-            onTripUpdate={onSystem2Response}
+            onSendMessageReady={(send) => {
+              sendMessageRef.current = send;
+            }}
             onClearReady={(fn) => setClearMessagesFn(() => fn)}
           />
         );
@@ -168,6 +236,9 @@ export default function AgentChatSidebar({
             activeTripId={effectiveTripId}
             onSystem2Response={onSystem2Response}
             entryPoint={entryPoint}
+            attachActiveTripSummaryContext={Boolean(
+              effectiveTripId && entryPoint === 'trip_detail_page'
+            )}
             className="h-full"
           />
         );
@@ -179,8 +250,13 @@ export default function AgentChatSidebar({
   return (
     <aside
       className={cn(
-        'bg-white border-l border-gray-200 flex flex-col h-full transition-all duration-300 ease-in-out flex-shrink-0',
-        expanded ? 'w-[400px] min-w-[400px]' : 'w-14 min-w-[3.5rem]',
+        'relative z-30 bg-white border-l border-gray-200 flex flex-col h-full flex-shrink-0',
+        layoutExpanded
+          ? 'w-full min-w-0'
+          : expanded
+            ? 'w-[440px] min-w-[300px] max-w-[800px]'
+            : 'w-14 min-w-[3.5rem]',
+        !layoutExpanded && 'transition-[width] duration-300 ease-in-out',
         className
       )}
     >
@@ -223,6 +299,21 @@ export default function AgentChatSidebar({
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {config.component === 'planning' && isPlanStudioAgent && agentRouteOpts.pageMode === 'debug' ? (
+                <AgentDebugReplaySheet tripIdRaw={effectiveTripId} />
+              ) : null}
+              {config.component === 'planning' && isPlanStudioAgent ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-[10px] text-gray-500"
+                  onClick={toggleAgentDebugMode}
+                  title={agentRouteOpts.pageMode === 'debug' ? '退出调试模式' : '调试模式'}
+                >
+                  {agentRouteOpts.pageMode === 'debug' ? '调试中' : '调试'}
+                </Button>
+              ) : null}
               {/* 清空按钮 - 规划模式下显示，点击清空对话 */}
               {config.component === 'planning' && (
                 <Button
@@ -231,7 +322,7 @@ export default function AgentChatSidebar({
                   onClick={() => clearMessagesFn?.()}
                   disabled={!clearMessagesFn}
                   className="h-8 w-8 text-gray-500 hover:text-gray-700"
-                  title="清空对话"
+                  title="清空对话并重置服务端会话（DELETE v2 session）"
                 >
                   <RefreshCw className="h-4 w-4" />
                 </Button>

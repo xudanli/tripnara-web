@@ -9,9 +9,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   chatApi,
   type ChatRequest,
+  type ChatResponse,
 } from '@/api/planning-assistant-v2';
+import { assistantFieldsFromChatResponse } from '@/lib/planning-assistant-chat-message';
 
 import type { RoutingTarget } from '@/api/planning-assistant-v2';
+import { useRouteAndRunTask } from '@/hooks/useRouteAndRunTask';
+import { chatMessageFromRouteAndRun } from '@/lib/chat-message-from-route-run';
+import { handleRouteAndRunResponse } from '@/lib/handleRouteAndRunResponse';
 
 export interface ChatMessage {
   id: string;
@@ -77,6 +82,8 @@ export interface ChatMessage {
     decision_log?: any[];
     decisionState?: any;
   };
+  /** ASYNC_POLLING：轮询完成前展示 PlanningPipelineProgress */
+  asyncTaskPending?: boolean;
 }
 
 export interface UseChatV2Return {
@@ -103,6 +110,7 @@ export function useChatV2(
 ): UseChatV2Return {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { waitForCompletion } = useRouteAndRunTask();
 
   const generateMessageId = useCallback(() => {
     return `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -121,24 +129,25 @@ export function useChatV2(
       setMessages((prev) => [...prev, userMessage]);
     },
     onSuccess: (data) => {
-      // 添加AI回复
-      // 优先使用 reply（根据用户输入语言自动选择），如果没有则使用 replyCN 或 messageCN
-      const replyContent = data.reply || data.replyCN || data.messageCN || data.message || '收到回复，但内容为空';
+      if (data.routing?.mode === 'ASYNC_POLLING' && data.task_id) {
+        return;
+      }
+      const mapped = assistantFieldsFromChatResponse(data);
       const aiMessage: ChatMessage = {
         id: generateMessageId(),
         role: 'assistant',
-        content: replyContent,
+        content: mapped.content,
         timestamp: new Date(),
-        phase: data.phase,
-        clarificationNeeded: data.clarificationNeeded,
-        routing: data.routing,
+        phase: mapped.phase,
+        clarificationNeeded: mapped.clarificationNeeded,
+        routing: mapped.routing,
         // 推荐和方案数据
         recommendations: data.recommendations,
         plans: data.plans,
         // MCP 服务响应数据
-        hotels: data.hotels,
-        airbnbListings: data.airbnbListings,
-        accommodations: data.accommodations,
+        hotels: mapped.hotels,
+        airbnbListings: mapped.airbnbListings,
+        accommodations: mapped.accommodations,
         restaurants: data.restaurants,
         weather: data.weather,
         searchResults: data.searchResults,
@@ -163,7 +172,7 @@ export function useChatV2(
         replyCN: data.replyCN,
         message: data.message,
         messageCN: data.messageCN,
-        finalContent: replyContent,
+        finalContent: mapped.content,
         phase: data.phase,
         routing: data.routing,
         routingTarget: data.routing?.target,
@@ -220,16 +229,66 @@ export function useChatV2(
         console.log('[useChatV2] 发送消息，context 无 tripId:', { countryCode: context.countryCode });
       }
 
-      await sendMessageMutation.mutateAsync({
+      const data: ChatResponse = await sendMessageMutation.mutateAsync({
         sessionId,
         message: message.trim(),
         userId,
+        ...(requestContext?.tripId ? { tripId: requestContext.tripId } : {}),
         language: 'zh',
         context: requestContext,
         ...(imageUrls?.length ? { imageUrls } : {}),
       });
+
+      if (data.routing?.mode === 'ASYNC_POLLING' && data.task_id) {
+        const pendingId = generateMessageId();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: pendingId,
+            role: 'assistant',
+            content: data.replyCN || data.reply || data.messageCN || data.message || '规划师正在生成行程…',
+            timestamp: new Date(),
+            routing: data.routing,
+            asyncTaskPending: true,
+          },
+        ]);
+        try {
+          const routeRun = await waitForCompletion(data.task_id, data.task_poll_path);
+          handleRouteAndRunResponse(routeRun, {
+            onAsyncStart: () => {},
+            onClarification: (_payload, body) => {
+              const finalMsg = chatMessageFromRouteAndRun(body, pendingId);
+              setMessages((prev) => prev.map((m) => (m.id === pendingId ? finalMsg : m)));
+            },
+            onSuccess: (body) => {
+              const finalMsg = chatMessageFromRouteAndRun(body, pendingId);
+              setMessages((prev) => prev.map((m) => (m.id === pendingId ? finalMsg : m)));
+            },
+            onFailed: (body) => {
+              const errText = body.result?.answer_text?.trim() || '行程规划失败';
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingId ? { ...m, content: errText, asyncTaskPending: false } : m
+                )
+              );
+            },
+          });
+          if (sessionId) {
+            queryClient.invalidateQueries({ queryKey: ['planning-session-v2', sessionId] });
+          }
+        } catch (err) {
+          const errText = err instanceof Error ? err.message : '行程规划失败';
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === pendingId
+                ? { ...m, content: errText, asyncTaskPending: false }
+                : m
+            )
+          );
+        }
+      }
     },
-    [sessionId, userId, context, sendMessageMutation]
+    [sessionId, userId, context, sendMessageMutation, generateMessageId, waitForCompletion, queryClient]
   );
 
   const clearMessages = useCallback(() => {

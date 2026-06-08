@@ -1,0 +1,47 @@
+{
+  "revision": "rev-console-2026-06-04T08:00:00Z",
+  "l0": {
+    "nationality": "CN",
+    "residency_country": "CN",
+    "dietary_restrictions": ["VEGETARIAN"],
+    "preferred_attraction_types": ["NATURE", "CULTURE"]
+  },
+  "l1": {
+    "pace_preference": "MODERATE",
+    "budget_preference": "MEDIUM",
+    "accommodation_preference": "COMFORTABLE",
+    "travel_mode_preference": "PUBLIC_TRANSIT",
+    "client_acknowledged": true
+  },
+  "l2": [
+    {
+      "id": "l2-dec-001",
+      "summary_zh": "冰岛行程偏好慢节奏，避开网红打卡点",
+      "source_layer": "session_summary",
+      "created_at": "2026-06-01T10:00:00Z"
+    },
+    {
+      "id": "l2-dec-002",
+      "summary_zh": "住宿倾向市中心步行可达",
+      "source_layer": "planning_feedback",
+      "created_at": "2026-06-02T15:30:00Z"
+    }
+  ],
+  "trip": {
+    "trip_id": "00000000-0000-4000-8000-000000000001",
+    "constraint_patches": [
+      {
+        "patch_id": "patch-trip-001",
+        "summary_zh": "对话偏好：目的地锁定雷克雅未克周边",
+        "applied_keys": ["destination"],
+        "created_at": "2026-06-03T14:30:00Z"
+      },
+      {
+        "patch_id": "patch-trip-002",
+        "summary_zh": "对话偏好：节奏调整为悠闲",
+        "applied_keys": ["pace"],
+        "created_at": "2026-06-04T09:15:00Z"
+      }
+    ]
+  }
+}

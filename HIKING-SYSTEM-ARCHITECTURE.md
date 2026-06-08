@@ -46,7 +46,7 @@
   - 可走指数（0-100）
   - 关键风险标签
   - CTA：查看详情、收藏、离线下载
-- 地图模式（可切换，待实现）
+- 地图模式（Mapbox `MapboxTrailMap`，按国家中心 + 微偏移展示路线点，点击跳转详情）
 
 ### 3. Trail Detail（路线详情页）
 **路径**: `/dashboard/trails/:id`  
@@ -57,7 +57,7 @@
   - 标题、地点、季节徽章
   - 核心指标一行（距离、爬升、耗时、最高点、难度）
   - CTA：做 Readiness、保存、分享
-  - 预览图占位（路线线条 + 海拔剖面缩略图）
+  - Mapbox 轨迹图（冰岛徒步路线可拉取 `GET /demo/hiking/laugavegur` 的 polyline + 补给点）
 
 - **Route Intelligence（路线结构）**：
   - 路线类型
@@ -81,8 +81,8 @@
   - 最小改动修复建议
 
 ### 4. Readiness（可执行性评估）
-**路径**: `/dashboard/readiness`  
-**文件**: `src/pages/readiness/index.tsx`（已存在，可扩展为徒步专用版本）
+**路径**: `/dashboard/readiness` · 徒步路线：`?trailId={routeDirectionId}`  
+**文件**: `src/pages/readiness/index.tsx` + `HikingTrailReadinessPanel`
 
 **功能**（徒步专用版本）:
 - Readiness 总结条（结论先行）
@@ -92,8 +92,9 @@
 - Neptune：修复与替代
 
 ### 5. Prep Center（准备页）
-**路径**: `/dashboard/trails/prep/:hikePlanId`  
-**文件**: `src/pages/trails/prep/[hikePlanId].tsx`
+**路径**: `/dashboard/trails/prep/:hikePlanId`（`:hikePlanId` = HikePlan UUID）  
+**文件**: `src/pages/trails/prep/[hikePlanId].tsx`  
+**API**: `docs/api/hike-plan-lifecycle.md` · `hikePlanRepository`
 
 **功能**:
 - **Checklist（装备清单）**：
@@ -119,7 +120,8 @@
 
 ### 6. On-trail Live（执行页）
 **路径**: `/dashboard/trails/on-trail/:hikePlanId`  
-**文件**: `src/pages/trails/on-trail/[hikePlanId].tsx`
+**文件**: `src/pages/trails/on-trail/[hikePlanId].tsx`  
+**GPS**: `useGpsTrackRecorder` → `POST /hiking/hike-plans/:id/track-points`（离线队列 IndexedDB）
 
 **功能**:
 - **地图主视图**（离线优先）：
@@ -286,20 +288,24 @@
 />
 ```
 
-## 待实现功能
+## 实现状态（2026-05）
 
-1. **地图视图**：
-   - Trails Explore 的地图模式
-   - Trail Detail 的海拔剖面交互（已提供 ElevationProfile 组件）
-   - On-trail Live 的实时地图
+| 能力 | 状态 |
+|------|------|
+| 发现列表 + 地图模式 | ✅ `trails/explore.tsx` |
+| 路线详情四 Tab + 许可列表 | ✅ 数据依赖 `hikingDetail` |
+| Readiness 路线 P2 + 行程 hiking-audit | ✅ |
+| HikePlan 全链路 + API/IndexedDB | ✅ |
+| 准备页 prep + 同步模板 | ✅ |
+| 行中地图 + GPS + live-state | ✅ |
+| 行中海拔剖面 + 事件钉子 | ✅ GPS 优先，离线包剖面兜底 |
+| 偏航提示 | ✅ 来自 `live-state.activeRisks`（type=route / 文案匹配） |
+| 复盘 + review generate | ✅ |
+| 详情收藏 | ✅ 云端 `GET/PUT/DELETE trail-bookmarks` + 本地缓存 |
+| Mapbox 矢量瓦片离线下载 | ✅ `download-offline-tiles` + `tripnara-offline://` 行中底图 |
+| 收藏云端同步 | ⏸ 待后端 API |
 
-2. **Readiness 徒步专用版本**：
-   - 扩展现有 Readiness 页面，添加徒步特定评估逻辑
-
-3. **数据集成**：
-   - 连接后端 API 获取真实数据
-   - 实现离线地图下载
-   - 实现 GPS 轨迹记录
+详见 [`docs/api/hiking-module-acceptance-checklist.md`](docs/api/hiking-module-acceptance-checklist.md)。
 
 ## 设计原则
 
@@ -309,10 +315,8 @@
 
 ## 下一步
 
-1. 后端 API 实现关键字段
-2. 地图组件集成（如 Mapbox、Leaflet）
-3. GPS 定位和轨迹记录
-4. 离线地图下载功能
-5. 实时天气数据集成
-6. 用户反馈和优化
+1. 后端填满 `hikingDetail`（`IS_LAUGAVEGUR` 种子 + Admin override）
+2. 生产环境 `HIKING_OFFLINE_PACK_BASE_URL` + `prisma migrate deploy`
+3. P2：收藏服务端同步（瓦片离线 ✅）
+4. 实时天气与 live-state 字段持续对齐
 

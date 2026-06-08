@@ -7,16 +7,14 @@ import { useState, useMemo } from 'react';
 import type { TripDetail } from '@/types/trip';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  Shield, 
-  Activity,
-  RefreshCw,
+import {
   Eye,
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPersonaIconColorClasses, getPersonaBackgroundClasses } from '@/lib/persona-colors';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import type { 
   OverallMetrics, 
   AbuViewData, 
@@ -227,7 +225,7 @@ export default function AutoOverview({
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Shield className={cn('w-4 h-4', getPersonaIconColorClasses('ABU'))} />
+                    <PersonaAvatar persona="ABU" size={28} />
                     <span className="font-semibold text-sm">安全视角</span>
                   </div>
                 </div>
@@ -274,7 +272,7 @@ export default function AutoOverview({
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Activity className={cn('w-4 h-4', getPersonaIconColorClasses('DR_DRE'))} />
+                    <PersonaAvatar persona="DR_DRE" size={28} />
                     <span className="font-semibold text-sm">节奏视角</span>
                   </div>
                 </div>
@@ -309,7 +307,7 @@ export default function AutoOverview({
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <RefreshCw className={cn('w-4 h-4', getPersonaIconColorClasses('NEPTUNE'))} />
+                    <PersonaAvatar persona="NEPTUNE" size={28} />
                     <span className="font-semibold text-sm">修复视角</span>
                   </div>
                 </div>

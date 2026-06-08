@@ -5,10 +5,11 @@
 
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { DEFAULT_FITNESS_PROFILE } from '@/constants/fitness';
 import type { FitnessDimensions } from '@/types/fitness';
 
 interface DimensionRadarChartProps {
-  dimensions: FitnessDimensions;
+  dimensions?: Partial<FitnessDimensions> | null;
   size?: number;
   className?: string;
   showLabels?: boolean;
@@ -26,6 +27,15 @@ const DIMENSION_CONFIGS: DimensionConfig[] = [
   { key: 'endurance', label: '耐力', emoji: '🏃' },
   { key: 'recoverySpeed', label: '恢复速度', emoji: '🔄' },
 ];
+
+function resolveDimensions(dimensions?: Partial<FitnessDimensions> | null): FitnessDimensions {
+  const fallback = DEFAULT_FITNESS_PROFILE.dimensions;
+  return {
+    climbingAbility: dimensions?.climbingAbility ?? fallback.climbingAbility,
+    endurance: dimensions?.endurance ?? fallback.endurance,
+    recoverySpeed: dimensions?.recoverySpeed ?? fallback.recoverySpeed,
+  };
+}
 
 /**
  * 能力维度雷达图
@@ -45,6 +55,7 @@ export function DimensionRadarChart({
   showLabels = true,
   animated = true,
 }: DimensionRadarChartProps) {
+  const safeDimensions = useMemo(() => resolveDimensions(dimensions), [dimensions]);
   const center = size / 2;
   const radius = (size / 2) - 30; // 留出标签空间
 
@@ -55,7 +66,7 @@ export function DimensionRadarChart({
 
     return DIMENSION_CONFIGS.map((config, index) => {
       const angle = startAngle + index * angleStep;
-      const value = dimensions[config.key] / 100; // 归一化到 0-1
+      const value = safeDimensions[config.key] / 100; // 归一化到 0-1
       
       return {
         ...config,
@@ -72,7 +83,7 @@ export function DimensionRadarChart({
         labelY: center + (radius + 25) * Math.sin(angle),
       };
     });
-  }, [dimensions, center, radius]);
+  }, [safeDimensions, center, radius]);
 
   // 生成网格线
   const gridLevels = [0.25, 0.5, 0.75, 1];
@@ -162,7 +173,7 @@ export function DimensionRadarChart({
             {point.label}
           </span>
           <span className="text-sm font-semibold">
-            {dimensions[point.key]}
+            {safeDimensions[point.key]}
           </span>
         </div>
       ))}

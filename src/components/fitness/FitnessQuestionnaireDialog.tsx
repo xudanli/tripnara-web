@@ -37,7 +37,6 @@ import {
   trackQuestionnaireResumed,
 } from '@/utils/fitness-analytics';
 import { FitnessLevelBadge } from './FitnessLevelBadge';
-
 interface FitnessQuestionnaireDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -216,9 +215,11 @@ export function FitnessQuestionnaireDialog({
   // 提交问卷
   const handleSubmit = useCallback(async () => {
     try {
+      const longestHike = answers.longestHike ?? 2;
+
       const result = await submitMutation.mutateAsync({
         weeklyExercise: answers.weeklyExercise ?? 2,
-        longestHike: answers.longestHike ?? 2,
+        longestHike,
         elevationExperience: answers.elevationExperience ?? 2,
         ageGroupIndex: answers.ageGroupIndex ?? 1,
         riskTolerance: answers.riskTolerance,

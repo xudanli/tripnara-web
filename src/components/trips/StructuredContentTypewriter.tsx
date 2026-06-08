@@ -164,6 +164,7 @@ export function StructuredContentTypewriter({
           <ResponseBlockRenderer 
             key={block.id || `block-${idx}`} 
             block={block} 
+            allBlocks={blocks}
           />
         );
       })}

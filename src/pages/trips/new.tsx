@@ -27,8 +27,11 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Plus, X, Globe, CreditCard, ExternalLink, TrendingUp, Check, ChevronsUpDown, MapPin, ChevronDown, Settings2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, X, Globe, CreditCard, TrendingUp, Check, ChevronsUpDown, MapPin, ChevronDown, Settings2, AlertTriangle } from 'lucide-react';
 import { cn, toDateOnly } from '@/lib/utils';
+import { buildEmbeddedHikingMetadata, buildHikingAuditMetadata } from '@/lib/trip-hiking';
+import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const PAYMENT_TYPE_LABELS: Record<string, string> = {
   CASH_HEAVY: '现金为主',
@@ -124,6 +127,7 @@ export default function NewTripPage() {
 
   // ========== 更多设置：必须点/不去点 ==========
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
+  const [includeEmbeddedHiking, setIncludeEmbeddedHiking] = useState(false);
   
   // 必须点状态
   const [mustPlaces, setMustPlaces] = useState<number[]>([]);
@@ -701,22 +705,39 @@ export default function NewTripPage() {
 
     // 如果选择了多个目的地，使用第一个作为主要目的地
     // 其他目的地可以在后续的规划阶段添加
+    let hikingMetadata: Record<string, unknown> | undefined;
+    if (finalDestination === 'IS') {
+      hikingMetadata = buildHikingAuditMetadata({
+        hikingLevel: 'hiking-heavy',
+        destination: finalDestination,
+      });
+    } else if (includeEmbeddedHiking && isEmbeddedHikingEnabled()) {
+      hikingMetadata = buildEmbeddedHikingMetadata({ destination: finalDestination });
+    }
+
     const submitData: CreateTripRequest = {
       ...formData,
       destination: finalDestination,
-      // 高级设置：必须点/不去点
       mustPlaces: mustPlaces.length > 0 ? mustPlaces : undefined,
       avoidPlaces: avoidPlaces.length > 0 ? avoidPlaces : undefined,
+      metadata: hikingMetadata,
     };
 
     try {
-      await tripsApi.create(submitData);
-      // 创建成功后显示提示并跳转到行程列表
+      const created = await tripsApi.create(submitData);
+      tripsApi.supplementIntentAfterCreate(created.id, {
+        pacingConfig: submitData.pacingConfig ? {
+          travelMode: submitData.pacingConfig.travelMode,
+          level: submitData.pacingConfig.level,
+          maxDailyActivities: submitData.pacingConfig.maxDailyActivities,
+        } : undefined,
+      }).catch(() => {});
+      // 创建成功后显示提示并跳转到行程列表（优先展示接口返回的 message）
       toast.success('行程创建成功', {
-        description: '您的行程已成功创建',
+        description: created.message ?? '您的行程已成功创建',
         duration: 3000,
       });
-      navigate('/dashboard/trips', { state: { from: 'create' } });
+      navigate(`/dashboard/plan-studio?tripId=${created.id}`, { state: { from: 'create' } });
     } catch (err: any) {
       // 🆕 特殊处理 UNAUTHORIZED 错误
       const isUnauthorized = 
@@ -735,12 +756,19 @@ export default function NewTripPage() {
           
           // 重试创建行程
           try {
-            await tripsApi.create(submitData);
+            const created = await tripsApi.create(submitData);
+            tripsApi.supplementIntentAfterCreate(created.id, {
+              pacingConfig: submitData.pacingConfig ? {
+                travelMode: submitData.pacingConfig.travelMode,
+                level: submitData.pacingConfig.level,
+                maxDailyActivities: submitData.pacingConfig.maxDailyActivities,
+              } : undefined,
+            }).catch(() => {});
             toast.success('行程创建成功', {
-              description: '您的行程已成功创建',
+              description: created.message ?? '您的行程已成功创建',
               duration: 3000,
             });
-            navigate('/dashboard/trips', { state: { from: 'create' } });
+            navigate(`/dashboard/plan-studio?tripId=${created.id}`, { state: { from: 'create' } });
             return; // 成功，直接返回
           } catch (retryErr: any) {
             // 重试仍然失败，显示错误
@@ -841,8 +869,12 @@ export default function NewTripPage() {
   const handlePlanningComplete = (trip: TripDetail) => {
     setShowPlanningWaitDialog(false);
     setWaitingTripId(null);
-    // 跳转到行程详情页
-    navigate(`/dashboard/trips/${trip.id}`);
+    // 规划中行程：与 NL 创建一致，进入规划工作台为主战场
+    if (trip.status === 'PLANNING') {
+      navigate(`/dashboard/plan-studio?tripId=${trip.id}`);
+    } else {
+      navigate(`/dashboard/trips/${trip.id}`);
+    }
   };
 
   return (
@@ -1246,18 +1278,7 @@ export default function NewTripPage() {
                 {(selectedCountry || formData.destination) && (
                   <Card className="border-blue-200 bg-blue-50/50">
                     <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">目的地信息</CardTitle>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/dashboard/countries/${selectedCountry || formData.destination}`)}
-                        >
-                          查看详情
-                          <ExternalLink className="w-4 h-4 ml-2" />
-                        </Button>
-                      </div>
+                      <CardTitle className="text-lg">目的地信息</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {countryInfoLoading ? (
@@ -1480,6 +1501,24 @@ export default function NewTripPage() {
                     })}
                                               </div>
                                           </div>
+
+                {isEmbeddedHikingEnabled() ? (
+                  <div className="flex items-start space-x-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                    <Checkbox
+                      id="embedded-hiking"
+                      checked={includeEmbeddedHiking}
+                      onCheckedChange={(c) => setIncludeEmbeddedHiking(c === true)}
+                    />
+                    <div className="grid gap-1 leading-none">
+                      <Label htmlFor="embedded-hiking" className="font-medium cursor-pointer">
+                        含徒步片段（混合出行）
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        创建后在行程详情登记徒步日期；不会整单走硬核 Trail 生成。
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* 更多设置 - 可折叠区域 */}
                 <Collapsible open={advancedSettingsOpen} onOpenChange={setAdvancedSettingsOpen}>

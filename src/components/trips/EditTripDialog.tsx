@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { tripsApi } from '@/api/trips';
+import { itineraryItemsApi, tripsApi } from '@/api/trips';
 import type { TripDetail, UpdateTripRequest } from '@/types/trip';
 import {
   Dialog,
@@ -89,6 +89,30 @@ export function EditTripDialog({ trip, open, onOpenChange, onSuccess }: EditTrip
       };
       
       await tripsApi.update(trip.id, updateData);
+
+      // 同步修复 TripDay.date / 行程项日期，使 Day1/Day2 的日期与新起止日期一致
+      try {
+        const fixRes = await itineraryItemsApi.fixDates(trip.id);
+        if (fixRes.fixedCount > 0) {
+          toast.success(`已同步更新 ${fixRes.fixedCount} 个行程项日期`, {
+            duration: 2500,
+          });
+        } else {
+          // 0 条通常意味着后端没有需要修复的“行程项日期”，但 TripDay.date 可能仍未平移
+          console.warn('[EditTripDialog] fixDates fixedCount=0', fixRes);
+          toast.info('行程日期已更新', {
+            description: '若 Day1 日期仍未变化，请刷新页面或稍后再试',
+            duration: 3000,
+          });
+        }
+      } catch (fixErr: any) {
+        console.warn('[EditTripDialog] fixDates failed:', fixErr);
+        toast.warning('行程日期已更新，但行程项日期同步失败', {
+          description: fixErr?.message || '请稍后重试或刷新页面',
+          duration: 4000,
+        });
+      }
+
       toast.success('行程信息已更新', {
         description: '您的行程信息已成功保存',
         duration: 3000,

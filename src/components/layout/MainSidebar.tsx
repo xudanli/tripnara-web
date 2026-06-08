@@ -3,6 +3,7 @@
  * 
  * Phase 1: 核心导航项
  * - Logo
+ * - 新行程 / 我的行程 / 搭子广场 / 路线模版 / 徒步
  * - 收藏（展开显示收藏的行程）
  * - 规划中（展开显示规划中的行程）
  * - 进行中（展开显示进行中的行程）
@@ -11,7 +12,6 @@
  * Phase 2: 可选导航项（待实施）
  * - 新行程
  * - 路线模版
- * - 国家知识库
  * - 我的行程
  */
 
@@ -40,7 +40,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Plus,
   Route,
-  Globe,
   MapPin,
   Heart,
   ChevronDown,
@@ -65,6 +64,10 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
+import { getTripHikingProfile } from '@/lib/trip-hiking';
+import { parseHikingSegments } from '@/lib/hiking-segments';
+import { hikingPhaseSidebarLine } from '@/lib/hiking-phase';
+import { useTripEmbeddedSidebarStore } from '@/store/tripEmbeddedSidebarStore';
 
 interface MainSidebarProps {
   className?: string;
@@ -266,6 +269,9 @@ export default function MainSidebar({ className }: MainSidebarProps) {
       // "我的行程"：精确匹配，排除具体行程页面（/dashboard/trips/xxx）
       return location.pathname === '/dashboard/trips' || location.pathname === '/dashboard/trips/';
     }
+    if (path === '/dashboard/tripnara/plaza') {
+      return location.pathname.startsWith('/dashboard/tripnara/plaza');
+    }
     return location.pathname.startsWith(path);
   };
   
@@ -318,7 +324,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
   return (
     <aside
       className={cn(
-        'bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 relative z-10',
+        'bg-white border-r border-gray-200 flex flex-col h-full max-h-screen min-h-0 overflow-hidden transition-all duration-300 relative z-10',
         collapsed ? 'w-16' : 'w-64',
         className
       )}
@@ -380,7 +386,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
       
       
       {/* 导航内容区域 - ChatGPT 风格：更紧凑的间距 */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="py-1">
           {/* 导航菜单项 */}
           {/* 新行程 - 直接跳转到自然语言创建页面 */}
@@ -388,7 +394,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             icon={Plus}
             label="新行程"
             onClick={() => handleNavClick('/dashboard')}
-            active={isActive('/dashboard') && !isActive('/dashboard/trips') && !isActive('/dashboard/plan-studio')}
+            active={isActive('/dashboard') && !isActive('/dashboard/trips') && !isActive('/dashboard/plan-studio') && !isActive('/dashboard/tripnara/plaza')}
             collapsed={collapsed}
           />
           
@@ -398,6 +404,15 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             label="我的行程"
             onClick={() => handleNavClick('/dashboard/trips')}
             active={isActive('/dashboard/trips')}
+            collapsed={collapsed}
+          />
+
+          {/* 搭子广场 — 行程确定「去哪」后，匹配「同行人」；位于行程与灵感内容之间 */}
+          <NavItem
+            icon={Users}
+            label="搭子广场"
+            onClick={() => handleNavClick('/dashboard/tripnara/plaza')}
+            active={isActive('/dashboard/tripnara/plaza')}
             collapsed={collapsed}
           />
           
@@ -410,15 +425,6 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             collapsed={collapsed}
           />
           
-          {/* 国家知识库 */}
-          <NavItem
-            icon={Globe}
-            label="国家知识库"
-            onClick={() => handleNavClick('/dashboard/countries')}
-            active={isActive('/dashboard/countries')}
-            collapsed={collapsed}
-          />
-          
           {/* 徒步 */}
           <NavItem
             icon={Mountain}
@@ -427,7 +433,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             active={isActive('/dashboard/trails')}
             collapsed={collapsed}
           />
-          
+
           {/* 收藏 - 只在有收藏内容时显示 */}
           {!collapsed && collectedTrips.length > 0 && (
             <ExpandableNavItem
@@ -577,12 +583,22 @@ export default function MainSidebar({ className }: MainSidebarProps) {
               {/* 🆕 参考 shadcn 设计：账户、账单、通知、偏好、退出登录 */}
               <DropdownMenuItem
                 onClick={() => {
-                  navigate('/dashboard/settings?tab=account');
+                  navigate('/dashboard/profile');
                   setUserMenuOpen(false);
                 }}
                 className="cursor-pointer"
               >
                 <User className="mr-2 h-4 w-4" />
+                <span>我的主页</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  navigate('/dashboard/settings?tab=account');
+                  setUserMenuOpen(false);
+                }}
+                className="cursor-pointer"
+              >
+                <Settings className="mr-2 h-4 w-4" />
                 <span>账户</span>
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -808,6 +824,19 @@ function TripListItem({
 }: TripListItemProps) {
   const isHovered = hoveredTripId === trip.id;
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const embeddedSub = useTripEmbeddedSidebarStore((s) => s.subtitles[trip.id]);
+  const embeddedSubtitle =
+    getTripHikingProfile(trip) === 'embedded'
+      ? embeddedSub
+        ? `${embeddedSub.travelLabel ?? '自驾'} · ${
+            embeddedSub.phaseHintZh ??
+            hikingPhaseSidebarLine(embeddedSub.phase, embeddedSub.segmentCount)
+          }`
+        : (() => {
+            const n = parseHikingSegments(trip.metadata).length;
+            return n > 0 ? `自驾 · 含 ${n} 段徒步` : '自驾 · 含徒步片段';
+          })()
+      : null;
   
   // 根据当前状态获取允许的状态转换
   const getAllowedStatusTransitions = (currentStatus: TripStatus) => {
@@ -864,7 +893,11 @@ function TripListItem({
         style={{ color: '#111827' }}
       >
         <p className="truncate font-normal">{getDisplayName(trip)}</p>
-        {/* 🆕 所有状态的行程都不显示日期 */}
+        {embeddedSubtitle ? (
+          <p className="truncate text-[11px] mt-0.5" style={{ color: '#666666' }}>
+            {embeddedSubtitle}
+          </p>
+        ) : null}
       </button>
       
       {/* 悬浮时显示的更多操作按钮 */}

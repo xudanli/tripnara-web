@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyMedia } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, DollarSign, Shield, Activity, RefreshCw, Heart, Share2, Users, ArrowRight, CloudSun, MessageSquare, FileText, Maximize2, Minimize2, X, MapPin } from 'lucide-react';
+import { Plus, Calendar, DollarSign, Heart, Share2, Users, ArrowRight, CloudSun, MessageSquare, FileText, Maximize2, Minimize2, X, MapPin } from 'lucide-react';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import { format } from 'date-fns';
 import { TripPlanning } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
@@ -19,7 +20,7 @@ import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/format';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
-import { getPersonaIconColorClasses } from '@/lib/persona-colors';
+import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
 import { TripCardWeather } from '@/components/weather/WeatherCard';
 import NLChatInterface from '@/components/trips/NLChatInterface';
 import {
@@ -513,8 +514,33 @@ export default function TripsPage() {
     setShowCloseConfirm(false);
   };
 
-  const handleTripClick = (tripId: string) => {
-    navigate(`/dashboard/trips/${tripId}`);
+  const [checkingTripId, setCheckingTripId] = useState<string | null>(null);
+
+  const handleTripClick = async (tripId: string) => {
+    if (checkingTripId === tripId) return;
+    setCheckingTripId(tripId);
+    try {
+      const trip = await tripsApi.getById(tripId);
+      if (shouldShowNlItemsGeneratingPlaceholder(trip)) {
+        const progress = trip.metadata?.generationProgress;
+        if (progress?.status === 'failed') {
+          toast.error('行程项生成失败', {
+            description: progress.message || '请稍后重试',
+          });
+        } else {
+          toast.info('行程项生成中', {
+            description: '预计需要 2–5 分钟，请稍后刷新或直接访问行程查看进度',
+          });
+        }
+        return;
+      }
+      navigate(`/dashboard/trips/${tripId}`);
+    } catch (err) {
+      console.error('Failed to check trip before navigation:', err);
+      toast.error('无法加载行程，请重试');
+    } finally {
+      setCheckingTripId(null);
+    }
   };
 
   // getMaturity, getMaturityColor 和 getMaturityText 已移除，未使用
@@ -757,21 +783,21 @@ export default function TripsPage() {
                     <div className="space-y-2 border-t pt-3">
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <Shield className={cn('w-4 h-4', getPersonaIconColorClasses('ABU'))} />
+                          <PersonaAvatar persona="ABU" size={24} />
                           <span className="text-muted-foreground">Abu 评估</span>
                         </div>
                         <span className="text-xs text-muted-foreground">查看详情</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <Activity className={cn('w-4 h-4', getPersonaIconColorClasses('DR_DRE'))} />
+                          <PersonaAvatar persona="DR_DRE" size={24} />
                           <span className="text-muted-foreground">Dr.Dre 评估</span>
                         </div>
                         <span className="text-xs text-muted-foreground">查看详情</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <RefreshCw className={cn('w-4 h-4', getPersonaIconColorClasses('NEPTUNE'))} />
+                          <PersonaAvatar persona="NEPTUNE" size={24} />
                           <span className="text-muted-foreground">Neptune 评估</span>
                         </div>
                         <span className="text-xs text-muted-foreground">查看详情</span>
@@ -927,7 +953,7 @@ export default function TripsPage() {
               onTripCreated={handleNlTripCreated}
               className="h-full"
               showHeader={false}
-              resetOnMount={true}
+              resetOnMount={false}
             />
           </div>
         </DialogContent>

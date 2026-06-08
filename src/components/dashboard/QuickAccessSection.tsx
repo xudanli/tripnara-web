@@ -1,12 +1,12 @@
 /**
  * 快捷入口区域
- * 显示三个核心入口：行程、国家数据库、路线模版
+ * 显示核心入口：行程、路线模版
  */
 
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { List, Globe, Route } from 'lucide-react';
+import { List, Route } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface QuickAccessSectionProps {
@@ -23,17 +23,6 @@ export default function QuickAccessSection({ className }: QuickAccessSectionProp
       description: '查看和管理所有行程',
       icon: List,
       route: '/dashboard/trips',
-      // 统一使用中性色，通过图标形状区分功能
-      color: 'text-slate-600',
-      bgColor: 'bg-slate-50',
-      hoverBgColor: 'hover:bg-slate-100',
-    },
-    {
-      id: 'countries',
-      title: '国家数据库',
-      description: '浏览国家知识库和目的地信息',
-      icon: Globe,
-      route: '/dashboard/countries',
       // 统一使用中性色，通过图标形状区分功能
       color: 'text-slate-600',
       bgColor: 'bg-slate-50',
@@ -61,7 +50,7 @@ export default function QuickAccessSection({ className }: QuickAccessSectionProp
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {quickAccessItems.map((item) => {
             const Icon = item.icon;
             return (

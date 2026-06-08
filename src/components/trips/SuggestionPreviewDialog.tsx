@@ -26,6 +26,8 @@ interface SuggestionPreviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void | Promise<void>; // 🆕 支持异步回调，确保数据刷新完成
+  /** 可选：指定要预览/应用的 actionId；不传则自动选择 primary/apply */
+  actionId?: string | null;
 }
 
 export function SuggestionPreviewDialog({
@@ -34,6 +36,7 @@ export function SuggestionPreviewDialog({
   open,
   onOpenChange,
   onConfirm,
+  actionId,
 }: SuggestionPreviewDialogProps) {
   const [loading, setLoading] = useState(false);
   const [previewResult, setPreviewResult] = useState<ApplySuggestionResponse | null>(null);
@@ -62,17 +65,28 @@ export function SuggestionPreviewDialog({
     }
   }, [tripId, open]);
 
+  const pickActionId = (): string | null => {
+    if (!suggestion?.actions?.length) return null;
+    if (actionId && suggestion.actions.some((a) => a.id === actionId)) return actionId;
+    const primary = suggestion.actions.find((a) => a.primary);
+    if (primary) return primary.id;
+    const apply = suggestion.actions.find((a) => a.type === 'apply');
+    if (apply) return apply.id;
+    return suggestion.actions[0]?.id ?? null;
+  };
+
   const loadPreview = async () => {
     if (!suggestion || !suggestion.actions || suggestion.actions.length === 0) {
       return;
     }
 
-    const actionId = suggestion.actions[0].id;
+    const effectiveActionId = pickActionId();
+    if (!effectiveActionId) return;
     setLoading(true);
 
     try {
       const result = await tripsApi.applySuggestion(tripId, suggestion.id, {
-        actionId: actionId,
+        actionId: effectiveActionId,
         preview: true,
       });
       setPreviewResult(result);
@@ -100,12 +114,13 @@ export function SuggestionPreviewDialog({
       return;
     }
 
-    const actionId = suggestion.actions[0].id;
+    const effectiveActionId = pickActionId();
+    if (!effectiveActionId) return;
     setApplying(true);
 
     try {
       const result = await tripsApi.applySuggestion(tripId, suggestion.id, {
-        actionId: actionId,
+        actionId: effectiveActionId,
         preview: false,
       });
 

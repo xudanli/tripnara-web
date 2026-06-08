@@ -9,6 +9,11 @@
  */
 
 import { agentApi, type RouteAndRunRequest, type RouteAndRunResponse } from '@/api/agent';
+import i18n from '@/i18n/config';
+import { localeForAgentConversationContext } from '@/lib/agent-conversation-locale';
+import { buildPreferenceProfileForRouteRun } from '@/lib/route-run-preference-profile';
+import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
+import { pickRawDecisionLogFromRouteRun } from '@/lib/unified-execution-trace';
 
 // 注意：useAuth 是 React Hook，不能在类中使用
 // 需要在调用时传入 userId
@@ -117,14 +122,23 @@ class PlanStudioOrchestrator {
           message = `执行操作: ${action}`;
       }
 
+      const agentLocale = localeForAgentConversationContext(i18n.language);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      const preference_profile = buildPreferenceProfileForRouteRun();
+      const sanitizedTripId = sanitizeRouteRunTripId(tripId);
+
       // 构建请求
       const request: RouteAndRunRequest = {
         request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         user_id: userId,
-        trip_id: tripId,
+        trip_id: sanitizedTripId ?? null,
         message,
+        ...(preference_profile ? { preference_profile: preference_profile as any } : {}),
         conversation_context: {
           recent_messages: [],
+          ...(agentLocale ? { locale: agentLocale } : {}),
+          timezone,
         },
         options: {
           // 可以在这里添加选项
@@ -158,7 +172,7 @@ class PlanStudioOrchestrator {
       // OK 表示成功，NEED_CONFIRMATION 表示需要审批（不是失败），其他状态视为失败
       const isSuccess = response.result.status === 'OK';
       const statusMessage = response.result.answer_text || '未知状态';
-      const decisionLog = response.explain?.decision_log || [];
+      const decisionLog = pickRawDecisionLogFromRouteRun(response);
 
       // 尝试从决策日志中提取更详细的错误信息
       let detailedError: string | undefined;

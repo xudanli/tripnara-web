@@ -86,6 +86,9 @@ import PackingListTab from '@/components/readiness/PackingListTab';
 import ReadinessDisclaimerComponent from '@/components/readiness/ReadinessDisclaimer'; // 🆕 免责声明组件
 import { planningWorkbenchApi } from '@/api/planning-workbench'; // 🆕 规划工作台 API
 import { useIcelandInfo, useIsIcelandTrip } from '@/hooks'; // 🆕 冰岛信息源 Hook
+import { HikingTrailReadinessPanel } from '@/components/hiking/HikingTrailReadinessPanel';
+import { HikingAuditCard } from '@/components/hiking/HikingAuditCard';
+import { tripIncludesHiking } from '@/lib/trip-hiking';
 import { inferIcelandInfoParams } from '@/utils/iceland-info-inference'; // 🆕 冰岛信息源参数推断
 // import CapabilityPackPersonaInsights from '@/components/readiness/CapabilityPackPersonaInsights'; // 暂时移除：信息重复
 
@@ -101,6 +104,11 @@ export default function ReadinessPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
+  const trailIdParam = searchParams.get('trailId');
+  const trailRouteId =
+    trailIdParam && /^\d+$/.test(trailIdParam) ? Number(trailIdParam) : null;
+  const hikePlanIdParam = searchParams.get('hikePlanId') ?? undefined;
+  const plannedDateParam = searchParams.get('plannedDate') ?? undefined;
   const tabParam = searchParams.get('tab'); // 🆕 从 URL 参数读取标签页
   
   // 🆕 获取用户权限
@@ -224,13 +232,16 @@ export default function ReadinessPage() {
   const [selectedBlockerMessage, setSelectedBlockerMessage] = useState<string | null>(null);  // 当前选中的阻塞项描述
 
   useEffect(() => {
+    if (trailRouteId != null) {
+      setLoading(false);
+      return;
+    }
     if (tripId) {
       loadData();
     } else {
-      // 如果没有 tripId，尝试获取最近的 trip
       loadRecentTrip();
     }
-  }, [tripId]);
+  }, [tripId, trailRouteId]);
 
   const loadRecentTrip = async () => {
     try {
@@ -1425,7 +1436,7 @@ export default function ReadinessPage() {
 
   const handlePreviewFix = (_optionId: string) => {
     if (!tripId) return;
-    navigate(`/dashboard/trips/${tripId}?tab=plan&highlight=${selectedBlockerId}`);
+    navigate(`/dashboard/trips/${tripId}?tab=overview&highlight=${selectedBlockerId}`);
   };
 
   const handleStartExecute = () => {
@@ -1530,6 +1541,18 @@ export default function ReadinessPage() {
     ? readinessData?.blockers || []
     : (readinessData?.blockers || []).slice(0, 3);
 
+  if (trailRouteId != null) {
+    return (
+      <div className="h-full flex flex-col overflow-auto px-4 py-6 md:px-6">
+        <HikingTrailReadinessPanel
+          routeDirectionId={trailRouteId}
+          hikePlanId={hikePlanIdParam}
+          plannedDate={plannedDateParam}
+        />
+      </div>
+    );
+  }
+
   if (loading) {
     return <ReadinessPageSkeleton />;
   }
@@ -1569,6 +1592,7 @@ export default function ReadinessPage() {
   const isReady = readinessData.status === 'ready';
   const isNearly = readinessData.status === 'nearly';
   const isNotReady = readinessData.status === 'not-ready';
+  const showHikingAudit = Boolean(tripId && trip && tripIncludesHiking(trip));
 
   return (
     <div className="h-full flex flex-col">
@@ -1684,6 +1708,14 @@ export default function ReadinessPage() {
         </div>
       </div>
 
+      {showHikingAudit && (
+        <div className="border-b bg-background px-6 py-4">
+          <div className="max-w-7xl mx-auto">
+            <HikingAuditCard tripId={tripId!} />
+          </div>
+        </div>
+      )}
+
       {/* Core 区域：Blockers + Repair Preview */}
       <div className="flex-1 overflow-y-auto bg-muted/30">
         <div className="max-w-7xl mx-auto p-6">
@@ -1768,7 +1800,7 @@ export default function ReadinessPage() {
                         return (
                           <>
                             {risksToDisplay.map((risk) => (
-                              <RiskCard key={risk.id || risk.type} risk={risk} />
+                              <RiskCard key={risk.id || risk.type} risk={risk} trip={trip} />
                             ))}
                             {/* 🆕 显示所有官方来源汇总 */}
                             {riskWarnings?.packSources && riskWarnings.packSources.length > 0 && (
@@ -2312,7 +2344,7 @@ export default function ReadinessPage() {
                           <h3 className="text-sm font-semibold">{t('dashboard.readiness.page.risks')}</h3>
                           <div className="space-y-3">
                             {rawReadinessResult.risks.map((risk, index) => (
-                              <RiskCard key={index} risk={risk} />
+                              <RiskCard key={index} risk={risk} trip={trip} />
                             ))}
                           </div>
                           {/* 🆕 显示所有官方来源汇总 */}
@@ -2482,8 +2514,11 @@ export default function ReadinessPage() {
                                     <ChecklistSection
                                       title={t('dashboard.readiness.page.blockers')}
                                       items={allBlockers}
-                                      level="must"
+                                      level="blocker"
                                       tripStartDate={tripStartDate}
+                                      trip={trip}
+                                      tripId={tripId || undefined}
+                                      onViewBlockerSolution={(blockerId) => void handleFixBlocker(blockerId)}
                                     />
                                   )}
                                   {allMust.length > 0 && (
@@ -2492,6 +2527,7 @@ export default function ReadinessPage() {
                                       items={allMust}
                                       level="must"
                                       tripStartDate={tripStartDate}
+                                      trip={trip}
                                       tripId={tripId || undefined}
                                       onFindingUpdated={async (findingId, updatedFinding) => {
                                         // 重新加载数据以反映更新

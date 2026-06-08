@@ -8,8 +8,9 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect, ReactNode } from 'react';
+import type { ItineraryAdjustDraftPreview } from '@/lib/itinerary-adjust-response';
 
-// ==================== 类型定义 ====================
+export type { ItineraryAdjustDraftPreview };
 
 export interface SelectedContext {
   /** 当前选中的天数 (1-based) */
@@ -103,6 +104,10 @@ interface PlanStudioContextValue {
   hasUnsavedScheduleChanges: boolean;
   /** 设置是否有未保存的时间轴改动 */
   setHasUnsavedScheduleChanges: (hasChanges: boolean) => void;
+  /** 改排草案预览（待确认）；勿为此单独 GET Trip 拼总结 */
+  itineraryAdjustDraftPreview: ItineraryAdjustDraftPreview | null;
+  setItineraryAdjustDraftPreview: (preview: ItineraryAdjustDraftPreview | null) => void;
+  clearItineraryAdjustDraftPreview: () => void;
   
   // ========== 左侧 → 右侧 (行程 → 助手) ==========
   /** 选中某一天 */
@@ -136,6 +141,20 @@ interface PlanStudioContextValue {
   /** 注册打开助手抽屉处理器 */
   onOpenAssistant: (() => void) | null;
   setOnOpenAssistant: (handler: () => void) => void;
+
+  // ========== Plan Gate 抽屉（原决策评估 Tab） ==========
+  /** 方案预览与提交抽屉是否打开 */
+  planGateOpen: boolean;
+  /** 打开方案抽屉；autoGenerate 为 true 时挂载后自动 execute(generate) */
+  openPlanGate: (options?: { autoGenerate?: boolean }) => void;
+  closePlanGate: () => void;
+  /** 抽屉会话序号，用于 remount PlanningWorkbenchTab */
+  planGateSession: number;
+  /** 本次打开是否自动触发生成 */
+  planGateAutoGenerate: boolean;
+  /** 方案提交到行程后刷新时间轴等 */
+  notifyPlanCommitted: () => void;
+  setOnPlanCommitted: (handler: (() => void) | null) => void;
 }
 
 // ==================== Context 创建 ====================
@@ -168,11 +187,30 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
   
   // 🆕 未保存的时间轴改动状态
   const [hasUnsavedScheduleChanges, setHasUnsavedScheduleChanges] = useState(false);
+
+  const [itineraryAdjustDraftPreview, setItineraryAdjustDraftPreviewState] =
+    useState<ItineraryAdjustDraftPreview | null>(null);
+
+  const setItineraryAdjustDraftPreview = useCallback(
+    (preview: ItineraryAdjustDraftPreview | null) => {
+      setItineraryAdjustDraftPreviewState(preview);
+    },
+    []
+  );
+
+  const clearItineraryAdjustDraftPreview = useCallback(() => {
+    setItineraryAdjustDraftPreviewState(null);
+  }, []);
   
   // 回调处理器
   const [onAskAssistant, setOnAskAssistantState] = useState<((question: string, context: SelectedContext) => void) | null>(null);
   const [onApplySuggestion, setOnApplySuggestionState] = useState<((suggestion: PendingSuggestion) => Promise<boolean>) | null>(null);
   const [onOpenAssistant, setOnOpenAssistantState] = useState<(() => void) | null>(null);
+
+  const [planGateOpen, setPlanGateOpen] = useState(false);
+  const [planGateSession, setPlanGateSession] = useState(0);
+  const [planGateAutoGenerate, setPlanGateAutoGenerate] = useState(false);
+  const onPlanCommittedRef = useRef<(() => void) | null>(null);
   
   // 使用 ref 存储回调处理器，避免依赖导致循环
   const onAskAssistantRef = useRef<((question: string, context: SelectedContext) => void) | null>(null);
@@ -304,6 +342,28 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     setOnOpenAssistantState(() => handler);
   }, []);
 
+  const openPlanGate = useCallback((options?: { autoGenerate?: boolean }) => {
+    setPlanGateAutoGenerate(options?.autoGenerate === true);
+    setPlanGateSession((n) => n + 1);
+    setPlanGateOpen(true);
+  }, []);
+
+  const closePlanGate = useCallback(() => {
+    setPlanGateOpen(false);
+    setPlanGateAutoGenerate(false);
+  }, []);
+
+  const notifyPlanCommitted = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+    }
+    onPlanCommittedRef.current?.();
+  }, []);
+
+  const setOnPlanCommitted = useCallback((handler: (() => void) | null) => {
+    onPlanCommittedRef.current = handler;
+  }, []);
+
   // ========== Context Value ==========
 
   const value = useMemo<PlanStudioContextValue>(() => ({
@@ -312,6 +372,9 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     recentAction,
     hasUnsavedScheduleChanges,
     setHasUnsavedScheduleChanges,
+    itineraryAdjustDraftPreview,
+    setItineraryAdjustDraftPreview,
+    clearItineraryAdjustDraftPreview,
     selectDay,
     selectItem,
     clearSelection,
@@ -327,11 +390,21 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     setOnApplySuggestion,
     onOpenAssistant,
     setOnOpenAssistant,
+    planGateOpen,
+    openPlanGate,
+    closePlanGate,
+    planGateSession,
+    planGateAutoGenerate,
+    notifyPlanCommitted,
+    setOnPlanCommitted,
   }), [
     selectedContext,
     pendingSuggestions,
     recentAction,
     hasUnsavedScheduleChanges,
+    itineraryAdjustDraftPreview,
+    setItineraryAdjustDraftPreview,
+    clearItineraryAdjustDraftPreview,
     selectDay,
     selectItem,
     clearSelection,
@@ -347,6 +420,13 @@ export function PlanStudioProvider({ children }: { children: ReactNode }) {
     setOnApplySuggestion,
     onOpenAssistant,
     setOnOpenAssistant,
+    planGateOpen,
+    openPlanGate,
+    closePlanGate,
+    planGateSession,
+    planGateAutoGenerate,
+    notifyPlanCommitted,
+    setOnPlanCommitted,
   ]);
 
   return (

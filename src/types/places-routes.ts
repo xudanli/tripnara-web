@@ -395,6 +395,28 @@ export interface RouteDirection {
   status?: 'draft' | 'active' | 'deprecated';
   createdAt?: string;
   updatedAt?: string;
+  /** 硬徒步路线标识，如 IS_LAUGAVEGUR */
+  routeDirectionName?: string;
+  /** 发现列表：可走指数 0–100 */
+  readinessScore?: number;
+  totalDistanceKm?: number;
+  totalAscentM?: number;
+  estimatedDays?: number;
+  startPoint?: { lat: number; lng: number; nameCN?: string };
+  /** tag=徒步 列表：地图中心（无 startPoint 时） */
+  center?: { lat: number; lng: number };
+  /** tag=徒步 列表：起点文案 */
+  startPointLabel?: string;
+  /** 列表卡片等；C 端勿读 hikingDetailOverride（GET 详情已剔除） */
+  metadata?: {
+    totalDistanceKm?: number;
+    estimatedDuration?: number | string;
+    estimatedDays?: number;
+    startPointLabel?: string;
+    [key: string]: unknown;
+  };
+  /** GET ?longestHike= 且 tags 含徒步时，后端 merge override 后的详情 */
+  hikingDetail?: import('@/types/hiking-trail-detail').HikingTrailDetail;
 }
 
 export interface RouteDirectionCard {

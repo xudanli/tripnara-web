@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,107 +16,76 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { HikeReview } from '@/types/trail';
+import { hikePlanRepository, isUuidLike } from '@/services/hike-plan-repository';
+import { Spinner } from '@/components/ui/spinner';
+import { HikingElevationChart } from '@/components/hiking/HikingElevationChart';
+import { gpsTrackToElevationProfile } from '@/lib/gps-to-elevation';
+import type { GpsTrackResponse } from '@/types/hike-plan';
 
 export default function HikeReviewPage() {
-  const { hikePlanId } = useParams<{ hikePlanId: string }>();
+  const { hikePlanId: paramId } = useParams<{ hikePlanId: string }>();
   const navigate = useNavigate();
+  const planId = paramId && isUuidLike(paramId) ? paramId : undefined;
 
-  // 模拟复盘数据
-  const [review, setReview] = useState<HikeReview>({
-    id: 'review-1',
-    hikePlanId: hikePlanId || '',
-    trailId: 'trail-1',
-    completedDate: new Date().toISOString(),
-    actualDistanceKm: 15.2,
-    actualDurationMin: 420,
-    actualElevationGainedM: 850,
-    elevationEvents: [
-      {
-        id: 'event-1',
-        type: 'delay',
-        distanceKm: 5.2,
-        elevationM: 1200,
-        timestamp: new Date().toISOString(),
-        description: '在 5.2km 处因风大延误 30 分钟',
-        impact: 'negative',
-      },
-      {
-        id: 'event-2',
-        type: 'fatigue',
-        distanceKm: 8.5,
-        elevationM: 1500,
-        timestamp: new Date().toISOString(),
-        description: '在 8.5km 处明显疲劳，休息 20 分钟',
-        impact: 'negative',
-      },
-      {
-        id: 'event-3',
-        type: 'turnaround',
-        distanceKm: 12.0,
-        elevationM: 1800,
-        timestamp: new Date().toISOString(),
-        description: '在 12km 处因时间不足提前折返',
-        impact: 'neutral',
-      },
-    ],
-    insights: [
-      {
-        id: 'insight-1',
-        category: 'friction',
-        title: '暴露山脊段风大影响节奏',
-        description: '在 5-6km 的暴露山脊段，风速超过 10m/s 时明显影响行进速度',
-        evidence: ['事件记录：5.2km 处延误 30 分钟', '天气数据：风速 10.5m/s'],
-      },
-      {
-        id: 'insight-2',
-        category: 'rhythm',
-        title: '日爬升超过 900m 会明显疲劳',
-        description: '实际爬升 850m，在 8.5km 处已明显疲劳，建议下次改为 2 天行程',
-        evidence: ['事件记录：8.5km 处疲劳', '实际爬升：850m'],
-      },
-      {
-        id: 'insight-3',
-        category: 'highlight',
-        title: '日落前 90 分钟必须在下撤段',
-        description: '本次在 12km 处折返，刚好在日落前 90 分钟，时间控制合理',
-        evidence: ['事件记录：12km 折返', '日落时间：18:30'],
-      },
-    ],
-    anchorRules: [
-      {
-        id: 'rule-1',
-        condition: '风速 > 12m/s 的暴露山脊',
-        action: '不走',
-        context: '下次自动更稳',
-        priority: 'high',
-      },
-      {
-        id: 'rule-2',
-        condition: '每日爬升 > 900m',
-        action: '改 2 天',
-        context: '避免明显疲劳',
-        priority: 'high',
-      },
-      {
-        id: 'rule-3',
-        condition: '日落前 90 分钟',
-        action: '必须在下撤段',
-        context: '确保安全返回',
-        priority: 'high',
-      },
-    ],
-    status: 'generated',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
+  const [review, setReview] = useState<HikeReview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [gpsTrack, setGpsTrack] = useState<GpsTrackResponse | null>(null);
+
+  useEffect(() => {
+    if (!planId) {
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await hikePlanRepository.getReview(planId);
+        setReview(res.review);
+      } catch {
+        setReview(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [planId]);
+
+  useEffect(() => {
+    if (!planId) return;
+    hikePlanRepository.getTrack(planId).then(setGpsTrack).catch(() => setGpsTrack(null));
+  }, [planId]);
+
+  const elevationFromGps = useMemo(() => {
+    if (!gpsTrack?.points.length) return [];
+    return gpsTrackToElevationProfile(gpsTrack.points);
+  }, [gpsTrack]);
+
+  const handleGenerate = async () => {
+    if (!planId) return;
+    setGenerating(true);
+    try {
+      const res = await hikePlanRepository.generateReview(planId, { useGpsTrack: true });
+      setReview(res.review);
+      const track = await hikePlanRepository.getTrack(planId);
+      setGpsTrack(track);
+      toast.success('已根据 GPS 与执行记录生成复盘');
+    } catch (e) {
+      toast.error((e as Error).message || '生成失败');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleInsightFeedback = (insightId: string, vote: 'agree' | 'disagree') => {
-    setReview((prev) => ({
-      ...prev,
-      insights: prev.insights.map((insight) =>
+    if (!review || !planId) return;
+    const next = {
+      ...review,
+      insights: review.insights.map((insight) =>
         insight.id === insightId ? { ...insight, userFeedback: vote } : insight
       ),
-    }));
+    };
+    setReview(next);
+    void hikePlanRepository.updateReview(planId, { insights: next.insights });
     toast.success(vote === 'agree' ? '已同意' : '已不同意');
   };
 
@@ -154,19 +123,51 @@ export default function HikeReviewPage() {
     skip: 'bg-gray-100 text-gray-800',
   };
 
+  if (!planId) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <p className="text-muted-foreground mb-4">无效的 HikePlan ID</p>
+        <Button onClick={() => navigate('/dashboard/trails/my-hikes')}>我的徒步</Button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
+  if (!review) {
+    return (
+      <div className="container mx-auto px-4 py-12 max-w-lg text-center">
+        <p className="text-muted-foreground mb-4">尚未生成复盘，可基于 GPS 轨迹与执行事件生成</p>
+        <Button onClick={handleGenerate} disabled={generating}>
+          {generating ? '生成中…' : '生成复盘'}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
-      {/* 返回按钮 */}
       <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4">
         <ArrowLeft className="h-4 w-4 mr-2" />
         返回
       </Button>
 
-      <div className="mb-6">
+      <div className="mb-6 flex justify-between items-start gap-4">
+        <div>
         <h1 className="text-3xl font-bold mb-2">徒步复盘</h1>
         <p className="text-muted-foreground">
           证据 → 洞察 → 锚点沉淀
         </p>
+        </div>
+        <Button variant="outline" onClick={handleGenerate} disabled={generating}>
+          {generating ? '重新生成中…' : '重新生成'}
+        </Button>
       </div>
 
       {/* 执行摘要 */}
@@ -217,35 +218,49 @@ export default function HikeReviewPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {/* 海拔剖面图占位 */}
-              <div className="h-64 bg-muted rounded-lg mb-6 flex items-center justify-center text-muted-foreground relative">
-                <div className="text-center">
-                  <TrendingUp className="h-12 w-12 mx-auto mb-2" />
-                  <p>交互式海拔剖面图</p>
-                  <p className="text-xs mt-1">事件钉子标注在对应位置</p>
-                </div>
-                {/* 模拟事件标记 */}
-                {review.elevationEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="absolute"
-                    style={{
-                      left: `${(event.distanceKm / review.actualDistanceKm) * 100}%`,
-                      bottom: `${(event.elevationM / 2000) * 100}%`,
-                    }}
-                  >
-                    <div
-                      className={`w-3 h-3 rounded-full border-2 border-white ${
-                        event.impact === 'negative'
-                          ? 'bg-red-500'
-                          : event.impact === 'positive'
-                          ? 'bg-green-500'
-                          : 'bg-gray-500'
-                      }`}
-                      title={event.description}
-                    />
+              {elevationFromGps.length > 1 ? (
+                <HikingElevationChart
+                  className="mb-6"
+                  points={elevationFromGps}
+                  dataSource="live_dem"
+                />
+              ) : (
+                <div className="h-48 bg-muted rounded-lg mb-6 flex items-center justify-center text-muted-foreground">
+                  <div className="text-center">
+                    <TrendingUp className="h-10 w-10 mx-auto mb-2" />
+                    <p className="text-sm">暂无 GPS 海拔数据</p>
+                    <p className="text-xs mt-1">执行页开启定位并记录轨迹后可展示</p>
                   </div>
-                ))}
+                </div>
+              )}
+              {gpsTrack && (
+                <p className="text-xs text-muted-foreground mb-4">
+                  GPS：{gpsTrack.summary.distanceKm.toFixed(2)} km ·{' '}
+                  {gpsTrack.summary.pointCount} 点 · {gpsTrack.summary.durationMin} min
+                </p>
+              )}
+              <div className="relative h-8 mb-4">
+                {review.elevationEvents.map((event) => {
+                  const denom = Math.max(review.actualDistanceKm, 0.1);
+                  return (
+                    <div
+                      key={event.id}
+                      className="absolute top-1/2 -translate-y-1/2"
+                      style={{ left: `${Math.min(98, (event.distanceKm / denom) * 100)}%` }}
+                      title={event.description}
+                    >
+                      <div
+                        className={`w-3 h-3 rounded-full border-2 border-white ${
+                          event.impact === 'negative'
+                            ? 'bg-red-500'
+                            : event.impact === 'positive'
+                            ? 'bg-green-500'
+                            : 'bg-gray-500'
+                        }`}
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               {/* 事件列表 */}

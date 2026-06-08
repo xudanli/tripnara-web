@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { executionApi, type PreviewFallbackResponse } from '@/api/execution';
 import { toast } from 'sonner';
 import { CheckCircle2, X, Plus, Minus, Edit, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatScheduleTime, formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';
 import { cn } from '@/lib/utils';
 
 interface FallbackSolutionPreviewDialogProps {
@@ -151,13 +151,13 @@ export function FallbackSolutionPreviewDialog({
                             {change.original && (
                               <div className="text-xs text-muted-foreground mb-1">
                                 <span className="font-medium">原计划：</span>
-                                {change.original.placeName} ({format(new Date(change.original.startTime), 'HH:mm')} - {format(new Date(change.original.endTime), 'HH:mm')})
+                                {change.original.placeName} ({formatScheduleTimeRange(change.original.startTime, change.original.endTime)})
                               </div>
                             )}
                             {change.modified && (
                               <div className="text-xs text-muted-foreground">
                                 <span className="font-medium">新计划：</span>
-                                {change.modified.placeName} ({format(new Date(change.modified.startTime), 'HH:mm')} - {format(new Date(change.modified.endTime), 'HH:mm')})
+                                {change.modified.placeName} ({formatScheduleTimeRange(change.modified.startTime, change.modified.endTime)})
                               </div>
                             )}
                             {change.reason && (
@@ -235,7 +235,7 @@ export function FallbackSolutionPreviewDialog({
                         )}
                       >
                         <div className="flex-shrink-0 w-16 text-xs text-muted-foreground">
-                          {format(new Date(item.startTime), 'HH:mm')}
+                          {formatScheduleTime(item.startTime)}
                         </div>
                         <div className="flex-1">
                           <div className="text-sm font-medium">{item.placeName}</div>

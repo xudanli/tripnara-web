@@ -4,6 +4,8 @@
  * 根据 Planning Assistant V2 API 完整接口文档定义
  */
 
+import type { OrchestrationResult, OrchestrationUiState } from '@/api/agent';
+
 // ==================== 会话管理类型 ====================
 
 export interface CreateSessionRequest {
@@ -69,6 +71,8 @@ export interface ChatRequest {
   sessionId: string;
   message: string;
   userId?: string;
+  /** 工作台绑定行程 ID；Sink 写入必需，与 context.tripId 同时传递 */
+  tripId?: string;
   language?: 'en' | 'zh';
   context?: ChatRequestContext; // 请求上下文信息
   /** 图片 URL 列表（base64 data URL 或上传后的 URL） */
@@ -125,7 +129,12 @@ export interface ChatResponse {
     reason: string;
     reasonCN?: string; // 路由原因（中文）
     params?: Record<string, any>;
+    /** 重规划走 route_and_run 异步轮询 */
+    mode?: 'SYNC' | 'ASYNC_POLLING' | (string & {});
   };
+  /** routing.mode === ASYNC_POLLING 时由后端下发 */
+  task_id?: string;
+  task_poll_path?: string;
   // 推荐和方案数据
   recommendations?: Recommendation[]; // 目的地推荐列表（当 routing.target === "recommendations" 时包含）
   plans?: Plan[]; // 方案候选列表（当 routing.target === "generate" 时包含）
@@ -156,21 +165,17 @@ export interface ChatResponse {
     primary?: boolean;
   }>;
   /** 编排 UI 状态（当后端走 route_and_run 或编排流程时返回） */
-  ui_state?: {
-    phase?: string;
-    ui_status?: string;
-    progress_percent?: number;
-    message?: string;
-    requires_user_action?: boolean;
-    current_step_detail?: string;
-  };
+  ui_state?: OrchestrationUiState;
   /** 编排结果（state、gate_result、decision_log、decisionState） */
-  orchestrationResult?: {
-    state?: any;
-    itinerary?: any;
-    gate_result?: { result?: string; reason?: string; warnings?: string[]; [key: string]: any };
-    decision_log?: any[];
-    decisionState?: any;
+  orchestrationResult?: OrchestrationResult;
+  /** 酒店搜索元信息（如 disclaimer_zh） */
+  hotelSearchMeta?: {
+    disclaimer_zh?: string;
+    [key: string]: unknown;
+  };
+  hotel_search_meta?: {
+    disclaimer_zh?: string;
+    [key: string]: unknown;
   };
 }
 
@@ -387,6 +392,19 @@ export interface Hotel {
   roomTypes?: string[];
 }
 
+/** 行程相关中文提示：字符串可按换行拆主标题与副标题；对象则显式主副标题 */
+export type ItineraryHintZh =
+  | string
+  | {
+      title?: string;
+      subtitle?: string;
+      /** API 别名 */
+      main?: string;
+      sub?: string;
+      primary?: string;
+      secondary?: string;
+    };
+
 /** 住宿统一卡片（酒店 + Airbnb 混合列表，对应后端 AccommodationItemDto） */
 export interface Accommodation {
   id: string;
@@ -394,6 +412,15 @@ export interface Accommodation {
   name: string;
   nameCN?: string;
   nameEN?: string;
+  /** 中文主副标题区（行程提示） */
+  itineraryHintZh?: ItineraryHintZh;
+  /** 入住/连住等中文短标签（角标） */
+  stayLabelZh?: string;
+  /** 酒店搜索附带的元信息（如免责声明） */
+  hotelSearchMeta?: {
+    disclaimer_zh?: string;
+    [key: string]: unknown;
+  };
   address?: string;
   /** 房型描述（如 "1 bedroom, 1 queen bed"） */
   roomSpecs?: string;
@@ -409,10 +436,32 @@ export interface Accommodation {
   photos?: string[];
   checkIn?: string;
   checkOut?: string;
-  /** 距当天最近行程点的距离（公里），有 tripId+checkIn 时计算 */
+  /** 对应 payload.accommodations[] 下标 +1，或后端下发的 night_index */
+  nightIndex?: number;
   distanceKm?: number;
   /** 最近的行程点名称 */
   nearestPlaceName?: string;
+  /**
+   * route_and_run 住宿卡片：房源 ↔ 入住日当天最后一站行程 POI（「xxx周边」锚点）的球面距离（km，一位小数）
+   */
+  distanceToAnchorKm?: number;
+  /** 锚点 POI 中文名（可与 distanceToAnchorKm 组合展示） */
+  anchorPoiNameZh?: string;
+  /** 后端预填距离文案，例如：距「迪尔餐厅」约 2.3 km */
+  distanceLabelZh?: string;
+  /** MCP 解析的房源纬度（地图/复核；可能与 location 同源） */
+  listingLat?: number;
+  /** MCP 解析的房源经度 */
+  listingLng?: number;
+  /** 规则拼装的住宿决策短说明（中文），无足够信号时可能不出现 */
+  decisionSupportZh?: string;
+  /** 卡片操作（view / 加入行程 / 预订），与 railRoutes.actions 同形 */
+  actions?: Array<{
+    action: string;
+    label: string;
+    labelCN?: string;
+    params?: Record<string, unknown>;
+  }>;
   /** 原始数据（调试用） */
   raw?: Record<string, unknown>;
 }

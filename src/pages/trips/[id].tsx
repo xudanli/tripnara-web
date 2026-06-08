@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext, useCallback } from 'react';
+import { useEffect, useState, useContext, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DrawerContext } from '@/components/layout/DashboardLayout';
@@ -11,12 +11,11 @@ import type {
   TripDetail, 
   ItineraryItem, 
   TripRecapReport,
-  PersonaAlert,
   DayMetricsResponse,
   TripMetricsResponse,
   ConflictsResponse
 } from '@/types/trip';
-import type { Suggestion, SuggestionStats } from '@/types/suggestion';
+import type { Suggestion } from '@/types/suggestion';
 import { AssistantCenter } from '@/components/trips/AssistantCenter';
 import DayItineraryCard from '@/components/trips/DayItineraryCard';
 import { AdjustTimeDialog } from '@/components/trips/AdjustTimeDialog';
@@ -28,6 +27,31 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TripFeedbackDialog, TripTerrainSummary } from '@/components/fitness';
+import {
+  HikingAuditCard,
+  HikingTrailPlanSummaryCard,
+  HardTrekTrailPlanTimeline,
+  extractHardTrekTrailPlan,
+  extractRouteDirectionName,
+} from '@/components/hiking';
+import {
+  getTripHikingSegments,
+  isPrimaryHikingTrip,
+  isEmbeddedHikingTrip,
+} from '@/lib/trip-hiking';
+import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
+import { mergeTripMetadata, removeSegment } from '@/lib/hiking-segments';
+import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
+import {
+  HikingSegmentEmptyBanner,
+  AddHikingSegmentDialog,
+  EmbeddedHikingStatusBar,
+  EmbeddedHikingSegmentsPanel,
+  EmbeddedHikingDayRail,
+  HikingTrailSegmentsOverview,
+} from '@/components/hiking';
+import { getTripHikingTrailSegments } from '@/lib/hiking-day-card';
+import type { HikingSegment } from '@/types/hiking-embedded';
 import type { TerrainType } from '@/types/fitness';
 import {
   DropdownMenu,
@@ -41,6 +65,11 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import { TripDetailSkeleton } from '@/components/trips/TripDetailSkeleton';
+import { TripGeneratingPlaceholder } from '@/components/trips/TripGeneratingPlaceholder';
+import { TripSkeletonOnlyEmptyState } from '@/components/trips/TripSkeletonOnlyEmptyState';
+import { TRIP_DATA_UPDATED_EVENT, type TripDataUpdatedDetail } from '@/lib/agent-trip-sync';
+import { shouldShowNlItemsGeneratingPlaceholder, shouldShowTripSkeletonOnlyEmptyState } from '@/lib/trip-planning-complete';
+import { normalizeSuggestionForDisplay } from '@/lib/persona-alert-display';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -53,7 +82,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, Shield, Activity, RefreshCw, History, Play, Compass, BarChart3, Eye, Info, AlertTriangle, Plus, Wallet } from 'lucide-react';
+import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, RefreshCw, History, Play, Compass, BarChart3, Eye, Info, AlertTriangle, Wallet, Mountain } from 'lucide-react';
+import { CollaborativeTaskFlywheelPanel } from '@/features/match-square/components/CollaborativeTaskFlywheelPanel';
 import TripBudgetPage from './budget';
 import BudgetOverviewCard from '@/components/trips/BudgetOverviewCard';
 import BudgetMonitorCard from '@/components/trips/BudgetMonitorCard';
@@ -73,31 +103,41 @@ import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
 import ComplianceRulesCard from '@/components/trips/ComplianceRulesCard';
 import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
+import { EvidenceRefsReadable } from '@/lib/evidence-refs-readability';
+import {
+  getTripDecisionEvidenceRefs,
+  OntologyTripDecisionExtras,
+  extractTripDecisionOntologyEvidenceDisplayZh,
+  extractTripDecisionReadinessEvidenceDisplayZh,
+  extractTripDecisionReadinessTechnicalEvidenceRefs,
+} from '@/lib/ontology-decision-display';
 import { zhCN } from 'date-fns/locale';
-import AbuView from '@/components/trips/views/AbuView';
-import DrDreView from '@/components/trips/views/DrDreView';
-import NeptuneView from '@/components/trips/views/NeptuneView';
-import { 
-  extractAbuData, 
-  extractDrDreData, 
-  extractNeptuneData, 
-  calculateOverallMetrics,
-  type AbuViewData,
-  type DrDreViewData,
-  type NeptuneViewData,
-  type OverallMetrics,
-} from '@/utils/trip-data-extractors';
 import { tripDetailToRoutePlanDraft } from '@/utils/plan-converters';
 import { buildWorldModelContext } from '@/utils/world-context-builder';
 import { useFitnessContext } from '@/contexts/FitnessContext';
-import { useMemo } from 'react';
-import { getPersonaColorClasses, getPersonaIconColorClasses } from '@/lib/persona-colors';
+import { getPersonaColorClasses } from '@/lib/persona-colors';
+import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { WeatherCard, WeatherAlertBanner } from '@/components/weather/WeatherCard';
 import { formatCurrency } from '@/utils/format';
 // V2 优化组件
-import { OptimizationDashboard, FeedbackForm } from '@/components/optimization';
-import { useSubmitFeedback } from '@/hooks/useOptimizationV2';
+import { FeedbackForm, TeamManagementPanel, CreateTeamDialog, TeamNegotiationResultCard, InviteMemberDialog } from '@/components/optimization';
+import { MatchSquareRosterPanel } from '@/features/match-square/components/MatchSquareRosterPanel';
+import { useMatchSquareTeamBridge } from '@/features/match-square/hooks/useMatchSquareTeamBridge';
+import { 
+  useSubmitFeedback,
+  useCreateTeam,
+  useTeam,
+  useAddTeamMember,
+  useRemoveTeamMember,
+  useUpdateTeamMember,
+  useTeamNegotiation,
+  useTeamConstraints,
+  useTeamWeights,
+} from '@/hooks/useOptimizationV2';
+import type { TeamMember, TeamNegotiationResponse } from '@/types/optimization-v2';
+import { DEFAULT_WEIGHTS } from '@/types/optimization-v2';
+import { Skeleton } from '@/components/ui/skeleton';
 // 决策引擎组件
 import { DecisionFeedbackForm } from '@/components/decision';
 import { useAuth } from '@/hooks/useAuth';
@@ -107,41 +147,383 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { MessageSquare, Zap } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 
-// V2 优化标签页组件
-function OptimizeTabContent({
+// 团队标签页组件
+function TeamTabContent({
   tripId,
   trip,
   onTripRefetch,
+  onGoToPlanStudio,
 }: {
   tripId: string;
   trip: TripDetail;
   onTripRefetch?: () => void | Promise<void>;
+  /** 打开规划工作台（用于「去改行程」） */
+  onGoToPlanStudio?: () => void;
 }) {
-  const { profile: fitnessProfile } = useFitnessContext();
+  const { user } = useAuth();
+  const [localTeamId, setLocalTeamId] = useState<string | null>(null);
+  const [createTeamDialogOpen, setCreateTeamDialogOpen] = useState(false);
+  const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [teamNegotiationResult, setTeamNegotiationResult] = useState<TeamNegotiationResponse | null>(null);
 
-  const planDraft = useMemo(
-    () => tripDetailToRoutePlanDraft(trip),
-    [trip]
+  const tripMetadata = (trip as { metadata?: Record<string, unknown> })?.metadata;
+  const teamIdFromTrip = (trip as { metadata?: { teamId?: string } })?.metadata?.teamId;
+  const effectiveTeamId = localTeamId ?? teamIdFromTrip;
+
+  const persistTeamId = useCallback(
+    async (teamId: string) => {
+      setLocalTeamId(teamId);
+      try {
+        localStorage.setItem(`trip_team_id:${tripId}`, teamId);
+        await tripsApi.update(tripId, {
+          metadata: { ...(tripMetadata || {}), teamId },
+        });
+        await onTripRefetch?.();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : '团队已创建，但写入行程失败';
+        toast.error(message);
+      }
+    },
+    [tripId, tripMetadata, onTripRefetch]
   );
+
+  const {
+    isMatchSquareTrip,
+    roster: matchSquareRoster,
+    rosterLoading: matchSquareRosterLoading,
+    isImporting: matchSquareImporting,
+    importError: matchSquareImportError,
+    retryImport: retryMatchSquareImport,
+  } = useMatchSquareTeamBridge({
+    tripId,
+    trip,
+    effectiveTeamId,
+    onTeamImported: persistTeamId,
+  });
+
+  // 从 localStorage 恢复团队 ID
+  useEffect(() => {
+    if (teamIdFromTrip) {
+      setLocalTeamId(null);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(`trip_team_id:${tripId}`);
+      setLocalTeamId(stored || null);
+    } catch {
+      setLocalTeamId(null);
+    }
+  }, [tripId, teamIdFromTrip]);
+
+  // Hooks
+  const createTeamMutation = useCreateTeam();
+  const { data: team, isLoading: teamLoading } = useTeam(effectiveTeamId);
+  const addMemberMutation = useAddTeamMember(effectiveTeamId ?? '');
+  const removeMemberMutation = useRemoveTeamMember(effectiveTeamId ?? '');
+  const updateMemberMutation = useUpdateTeamMember(effectiveTeamId ?? '');
+  const teamNegotiationMutation = useTeamNegotiation(effectiveTeamId ?? '');
+  const { data: teamConstraints } = useTeamConstraints(effectiveTeamId);
+  const { data: teamWeights } = useTeamWeights(effectiveTeamId);
+
+  // 计划数据（团队协商需要）
+  const { profile: fitnessProfile } = useFitnessContext();
+  const planDraft = useMemo(() => tripDetailToRoutePlanDraft(trip), [trip]);
   const worldContext = useMemo(
     () => buildWorldModelContext(trip, { fitnessProfile }),
     [trip, fitnessProfile]
   );
 
-  const teamId = (trip as { metadata?: { teamId?: string } })?.metadata?.teamId;
-  const tripMetadata = (trip as { metadata?: Record<string, unknown> })?.metadata;
+  // 添加成员
+  const handleAddMember = async (member: Omit<TeamMember, 'userId' | 'personalWeights'>) => {
+    if (!effectiveTeamId) return;
+    try {
+      const fullMember: TeamMember = {
+        ...member,
+        userId: `user_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        personalWeights: DEFAULT_WEIGHTS,
+      };
+      await addMemberMutation.mutateAsync(fullMember);
+      toast.success(`已添加成员 ${member.displayName}`);
+    } catch (error: any) {
+      toast.error(error?.message || '添加成员失败');
+    }
+  };
+
+  // 编辑成员
+  const handleEditMember = async (member: TeamMember) => {
+    if (!effectiveTeamId) return;
+    try {
+      await updateMemberMutation.mutateAsync({
+        userId: member.userId,
+        updates: {
+          displayName: member.displayName,
+          role: member.role,
+          fitnessLevel: member.fitnessLevel,
+          experienceLevel: member.experienceLevel,
+          decisionWeight: member.decisionWeight,
+        },
+      });
+      toast.success(`已更新成员 ${member.displayName}`);
+    } catch (error: any) {
+      toast.error(error?.message || '更新成员失败');
+    }
+  };
+
+  // 移除成员
+  const handleRemoveMember = async (userId: string) => {
+    if (!effectiveTeamId) return;
+    try {
+      await removeMemberMutation.mutateAsync(userId);
+      toast.success('已移除成员');
+    } catch (error: any) {
+      toast.error(error?.message || '移除成员失败');
+    }
+  };
+
+  // 团队协商
+  const handleTeamNegotiate = async () => {
+    if (!effectiveTeamId) return;
+    const memberCount = team?.members?.length ?? 0;
+    const hasPlan = (trip.TripDay ?? []).some(day => (day.ItineraryItem?.length ?? 0) > 0);
+    if (memberCount < 1) {
+      toast.error('请先添加至少 1 名成员');
+      return;
+    }
+    if (!hasPlan) {
+      toast.error('请先在总览或规划工作台生成行程');
+      return;
+    }
+    try {
+      const result = await teamNegotiationMutation.mutateAsync({
+        plan: planDraft,
+        world: worldContext,
+        tripId,
+      });
+      setTeamNegotiationResult(result);
+      toast.success('团队协商完成');
+    } catch {
+      toast.error('团队协商失败');
+    }
+  };
+
+  const isLoading = teamLoading || addMemberMutation.isPending || removeMemberMutation.isPending || updateMemberMutation.isPending;
+
+  // 发起协商前置校验（设计文档 Phase 2）
+  const memberCount = team?.members?.length ?? 0;
+  const hasPlan = (trip.TripDay ?? []).some(day => (day.ItineraryItem?.length ?? 0) > 0);
+  const canNegotiate = memberCount >= 1 && hasPlan;
+  const negotiateDisabledReason = !memberCount
+    ? '请先添加至少 1 名成员'
+    : !hasPlan
+      ? '请先在总览或规划工作台生成行程'
+      : null;
 
   return (
-    <OptimizationDashboard
-      plan={planDraft}
-      world={worldContext}
-      tripId={tripId}
-      teamId={teamId}
-      tripMetadata={tripMetadata}
-      onTripUpdated={onTripRefetch}
-    />
+    <div className="p-6 space-y-6">
+      {!effectiveTeamId ? (
+        isMatchSquareTrip ? (
+          <MatchSquareRosterPanel
+            roster={matchSquareRoster}
+            rosterLoading={matchSquareRosterLoading}
+            isImporting={matchSquareImporting}
+            importError={matchSquareImportError}
+            onRetryImport={retryMatchSquareImport}
+            onManualCreate={() => setCreateTeamDialogOpen(true)}
+          />
+        ) : (
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+                  <Users className="w-8 h-8 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">创建行程团队</h3>
+                  <p className="text-muted-foreground text-sm mt-1 max-w-md mx-auto">
+                    创建后可邀请同行者，共同设定偏好并协商行程
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  onClick={() => setCreateTeamDialogOpen(true)}
+                  disabled={!user?.id}
+                  className="gap-2"
+                >
+                  <Users className="w-4 h-4" />
+                  创建团队
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      ) : (
+        // 已关联团队：按 L1-L4 排布（设计文档 Phase 1）
+        <div className="space-y-6">
+          {/* L1 状态区 */}
+          <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">{team?.name ?? '团队'}</h3>
+                <p className="text-sm text-muted-foreground">{memberCount} 成员</p>
+              </div>
+              {teamNegotiationResult && (
+                <div className="flex items-center gap-2 ml-4 pl-4 border-l">
+                  <Badge variant={
+                    teamNegotiationResult.decision === 'APPROVE' ? 'default' :
+                    teamNegotiationResult.decision === 'REJECT' ? 'destructive' :
+                    'secondary'
+                  }>
+                    {teamNegotiationResult.decision === 'APPROVE' ? '通过' :
+                     teamNegotiationResult.decision === 'REJECT' ? '拒绝' :
+                     teamNegotiationResult.decision === 'APPROVE_WITH_CONDITIONS' ? '有条件通过' :
+                     '需人工决策'}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    共识度 {Math.round(teamNegotiationResult.consensusLevel * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* L2 行动区：空成员时引导添加 */}
+          {memberCount === 0 && (
+            <Card className="border-dashed border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="py-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-amber-800 dark:text-amber-200">添加第一位成员</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">添加成员后可发起团队协商，汇总偏好达成共识</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => setAddMemberDialogOpen(true)}
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    添加成员
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* L2 行动区 + L3 协商结果 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">团队协商</CardTitle>
+                  <CardDescription className="text-sm">
+                    基于所有成员偏好，生成团队共识方案
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setInviteDialogOpen(true)}
+                  >
+                    <Users className="w-4 h-4" />
+                    邀请成员
+                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <Button
+                            onClick={handleTeamNegotiate}
+                            disabled={!canNegotiate || teamNegotiationMutation.isPending}
+                            className="gap-2"
+                          >
+                            <Users className="w-4 h-4" />
+                            {teamNegotiationMutation.isPending ? '协商中...' : '发起协商'}
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {negotiateDisabledReason ?? '基于成员偏好生成团队共识方案'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+            </CardHeader>
+            {teamNegotiationResult && (
+              <CardContent className="pt-0">
+                <TeamNegotiationResultCard
+                  result={teamNegotiationResult}
+                  tripId={tripId}
+                  onGoToPlan={onGoToPlanStudio}
+                  embedded
+                />
+              </CardContent>
+            )}
+          </Card>
+
+          {/* 成员管理 */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">团队成员</CardTitle>
+              <CardDescription className="text-sm">
+                管理团队成员及其个人偏好
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : (
+                <TeamManagementPanel
+                  team={team}
+                  constraints={teamConstraints}
+                  weights={teamWeights}
+                  onAddMember={handleAddMember}
+                  onRemoveMember={handleRemoveMember}
+                  onEditMember={handleEditMember}
+                  readonly={!effectiveTeamId}
+                  loading={isLoading}
+                  openAddMember={addMemberDialogOpen}
+                  onOpenAddMemberChange={setAddMemberDialogOpen}
+                  isEditMemberPending={updateMemberMutation.isPending}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* 邀请成员对话框 */}
+      <InviteMemberDialog
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
+        teamId={effectiveTeamId ?? ''}
+        tripId={tripId}
+        onAddMember={() => setAddMemberDialogOpen(true)}
+      />
+
+      {/* 创建团队对话框 */}
+      <CreateTeamDialog
+        open={createTeamDialogOpen}
+        onOpenChange={setCreateTeamDialogOpen}
+        onSubmit={async (req) => {
+          const newTeam = await createTeamMutation.mutateAsync(req);
+          await persistTeamId(newTeam.teamId);
+        }}
+        currentUserId={user?.id ?? ''}
+        currentUserDisplayName={user?.displayName ?? user?.email ?? '我'}
+        isSubmitting={createTeamMutation.isPending}
+      />
+    </div>
   );
 }
 
@@ -181,21 +563,6 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
     }
   };
 
-  // 使用三人格颜色工具函数
-  const getPersonaIcon = (persona?: string) => {
-    const iconColorClasses = getPersonaIconColorClasses(persona || '');
-    switch (persona) {
-      case 'ABU':
-        return <Shield className={cn('w-4 h-4', iconColorClasses)} />;
-      case 'DR_DRE':
-        return <Activity className={cn('w-4 h-4', iconColorClasses)} />;
-      case 'NEPTUNE':
-        return <RefreshCw className={cn('w-4 h-4', iconColorClasses)} />;
-      default:
-        return null;
-    }
-  };
-
   const getPersonaColor = (persona?: string) => {
     return getPersonaColorClasses(persona || '');
   };
@@ -232,14 +599,34 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
           <div className="space-y-4">
             {logs.map((log) => {
               const personaName = getPersonaName(log.persona);
+              const meta = log.metadata as Record<string, unknown> | undefined;
+              const outputsSummary =
+                typeof meta?.outputs_summary === 'string' ? meta.outputs_summary.trim() : '';
+              const evidenceRefs = getTripDecisionEvidenceRefs(log);
+              const ontologyZh = extractTripDecisionOntologyEvidenceDisplayZh(log);
+              const readinessZh = extractTripDecisionReadinessEvidenceDisplayZh(log);
+              const readinessTechnicalRefs = extractTripDecisionReadinessTechnicalEvidenceRefs(log);
+              const summaryHintsReadiness =
+                outputsSummary.length > 0 && /准备度|Readiness|readiness|就绪/i.test(outputsSummary);
+              const readinessWired =
+                (readinessZh?.length ?? 0) > 0 ||
+                readinessTechnicalRefs.some(
+                  (r) => r.startsWith('readiness_pack_check:') || r.startsWith('readiness:')
+                ) ||
+                evidenceRefs.some(
+                  (r) =>
+                    r.trim().startsWith('readiness_pack_check:') || r.trim().startsWith('readiness:')
+                );
               return (
                 <div
                   key={log.id}
                   className={`p-4 rounded-lg border ${getPersonaColor(log.persona)}`}
                 >
                   <div className="flex items-start gap-3">
-                    {getPersonaIcon(log.persona)}
-                    <div className="flex-1">
+                    {log.persona ? (
+                      <PersonaAvatar persona={log.persona} size={28} withBackground />
+                    ) : null}
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         {personaName && (
                           <span className="font-semibold text-sm">
@@ -249,15 +636,61 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
                         <span className="text-sm">
                           {log.description}
                         </span>
-                        <span className="text-xs opacity-70 ml-auto">
+                        <span className="text-xs opacity-70 ml-auto shrink-0">
                           {format(new Date(log.date), 'yyyy年M月d日 HH:mm', { locale: zhCN })}
                         </span>
                       </div>
+                      {outputsSummary && outputsSummary !== log.description ? (
+                        <div className="text-xs text-muted-foreground mt-1 border-l-2 border-primary/25 pl-2">
+                          {outputsSummary}
+                        </div>
+                      ) : null}
                       {log.source && (
                         <div className="text-xs opacity-70 mt-1">
                           来源：{log.source}
                         </div>
                       )}
+                      {evidenceRefs.length > 0 ||
+                      (ontologyZh?.length ?? 0) > 0 ||
+                      (readinessZh?.length ?? 0) > 0 ||
+                      summaryHintsReadiness ||
+                      readinessWired ||
+                      readinessTechnicalRefs.length > 0 ? (
+                        <div className="mt-2">
+                          <EvidenceRefsReadable
+                            refs={evidenceRefs}
+                            ontologyEvidenceDisplayZh={ontologyZh}
+                            readinessEvidenceDisplayZh={readinessZh}
+                            readinessTechnicalEvidenceRefs={readinessTechnicalRefs}
+                            outputsSummary={outputsSummary || null}
+                          />
+                        </div>
+                      ) : null}
+                      <OntologyTripDecisionExtras log={log} />
+                      {(() => {
+                        const logRecord = log as unknown as Record<string, unknown>;
+                        const meta = log.metadata as Record<string, unknown> | undefined;
+                        const hardTrek = extractHardTrekTrailPlan({
+                          ...logRecord,
+                          ...meta,
+                          hardTrekTrailPlan:
+                            meta?.hardTrekTrailPlan ?? logRecord.hardTrekTrailPlan,
+                          routeDirection:
+                            meta?.routeDirection ?? logRecord.routeDirection,
+                        });
+                        if (!hardTrek) return null;
+                        return (
+                          <div className="mt-3 border-t pt-3">
+                            <HardTrekTrailPlanTimeline
+                              plan={hardTrek}
+                              routeDirectionName={extractRouteDirectionName({
+                                ...logRecord,
+                                ...meta,
+                              })}
+                            />
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -333,12 +766,11 @@ export default function TripDetailPage() {
   const [statusConfirmText, setStatusConfirmText] = useState(''); // ✅ 状态修改确认输入
   const [statusConfirmCode, setStatusConfirmCode] = useState<string>(''); // ✅ 随机验证码
   const [country, setCountry] = useState<Country | null>(null);
-  const [planViewTab, setPlanViewTab] = useState<'abu' | 'dre' | 'neptune'>('abu'); // 问题与改进内的子视角（安全/节奏/修复）
-  const [planDetailTab, setPlanDetailTab] = useState<'issues' | 'optimize'>('issues'); // 方案A二段式：问题与改进 | 智能优化
   const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
   const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewSuggestion, setPreviewSuggestion] = useState<Suggestion | null>(null);
+  const [previewActionId, setPreviewActionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('overview'); // ✅ Tab 状态控制
   const [metricExplanationDialogOpen, setMetricExplanationDialogOpen] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<'schedule' | 'budget' | 'pace' | 'feasibility' | null>(null);
@@ -349,96 +781,59 @@ export default function TripDetailPage() {
   const [optimizationFeedbackDialogOpen, setOptimizationFeedbackDialogOpen] = useState(false);
   
   // 新增：风险、指标相关状态
-  const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
   const [personaAlertsLoading, setPersonaAlertsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
   const [tripMetrics, setTripMetrics] = useState<TripMetricsResponse | null>(null);
-  const [tripMetricsLoading, setTripMetricsLoading] = useState(false); // 🆕 跟踪tripMetrics加载状态
   const [conflicts, setConflicts] = useState<ConflictsResponse | null>(null);
+
+  // ✅ 批量 seen：避免用户每次进来都还是 new（仅对“已展示过的 new suggestions”触发一次）
+  const markedSuggestionIdsRef = useRef<Set<string>>(new Set());
+  const markSeenInFlightRef = useRef(false);
   
   // 新增：决策日志相关状态
-  const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
-  const [decisionLogsLoading, setDecisionLogsLoading] = useState(false); // 🆕 跟踪decisionLogs加载状态
-  
   // 新增：行程详情页 Agent 相关状态
   const [tripHealth, setTripHealth] = useState<Health | null>(null);
-  
+  const [addSegmentOpen, setAddSegmentOpen] = useState(false);
+
+  const embeddedHiking = useEmbeddedHikingTrip(trip);
+  const showEmbeddedUi =
+    isEmbeddedHikingEnabled() && embeddedHiking.embedded && isEmbeddedHikingTrip(trip);
+
   // 🆕 货币状态：用于格式化费用显示
   const [currency, setCurrency] = useState<string>('CNY');
   
-  // 新增：提取的数据状态（通过 useMemo 计算）
-  // ✅ 即使数据为空，也返回空数据结构，让视图组件自己处理空状态
-  const abuData = useMemo<AbuViewData | null>(() => {
-    // 如果有行程项，即使没有决策日志和提醒，也应该显示视图（显示空状态）
-    const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
-    if (!hasTripItems) return null; // 没有行程项时返回null
-    return extractAbuData(decisionLogs, personaAlerts);
-  }, [decisionLogs, personaAlerts, trip]);
-  
-  const drDreData = useMemo<DrDreViewData | null>(() => {
-    // 如果有行程项，即使没有决策日志和指标，也应该显示视图（显示空状态）
-    const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
-    if (!hasTripItems) return null; // 没有行程项时返回null
-    
-    // 🐛 调试：记录依赖项的变化
-    const decisionLogsRef = decisionLogs; // 保存引用用于比较
-    const tripMetricsRef = tripMetrics; // 保存引用用于比较
-    
-    console.log('[TripDetail] drDreData useMemo 重新计算:', {
-      decisionLogsCount: decisionLogs.length,
-      decisionLogsRef: decisionLogsRef, // 完整数组引用
-      hasTripMetrics: !!tripMetrics,
-      tripMetricsRef: tripMetricsRef, // 完整对象引用
-      tripMetricsSummary: tripMetrics?.summary,
-      tripMetricsSummaryTotalFatigue: tripMetrics?.summary?.totalFatigue,
-      tripMetricsSummaryTotalBuffer: tripMetrics?.summary?.totalBuffer,
-      tripMetricsSummaryTotalWalk: tripMetrics?.summary?.totalWalk,
-      tripMetricsSummaryTotalDrive: tripMetrics?.summary?.totalDrive,
-      tripId: trip?.id,
-      recalculateTime: new Date().toISOString(),
-    });
-    
-    const result = extractDrDreData(decisionLogs, tripMetrics);
-    
-    console.log('[TripDetail] drDreData useMemo 计算结果:', {
-      metrics: result.metrics,
-      adjustmentsCount: result.adjustments?.length || 0,
-      logsCount: result.logs?.length || 0,
-    });
-    
-    return result;
-  }, [decisionLogs, tripMetrics, trip]);
-  
-  const neptuneData = useMemo<NeptuneViewData>(() => {
-    // 始终返回数据结构，让 NeptuneView 展示空状态；仅在加载中时由 UI 显示加载态
-    return extractNeptuneData(decisionLogs, suggestions);
-  }, [decisionLogs, suggestions]);
-  
-  const overallMetrics = useMemo<OverallMetrics | null>(() => {
-    // ✅ 如果行程项为空，不计算综合指标（避免显示误导性的100/100）
-    const hasTripItems = trip?.TripDay?.some(day => day.ItineraryItem && day.ItineraryItem.length > 0) || false;
-    if (!hasTripItems) {
-      return null; // 行程项为空时，不显示综合指标
-    }
-    
-    if (decisionLogs.length === 0 && personaAlerts.length === 0 && !suggestionStats) return null;
-    return calculateOverallMetrics(decisionLogs, personaAlerts, suggestionStats, suggestions);
-  }, [decisionLogs, personaAlerts, suggestionStats, suggestions, trip]);
-
-  const hasPlanIssues = useMemo(() => {
-    if (!overallMetrics) return true; // 数据未就绪时默认展示问题与改进
-    const h = Math.min(overallMetrics.safetyScore, overallMetrics.rhythmScore, overallMetrics.readinessScore);
-    return h < 90;
-  }, [overallMetrics]);
-
-  // 方案A：智能优化已并入规划Tab内，非PLANNING时若在优化子Tab则切回问题与改进
+  // 总览 tab：new 列表成功渲染后，尽快批量标记为 seen
   useEffect(() => {
-    if (trip?.status !== 'PLANNING' && planDetailTab === 'optimize') {
-      setPlanDetailTab('issues');
-    }
-  }, [trip?.status, planDetailTab]);
+    if (!id) return;
+    if (suggestions.length === 0) return;
+    if (markSeenInFlightRef.current) return;
+
+    // 仅把 NEW -> SEEN（不覆盖 APPLIED / DISMISSED；后端也有保护逻辑）
+    const idsToMark = suggestions
+      .filter((s) => s.status === 'new')
+      .map((s) => s.id)
+      .filter((sid): sid is string => Boolean(sid))
+      .filter((sid) => !markedSuggestionIdsRef.current.has(sid));
+
+    if (idsToMark.length === 0) return;
+
+    markSeenInFlightRef.current = true;
+
+    (async () => {
+      try {
+        await tripsApi.markSuggestionsSeen(id, { suggestionIds: idsToMark });
+        idsToMark.forEach((sid) => markedSuggestionIdsRef.current.add(sid));
+        // 刷新建议列表，与后端 seen 状态对齐
+        await loadSuggestions();
+      } catch (err: any) {
+        // 静默失败：不阻塞页面渲染，下一次触发时会再尝试
+        console.warn('[TripDetail] markSuggestionsSeen failed:', err?.message || err);
+      } finally {
+        markSeenInFlightRef.current = false;
+      }
+    })();
+  }, [id, suggestions]);
 
   // ⚠️ 重要：所有 hooks（包括 useMemo）必须在任何条件返回之前调用
   // 获取天气位置：优先使用行程项坐标，否则使用目的地国家默认坐标
@@ -526,6 +921,17 @@ export default function TripDetailPage() {
     }
   }, [id, isInvalidTripId]);
 
+  useEffect(() => {
+    if (!id || isInvalidTripId) return;
+    const onTripDataUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent<TripDataUpdatedDetail>).detail;
+      if (detail?.tripId && detail.tripId !== id) return;
+      loadTrip();
+    };
+    window.addEventListener(TRIP_DATA_UPDATED_EVENT, onTripDataUpdated);
+    return () => window.removeEventListener(TRIP_DATA_UPDATED_EVENT, onTripDataUpdated);
+  }, [id, isInvalidTripId]);
+
   // 处理从其他页面传递过来的状态（如侧边栏的操作）
   useEffect(() => {
     const state = location.state as {
@@ -559,14 +965,14 @@ export default function TripDetailPage() {
   useEffect(() => {
     if (!trip) return;
     
-    // 如果当前在"执行"tab，但状态不是进行中或已完成，切换回"规划"tab
+    // 如果当前在"执行"tab，但状态不是进行中或已完成，切换回总览
     if (activeTab === 'execute' && trip?.status !== 'IN_PROGRESS' && trip?.status !== 'COMPLETED') {
-      setActiveTab('plan');
+      setActiveTab('overview');
     }
     
-    // 如果当前在"复盘"tab，但状态不是已完成，切换回"规划"tab
+    // 如果当前在"复盘"tab，但状态不是已完成，切换回总览
     if (activeTab === 'insights' && trip?.status !== 'COMPLETED') {
-      setActiveTab('plan');
+      setActiveTab('overview');
     }
   }, [trip?.status, activeTab]);
 
@@ -711,7 +1117,6 @@ export default function TripDetailPage() {
           loadSuggestions(),
           loadConflicts(),
           loadPersonaAlerts(), // 新增：加载三人格提醒
-          loadDecisionLogs(), // 新增：加载决策日志
           loadTripHealth(), // 新增：加载行程健康度
         ]);
       } else {
@@ -769,12 +1174,13 @@ export default function TripDetailPage() {
     }
   };
   
-  // 🆕 检测URL参数，如果tab=budget，切换到预算标签页
+  // 🆕 检测URL参数，支持 tab=budget 等（tab=plan 已废弃，落到总览）
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'budget') {
       setActiveTab('budget');
-      // 不清除URL参数，因为openConstraintDialog参数需要保留给TripBudgetPage
+    } else if (tabParam === 'plan') {
+      setActiveTab('overview');
     }
   }, [searchParams]);
 
@@ -920,8 +1326,18 @@ export default function TripDetailPage() {
     if (!id) return;
     try {
       setPersonaAlertsLoading(true);
-      // 使用新的统一接口获取建议列表
-      const result = await tripsApi.getSuggestions(id, { status: 'new' });
+      // Story D：默认拉取 NEW + SEEN（未处理建议），用于列表/角标/状态闭环
+      // 后端会从 trip_suggestion_states 回填 status；若无记录默认 NEW
+      const [newRes, seenRes] = await Promise.all([
+        tripsApi.getSuggestions(id, { status: 'new', limit: 100, offset: 0 }),
+        tripsApi.getSuggestions(id, { status: 'seen', limit: 100, offset: 0 }),
+      ]);
+
+      const result = {
+        items: [...(newRes.items || []), ...(seenRes.items || [])],
+        total: (newRes.total || 0) + (seenRes.total || 0),
+        filters: newRes.filters ?? seenRes.filters,
+      };
       
       // 确保建议 ID 唯一，去重处理
       const uniqueSuggestions = result.items.reduce((acc, suggestion) => {
@@ -946,89 +1362,28 @@ export default function TripDetailPage() {
       const filteredSuggestions = correctedSuggestions.filter(
         suggestion => !isNoIssueSuggestion(suggestion)
       );
-      
-      setSuggestions(filteredSuggestions);
-      
-      // 使用新的统一接口获取统计数据
-      const stats = await tripsApi.getSuggestionStats(id);
-      setSuggestionStats(stats);
+
+      setSuggestions(filteredSuggestions.map(normalizeSuggestionForDisplay));
     } catch (err: any) {
       console.error('Failed to load suggestions:', err);
       // 静默处理错误，不影响主流程
       setSuggestions([]);
-      setSuggestionStats(null);
     } finally {
       setPersonaAlertsLoading(false);
     }
   };
 
-  // 检查是否是"未发现问题"类型的提醒
-  const isNoIssuePersonaAlert = (alert: PersonaAlert): boolean => {
-    const message = alert.message || '';
-    const title = alert.title || '';
-    const text = `${title} ${message}`.toLowerCase();
-    
-    // 检查是否包含"未发现"、"未检测到"、"无"、"通过"等关键词
-    const noIssuePatterns = [
-      '未发现',
-      '未检测到',
-      '未发现.*问题',
-      '无.*问题',
-      '均通过',
-      '允许继续',
-      '检查通过',
-      '没有问题',
-      '一切正常',
-    ];
-    
-    return noIssuePatterns.some(pattern => {
-      const regex = new RegExp(pattern);
-      return regex.test(text);
-    });
-  };
-
-  // 新增：加载三人格提醒
+  // 新增：加载三人格提醒（与建议列表共用 loading 口径）
   const loadPersonaAlerts = async () => {
     if (!id) return;
     try {
       setPersonaAlertsLoading(true);
-      const data = await tripsApi.getPersonaAlerts(id);
-      // 过滤掉"未发现问题"类型的提醒
-      const filteredData = (data || []).filter(alert => !isNoIssuePersonaAlert(alert));
-      setPersonaAlerts(filteredData);
+      await tripsApi.getPersonaAlerts(id);
     } catch (err: any) {
       console.error('Failed to load persona alerts:', err);
       // 静默处理错误，不影响主流程
-      setPersonaAlerts([]);
     } finally {
       setPersonaAlertsLoading(false);
-    }
-  };
-
-  // 新增：加载决策日志
-  const loadDecisionLogs = async () => {
-    if (!id) return;
-    try {
-      setDecisionLogsLoading(true);
-      // 获取足够多的日志（100条）
-      const response = await tripsApi.getDecisionLog(id, 100, 0);
-      const newLogs = response.items || [];
-      console.log('[TripDetail] loadDecisionLogs 完成:', {
-        logsCount: newLogs.length,
-        drDreLogsCount: newLogs.filter(log => log.persona === 'DR_DRE').length,
-        tripId: id,
-        // 🐛 调试：记录完整数组引用，用于检查是否变化
-        logsRef: newLogs,
-        loadTime: new Date().toISOString(),
-      });
-      // 🐛 确保设置新的数组引用，触发 useMemo 重新计算
-      setDecisionLogs([...newLogs]); // 创建新数组引用
-    } catch (err: any) {
-      console.error('Failed to load decision logs:', err);
-      // 静默处理错误，不影响主流程
-      setDecisionLogs([]);
-    } finally {
-      setDecisionLogsLoading(false);
     }
   };
 
@@ -1067,7 +1422,6 @@ export default function TripDetailPage() {
       return;
     }
     try {
-      setTripMetricsLoading(true);
       console.log('[TripDetail] 开始加载行程指标:', { tripId: targetTripId });
       const data = await tripsApi.getMetrics(targetTripId);
       console.log('[TripDetail] 行程指标加载成功:', {
@@ -1083,21 +1437,37 @@ export default function TripDetailPage() {
         dataRef: data,
         loadTime: new Date().toISOString(),
       });
-      // 🐛 确保设置新的对象引用，触发 useMemo 重新计算
-      // 深度克隆所有嵌套对象，确保 React 能检测到变化
-      setTripMetrics({
-        ...data,
-        summary: data.summary ? { ...data.summary } : undefined,
-        days: data.days ? data.days.map(day => ({
-          ...day,
-          metrics: day.metrics ? { ...day.metrics } : undefined,
-        })) : undefined,
-      });
+      // 兼容后端字段可能为可选：前端统一归一化为强类型结构，避免下游渲染/计算报错
+      const normalized: TripMetricsResponse = {
+        tripId: data.tripId || targetTripId,
+        summary: data.summary
+          ? { ...data.summary }
+          : {
+              totalWalk: 0,
+              totalDrive: 0,
+              totalBuffer: 0,
+              totalFatigue: 0,
+              totalCost: 0,
+              averageWalkPerDay: 0,
+              averageDrivePerDay: 0,
+            },
+        days: Array.isArray(data.days)
+          ? data.days.map((day) => ({
+              ...day,
+              metrics: day.metrics
+                ? { ...day.metrics }
+                : { walk: 0, drive: 0, buffer: 0, fatigue: 0, ascent: 0, cost: 0 },
+              conflicts: Array.isArray(day.conflicts) ? day.conflicts : [],
+            }))
+          : [],
+      };
+
+      setTripMetrics(normalized);
       
       // 建立每日指标映射
-      if (data.days) {
+      if (normalized.days.length > 0) {
         const metricsMap = new Map<string, DayMetricsResponse>();
-        for (const day of data.days) {
+        for (const day of normalized.days) {
           metricsMap.set(day.date, day);
         }
         setDayMetricsMap(metricsMap);
@@ -1115,8 +1485,6 @@ export default function TripDetailPage() {
       });
       // 设置错误状态，让组件显示错误提示
       setTripMetrics(null);
-    } finally {
-      setTripMetricsLoading(false);
     }
   };
 
@@ -1430,8 +1798,8 @@ export default function TripDetailPage() {
         // 进行中 → 已完成：切换到"复盘"tab
         setActiveTab('insights');
       } else if (pendingStatus === 'PLANNING') {
-        // 改回规划中：切换到"规划"tab
-        setActiveTab('plan');
+        // 改回规划中：回到总览
+        setActiveTab('overview');
       }
       // 已取消状态保持当前tab不变
       
@@ -1485,6 +1853,24 @@ export default function TripDetailPage() {
   // ⚠️ 以下是早期返回，所有 hooks 必须在这之前调用
   if (loading) {
     return <TripDetailSkeleton />;
+  }
+
+  // NL 建行程：generatingItems === true 时展示生成中占位（不再用 items.length 推断）
+  if (trip && id && shouldShowNlItemsGeneratingPlaceholder(trip)) {
+    return (
+      <TripGeneratingPlaceholder
+        tripId={id}
+        onReady={() => loadTrip()}
+      />
+    );
+  }
+
+  if (trip && id && shouldShowTripSkeletonOnlyEmptyState(trip)) {
+    return (
+      <div className="min-h-full">
+        <TripSkeletonOnlyEmptyState trip={trip} tripId={id} />
+      </div>
+    );
   }
 
   if (error || !trip) {
@@ -1673,7 +2059,18 @@ export default function TripDetailPage() {
                 ) : null;
               })()}
               <Badge variant="secondary" className="text-xs">标准节奏</Badge>
-              <Badge variant="secondary" className="text-xs">自驾</Badge>
+              <Badge variant="secondary" className="text-xs">
+                {trip.pacingConfig?.travelMode === 'PUBLIC_TRANSIT'
+                  ? '公共交通'
+                  : trip.pacingConfig?.travelMode === 'WALKING'
+                    ? '步行'
+                    : '自驾'}
+              </Badge>
+              {showEmbeddedUi ? (
+                <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-800">
+                  含 {embeddedHiking.segments.length || '—'} 段徒步
+                </Badge>
+              ) : null}
               {/* 天气卡片 */}
               {weatherLocation && (
                 <WeatherCard
@@ -1707,7 +2104,9 @@ export default function TripDetailPage() {
                 onNavigateToBudget={() => {
                   setActiveTab('budget');
                 }}
-                onExpandToPlanDetails={() => setActiveTab('plan')}
+                onExpandToPlanDetails={() => {
+                  if (id) navigate(`/dashboard/plan-studio?tripId=${id}`);
+                }}
               />
             ) : (
               // ✅ 弱化上方提示，只显示简单的占位
@@ -1778,7 +2177,7 @@ export default function TripDetailPage() {
               );
             })()}
             
-            {/* ✅ 视图模式已移至规划tab，Header不再显示 */}
+            {/* ✅ 深度规划能力在规划工作台；Header 不再承载独立视图切换 */}
             
             {/* 更多菜单 - 弱化为图标 */}
             <DropdownMenu>
@@ -2029,6 +2428,11 @@ export default function TripDetailPage() {
             <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-2">
               <li>{trip.statistics?.totalDays || trip.TripDay?.length || 0} 天的行程安排</li>
               <li>{trip.statistics?.totalItems || 0} 个行程项</li>
+              {showEmbeddedUi && embeddedHiking.plans.length > 0 ? (
+                <li>
+                  {embeddedHiking.plans.length} 个关联徒步计划（HikePlan）及轨迹点
+                </li>
+              ) : null}
               <li>所有协作者、收藏、点赞、分享记录</li>
             </ul>
             <div className="text-sm font-medium text-destructive">
@@ -2090,7 +2494,7 @@ export default function TripDetailPage() {
         </div>
       )}
 
-      {/* 主体分区（顶部 Tab 4 个） */}
+      {/* 主体分区（顶部 Tab） */}
       <div className="flex-1 overflow-hidden flex flex-col">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
           <div className="relative z-10 border-b bg-white px-4 sm:px-6 shadow-sm flex-shrink-0">
@@ -2099,10 +2503,12 @@ export default function TripDetailPage() {
                 <Eye className="w-4 h-4 mr-2" />
                 总览
               </TabsTrigger>
-              <TabsTrigger value="plan">
-                <Compass className="w-4 h-4 mr-2" />
-                规划
-              </TabsTrigger>
+              {trip && isPrimaryHikingTrip(trip) && (
+                <TabsTrigger value="hiking">
+                  <Mountain className="w-4 h-4 mr-2" />
+                  行前徒步
+                </TabsTrigger>
+              )}
               {/* ✅ 根据行程状态显示"执行"tab：仅在 IN_PROGRESS 或 COMPLETED 时显示 */}
               {(trip?.status === 'IN_PROGRESS' || trip?.status === 'COMPLETED') && (
                 <TabsTrigger value="execute">
@@ -2122,11 +2528,41 @@ export default function TripDetailPage() {
                 <Wallet className="w-4 h-4 mr-2" />
                 预算
               </TabsTrigger>
+              {/* 团队标签页 */}
+              <TabsTrigger value="team">
+                <Users className="w-4 h-4 mr-2" />
+                团队
+              </TabsTrigger>
         </TabsList>
           </div>
 
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50/50">
           <TabsContent value="overview" className="mt-0 space-y-3 sm:space-y-4">
+            {showEmbeddedUi && embeddedHiking.segments.length === 0 ? (
+              <HikingSegmentEmptyBanner onAddSegment={() => setAddSegmentOpen(true)} />
+            ) : null}
+            {showEmbeddedUi && id ? (
+              <>
+                <EmbeddedHikingStatusBar
+                  tripId={id}
+                  phase={embeddedHiking.phase}
+                  phaseHintZh={embeddedHiking.phaseHintZh}
+                  segmentCount={embeddedHiking.segments.length}
+                  plans={embeddedHiking.plans}
+                  onAddSegment={() => setAddSegmentOpen(true)}
+                />
+                {embeddedHiking.summaryError ? (
+                  <p className="text-xs text-amber-800 px-1">
+                    徒步摘要加载失败（已回退 metadata）：{embeddedHiking.summaryError}
+                  </p>
+                ) : null}
+                {trip && getTripHikingTrailSegments(trip).length > 0 ? (
+                  <div className="rounded-lg border bg-white p-4 shadow-sm">
+                    <HikingTrailSegmentsOverview segments={getTripHikingTrailSegments(trip)} />
+                  </div>
+                ) : null}
+              </>
+            ) : null}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
               {/* 左（8/12）：Route Map / Skeleton + Day Summary */}
               <div className="lg:col-span-12 xl:col-span-8 space-y-3 sm:space-y-4">
@@ -2140,10 +2576,21 @@ export default function TripDetailPage() {
                     <div className="space-y-3">
                       {(trip.TripDay || []).map((day, idx) => {
                         const dayMetrics = dayMetricsMap.get(day.date);
-                        
+
                         return (
+                          <div key={day.id} className="space-y-2">
+                            {showEmbeddedUi && trip ? (
+                              <EmbeddedHikingDayRail
+                                trip={trip}
+                                tripDay={day}
+                                dayDate={day.date}
+                                dayIndex={idx}
+                                segments={embeddedHiking.segments}
+                                plans={embeddedHiking.plans}
+                                resolvePlan={embeddedHiking.planForSegment}
+                              />
+                            ) : null}
                           <DayItineraryCard
-                            key={day.id}
                             day={day}
                             dayIndex={idx}
                             dayMetrics={dayMetrics}
@@ -2177,6 +2624,7 @@ export default function TripDetailPage() {
                               navigate(`/dashboard/plan-studio?tripId=${id}&dayId=${day.id}&tab=recommendations`);
                             } : undefined}
                           />
+                          </div>
                         );
                       })}
                     </div>
@@ -2186,6 +2634,26 @@ export default function TripDetailPage() {
 
               {/* 右（4/12）：预算概览 + 助手中心 */}
               <div className="lg:col-span-12 xl:col-span-4 space-y-3 sm:space-y-4">
+                {showEmbeddedUi && id ? (
+                  <EmbeddedHikingSegmentsPanel
+                    tripId={id}
+                    segments={embeddedHiking.segments}
+                    plans={embeddedHiking.plans}
+                    resolvePlan={embeddedHiking.planForSegment}
+                    onAddSegment={() => setAddSegmentOpen(true)}
+                    onRemoveSegment={async (segmentId) => {
+                      try {
+                        const next = removeSegment(embeddedHiking.segments, segmentId);
+                        await embeddedHiking.saveSegments(next);
+                        await loadTrip();
+                        await embeddedHiking.refreshPlans();
+                        toast.success('已移除徒步片段');
+                      } catch (e) {
+                        toast.error((e as Error).message);
+                      }
+                    }}
+                  />
+                ) : null}
                 {/* 地形难度汇总 - 基于行程天数模拟地形数据 */}
                 {trip.TripDay && trip.TripDay.length > 0 && (
                   <TripTerrainSummary 
@@ -2224,22 +2692,34 @@ export default function TripDetailPage() {
                       loading={personaAlertsLoading}
                       trip={trip}
                       onSuggestionClick={() => {
-                        // 点击建议时打开对应的抽屉
-                          setDrawerTab('risk');
-                          setDrawerOpen(true);
-                        }}
+                        setDrawerTab('risk');
+                        setDrawerOpen(true);
+                      }}
+                      onDismissSuggestion={async (suggestion) => {
+                        if (!id) return;
+                        try {
+                          await tripsApi.dismissSuggestion(id, suggestion.id);
+                          toast.success('建议已忽略');
+                          await loadSuggestions();
+                        } catch (err: any) {
+                          toast.error(err?.message || '忽略失败');
+                        }
+                      }}
                       onActionClick={async (suggestion, actionId) => {
                       if (!id) return;
                       try {
+                        // actionId 必须是后端动作ID（suggestion.actions[].id）
+                        const action = suggestion.actions.find((a) => a.id === actionId);
+
                         // 查看证据操作
-                        if (actionId === 'view_evidence') {
+                        if (actionId === 'view_evidence' || action?.type === 'view_evidence') {
                           setDrawerTab('risk');
                           setDrawerOpen(true);
                           return;
                         }
                         
                         // 忽略建议操作
-                        if (actionId === 'dismiss') {
+                        if (actionId === 'dismiss' || action?.type === 'dismiss') {
                           await tripsApi.dismissSuggestion(id, suggestion.id);
                           toast.success('建议已忽略');
                           // 重新加载建议列表
@@ -2247,44 +2727,14 @@ export default function TripDetailPage() {
                           return;
                         }
                         
-                        // 应用建议操作
-                        if (actionId === 'apply' || actionId.startsWith('apply_')) {
-                          const result = await tripsApi.applySuggestion(id, suggestion.id, {
-                            actionId: actionId,
-                            preview: false,
-                          });
-                          
-                          // 重新加载建议列表、健康度数据和冲突数据
-                          await Promise.all([
-                            loadSuggestions(),
-                            loadTrip(), // 🆕 重新加载行程数据（确保行程项时间更新）
-                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
-                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
-                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
-                            loadTripHealth(), // ✅ 应用建议后自动刷新健康度数据
-                            loadConflicts(), // 🆕 重新加载冲突数据（应用建议后可能已解决冲突）
-                          ]);
-                          
-                          // 显示成功提示
-                          toast.success('建议已成功应用');
-                          
-                          // 如果有触发的建议，提示用户
-                          if (result.triggeredSuggestions && result.triggeredSuggestions.length > 0) {
-                            toast.info(`应用建议后产生了 ${result.triggeredSuggestions.length} 个新建议`);
-                          }
-                          return;
-                        }
-                        
                         // 预览操作
-                        if (actionId === 'preview') {
+                        if (actionId === 'preview' || action?.type === 'preview') {
                           // 打开预览对话框
                           setPreviewSuggestion(suggestion);
+                          setPreviewActionId(actionId);
                           setPreviewDialogOpen(true);
                           return;
                         }
-                        
-                        // 查找 action 对象
-                        const action = suggestion.actions.find(a => a.id === actionId);
                         
                         // 调整时间/调整节奏操作（adjust_rhythm, adjust_time 等）
                         if (actionId === 'adjust_rhythm' || actionId === 'adjust_time' || actionId.includes('adjust') || action?.label?.includes('调整时间')) {
@@ -2294,38 +2744,26 @@ export default function TripDetailPage() {
                           return;
                         }
                         
-                        // 其他操作类型：尝试通过 applySuggestion API 处理
-                        // 如果是 apply 类型，使用 applySuggestion
-                        if (action && (action.type === 'apply' || action.type === 'adjust_rhythm' || action.type === 'view_alternatives')) {
-                          const result = await tripsApi.applySuggestion(id, suggestion.id, {
-                            actionId: actionId,
-                            preview: false,
-                          });
-                          
-                          // 重新加载建议列表、行程数据、健康度数据和冲突数据
-                          await Promise.all([
-                            loadSuggestions(),
-                            loadTrip(),
-                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
-                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
-                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
-                            loadTripHealth(), // ✅ 应用建议后自动刷新健康度数据
-                            loadConflicts(), // 🆕 重新加载冲突数据（应用建议后可能已解决冲突）
-                          ]);
-                          
-                          // 显示成功提示
-                          toast.success('建议已成功应用');
-                          
-                          // 如果有触发的建议，提示用户
-                          if (result.triggeredSuggestions && result.triggeredSuggestions.length > 0) {
-                            toast.info(`应用建议后产生了 ${result.triggeredSuggestions.length} 个新建议`);
-                          }
-                          return;
+                        // 默认：通过 applySuggestion 执行（preview=false），并刷新关键数据
+                        const result = await tripsApi.applySuggestion(id, suggestion.id, {
+                          actionId: actionId,
+                          preview: false,
+                        });
+
+                        await Promise.all([
+                          loadSuggestions(),
+                          loadTrip(),
+                          loadTripMetrics(),
+                          loadPersonaAlerts(),
+                          loadTripHealth(),
+                          loadConflicts(),
+                        ]);
+
+                        toast.success('建议已成功应用');
+                        if (result.triggeredSuggestions && result.triggeredSuggestions.length > 0) {
+                          toast.info(`应用建议后产生了 ${result.triggeredSuggestions.length} 个新建议`);
                         }
-                        
-                        // 其他操作类型
-                        console.log('处理操作:', actionId, suggestion);
-                        toast.info('该操作正在处理中...');
+                        return;
                       } catch (error: any) {
                         console.error('Failed to handle suggestion action:', error);
                         // 显示错误提示
@@ -2342,356 +2780,6 @@ export default function TripDetailPage() {
 
                     </div>
                       </div>
-          </TabsContent>
-
-          {/* Plan Tab */}
-          <TabsContent value="plan" className="mt-0 space-y-4">
-          {(!trip.TripDay || trip.TripDay.length === 0) ? (
-            <Card className="border-2 border-dashed border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
-              <CardContent className="py-24 px-8 min-h-[60vh] flex items-center justify-center">
-                <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-2xl w-full">
-                  {/* 图标 */}
-                  <div className="p-6 rounded-full bg-primary/10">
-                    <Compass className="w-16 h-16 text-primary" />
-                  </div>
-                  
-                  {/* 主文案 - 简洁友好 */}
-                  <div className="space-y-2">
-                    <h2 className="text-xl font-semibold text-foreground">
-                      你还没有添加任何行程项～
-                    </h2>
-                    <p className="text-base text-muted-foreground">
-                      添加第一站，开启你的专属旅程吧！
-                    </p>
-                  </div>
-                  
-                  {/* 按钮组 - 已取消状态下不显示 */}
-                  {trip?.status !== 'CANCELLED' && (
-                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
-                      {/* 主按钮：创建第一个行程项 */}
-                      <Button
-                        size="lg"
-                        onClick={() => {
-                          const firstDay = trip.TripDay?.[0];
-                          if (firstDay) {
-                            setSelectedDayId(firstDay.id);
-                            setCreateItemDialogOpen(true);
-                          } else if (trip.status === 'PLANNING') {
-                            // ✅ 只有规划中状态才能进入规划工作台
-                            navigate(`/dashboard/plan-studio?tripId=${id}`);
-                          }
-                        }}
-                        className="flex-1 text-base h-12 shadow-lg hover:shadow-xl transition-shadow"
-                      >
-                        <Plus className="w-5 h-5 mr-2" />
-                        创建第一个行程项
-                      </Button>
-                      
-                      {/* 次按钮：进入规划工作台 - 仅规划中状态显示 */}
-                      {trip?.status === 'PLANNING' && (
-                        <Button
-                          size="lg"
-                          variant="outline"
-                          onClick={() => navigate(`/dashboard/plan-studio?tripId=${id}`)}
-                          className="flex-1 text-base h-12"
-                        >
-                          <Compass className="w-5 h-5 mr-2" />
-                          进入规划工作台
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              {/* 方案A 二段式：问题与改进 + 智能优化（常驻展开） */}
-              {/* {trip && trip.destination && (
-                <ComplianceRulesCard
-                  tripId={id!}
-                  countryCodes={extractCountryCodes(trip.destination)}
-                  ruleTypes={['VISA', 'TRANSPORT', 'ENTRY']}
-                />
-              )} */}
-
-              {/* 方案A 二段式：无问题时仅显示智能优化；有问题时显示问题与改进 + 智能优化 */}
-              {trip?.status !== 'CANCELLED' && (hasPlanIssues || trip?.status === 'PLANNING') && (
-                <div className="space-y-4">
-                {/* 无问题且 PLANNING：直接显示智能优化，不显示 Tab 栏 */}
-                {!hasPlanIssues && trip?.status === 'PLANNING' ? (
-                  <OptimizeTabContent tripId={id!} trip={trip} onTripRefetch={loadTrip} />
-                ) : (
-                <Tabs value={planDetailTab} onValueChange={(v) => {
-                  setPlanDetailTab(v as 'issues' | 'optimize');
-                }} className="w-full">
-                  <TabsList className={cn(
-                    "grid w-full h-11 bg-muted/50 rounded-lg p-1",
-                    trip?.status === 'PLANNING' ? "grid-cols-2" : "grid-cols-1"
-                  )}>
-                    <TabsTrigger
-                      value="issues"
-                      className="flex items-center justify-center gap-2 rounded-md px-4 py-2 text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-semibold"
-                    >
-                      <Shield className="w-4 h-4" />
-                      问题与改进
-                    </TabsTrigger>
-                    {trip?.status === 'PLANNING' && (
-                      <TabsTrigger
-                        value="optimize"
-                        className="flex items-center justify-center gap-2 rounded-md px-4 py-2 text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-semibold"
-                      >
-                        <Zap className="w-4 h-4" />
-                        智能优化
-                      </TabsTrigger>
-                    )}
-                  </TabsList>
-
-                  {/* 问题与改进：安全 | 节奏 | 修复 */}
-                  <TabsContent value="issues" className="mt-4">
-                <Tabs value={planViewTab} onValueChange={(v) => {
-                  setPlanViewTab(v as typeof planViewTab);
-                }} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 h-11 bg-muted/30 rounded-lg p-1">
-                    <TabsTrigger 
-                      value="abu" 
-                      className={cn(
-                        'flex items-center justify-center gap-2 relative',
-                        'transition-all duration-200 ease-in-out',
-                        'rounded-md px-4 py-2',
-                        // 未激活状态
-                        'text-muted-foreground',
-                        'hover:text-foreground hover:bg-muted/80',
-                        // 激活状态
-                        'data-[state=active]:bg-persona-abu/20',
-                        'data-[state=active]:text-persona-abu-foreground',
-                        'data-[state=active]:font-semibold',
-                        'data-[state=active]:shadow-sm',
-                        // 底部指示器
-                        'data-[state=active]:after:absolute',
-                        'data-[state=active]:after:bottom-0',
-                        'data-[state=active]:after:left-1/2',
-                        'data-[state=active]:after:-translate-x-1/2',
-                        'data-[state=active]:after:w-8',
-                        'data-[state=active]:after:h-0.5',
-                        'data-[state=active]:after:bg-persona-abu-foreground',
-                        'data-[state=active]:after:rounded-full'
-                      )}
-                    >
-                      <Shield className="w-4 h-4" />
-                      安全
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="dre" 
-                      className={cn(
-                        'flex items-center justify-center gap-2 relative',
-                        'transition-all duration-200 ease-in-out',
-                        'rounded-md px-4 py-2',
-                        // 未激活状态
-                        'text-muted-foreground',
-                        'hover:text-foreground hover:bg-muted/80',
-                        // 激活状态
-                        'data-[state=active]:bg-persona-dre/20',
-                        'data-[state=active]:text-persona-dre-foreground',
-                        'data-[state=active]:font-semibold',
-                        'data-[state=active]:shadow-sm',
-                        // 底部指示器
-                        'data-[state=active]:after:absolute',
-                        'data-[state=active]:after:bottom-0',
-                        'data-[state=active]:after:left-1/2',
-                        'data-[state=active]:after:-translate-x-1/2',
-                        'data-[state=active]:after:w-8',
-                        'data-[state=active]:after:h-0.5',
-                        'data-[state=active]:after:bg-persona-dre-foreground',
-                        'data-[state=active]:after:rounded-full'
-                      )}
-                    >
-                      <Activity className="w-4 h-4" />
-                      节奏
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="neptune" 
-                      className={cn(
-                        'flex items-center justify-center gap-2 relative',
-                        'transition-all duration-200 ease-in-out',
-                        'rounded-md px-4 py-2',
-                        // 未激活状态
-                        'text-muted-foreground',
-                        'hover:text-foreground hover:bg-muted/80',
-                        // 激活状态
-                        'data-[state=active]:bg-persona-neptune/20',
-                        'data-[state=active]:text-persona-neptune-foreground',
-                        'data-[state=active]:font-semibold',
-                        'data-[state=active]:shadow-sm',
-                        // 底部指示器
-                        'data-[state=active]:after:absolute',
-                        'data-[state=active]:after:bottom-0',
-                        'data-[state=active]:after:left-1/2',
-                        'data-[state=active]:after:-translate-x-1/2',
-                        'data-[state=active]:after:w-8',
-                        'data-[state=active]:after:h-0.5',
-                        'data-[state=active]:after:bg-persona-neptune-foreground',
-                        'data-[state=active]:after:rounded-full'
-                      )}
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      修复
-                    </TabsTrigger>
-                  </TabsList>
-
-                  {/* 安全视角 */}
-                  <TabsContent value="abu" className="mt-4">
-                    {abuData ? (
-                      <AbuView 
-                        trip={trip} 
-                        abuData={abuData}
-                        onItemClick={() => {
-                          setDrawerTab('risk');
-                          setDrawerOpen(true);
-                        }}
-                      />
-                    ) : (personaAlertsLoading || decisionLogsLoading) ? (
-                      <div className="flex flex-col items-center justify-center p-8 gap-2">
-                        <LogoLoading size={32} />
-                        <span className="text-sm text-muted-foreground">加载安全数据...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center p-8">
-                        <div className="text-center">
-                          <Shield className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                          <div className="text-sm text-muted-foreground">暂无安全数据</div>
-                        </div>
-                      </div>
-                    )}
-                  </TabsContent>
-
-                  {/* 节奏视角 */}
-                  <TabsContent value="dre" className="mt-4">
-                    {(() => {
-                      // 🐛 调试：记录渲染时的数据状态和 tab 状态
-                      console.log('[TripDetail] DrDreView 渲染检查:', {
-                        planViewTab, // 🆕 当前选中的 tab
-                        isDreTabActive: planViewTab === 'dre', // 🆕 是否在节奏 tab
-                        hasDrDreData: !!drDreData,
-                        drDreDataMetrics: drDreData?.metrics,
-                        hasTripMetrics: !!tripMetrics,
-                        tripMetricsSummary: tripMetrics?.summary,
-                        tripMetricsLoading,
-                        decisionLogsCount: decisionLogs.length,
-                        tripId: trip?.id,
-                        renderTime: new Date().toISOString(),
-                      });
-                      
-                      // 🐛 如果不在 dre tab，提前返回（不渲染组件）
-                      if (planViewTab !== 'dre') {
-                        console.log('[TripDetail] ⚠️ 不在 "dre" tab，跳过渲染 DrDreView', { planViewTab });
-                        return null;
-                      }
-                      
-                      console.log('[TripDetail] ✅ 在 "dre" tab，准备渲染 DrDreView', {
-                        hasDrDreData: !!drDreData,
-                        drDreMetrics: drDreData?.metrics,
-                        tripMetricsSummary: tripMetrics?.summary,
-                      });
-                      
-                      return drDreData ? (
-                        <DrDreView 
-                          key={`drDre-${trip?.id}-${decisionLogs.length}-${tripMetrics?.summary?.totalFatigue || 0}-${tripMetrics?.summary?.totalBuffer || 0}-${tripMetrics?.summary?.totalWalk || 0}-${tripMetrics?.summary?.totalDrive || 0}`} // 🐛 使用稳定的 key，基于实际数据值
-                          trip={trip} 
-                          drDreData={drDreData}
-                          tripMetrics={tripMetrics}
-                          tripMetricsLoading={tripMetricsLoading}
-                          onItemClick={() => {
-                            setDrawerTab('evidence');
-                            setDrawerOpen(true);
-                          }}
-                          onScheduleChanged={async () => {
-                            // 🆕 重新排程后刷新数据（包括冲突数据）
-                            await Promise.all([
-                              loadTrip(),
-                              loadSuggestions(),
-                              loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
-                              loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
-                              loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
-                              loadTripHealth(),
-                              loadConflicts(), // 🆕 重新加载冲突数据（重新排程后可能已解决冲突）
-                            ]);
-                          }}
-                        />
-                      ) : tripMetricsLoading ? (
-                      // tripMetrics 正在加载中
-                      <div className="flex flex-col items-center justify-center p-8 gap-2">
-                        <LogoLoading size={32} />
-                        <span className="text-sm text-muted-foreground">加载节奏数据...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center p-8">
-                        <div className="text-center">
-                          <Activity className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                          <div className="text-sm text-muted-foreground">暂无节奏数据</div>
-                        </div>
-                      </div>
-                    );
-                    })()}
-                  </TabsContent>
-
-                  {/* 修复视角 */}
-                  <TabsContent value="neptune" className="mt-4">
-                    {decisionLogsLoading || personaAlertsLoading ? (
-                      <div className="flex flex-col items-center justify-center p-8 gap-2">
-                        <LogoLoading size={32} />
-                        <span className="text-sm text-muted-foreground">加载修复数据...</span>
-                      </div>
-                    ) : (
-                      <NeptuneView 
-                        trip={trip} 
-                        neptuneData={neptuneData}
-                        onItemClick={() => {
-                          setDrawerTab('evidence');
-                          setDrawerOpen(true);
-                        }}
-                        onRepairApplied={async () => {
-                          // 刷新数据
-                          await Promise.all([
-                            loadTrip(),
-                            loadSuggestions(),
-                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
-                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
-                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
-                            loadTripHealth(),
-                            loadConflicts(), // 🆕 重新加载冲突数据（应用修复后可能已解决冲突）
-                          ]);
-                        }}
-                        onAlternativeApplied={async () => {
-                          // 刷新数据
-                          await Promise.all([
-                            loadTrip(),
-                            loadSuggestions(),
-                            loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
-                            loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
-                            loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
-                            loadTripHealth(),
-                            loadConflicts(), // 🆕 重新加载冲突数据（应用替代方案后可能已解决冲突）
-                          ]);
-                        }}
-                      />
-                    )}
-                  </TabsContent>
-                </Tabs>
-                  </TabsContent>
-
-                  {/* 智能优化（仅 PLANNING 时显示） */}
-                  {trip?.status === 'PLANNING' && (
-                    <TabsContent value="optimize" className="mt-4">
-                      <OptimizeTabContent tripId={id!} trip={trip} onTripRefetch={loadTrip} />
-                    </TabsContent>
-                  )}
-                </Tabs>
-                )}
-                </div>
-              )}
-            </>
-          )}
           </TabsContent>
 
           {/* Execute Tab */}
@@ -2764,7 +2852,28 @@ export default function TripDetailPage() {
             </div>
           </TabsContent>
 
-          {/* Insights Tab */}
+          {id && trip && isPrimaryHikingTrip(trip) && (
+            <TabsContent value="hiking" className="mt-0 space-y-4 p-3 sm:p-4">
+              <HikingAuditCard tripId={id} />
+              <HikingTrailPlanSummaryCard tripId={id} />
+              <Card>
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    在规划工作台生成或预演 Trail 段（决策引擎 generate-plan）
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/dashboard/plan-studio?tripId=${id}&tab=schedule&planGate=1`)}
+                  >
+                    打开规划工作台
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
           {/* Budget Tab */}
           <TabsContent value="budget" className="mt-0">
             {id ? (
@@ -2776,6 +2885,26 @@ export default function TripDetailPage() {
             )}
           </TabsContent>
 
+          {/* Team Tab */}
+          <TabsContent value="team" className="mt-0">
+            {id && trip ? (
+              <>
+                <CollaborativeTaskFlywheelPanel tripId={id} interactive className="mb-4" />
+                <TeamTabContent
+                  tripId={id}
+                  trip={trip}
+                  onTripRefetch={loadTrip}
+                  onGoToPlanStudio={() => navigate(`/dashboard/plan-studio?tripId=${id}`)}
+                />
+              </>
+            ) : (
+              <div className="p-6 text-center text-muted-foreground">
+                <p>无法加载团队信息</p>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Insights Tab */}
           <TabsContent value="insights" className="mt-0">
             <div className="p-6 space-y-6">
             <Card>
@@ -3016,10 +3145,11 @@ export default function TripDetailPage() {
       {/* 行程反馈对话框 (V2 优化) */}
       {id && (
         <Dialog open={optimizationFeedbackDialogOpen} onOpenChange={setOptimizationFeedbackDialogOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
+          <DialogContent className="max-w-lg max-h-[70vh] flex flex-col">
+            <DialogHeader className="shrink-0">
               <DialogTitle>行程反馈</DialogTitle>
             </DialogHeader>
+            <div className="min-h-0 overflow-y-auto flex-1 -mx-6 px-6">
             {user?.id ? (
               <FeedbackForm
                 userId={user.id}
@@ -3031,10 +3161,18 @@ export default function TripDetailPage() {
                 }}
                 onCancel={() => setOptimizationFeedbackDialogOpen(false)}
                 isSubmitting={submitFeedbackMutation.isPending}
+                outcomeCapture={{
+                  utilityWeights: DEFAULT_WEIGHTS,
+                  contextSnapshot: {
+                    schema: 'trip.optimizationFeedback/v1',
+                    tripId: id,
+                  },
+                }}
               />
             ) : (
               <p className="text-muted-foreground py-6 text-center">请先登录后再提交反馈</p>
             )}
+            </div>
           </DialogContent>
         </Dialog>
       )}
@@ -3106,11 +3244,10 @@ export default function TripDetailPage() {
             await Promise.all([
               loadSuggestions(),
               loadTrip(),
-              loadTripMetrics(), // 🆕 重新加载行程指标
-              loadDecisionLogs(), // 🆕 重新加载决策日志
-              loadPersonaAlerts(), // 🆕 重新加载人格提醒
-              loadTripHealth(), // 🆕 重新加载健康度数据
-              loadConflicts(), // 🆕 重新加载冲突数据
+              loadTripMetrics(),
+              loadPersonaAlerts(),
+              loadTripHealth(),
+              loadConflicts(),
             ]);
           }}
         />
@@ -3122,10 +3259,12 @@ export default function TripDetailPage() {
           tripId={id}
           suggestion={previewSuggestion}
           open={previewDialogOpen}
+          actionId={previewActionId}
           onOpenChange={(open) => {
             setPreviewDialogOpen(open);
             if (!open) {
               setPreviewSuggestion(null);
+              setPreviewActionId(null);
             }
           }}
           onConfirm={async () => {
@@ -3133,11 +3272,10 @@ export default function TripDetailPage() {
             await Promise.all([
               loadSuggestions(),
               loadTrip(),
-              loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
-              loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
-              loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
-              loadTripHealth(), // 🆕 应用建议后重新加载健康度数据
-              loadConflicts(), // 🆕 重新加载冲突数据（应用建议后可能已解决冲突）
+              loadTripMetrics(),
+              loadPersonaAlerts(),
+              loadTripHealth(),
+              loadConflicts(),
             ]);
           }}
         />
@@ -3174,13 +3312,12 @@ export default function TripDetailPage() {
             onSuccess={async (result) => {
               // 优化成功后刷新数据
               await Promise.all([
-                loadTrip(), // 重新加载行程数据
-                loadSuggestions(), // 重新加载建议列表
-                loadTripMetrics(), // 🆕 重新加载行程指标（DayItineraryCard 使用 dayMetrics.conflicts，DrDreView 使用 tripMetrics）
-                loadDecisionLogs(), // 🆕 重新加载决策日志（DrDreView 使用 decisionLogs 计算 drDreData）
-                loadPersonaAlerts(), // 🆕 重新加载人格提醒（用于计算综合指标）
-                loadTripHealth(), // 重新加载健康度数据
-                loadConflicts(), // 🆕 重新加载冲突数据（优化后可能已解决冲突）
+                loadTrip(),
+                loadSuggestions(),
+                loadTripMetrics(),
+                loadPersonaAlerts(),
+                loadTripHealth(),
+                loadConflicts(),
               ]);
               
               // 显示成功提示
@@ -3215,6 +3352,36 @@ export default function TripDetailPage() {
           />
         );
       })()}
+
+      {showEmbeddedUi && id && trip ? (
+        <AddHikingSegmentDialog
+          open={addSegmentOpen}
+          onOpenChange={setAddSegmentOpen}
+          tripId={id}
+          tripStart={trip.startDate}
+          tripEnd={trip.endDate}
+          segmentCount={embeddedHiking.segments.length}
+          onCreated={async (segment: HikingSegment) => {
+            try {
+              const fresh = await tripsApi.getById(id);
+              const metaSegs = getTripHikingSegments(fresh);
+              if (!metaSegs.some((s) => s.segmentId === segment.segmentId)) {
+                await tripsApi.update(id, {
+                  metadata: mergeTripMetadata(fresh.metadata, {
+                    hikingProfile: 'embedded',
+                    hikingSegments: [...metaSegs, segment],
+                  }),
+                });
+              }
+              await loadTrip();
+              await embeddedHiking.refreshPlans();
+              toast.success('已添加徒步片段');
+            } catch (e) {
+              toast.error((e as Error).message);
+            }
+          }}
+        />
+      ) : null}
 
       {/* 体能反馈弹窗 - 行程完成后显示 */}
       {id && trip && (

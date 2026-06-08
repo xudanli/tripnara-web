@@ -12,6 +12,7 @@ import { tripsApi } from '@/api/trips';
 // decisionApi 已移除 - 不再直接调用决策接口，改为通过 LangGraph Orchestrator
 import { readinessApi } from '@/api/readiness';
 import type { PersonaAlert, TripDetail, TripMetricsResponse, IntentResponse } from '@/types/trip';
+import { getPersonaAlertUserBody } from '@/lib/persona-alert-display';
 // 以下类型已移除，因为不再直接调用决策接口
 // import type { ValidateSafetyRequest, AdjustPacingRequest, ReplaceNodesRequest, RoutePlanDraft, WorldModelContext, RouteSegment, DEMEvidenceItem } from '@/types/strategy';
 import { formatCurrency } from '@/utils/format';
@@ -954,7 +955,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
       const allIssues = metricAlerts.map(alert => ({
         type: alert.metadata?.type || 'UNKNOWN',
         title: alert.title,
-        description: alert.message,
+        description: getPersonaAlertUserBody(alert),
         severity: alert.severity === 'warning' ? 'HIGH' : alert.severity === 'info' ? 'MEDIUM' : 'LOW',
       }));
 

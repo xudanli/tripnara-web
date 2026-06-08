@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
-import { agentApi } from '@/api/agent';
-import type { RouteAndRunRequest, RouteAndRunResponse } from '@/api/agent';
+import type { RouteAndRunRequest } from '@/api/agent';
+import { invokeRouteAndRun } from '@/lib/invoke-route-and-run';
+import { PlanningPipelineProgress } from '@/components/agent/PlanningPipelineProgress';
+import { usePlanningTaskStore } from '@/store/planningTaskStore';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +23,10 @@ import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { toast } from 'sonner';
 import { needsApproval, extractApprovalId } from '@/utils/approval';
+import { describeAgentFailureToast } from '@/utils/agent-error-types';
+import { localeForAgentConversationContext } from '@/lib/agent-conversation-locale';
+import { useRouteRunPreferenceProfile } from '@/hooks/useRouteRunPreferenceProfile';
+import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
 
 interface GlobalCommandBarProps {
   activeTripId?: string | null;
@@ -45,6 +51,10 @@ export default function GlobalCommandBar({
   // 审批相关状态
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const routeRunPreferenceProfile = useRouteRunPreferenceProfile(activeTripId);
+  const sanitizedTripId = sanitizeRouteRunTripId(activeTripId);
+  const planningTaskStatus = usePlanningTaskStore((s) => s.status);
+  const planningTaskBusy = planningTaskStatus === 'PROCESSING';
 
   // 聚焦时展开
   useEffect(() => {
@@ -76,18 +86,32 @@ export default function GlobalCommandBar({
     setLoading(true);
     setIsExpanded(false);
 
+    let routeRunRequestId: string | null = null;
     try {
+      const agentLocale = localeForAgentConversationContext(i18n.language);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const request: RouteAndRunRequest = {
         request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         user_id: user.id,
-        trip_id: activeTripId || null,
+        trip_id: sanitizedTripId ?? null,
         message: userInput,
+        ...(routeRunPreferenceProfile ? { preference_profile: routeRunPreferenceProfile as any } : {}),
         conversation_context: {
           recent_messages: [],
+          ...(agentLocale ? { locale: agentLocale } : {}),
+          timezone,
+        },
+        options: {
+          intent_mode: sanitizedTripId ? 'AUTO' : 'GENERIC_QA',
+          async_mode: 'AUTO',
+          entry_point: 'dashboard',
+          show_debug_scores: false,
+          enable_guardians_debate_llm: true,
         },
       };
+      routeRunRequestId = request.request_id;
 
-      const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
+      const response = await invokeRouteAndRun(request);
 
       // 检查是否需要审批
       if (needsApproval(response)) {
@@ -143,7 +167,10 @@ export default function GlobalCommandBar({
       console.log('Agent response:', response);
     } catch (err) {
       console.error('Failed to send agent request:', err);
-      toast.error('操作失败，请稍后重试');
+      const httpStatus = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(httpStatus && httpStatus >= 500 ? '服务暂时不可用' : '操作失败', {
+        description: describeAgentFailureToast(err, routeRunRequestId),
+      });
     } finally {
       setLoading(false);
     }
@@ -183,18 +210,23 @@ export default function GlobalCommandBar({
                 setTimeout(() => setIsExpanded(false), 200);
               }}
               placeholder={t('globalCommandBar.placeholder')}
-              disabled={loading}
+              disabled={loading || planningTaskBusy}
               className={cn(
                 'pl-10 pr-10',
                 isExpanded && 'ring-2 ring-primary'
               )}
             />
+            {(loading || planningTaskBusy) && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 px-1">
+                <PlanningPipelineProgress compact />
+              </div>
+            )}
             {input.trim() && (
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={handleSend}
-                disabled={loading}
+                disabled={loading || planningTaskBusy}
                 className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
               >
                 <Send className="h-4 w-4" />

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { LaunchRecruitmentFromTemplateButton } from '@/features/match-square/components/LaunchRecruitmentFromTemplateButton';
 import {
   ArrowLeft,
   Calendar,
@@ -378,6 +379,18 @@ export default function RouteTemplateDetailPage() {
 
         {/* 右侧：关联信息 */}
         <div className="space-y-6">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">搭子广场 · 车队招募</CardTitle>
+              <CardDescription>
+                强绑定本模板 GPS / 天数 / 物理约束，一键挂起招募卡片
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <LaunchRecruitmentFromTemplateButton template={template} fullWidth />
+            </CardContent>
+          </Card>
+
           {/* 路线方向信息 */}
           {template.routeDirection && (
             <Card>

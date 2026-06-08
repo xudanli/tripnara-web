@@ -21,10 +21,37 @@ import {
   Clock,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/format';
+import Logo from '@/components/common/Logo';
 
 interface ResponseBlockRendererProps {
   block: PlannerResponseBlock;
+  /** 同条消息的全部块，用于从列表块提取人数补充到摘要卡片 */
+  allBlocks?: PlannerResponseBlock[];
   className?: string;
+}
+
+/** 从列表块中提取 "出行人数 X人" 文本，用于补充 summary_card 的 travelers */
+function extractTravelersFromBlocks(blocks?: PlannerResponseBlock[]): string | null {
+  if (!blocks?.length) return null;
+  for (const b of blocks) {
+    if (b.type === 'list' && Array.isArray(b.items)) {
+      const found = b.items.find(
+        (item) => typeof item === 'string' && /出行人数\s*.+/.test(item)
+      );
+      if (found && typeof found === 'string') {
+        const m = found.match(/出行人数\s*(\S+)/);
+        return m ? m[1] : found;
+      }
+    }
+  }
+  return null;
+}
+
+/** 是否为与 summary_card 重复的行程概览列表（保留上面的卡片，跳过此列表） */
+function isDuplicateItineraryList(block: PlannerResponseBlock): boolean {
+  if (block.type !== 'list') return false;
+  const t = (block.title || '').trim();
+  return t === '当前行程概览' || t === '已确认信息';
 }
 
 /**
@@ -97,57 +124,124 @@ function ListBlock({
 
 /**
  * 摘要卡片渲染
+ * 当 summary.travelers 缺失或为「未指定」时，从同消息的列表块中提取出行人数
  */
-function SummaryCardBlock({ summary, className }: { summary: PlannerResponseBlock['summary']; className?: string }) {
+function SummaryCardBlock({ 
+  summary, 
+  travelersFallback,
+  className 
+}: { 
+  summary: PlannerResponseBlock['summary']; 
+  travelersFallback?: string | null;
+  className?: string;
+}) {
   if (!summary) return null;
-  
+  const travelersDisplay = summary.travelers && summary.travelers !== '未指定' 
+    ? summary.travelers 
+    : (travelersFallback || summary.travelers);
+  // 优先使用预格式化字符串 dayAllocationDisplay
+  const dayAllocationText = summary.dayAllocationDisplay
+    ?? (Array.isArray(summary.dayAllocation)
+      ? summary.dayAllocation?.map(a => `${a.city} ${a.days} 天`).join('、')
+      : summary.dayAllocation && typeof summary.dayAllocation === 'object' && !Array.isArray(summary.dayAllocation) && Object.keys(summary.dayAllocation).length > 0
+        ? Object.entries(summary.dayAllocation).map(([city, days]) => `${city} ${days} 天`).join('、')
+        : null);
+
   return (
-    <Card className={cn(
-      "w-full border border-slate-200 bg-slate-50/50 mb-3",
-      className
-    )}>
-      <CardContent className="p-4">
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {/* 目的地 */}
+    <div className={cn("w-full mb-3", className)}>
+      {/* Logo 压在卡片边框上，左侧，无边框 */}
+      <div className="flex justify-start pl-4 -mb-7 relative z-10">
+        <Logo variant="icon" size={64} className="opacity-95" />
+      </div>
+      <Card className={cn(
+        "w-full border border-slate-200 bg-transparent overflow-visible",
+        "rounded-xl shadow-sm"
+      )}>
+        <CardContent className="p-6 pt-10 pl-8">
+          {/* 标题区 */}
+          <div className="mb-5 -mt-4">
+            <h3 className="text-base font-bold text-slate-900">行程信息</h3>
+            <p className="text-xs text-slate-500 mt-1">您的旅程将从这里开始</p>
+          </div>
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
           {summary.destination && (
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="font-medium text-slate-800">{summary.destination}</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-slate-500">目的地</span>
+              <div className="flex items-center gap-2.5">
+                <MapPin className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span className="text-slate-800">{summary.destination}</span>
+              </div>
             </div>
           )}
-          
-          {/* 天数 */}
-          {summary.duration && (
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-slate-700">{summary.duration}</span>
+          {(summary.startDate || summary.duration) && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-slate-500">出行时间</span>
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span className="text-slate-800">
+                  {summary.startDate
+                    ? new Date(summary.startDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+                    : summary.duration}
+                </span>
+              </div>
             </div>
           )}
-          
-          {/* 同行人 */}
-          {summary.travelers && (
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-slate-700">{summary.travelers}</span>
+          {summary.endDate && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-slate-500">返程时间</span>
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span className="text-slate-800">
+                  {new Date(summary.endDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+              </div>
             </div>
           )}
-          
-          {/* 预算 */}
+          {travelersDisplay && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-slate-500">出行人数</span>
+              <div className="flex items-center gap-2.5">
+                <Users className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span className="text-slate-800">{travelersDisplay}</span>
+              </div>
+            </div>
+          )}
           {summary.budget && (
-            <div className="flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-slate-700">
-                {formatCurrency(summary.budget.amount, summary.budget.currency || 'CNY')}
-              </span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-slate-500">预算</span>
+              <div className="flex items-center gap-2.5">
+                <Wallet className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span className="text-slate-800">
+                  {formatCurrency(summary.budget.amount, summary.budget.currency || 'CNY')}
+                </span>
+              </div>
+            </div>
+          )}
+          {dayAllocationText ? (
+            <div className="flex flex-col gap-0.5 col-span-2">
+              <span className="text-xs text-slate-500">天数分配</span>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <Route className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span className="text-slate-800">{dayAllocationText}</span>
+              </div>
+            </div>
+          ) : null}
+          {summary.mustHavePois && summary.mustHavePois.length > 0 && (
+            <div className="flex flex-col gap-0.5 col-span-2">
+              <span className="text-xs text-slate-500">必含景点</span>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <MapPin className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                <span className="text-slate-800">
+                  {summary.mustHavePois.join('、')}
+                </span>
+              </div>
             </div>
           )}
         </div>
-        
-        {/* 预算明细 */}
         {summary.budget?.details && summary.budget.details.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-200">
-            <p className="text-xs text-muted-foreground mb-1.5">预算包含：</p>
-            <div className="flex flex-wrap gap-1.5">
+          <div className="mt-5 pt-4 border-t border-slate-200">
+            <p className="text-xs text-slate-500 mb-2">预算包含：</p>
+            <div className="flex flex-wrap gap-2">
               {summary.budget.details.map((detail, idx) => (
                 <Badge key={idx} variant="outline" className="text-xs">
                   {detail}
@@ -156,8 +250,29 @@ function SummaryCardBlock({ summary, className }: { summary: PlannerResponseBloc
             </div>
           </div>
         )}
+        {/* 城市天数分配：杭州 3 天、千岛湖 1 天，优先使用 dayAllocationDisplay */}
+        {dayAllocationText ? (
+          <div className="mt-5 pt-4 border-t border-slate-200">
+            <p className="text-xs text-slate-500 mb-2">行程分配</p>
+            <p className="text-sm text-slate-800">{dayAllocationText}</p>
+          </div>
+        ) : null}
+        {/* 必含景点 */}
+        {summary.mustHavePois && summary.mustHavePois.length > 0 && (
+          <div className="mt-5 pt-4 border-t border-slate-200">
+            <p className="text-xs text-slate-500 mb-2">必含景点</p>
+            <div className="flex flex-wrap gap-2">
+              {summary.mustHavePois.map((poi, idx) => (
+                <Badge key={idx} variant="secondary" className="text-xs">
+                  {poi}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
+    </div>
   );
 }
 
@@ -307,7 +422,7 @@ function ItineraryOverviewBlock({ itinerary, className }: { itinerary: PlannerRe
 /**
  * 问题卡片占位符（实际渲染由父组件处理）
  */
-function QuestionCardPlaceholder({ questionId, className }: { questionId?: string; className?: string }) {
+function QuestionCardPlaceholder(_props: { questionId?: string; className?: string }) {
   // 这个占位符只是标记位置，实际的问题卡片会在父组件中渲染
   return null;
 }
@@ -315,11 +430,12 @@ function QuestionCardPlaceholder({ questionId, className }: { questionId?: strin
 /**
  * 主渲染器组件
  */
-export function ResponseBlockRenderer({ block, className }: ResponseBlockRendererProps) {
+export function ResponseBlockRenderer({ block, allBlocks, className }: ResponseBlockRendererProps) {
   switch (block.type) {
     case 'paragraph':
-      return block.content ? (
-        <ParagraphBlock content={block.content} className={className} />
+      const content = block.content ?? '';
+      return content ? (
+        <ParagraphBlock content={content} className={className} />
       ) : null;
       
     case 'heading':
@@ -328,10 +444,11 @@ export function ResponseBlockRenderer({ block, className }: ResponseBlockRendere
       ) : null;
       
     case 'list':
+      if (isDuplicateItineraryList(block)) return null;
       return (
         <ListBlock 
           title={block.title} 
-          items={block.items} 
+          items={Array.isArray(block.items) ? block.items : []}
           ordered={block.ordered}
           className={className}
         />
@@ -339,7 +456,11 @@ export function ResponseBlockRenderer({ block, className }: ResponseBlockRendere
       
     case 'summary_card':
       return (
-        <SummaryCardBlock summary={block.summary} className={className} />
+        <SummaryCardBlock 
+          summary={block.summary} 
+          travelersFallback={extractTravelersFromBlocks(allBlocks)}
+          className={className} 
+        />
       );
       
     case 'question_card':
@@ -349,8 +470,8 @@ export function ResponseBlockRenderer({ block, className }: ResponseBlockRendere
     case 'highlight':
       return (
         <HighlightBlock 
-          highlightText={block.highlightText} 
-          highlightType={block.highlightType}
+          highlightText={block.highlightText ?? ''}
+          highlightType={block.highlightType ?? 'info'}
           className={className}
         />
       );

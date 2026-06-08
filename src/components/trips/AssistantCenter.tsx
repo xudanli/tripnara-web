@@ -1,25 +1,28 @@
 /**
- * 助手中心组件
- * 统一的建议列表容器，替代原有的Top Risks等分散展示
+ * 助手中心组件 - 优化建议
+ * 统一的建议列表容器，插画风格卡片设计
  */
 
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { Shield, Activity, RefreshCw, AlertTriangle, Info, CheckCircle2, Calendar } from 'lucide-react';
+import { Shield, Activity, RefreshCw, CheckCircle2 } from 'lucide-react';
 import type { Suggestion } from '@/types/suggestion';
 import type { TripDetail } from '@/types/trip';
 import { cn } from '@/lib/utils';
+import { OptimizationSuggestionCard } from './OptimizationSuggestionCard';
+import type { SuggestionMetrics } from './OptimizationSuggestionCard';
 
 interface AssistantCenterProps {
   suggestions: Suggestion[];
   loading?: boolean;
-  trip?: TripDetail | null; // 用于解析 dayId 到 day 索引
+  trip?: TripDetail | null;
   onSuggestionClick?: (suggestion: Suggestion) => void;
   onActionClick?: (suggestion: Suggestion, actionId: string) => void;
+  onDismissSuggestion?: (suggestion: Suggestion) => void;
+  getMetrics?: (suggestion: Suggestion) => SuggestionMetrics[] | undefined;
   className?: string;
 }
 
@@ -44,30 +47,14 @@ const personaConfig = {
   },
 };
 
-const severityConfig = {
-  blocker: {
-    icon: AlertTriangle,
-    label: '红线',
-    className: 'bg-red-50 text-red-800 border-red-200',
-  },
-  warn: {
-    icon: Info,
-    label: '警告',
-    className: 'bg-yellow-50 text-yellow-800 border-yellow-200',
-  },
-  info: {
-    icon: Info,
-    label: '提示',
-    className: 'bg-blue-50 text-blue-800 border-blue-200',
-  },
-};
-
 export function AssistantCenter({
   suggestions,
   loading = false,
   trip,
   onSuggestionClick,
   onActionClick,
+  onDismissSuggestion,
+  getMetrics,
   className,
 }: AssistantCenterProps) {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -103,8 +90,8 @@ export function AssistantCenter({
   return (
     <Card className={cn("shadow-sm border-gray-200", className)}>
       <CardHeader className="p-3 sm:p-4 pb-1">
-        <CardTitle className="text-sm sm:text-base font-semibold text-gray-900">助手中心</CardTitle>
-        <CardDescription className="text-xs text-gray-500 mt-0.5">三人格的建议与提醒</CardDescription>
+        <CardTitle className="text-sm sm:text-base font-semibold text-gray-900">优化建议</CardTitle>
+        <CardDescription className="text-xs text-gray-500 mt-0.5">安全、节奏、修复三维度的改进建议</CardDescription>
       </CardHeader>
       <CardContent className="p-3 sm:p-4 pt-1">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FilterTab)}>
@@ -154,14 +141,22 @@ export function AssistantCenter({
                 <p>暂无需要处理的建议</p>
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {filteredSuggestions.map((suggestion, index) => (
-                  <SuggestionCard
+                  <OptimizationSuggestionCard
                     key={suggestion.id || `suggestion-${index}-${suggestion.createdAt}`}
                     suggestion={suggestion}
-                    trip={trip}
+                    metrics={getMetrics?.(suggestion)}
+                    highPriority={suggestion.severity === 'blocker'}
+                    onApply={(s) => {
+                      const applyAction = s.actions.find(
+                        (a) => a.type === 'apply' || a.label.includes('应用') || a.label.includes('采纳') || a.label.includes('调整') || a.label.includes('修复')
+                      );
+                      if (applyAction) onActionClick?.(s, applyAction.id);
+                    }}
+                    onDismiss={onDismissSuggestion}
                     onClick={() => onSuggestionClick?.(suggestion)}
-                    onActionClick={(actionId) => onActionClick?.(suggestion, actionId)}
+                    onActionClick={(s, actionId) => onActionClick?.(s, actionId)}
                   />
                 ))}
               </div>
@@ -173,128 +168,4 @@ export function AssistantCenter({
   );
 }
 
-interface SuggestionCardProps {
-  suggestion: Suggestion;
-  trip?: TripDetail | null;
-  onClick?: () => void;
-  onActionClick?: (actionId: string) => void;
-}
-
-function SuggestionCard({ suggestion, trip, onClick, onActionClick }: SuggestionCardProps) {
-  const persona = personaConfig[suggestion.persona];
-  const PersonaIcon = persona.icon;
-  const severity = severityConfig[suggestion.severity];
-  const SeverityIcon = severity.icon;
-
-  // 优化标题显示：提炼核心冲突点，使用更自然的语言
-  const getOptimizedTitle = () => {
-    const title = suggestion.title || '';
-    // 如果是时间冲突，优化显示
-    if (title.includes('时间重叠') || title.includes('时间冲突')) {
-      return '🚨 时间冲突';
-    }
-    // 如果是节奏问题
-    if (title.includes('节奏') || title.includes('过快') || title.includes('过慢')) {
-      return '🧠 节奏问题';
-    }
-    // 如果是安全风险
-    if (title.includes('风险') || title.includes('安全')) {
-      return '⚠️ 安全风险';
-    }
-    return title;
-  };
-
-  // 提取 Day 信息：从 dayId 解析为 Day 1, Day 2 等
-  const getDayInfo = (): string | null => {
-    // 如果 metadata 中有 day 索引，直接使用
-    if (suggestion.scope === 'day' && suggestion.metadata?.day) {
-      return `Day ${suggestion.metadata.day}`;
-    }
-    
-    // 如果有 scopeId（可能是 dayId），尝试从 trip 数据中解析
-    if (suggestion.scopeId && trip?.TripDay) {
-      const dayIndex = trip.TripDay.findIndex(day => day.id === suggestion.scopeId);
-      if (dayIndex >= 0) {
-        return `Day ${dayIndex + 1}`;
-      }
-      // 如果找不到，可能是其他类型的 ID，尝试直接显示（但格式化为更友好的形式）
-      // 检查是否是 UUID 格式
-      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidPattern.test(suggestion.scopeId)) {
-        // 是 UUID，但不匹配任何 day，返回 null（不显示）
-        return null;
-      }
-      // 不是 UUID，可能是其他格式的 ID，直接显示
-      return `Day ${suggestion.scopeId}`;
-    }
-    
-    return null;
-  };
-  
-  const dayInfo = getDayInfo();
-
-  return (
-    <div
-      className={cn(
-        'p-2.5 sm:p-3 border rounded-lg cursor-pointer hover:shadow-sm transition-all space-y-1.5',
-        severity.className,
-        'bg-white' // 降低红色卡片饱和度，使用白色背景
-      )}
-      onClick={onClick}
-    >
-      {/* 标题行 */}
-      <div className="flex items-start gap-1.5">
-        <PersonaIcon className={cn('w-3.5 h-3.5 mt-0.5 flex-shrink-0', persona.color)} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-            <span className="font-semibold text-xs truncate">{getOptimizedTitle()}</span>
-            <Badge variant="outline" className={cn('text-xs flex-shrink-0 px-1.5 py-0', severity.className)}>
-              <SeverityIcon className="w-2.5 h-2.5 mr-0.5" />
-              {severity.label}
-            </Badge>
-            {dayInfo && (
-              <Badge variant="outline" className="text-xs flex-shrink-0 px-1.5 py-0">
-                <Calendar className="w-2.5 h-2.5 mr-0.5" />
-                {dayInfo}
-              </Badge>
-            )}
-          </div>
-          {/* 优化描述：使用更自然的语言 */}
-          <p className="text-xs text-gray-700 leading-tight break-words">
-            {suggestion.description || suggestion.summary}
-          </p>
-          {/* 如果有建议文本 */}
-          {suggestion.metadata?.suggestion && (
-            <p className="text-xs text-muted-foreground mt-0.5 italic break-words">
-              建议：{suggestion.metadata.suggestion}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* 操作按钮 */}
-      {suggestion.actions.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-1.5 pt-1.5 border-t" onClick={(e) => e.stopPropagation()}>
-          {suggestion.actions.slice(0, 2).map((action) => (
-            <Button
-              key={action.id}
-              size="sm"
-              variant={action.primary || action.label.includes('调整') || action.label.includes('修复') ? 'default' : 'outline'}
-              className={cn(
-                'text-xs h-7',
-                (action.primary || action.label.includes('调整') || action.label.includes('修复')) && 'bg-gray-900 hover:bg-gray-800 text-white'
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                onActionClick?.(action.id);
-              }}
-            >
-              {action.label}
-            </Button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 

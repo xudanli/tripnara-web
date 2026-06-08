@@ -23,6 +23,7 @@ import type {
   FeedbackData, 
   ModificationType,
   SubmitFeedbackRequest,
+  ObjectiveFunctionWeights,
 } from '@/types/optimization-v2';
 import {
   Star,
@@ -38,6 +39,7 @@ import {
   Send,
   Loader2,
 } from 'lucide-react';
+import { optimizationApi } from '@/api/optimization-v2';
 
 // ==================== 配置 ====================
 
@@ -278,6 +280,13 @@ function CompletionProgress({
 
 // ==================== 主组件 ====================
 
+/** 与 tradeoff-dwell / 对比视图对齐的 outcome 捕获上下文 */
+export interface FeedbackOutcomeCaptureOptions {
+  correlationId?: string;
+  utilityWeights: ObjectiveFunctionWeights;
+  contextSnapshot: Record<string, unknown>;
+}
+
 export interface FeedbackFormProps {
   /** 用户 ID */
   userId: string;
@@ -297,6 +306,11 @@ export interface FeedbackFormProps {
   isSubmitting?: boolean;
   /** 自定义类名 */
   className?: string;
+  /**
+   * 若设置，在 onSubmit 成功后调用 recordOutcomeCapture，并附带 rlhfJsonEval
+   *（与对比视图的 tradeoff-dwell 共用 sessionStorage 中的 correlationId）。
+   */
+  outcomeCapture?: FeedbackOutcomeCaptureOptions;
 }
 
 export function FeedbackForm({
@@ -309,6 +323,7 @@ export function FeedbackForm({
   onCancel,
   isSubmitting = false,
   className,
+  outcomeCapture,
 }: FeedbackFormProps) {
   // ==================== 状态 ====================
   const [feedbackType, setFeedbackType] = React.useState<FeedbackType>(defaultType);
@@ -370,6 +385,43 @@ export function FeedbackForm({
     };
 
     await onSubmit(request);
+
+    if (outcomeCapture) {
+      let correlationId = outcomeCapture.correlationId;
+      if (!correlationId) {
+        try {
+          correlationId =
+            sessionStorage.getItem(`tripnara.tradeoffCorrelation.${tripId}`) ?? undefined;
+        } catch {
+          correlationId = undefined;
+        }
+      }
+      const modification =
+        feedbackType === 'PLAN_MODIFICATION' &&
+        (data.modificationType != null ||
+          (typeof data.modificationReason === 'string' && data.modificationReason.trim().length > 0))
+          ? {
+              modificationType: data.modificationType,
+              modificationReason: data.modificationReason?.trim() || undefined,
+            }
+          : undefined;
+      try {
+        await optimizationApi.recordOutcomeCapture({
+          userId,
+          tripId,
+          correlationId,
+          feedbackType,
+          feedbackData: request.data,
+          rlhfJsonEval: {
+            contextSnapshot: outcomeCapture.contextSnapshot,
+            utilityWeights: outcomeCapture.utilityWeights,
+            ...(modification ? { modification } : {}),
+          },
+        });
+      } catch {
+        /* outcome 捕获失败不阻塞已提交的反馈 */
+      }
+    }
   };
 
   // ==================== 渲染 ====================

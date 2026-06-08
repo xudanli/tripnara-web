@@ -5,6 +5,24 @@
  */
 
 import type { ErrorType } from '@/api/agent';
+import { isTripnaraHttpError } from '@/types/http-error';
+
+/**
+ * route_and_run 等 Agent 请求失败时的 toast 文案：优先 Axios 拦截器挂上的 requestId
+ */
+export function describeAgentFailureToast(
+  error: unknown,
+  fallbackRequestId: string | null | undefined
+): string {
+  const rid =
+    (isTripnaraHttpError(error) && error.requestId) ||
+    (fallbackRequestId?.trim() ? fallbackRequestId.trim() : undefined);
+  const base =
+    error instanceof Error && error.message
+      ? error.message
+      : '出了一点小状况，要不再试一次？';
+  return rid ? `${base}（request_id: ${rid}）` : base;
+}
 
 /**
  * 错误处理策略

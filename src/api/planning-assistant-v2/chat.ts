@@ -9,7 +9,7 @@ import planningAssistantV2Client from './client';
 import type { ChatRequest, ChatResponse } from './types';
 
 /** 住宿/酒店搜索等 MCP 工具调用可能耗时 60-70 秒，需使用长超时 */
-const CHAT_TIMEOUT = CONFIG.API.TIMEOUT_LONG; // 120 秒
+const CHAT_TIMEOUT = CONFIG.API.TIMEOUT_LONG; // 300 秒
 
 export const chatApi = {
   /**
@@ -21,7 +21,7 @@ export const chatApi = {
    * 
    * 认证: ✅ 公开接口，无需认证（但建议提供 userId）
    * 速率限制: 30 次/分钟
-   * 超时: 120 秒（住宿搜索等 MCP 工具调用可能耗时 60-70 秒）
+   * 超时: 300 秒（住宿搜索等 MCP 工具调用可能耗时 60-70 秒）
    */
   sendMessage: async (data: ChatRequest): Promise<ChatResponse> => {
     const response = await planningAssistantV2Client.post<ChatResponse>(

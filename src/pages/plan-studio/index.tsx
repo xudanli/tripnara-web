@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import IntentTab from './IntentTab';
 import ScheduleTab from './ScheduleTab';
-import PlanningWorkbenchTab from './PlanningWorkbenchTab';
+import PlanGateDrawer from '@/components/plan-studio/PlanGateDrawer';
 import BudgetTab from './BudgetTab';
 // PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
 // PlanStudioSidebar 已移除 - 策略概览功能已整合到 AI 助手侧边栏
@@ -36,13 +36,32 @@ import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
 import type { PipelineStatus, PipelineStage, TripListItem, TripDetail } from '@/types/trip';
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
-import { Settings2, Zap, Footprints, Wallet, Sparkles } from 'lucide-react';
-import { PlanStudioProvider } from '@/contexts/PlanStudioContext';
+import { Settings2, Zap, Footprints, Wallet, Sparkles, Mountain } from 'lucide-react';
+import {
+  TrailPlanPreviewDialog,
+  HikingGeneratePlanResultDialog,
+  EmbeddedHikingStatusBar,
+  HikingTrailSegmentsOverview,
+} from '@/components/hiking';
+import {
+  tripIncludesHiking,
+  isPrimaryHikingTrip,
+  isEmbeddedHikingTrip,
+  buildHikingAuditMetadata,
+} from '@/lib/trip-hiking';
+import { getTripHikingTrailSegments } from '@/lib/hiking-day-card';
+import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
+import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
+import {
+  buildGeneratePlanRequestForHiking,
+  saveHikingGenerateLog,
+  loadHikingGenerateLog,
+} from '@/lib/hiking-generate-plan';
+import { decisionEngineApi } from '@/api/decision-engine';
+import { useFitnessContext } from '@/contexts/FitnessContext';
+import { PlanStudioProvider, usePlanStudio } from '@/contexts/PlanStudioContext';
 import { formatCurrency } from '@/utils/format';
 import { WeatherCard } from '@/components/weather/WeatherCard';
-import { planningWorkbenchApi } from '@/api/planning-workbench';
-import { useContextApi } from '@/hooks';
-import type { ContextPackage } from '@/api/context';
 import { toast } from 'sonner';
 import {
   Tooltip,
@@ -54,6 +73,30 @@ import { Progress } from '@/components/ui/progress';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
+import { TripGeneratingPlaceholder } from '@/components/trips/TripGeneratingPlaceholder';
+import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
+import { format } from 'date-fns';
+import { PlanningBanner } from '@/components/planning/PlanningBanner';
+import { WorldConstraintBanner } from '@/components/planning/WorldConstraintBanner';
+import { DecisionCockpitPanel } from '@/components/agent/DecisionCockpitPanel';
+import { hasDecisionCockpitUi } from '@/lib/decision-cockpit';
+import { formatOptimizationMethodZh } from '@/lib/route-run-optimization-explain';
+import { resetWorldModelGuardsStore } from '@/lib/world-model-guards';
+import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
+
+/** 工作台标题副文案：与侧栏行程列表展示逻辑对齐 */
+function planStudioTripHeadingLabel(trip: TripDetail): string {
+  const name = trip.name?.trim();
+  if (name) return name;
+  if (trip.destination && trip.startDate) {
+    try {
+      return `${trip.destination} ${format(new Date(trip.startDate), 'yyyy-MM-dd')}`;
+    } catch {
+      return trip.destination;
+    }
+  }
+  return trip.destination || '行程';
+}
 
 function PlanStudioPageContent() {
   const { t } = useTranslation();
@@ -63,8 +106,13 @@ function PlanStudioPageContent() {
   const tripId = searchParams.get('tripId');
   const defaultTab = searchParams.get('tab') || 'schedule';
   // 如果访问已移除的 tab，重定向到 schedule
-  const normalizedTab = (defaultTab === 'optimize' || defaultTab === 'what-if' || defaultTab === 'decision-draft' || defaultTab === 'bookings') ? 'schedule' : defaultTab;
-  const [activeTab, setActiveTab] = useState(normalizedTab === 'intent' || normalizedTab === 'places' ? 'schedule' : normalizedTab);
+  const removedTabs = new Set(['optimize', 'what-if', 'decision-draft', 'bookings', 'workbench']);
+  const normalizedTab = removedTabs.has(defaultTab) ? 'schedule' : defaultTab;
+  const [activeTab, setActiveTab] = useState(
+    normalizedTab === 'intent' || normalizedTab === 'places' ? 'schedule' : normalizedTab
+  );
+  const planStudio = usePlanStudio();
+  const planGateUrlHandledRef = useRef(false);
   
   // 意图与约束弹窗
   const [showIntentDialog, setShowIntentDialog] = useState(false);
@@ -90,7 +138,18 @@ function PlanStudioPageContent() {
   
   // 当前行程详情（用于摘要条显示）
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
-  
+  const embeddedHiking = useEmbeddedHikingTrip(currentTrip);
+  const showEmbeddedPlanStudio =
+    Boolean(tripId) &&
+    isEmbeddedHikingEnabled() &&
+    embeddedHiking.embedded &&
+    isEmbeddedHikingTrip(currentTrip);
+  /** 整单硬核 Trail（与混合出行互斥） */
+  const showPrimaryTrailPlanStudio =
+    Boolean(tripId && tripExists && currentTrip) &&
+    isPrimaryHikingTrip(currentTrip) &&
+    !showEmbeddedPlanStudio;
+
   // 对话框状态
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -100,7 +159,25 @@ function PlanStudioPageContent() {
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState(0);
   const [generatingStage, setGeneratingStage] = useState('');
-  const { buildContextWithCompress } = useContextApi();
+  const [trailPreviewOpen, setTrailPreviewOpen] = useState(false);
+  const [hikingResultOpen, setHikingResultOpen] = useState(false);
+  const [lastHikingGenerateLog, setLastHikingGenerateLog] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const { profile: fitnessProfile } = useFitnessContext();
+  const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
+  const explainOptimization = useWorldModelGuardsStore((s) => s.explainOptimization);
+  const decisionCockpit = useWorldModelGuardsStore((s) => s.decisionCockpit);
+  const showDecisionCockpitDeepLink = searchParams.get('decisionCockpit') === '1';
+  const decisionCockpitRef = useRef<HTMLDivElement>(null);
+  const optimizationMethodLabel = formatOptimizationMethodZh(
+    useWorldModelGuardsStore((s) => s.optimizationMethod)
+  );
+
+  useEffect(() => {
+    resetWorldModelGuardsStore();
+  }, [tripId]);
 
   // 根据国家代码获取国家名称
   const getCountryName = (countryCode: string): string => {
@@ -127,6 +204,47 @@ function PlanStudioPageContent() {
     window.addEventListener('plan-studio:schedule-refresh', handler);
     return () => window.removeEventListener('plan-studio:schedule-refresh', handler);
   }, []);
+
+  useEffect(() => {
+    const onSelectScheduleDay = () => {
+      setActiveTab('schedule');
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('tab', 'schedule');
+      setSearchParams(newParams, { replace: true });
+    };
+    window.addEventListener('plan-studio:select-schedule-day', onSelectScheduleDay);
+    return () => window.removeEventListener('plan-studio:select-schedule-day', onSelectScheduleDay);
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    planGateUrlHandledRef.current = false;
+  }, [tripId]);
+
+  // tab=workbench / planGate=1 深链 → 时间轴 + 方案抽屉
+  useEffect(() => {
+    if (!tripId || !tripExists || planGateUrlHandledRef.current) return;
+    const tab = searchParams.get('tab');
+    const planGate = searchParams.get('planGate');
+    if (tab !== 'workbench' && planGate !== '1') return;
+
+    planGateUrlHandledRef.current = true;
+    const autoGenerate = searchParams.get('generate') === '1';
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'schedule');
+    next.delete('planGate');
+    next.delete('generate');
+    setSearchParams(next, { replace: true });
+    setActiveTab('schedule');
+    planStudio.openPlanGate({ autoGenerate });
+  }, [tripId, tripExists, searchParams, setSearchParams, planStudio]);
+
+  useEffect(() => {
+    if (!showDecisionCockpitDeepLink || !decisionCockpit || !decisionCockpitRef.current) return;
+    decisionCockpitRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const next = new URLSearchParams(searchParams);
+    next.delete('decisionCockpit');
+    setSearchParams(next, { replace: true });
+  }, [showDecisionCockpitDeepLink, decisionCockpit, searchParams, setSearchParams]);
 
 
   // 加载国家信息
@@ -312,37 +430,6 @@ function PlanStudioPageContent() {
     };
   };
 
-  // 构建 Context Package
-  const buildContextPackage = async (userQuery: string): Promise<ContextPackage | null> => {
-    if (!currentTrip || !tripId) return null;
-
-    try {
-      const phase = 'planning';
-      const agent = 'PLANNER';
-
-      const contextPkg = await buildContextWithCompress(
-        {
-          tripId,
-          phase,
-          agent,
-          userQuery,
-          tokenBudget: 3600,
-          requiredTopics: ['VISA', 'ROAD_RULES', 'SAFETY'],
-          useCache: true,
-        },
-        {
-          strategy: 'balanced',
-          preserveKeys: [],
-        }
-      );
-
-      return contextPkg;
-    } catch (err: any) {
-      console.error('[Plan Studio] Context Package 构建失败:', err);
-      return null;
-    }
-  };
-
   // 加载行程数据
   const loadTrip = async () => {
     if (!tripId) return;
@@ -352,85 +439,106 @@ function PlanStudioPageContent() {
         setCurrentTrip(trip);
         setTripExists(true);
       }
+      setLastHikingGenerateLog(loadHikingGenerateLog(tripId));
     } catch (err: any) {
       console.error('Failed to load trip:', err);
     }
   };
 
-  // 生成方案
+  const runHikingDecisionGenerate = async () => {
+    if (!tripId || !currentTrip) return;
+
+    setGeneratingStage('决策引擎 · Trail 计划生成中...');
+    setGeneratingProgress(30);
+
+    const body = buildGeneratePlanRequestForHiking(currentTrip, { fitnessProfile });
+    const data = await decisionEngineApi.generatePlan(body);
+
+    setGeneratingProgress(85);
+    setGeneratingStage('解析 Trail 段...');
+
+    const log = (data.log ?? {}) as Record<string, unknown>;
+    saveHikingGenerateLog(tripId, log);
+    setLastHikingGenerateLog(log);
+
+    let tripAfter = currentTrip;
+    try {
+      tripAfter = await tripsApi.getById(tripId);
+      setCurrentTrip(tripAfter);
+    } catch (e) {
+      console.warn('[Plan Studio] 刷新行程失败，使用本地 log 合并 metadata:', e);
+      const hardTrek = log.hardTrekTrailPlan;
+      if (hardTrek && typeof hardTrek === 'object') {
+        tripAfter = {
+          ...currentTrip,
+          metadata: {
+            ...currentTrip.metadata,
+            hardTrekTrailPlan: hardTrek,
+            routeDirectionName:
+              (log.routeDirection as { selected?: { name?: string } })?.selected?.name ??
+              currentTrip.metadata?.routeDirectionName,
+          },
+        };
+        setCurrentTrip(tripAfter);
+      }
+    }
+
+    const hikingMeta = buildHikingAuditMetadata({
+      hikingLevel:
+        (tripAfter.metadata?.hikingLevel as 'light' | 'hiking-heavy' | undefined) ??
+        'hiking-heavy',
+      destination: tripAfter.destination,
+    });
+    if (hikingMeta) {
+      try {
+        await tripsApi.update(tripId, {
+          metadata: { ...tripAfter.metadata, ...hikingMeta },
+        });
+        const merged = await tripsApi.getById(tripId);
+        setCurrentTrip(merged);
+      } catch (e) {
+        console.warn('[Plan Studio] 徒步 audit metadata 同步失败:', e);
+      }
+    }
+
+    setGeneratingProgress(100);
+    setGeneratingStage('完成');
+    setHikingResultOpen(true);
+
+    toast.success('徒步 Trail 计划已生成', {
+      description: log.hardTrekTrailPlan ? '已解析按日 Trail 段' : '请查看决策日志或 POI 日程',
+    });
+  };
+
+  // 生成方案：徒步行程走决策引擎 generate-plan，其余走规划工作台
   const handleGeneratePlan = async () => {
     if (!tripId || !currentTrip) {
       toast.error('请先选择行程');
       return;
     }
 
-    const context = buildPlanningContext();
-    if (!context) return;
+    if (!tripIncludesHiking(currentTrip) && !buildPlanningContext()) {
+      return;
+    }
+
+    if (!showPrimaryTrailPlanStudio) {
+      planStudio.openPlanGate({ autoGenerate: true });
+      toast.success('正在生成方案预览', {
+        description: '请在右侧抽屉查看三人格评估与提交',
+      });
+      return;
+    }
 
     setGeneratingPlan(true);
     setGeneratingProgress(0);
     setGeneratingStage('准备中...');
-    
+
     try {
-      const userQuery = `帮我规划${currentTrip.destination || ''}的${currentTrip.TripDay?.length || 0}天行程`;
-      
-      // 模拟进度更新
-      const progressInterval = setInterval(() => {
-        setGeneratingProgress((prev) => {
-          if (prev >= 90) return prev;
-          return prev + Math.random() * 10;
-        });
-      }, 500);
-
-      // 构建 Context Package（可选，不阻塞流程）
-      setGeneratingStage('构建上下文...');
-      setGeneratingProgress(20);
-      buildContextPackage(userQuery).catch(err => {
-        console.warn('Context Package 构建失败，继续执行:', err);
-      });
-
-      setGeneratingProgress(40);
-      setGeneratingStage('执行规划操作...');
-
-      // 调用规划工作台 API
-      await planningWorkbenchApi.execute({
-        context,
-        tripId,
-        userAction: 'generate',
-      });
-
-      clearInterval(progressInterval);
-      setGeneratingProgress(100);
-      setGeneratingStage('完成');
-
-      toast.success('方案生成成功！3秒后切换到决策评估...', {
-        duration: 3000,
-        action: {
-          label: '立即查看',
-          onClick: () => {
-            setActiveTab('workbench');
-            const newParams = new URLSearchParams(searchParams);
-            newParams.set('tab', 'workbench');
-            setSearchParams(newParams);
-          },
-        },
-      });
-      
-      // 延迟切换到决策评估 Tab，给用户选择时间
-      setTimeout(() => {
-        setActiveTab('workbench');
-        const newParams = new URLSearchParams(searchParams);
-        newParams.set('tab', 'workbench');
-        setSearchParams(newParams);
-        setGeneratingProgress(0);
-        setGeneratingStage('');
-      }, 3000);
-      
-      // 刷新页面数据
+      await runHikingDecisionGenerate();
       await loadTrip();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('生成方案失败:', err);
-      toast.error(err.message || '生成方案失败，请稍后重试');
+      toast.error((err as Error).message || '生成方案失败，请稍后重试');
       setGeneratingProgress(0);
       setGeneratingStage('');
     } finally {
@@ -598,6 +706,17 @@ function PlanStudioPageContent() {
     );
   }
 
+  // 行程项未生成完成时，展示生成中占位页
+  if (tripId && tripExists && currentTrip && shouldShowNlItemsGeneratingPlaceholder(currentTrip)) {
+    return (
+      <TripGeneratingPlaceholder
+        tripId={tripId}
+        onReady={loadTrip}
+        compact
+      />
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
       {/* 顶部：标题 + 行程切换 + 状态 */}
@@ -605,7 +724,11 @@ function PlanStudioPageContent() {
         {/* 第一行：标题和主要操作 */}
         <div className="flex items-start justify-between gap-3 sm:gap-4 mb-3 sm:mb-0">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">{t('planStudio.title')}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold truncate">
+              {tripId && currentTrip
+                ? `${t('planStudio.title')} - ${planStudioTripHeadingLabel(currentTrip)}`
+                : t('planStudio.title')}
+            </h1>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
               {t('planStudio.subtitle')}
             </p>
@@ -614,6 +737,19 @@ function PlanStudioPageContent() {
           {/* 右侧操作区：生成方案按钮 + Pipeline状态 */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* 生成方案按钮 */}
+            {showPrimaryTrailPlanStudio && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex items-center gap-1.5 text-xs"
+                onClick={() => setTrailPreviewOpen(true)}
+                disabled={generatingPlan}
+              >
+                <Mountain className="w-3.5 h-3.5" />
+                Trail 预演
+              </Button>
+            )}
             {tripId && tripExists && (
               <TooltipProvider>
                 <Tooltip>
@@ -648,7 +784,11 @@ function PlanStudioPageContent() {
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
                     <p className="text-sm">
-                      基于您在时间轴的修改，生成新的行程方案。生成后可在决策评估中查看和提交。
+                      {showPrimaryTrailPlanStudio
+                        ? '徒步行程将调用决策引擎 generate-plan，并解析 log.hardTrekTrailPlan。'
+                        : showEmbeddedPlanStudio
+                          ? '混合出行仅重新生成自驾/日程；徒步片段请在行程详情登记。'
+                          : '基于您在时间轴的修改，生成新的行程方案。生成后可在决策评估中查看和提交。'}
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -703,6 +843,48 @@ function PlanStudioPageContent() {
         />
       )}
 
+
+      {showEmbeddedPlanStudio && tripId ? (
+        <div className="px-6 pb-2">
+          <EmbeddedHikingStatusBar
+            tripId={tripId}
+            phase={embeddedHiking.phase}
+            phaseHintZh={embeddedHiking.phaseHintZh}
+            segmentCount={embeddedHiking.segments.length}
+            plans={embeddedHiking.plans}
+            onAddSegment={() => navigate(`/dashboard/trips/${tripId}`)}
+          />
+          {currentTrip && getTripHikingTrailSegments(currentTrip).length > 0 ? (
+            <div className="mt-3 rounded-lg border bg-muted/20 p-4">
+              <HikingTrailSegmentsOverview segments={getTripHikingTrailSegments(currentTrip)} />
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground mt-2 px-1">
+            混合出行请在行程详情登记徒步片段；本页继续编辑自驾/日程，不会对整单触发硬核 Trail 生成。
+          </p>
+        </div>
+      ) : null}
+
+      {tripId && tripExists && (
+        <div className="px-6">
+          <PlanningBanner guards={worldModelGuards} />
+          <WorldConstraintBanner
+            materialization={explainOptimization?.world_constraint_materialization}
+            className="-mt-2 mb-3"
+          />
+          {optimizationMethodLabel ? (
+            <p className="text-xs text-muted-foreground -mt-2 mb-4 px-1">
+              优化方式：{optimizationMethodLabel}
+            </p>
+          ) : null}
+          {hasDecisionCockpitUi(decisionCockpit) ? (
+            <div ref={decisionCockpitRef} className="mb-4">
+              <DecisionCockpitPanel cockpit={decisionCockpit} defaultOpen={showDecisionCockpitDeepLink} />
+            </div>
+          ) : null}
+        </div>
+      )}
+
       {/* 主内容区：Tab导航 + 内容 */}
       <div className="flex-1 overflow-hidden flex">
         {/* 主内容区 */}
@@ -711,7 +893,6 @@ function PlanStudioPageContent() {
             <div className="border-b bg-white px-6">
               <TabsList className="justify-start">
                 <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
-                <TabsTrigger value="workbench">{t('planStudio.tabs.workbench')}</TabsTrigger>
                 <TabsTrigger value="budget">预算管理</TabsTrigger>
               </TabsList>
             </div>
@@ -737,11 +918,6 @@ function PlanStudioPageContent() {
                     </div>
                   )}
                 </TabsContent>
-                <TabsContent value="workbench" className="mt-0">
-                  <PlanningWorkbenchTab 
-                    tripId={tripId!} 
-                  />
-                </TabsContent>
                 <TabsContent value="budget" className="mt-0">
                   <BudgetTab tripId={tripId!} />
                 </TabsContent>
@@ -750,6 +926,8 @@ function PlanStudioPageContent() {
           </Tabs>
         </div>
       </div>
+
+      <PlanGateDrawer tripId={tripId} />
 
       {/* 准备度抽屉 */}
       <ReadinessDrawer
@@ -760,6 +938,21 @@ function PlanStudioPageContent() {
         }}
         tripId={tripId}
         highlightFindingId={highlightFindingId}
+      />
+
+      {showPrimaryTrailPlanStudio && currentTrip && (
+        <TrailPlanPreviewDialog
+          trip={currentTrip}
+          open={trailPreviewOpen}
+          onOpenChange={setTrailPreviewOpen}
+          onConfirmGenerate={() => void handleGeneratePlan()}
+        />
+      )}
+
+      <HikingGeneratePlanResultDialog
+        open={hikingResultOpen}
+        onOpenChange={setHikingResultOpen}
+        log={lastHikingGenerateLog}
       />
 
       {/* Pipeline 状态详情对话框 */}
@@ -783,7 +976,7 @@ function PlanStudioPageContent() {
 
       {/* 意图与约束弹窗 */}
       <Dialog open={showIntentDialog} onOpenChange={setShowIntentDialog}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-4 gap-2">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings2 className="w-5 h-5" />
@@ -793,8 +986,8 @@ function PlanStudioPageContent() {
               设置行程的意图、偏好和约束条件
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-4">
-            <IntentTab tripId={tripId} />
+          <div className="mt-2">
+            <IntentTab tripId={tripId} compact />
           </div>
         </DialogContent>
       </Dialog>

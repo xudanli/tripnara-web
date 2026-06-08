@@ -33,16 +33,27 @@ export interface ClarificationQuestionValidation {
   pattern?: string;
 }
 
+/** 单选项：提交用 value，展示用 label */
+export interface ClarificationOptionItem {
+  value: string;
+  label: string;
+}
+
 export interface ClarificationQuestion {
   id: string;
   question: string;
   type: ClarificationQuestionType;
+  /** 展示用文案（legacy）；有 optionItems 时以 optionItems 为准 */
   options?: string[];
+  /** 结构化选项（guardian_debate 等须用 value 回传 clarification_answers） */
+  optionItems?: ClarificationOptionItem[];
   required: boolean;
   placeholder?: string;
   hint?: string;
   default?: string | string[];
   validation?: ClarificationQuestionValidation;
+  /** route_and_run：presentation / user_intent_feasibility 等 */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ClarificationAnswer {

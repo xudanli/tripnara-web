@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -34,9 +35,36 @@ import {
   ChevronsUpDown,
   Eye,
   Save,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import {
+  buildEmbeddedHikingMetadata,
+  buildHikingAuditMetadata,
+} from '@/lib/trip-hiking';
+import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
+
+const FAILURE_REASON_LABELS: Record<string, string> = {
+  INSUFFICIENT_CANDIDATES: '候选地点不足',
+  VALIDATION_FAILED: '规则校验失败',
+  TIME_WINDOW_INFEASIBLE: '时间窗口不可行',
+  OPENING_HOURS_CONFLICT: '营业时间冲突',
+  TRAVEL_TIME_TOO_LONG: '交通时间过长',
+  HARD_CONSTRAINT_VIOLATION: '硬约束不满足',
+  UNKNOWN: '未知原因',
+};
+
+function failureReasonToLabel(code: string): string {
+  return FAILURE_REASON_LABELS[code] || code;
+}
+
+function minutesLabel(min?: number): string | null {
+  if (min === undefined || min === null || Number.isNaN(min)) return null;
+  const n = Math.round(min);
+  return `${n} min`;
+}
 
 const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
   morning: '上午 (9:00-12:00)',
@@ -69,8 +97,8 @@ const TRANSPORT_LABELS: Record<TransportMode, string> = {
 
 const HIKING_LABELS: Record<HikingLevel, string> = {
   none: '无徒步',
-  light: '轻度徒步',
-  'hiking-heavy': '重度徒步',
+  light: isEmbeddedHikingEnabled() ? '混合出行（自驾 + 徒步片段）' : '轻度徒步',
+  'hiking-heavy': '整单硬核徒步',
 };
 
 export default function GenerateTripPage() {
@@ -98,6 +126,8 @@ export default function GenerateTripPage() {
   const [draft, setDraft] = useState<TripDraftResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const [lockedItems, setLockedItems] = useState<Set<string>>(new Set());
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [itemEvidenceOpen, setItemEvidenceOpen] = useState<Record<string, boolean>>({});
   
   useEffect(() => {
     loadCountries();
@@ -160,11 +190,32 @@ export default function GenerateTripPage() {
     setError(null);
     
     try {
+      let hikingMetadata: Record<string, unknown> | undefined;
+      if (formData.hikingLevel === 'light' && isEmbeddedHikingEnabled()) {
+        hikingMetadata = buildEmbeddedHikingMetadata({
+          destination: formData.destination,
+        });
+      } else if (formData.hikingLevel !== 'none') {
+        const audit = buildHikingAuditMetadata({
+          hikingLevel: formData.hikingLevel,
+          destination: formData.destination,
+        });
+        hikingMetadata = audit
+          ? { ...audit, hikingProfile: 'primary' as const }
+          : { hikingProfile: 'primary', tags: ['徒步'], hikingLevel: formData.hikingLevel };
+      }
+
       const result = await tripsApi.saveDraft({
-        draft,
+        draft: hikingMetadata
+          ? {
+              ...draft,
+              metadata: { ...draft.metadata, ...hikingMetadata },
+            }
+          : draft,
         userEdits: {
           lockedItemIds: Array.from(lockedItems),
         },
+        metadata: hikingMetadata,
       });
       
       // 保存成功后跳转到行程详情页
@@ -190,6 +241,27 @@ export default function GenerateTripPage() {
   
   const isItemLocked = (dayIndex: number, slot: TimeSlot): boolean => {
     return lockedItems.has(`${dayIndex}-${slot}`);
+  };
+
+  const toggleItemEvidence = (key: string) => {
+    setItemEvidenceOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const evidenceSummary = (item: any): string | null => {
+    const ev = item?.evidence;
+    if (!ev) return null;
+    const parts: string[] = [];
+    if (typeof ev.compressedMin === 'number' && ev.compressedMin > 0) {
+      const r = ev.decisionTrace?.relaxation_event?.reason;
+      parts.push(`压缩 ${minutesLabel(ev.compressedMin)}${r ? `：${r}` : ''}`);
+    }
+    if (typeof ev.travelFromPrevMin === 'number') {
+      parts.push(`交通 ${minutesLabel(ev.travelFromPrevMin)}`);
+    }
+    if (typeof ev.bufferMin === 'number') {
+      parts.push(`缓冲 ${minutesLabel(ev.bufferMin)}`);
+    }
+    return parts.length ? parts.join(' · ') : null;
   };
   
   return (
@@ -381,6 +453,13 @@ export default function GenerateTripPage() {
               {/* 徒步级别 */}
               <div className="space-y-2">
                 <Label htmlFor="hikingLevel">徒步级别</Label>
+                {formData.hikingLevel && formData.hikingLevel !== 'none' && (
+                  <p className="text-xs text-muted-foreground">
+                    {formData.hikingLevel === 'light' && isEmbeddedHikingEnabled()
+                      ? '保存为混合出行行程；在行程详情「总览」中登记徒步片段（HikePlan）。'
+                      : '保存为整单硬核徒步；可在行程详情「行前徒步」与 Plan Studio 生成 Trail 方案。'}
+                  </p>
+                )}
                 <Select
                   value={formData.hikingLevel}
                   onValueChange={(value) => setFormData({ ...formData, hikingLevel: value as HikingLevel })}
@@ -517,6 +596,88 @@ export default function GenerateTripPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Decision OS: 草案可审计元数据 */}
+                  {(draft.metadata?.verificationStatus ||
+                    draft.metadata?.relaxationLevel ||
+                    draft.metadata?.totalCompressedMin !== undefined ||
+                    (draft.metadata?.failureReasonCodes && draft.metadata.failureReasonCodes.length > 0) ||
+                    (draft.metadata?.failureDecisionTraces && draft.metadata.failureDecisionTraces.length > 0)) && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {draft.metadata?.verificationStatus && (
+                          <Badge
+                            variant={
+                              draft.metadata.verificationStatus === 'VERIFIED'
+                                ? 'default'
+                                : draft.metadata.verificationStatus === 'VERIFIED_WITH_RELAXATION'
+                                  ? 'secondary'
+                                  : draft.metadata.verificationStatus === 'FAILED'
+                                    ? 'destructive'
+                                    : 'outline'
+                            }
+                          >
+                            {draft.metadata.verificationStatus === 'VERIFIED'
+                              ? '已验证'
+                              : draft.metadata.verificationStatus === 'VERIFIED_WITH_RELAXATION'
+                                ? '已验证（含松弛）'
+                                : draft.metadata.verificationStatus === 'FAILED'
+                                  ? '失败'
+                                  : draft.metadata.verificationStatus}
+                          </Badge>
+                        )}
+                        {draft.metadata?.relaxationLevel && (
+                          <Badge variant="outline">
+                            松弛等级: {draft.metadata.relaxationLevel}
+                          </Badge>
+                        )}
+                        {draft.metadata?.totalCompressedMin !== undefined && (
+                          <Badge variant="outline">
+                            累计压缩: {minutesLabel(draft.metadata.totalCompressedMin)}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {draft.metadata?.verificationStatus === 'FAILED' &&
+                        draft.metadata?.failureReasonCodes &&
+                        draft.metadata.failureReasonCodes.length > 0 && (
+                          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                            <div className="text-sm font-medium text-red-800">生成失败原因</div>
+                            <ul className="mt-1 text-sm text-red-700 list-disc list-inside">
+                              {draft.metadata.failureReasonCodes.map((code, idx) => (
+                                <li key={`${code}-${idx}`}>{failureReasonToLabel(code)}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                      {draft.metadata?.failureDecisionTraces &&
+                        draft.metadata.failureDecisionTraces.length > 0 && (
+                          <Collapsible open={auditOpen} onOpenChange={setAuditOpen}>
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium">失败审计证据</div>
+                              <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm" className="gap-2">
+                                  {auditOpen ? '收起' : '查看'}
+                                  {auditOpen ? (
+                                    <ChevronUp className="w-4 h-4" />
+                                  ) : (
+                                    <ChevronDown className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </CollapsibleTrigger>
+                            </div>
+                            <CollapsibleContent className="mt-2">
+                              <div className="rounded-lg border bg-muted/30 p-3 text-xs overflow-auto">
+                                <pre className="whitespace-pre-wrap break-words">
+                                  {JSON.stringify(draft.metadata.failureDecisionTraces, null, 2)}
+                                </pre>
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               
@@ -537,6 +698,9 @@ export default function GenerateTripPage() {
                           if (!item) return null;
                           
                           const isLocked = isItemLocked(dayIndex, slot);
+                          const itemKey = `${dayIndex}-${slot}`;
+                          const summary = evidenceSummary(item);
+                          const isEvidenceOpen = !!itemEvidenceOpen[itemKey];
                           
                           return (
                             <div
@@ -576,6 +740,70 @@ export default function GenerateTripPage() {
                                       <div>评分: {item.evidence.rating}</div>
                                     )}
                                   </div>
+
+                                  {summary && (
+                                    <div className="mt-2 text-xs text-muted-foreground">
+                                      {summary}
+                                    </div>
+                                  )}
+
+                                  {(item.evidence?.decisionTrace ||
+                                    item.evidence?.compressedMin !== undefined ||
+                                    item.evidence?.baseStayMin !== undefined ||
+                                    item.evidence?.finalStayMin !== undefined ||
+                                    item.evidence?.travelFromPrevMin !== undefined ||
+                                    item.evidence?.bufferMin !== undefined) && (
+                                    <div className="mt-2">
+                                      <Collapsible open={isEvidenceOpen} onOpenChange={() => toggleItemEvidence(itemKey)}>
+                                        <div className="flex items-center justify-between">
+                                          <div className="text-xs font-medium text-muted-foreground">决策证据</div>
+                                          <CollapsibleTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="h-7 px-2 gap-1">
+                                              {isEvidenceOpen ? '收起' : '查看'}
+                                              {isEvidenceOpen ? (
+                                                <ChevronUp className="w-3.5 h-3.5" />
+                                              ) : (
+                                                <ChevronDown className="w-3.5 h-3.5" />
+                                              )}
+                                            </Button>
+                                          </CollapsibleTrigger>
+                                        </div>
+                                        <CollapsibleContent className="mt-2 space-y-2">
+                                          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                            {item.evidence?.baseStayMin !== undefined && (
+                                              <div>baseStayMin: {minutesLabel(item.evidence.baseStayMin)}</div>
+                                            )}
+                                            {item.evidence?.preferredStayMin !== undefined && (
+                                              <div>preferredStayMin: {minutesLabel(item.evidence.preferredStayMin)}</div>
+                                            )}
+                                            {item.evidence?.minSafeMin !== undefined && (
+                                              <div>minSafeMin: {minutesLabel(item.evidence.minSafeMin)}</div>
+                                            )}
+                                            {item.evidence?.finalStayMin !== undefined && (
+                                              <div>finalStayMin: {minutesLabel(item.evidence.finalStayMin)}</div>
+                                            )}
+                                            {item.evidence?.compressedMin !== undefined && (
+                                              <div>compressedMin: {minutesLabel(item.evidence.compressedMin)}</div>
+                                            )}
+                                            {item.evidence?.travelFromPrevMin !== undefined && (
+                                              <div>travelFromPrevMin: {minutesLabel(item.evidence.travelFromPrevMin)}</div>
+                                            )}
+                                            {item.evidence?.bufferMin !== undefined && (
+                                              <div>bufferMin: {minutesLabel(item.evidence.bufferMin)}</div>
+                                            )}
+                                          </div>
+
+                                          {item.evidence?.decisionTrace && (
+                                            <div className="rounded-lg border bg-muted/30 p-3 text-xs overflow-auto">
+                                              <pre className="whitespace-pre-wrap break-words">
+                                                {JSON.stringify(item.evidence.decisionTrace, null, 2)}
+                                              </pre>
+                                            </div>
+                                          )}
+                                        </CollapsibleContent>
+                                      </Collapsible>
+                                    </div>
+                                  )}
                                   {item.alternatives && item.alternatives.length > 0 && (
                                     <div className="mt-2 text-xs text-muted-foreground">
                                       备选: {item.alternatives.join(', ')}

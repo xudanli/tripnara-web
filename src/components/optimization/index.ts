@@ -46,6 +46,10 @@ export {
 } from './NegotiationResultCard';
 export type { NegotiationResultCardProps } from './NegotiationResultCard';
 
+// 团队协商结果
+export { TeamNegotiationResultCard } from './TeamNegotiationResultCard';
+export type { TeamNegotiationResultCardProps } from './TeamNegotiationResultCard';
+
 // 优化仪表盘（整合组件）
 export { OptimizationDashboard } from './OptimizationDashboard';
 export type { OptimizationDashboardProps } from './OptimizationDashboard';
@@ -85,10 +89,13 @@ export {
   FEEDBACK_TYPE_CONFIG,
   MODIFICATION_TYPE_CONFIG,
 } from './FeedbackForm';
-export type { FeedbackFormProps } from './FeedbackForm';
+export type { FeedbackFormProps, FeedbackOutcomeCaptureOptions } from './FeedbackForm';
 
 // 创建团队
 export { CreateTeamDialog } from './CreateTeamDialog';
+
+// 邀请成员
+export { InviteMemberDialog } from './InviteMemberDialog';
 
 // 实地报告
 export {
@@ -102,3 +109,38 @@ export {
   HAZARD_TYPES,
 } from './FieldReportForm';
 export type { FieldReportFormProps } from './FieldReportForm';
+
+// 优化进度
+export {
+  OptimizeProgressStepper,
+  GUARDIAN_STEPS,
+  DEFAULT_OPTIMIZE_STEPS,
+  updateStepsFromOptimizeResponse,
+} from './OptimizeProgressStepper';
+export type { 
+  OptimizeProgressStepperProps,
+  OptimizeStep,
+  OptimizeStepStatus,
+} from './OptimizeProgressStepper';
+
+// 智能优化工作台
+export { OptimizationWorkbench } from './OptimizationWorkbench';
+export type { OptimizationWorkbenchProps } from './OptimizationWorkbench';
+
+// 用户偏好设置
+export { UserPreferencesPanel } from './UserPreferencesPanel';
+export type { UserPreferencesPanelProps } from './UserPreferencesPanel';
+
+// 用户决策点弹窗
+export { JudgmentPointDialog } from './JudgmentPointDialog';
+export type { 
+  JudgmentPointDialogProps,
+  JudgmentPoint,
+} from './JudgmentPointDialog';
+
+// 疲劳预测图表
+export { FatiguePredictionChart } from './FatiguePredictionChart';
+export type { 
+  FatiguePredictionChartProps,
+  FatiguePrediction,
+} from './FatiguePredictionChart';

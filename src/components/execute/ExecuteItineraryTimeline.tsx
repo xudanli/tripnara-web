@@ -9,11 +9,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, ArrowRight, Calendar } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';
 import type { TripDetail, TripState, ScheduleResponse } from '@/types/trip';
 import type { ScheduleItem } from '@/types/trip';
+
+function parseDayDate(dateStr: string): Date | null {
+  const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`);
+  return isValid(d) ? d : null;
+}
+
+function formatDayLabel(dateStr: string): string {
+  const d = parseDayDate(dateStr);
+  return d ? format(d, 'M月d日 EEEE', { locale: zhCN }) : dateStr;
+}
+
+function toDateKey(dateStr: string): string | null {
+  const d = parseDayDate(dateStr);
+  return d ? format(d, 'yyyy-MM-dd') : null;
+}
 
 interface ExecuteItineraryTimelineProps {
   trip: TripDetail | null;
@@ -74,9 +90,7 @@ function TodayItemsList({
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
-                  {/^\d{2}:\d{2}$/.test(item.startTime) ? item.startTime : format(new Date(item.startTime), 'HH:mm')}
-                  {' - '}
-                  {/^\d{2}:\d{2}$/.test(item.endTime) ? item.endTime : format(new Date(item.endTime), 'HH:mm')}
+                  {formatScheduleTimeRange(item.startTime, item.endTime)}
                 </div>
               </div>
               <div className="flex-shrink-0">
@@ -127,7 +141,7 @@ function AllDaysList({
           <div key={day.id} className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground sticky top-0 bg-background py-2 z-10">
               <Calendar className="w-4 h-4" />
-              {format(new Date(day.date), 'M月d日 EEEE', { locale: zhCN })}
+              {formatDayLabel(day.date)}
               {isCurrentDay && (
                 <Badge variant="secondary" className="text-xs">今天</Badge>
               )}
@@ -158,8 +172,7 @@ function AllDaysList({
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {item.startTime && (/^\d{2}:\d{2}$/.test(item.startTime) ? item.startTime : format(new Date(item.startTime), 'HH:mm'))}
-                          {item.endTime && ` - ${/^\d{2}:\d{2}$/.test(item.endTime) ? item.endTime : format(new Date(item.endTime), 'HH:mm')}`}
+                          {formatScheduleTimeRange(item.startTime, item.endTime)}
                         </div>
                       </div>
                       <div className="flex-shrink-0">
@@ -200,9 +213,10 @@ export function ExecuteItineraryTimeline({
   // 今日模式：从 currentItemId 推导 currentPlaceId（今日 TripDay 中对应 ItineraryItem 的 placeId）
   const currentPlaceId = (() => {
     if (!currentItemId || !trip?.TripDay || !todaySchedule?.date) return undefined;
-    const todayDay = trip.TripDay.find(
-      d => format(new Date(d.date), 'yyyy-MM-dd') === format(new Date(todaySchedule!.date), 'yyyy-MM-dd')
-    );
+    const todayKey = toDateKey(todaySchedule!.date);
+    const todayDay = todayKey
+      ? trip.TripDay.find(d => toDateKey(d.date) === todayKey)
+      : undefined;
     const item = todayDay?.ItineraryItem?.find(i => i.id === currentItemId);
     return item?.placeId ?? undefined;
   })();

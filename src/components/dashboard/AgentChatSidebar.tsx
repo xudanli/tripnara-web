@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
-import { agentApi } from '@/api/agent';
 import type { RouteAndRunRequest, RouteAndRunResponse, RouteType } from '@/api/agent';
+import { invokeRouteAndRun } from '@/lib/executeRouteAndRun';
+import { resolveRouteAndRunDisplayStatus } from '@/lib/handleRouteAndRunResponse';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +17,13 @@ import { cn } from '@/lib/utils';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { toast } from 'sonner';
 import { needsApproval, extractApprovalId } from '@/utils/approval';
+import { describeAgentFailureToast } from '@/utils/agent-error-types';
+import { isTripnaraHttpError } from '@/types/http-error';
+import { localeForAgentConversationContext } from '@/lib/agent-conversation-locale';
+import { buildRouteAndRunConversationContext } from '@/lib/agent-route-and-run-context';
+import { useRouteRunPreferenceProfile } from '@/hooks/useRouteRunPreferenceProfile';
+import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
+import { pickRawDecisionLogFromRouteRun } from '@/lib/unified-execution-trace';
 
 interface AgentChatSidebarProps {
   activeTripId?: string | null;
@@ -27,17 +36,28 @@ interface Message {
   content: string;
   timestamp: Date;
   status?: 'thinking' | 'browsing' | 'verifying' | 'repairing' | 'done' | 'failed' | 'awaiting_confirmation' | 'awaiting_consent' | 'awaiting_user_input';
+  routeRunAsyncProgress?: number;
   routeType?: RouteType;
   decisionLogCount?: number;
   hasPlan?: boolean; // 是否有 plan 或调整结果
 }
 
 export default function AgentChatSidebar({ activeTripId, onSystem2Response }: AgentChatSidebarProps) {
+  const { i18n } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const routeRunPreferenceProfile = useRouteRunPreferenceProfile(activeTripId);
+  const sanitizedTripId = sanitizeRouteRunTripId(activeTripId);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const routeRunPollAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      routeRunPollAbortRef.current?.abort();
+    };
+  }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // 审批相关状态
@@ -52,10 +72,11 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
   const handleSend = async () => {
     if (!input.trim() || loading || !user) return;
 
+    const userText = input.trim();
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: input.trim(),
+      content: userText,
       timestamp: new Date(),
     };
 
@@ -73,18 +94,55 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
     };
     setMessages((prev) => [...prev, thinkingMessage]);
 
+    let routeRunRequestId: string | null = null;
     try {
+      const agentLocale = localeForAgentConversationContext(i18n.language);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const request: RouteAndRunRequest = {
         request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         user_id: user.id,
-        trip_id: activeTripId || null,
+        trip_id: sanitizedTripId ?? null,
         message: userMessage.content,
-        conversation_context: {
-          recent_messages: messages.slice(-5).map((m) => m.content),
+        ...(routeRunPreferenceProfile ? { preference_profile: routeRunPreferenceProfile as any } : {}),
+        conversation_context: buildRouteAndRunConversationContext({
+          history: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            status: m.status,
+          })),
+          currentUserContent: userText,
+          locale: agentLocale,
+          timezone,
+          contextType: sanitizedTripId ? 'active_trip_summary' : undefined,
+        }),
+        options: {
+          intent_mode: sanitizedTripId ? 'AUTO' : 'GENERIC_QA',
+          entry_point: 'dashboard',
         },
       };
+      routeRunRequestId = request.request_id;
 
-      const response: RouteAndRunResponse = await agentApi.routeAndRun(request);
+      routeRunPollAbortRef.current?.abort();
+      const pollAbort = new AbortController();
+      routeRunPollAbortRef.current = pollAbort;
+
+      const response: RouteAndRunResponse = await invokeRouteAndRun(request, {
+        signal: pollAbort.signal,
+        onProgress: (snap) => {
+          const label = formatRouteRunAsyncProgressLabel(snap);
+          const pct =
+            typeof snap.progress_percentage === 'number' && Number.isFinite(snap.progress_percentage)
+              ? snap.progress_percentage
+              : undefined;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === thinkingMessage.id
+                ? { ...m, content: label, routeRunAsyncProgress: pct }
+                : m
+            )
+          );
+        },
+      });
 
       // 处理重定向（REDIRECT_REQUIRED）
       if (response.result.status === 'REDIRECT_REQUIRED') {
@@ -162,7 +220,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
       // 根据 routeType 处理响应（按照前端路由指南）
       const routeType = response.route.route;
       const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
-      const decisionLogCount = response.explain?.decision_log?.length || 0;
+      const decisionLogCount = pickRawDecisionLogFromRouteRun(response).length;
       const status = response.result.status;
 
       // 如果是 System2 且有回调，通知父组件刷新数据（persona-alerts/decision-log）
@@ -210,18 +268,8 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
         messageContent += `\n\n📊 已生成 ${decisionLogCount} 条决策记录，可在决策看板中查看详情。`;
       }
 
-      // 确定 UI 状态
-      let uiStatus: Message['status'] = response.route.ui_hint.status as Message['status'];
-      
-      // 如果是 NEED_MORE_INFO，使用 awaiting_user_input 状态
-      if (status === 'NEED_MORE_INFO') {
-        if (response.route.ui_hint.status === 'awaiting_confirmation' || 
-            response.route.ui_hint.status === 'awaiting_user_input') {
-          uiStatus = 'awaiting_user_input';
-        } else {
-          uiStatus = 'awaiting_user_input';
-        }
-      }
+      // 确定 UI 状态（以 result.status 为准，避免 ui_state.thinking 盖过澄清）
+      let uiStatus: Message['status'] = resolveRouteAndRunDisplayStatus(response) as Message['status'];
 
       // 移除思考中的消息，添加实际回复
       setMessages((prev) => {
@@ -242,7 +290,19 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
       });
     } catch (error: any) {
       console.error('Agent chat error:', error);
-      // 移除思考中的消息，添加错误消息
+      const httpStatus = error?.response?.status as number | undefined;
+      const ridForBubble =
+        (isTripnaraHttpError(error) && error.requestId) || routeRunRequestId || undefined;
+      const baseMsg = error?.message || '抱歉，发生了错误。请稍后重试。';
+      const bubbleContent =
+        ridForBubble && !String(baseMsg).includes(ridForBubble)
+          ? `${baseMsg}\n\nrequest_id: ${ridForBubble}`
+          : baseMsg;
+
+      toast.error(httpStatus && httpStatus >= 500 ? '服务暂时不可用' : '请求未完成', {
+        description: describeAgentFailureToast(error, routeRunRequestId),
+      });
+
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
         return [
@@ -250,7 +310,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
           {
             id: `error-${Date.now()}`,
             role: 'assistant',
-            content: error.message || '抱歉，发生了错误。请稍后重试。',
+            content: bubbleContent,
             timestamp: new Date(),
             status: 'failed',
           },
@@ -338,12 +398,12 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
                               </Badge>
                             )}
                             {/* 如果有 tripId，显示查看详情链接 */}
-                            {activeTripId && (
+                            {sanitizedTripId && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-6 text-xs px-2"
-                                onClick={() => navigate(`/dashboard/trips/${activeTripId}`)}
+                                onClick={() => navigate(`/dashboard/trips/${sanitizedTripId}`)}
                               >
                                 查看详情 <ExternalLink className="w-3 h-3 ml-1" />
                               </Button>
@@ -361,7 +421,11 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
 
                     {message.status && message.status !== 'done' && message.status !== 'failed' && (
                       <div className="mt-2 text-xs opacity-70">
-                        {message.status === 'thinking' && '思考中...'}
+                        {message.status === 'thinking' &&
+                          (message.content?.trim() ||
+                            (typeof message.routeRunAsyncProgress === 'number'
+                              ? `处理中… ${Math.round(message.routeRunAsyncProgress)}%`
+                              : '思考中...'))}
                         {message.status === 'browsing' && '浏览中...'}
                         {message.status === 'verifying' && '验证中...'}
                         {message.status === 'repairing' && '修复中...'}

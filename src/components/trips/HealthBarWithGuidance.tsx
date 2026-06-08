@@ -18,7 +18,7 @@ interface HealthBarWithGuidanceProps {
   onMetricClick?: (metricName: 'schedule' | 'budget' | 'pace' | 'feasibility') => void;
   onNavigateToPlanStudio?: () => void;
   onNavigateToBudget?: () => void;
-  onExpandToPlanDetails?: () => void; // 点击「展开：查看分析」时，可跳转并展开规划 Tab 内的问题与改进
+  onExpandToPlanDetails?: () => void; // 点击「展开：查看分析」时跳转（例如规划工作台）
   tripStatus?: string;
   overallScore?: number; // 🆕 优先使用 API 返回的整体健康度分数（0-100）
 }

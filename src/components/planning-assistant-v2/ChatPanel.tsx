@@ -56,6 +56,7 @@ export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, cont
   const [visionResult, setVisionResult] = useState<Awaited<ReturnType<typeof visionApi.poiRecommend>> | null>(null);
   const [visionDialogOpen, setVisionDialogOpen] = useState(false);
   const [visionLoading, setVisionLoading] = useState(false);
+  const [visionRecognizingImage, setVisionRecognizingImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const visionInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -72,13 +73,13 @@ export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, cont
     }
   }, [onClearReady, handleClearMessages]);
 
-  // 自动滚动到底部
+  // 自动滚动到底部（消息变化或拍照识别开始时）
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, visionLoading]);
 
   const handleSend = async () => {
     if ((!inputValue.trim() && imageFiles.length === 0) || isLoading || !sessionId) return;
@@ -91,6 +92,8 @@ export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, cont
       if (hadMultiple) {
         toast.info('拍照识别仅支持单张图片，已识别第一张');
       }
+      const imageUrl = await fileToDataUrl(file);
+      setVisionRecognizingImage(imageUrl);
       setVisionLoading(true);
       toast.info('正在识别图片...');
       try {
@@ -111,6 +114,7 @@ export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, cont
         toast.error(err instanceof Error ? err.message : '拍照识别失败');
       } finally {
         setVisionLoading(false);
+        setVisionRecognizingImage(null);
       }
       return;
     }
@@ -177,6 +181,8 @@ export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, cont
       const file = e.target.files?.[0];
       e.target.value = '';
       if (!file || !file.type.startsWith('image/')) return;
+      const imageUrl = await fileToDataUrl(file);
+      setVisionRecognizingImage(imageUrl);
       setVisionLoading(true);
       toast.info('正在识别图片...');
       try {
@@ -197,6 +203,7 @@ export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, cont
         toast.error(err instanceof Error ? err.message : '拍照识别失败');
       } finally {
         setVisionLoading(false);
+        setVisionRecognizingImage(null);
       }
     },
     []
@@ -291,13 +298,35 @@ export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, cont
                 message.role === 'assistant' &&
                 messages.filter((m) => m.role === 'assistant').pop()?.id === message.id
               }
+              sessionId={sessionId}
               tripId={tripId}
               tripInfo={tripInfo}
               onAddToTripSuccess={onAddToTripSuccess}
               hideExecutionOrchestration={hideExecutionOrchestration}
             />
           ))}
-          
+
+          {/* 拍照识别中：在对话中显示正在识别的图片 */}
+          {visionLoading && visionRecognizingImage && (
+            <div className="flex justify-end gap-3 animate-in fade-in duration-200">
+              <div className="flex flex-col items-end gap-2 max-w-[85%]">
+                <div className="relative rounded-2xl rounded-tr-sm overflow-hidden border border-muted bg-muted/30">
+                  <img
+                    src={visionRecognizingImage}
+                    alt="识别中"
+                    className="max-h-48 w-auto object-contain"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <div className="flex items-center gap-2 text-white text-sm font-medium">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      正在识别图片...
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isLoading && (
             <div className="flex gap-3 animate-in fade-in duration-200">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">

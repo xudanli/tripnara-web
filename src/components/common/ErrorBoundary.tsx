@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { resolveHttpErrorUserMessage } from '@/types/http-error';
 
 interface Props {
   children: ReactNode;
@@ -46,7 +47,9 @@ export class ErrorBoundary extends Component<Props, State> {
             Something went wrong
           </h1>
           <p style={{ color: '#666', marginBottom: '2rem' }}>
-            {this.state.error?.message || 'An unexpected error occurred'}
+            {this.state.error
+              ? resolveHttpErrorUserMessage(this.state.error, 'An unexpected error occurred')
+              : 'An unexpected error occurred'}
           </p>
           <button
             onClick={() => {

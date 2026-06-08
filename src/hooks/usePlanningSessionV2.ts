@@ -11,6 +11,7 @@ import {
   type SessionState,
   type CreateSessionRequest,
 } from '@/api/planning-assistant-v2';
+import { resetPlanningAssistantV2Session } from '@/lib/planning-assistant-session-reset';
 
 const STORAGE_KEY = 'planning-assistant-v2-session';
 
@@ -21,6 +22,7 @@ export interface UsePlanningSessionV2Return {
   error: Error | null;
   createSession: (userId?: string) => Promise<string>;
   deleteSession: () => Promise<void>;
+  resetSession: () => Promise<string | null>;
   refreshSession: () => Promise<void>;
 }
 
@@ -85,6 +87,21 @@ export function usePlanningSessionV2(userId?: string): UsePlanningSessionV2Retur
     }
   }, [sessionId, deleteMutation]);
 
+  const resetSession = useCallback(async (): Promise<string | null> => {
+    const previousId = sessionId;
+    const newId = await resetPlanningAssistantV2Session(userId);
+    if (previousId) {
+      queryClient.removeQueries({ queryKey: ['planning-session-v2', previousId] });
+    }
+    if (newId) {
+      setSessionId(newId);
+      void queryClient.invalidateQueries({ queryKey: ['planning-session-v2', newId] });
+    } else {
+      setSessionId(null);
+    }
+    return newId;
+  }, [sessionId, userId, queryClient]);
+
   const refreshSession = useCallback(async () => {
     if (sessionId) {
       await refetch();
@@ -98,6 +115,7 @@ export function usePlanningSessionV2(userId?: string): UsePlanningSessionV2Retur
     error: (error as Error) || createMutation.error || deleteMutation.error || null,
     createSession,
     deleteSession,
+    resetSession,
     refreshSession,
   };
 }

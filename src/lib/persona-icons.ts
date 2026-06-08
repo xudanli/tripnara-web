@@ -12,10 +12,24 @@ import { Shield, Activity, RefreshCw, type LucideIcon } from 'lucide-react';
 
 export type PersonaType = 'ABU' | 'DR_DRE' | 'NEPTUNE';
 
+/** 品牌头像（public/images/personas） */
+export const PERSONA_LOGO_SRC: Record<PersonaType, string> = {
+  ABU: '/images/personas/abu-logo.svg',
+  DR_DRE: '/images/personas/dr-dre-logo.svg',
+  NEPTUNE: '/images/personas/neptune-logo.svg',
+};
+
+/** 行程健康度等 C 端短标签 */
+export const PERSONA_ROLE_LABEL_ZH: Record<PersonaType, string> = {
+  ABU: '安全',
+  DR_DRE: '节奏',
+  NEPTUNE: '完整',
+};
+
 /**
  * 标准化三人格类型
  */
-function normalizePersona(persona: PersonaType | string): PersonaType {
+export function normalizePersona(persona: PersonaType | string): PersonaType {
   const upper = persona.toUpperCase();
   if (upper === 'ABU') return 'ABU';
   if (upper === 'DR_DRE' || upper === 'DRDRE') return 'DR_DRE';
@@ -75,4 +89,17 @@ export function getPersonaName(persona: PersonaType | string): string {
     case 'NEPTUNE':
       return 'Neptune';
   }
+}
+
+export function getPersonaLogoSrc(persona: PersonaType | string): string {
+  return PERSONA_LOGO_SRC[normalizePersona(persona)];
+}
+
+/** Guardian 合议 bullet → 三人格（前缀 Abu:/Dr.Dre:/Neptune:） */
+export function personaFromCouncilBullet(line: string): PersonaType | null {
+  const trimmed = line.trim();
+  if (/^Abu\s*[:：]/i.test(trimmed)) return 'ABU';
+  if (/^Dr\.?\s*Dre\s*[:：]/i.test(trimmed)) return 'DR_DRE';
+  if (/^Neptune\s*[:：]/i.test(trimmed)) return 'NEPTUNE';
+  return null;
 }

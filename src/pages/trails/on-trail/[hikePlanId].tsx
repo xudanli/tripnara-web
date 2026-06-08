@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,82 +18,144 @@ import {
   Pause,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type {
-  OnTrailState,
-  TrailEvent,
-} from '@/types/trail';
+import type { OnTrailState, TrailEvent } from '@/types/trail';
+import { MapboxTrailMap } from '@/components/map';
+import { trailOfflineStore } from '@/services/trail-offline-store';
+import type { TrailOfflinePackRecord } from '@/types/trail-offline';
+import { hikePlanRepository, isUuidLike } from '@/services/hike-plan-repository';
+import { useHikePlan } from '@/hooks/useHikePlan';
+import { useGpsTrackRecorder } from '@/hooks/useGpsTrackRecorder';
+import { GpsRecordingBar } from '@/components/hiking/GpsRecordingBar';
+import { Spinner } from '@/components/ui/spinner';
+import {
+  formatKm,
+  formatPaceKmh,
+  normalizeOnTrailState,
+  userRecordedTrailEvents,
+} from '@/lib/on-trail-state';
+import {
+  gpsToElevationPoints,
+  hikingElevationToPoints,
+  pickOffRouteAlert,
+  trailEventsToElevationEvents,
+} from '@/lib/on-trail-elevation';
+import { ElevationProfile } from '@/components/trails/ElevationProfile';
 
-export default function OnTrailLivePage() {
-  const { hikePlanId } = useParams<{ hikePlanId: string }>();
-  const navigate = useNavigate();
-  const [isRecording, setIsRecording] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
-
-  // 模拟实时状态
-  const [trailState, setTrailState] = useState<OnTrailState>({
-    hikePlanId: hikePlanId || '',
-    currentLocation: { latitude: -45.0, longitude: 168.0 },
-    currentElevation: 1200,
-    currentSegmentId: 'segment-2',
-    distanceCompletedKm: 8.5,
-    elevationGainedM: 450,
-    timeElapsedMin: 180,
-    estimatedArrivalTime: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    sunsetCountdownMin: 120,
-    isOffline: false,
-    activeRisks: [
-      {
-        id: 'risk-1',
-        type: 'wind',
-        severity: 'medium',
-        message: '风速接近阈值',
-        threshold: {
-          metric: '风速',
-          value: 12,
-          current: 10.5,
-        },
-        suggestedAction: 'continue',
-      },
-    ],
-    paceStatus: {
-      currentPace: 3.2,
-      plannedPace: 3.5,
-      bufferRemainingMin: 45,
-      latestTurnaroundTime: '16:30',
-    },
-    repairSuggestions: [
-      {
-        id: 'repair-1',
-        title: '走到撤退点下山',
-        description: '如果感觉疲劳，可以在 3km 后的撤退点提前下山',
-        type: 'exit_point',
-        changes: {
-          distanceChangeKm: -5,
-          timeChangeMin: -90,
-        },
-        targetPoint: {
-          name: '撤退点 A',
-          coordinates: { latitude: -45.1, longitude: 168.1 },
-          distanceFromStartKm: 11.5,
-        },
-      },
-    ],
+const emptyTrailState = (id: string): OnTrailState =>
+  normalizeOnTrailState({
+    hikePlanId: id,
+    distanceCompletedKm: 0,
+    elevationGainedM: 0,
+    timeElapsedMin: 0,
     events: [],
   });
 
-  const handleRecordEvent = (type: TrailEvent['type']) => {
+export default function OnTrailLivePage() {
+  const { hikePlanId: paramId } = useParams<{ hikePlanId: string }>();
+  const navigate = useNavigate();
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+  const [offlinePack, setOfflinePack] = useState<TrailOfflinePackRecord | null>(null);
+  const [trailState, setTrailState] = useState<OnTrailState | null>(null);
+  const [completing, setCompleting] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+
+  const planId = paramId && isUuidLike(paramId) ? paramId : undefined;
+  const { plan, loading: planLoading } = useHikePlan(planId);
+  const gpsEnabled = plan?.status === 'in_progress';
+
+  const refreshLiveState = useCallback(() => {
+    if (!planId) return;
+    hikePlanRepository
+      .getLiveState(planId)
+      .then((live) => setTrailState(normalizeOnTrailState(live)))
+      .catch(() => setTrailState(emptyTrailState(planId)));
+  }, [planId]);
+
+  const gps = useGpsTrackRecorder(planId, gpsEnabled, {
+    onTrackFlushed: refreshLiveState,
+  });
+
+  useEffect(() => {
+    const onOnline = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!plan?.routeDirectionId) return;
+    trailOfflineStore.get(plan.routeDirectionId).then(setOfflinePack);
+  }, [plan?.routeDirectionId]);
+
+  useEffect(() => {
+    refreshLiveState();
+  }, [refreshLiveState]);
+
+  /** GPS 上传后服务端会刷新偏航 events */
+  useEffect(() => {
+    if (!planId || !gpsEnabled) return;
+    const timer = window.setInterval(() => refreshLiveState(), 20_000);
+    return () => window.clearInterval(timer);
+  }, [planId, gpsEnabled, refreshLiveState]);
+
+  useEffect(() => {
+    if (!planId || gps.summary.pointCount === 0) return;
+    setTrailState((prev) => {
+      const base = prev ?? emptyTrailState(planId);
+      return {
+        ...base,
+        distanceCompletedKm: gps.summary.distanceKm,
+        timeElapsedMin: gps.summary.durationMin,
+        elevationGainedM: gps.summary.elevationGainM ?? base.elevationGainedM,
+      };
+    });
+    void hikePlanRepository.updateLiveState(planId, {
+      distanceCompletedKm: gps.summary.distanceKm,
+      timeElapsedMin: gps.summary.durationMin,
+      elevationGainedM: gps.summary.elevationGainM,
+      isOffline,
+    });
+  }, [gps.summary, planId, isOffline]);
+
+  const handleRecordEvent = async (type: TrailEvent['type']) => {
+    if (!planId) return;
     const newEvent: TrailEvent = {
       id: `event-${Date.now()}`,
       type,
       timestamp: new Date().toISOString(),
-      location: trailState.currentLocation,
-      segmentId: trailState.currentSegmentId,
+      location: trailState?.currentLocation,
+      segmentId: trailState?.currentSegmentId,
     };
-    setTrailState((prev) => ({
-      ...prev,
-      events: [...prev.events, newEvent],
-    }));
-    toast.success('事件已记录');
+    try {
+      const live = await hikePlanRepository.appendEvent(planId, newEvent);
+      setTrailState((prev) => ({
+        ...(prev ?? emptyTrailState(planId)),
+        events: live.events ?? [],
+      }));
+      toast.success('事件已记录');
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const handleCompleteHike = async () => {
+    if (!planId) return;
+    setCompleting(true);
+    try {
+      gps.stopRecording();
+      await hikePlanRepository.complete(planId);
+      navigate(`/dashboard/trails/review/${planId}`);
+    } catch (e) {
+      toast.error((e as Error).message || '结束徒步失败');
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const formatTime = (minutes: number) => {
@@ -102,19 +164,86 @@ export default function OnTrailLivePage() {
     return `${hours}h ${mins}m`;
   };
 
+  const offRouteAlert = useMemo(
+    () =>
+      pickOffRouteAlert({
+        events: trailState?.events,
+        risks: trailState?.activeRisks,
+      }),
+    [trailState?.events, trailState?.activeRisks]
+  );
+
+  const elevationLive = useMemo(() => {
+    const fromGps = gpsToElevationPoints(gps.points);
+    if (fromGps.length > 0) return fromGps;
+    return hikingElevationToPoints(offlinePack?.elevationProfile);
+  }, [gps.points, offlinePack?.elevationProfile]);
+
+  const elevationEvents = useMemo(() => {
+    if (!trailState) return [];
+    return trailEventsToElevationEvents(
+      userRecordedTrailEvents(trailState.events),
+      gps.points,
+      trailState.distanceCompletedKm
+    );
+  }, [trailState, gps.points]);
+
+  const offlineBasemap = useMemo(() => {
+    if (!offlinePack?.tileCache?.tileCount) return undefined;
+    return {
+      packKey: offlinePack.tileCache.packKey,
+      manifest: offlinePack.tileManifest,
+      format: offlinePack.tileCache.format,
+    };
+  }, [offlinePack]);
+
+  const elevationStats = useMemo(() => {
+    if (!elevationLive.length) {
+      return {
+        totalKm: offlinePack?.summary?.totalDistanceKm ?? 0,
+        maxM: offlinePack?.summary?.maxElevationM ?? 1,
+      };
+    }
+    const maxM = Math.max(...elevationLive.map((p) => p.elevationM), 1);
+    const totalKm =
+      elevationLive[elevationLive.length - 1]?.distanceKm ??
+      offlinePack?.summary?.totalDistanceKm ??
+      0;
+    return { totalKm: Math.max(totalKm, 0.1), maxM };
+  }, [elevationLive, offlinePack?.summary]);
+
+  if (!planId) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <p className="text-muted-foreground mb-4">请从准备页「开始徒步」进入（需有效的 HikePlan ID）</p>
+        <Button onClick={() => navigate('/dashboard/trails/my-hikes')}>我的徒步</Button>
+      </div>
+    );
+  }
+
+  if (planLoading || !trailState) {
+    return (
+      <div className="container mx-auto px-4 py-12 flex justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-4 max-w-7xl">
-      {/* 顶部栏 */}
       <div className="flex items-center justify-between mb-4">
         <Button variant="ghost" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           返回
         </Button>
         <div className="flex items-center gap-2">
+          {plan?.nameCN ? (
+            <span className="text-sm font-medium hidden sm:inline">{plan.nameCN}</span>
+          ) : null}
           {isOffline ? (
             <Badge variant="outline" className="bg-yellow-50">
               <WifiOff className="h-3 w-3 mr-1" />
-              离线模式
+              离线
             </Badge>
           ) : (
             <Badge variant="outline" className="bg-green-50">
@@ -122,15 +251,21 @@ export default function OnTrailLivePage() {
               在线
             </Badge>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsOffline(!isOffline)}
-          >
-            {isOffline ? '切换到在线' : '切换到离线'}
+          <Button size="sm" variant="outline" onClick={handleCompleteHike} disabled={completing}>
+            结束徒步
           </Button>
         </div>
       </div>
+
+      <GpsRecordingBar
+        className="mb-4"
+        recording={gps.recording}
+        summary={gps.summary}
+        lastError={gps.lastError}
+        onStart={gps.startRecording}
+        onStop={gps.stopRecording}
+        onSync={() => planId && hikePlanRepository.syncPendingGps(planId)}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* 左侧：地图主视图 */}
@@ -148,29 +283,62 @@ export default function OnTrailLivePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0 h-[calc(100%-80px)] relative">
-              <div className="h-full bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
-                <div className="text-center">
-                  <Map className="h-12 w-12 mx-auto mb-2" />
-                  <p>离线地图视图</p>
-                  <p className="text-xs mt-1">
-                    当前点、路线线条、下一关键节点
-                  </p>
+              {offlinePack && offlinePack.lineCoordinates.length > 0 ? (
+                <MapboxTrailMap
+                  height="100%"
+                  lineCoordinates={offlinePack.lineCoordinates}
+                  recordedLineCoordinates={gps.lineCoordinates}
+                  currentPosition={
+                    gps.points.length > 0
+                      ? {
+                          lng: gps.points[gps.points.length - 1].lng,
+                          lat: gps.points[gps.points.length - 1].lat,
+                        }
+                      : undefined
+                  }
+                  markers={offlinePack.markers}
+                  mapStyle="outdoors"
+                  fitBounds={!gps.recording}
+                  emptyMessage="无轨迹数据"
+                  offlineBasemap={offlineBasemap}
+                  useOfflineBasemap={Boolean(offlineBasemap)}
+                />
+              ) : (
+                <div className="h-full bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
+                  <div className="text-center px-4">
+                    <Map className="h-12 w-12 mx-auto mb-2" />
+                    <p>暂无计划路线</p>
+                    <p className="text-xs mt-1">可在准备页下载离线包；GPS 蓝线为实走轨迹</p>
+                    {gps.lineCoordinates.length >= 2 ? (
+                      <div className="mt-4 h-48 w-full">
+                        <MapboxTrailMap
+                          height={192}
+                          recordedLineCoordinates={gps.lineCoordinates}
+                          fitBounds
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              {/* 偏航提示 */}
-              <div className="absolute top-4 left-4 right-4">
-                <Card className="bg-yellow-50 border-yellow-200">
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-2 text-yellow-900">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="text-sm font-medium">偏航提示</span>
-                    </div>
-                    <p className="text-xs text-yellow-700 mt-1">
-                      您已偏离路线 50m，建议回到路线
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+              )}
+              {offRouteAlert ? (
+                <div className="absolute top-4 left-4 right-4 z-10">
+                  <Card className="bg-yellow-50 border-yellow-200 shadow-md">
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-2 text-yellow-900">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="text-sm font-medium">偏航提示</span>
+                      </div>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        {offRouteAlert.message}
+                        {offRouteAlert.distanceM != null
+                          ? `（约 ${Math.round(offRouteAlert.distanceM)} m）`
+                          : ''}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -183,7 +351,7 @@ export default function OnTrailLivePage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <div className="text-2xl font-bold">
-                    {trailState.distanceCompletedKm.toFixed(1)} km
+                    {formatKm(trailState.distanceCompletedKm)}
                   </div>
                   <div className="text-sm text-muted-foreground">已完成距离</div>
                 </div>
@@ -222,6 +390,13 @@ export default function OnTrailLivePage() {
               </div>
             </CardContent>
           </Card>
+
+          <ElevationProfile
+            elevationPoints={elevationLive}
+            events={elevationEvents}
+            totalDistanceKm={elevationStats.totalKm}
+            maxElevationM={elevationStats.maxM}
+          />
         </div>
 
         {/* 右侧：风险、节奏、修复卡片 */}
@@ -298,38 +473,43 @@ export default function OnTrailLivePage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {trailState.paceStatus && (
+              {trailState.paceStatus &&
+              (trailState.paceStatus.plannedPace > 0 ||
+                trailState.paceStatus.currentPace > 0) ? (
                 <>
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span>当前配速</span>
                       <span className="font-medium">
-                        {trailState.paceStatus.currentPace.toFixed(1)} km/h
+                        {formatPaceKmh(trailState.paceStatus.currentPace)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm mb-1">
                       <span>计划配速</span>
                       <span className="font-medium">
-                        {trailState.paceStatus.plannedPace.toFixed(1)} km/h
+                        {formatPaceKmh(trailState.paceStatus.plannedPace)}
                       </span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden mt-2">
-                      <div
-                        className={`h-full ${
-                          trailState.paceStatus.currentPace >=
-                          trailState.paceStatus.plannedPace
-                            ? 'bg-green-500'
-                            : 'bg-yellow-500'
-                        }`}
-                        style={{
-                          width: `${
-                            (trailState.paceStatus.currentPace /
-                              trailState.paceStatus.plannedPace) *
-                            100
-                          }%`,
-                        }}
-                      />
-                    </div>
+                    {trailState.paceStatus.plannedPace > 0 ? (
+                      <div className="h-2 bg-muted rounded-full overflow-hidden mt-2">
+                        <div
+                          className={`h-full ${
+                            trailState.paceStatus.currentPace >=
+                            trailState.paceStatus.plannedPace
+                              ? 'bg-green-500'
+                              : 'bg-yellow-500'
+                          }`}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (trailState.paceStatus.currentPace /
+                                trailState.paceStatus.plannedPace) *
+                                100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="text-sm font-medium text-blue-900 mb-1">
@@ -350,6 +530,10 @@ export default function OnTrailLivePage() {
                     </div>
                   )}
                 </>
+              ) : (
+                <div className="text-sm text-muted-foreground text-center py-4">
+                  暂无节奏数据
+                </div>
               )}
             </CardContent>
           </Card>

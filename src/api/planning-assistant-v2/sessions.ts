@@ -12,6 +12,21 @@ import type {
   ChatHistoryResponse,
 } from './types';
 
+function readSessionIdFromPayload(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const nested =
+    o.data && typeof o.data === 'object' ? (o.data as Record<string, unknown>) : null;
+  for (const src of [o, nested]) {
+    if (!src) continue;
+    for (const key of ['sessionId', 'session_id'] as const) {
+      const v = src[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+  }
+  return null;
+}
+
 export const sessionsApi = {
   /**
    * 创建会话
@@ -21,11 +36,12 @@ export const sessionsApi = {
    * 速率限制: 10 次/分钟
    */
   create: async (data: CreateSessionRequest): Promise<CreateSessionResponse> => {
-    const response = await planningAssistantV2Client.post<CreateSessionResponse>(
-      '/sessions',
-      data
-    );
-    return response.data;
+    const response = await planningAssistantV2Client.post<unknown>('/sessions', data);
+    const sessionId = readSessionIdFromPayload(response.data);
+    if (!sessionId) {
+      throw new Error('Create session response missing sessionId');
+    }
+    return { sessionId };
   },
 
   /**

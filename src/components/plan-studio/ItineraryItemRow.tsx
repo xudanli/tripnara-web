@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { DateTime } from 'luxon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, X, ChevronLeft, ChevronRight, Utensils, Hotel, Coffee, Fuel, Compass, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, X, ChevronLeft, ChevronRight, Compass, Pencil, RefreshCw, Trash2, Lock, Utensils, Hotel, Coffee, Fuel } from 'lucide-react';
 import type { ItineraryItem, BookingStatus } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import type { PlaceImageInfo } from '@/types/place-image';
@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
+import { isAlwaysOpenHours } from '@/utils/opening-hours-schedule-check';
 import { toast } from 'sonner';
 
 interface ItineraryItemRowProps {
@@ -65,6 +66,10 @@ interface ItineraryItemRowProps {
   onSearchNearby?: (item: ItineraryItem, category?: PlaceCategory) => void;
   /** 是否高亮（证据点击时用于在行程中高亮对应行程项） */
   highlighted?: boolean;
+  /** 路线拓扑锁：段结构只读（防震荡降级视觉） */
+  structureLocked?: boolean;
+  /** 菜单「编辑」展示为微调时间 */
+  editTimingOnly?: boolean;
 }
 
 // 类别图标映射
@@ -118,6 +123,8 @@ export default function ItineraryItemRow({
   onAskNara,
   onSearchNearby,
   highlighted,
+  structureLocked = false,
+  editTimingOnly = false,
 }: ItineraryItemRowProps) {
   const { t } = useTranslation();
   const place = item.Place;
@@ -472,15 +479,19 @@ export default function ItineraryItemRow({
       return text;
     };
 
-    // 获取今日营业时间
+    // 行程计划时间（目的地时区）
+    const visitStartDt = item.startTime
+      ? DateTime.fromISO(item.startTime, { zone: 'UTC' }).setZone(timezone)
+      : null;
+    const visitEndDt = item.endTime
+      ? DateTime.fromISO(item.endTime, { zone: 'UTC' }).setZone(timezone)
+      : null;
+    const tripDate = visitStartDt?.toJSDate() ?? new Date();
+
+    // 获取行程日营业时间
     const getTodayHours = (): string | null => {
       // 如果没有数据，返回 null
       if (!rawOpeningHours) return null;
-      
-      // 获取行程日期（用于判断季节）
-      const tripDate = item.startTime 
-        ? DateTime.fromISO(item.startTime, { zone: 'UTC' }).setZone(timezone).toJSDate()
-        : new Date();
       
       // 如果是字符串格式
       if (typeof rawOpeningHours === 'string') {
@@ -509,12 +520,12 @@ export default function ItineraryItemRow({
         return text;
       }
       
-      // 按星期获取
+      // 按行程日星期获取
       const dayMap: Record<number, string> = {
         0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat'
       };
-      const today = new Date().getDay();
-      const dayKey = dayMap[today];
+      const tripDay = tripDate.getDay();
+      const dayKey = dayMap[tripDay];
     
       // 尝试获取具体星期的时间
       if (openingHours[dayKey]) {
@@ -522,7 +533,7 @@ export default function ItineraryItemRow({
       }
       
       // 尝试使用统一时间（工作日/周末）
-      const isWeekend = today === 0 || today === 6;
+      const isWeekend = tripDay === 0 || tripDay === 6;
       if (isWeekend && openingHours.weekend) {
         return openingHours.weekend;
       }
@@ -531,9 +542,9 @@ export default function ItineraryItemRow({
       }
       
       // 兼容旧格式：尝试用英文星期名
-      const todayEn = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-      if (openingHours[todayEn]) {
-        return openingHours[todayEn];
+      const tripDayEn = tripDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      if (openingHours[tripDayEn]) {
+        return openingHours[tripDayEn];
       }
       
       return null;
@@ -541,8 +552,10 @@ export default function ItineraryItemRow({
     
     const todayHours = getTodayHours();
     
-    // 判断当前是否营业
-    const isOpenNow = (): boolean | null => {
+    // 按行程项计划时间判断是否营业
+    const isOpenAtScheduledTime = (): boolean | null => {
+      if (!visitStartDt) return null;
+
       // 如果有 business_status，优先使用
       if (metadata.business_status) {
         if (metadata.business_status === 'CLOSED_TEMPORARILY' || 
@@ -552,6 +565,7 @@ export default function ItineraryItemRow({
       }
       
       if (!todayHours || todayHours === 'closed') return false;
+      if (isAlwaysOpenHours(todayHours)) return true;
       
       // 尝试解析时间范围
       try {
@@ -560,13 +574,15 @@ export default function ItineraryItemRow({
         if (!timeMatch) return null;
         
         const [, openTime, closeTime] = timeMatch;
-        const now = new Date();
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const visitStartMinutes = visitStartDt.hour * 60 + visitStartDt.minute;
+        const visitEndMinutes = visitEndDt
+          ? visitEndDt.hour * 60 + visitEndDt.minute
+          : visitStartMinutes;
         const [openH, openM] = openTime.split(':').map(Number);
         const [closeH, closeM] = closeTime.split(':').map(Number);
         const openMinutes = openH * 60 + openM;
         const closeMinutes = closeH * 60 + closeM;
-        return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
+        return visitStartMinutes >= openMinutes && visitEndMinutes <= closeMinutes;
       } catch {
         return null; // 无法判断
       }
@@ -597,7 +613,7 @@ export default function ItineraryItemRow({
       address,
       rating,
       todayHours,
-      isOpen: isOpenNow(),
+      isOpen: isOpenAtScheduledTime(),
       description,
       phone,
       website,
@@ -680,7 +696,10 @@ export default function ItineraryItemRow({
     <>
     <div
       className={cn(
-        'p-3 border rounded-lg hover:border-primary transition-colors group cursor-pointer',
+        'p-3 border rounded-lg transition-colors group cursor-pointer',
+        structureLocked
+          ? 'border-amber-200/70 bg-amber-50/30 hover:border-amber-300/80'
+          : 'hover:border-primary',
         abuFields ? getStatusColor(abuFields.status) : '',
         highlighted && 'border-primary bg-primary/5 ring-1 ring-primary/20'
       )}
@@ -793,8 +812,17 @@ export default function ItineraryItemRow({
 
           {/* 地点名称 */}
           <div className="font-medium text-base mb-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="truncate block">{name}</span>
+              {structureLocked ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] shrink-0 border-amber-300/80 bg-amber-50 text-amber-900"
+                >
+                  <Lock className="h-3 w-3 mr-0.5" />
+                  段已锁定
+                </Badge>
+              ) : null}
               {/* ✅ 显示必游标记（如果存在） */}
               {(item.isRequired || item.note?.includes('[必游]')) && (
                 <Badge variant="default" className="text-xs shrink-0">
@@ -1049,7 +1077,7 @@ export default function ItineraryItemRow({
               {onSearchNearby && (
                 <>
                   <DropdownMenuSub>
-                    <DropdownMenuSubTrigger 
+                    <DropdownMenuSubTrigger
                       disabled={!getPlaceCoordinates}
                       className={cn(
                         !getPlaceCoordinates && 'opacity-50 cursor-not-allowed'
@@ -1062,7 +1090,7 @@ export default function ItineraryItemRow({
                       )}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="min-w-[160px]">
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onSelect={() => {
                           if (getPlaceCoordinates) {
                             onSearchNearby(item, 'ATTRACTION');
@@ -1074,7 +1102,7 @@ export default function ItineraryItemRow({
                         <Star className="w-4 h-4 mr-2 text-amber-500" />
                         <span>景点</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onSelect={() => {
                           if (getPlaceCoordinates) {
                             onSearchNearby(item, 'RESTAURANT');
@@ -1086,7 +1114,7 @@ export default function ItineraryItemRow({
                         <Utensils className="w-4 h-4 mr-2 text-red-500" />
                         <span>餐厅</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onSelect={() => {
                           if (getPlaceCoordinates) {
                             onSearchNearby(item, 'HOTEL');
@@ -1098,7 +1126,7 @@ export default function ItineraryItemRow({
                         <Hotel className="w-4 h-4 mr-2 text-purple-500" />
                         <span>酒店</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onSelect={() => {
                           if (getPlaceCoordinates) {
                             onSearchNearby(item, 'CAFE');
@@ -1110,7 +1138,7 @@ export default function ItineraryItemRow({
                         <Coffee className="w-4 h-4 mr-2 text-amber-700" />
                         <span>休息点</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onSelect={() => {
                           if (getPlaceCoordinates) {
                             onSearchNearby(item, 'TRANSPORT');
@@ -1130,7 +1158,7 @@ export default function ItineraryItemRow({
               {onEdit && (
                 <DropdownMenuItem onClick={() => onEdit(item)} className="min-h-[44px] cursor-pointer">
                   <Pencil className="w-4 h-4 mr-2" />
-                  {t('planStudio.scheduleTab.actions.edit')}
+                  {editTimingOnly ? '微调时间' : t('planStudio.scheduleTab.actions.edit')}
                 </DropdownMenuItem>
               )}
               {onReplace && (

@@ -16,12 +16,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    // 依赖预构建缓存放在项目卷内，避免 /tmp 与项目跨设备 rename 触发 EXDEV
+    cacheDir: path.resolve(__dirname, 'node_modules/.vite'),
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
     },
     server: {
+      host: true, // 允许通过局域网 IP 访问（如手机）
       proxy: {
         '/api': {
           target: BACKEND_TARGET,

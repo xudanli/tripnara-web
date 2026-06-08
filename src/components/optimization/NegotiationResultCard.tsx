@@ -40,10 +40,14 @@ import {
   Scale,
   Users,
   MessageSquare,
+  Lightbulb,
   CloudRain,
   Pencil,
   Copy,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 // ==================== 配置 ====================
 
@@ -162,7 +166,7 @@ function DecisionBadge({
 }
 
 /** 共识度指示器 */
-function ConsensusIndicator({ level }: { level: number }) {
+function ConsensusIndicator({ level, compact }: { level: number; compact?: boolean }) {
   const v = Number(level);
   const percentage = Number.isNaN(v) ? 0 : Math.round(Math.max(0, Math.min(1, v)) * 100);
   
@@ -184,14 +188,14 @@ function ConsensusIndicator({ level }: { level: number }) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-3">
-            <Scale className="h-4 w-4 text-muted-foreground" />
+          <div className={cn('flex items-center', compact ? 'gap-1.5' : 'gap-3')}>
+            <Scale className={cn('text-muted-foreground', compact ? 'h-3 w-3' : 'h-4 w-4')} />
             <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
+              <div className={cn('flex items-center justify-between', compact ? 'mb-0.5' : 'mb-1')}>
                 <span className="text-sm font-medium">共识度</span>
                 <span className="text-sm tabular-nums">{percentage}%</span>
               </div>
-              <Progress value={percentage} className={cn('h-2', getColor())} />
+              <Progress value={percentage} className={cn(compact ? 'h-1.5' : 'h-2', getColor())} />
             </div>
           </div>
         </TooltipTrigger>
@@ -203,28 +207,30 @@ function ConsensusIndicator({ level }: { level: number }) {
 
 /** 投票结果展示（X 赞成 · Y 反对 · Z 弃权） */
 function VotingResult({ 
-  result 
+  result,
+  compact,
 }: { 
   result: NegotiationResponse['votingResult'];
+  compact?: boolean;
 }) {
   const approve = Math.max(0, result.approve ?? 0);
   const reject = Math.max(0, result.reject ?? 0);
   const abstain = Math.max(0, result.abstain ?? 0);
   
   return (
-    <div className="flex flex-wrap items-center gap-3 text-sm">
-      <div className="flex items-center gap-1.5">
-        <ThumbsUp className="h-4 w-4 text-green-500" />
+    <div className={cn('flex flex-wrap items-center text-sm', compact ? 'gap-2' : 'gap-3')}>
+      <div className="flex items-center gap-1">
+        <ThumbsUp className={cn('text-green-500', compact ? 'h-3 w-3' : 'h-4 w-4')} />
         <span className="font-medium text-green-600">{approve}</span>
         <span className="text-muted-foreground">赞成</span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <ThumbsDown className="h-4 w-4 text-red-500" />
+      <div className="flex items-center gap-1">
+        <ThumbsDown className={cn('text-red-500', compact ? 'h-3 w-3' : 'h-4 w-4')} />
         <span className="font-medium text-red-600">{reject}</span>
         <span className="text-muted-foreground">反对</span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <Minus className="h-4 w-4 text-gray-400" />
+      <div className="flex items-center gap-1">
+        <Minus className={cn('text-gray-400', compact ? 'h-3 w-3' : 'h-4 w-4')} />
         <span className="font-medium text-gray-500">{abstain}</span>
         <span className="text-muted-foreground">弃权</span>
       </div>
@@ -236,9 +242,11 @@ function VotingResult({
 function GuardianEvaluation({
   guardian,
   utility,
+  compact,
 }: {
   guardian: 'abu' | 'dre' | 'neptune';
   utility: number;
+  compact?: boolean;
 }) {
   const config = GUARDIAN_CONFIG[guardian];
   const Icon = config.icon;
@@ -247,23 +255,25 @@ function GuardianEvaluation({
 
   return (
     <div className={cn(
-      'flex items-center gap-3 p-3 rounded-lg',
-      config.bgColor
+      'flex items-center rounded-lg',
+      config.bgColor,
+      compact ? 'gap-2 p-2' : 'gap-3 p-3'
     )}>
       <div className={cn(
-        'flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm'
+        'flex items-center justify-center rounded-full bg-white shadow-sm',
+        compact ? 'h-7 w-7' : 'h-10 w-10'
       )}>
-        <Icon className={cn('h-5 w-5', config.color)} />
+        <Icon className={cn(compact ? 'h-3.5 w-3.5' : 'h-5 w-5', config.color)} />
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium">{config.nameCN}</p>
-            <p className="text-xs text-muted-foreground">{config.description}</p>
+            <p className="text-sm font-medium">{config.nameCN}</p>
+            {!compact && <p className="text-xs text-muted-foreground">{config.description}</p>}
           </div>
-          <div className="text-right">
-            <p className="text-lg font-bold tabular-nums">{percentage}</p>
-            <p className="text-xs text-muted-foreground">评分</p>
+          <div className="text-right shrink-0">
+            <p className={cn('font-bold tabular-nums', compact ? 'text-sm' : 'text-lg')}>{percentage}</p>
+            <p className="text-xs text-muted-foreground">{getScoreLabel(percentage)}</p>
           </div>
         </div>
       </div>
@@ -271,7 +281,26 @@ function GuardianEvaluation({
   );
 }
 
-/** 将内部代号改写为用户可读文案 */
+/** 评估分数 → 可读状态 */
+function getScoreLabel(percentage: number): string {
+  if (percentage >= 70) return '良好';
+  if (percentage >= 40) return '一般';
+  return '待改进';
+}
+
+/** 从建议文案提取首句或前 40 字作为摘要 */
+function extractSummary(text: string, maxLen = 40): string {
+  const match = text.match(/^[^。！？]+[。！？]?/);
+  const first = (match ? match[0].trim() : text) || text;
+  if (first.length <= maxLen) return first;
+  return first.slice(0, maxLen) + '…';
+}
+
+/** 是否有超出摘要的详情可展开 */
+function hasExpandableDetail(full: string, summary: string): boolean {
+  return full.length > summary.length;
+}
+
 /** 根据文案推断建议类型（天气/节奏/安全），用于展示图标 */
 function inferConcernType(text: string): 'weather' | 'pace' | 'safety' | 'other' {
   const t = text.toLowerCase();
@@ -281,11 +310,15 @@ function inferConcernType(text: string): 'weather' | 'pace' | 'safety' | 'other'
   return 'other';
 }
 
-const CONCERN_TYPE_CONFIG: Record<'weather' | 'pace' | 'safety' | 'other', { icon: React.ElementType; label: string; color: string }> = {
-  weather: { icon: CloudRain, label: '天气', color: 'text-blue-600' },
-  pace: { icon: Activity, label: '节奏', color: 'text-amber-600' },
-  safety: { icon: Shield, label: '安全', color: 'text-red-600' },
-  other: { icon: AlertTriangle, label: '建议', color: 'text-muted-foreground' },
+/** 建议类型 → 影响维度（建立 建议↔评分 认知映射） */
+const CONCERN_TYPE_CONFIG: Record<
+  'weather' | 'pace' | 'safety' | 'other',
+  { icon: React.ElementType; label: string; color: string; dimension: string; impactHint: string }
+> = {
+  weather: { icon: CloudRain, label: '天气', color: 'text-blue-600', dimension: '安全', impactHint: '采纳后可降低天气风险、提升安全分' },
+  pace: { icon: Activity, label: '节奏', color: 'text-amber-600', dimension: '节奏', impactHint: '采纳后可缓解疲劳、提升节奏分' },
+  safety: { icon: Shield, label: '安全', color: 'text-red-600', dimension: '安全', impactHint: '采纳后可提升安全分' },
+  other: { icon: AlertTriangle, label: '建议', color: 'text-muted-foreground', dimension: '修复', impactHint: '采纳后可优化体验与路线结构' },
 };
 
 function toUserReadableTradeoff(text: string): string {
@@ -323,6 +356,107 @@ function TradeoffsList({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** 建议任务行：结论 + 主操作，详情可展开 */
+function SuggestionTaskRow({
+  concern,
+  onGoToEdit,
+  tripId,
+  dimensionLabel,
+}: {
+  concern: string;
+  onGoToEdit: () => void;
+  tripId: string | undefined;
+  /** 后端返回的维度标签（如 安全/节奏/修复），无则用 heuristic */
+  dimensionLabel?: string;
+}) {
+  const [detailOpen, setDetailOpen] = React.useState(false);
+  const type = inferConcernType(concern);
+  const config = CONCERN_TYPE_CONFIG[type];
+  const Icon = config.icon;
+  const label = dimensionLabel ?? config.dimension;
+  const hint = dimensionLabel ? `采纳后可提升${dimensionLabel}分` : config.impactHint;
+  const summary = extractSummary(concern);
+  const hasDetail = hasExpandableDetail(concern, summary);
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 p-3 min-h-[48px]">
+        <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted/50', config.color)}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="text-sm line-clamp-2">
+                  <span className="text-xs text-muted-foreground shrink-0">[{label}] </span>
+                  {summary}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[220px]">
+                {hint}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 text-xs"
+                onClick={onGoToEdit}
+                disabled={!tripId}
+              >
+                <Pencil className="h-3 w-3 mr-1" />
+                去改行程
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {tripId ? '进入规划工作台调整行程' : '请在行程详情页使用此功能'}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+      {hasDetail && (
+        <Collapsible open={detailOpen} onOpenChange={setDetailOpen}>
+          <CollapsibleTrigger className="flex w-full items-center gap-1 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 transition-colors">
+            {detailOpen ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+            查看详情
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="px-3 pb-3 pt-0 flex items-start gap-2">
+              <p className="text-sm text-muted-foreground flex-1">{concern}</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs shrink-0"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(concern);
+                    toast.success('已复制');
+                  } catch {
+                    toast.error('复制失败');
+                  }
+                }}
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                复制
+              </Button>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   );
 }
@@ -367,10 +501,10 @@ export function NegotiationResultCard({
       decisionConfig.borderColor,
       className
     )}>
-      <CardHeader className={cn(decisionConfig.bgColor, compact && 'pb-3')}>
+      <CardHeader className={cn(decisionConfig.bgColor, compact ? 'p-2.5 pb-1.5' : 'pb-3')}>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className={cn(compact && 'text-base')}>{title}</CardTitle>
+            <CardTitle className={cn(compact ? 'text-sm' : '')}>{title}</CardTitle>
             {!compact && (
               <CardDescription>综合评估结论</CardDescription>
             )}
@@ -379,36 +513,39 @@ export function NegotiationResultCard({
         </div>
       </CardHeader>
 
-      <CardContent className={cn('pt-4', compact && 'pt-3')}>
+      <CardContent className={cn(compact ? 'p-2.5 pt-0' : 'pt-4')}>
         {/* 共识度和投票 */}
-        <div className="grid gap-4 sm:grid-cols-2 mb-4">
-          <ConsensusIndicator level={result.consensusLevel} />
+        <div className={cn('grid sm:grid-cols-2', compact ? 'gap-2 mb-2' : 'gap-4 mb-4')}>
+          <ConsensusIndicator level={result.consensusLevel} compact={compact} />
           <div>
-            <p className="text-sm font-medium mb-2 flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
+            <p className={cn('font-medium flex items-center gap-2', compact ? 'text-sm mb-1' : 'text-sm mb-2')}>
+              <Users className={cn('text-muted-foreground', compact ? 'h-3 w-3' : 'h-4 w-4')} />
               投票结果
             </p>
-            <VotingResult result={result.votingResult} />
+            <VotingResult result={result.votingResult} compact={compact} />
           </div>
         </div>
 
-        <Separator className="my-4" />
+        <Separator className={compact ? 'my-2' : 'my-4'} />
 
         {/* 评估维度（安全守护者 64 · 节奏 44 · 修复 67） */}
-        <div className="mb-4">
-          <p className="text-sm font-medium mb-3">评估维度</p>
-          <div className="grid gap-2 sm:grid-cols-3">
+        <div className={compact ? 'mb-2' : 'mb-4'}>
+          <p className={cn('font-medium', compact ? 'text-sm mb-2' : 'text-sm mb-3')}>评估维度</p>
+          <div className={cn('grid sm:grid-cols-3', compact ? 'gap-2' : 'gap-2')}>
             <GuardianEvaluation 
               guardian="abu" 
-              utility={result.evaluationSummary.abuUtility} 
+              utility={result.evaluationSummary.abuUtility}
+              compact={compact}
             />
             <GuardianEvaluation 
               guardian="dre" 
-              utility={result.evaluationSummary.dreUtility} 
+              utility={result.evaluationSummary.dreUtility}
+              compact={compact}
             />
             <GuardianEvaluation 
               guardian="neptune" 
-              utility={result.evaluationSummary.neptuneUtility} 
+              utility={result.evaluationSummary.neptuneUtility}
+              compact={compact}
             />
           </div>
         </div>
@@ -416,93 +553,40 @@ export function NegotiationResultCard({
         {/* 详情展开 */}
         {showDetails && (() => {
           const criticalConcerns = result.evaluationSummary?.criticalConcerns ?? [];
+          const suggestionsWithDimension = result.evaluationSummary?.suggestionsWithDimension;
           const keyTradeoffs = result.keyTradeoffs ?? [];
           const conditions = result.conditions ?? [];
           const conditionSet = new Set(conditions);
-          const executableConcerns = criticalConcerns.filter((c) => !conditionSet.has(c));
-          const suggestionCount = executableConcerns.length + keyTradeoffs.length;
+          const executableItems: Array<{ text: string; dimensionLabel?: string }> =
+            suggestionsWithDimension?.length
+              ? suggestionsWithDimension.filter((s) => !conditionSet.has(s.text)).map((s) => ({ text: s.text, dimensionLabel: s.dimensionLabel }))
+              : criticalConcerns.filter((c) => !conditionSet.has(c)).map((text) => ({ text, dimensionLabel: undefined }));
+          const suggestionCount = executableItems.length + keyTradeoffs.length;
           return (
           <Accordion type="single" collapsible className="w-full">
-            {/* 行程优化建议 (N) = 可执行的调整 + 不同维度的评估意见，去重后 */}
+            {/* 建议你先做：任务清单式，结论+主操作 */}
             {suggestionCount > 0 ? (
               <AccordionItem value="suggestions">
                 <AccordionTrigger className="text-sm">
-                  行程优化建议 ({suggestionCount})
+                  <span className="flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-amber-500" />
+                    建议你先做 ({suggestionCount})
+                  </span>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-4">
-                    {executableConcerns.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium mb-2">可执行的调整</p>
-                        <p className="text-xs text-muted-foreground mb-3">根据建议调整行程顺序或预留备选方案，可点击「去改行程」进入规划工作台</p>
-                        <ul className="space-y-3">
-                          {executableConcerns.map((concern, i) => {
-                            const type = inferConcernType(concern);
-                            const config = CONCERN_TYPE_CONFIG[type];
-                            const Icon = config.icon;
-                            return (
-                              <li
-                                key={i}
-                                className="flex flex-col gap-2 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md', config.color, 'bg-muted/50')}>
-                                    <Icon className="h-4 w-4" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <span className="text-xs font-medium text-muted-foreground">{config.label}</span>
-                                    <p className="text-sm mt-0.5">{concern}</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 pl-11">
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-7 text-xs"
-                                            onClick={handleGoToEdit}
-                                            disabled={!tripId}
-                                          >
-                                            <Pencil className="h-3 w-3 mr-1" />
-                                            去改行程
-                                          </Button>
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        {tripId ? '进入规划工作台调整行程' : '请在行程详情页使用此功能'}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={async () => {
-                                      try {
-                                        await navigator.clipboard.writeText(concern);
-                                        toast.success('已复制');
-                                      } catch {
-                                        toast.error('复制失败');
-                                      }
-                                    }}
-                                  >
-                                    <Copy className="h-3 w-3 mr-1" />
-                                    复制
-                                  </Button>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    )}
+                  <div className="space-y-3">
+                    {executableItems.map((item, i) => (
+                      <SuggestionTaskRow
+                        key={i}
+                        concern={item.text}
+                        onGoToEdit={handleGoToEdit}
+                        tripId={tripId}
+                        dimensionLabel={item.dimensionLabel}
+                      />
+                    ))}
                     {keyTradeoffs.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium mb-1">不同维度的评估意见</p>
-                        <p className="text-xs text-muted-foreground mb-2">安全、节奏、体验等角度看法不一，供参考</p>
+                      <div className="pt-2 border-t">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">其他参考</p>
                         <ul className="space-y-1.5 text-sm text-muted-foreground">
                           {keyTradeoffs.map((item, i) => (
                             <li key={i}>
@@ -538,7 +622,7 @@ export function NegotiationResultCard({
                 <AccordionTrigger className="text-sm">
                   <span className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                    出发前建议完成 ({conditions.length})
+                    出发前需完成 ({conditions.length})
                   </span>
                 </AccordionTrigger>
                 <AccordionContent>

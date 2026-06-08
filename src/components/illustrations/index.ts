@@ -28,6 +28,8 @@ export {
   EmptyInsightsIllustration,
   ReadinessIllustration,
   AllClearIllustration,
+  SmartOptimizationIllustration,
+  PlannerThinkingIllustration,
 } from './OnboardingIllustrations';
 
 export {

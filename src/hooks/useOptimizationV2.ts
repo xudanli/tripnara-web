@@ -197,6 +197,72 @@ export function useRemoveTeamMember(teamId: string) {
 }
 
 /**
+ * 更新团队成员
+ */
+export function useUpdateTeamMember(teamId: string) {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ userId, updates }: { userId: string; updates: Partial<TeamMember> }) =>
+      teamApi.updateMember(teamId, userId, updates),
+    onSuccess: (data) => {
+      queryClient.setQueryData(teamKeys.detail(teamId), data);
+      queryClient.invalidateQueries({ queryKey: teamKeys.constraints(teamId) });
+      queryClient.invalidateQueries({ queryKey: teamKeys.weights(teamId) });
+    },
+  });
+}
+
+/**
+ * 生成团队邀请链接
+ */
+export function useCreateTeamInvite(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request?: Parameters<typeof teamApi.createInvite>[1]) =>
+      teamApi.createInvite(teamId, request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: teamKeys.detail(teamId) });
+    },
+  });
+}
+
+/**
+ * 列出团队邀请
+ */
+export function useTeamInvites(teamId: string | undefined) {
+  return useQuery({
+    queryKey: [...teamKeys.detail(teamId ?? ''), 'invites'],
+    queryFn: () => teamApi.listInvites(teamId!),
+    enabled: !!teamId,
+  });
+}
+
+/**
+ * 撤销团队邀请
+ */
+export function useRevokeTeamInvite(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => teamApi.revokeInvite(teamId, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: teamKeys.detail(teamId) });
+    },
+  });
+}
+
+/**
+ * 获取邀请信息（公开，用于加入页）
+ */
+export function useTeamInviteInfo(token: string | undefined) {
+  return useQuery({
+    queryKey: ['team-invite', token],
+    queryFn: () => teamApi.getInviteInfo(token!),
+    enabled: !!token,
+  });
+}
+
+/**
  * 团队协商
  *
  * 请求体必须包含 plan (RoutePlanDraft，需含 tripId) 和 world (WorldModelContext)。

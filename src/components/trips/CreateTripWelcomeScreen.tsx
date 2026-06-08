@@ -1,53 +1,55 @@
 /**
- * 创建行程欢迎界面 - 优化转化率
- * 
- * 黄金结构：
- * 1. 强价值标题
- * 2. 降低心理负担的副标题
- * 3. 创建行程输入区（绝对主角）
- * 4. 可点击示例（结果导向）
- * 5. 风险消除 / 信心补充
+ * 创建行程欢迎界面 - TripNARA 视觉设计规范
+ *
+ * 设计原则（视觉设计师.md）：
+ * - Clarity over Charm：清晰优先于讨喜
+ * - Quiet confidence：比例、留白、层级、细节一致性
+ * - 中性色为主，强调色用于裁决状态，严禁情绪化大色块
+ * - 主靠层级、描边、icon、标签，避免情绪化
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Sparkles, MapPin, Calendar, Users, Loader2, CheckCircle2, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, ArrowUp, Mic, Mountain, Sun, Flower2, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CreateTripWelcomeScreenProps {
   onStart: (message: string) => void;
   isLoading?: boolean;
   isCreating?: boolean;
-  error?: string | null; // 🆕 P1: 错误状态
-  onRetry?: () => void; // 🆕 P1: 重试机制
+  error?: string | null;
+  onRetry?: () => void;
   className?: string;
 }
 
-// 示例卡片数据（结果导向）
+/** 产品文案 - 降低心理门槛，强调可执行、即刻开始 */
+const COPY = {
+  title: '输入你的旅行意向，我帮你做一次完整决策',
+  placeholder: '想去冰岛 7 天，南岸+黄金圈，自驾但安全优先，想看瀑布、冰河湖和黑沙滩',
+  styleWeightLabel: '更偏向',
+  styleWeightCta: '以此开始',
+  exampleSectionLabel: '也可以从这些灵感开始',
+  creatingStatus: '正在生成可执行行程',
+  creatingSteps: ['校验目的地', '安排节奏', '生成方案'] as const,
+};
+
+/** 多选式风格权重 - 符合决策模型，用户勾选偏好后组合成 prompt */
+const STYLE_WEIGHTS = [
+  { id: 'relax', label: '放松' },
+  { id: 'deep', label: '深度' },
+  { id: 'photo', label: '摄影' },
+  { id: 'food', label: '美食' },
+  { id: 'nature', label: '自然' },
+] as const;
+
 const exampleCards = [
-  {
-    id: 'nz-south-island',
-    emoji: '🏔️',
-    title: '新西兰南岛自驾',
-    subtitle: '10 天 · 皇后镇/米尔福德峡湾 · 自驾游',
-    prompt: '想去新西兰南岛自驾 10 天，看雪山湖泊',
-  },
-  {
-    id: 'iceland-aurora',
-    emoji: '❄️',
-    title: '冰岛极光之旅',
-    subtitle: '6 天 · 自驾/跟团可选 · 冬季限定',
-    prompt: '想去冰岛看极光，6天左右，可以自驾',
-  },
-  {
-    id: 'disney-family',
-    emoji: '🏰',
-    title: '迪士尼亲子游',
-    subtitle: '5 天 · 上海/东京 · 含游玩建议',
-    prompt: '带小孩去迪士尼，5天行程，需要详细的游玩建议',
-  },
+  { id: 'iceland-ring-road', title: '冰岛环岛 · 7天自驾（含黄金圈）', prompt: '想去冰岛环岛自驾 7 天，想看瀑布、冰川和黑沙滩，节奏平衡，包含黄金圈。', icon: MapPin },
+  { id: 'iceland-south-coast', title: '冰岛南岸 · 4天轻松看瀑布', prompt: '想去冰岛南岸 4 天游玩，节奏轻松，重点是瀑布、黑沙滩和冰河湖，不要太赶。', icon: Sun },
+  { id: 'iceland-northern-lights', title: '冰岛冬季 · 5天追极光（安全优先）', prompt: '冬天去冰岛 5 天，想追极光但安全优先，希望避开危险路况，安排温泉和城市休整。', icon: Mountain },
+  { id: 'iceland-hot-springs', title: '冰岛温泉 · 3天周末放松', prompt: '想去冰岛 3 天短途放松，想泡温泉（蓝湖/天空之湖/当地温泉），配合轻量城市漫步。', icon: Flower2 },
+  { id: 'iceland-family', title: '冰岛亲子 · 6天不自虐行程', prompt: '带家人去冰岛 6 天，节奏不要太赶，路程别太长，想看自然景观+温泉，住宿尽量稳定。', icon: MapPin },
 ];
 
 export function CreateTripWelcomeScreen({
@@ -59,284 +61,241 @@ export function CreateTripWelcomeScreen({
   className,
 }: CreateTripWelcomeScreenProps) {
   const [inputValue, setInputValue] = useState('');
-  const [selectedExample, setSelectedExample] = useState<string | null>(null);
+  const [selectedStyles, setSelectedStyles] = useState<Set<string>>(new Set());
   const [creatingSteps, setCreatingSteps] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
-  // 处理示例点击（支持鼠标和键盘）
-  const handleExampleClick = (example: typeof exampleCards[0]) => {
-    if (isLoading || isCreating) return;
-    
-    setSelectedExample(example.id);
-    // 🆕 显示创建中步骤
-    setCreatingSteps(['分析目的地', '安排行程节奏', '优化交通与时间']);
-    
-    // 🆕 自动提交示例内容（半自动创建，转化率更高）
-    onStart(example.prompt);
-    setInputValue('');
-    
-    // 🆕 HCI优化：焦点管理 - 创建中状态出现时聚焦到状态区域
-    setTimeout(() => {
-      statusRef.current?.focus();
-    }, 100);
-    
-    // 延迟清除选中状态，让用户看到反馈
-    setTimeout(() => {
-      setSelectedExample(null);
-    }, 500);
-  };
-
-  // 🆕 HCI优化：键盘事件处理
-  const handleExampleKeyDown = (
-    e: React.KeyboardEvent,
-    example: typeof exampleCards[0]
-  ) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleExampleClick(example);
-    }
-  };
-
-  // 处理提交
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || isLoading || isCreating) return;
-    
-    // 显示创建中步骤
-    setCreatingSteps(['分析目的地', '安排行程节奏', '优化交通与时间']);
-    
+    setCreatingSteps([...COPY.creatingSteps]);
     onStart(inputValue.trim());
     setInputValue('');
-    setSelectedExample(null);
-    
-    // 🆕 HCI优化：提交后聚焦到状态区域（如果创建中）或保持输入框焦点
     setTimeout(() => {
-      if (isLoading || isCreating) {
-        statusRef.current?.focus();
-      } else {
-        textareaRef.current?.focus();
-      }
+      if (isLoading || isCreating) statusRef.current?.focus();
+      else textareaRef.current?.focus();
     }, 100);
   };
 
-  // 🆕 当开始加载或创建时，显示创建步骤
+  const handleExampleClick = (prompt: string) => {
+    if (isLoading || isCreating) return;
+    setCreatingSteps([...COPY.creatingSteps]);
+    onStart(prompt);
+    setInputValue('');
+    setTimeout(() => statusRef.current?.focus(), 100);
+  };
+
+  const setStyleChecked = (id: string, checked: boolean) => {
+    if (isLoading || isCreating) return;
+    setSelectedStyles((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleStyleWeightStart = () => {
+    if (isLoading || isCreating || selectedStyles.size === 0) return;
+    const labels = STYLE_WEIGHTS.filter((s) => selectedStyles.has(s.id)).map((s) => s.label);
+    const prompt = `想要更偏向${labels.join('、')}的旅行，请帮我规划`;
+    setCreatingSteps([...COPY.creatingSteps]);
+    onStart(prompt);
+    setSelectedStyles(new Set());
+    setTimeout(() => statusRef.current?.focus(), 100);
+  };
+
   useEffect(() => {
     if (isLoading || isCreating) {
-      setCreatingSteps(['分析目的地', '安排行程节奏', '优化交通与时间']);
+      setCreatingSteps([...COPY.creatingSteps]);
     } else {
-      // 延迟清除步骤，让用户看到完成状态
-      const timer = setTimeout(() => {
-        setCreatingSteps([]);
-      }, 1000);
+      const timer = setTimeout(() => setCreatingSteps([]), 1000);
       return () => clearTimeout(timer);
     }
   }, [isLoading, isCreating]);
 
   return (
-    <div className={cn('flex flex-col h-full', className)}>
-      {/* 主内容区 - 居中显示 */}
-      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-12">
-        <div className="w-full max-w-3xl space-y-6 sm:space-y-8">
-          {/* 1. 强价值标题 */}
-          <div className="text-center space-y-2 sm:space-y-3">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">
-              创建你的专属行程 <span aria-hidden="true">✨</span>
+    <div className={cn('flex flex-col h-full bg-background', className)}>
+      {/* 主内容区 - 留白充足，层级清晰 */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 sm:px-8 py-12 sm:py-16">
+        <div className="w-full max-w-2xl space-y-10">
+          {/* 1. 主标题 - 层级一：清晰问句 */}
+          <div className="text-center space-y-1">
+            <h1 className="text-xl sm:text-2xl font-medium text-foreground tracking-tight">
+              {COPY.title}
             </h1>
-            {/* 2. 降低心理负担的副标题 */}
-            <p className="text-base sm:text-lg text-gray-600 max-w-xl mx-auto px-4">
-              一句话描述你的旅行想法，AI 立即为你生成完整可用的行程方案
+            <p className="text-sm text-muted-foreground">
+              我会综合时间、预算、节奏与风险，给出最合理的行程结构。
             </p>
           </div>
 
-          {/* 3. 创建行程输入区 - 认知负荷优化：移除重复信息 */}
-          <div className="space-y-3">
-            {/* 输入框区域 - 作为绝对视觉焦点 */}
-            <form onSubmit={handleSubmit}>
-              <div>
-                <label htmlFor="trip-input" className="sr-only">
-                  描述您的旅行想法
-                </label>
-                {/* 输入容器 - 统一使用白底 + gray-200 边框 */}
-                <div className={cn(
-                  'flex items-end gap-2',
-                  'bg-white rounded-2xl shadow-sm',
-                  'border border-gray-200',
+          {/* 2. 输入区 - 层级二：绝对主角，克制动效 */}
+          <div className="space-y-5">
+            <form onSubmit={handleSubmit} className="w-full">
+              <div
+                className={cn(
+                  'flex items-end gap-0 rounded-xl border border-border bg-card',
                   'transition-all duration-200',
-                  'hover:shadow-md focus-within:shadow-md focus-within:border-black/50',
-                  'p-2',
-                  error && 'border-red-200'
-                )}>
-                  <Textarea
-                    id="trip-input"
-                    ref={textareaRef}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    placeholder="例如：3 月和家人去日本 7 天，节奏轻松"
-                    disabled={isLoading || isCreating}
-                    aria-describedby="trip-input-hint"
-                    aria-invalid={!!error}
-                    className={cn(
-                      'flex-1 min-h-[80px] sm:min-h-[100px] text-base resize-none',
-                      'border-0 bg-transparent shadow-none',
-                      'rounded-xl px-3 sm:px-4 py-2 sm:py-3',
-                      'placeholder:text-gray-400',
-                      'focus-visible:outline-none focus-visible:ring-0',
-                      'transition-all duration-200',
-                      'disabled:cursor-not-allowed'
-                    )}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                        handleSubmit(e);
-                      }
-                    }}
-                  />
-                  {/* 发送按钮 */}
+                  'hover:border-input',
+                  'focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30',
+                  error && 'border-destructive focus-within:ring-destructive/20'
+                )}
+              >
+                <label htmlFor="trip-input" className="sr-only">描述行程想法</label>
+                <Textarea
+                  id="trip-input"
+                  ref={textareaRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder={COPY.placeholder}
+                  disabled={isLoading || isCreating}
+                  aria-invalid={!!error}
+                  className={cn(
+                    'flex-1 min-h-[52px] sm:min-h-[56px] text-[15px] resize-none',
+                    'border-0 bg-transparent shadow-none rounded-xl pl-4 pr-2 py-3',
+                    'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0'
+                  )}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit(e);
+                  }}
+                />
+                <div className="flex items-center gap-0.5 pr-2 pb-2">
+                  <button
+                    type="button"
+                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    aria-label="语音输入"
+                  >
+                    <Mic className="w-4 h-4" />
+                  </button>
                   <Button
                     type="submit"
                     disabled={!inputValue.trim() || isLoading || isCreating}
-                    aria-label={!inputValue.trim() ? '请输入旅行想法后再生成行程' : '立即生成行程'}
-                    aria-describedby={!inputValue.trim() ? 'submit-hint' : undefined}
-                    className={cn(
-                      'h-9 w-9 p-0 mb-2 flex-shrink-0',
-                      'bg-black hover:bg-gray-800',
-                      'text-white rounded-lg',
-                      'transition-all duration-200',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2'
-                    )}
+                    aria-label="发送"
+                    className="h-8 w-8 p-0 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex-shrink-0"
                   >
                     {isLoading || isCreating ? (
-                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                      <ArrowUp className="w-4 h-4" />
                     )}
                   </Button>
                 </div>
-                <p id="trip-input-hint" className="sr-only">
-                  输入您的旅行想法，例如目的地、天数、同行人员等信息
-                </p>
-                {!inputValue.trim() && (
-                  <p id="submit-hint" className="sr-only">
-                    请输入旅行想法后才能生成行程
-                  </p>
-                )}
               </div>
             </form>
-            
-            {/* 错误提示 - 仅在出错时显示 */}
-            {error && (
-              <div 
-                role="alert"
-                aria-live="assertive"
-                className="flex items-center gap-2 text-sm text-red-600"
-              >
-                <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                <span>{error}</span>
-                {onRetry && (
-                  <button
-                    type="button"
-                    onClick={onRetry}
-                    className="text-red-700 underline hover:no-underline ml-1"
-                  >
-                    重试
-                  </button>
-                )}
-              </div>
-            )}
-            
-            {/* 简短的信心补充 - 单行 */}
-            <p className="text-xs text-gray-400 text-center">
-              不需要想得很清楚，后面可以随时修改
-            </p>
-          </div>
 
-          {/* 4. 可点击示例 - 简化引导文字 */}
-          <div className="space-y-3">
-            <p className="text-sm text-gray-500 text-center">
-              或选择示例快速开始
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" role="list">
-              {exampleCards.map((example) => (
-                <Card
-                  key={example.id}
-                  role="listitem"
-                  tabIndex={isLoading || isCreating ? -1 : 0}
-                  aria-label={`选择示例：${example.title}`}
-                  aria-disabled={isLoading || isCreating}
-                  className={cn(
-                    'cursor-pointer transition-all duration-200',
-                    'border border-gray-200 bg-white shadow-sm',
-                    'hover:shadow-md hover:border-gray-300 active:scale-[0.98]',
-                    selectedExample === example.id
-                      ? 'border-black/50 shadow-md ring-1 ring-black/10'
-                      : '',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2',
-                    (isLoading || isCreating) && 'opacity-50 cursor-not-allowed'
-                  )}
-                  onClick={() => handleExampleClick(example)}
-                  onKeyDown={(e) => handleExampleKeyDown(e, example)}
-                >
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xl" aria-hidden="true">{example.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-gray-900 text-sm">
-                          {example.title}
-                        </h3>
-                        <p className="text-xs text-gray-500 truncate">
-                          {example.subtitle}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            {/* 3. 多选式风格权重 - 层级三：符合决策模型，克制动效 */}
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground text-center">{COPY.styleWeightLabel}</p>
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+                {STYLE_WEIGHTS.map(({ id, label }) => {
+                  const checked = selectedStyles.has(id);
+                  return (
+                    <label
+                      key={id}
+                      className={cn(
+                        'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors',
+                        'border',
+                        checked
+                          ? 'border-primary bg-primary/5 text-foreground'
+                          : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:border-input',
+                        (isLoading || isCreating) && 'opacity-50 cursor-not-allowed pointer-events-none'
+                      )}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(c) => setStyleChecked(id, c === true)}
+                        disabled={isLoading || isCreating}
+                        onPointerDown={(e) => (isLoading || isCreating) && e.preventDefault()}
+                      />
+                      {label}
+                    </label>
+                  );
+                })}
+              </div>
+              {selectedStyles.size > 0 && (
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStyleWeightStart}
+                    disabled={isLoading || isCreating}
+                    className="text-sm"
+                  >
+                    {COPY.styleWeightCta}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* 4. 示例卡片 - 层级四：主靠描边与层级，图标中性灰 */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-muted-foreground">{COPY.exampleSectionLabel}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {exampleCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => handleExampleClick(card.prompt)}
+                    disabled={isLoading || isCreating}
+                    className={cn(
+                      'flex items-start gap-3 p-4 rounded-xl text-left',
+                      'border border-border bg-card',
+                      'hover:border-input hover:bg-muted/50 transition-colors',
+                      'disabled:opacity-50 disabled:cursor-not-allowed'
+                    )}
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-foreground text-sm">{card.title}</h3>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 错误提示 */}
+          {error && (
+            <div role="alert" className="flex items-center gap-2 text-sm text-destructive">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{error}</span>
+              {onRetry && (
+                <button onClick={onRetry} className="underline hover:no-underline ml-1">
+                  重试
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 创建中状态（提升信任感） */}
+      {/* 创建中状态 - 克制动效，状态解释 */}
       {(isCreating || isLoading) && creatingSteps.length > 0 && (
         <div
           ref={statusRef}
           role="status"
           aria-live="polite"
-          aria-atomic="true"
           tabIndex={-1}
-          className="border-t bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 animate-in slide-in-from-bottom duration-300"
+          className="border-t border-border bg-muted/50 px-6 py-3 animate-in slide-in-from-bottom duration-200"
         >
-          <div className="max-w-3xl mx-auto">
-            <div className="flex items-center gap-3">
-              <Loader2 
-                className="w-5 h-5 animate-spin text-primary" 
-                aria-hidden="true"
-              />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900 mb-2">
-                  <span aria-hidden="true">🧠</span>{' '}
-                  <span>正在为你规划行程</span>
-                </p>
-                <div className="space-y-1" role="list">
-                  {creatingSteps.map((step, index) => (
-                    <div 
-                      key={index} 
-                      className="flex items-center gap-2 text-xs text-gray-600"
-                      role="listitem"
-                    >
-                      <CheckCircle2 
-                        className="w-3 h-3 text-green-600" 
-                        aria-hidden="true"
-                      />
-                      <span>{step}</span>
-                    </div>
-                  ))}
-                </div>
-                {/* 🆕 HCI优化：屏幕阅读器完整描述 */}
-                <div className="sr-only">
-                  正在生成行程，步骤包括：{creatingSteps.join('、')}
-                </div>
+          <div className="max-w-2xl mx-auto flex items-center gap-3">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">{COPY.creatingStatus}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+                {creatingSteps.map((step, i) => (
+                  <span key={i} className="inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-foreground/60" strokeWidth={2} />
+                    {step}
+                  </span>
+                ))}
               </div>
             </div>
           </div>

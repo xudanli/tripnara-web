@@ -11,6 +11,7 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
+    details?: any;
   };
 }
 
@@ -62,6 +63,31 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
   return response.data.data;
 }
 
+function tryUnwrapRequiresConfirmation(payload: any): (Error & {
+  code?: string;
+  warnings?: any[];
+  cascadeImpact?: any;
+  travelInfo?: any;
+}) | null {
+  if (!payload || payload?.success !== false) return null;
+  if (payload?.error?.code !== 'REQUIRES_CONFIRMATION') return null;
+
+  const details = payload?.error?.details ?? {};
+  const e = new Error(payload?.error?.message || '需要确认') as Error & {
+    code?: string;
+    warnings?: any[];
+    cascadeImpact?: any;
+    travelInfo?: any;
+  };
+  e.code = 'REQUIRES_CONFIRMATION';
+  e.warnings = details.warnings ?? payload.warnings ?? [];
+  e.cascadeImpact = details.cascadeImpact ?? payload.cascadeImpact;
+  e.travelInfo = details.travelInfo ?? payload.travelInfo;
+  return e;
+}
+
+import { IntentTravelMode } from '@/types/trip';
+import { normalizeTripApiFields } from '@/lib/trip-content-mode';
 import type {
   TripListItem,
   TripDetail,
@@ -69,6 +95,8 @@ import type {
   CreateTripResponse,
   CreateTripFromNLRequest,
   CreateTripFromNLResponse,
+  NLConversation,
+  ParsedTripParams,
   UpdateTripRequest,
   TripState,
   ScheduleResponse,
@@ -216,10 +244,14 @@ export const tripsApi = {
   /**
    * 创建新行程
    * POST /trips
+   * 接口可能返回 message 字段（与 data 平级或位于 data 内），用于直接展示给用户
    */
   create: async (data: CreateTripRequest): Promise<CreateTripResponse> => {
     const response = await apiClient.post<ApiResponseWrapper<CreateTripResponse>>('/trips', data);
-    return handleResponse(response);
+    const result = handleResponse(response) as CreateTripResponse;
+    const raw = response?.data as { data?: { message?: string }; message?: string };
+    const msg = result.message ?? raw?.data?.message ?? raw?.message;
+    return msg ? { ...result, message: msg } : result;
   },
 
   /**
@@ -236,30 +268,98 @@ export const tripsApi = {
    * POST /trips/from-natural-language
    * 注意：此操作可能需要较长时间（LLM 调用、方案生成等），使用更长的超时时间
    * 支持会话上下文：如果提供 sessionId，会恢复之前的对话上下文
-   * 
+   *
+   * **展示规划师回复**：读 `plannerResponseBlocks`（优先）与 `plannerReply`（降级）；忽略响应里的 **`reply`**（不合并、不展示）。
+   *
    * 🆕 字段名映射：自动将后端返回的澄清问题格式转换为前端格式
    * 兼容新旧两种字段名（question/text, type/inputType）
+   *
+   * @param signal 可选，用于支持用户终止：传入 AbortController.signal 可在请求中取消
    */
-  createFromNL: async (data: CreateTripFromNLRequest): Promise<CreateTripFromNLResponse> => {
+  createFromNL: async (
+    data: CreateTripFromNLRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<CreateTripFromNLResponse> => {
     const response = await apiClient.post<ApiResponseWrapper<CreateTripFromNLResponse>>(
       '/trips/from-natural-language',
       data,
       {
-        timeout: 120000, // 120 秒超时，用于自然语言创建行程等耗时操作
+        timeout: 300000, // 300 秒超时，用于自然语言创建行程等耗时操作
+        signal: options?.signal,
       }
     );
     const result = handleResponse(response);
-    
-    // 🆕 字段名映射：转换澄清问题格式
-    if (result.clarificationQuestions && Array.isArray(result.clarificationQuestions)) {
-      // 检查是否是结构化问题（对象数组）还是字符串数组（向后兼容）
-      if (result.clarificationQuestions.length > 0 && typeof result.clarificationQuestions[0] === 'object') {
-        const { normalizeClarificationQuestions } = await import('@/utils/nl-conversation-adapter');
-        result.clarificationQuestions = normalizeClarificationQuestions(result.clarificationQuestions as any[]);
-      }
+    const payload = result ?? {};
+
+    // 空值保护：避免 undefined 导致渲染报错（遵循 from-nl 前端解析规范）
+    const blocks = Array.isArray(payload.plannerResponseBlocks) ? payload.plannerResponseBlocks : [];
+    const questionsRaw = Array.isArray(payload.clarificationQuestions) ? payload.clarificationQuestions : [];
+    const plannerTrimmed =
+      typeof payload.plannerReply === 'string' && payload.plannerReply.trim() !== ''
+        ? payload.plannerReply.trim()
+        : undefined;
+
+    const safeResult = {
+      ...payload,
+      plannerResponseBlocks: blocks,
+      clarificationQuestions: questionsRaw,
+      partialParams: payload.partialParams ?? {},
+      ...(plannerTrimmed !== undefined ? { plannerReply: plannerTrimmed } : {}),
+    };
+
+    // 字段名映射：转换澄清问题格式（question→text, type→inputType, options 兼容 string | {value,label}）
+    if (questionsRaw.length > 0 && typeof questionsRaw[0] === 'object') {
+      const { normalizeClarificationQuestions } = await import('@/utils/nl-conversation-adapter');
+      safeResult.clarificationQuestions = normalizeClarificationQuestions(questionsRaw as any[]);
     }
-    
-    return result;
+
+    return safeResult as CreateTripFromNLResponse;
+  },
+
+  /**
+   * Trips NL v2：自然语言创建行程（Ontology + Solver pre-check）
+   * POST /trips/from-natural-language/v2
+   *
+   * 返回结构与 v1 基本一致，但会新增 feasibility / generationEngine 等字段。
+   * 前端沿用同一套适配逻辑（空值保护 + 澄清问题字段映射）。
+   * **展示规划师回复**：同 v1，使用 `plannerResponseBlocks` / `plannerReply`；忽略 **`reply`**。
+   */
+  createFromNLv2: async (
+    data: CreateTripFromNLRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<CreateTripFromNLResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<CreateTripFromNLResponse>>(
+      '/trips/from-natural-language/v2',
+      data,
+      {
+        timeout: 300000,
+        signal: options?.signal,
+      }
+    );
+    const result = handleResponse(response);
+    const payload = result ?? {};
+
+    const blocks = Array.isArray(payload.plannerResponseBlocks) ? payload.plannerResponseBlocks : [];
+    const questionsRaw = Array.isArray(payload.clarificationQuestions) ? payload.clarificationQuestions : [];
+    const plannerTrimmed =
+      typeof payload.plannerReply === 'string' && payload.plannerReply.trim() !== ''
+        ? payload.plannerReply.trim()
+        : undefined;
+
+    const safeResult = {
+      ...payload,
+      plannerResponseBlocks: blocks,
+      clarificationQuestions: questionsRaw,
+      partialParams: payload.partialParams ?? {},
+      ...(plannerTrimmed !== undefined ? { plannerReply: plannerTrimmed } : {}),
+    };
+
+    if (questionsRaw.length > 0 && typeof questionsRaw[0] === 'object') {
+      const { normalizeClarificationQuestions } = await import('@/utils/nl-conversation-adapter');
+      safeResult.clarificationQuestions = normalizeClarificationQuestions(questionsRaw as any[]);
+    }
+
+    return safeResult as CreateTripFromNLResponse;
   },
 
   /**
@@ -324,7 +424,7 @@ export const tripsApi = {
       `/trips/nl-conversation/${sessionId}/confirm-create`,
       data,
       {
-        timeout: 120000, // 120 秒超时
+        timeout: 300000, // 300 秒超时
       }
     );
     return handleResponse(response);
@@ -393,7 +493,7 @@ export const tripsApi = {
         resultId: result?.id,
         hasResult: !!result,
       });
-      return result;
+      return normalizeTripApiFields(result);
     } catch (error: any) {
       console.error('[Trips API] getById 失败:', {
         id,
@@ -412,6 +512,33 @@ export const tripsApi = {
    */
   update: async (id: string, data: UpdateTripRequest): Promise<CreateTripResponse> => {
     const response = await apiClient.put<ApiResponseWrapper<CreateTripResponse>>(`/trips/${id}`, data);
+    return handleResponse(response);
+  },
+
+  /**
+   * P1 徒步摘要：profile、phase、segments + 关联 HikePlan
+   * GET /trips/:tripId/hiking-summary
+   */
+  getHikingSummary: async (
+    tripId: string
+  ): Promise<import('@/types/trip-hiking-summary').TripHikingSummary> => {
+    const response = await apiClient.get<
+      ApiResponseWrapper<import('@/types/trip-hiking-summary').TripHikingSummary>
+    >(`/trips/${tripId}/hiking-summary`);
+    return handleResponse(response);
+  },
+
+  /**
+   * 片段评估：Readiness / 许可 / 费用提示
+   * GET /trips/:tripId/hiking-segments/:segmentId/evaluate
+   */
+  evaluateHikingSegment: async (
+    tripId: string,
+    segmentId: string
+  ): Promise<import('@/types/trip-hiking-summary').HikingSegmentEvaluateResponse> => {
+    const response = await apiClient.get<
+      ApiResponseWrapper<import('@/types/trip-hiking-summary').HikingSegmentEvaluateResponse>
+    >(`/trips/${tripId}/hiking-segments/${segmentId}/evaluate`);
     return handleResponse(response);
   },
 
@@ -1271,6 +1398,45 @@ export const tripsApi = {
     return handleResponse(response);
   },
 
+  /**
+   * 创建行程后补充 intent 默认值（travelMode、dailyWalkLimit、earlyRiser、nightOwl、planningPolicy）
+   * 创建时这些字段可能缺失，需通过 PUT /trips/:id/intent 补充以支持决策判断
+   * 静默执行，失败不阻塞主流程
+   */
+  supplementIntentAfterCreate: async (
+    id: string,
+    overrides?: Partial<UpdateIntentRequest>
+  ): Promise<void> => {
+    try {
+      const defaults: UpdateIntentRequest = {
+        pacingConfig: {
+          travelMode: IntentTravelMode.MIXED,
+          level: 'standard',
+          maxDailyActivities: 5,
+        },
+        constraints: {
+          dailyWalkLimit: 10,
+          earlyRiser: false,
+          nightOwl: false,
+        },
+        planningPolicy: 'safe',
+      };
+      const merged: UpdateIntentRequest = {
+        ...defaults,
+        ...overrides,
+        pacingConfig: { ...defaults.pacingConfig, ...overrides?.pacingConfig },
+        constraints: { ...defaults.constraints, ...overrides?.constraints },
+      };
+      const res = await apiClient.put<ApiResponseWrapper<IntentResponse>>(
+        `/trips/${id}/intent`,
+        merged
+      );
+      handleResponse(res);
+    } catch (err: any) {
+      console.warn('[tripsApi] supplementIntentAfterCreate 失败:', err?.message || err);
+    }
+  },
+
   // ==================== 每日指标 ====================
 
   /**
@@ -1398,6 +1564,25 @@ export const tripsApi = {
   },
 
   /**
+   * 标记单条建议为已读
+   * POST /trips/:id/suggestions/:suggestionId/seen
+   */
+  markSuggestionSeen: async (id: string, suggestionId: string): Promise<void> => {
+    await apiClient.post(`/trips/${id}/suggestions/${suggestionId}/seen`);
+  },
+
+  /**
+   * 批量标记建议为已读（推荐使用）
+   * POST /trips/:id/suggestions/seen
+   */
+  markSuggestionsSeen: async (
+    id: string,
+    data: { suggestionIds: string[] }
+  ): Promise<void> => {
+    await apiClient.post(`/trips/${id}/suggestions/seen`, data);
+  },
+
+  /**
    * 应用建议
    * POST /trips/:id/suggestions/:suggestionId/apply
    */
@@ -1440,33 +1625,7 @@ export const itineraryItemsApi = {
         '/itinerary-items',
         data
       );
-      
-      // 检查响应格式
-      if (!response.data.success) {
-        const errorData = response.data as unknown as ErrorResponse;
-        
-        // 如果是需要确认的错误（REQUIRES_CONFIRMATION），返回特殊格式
-        if (errorData.error.code === 'REQUIRES_CONFIRMATION') {
-          const error = new Error(errorData.error.message) as Error & {
-            code?: string;
-            warnings?: any[];
-            cascadeImpact?: any;
-            travelInfo?: any;
-          };
-          error.code = errorData.error.code;
-          // 从 details 中提取 warnings、cascadeImpact、travelInfo
-          if (errorData.error.details) {
-            error.warnings = errorData.error.details.warnings || [];
-            error.cascadeImpact = errorData.error.details.cascadeImpact;
-            error.travelInfo = errorData.error.details.travelInfo;
-          }
-          throw error;
-        }
-        
-        // 其他错误正常抛出
-        throw new Error(errorData.error.message);
-      }
-      
+
       const result = handleResponse(response);
       
       // 如果返回的是增强版响应（包含 warnings），直接返回
@@ -1481,6 +1640,9 @@ export const itineraryItemsApi = {
         infos: [],
       };
     } catch (error: any) {
+      const requiresConfirmation = tryUnwrapRequiresConfirmation(error?.response?.data);
+      if (requiresConfirmation) throw requiresConfirmation;
+
       // 处理网络错误
       if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
         throw new Error('网络异常，请检查网络连接');
@@ -1494,7 +1656,12 @@ export const itineraryItemsApi = {
       // 处理后端错误响应
       // 兼容两种格式：1) 自定义 { success, error: { message } } 2) NestJS { message, error, statusCode }
       if (error.response?.data) {
-        const errorData = error.response.data as ErrorResponse & { message?: string };
+        const errorData = error.response.data as ErrorResponse & {
+          message?: string;
+          warnings?: any[];
+          cascadeImpact?: any;
+          travelInfo?: any;
+        };
         const message =
           errorData.message ??
           (typeof errorData.error === 'object' && errorData.error?.message
@@ -1512,10 +1679,16 @@ export const itineraryItemsApi = {
         };
         apiError.code = errObj?.code;
         apiError.details = errObj?.details;
+
+        // 兼容：优先读 error.details（后端已补齐），兜底读顶层字段
         if (apiError.details) {
           apiError.warnings = apiError.details.warnings || [];
           apiError.cascadeImpact = apiError.details.cascadeImpact;
           apiError.travelInfo = apiError.details.travelInfo;
+        } else {
+          apiError.warnings = errorData.warnings || [];
+          apiError.cascadeImpact = errorData.cascadeImpact;
+          apiError.travelInfo = errorData.travelInfo;
         }
         throw apiError;
       }
@@ -1585,33 +1758,7 @@ export const itineraryItemsApi = {
         `/itinerary-items/${id}`,
         data
       );
-      
-      // 检查响应格式
-      if (!response.data.success) {
-        const errorData = response.data as unknown as ErrorResponse;
-        
-        // 如果是需要确认的错误（REQUIRES_CONFIRMATION），返回特殊格式
-        if (errorData.error.code === 'REQUIRES_CONFIRMATION') {
-          const error = new Error(errorData.error.message) as Error & {
-            code?: string;
-            warnings?: any[];
-            cascadeImpact?: any;
-            travelInfo?: any;
-          };
-          error.code = errorData.error.code;
-          // 从 details 中提取 warnings、cascadeImpact、travelInfo
-          if (errorData.error.details) {
-            error.warnings = errorData.error.details.warnings || [];
-            error.cascadeImpact = errorData.error.details.cascadeImpact;
-            error.travelInfo = errorData.error.details.travelInfo;
-          }
-          throw error;
-        }
-        
-        // 其他错误正常抛出
-        throw new Error(errorData.error.message);
-      }
-      
+
       const result = handleResponse(response);
       
       // 如果返回的是增强版响应（包含 cascadeImpact），直接返回
@@ -1625,6 +1772,9 @@ export const itineraryItemsApi = {
         warnings: [],
       };
     } catch (error: any) {
+      const requiresConfirmation = tryUnwrapRequiresConfirmation(error?.response?.data);
+      if (requiresConfirmation) throw requiresConfirmation;
+
       // 处理网络错误
       if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
         throw new Error('网络异常，请检查网络连接');
@@ -1637,7 +1787,12 @@ export const itineraryItemsApi = {
       
       // 处理后端错误响应（兼容 NestJS { message } 与自定义 { error: { message } } 格式）
       if (error.response?.data) {
-        const errorData = error.response.data as ErrorResponse & { message?: string };
+        const errorData = error.response.data as ErrorResponse & {
+          message?: string;
+          warnings?: any[];
+          cascadeImpact?: any;
+          travelInfo?: any;
+        };
         const message =
           errorData.message ??
           (typeof errorData.error === 'object' && errorData.error?.message
@@ -1655,10 +1810,16 @@ export const itineraryItemsApi = {
         };
         apiError.code = errObj?.code;
         apiError.details = errObj?.details;
+
+        // 兼容：优先读 error.details（后端已补齐），兜底读顶层字段
         if (apiError.details) {
           apiError.warnings = apiError.details.warnings || [];
           apiError.cascadeImpact = apiError.details.cascadeImpact;
           apiError.travelInfo = apiError.details.travelInfo;
+        } else {
+          apiError.warnings = errorData.warnings || [];
+          apiError.cascadeImpact = errorData.cascadeImpact;
+          apiError.travelInfo = errorData.travelInfo;
         }
         throw apiError;
       }

@@ -134,6 +134,11 @@ export function useFitnessContext(): FitnessContextValue {
   return context;
 }
 
+/** Agent 等可选场景：无 Provider 时返回 null */
+export function useOptionalFitnessContext(): FitnessContextValue | null {
+  return useContext(FitnessContext);
+}
+
 /**
  * 快速判断是否需要体能评估
  * 用于需要检查但不需要完整 context 的场景

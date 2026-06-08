@@ -1,6 +1,21 @@
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
+const LG_BREAKPOINT = 1024
+
+function useMediaUp(minWidth: number) {
+  const [matches, setMatches] = React.useState<boolean | undefined>(undefined)
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(`(min-width: ${minWidth}px)`)
+    const onChange = () => setMatches(mql.matches)
+    mql.addEventListener("change", onChange)
+    setMatches(mql.matches)
+    return () => mql.removeEventListener("change", onChange)
+  }, [minWidth])
+
+  return !!matches
+}
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
@@ -16,6 +31,11 @@ export function useIsMobile() {
   }, [])
 
   return !!isMobile
+}
+
+/** Tailwind `lg`：与智能体分栏、EvidenceDrawer 等桌面布局一致 */
+export function useIsLgUp() {
+  return useMediaUp(LG_BREAKPOINT)
 }
 
 // 导出 useMobile 作为 useIsMobile 的别名（向后兼容）

@@ -18,6 +18,10 @@ import { LogoLoading } from '@/components/common/LogoLoading';
 import type { NeptuneViewData } from '@/utils/trip-data-extractors';
 import { tripsApi } from '@/api/trips';
 import { toast } from 'sonner';
+import {
+  personaSuggestionReasonCodesDebugEnabled,
+  stripPersonaMessageTechnicalTail,
+} from '@/lib/persona-alert-display';
 
 interface NeptuneViewProps {
   trip: TripDetail;
@@ -138,12 +142,16 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
                         <Badge variant="outline" className="text-xs">
                           修复建议
                         </Badge>
-                        <span className="text-sm font-medium truncate">{repair.explanation}</span>
+                        <span className="text-sm font-medium truncate">
+                          {stripPersonaMessageTechnicalTail(repair.explanation)}
+                        </span>
                       </div>
-                      {repair.reasonCodes && repair.reasonCodes.length > 0 && (
+                      {personaSuggestionReasonCodesDebugEnabled() &&
+                        repair.reasonCodes &&
+                        repair.reasonCodes.length > 0 && (
                         <div className="flex gap-1 mt-1.5 flex-wrap">
                           {repair.reasonCodes.map((code: string) => (
-                            <Badge key={code} variant="outline" className="text-xs">
+                            <Badge key={code} variant="outline" className="text-xs font-mono">
                               {code}
                             </Badge>
                           ))}
@@ -382,22 +390,28 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">{selectedRepair.explanation}</CardTitle>
+                    <CardTitle className="text-lg">
+                      {stripPersonaMessageTechnicalTail(selectedRepair.explanation)}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* 修复说明 */}
                     <div>
                       <div className="font-medium mb-2">修复说明</div>
-                      <div className="text-sm">{selectedRepair.explanation}</div>
+                      <div className="text-sm">
+                        {stripPersonaMessageTechnicalTail(selectedRepair.explanation)}
+                      </div>
                     </div>
 
-                    {/* 原因码 */}
-                    {selectedRepair.reasonCodes && selectedRepair.reasonCodes.length > 0 && (
+                    {/* 原因码（仅调试：localStorage tripnara.debug.personaReasonCodes=1 + DEV） */}
+                    {personaSuggestionReasonCodesDebugEnabled() &&
+                      selectedRepair.reasonCodes &&
+                      selectedRepair.reasonCodes.length > 0 && (
                       <div>
-                        <div className="font-medium mb-2">原因码</div>
+                        <div className="font-medium mb-2">原因码（调试）</div>
                         <div className="flex gap-2 flex-wrap">
                           {selectedRepair.reasonCodes.map((code: string) => (
-                            <Badge key={code} variant="outline">
+                            <Badge key={code} variant="outline" className="font-mono text-xs">
                               {code}
                             </Badge>
                           ))}

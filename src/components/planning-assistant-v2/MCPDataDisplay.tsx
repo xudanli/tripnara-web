@@ -23,6 +23,10 @@ import type { ChatMessage } from '@/hooks/useChatV2';
 interface MCPDataDisplayProps {
   message: ChatMessage;
   tripId?: string;
+  sessionId?: string;
+  userId?: string;
+  defaultCheckIn?: string;
+  defaultCheckOut?: string;
   tripInfo?: TripDetail;
   onAddToTripSuccess?: () => void;
   className?: string;
@@ -31,6 +35,10 @@ interface MCPDataDisplayProps {
 export function MCPDataDisplay({
   message,
   tripId,
+  sessionId,
+  userId,
+  defaultCheckIn,
+  defaultCheckOut,
   tripInfo,
   onAddToTripSuccess,
   className,
@@ -43,6 +51,10 @@ export function MCPDataDisplay({
       <AccommodationList
         accommodations={message.accommodations}
         tripId={tripId}
+        sessionId={sessionId}
+        userId={userId}
+        defaultCheckIn={defaultCheckIn}
+        defaultCheckOut={defaultCheckOut}
         tripInfo={tripInfo}
         onAddToTripSuccess={onAddToTripSuccess}
         className={cn('mt-3', className)}

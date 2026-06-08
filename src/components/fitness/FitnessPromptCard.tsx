@@ -146,27 +146,32 @@ export function FitnessPromptCard({
     );
   }
 
-  // 横幅样式
+  // 横幅样式 - 更紧凑、融入整体布局
   if (variant === 'banner') {
     return (
       <>
         <div className={cn(
-          'bg-primary/5 border-b border-primary/10 px-4 py-3',
+          'mx-4 mt-2 mb-0 rounded-xl',
+          'bg-slate-50 border border-slate-200',
+          'px-4 py-3 shadow-sm',
           className
         )}>
-          <div className="flex items-center justify-between max-w-screen-xl mx-auto">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🏃</span>
-              <p className="text-sm">
+          <div className="flex items-center justify-between gap-4 max-w-4xl mx-auto">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-slate-200/80 flex items-center justify-center flex-shrink-0">
+                <span className="text-base">🏃</span>
+              </div>
+              <p className="text-sm text-slate-700 truncate">
                 {displayMessage}
               </p>
             </div>
-            
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setShowQuestionnaire(true)}
+                className="border-slate-300 text-slate-700 hover:bg-slate-100"
               >
                 立即评估
               </Button>
@@ -175,6 +180,7 @@ export function FitnessPromptCard({
                   variant="ghost"
                   size="icon"
                   onClick={handleDismiss}
+                  className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg"
                 >
                   <X className="w-4 h-4" />
                 </Button>

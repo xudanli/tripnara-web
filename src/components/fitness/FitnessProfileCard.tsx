@@ -19,6 +19,7 @@ import {
   FITNESS_LEVEL_CONFIG, 
   CONFIDENCE_LEVEL_CONFIG,
   AGE_MODIFIERS,
+  DEFAULT_FITNESS_PROFILE,
 } from '@/constants/fitness';
 import { FitnessLevelBadge } from './FitnessLevelBadge';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -57,6 +58,7 @@ export function FitnessProfileCard({
   const [expanded, setExpanded] = useState(!compact);
   const levelConfig = FITNESS_LEVEL_CONFIG[profile.fitnessLevel] || FITNESS_LEVEL_CONFIG.MEDIUM;
   const confidenceConfig = CONFIDENCE_LEVEL_CONFIG[profile.confidence] || CONFIDENCE_LEVEL_CONFIG.LOW;
+  const dimensions = profile.dimensions ?? DEFAULT_FITNESS_PROFILE.dimensions;
 
   // 埋点
   const handleViewProfile = () => {
@@ -159,7 +161,7 @@ export function FitnessProfileCard({
             {showChart && (
               <div className="flex justify-center py-4">
                 <DimensionRadarChart 
-                  dimensions={profile.dimensions}
+                  dimensions={dimensions}
                   size={200}
                 />
               </div>
@@ -171,17 +173,17 @@ export function FitnessProfileCard({
                 <DimensionProgress
                   label="爬升能力"
                   emoji="🧗"
-                  value={profile.dimensions.climbingAbility}
+                  value={dimensions.climbingAbility}
                 />
                 <DimensionProgress
                   label="耐力"
                   emoji="🏃"
-                  value={profile.dimensions.endurance}
+                  value={dimensions.endurance}
                 />
                 <DimensionProgress
                   label="恢复速度"
                   emoji="🔄"
-                  value={profile.dimensions.recoverySpeed}
+                  value={dimensions.recoverySpeed}
                 />
               </div>
             )}

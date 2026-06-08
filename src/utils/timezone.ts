@@ -89,6 +89,16 @@ const COUNTRY_TIMEZONES: Record<string, string> = {
   NG: 'Africa/Lagos',          // 尼日利亚
 };
 
+/** 目的地别名 → ISO 国家码（用于中文名等非标准 destination） */
+const DESTINATION_COUNTRY_ALIASES: Record<string, string> = {
+  冰岛: 'IS',
+  ICELAND: 'IS',
+  日本: 'JP',
+  JAPAN: 'JP',
+  中国: 'CN',
+  CHINA: 'CN',
+};
+
 /**
  * 获取国家的时区
  * @param countryCode ISO 3166-1 alpha-2 国家代码
@@ -97,6 +107,20 @@ const COUNTRY_TIMEZONES: Record<string, string> = {
 export function getTimezoneByCountry(countryCode: string): string {
   const code = countryCode?.toUpperCase();
   return COUNTRY_TIMEZONES[code] || 'UTC';
+}
+
+/**
+ * 从 trip.destination（国家码 / 英文名 / 中文名）解析 IANA 时区
+ */
+export function resolveDestinationTimezone(destination?: string | null): string {
+  if (!destination?.trim()) return 'UTC';
+  const head = destination.split(',')[0]?.trim();
+  if (!head) return 'UTC';
+  const upper = head.toUpperCase();
+  if (COUNTRY_TIMEZONES[upper]) return COUNTRY_TIMEZONES[upper];
+  const aliasCode = DESTINATION_COUNTRY_ALIASES[head] ?? DESTINATION_COUNTRY_ALIASES[upper];
+  if (aliasCode) return getTimezoneByCountry(aliasCode);
+  return 'UTC';
 }
 
 /**

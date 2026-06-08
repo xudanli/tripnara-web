@@ -15,19 +15,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { optimizationApi } from '@/api/optimization-v2';
 import { cn } from '@/lib/utils';
 import type { 
   ComparePlansResponse, 
   EvaluatePlanResponse,
-  RoutePlanDraft,
+  TradeoffTelemetryContext,
 } from '@/types/optimization-v2';
 import {
-  ArrowRight,
   ArrowUp,
   ArrowDown,
   Minus,
   Check,
-  X,
   Trophy,
   Scale,
   GitCompare,
@@ -334,6 +333,11 @@ export interface PlanComparisonViewProps {
   compact?: boolean;
   /** 自定义类名 */
   className?: string;
+  /**
+   * 若提供 tripId + correlationId 等，则在失焦 / 确认选择时上报 tradeoff-dwell，
+   * 与 {@link optimizationApi.recordOutcomeCapture} 共用 correlationId。
+   */
+  tradeoffTelemetry?: TradeoffTelemetryContext;
 }
 
 export function PlanComparisonView({
@@ -345,14 +349,77 @@ export function PlanComparisonView({
   onSelectPlan,
   compact = false,
   className,
+  tradeoffTelemetry,
 }: PlanComparisonViewProps) {
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const dwellSegmentStartedAt = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    if (!tradeoffTelemetry) return;
+    dwellSegmentStartedAt.current = Date.now();
+    try {
+      sessionStorage.setItem(
+        `tripnara.tradeoffCorrelation.${tradeoffTelemetry.tripId}`,
+        tradeoffTelemetry.correlationId
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [tradeoffTelemetry?.correlationId, tradeoffTelemetry?.tripId]);
+
+  const sendTradeoffDwell = React.useCallback(
+    (endedBy: 'blur' | 'confirm', selectedPlan?: 'A' | 'B') => {
+      if (!tradeoffTelemetry || dwellSegmentStartedAt.current == null) return;
+      const dwellMs = Math.max(0, Date.now() - dwellSegmentStartedAt.current);
+      const { tripId, correlationId } = tradeoffTelemetry;
+      void optimizationApi
+        .tradeoffDwell({
+          tripId,
+          correlationId,
+          dwellMs,
+          endedBy,
+          ...(selectedPlan ? { selectedPlan } : {}),
+          comparisonSummary: {
+            preferredPlan: comparison.preferredPlan,
+            utilityDifference: comparison.utilityDifference,
+          },
+        })
+        .catch(() => {
+          /* 埋点失败不影响主流程 */
+        });
+      if (endedBy === 'blur') {
+        dwellSegmentStartedAt.current = Date.now();
+      } else {
+        dwellSegmentStartedAt.current = null;
+      }
+    },
+    [comparison.preferredPlan, comparison.utilityDifference, tradeoffTelemetry]
+  );
+
+  const handleRootBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (!tradeoffTelemetry) return;
+    const next = e.relatedTarget as Node | null;
+    if (rootRef.current && next && rootRef.current.contains(next)) return;
+    sendTradeoffDwell('blur');
+  };
+
+  const handleSelectPlanClick = (plan: 'A' | 'B') => {
+    if (tradeoffTelemetry) sendTradeoffDwell('confirm', plan);
+    onSelectPlan?.(plan);
+  };
   // 计算各方案的总分
   const scoreA = evaluationA?.totalUtility ?? 0;
   const scoreB = evaluationB?.totalUtility ?? 
     (scoreA + comparison.utilityDifference * -1); // 从差值反推
 
   return (
-    <Card className={className}>
+    <div
+      ref={rootRef}
+      tabIndex={0}
+      className={cn('rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/40', className)}
+      onBlur={handleRootBlur}
+    >
+    <Card>
       <CardHeader className={cn(compact && 'pb-3')}>
         <CardTitle className={cn(
           'flex items-center gap-2',
@@ -424,7 +491,7 @@ export function PlanComparisonView({
             <div className="flex items-center justify-center gap-4">
               <Button
                 variant={comparison.preferredPlan === 'A' ? 'default' : 'outline'}
-                onClick={() => onSelectPlan('A')}
+                onClick={() => handleSelectPlanClick('A')}
                 className="min-w-32"
               >
                 <ChevronLeft className="h-4 w-4 mr-1" />
@@ -432,7 +499,7 @@ export function PlanComparisonView({
               </Button>
               <Button
                 variant={comparison.preferredPlan === 'B' ? 'default' : 'outline'}
-                onClick={() => onSelectPlan('B')}
+                onClick={() => handleSelectPlanClick('B')}
                 className="min-w-32"
               >
                 选择 {labelB}
@@ -471,6 +538,7 @@ export function PlanComparisonView({
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }
 

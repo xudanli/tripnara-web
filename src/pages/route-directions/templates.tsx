@@ -13,6 +13,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CreateTripFromTemplateDialog } from '@/components/trips/CreateTripFromTemplateDialog';
+import { LaunchRecruitmentFromTemplateButton } from '@/features/match-square/components/LaunchRecruitmentFromTemplateButton';
 import {
   ArrowLeft,
   Calendar,
@@ -42,9 +43,12 @@ export default function RouteTemplatesPage() {
   const [durationDays, setDurationDays] = useState<number | undefined>(
     durationDaysParam ? parseInt(durationDaysParam, 10) : undefined
   );
-  const [isActive, setIsActive] = useState<boolean | undefined>(
-    isActiveParam ? isActiveParam === 'true' : undefined
-  );
+  /** 默认仅展示已激活模板；URL 显式传 isActive=false 时可查看未激活 */
+  const [isActive, setIsActive] = useState<boolean | undefined>(() => {
+    if (isActiveParam === 'true') return true;
+    if (isActiveParam === 'false') return false;
+    return true;
+  });
   const [countryCode, setCountryCode] = useState<string | undefined>(
     countryCodeParam || undefined
   );
@@ -62,6 +66,12 @@ export default function RouteTemplatesPage() {
   // 筛选模板函数
   const filterTemplates = (templatesToFilter: RouteTemplate[]) => {
     let filtered = [...templatesToFilter];
+
+    if (isActive === true) {
+      filtered = filtered.filter((t) => t.isActive);
+    } else if (isActive === false) {
+      filtered = filtered.filter((t) => !t.isActive);
+    }
 
     // 按国家代码筛选（前端筛选）
     if (countryCode) {
@@ -82,7 +92,7 @@ export default function RouteTemplatesPage() {
     if (allTemplates.length > 0) {
       filterTemplates(allTemplates);
     }
-  }, [countryCode, allTemplates]);
+  }, [countryCode, allTemplates, isActive]);
 
   const loadTemplates = async () => {
     try {
@@ -153,7 +163,7 @@ export default function RouteTemplatesPage() {
   const handleReset = () => {
     setRouteDirectionId(undefined);
     setDurationDays(undefined);
-    setIsActive(undefined);
+    setIsActive(true);
     setCountryCode(undefined);
     setLimit(100);
     setOffset(0);
@@ -169,12 +179,12 @@ export default function RouteTemplatesPage() {
     setCreateDialogOpen(true);
   };
 
-  const handleCreateSuccess = async (tripId: string) => {
+  const handleCreateSuccess = async (tripId: string, message?: string) => {
     console.log('🔄 [RouteTemplates] handleCreateSuccess 被调用，tripId:', tripId);
     
-    // 显示成功提示
-    toast.success('行程创建成功！', {
-      description: '正在跳转到行程库...',
+    // 显示成功提示（优先展示接口返回的 message）
+    toast.success('行程创建成功', {
+      description: message ?? '正在跳转到行程库...',
       duration: 3000,
     });
     
@@ -244,7 +254,9 @@ export default function RouteTemplatesPage() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold">路线模板</h1>
-          <p className="text-muted-foreground">查询和管理路线模板</p>
+          <p className="text-muted-foreground">
+          查询和管理路线模板（默认仅显示已激活模板）
+        </p>
         </div>
       </div>
 
@@ -332,7 +344,9 @@ export default function RouteTemplatesPage() {
                     <Checkbox
                       id="isActive-true"
                       checked={isActive === true}
-                      onCheckedChange={(checked) => setIsActive(checked ? true : undefined)}
+                      onCheckedChange={(checked) =>
+                        setIsActive(checked ? true : undefined)
+                      }
                     />
                     <Label htmlFor="isActive-true" className="cursor-pointer">
                       激活
@@ -457,24 +471,33 @@ export default function RouteTemplatesPage() {
                       )}
 
                       {/* 操作按钮 */}
-                      <div className="flex items-center gap-2 pt-2">
-                        <Button
-                          variant="outline"
+                      <div className="flex flex-col gap-2 pt-2">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleViewDetail(template.id)}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            查看详情
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleUseTemplate(template)}
+                          >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            使用模板
+                          </Button>
+                        </div>
+                        <LaunchRecruitmentFromTemplateButton
+                          template={template}
                           size="sm"
-                          className="flex-1"
-                          onClick={() => handleViewDetail(template.id)}
-                        >
-                          <Eye className="w-4 h-4 mr-2" />
-                          查看详情
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleUseTemplate(template)}
-                        >
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          使用模板
-                        </Button>
+                          variant="secondary"
+                          compact
+                          fullWidth
+                        />
                       </div>
                     </div>
                   </CardContent>

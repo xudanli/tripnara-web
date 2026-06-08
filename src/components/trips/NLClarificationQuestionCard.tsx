@@ -5,7 +5,7 @@
  * 这个组件专门为 NL 对话场景设计，更简洁，更突出
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { cn, toDateOnly } from '@/lib/utils';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import type { NLClarificationQuestion, ConditionalInputField } from '@/types/trip';
+import { getConditionalInputStorageKey as getStorageKey } from '@/utils/nl-conversation-adapter';
 import CriticalFieldIndicator from './CriticalFieldIndicator';
 
 interface NLClarificationQuestionCardProps {
@@ -27,9 +28,18 @@ interface NLClarificationQuestionCardProps {
   value: string | string[] | number | boolean | null;
   onChange: (value: string | string[] | number | boolean | null) => void;
   onAnswer?: (questionId: string, value: string | string[] | number | boolean | null) => void;
+  /** 条件输入字段的初始值，key 为 questionId_paramKey 或 fieldKey_triggerValue */
+  conditionalInputAnswers?: Record<string, any>;
+  /** 当 conditionalInput 有 submitLabel 时，点击提交按钮后调用：PUT 答案并 POST 继续对话 */
+  onConditionalSubmit?: (question: NLClarificationQuestion, answers: Record<string, string | string[] | number | boolean | null>) => void | Promise<void>;
   error?: string;
   disabled?: boolean;
   className?: string;
+}
+
+/** 获取条件输入字段的 state key（内部去重用，paramKey 优先以支持同 triggerValue 多字段） */
+function getConditionalInputStateKey(conditionalInput: ConditionalInputField): string {
+  return conditionalInput.paramKey || conditionalInput.triggerValue;
 }
 
 export function NLClarificationQuestionCard({
@@ -37,13 +47,34 @@ export function NLClarificationQuestionCard({
   value,
   onChange,
   onAnswer,
+  conditionalInputAnswers,
+  onConditionalSubmit,
   error,
   disabled,
   className,
 }: NLClarificationQuestionCardProps) {
+  const fieldKey = question.metadata?.fieldName || question.id;
+
   // 🆕 HCI优化：条件输入字段状态管理
   const [conditionalInputValues, setConditionalInputValues] = useState<Record<string, any>>({});
   const [conditionalInputErrors, setConditionalInputErrors] = useState<Record<string, string>>({});
+
+  // 从 questionAnswers 初始化条件输入字段的值（支持刷新/恢复场景）
+  useEffect(() => {
+    if (!conditionalInputAnswers || !question.conditionalInputs?.length) return;
+    const initial: Record<string, any> = {};
+    question.conditionalInputs.forEach((ci) => {
+      const storageKey = getStorageKey(question.id, fieldKey, ci);
+      const stateKey = getConditionalInputStateKey(ci);
+      const v = conditionalInputAnswers[storageKey];
+      if (v !== undefined && v !== null) {
+        initial[stateKey] = v;
+      }
+    });
+    if (Object.keys(initial).length > 0) {
+      setConditionalInputValues((prev) => ({ ...prev, ...initial }));
+    }
+  }, [question.id, question.conditionalInputs, fieldKey, conditionalInputAnswers]);
 
   // 🆕 检查当前选中的选项是否触发条件输入字段
   const getTriggeredConditionalInputs = (currentValue?: string | string[] | number | boolean | null): ConditionalInputField[] => {
@@ -55,25 +86,32 @@ export function NLClarificationQuestionCard({
     const valueToCheck = currentValue !== undefined ? currentValue : value;
 
     // 获取当前选中的值（需要标准化处理，与选项值匹配）
-    let selectedValue = '';
+    // 支持 single_choice、boolean、multiple_choice（多选时 value 为 string[]）
+    let selectedValues: string[] = [];
     if (question.inputType === 'single_choice' || question.inputType === 'boolean') {
+      let s = '';
       if (typeof valueToCheck === 'string') {
-        selectedValue = valueToCheck.trim();
+        s = valueToCheck.trim();
       } else if (typeof valueToCheck === 'boolean') {
         const options = question.options || ['是', '否'];
-        // 标准化选项值
         const normalizedOptions = options.map((opt: any) => {
           if (typeof opt === 'object' && opt !== null) {
             return opt.value ?? opt.label ?? String(opt);
           }
           return String(opt);
         });
-        selectedValue = valueToCheck ? normalizedOptions[0] : (normalizedOptions[1] || normalizedOptions[0]);
+        s = valueToCheck ? normalizedOptions[0] : (normalizedOptions[1] || normalizedOptions[0]);
       } else if (typeof valueToCheck === 'object' && valueToCheck !== null) {
-        // 处理对象类型的值
-        selectedValue = String((valueToCheck as any).value ?? (valueToCheck as any).label ?? valueToCheck).trim();
+        s = String((valueToCheck as any).value ?? (valueToCheck as any).label ?? valueToCheck).trim();
       }
+      if (s) selectedValues = [s];
+    } else if (question.inputType === 'multiple_choice' && Array.isArray(valueToCheck)) {
+      selectedValues = valueToCheck
+        .map((v) => (typeof v === 'string' ? v : String((v as any)?.value ?? (v as any)?.label ?? v)))
+        .filter(Boolean)
+        .map((s) => s.trim());
     }
+    const selectedValue = selectedValues.join(','); // 用于日志；匹配时逐个检查
 
     // 🐛 调试日志：检查匹配情况
     console.log('[NLClarificationQuestionCard] 检查条件输入字段:', {
@@ -81,70 +119,44 @@ export function NLClarificationQuestionCard({
       questionText: question.text?.substring(0, 50),
       inputType: question.inputType,
       currentValue: valueToCheck,
-      selectedValue,
+      selectedValues,
       hasConditionalInputs: question.conditionalInputs?.length > 0,
       conditionalInputs: question.conditionalInputs,
       triggerValues: question.conditionalInputs?.map(ci => ci.triggerValue),
       options: question.options,
     });
 
-    if (!selectedValue) {
+    if (selectedValues.length === 0) {
       return [];
     }
 
-    // 🆕 改进的匹配逻辑：更健壮的匹配方式
+    // 🆕 改进的匹配逻辑：更健壮的匹配方式（支持多选：任一选中项匹配即触发）
     const normalizeString = (str: string): string => {
-      // 移除所有标点符号和空格，只保留核心文字
       return str
-        .replace(/[,，。、\s]/g, '') // 移除逗号、空格等
+        .replace(/[,，。、\s]/g, '')
         .toLowerCase()
         .trim();
     };
 
-    // 检查是否有匹配的条件输入字段（使用精确匹配、模糊匹配和标准化匹配）
+    const valueMatchesTrigger = (sel: string, triggerValue: string): boolean => {
+      if (triggerValue === sel) return true;
+      if (sel.includes(triggerValue) || triggerValue.includes(sel)) return true;
+      const nTrigger = normalizeString(triggerValue);
+      const nSel = normalizeString(sel);
+      if (nTrigger === nSel || nSel.includes(nTrigger) || nTrigger.includes(nSel)) return true;
+      const keyPhrases = ['需要修改', '需要调整', '不准确', '不符合'];
+      if (keyPhrases.some((p) => sel.includes(p) && triggerValue.includes(p))) return true;
+      return false;
+    };
+
     const matched = question.conditionalInputs.filter((conditionalInput) => {
       const triggerValue = conditionalInput.triggerValue?.trim();
       if (!triggerValue) return false;
-      
-      // 1. 精确匹配
-      if (triggerValue === selectedValue) {
-        console.log('[NLClarificationQuestionCard] 精确匹配:', { triggerValue, selectedValue });
-        return true;
+      const match = selectedValues.some((sel) => valueMatchesTrigger(sel, triggerValue));
+      if (match) {
+        console.log('[NLClarificationQuestionCard] 条件输入匹配:', { triggerValue, selectedValues });
       }
-      
-      // 2. 模糊匹配：检查 selectedValue 是否包含 triggerValue，或 triggerValue 是否包含 selectedValue
-      const containsMatch = selectedValue.includes(triggerValue) || triggerValue.includes(selectedValue);
-      if (containsMatch) {
-        console.log('[NLClarificationQuestionCard] 模糊匹配:', { triggerValue, selectedValue });
-        return true;
-      }
-      
-      // 3. 🆕 标准化匹配：移除标点符号后比较（处理 "不准确, 需要修改" vs "不准确，需要修改"）
-      const normalizedTrigger = normalizeString(triggerValue);
-      const normalizedSelected = normalizeString(selectedValue);
-      if (normalizedTrigger === normalizedSelected || 
-          normalizedSelected.includes(normalizedTrigger) || 
-          normalizedTrigger.includes(normalizedSelected)) {
-        console.log('[NLClarificationQuestionCard] 标准化匹配:', { 
-          triggerValue, 
-          selectedValue,
-          normalizedTrigger,
-          normalizedSelected
-        });
-        return true;
-      }
-      
-      // 4. 🆕 关键词匹配：检查是否包含关键部分（例如："需要修改"、"需要调整"）
-      const keyPhrases = ['需要修改', '需要调整', '不准确', '不符合'];
-      const hasKeyPhrase = keyPhrases.some(phrase => 
-        selectedValue.includes(phrase) && triggerValue.includes(phrase)
-      );
-      if (hasKeyPhrase) {
-        console.log('[NLClarificationQuestionCard] 关键词匹配:', { triggerValue, selectedValue });
-        return true;
-      }
-      
-      return false;
+      return match;
     });
     
     console.log('[NLClarificationQuestionCard] 匹配结果:', { matchedCount: matched.length, matched });
@@ -157,10 +169,9 @@ export function NLClarificationQuestionCard({
     const fieldKey = question.metadata?.fieldName || question.id;
     onAnswer?.(fieldKey, newValue);
 
-    // 🆕 如果选项改变，清除不再触发的条件输入字段的值
-    // 🐛 修复：使用 newValue 而不是旧的 value 来检查触发的条件输入字段
+    // 如果选项改变，清除不再触发的条件输入字段的值
     const triggeredInputs = getTriggeredConditionalInputs(newValue);
-    const newTriggeredKeys = new Set(triggeredInputs.map((ci) => ci.triggerValue));
+    const newTriggeredKeys = new Set(triggeredInputs.map((ci) => getConditionalInputStateKey(ci)));
     setConditionalInputValues((prev) => {
       const updated = { ...prev };
       Object.keys(updated).forEach((key) => {
@@ -177,29 +188,27 @@ export function NLClarificationQuestionCard({
     conditionalInput: ConditionalInputField,
     inputValue: any
   ) => {
-    const key = conditionalInput.triggerValue;
+    const stateKey = getConditionalInputStateKey(conditionalInput);
     setConditionalInputValues((prev) => ({
       ...prev,
-      [key]: inputValue,
+      [stateKey]: inputValue,
     }));
 
-    // 🆕 验证条件输入字段
+    // 验证条件输入字段
     const validationError = validateConditionalInput(conditionalInput, inputValue);
     setConditionalInputErrors((prev) => {
       if (validationError) {
-        return { ...prev, [key]: validationError };
+        return { ...prev, [stateKey]: validationError };
       } else {
         const updated = { ...prev };
-        delete updated[key];
+        delete updated[stateKey];
         return updated;
       }
     });
 
-    // 🆕 通知父组件条件输入字段的值变化
-    // 格式：{ optionValue: inputValue } 或 { optionValue: { startDate, endDate } }
-    const fieldKey = question.metadata?.fieldName || question.id;
-    const conditionalFieldKey = `${fieldKey}_${key}`;
-    onAnswer?.(conditionalFieldKey, inputValue);
+    // 通知父组件：key 为 questionId_paramKey 或 fieldKey_triggerValue（向后兼容）
+    const storageKey = getStorageKey(question.id, fieldKey, conditionalInput);
+    onAnswer?.(storageKey, inputValue);
   };
 
   // 🆕 验证条件输入字段
@@ -220,6 +229,17 @@ export function NLClarificationQuestionCard({
         if (new Date(rangeValue.startDate) > new Date(rangeValue.endDate)) {
           return '开始日期不能晚于结束日期';
         }
+      }
+      return null;
+    }
+
+    // single_choice / multiple_choice 必填验证
+    if (conditionalInput.inputType === 'single_choice' || conditionalInput.inputType === 'multiple_choice') {
+      if (conditionalInput.required) {
+        const isEmpty = conditionalInput.inputType === 'single_choice'
+          ? (inputValue == null || inputValue === '')
+          : (!Array.isArray(inputValue) || inputValue.length === 0);
+        if (isEmpty) return '请至少选择一项';
       }
       return null;
     }
@@ -495,11 +515,39 @@ export function NLClarificationQuestionCard({
     }
   };
 
-  // 🆕 HCI优化：渲染条件输入字段
+  // 🆕 构建并提交条件输入答案（含主问题 + 已触发的条件输入）
+  const handleConditionalSubmit = (conditionalInput: ConditionalInputField) => {
+    if (!onConditionalSubmit) return;
+    const stateKey = getConditionalInputStateKey(conditionalInput);
+    const inputValue = conditionalInputValues[stateKey];
+    const err = validateConditionalInput(conditionalInput, inputValue);
+    if (err) {
+      setConditionalInputErrors((prev) => ({ ...prev, [stateKey]: err }));
+      return;
+    }
+    const answers: Record<string, string | string[] | number | boolean | null> = {};
+    if (value !== null && value !== undefined && value !== '') {
+      answers[fieldKey] = value;
+    }
+    const triggered = getTriggeredConditionalInputs(value);
+    triggered.forEach((ci) => {
+      const sk = getConditionalInputStateKey(ci);
+      const v = conditionalInputValues[sk];
+      if (v !== null && v !== undefined) {
+        const storageKey = getStorageKey(question.id, fieldKey, ci);
+        answers[storageKey] = v;
+      }
+    });
+    onConditionalSubmit(question, answers);
+  };
+
+  // HCI优化：渲染条件输入字段（同一 triggerValue 可对应多个字段，用 paramKey 区分）
   const renderConditionalInput = (conditionalInput: ConditionalInputField) => {
-    const key = conditionalInput.triggerValue;
-    const inputValue = conditionalInputValues[key];
-    const inputError = conditionalInputErrors[key];
+    const stateKey = getConditionalInputStateKey(conditionalInput);
+    const inputValue = conditionalInputValues[stateKey];
+    const inputError = conditionalInputErrors[stateKey];
+    // 仅当存在 submitLabel 时渲染独立提交按钮；否则仅显示主按钮「确认并继续」
+    const showSubmitButton = Boolean(conditionalInput.submitLabel?.trim?.() && onConditionalSubmit);
 
     switch (conditionalInput.inputType) {
       case 'text': {
@@ -512,13 +560,26 @@ export function NLClarificationQuestionCard({
                 <span className="text-red-500 ml-1">*</span>
               )}
             </Label>
-            <Input
-              value={textValue}
-              onChange={(e) => handleConditionalInputChange(conditionalInput, e.target.value)}
-              placeholder={conditionalInput.placeholder}
-              disabled={disabled}
-              className={cn(inputError && 'border-red-500')}
-            />
+            <div className={cn('flex gap-2', showSubmitButton && 'items-end')}>
+              <Input
+                value={textValue}
+                onChange={(e) => handleConditionalInputChange(conditionalInput, e.target.value)}
+                placeholder={conditionalInput.placeholder}
+                disabled={disabled}
+                className={cn(inputError && 'border-red-500', showSubmitButton && 'flex-1')}
+              />
+              {showSubmitButton && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleConditionalSubmit(conditionalInput)}
+                  disabled={disabled}
+                  className="shrink-0"
+                >
+                  {conditionalInput.submitLabel}
+                </Button>
+              )}
+            </div>
             {conditionalInput.hint && (
               <p className="text-xs text-muted-foreground">{conditionalInput.hint}</p>
             )}
@@ -539,17 +600,30 @@ export function NLClarificationQuestionCard({
                 <span className="text-red-500 ml-1">*</span>
               )}
             </Label>
-            <Input
-              type="number"
-              value={numValue}
-              onChange={(e) => {
-                const num = e.target.value ? Number(e.target.value) : null;
-                handleConditionalInputChange(conditionalInput, num);
-              }}
-              placeholder={conditionalInput.placeholder}
-              disabled={disabled}
-              className={cn(inputError && 'border-red-500')}
-            />
+            <div className={cn('flex gap-2', showSubmitButton && 'items-end')}>
+              <Input
+                type="number"
+                value={numValue}
+                onChange={(e) => {
+                  const num = e.target.value ? Number(e.target.value) : null;
+                  handleConditionalInputChange(conditionalInput, num);
+                }}
+                placeholder={conditionalInput.placeholder}
+                disabled={disabled}
+                className={cn(inputError && 'border-red-500', showSubmitButton && 'flex-1')}
+              />
+              {showSubmitButton && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleConditionalSubmit(conditionalInput)}
+                  disabled={disabled}
+                  className="shrink-0"
+                >
+                  {conditionalInput.submitLabel}
+                </Button>
+              )}
+            </div>
             {conditionalInput.hint && (
               <p className="text-xs text-muted-foreground">{conditionalInput.hint}</p>
             )}
@@ -570,18 +644,106 @@ export function NLClarificationQuestionCard({
                 <span className="text-red-500 ml-1">*</span>
               )}
             </Label>
-            <Input
-              type="date"
-              value={dateValue}
-              onChange={(e) => handleConditionalInputChange(conditionalInput, e.target.value)}
-              disabled={disabled}
-              className={cn(inputError && 'border-red-500')}
-            />
+            <div className={cn('flex gap-2', showSubmitButton && 'items-end')}>
+              <Input
+                type="date"
+                value={dateValue}
+                onChange={(e) => handleConditionalInputChange(conditionalInput, e.target.value)}
+                disabled={disabled}
+                className={cn(inputError && 'border-red-500', showSubmitButton && 'flex-1')}
+              />
+              {showSubmitButton && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleConditionalSubmit(conditionalInput)}
+                  disabled={disabled}
+                  className="shrink-0"
+                >
+                  {conditionalInput.submitLabel}
+                </Button>
+              )}
+            </div>
             {conditionalInput.hint && (
               <p className="text-xs text-muted-foreground">{conditionalInput.hint}</p>
             )}
             {inputError && (
               <p className="text-xs text-red-600" role="alert">{inputError}</p>
+            )}
+          </div>
+        );
+      }
+
+      case 'single_choice':
+      case 'multiple_choice': {
+        const opts = conditionalInput.options ?? [];
+        const normalizedOpts = opts.map((o: any) =>
+          typeof o === 'object' && o !== null
+            ? { value: o.value ?? o.label ?? '', label: o.label ?? o.value ?? '' }
+            : { value: String(o), label: String(o) }
+        );
+        const isMultiple = conditionalInput.inputType === 'multiple_choice';
+        const currentVal = conditionalInput.inputType === 'single_choice'
+          ? (typeof inputValue === 'string' ? inputValue : '')
+          : (Array.isArray(inputValue) ? inputValue : []);
+        const selectedSet = isMultiple
+          ? new Set(Array.isArray(currentVal) ? currentVal.map(String) : [])
+          : new Set(currentVal ? [String(currentVal)] : []);
+
+        return (
+          <div className="mt-3 space-y-1.5">
+            <Label className="text-xs font-medium text-slate-700">
+              {conditionalInput.label || '请选择'}
+              {conditionalInput.required && (
+                <span className="text-red-500 ml-1">*</span>
+              )}
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {normalizedOpts.map((opt) => {
+                const isSelected = selectedSet.has(opt.value);
+                return (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    variant={isSelected ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      if (isMultiple) {
+                        const next = isSelected
+                          ? (Array.isArray(currentVal) ? currentVal : []).filter((v) => String(v) !== opt.value)
+                          : [...(Array.isArray(currentVal) ? currentVal : []), opt.value];
+                        handleConditionalInputChange(conditionalInput, next);
+                      } else {
+                        handleConditionalInputChange(conditionalInput, isSelected ? null : opt.value);
+                      }
+                    }}
+                    disabled={disabled}
+                    className={cn(
+                      'text-xs',
+                      isSelected && 'bg-slate-900 hover:bg-slate-800 border-slate-900 text-white'
+                    )}
+                  >
+                    {opt.label}
+                  </Button>
+                );
+              })}
+            </div>
+            {conditionalInput.hint && (
+              <p className="text-xs text-muted-foreground mt-1">{conditionalInput.hint}</p>
+            )}
+            {showSubmitButton && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => handleConditionalSubmit(conditionalInput)}
+                disabled={disabled}
+                className="mt-1"
+              >
+                {conditionalInput.submitLabel}
+              </Button>
+            )}
+            {inputError && (
+              <p className="text-xs text-red-600 mt-1" role="alert">{inputError}</p>
             )}
           </div>
         );
@@ -673,6 +835,17 @@ export function NLClarificationQuestionCard({
             </div>
             {conditionalInput.hint && (
               <p className="text-xs text-muted-foreground">{conditionalInput.hint}</p>
+            )}
+            {showSubmitButton && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => handleConditionalSubmit(conditionalInput)}
+                disabled={disabled}
+                className="mt-2"
+              >
+                {conditionalInput.submitLabel}
+              </Button>
             )}
             {inputError && (
               <p className="text-xs text-red-600" role="alert">{inputError}</p>

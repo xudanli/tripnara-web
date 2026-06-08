@@ -826,6 +826,82 @@ export function AllClearIllustration({
   );
 }
 
+/**
+ * Smart Optimization - 智能优化行程插画
+ * 黑白线稿：路线轨迹（优化前虚线）、评估节点、路线图
+ * 酒红点睛：优化后关键节点、闪电/加速符号
+ */
+export function SmartOptimizationIllustration({
+  className = '',
+  size = 200,
+  strokeColor = '#1F2937',
+  highlightColor = BRAND_RED,
+}: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 200 200"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      {/* 地图轮廓（黑白线稿） */}
+      <path
+        d="M35 55 L55 45 L90 50 L130 38 L165 52 L175 85 L155 125 L105 145 L65 135 L45 105 Z"
+        stroke={strokeColor}
+        strokeWidth="2"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* 优化前路线（虚线，黑白） */}
+      <path
+        d="M55 45 L90 50 L130 38 L165 52"
+        stroke={strokeColor}
+        strokeWidth="2"
+        fill="none"
+        strokeDasharray="5 5"
+        strokeLinecap="round"
+        opacity="0.6"
+      />
+      {/* 优化后路线（实线，酒红） */}
+      <path
+        d="M55 45 Q75 42 95 48 Q120 52 140 42 Q160 48 165 52"
+        stroke={highlightColor}
+        strokeWidth="2.5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* 起点节点（黑白） */}
+      <circle cx="55" cy="45" r="4" stroke={strokeColor} strokeWidth="2" fill="white" />
+      {/* 中间优化节点（酒红点睛） */}
+      <circle cx="95" cy="48" r="5" fill={highlightColor} />
+      <circle cx="140" cy="42" r="5" fill={highlightColor} />
+      {/* 终点节点（酒红） */}
+      <circle cx="165" cy="52" r="5" fill={highlightColor} />
+      {/* 闪电/优化符号（酒红，右下角） */}
+      <g transform="translate(120, 130)">
+        <path
+          d="M4 0 L0 8 L5 8 L2 16 L8 10 L4 10 Z"
+          fill={highlightColor}
+          stroke={highlightColor}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+      </g>
+      {/* 评估图表面板（黑白，左上） */}
+      <g transform="translate(30, 30)" opacity="0.8">
+        <rect x="0" y="0" width="45" height="35" rx="4" stroke={strokeColor} strokeWidth="2" fill="none" />
+        <line x1="8" y1="12" x2="37" y2="12" stroke={strokeColor} strokeWidth="1.5" strokeDasharray="2 2" />
+        <line x1="8" y1="20" x2="30" y2="20" stroke={strokeColor} strokeWidth="1.5" strokeDasharray="2 2" />
+        <circle cx="25" cy="28" r="3" fill={highlightColor} opacity="0.6" />
+      </g>
+    </svg>
+  );
+}
+
 export function IdeasContainerIllustration({
   className = '',
   size = 200,
@@ -922,6 +998,78 @@ export function IdeasContainerIllustration({
       {/* 装饰圆圈（酒红色，浮动） */}
       <circle cx="45" cy="110" r="4" stroke={highlightColor} strokeWidth="2" fill="none" opacity="0.8" />
       <circle cx="155" cy="130" r="5" stroke={highlightColor} strokeWidth="2" fill="none" opacity="0.6" />
+    </svg>
+  );
+}
+
+/**
+ * 规划师思考 - 聊天气泡加载动效
+ * 黑白线稿：路线、地图轮廓
+ * 酒红点睛：流动的规划节点 + 脉冲动效
+ * 适用于「规划师正在思考...」状态，插画风格
+ */
+export function PlannerThinkingIllustration({
+  className = '',
+  size = 48,
+  strokeColor = '#1F2937',
+  highlightColor = BRAND_RED,
+}: IllustrationProps) {
+  return (
+    <svg
+      width={size}
+      height={(size * 44) / 64}
+      viewBox="0 0 64 44"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn('flex-shrink-0', className)}
+    >
+      {/* 地图轮廓（黑白线稿，简化） */}
+      <path
+        d="M8 12 L20 8 L36 14 L52 10 L58 22 L50 34 L32 38 L16 32 Z"
+        stroke={strokeColor}
+        strokeWidth="1.5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.5"
+      />
+      {/* 路线（虚线，绘制动效） */}
+      <path
+        d="M20 8 L36 14 L52 10"
+        stroke={strokeColor}
+        strokeWidth="2"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray="50"
+        className="planner-route-draw"
+        style={{ stroke: strokeColor }}
+      />
+      {/* 规划节点 - 酒红点睛 + 脉冲动效 */}
+      <circle
+        cx="20"
+        cy="8"
+        r="3"
+        fill={highlightColor}
+        className="planner-dot-pulse"
+        style={{ transformOrigin: '20px 8px' }}
+      />
+      <circle
+        cx="36"
+        cy="14"
+        r="3"
+        fill={highlightColor}
+        className="planner-dot-pulse planner-dot-pulse-delay-1"
+        style={{ transformOrigin: '36px 14px' }}
+      />
+      <circle
+        cx="52"
+        cy="10"
+        r="3"
+        fill={highlightColor}
+        className="planner-dot-pulse planner-dot-pulse-delay-2"
+        style={{ transformOrigin: '52px 10px' }}
+      />
     </svg>
   );
 }

@@ -5,6 +5,7 @@
 
 import type { PersonaAlert } from '@/types/trip';
 import type { Suggestion, PersonaType } from '@/types/suggestion';
+import { getPersonaAlertUserBody } from '@/lib/persona-alert-display';
 
 /**
  * 将PersonaAlert转换为Suggestion
@@ -14,6 +15,7 @@ export function personaAlertToSuggestion(alert: PersonaAlert, tripId: string): S
     ABU: 'abu',
     DR_DRE: 'drdre',
     NEPTUNE: 'neptune',
+    USER_ACTION: 'user_action',
   };
 
   const severityMap: Record<string, 'info' | 'warn' | 'blocker'> = {
@@ -21,6 +23,8 @@ export function personaAlertToSuggestion(alert: PersonaAlert, tripId: string): S
     info: 'info',
     warning: 'warn',
   };
+
+  const userBody = getPersonaAlertUserBody(alert);
 
   return {
     id: alert.id,
@@ -30,8 +34,8 @@ export function personaAlertToSuggestion(alert: PersonaAlert, tripId: string): S
     severity: severityMap[alert.severity] || 'info',
     status: 'new',
     title: alert.title,
-    summary: alert.message,
-    description: alert.message,
+    summary: userBody,
+    description: userBody,
     actions: [
       {
         id: 'view_evidence',

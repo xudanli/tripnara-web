@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import type { TripDetail, AttentionItem, PersonaAlert } from '@/types/trip';
+import { getPersonaAlertUserBody } from '@/lib/persona-alert-display';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -324,6 +325,7 @@ export default function ContextSidebar({
                     const personaName = 
                       alert.persona === 'ABU' ? '安全官 (Abu)' :
                       alert.persona === 'DR_DRE' ? '节奏官 (Dr.Dre)' :
+                      alert.persona === 'USER_ACTION' ? '系统处理记录' :
                       '修复官 (Neptune)';
                     
                     return (
@@ -355,7 +357,7 @@ export default function ContextSidebar({
                           />
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
-                          {personaName}: {alert.message}
+                          {personaName}: {getPersonaAlertUserBody(alert)}
                         </div>
                       </div>
                     );

@@ -124,3 +124,7 @@ const handleFileSelect = (file: File) => {
 };
 ```
 
+## Agent：`route_and_run` 响应 ↔ 调试 UI
+
+联调时对照 Network JSON 与 AgentChat 四个调试块，见：**[docs/api/route-and-run-debug-ui-field-map.md](../../docs/api/route-and-run-debug-ui-field-map.md)**。
+

@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
 import { AlertCircle } from 'lucide-react';
 import { routeDirectionsApi } from '@/api/route-directions';
+import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import type { CreateTripFromTemplateRequest } from '@/types/places-routes';
 import type { Country } from '@/types/country';
@@ -25,7 +26,7 @@ interface CreateTripFromTemplateDialogProps {
   defaultDestination?: string; // 🆕 模板的目的地（国家代码），如 "IS", "JP"
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: (tripId: string) => void;
+  onSuccess: (tripId: string, message?: string) => void;
 }
 
 export function CreateTripFromTemplateDialog({
@@ -205,9 +206,11 @@ export function CreateTripFromTemplateDialog({
       console.log('✅ [CreateTripFromTemplate] 准备调用成功回调，tripId:', tripId);
       console.log('✅ [CreateTripFromTemplate] onSuccess 回调函数:', typeof onSuccess);
 
-      // 调用成功回调（会处理导航）
+      tripsApi.supplementIntentAfterCreate(tripId).catch(() => {});
+
+      // 调用成功回调（会处理导航），传入接口返回的 message 供展示
       try {
-        onSuccess(tripId);
+        onSuccess(tripId, result.message);
         console.log('✅ [CreateTripFromTemplate] 成功回调已调用');
       } catch (callbackErr: any) {
         console.error('❌ [CreateTripFromTemplate] 调用成功回调失败:', callbackErr);

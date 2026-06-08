@@ -16,10 +16,11 @@ const LIST_MAX_HEIGHT = 320;
 
 interface HotelListProps {
   hotels: Hotel[];
+  layout?: 'scroll-contained' | 'flow';
   className?: string;
 }
 
-export function HotelList({ hotels, className }: HotelListProps) {
+export function HotelList({ hotels, layout = 'scroll-contained', className }: HotelListProps) {
   const [expanded, setExpanded] = useState(false);
 
   if (!hotels || hotels.length === 0) {
@@ -31,11 +32,17 @@ export function HotelList({ hotels, className }: HotelListProps) {
   const hasMore = total > INITIAL_VISIBLE && !expanded;
   const visibleHotels = hotels.slice(0, visibleCount);
 
+  const listScrollStyle =
+    layout === 'scroll-contained' ? { maxHeight: LIST_MAX_HEIGHT } : undefined;
+
   return (
     <div className={cn('mt-4', className)}>
       <div
-        className="space-y-3 overflow-y-auto pr-1"
-        style={{ maxHeight: LIST_MAX_HEIGHT }}
+        className={cn(
+          'space-y-3 pr-1',
+          layout === 'scroll-contained' ? 'overflow-y-auto' : 'overflow-visible'
+        )}
+        style={listScrollStyle}
       >
         {visibleHotels.map((hotel) => (
         <Card key={hotel.placeId} className="hover:shadow-md transition-shadow">

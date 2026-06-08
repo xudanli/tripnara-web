@@ -23,7 +23,8 @@ export interface UserPreferences {
     /** 默认出行方式（用户级别偏好） */
     travelMode?: 'DRIVING' | 'PUBLIC_TRANSIT' | 'MIXED';
   };
-  other?: Record<string, any>;
+  /** 扩展字段 */
+  other?: Record<string, unknown>;
 }
 
 /**

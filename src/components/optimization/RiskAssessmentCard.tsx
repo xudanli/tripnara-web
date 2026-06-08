@@ -95,6 +95,7 @@ function MetricCard({
   subValue,
   color = 'text-foreground',
   tooltip,
+  compact = false,
 }: {
   icon: React.ElementType;
   label: string;
@@ -102,23 +103,30 @@ function MetricCard({
   subValue?: string;
   color?: string;
   tooltip?: string;
+  compact?: boolean;
 }) {
   const content = (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-background shadow-sm">
-        <Icon className={cn('h-5 w-5', color)} />
+    <div className={cn(
+      'flex items-center rounded-lg bg-muted/50',
+      compact ? 'gap-1.5 p-2' : 'gap-3 p-3'
+    )}>
+      <div className={cn(
+        'flex items-center justify-center rounded bg-background shadow-sm',
+        compact ? 'h-6 w-6' : 'h-10 w-10 rounded-lg'
+      )}>
+        <Icon className={cn(compact ? 'h-3 w-3' : 'h-5 w-5', color)} />
       </div>
       <div>
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className={cn('text-xl font-bold tabular-nums', color)}>{value}</p>
-        {subValue && (
+        <p className={cn('text-muted-foreground', compact ? 'text-[10px]' : 'text-sm')}>{label}</p>
+        <p className={cn('font-bold tabular-nums', color, compact ? 'text-sm' : 'text-xl')}>{value}</p>
+        {subValue && !compact && (
           <p className="text-xs text-muted-foreground">{subValue}</p>
         )}
       </div>
     </div>
   );
 
-  if (tooltip) {
+  if (tooltip && !compact) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -358,11 +366,11 @@ export function RiskAssessmentCard({
 
   return (
     <Card className={cn('overflow-hidden', className)}>
-      <CardHeader className={cn(compact && 'pb-3')}>
+      <CardHeader className={cn(compact ? 'p-3 pb-2' : '')}>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className={cn('flex items-center gap-2', compact && 'text-base')}>
-              <BarChart3 className="h-5 w-5" />
+            <CardTitle className={cn('flex items-center gap-2', compact ? 'text-sm' : '')}>
+              <BarChart3 className={cn(compact ? 'h-4 w-4' : 'h-5 w-5')} />
               {title}
             </CardTitle>
             {!compact && (
@@ -373,7 +381,7 @@ export function RiskAssessmentCard({
           </div>
           <Badge 
             variant="outline" 
-            className={cn(riskConfig.bgColor, riskConfig.borderColor, riskConfig.color)}
+            className={cn(riskConfig.bgColor, riskConfig.borderColor, riskConfig.color, compact && 'text-xs')}
           >
             <riskConfig.icon className="h-3 w-3 mr-1" />
             {riskConfig.label}
@@ -381,11 +389,11 @@ export function RiskAssessmentCard({
         </div>
       </CardHeader>
 
-      <CardContent className={cn(compact && 'pt-0')}>
+      <CardContent className={cn(compact ? 'p-3 pt-0' : '')}>
         {/* 核心指标 */}
         <div className={cn(
-          'grid gap-3',
-          compact ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-4'
+          'grid',
+          compact ? 'grid-cols-4 gap-2' : 'grid-cols-2 lg:grid-cols-4 gap-3'
         )}>
           <MetricCard
             icon={Target}
@@ -393,6 +401,7 @@ export function RiskAssessmentCard({
             value={formatPct(assessment.expectedUtility)}
             color={getFeasibilityColor(Number(assessment.expectedUtility) || 0)}
             tooltip="Monte Carlo 模拟计算的期望效用值"
+            compact={compact}
           />
           <MetricCard
             icon={Shield}
@@ -400,6 +409,7 @@ export function RiskAssessmentCard({
             value={formatPct(assessment.feasibilityProbability)}
             color={getFeasibilityColor(Number(assessment.feasibilityProbability) || 0)}
             tooltip="计划成功执行的概率"
+            compact={compact}
           />
           <MetricCard
             icon={TrendingDown}
@@ -407,6 +417,7 @@ export function RiskAssessmentCard({
             value={formatPct(assessment.downsideRisk)}
             color={riskConfig.color}
             tooltip="效用低于阈值的概率"
+            compact={compact}
           />
           <MetricCard
             icon={Gauge}
@@ -419,6 +430,7 @@ export function RiskAssessmentCard({
             })() : '—'}
             subValue="95% CI"
             tooltip="效用值的不确定性范围"
+            compact={compact}
           />
         </div>
 
@@ -436,9 +448,9 @@ export function RiskAssessmentCard({
         })()}
 
         {/* 风险因素 */}
-        {showFactors && assessment.riskFactors && assessment.riskFactors.length > 0 && (
-          <div className="mt-6">
-            <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+        {showFactors && assessment.riskFactors && assessment.riskFactors.length > 0 && !compact && (
+          <div className="mt-4">
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
               主要风险因素
             </h4>
@@ -450,17 +462,17 @@ export function RiskAssessmentCard({
         )}
 
         {/* 建议 */}
-        {assessment.recommendation && (
+        {assessment.recommendation && !compact && (
           <div className={cn(
-            'mt-6 p-4 rounded-lg border',
+            'mt-4 p-3 rounded-lg border',
             riskConfig.bgColor,
             riskConfig.borderColor
           )}>
-            <div className="flex items-start gap-3">
-              <Info className={cn('h-5 w-5 flex-shrink-0 mt-0.5', riskConfig.color)} />
+            <div className="flex items-start gap-2">
+              <Info className={cn('h-4 w-4 flex-shrink-0 mt-0.5', riskConfig.color)} />
               <div>
-                <p className="font-medium mb-1">评估建议</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="font-medium text-sm mb-0.5">评估建议</p>
+                <p className="text-xs text-muted-foreground">
                   {assessment.recommendation}
                 </p>
               </div>

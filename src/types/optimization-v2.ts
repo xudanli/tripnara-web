@@ -310,6 +310,10 @@ export interface OptimizePlanResponse {
     originalUtility: number;
     finalUtility: number;
     improvementPct: number;
+    /** improvementPct < 0 时为 true，可展示「本次以满足约束为主，综合评分略有下降」 */
+    utilityDecreased?: boolean;
+    /** Dre 实际修改项数 */
+    changeCount?: number;
     safetyScore: number;
     constraintSatisfaction: number;
     confidence: number;
@@ -453,6 +457,8 @@ export interface NegotiationResponse {
     neptuneUtility: number;
     /** 具体问题（分歧产生的原因），列表展示 */
     criticalConcerns: string[];
+    /** 建议附带维度 (safety/rhythm/philosophy, dimensionLabel 如 安全/节奏/修复) */
+    suggestionsWithDimension?: Array<{ text: string; dimension: string; dimensionLabel: string }>;
   };
   /** 投票结果（非负整数） */
   votingResult: {
@@ -537,6 +543,78 @@ export interface SubmitFeedbackRequest {
 export interface SubmitFeedbackResponse {
   success: boolean;
   feedbackId: string;
+}
+
+// ==================== RLHF / 权衡停留（数据飞轮） ====================
+
+/**
+ * 用户在「方案对比」上的纠结时长结束原因
+ */
+export type TradeoffDwellEndedBy = 'blur' | 'confirm';
+
+/**
+ * POST /v2/user/optimization/tradeoff-dwell
+ * 与对比视图 onBlur / 点击选择方案（confirm）对齐；dwellMs 为当次会话累计毫秒
+ */
+export interface TradeoffDwellRequest {
+  tripId: string;
+  /** 与 {@link RecordOutcomeCaptureRequest.correlationId} 对齐，串联纠结时长与 outcome */
+  correlationId: string;
+  dwellMs: number;
+  endedBy: TradeoffDwellEndedBy;
+  /** 用户点击「选择 A/B」时携带 */
+  selectedPlan?: 'A' | 'B';
+  /** 对比摘要，便于后端 KV 归因 */
+  comparisonSummary?: {
+    preferredPlan: 'A' | 'B' | 'EQUAL';
+    utilityDifference: number;
+  };
+}
+
+export interface TradeoffDwellResponse {
+  success?: boolean;
+}
+
+/** RLHF JSON 评估载荷：上下文快照 + 效用权重 + 可选修改说明 */
+export interface RlhfModificationSlice {
+  modificationType?: ModificationType;
+  modificationReason?: string;
+}
+
+export interface RlhfJsonEval {
+  contextSnapshot: Record<string, unknown>;
+  utilityWeights: ObjectiveFunctionWeights;
+  modification?: RlhfModificationSlice;
+}
+
+/**
+ * POST /v2/user/optimization/record-outcome-capture
+ * 提交 outcome 时附带 rlhfJsonEval，与 tradeoff-dwell 共用 correlationId
+ */
+export interface RecordOutcomeCaptureRequest {
+  userId: string;
+  tripId: string;
+  correlationId?: string;
+  /** 与现有反馈类型对齐（可选） */
+  feedbackType?: FeedbackType;
+  feedbackData?: FeedbackData;
+  rlhfJsonEval: RlhfJsonEval;
+}
+
+export interface RecordOutcomeCaptureResponse {
+  success?: boolean;
+  captureId?: string;
+}
+
+/**
+ * 对比视图埋点上下文（由父组件在打开对比时生成 correlationId）
+ */
+export interface TradeoffTelemetryContext {
+  tripId: string;
+  correlationId: string;
+  utilityWeights: ObjectiveFunctionWeights;
+  /** 结构化 KV 归因快照（宜小：维度键、plan 摘要等） */
+  contextSnapshot: Record<string, unknown>;
 }
 
 /**
@@ -694,6 +772,65 @@ export interface TeamConstraintsResponse {
     sourceUserId: string;
     sourceDisplayName: string;
   }>;
+}
+
+// ==================== 团队邀请 ====================
+
+/** 生成邀请请求 */
+export interface CreateTeamInviteRequest {
+  expiresInDays?: number;
+  maxUses?: number;
+  tripId?: string;
+}
+
+/** 生成邀请响应 */
+export interface CreateTeamInviteResponse {
+  inviteToken: string;
+  inviteUrl: string;
+  expiresAt: string;
+  expiresInDays: number;
+}
+
+/** 邀请信息（公开） */
+export interface TeamInviteInfo {
+  valid: boolean;
+  teamId: string;
+  teamName: string;
+  tripId?: string;
+  tripTitle?: string;
+  inviterDisplayName: string;
+  expiresAt: string;
+  memberCount: number;
+}
+
+/** 通过邀请加入请求 */
+export interface JoinTeamInviteRequest {
+  displayName: string;
+  role?: MemberRole;
+  fitnessLevel?: FitnessLevelType;
+  experienceLevel?: ExperienceLevelType;
+  userId?: string;
+}
+
+/** 通过邀请加入响应 */
+export interface JoinTeamInviteResponse {
+  teamId: string;
+  member: TeamMember;
+  team: Team;
+}
+
+/** 邀请列表项 */
+export interface TeamInviteItem {
+  inviteToken: string;
+  inviteUrl: string;
+  expiresAt: string;
+  usesCount?: number;
+  maxUses?: number;
+}
+
+/** 邀请列表响应 */
+export interface TeamInviteListResponse {
+  invites: TeamInviteItem[];
 }
 
 // ==================== 实时状态 ====================

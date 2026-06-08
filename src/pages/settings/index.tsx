@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
@@ -25,7 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2, Loader2, Dumbbell } from 'lucide-react';
+import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2, Loader2, Dumbbell, Brain } from 'lucide-react';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useIntegrationAuth } from '@/hooks/useIntegrationAuth';
 import { userApi, UserApiError, type User } from '@/api/user';
@@ -45,6 +44,10 @@ import {
   AcclimatizationCard,
 } from '@/components/fitness';
 import { LearningProgressCard } from '@/components/decision';
+import { UserPreferencesPanel } from '@/components/optimization';
+import { isMemoryConsoleEnabled } from '@/lib/memory-feature';
+import { sanitizeUserPreferences } from '@/lib/legacy-companion-odyssey-cleanup';
+import { MEMORY_CONSOLE_UI_DEFAULT_ZH } from '@/contracts/memory-console-ui-state.v1';
 
 // 可选的景点类型
 const ATTRACTION_TYPES = [
@@ -279,7 +282,7 @@ export default function SettingsPage() {
     const rawTabParam = searchParams.get('tab') || 'preferences';
     const normalizedTab = rawTabParam === 'profile' ? 'account' : rawTabParam;
     // 验证 tab 值是否有效
-    const validTabs = ['account', 'preferences', 'fitness', 'data', 'integrations'];
+    const validTabs = ['account', 'preferences', 'optimization', 'fitness', 'data', 'integrations'];
     const finalTab = validTabs.includes(normalizedTab) ? normalizedTab : 'preferences';
     setActiveTab(finalTab);
   }, [searchParams]);
@@ -304,6 +307,7 @@ export default function SettingsPage() {
       accommodation: undefined,
       travelMode: undefined,
     },
+    other: {},
   });
 
   const [countries, setCountries] = useState<Country[]>([]);
@@ -379,6 +383,10 @@ export default function SettingsPage() {
           accommodation: preferences.travelPreferences?.accommodation,
           travelMode: preferences.travelPreferences?.travelMode,
         },
+        other: sanitizeUserPreferences({
+          ...preferences,
+          other: preferences.other ?? {},
+        }).other ?? {},
       });
     }
   }, [preferences]);
@@ -491,7 +499,7 @@ export default function SettingsPage() {
     setSubmitSuccess(false);
 
     try {
-      await updateProfile(formData);
+      await updateProfile(sanitizeUserPreferences(formData));
       setSubmitSuccess(true);
       toast.success('偏好设置已保存', {
         description: '您的偏好设置已成功保存',
@@ -526,6 +534,7 @@ export default function SettingsPage() {
             <TabsList>
               <TabsTrigger value="account">账户</TabsTrigger>
               <TabsTrigger value="preferences">偏好</TabsTrigger>
+              <TabsTrigger value="optimization">优化权重</TabsTrigger>
               <TabsTrigger value="fitness">体能</TabsTrigger>
               <TabsTrigger value="data">数据</TabsTrigger>
               <TabsTrigger value="integrations">集成</TabsTrigger>
@@ -1083,6 +1092,30 @@ export default function SettingsPage() {
               )}
             </TabsContent>
 
+            {/* 优化权重 */}
+            <TabsContent value="optimization" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>优化权重设置</CardTitle>
+                  <CardDescription>
+                    默认由系统根据反馈自动学习并保存权重，无需逐项填写。仅在有个性化诉求时再手动微调。
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <UserPreferencesPanel
+                    userId={user?.id}
+                    onWeightsChange={(newWeights) => {
+                      console.log('Weights changed:', newWeights);
+                    }}
+                    onSave={async () => {
+                      toast.success('优化权重已保存');
+                    }}
+                    compact={false}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             {/* 体能 */}
             <TabsContent value="fitness" className="space-y-6">
               <Card>
@@ -1137,41 +1170,6 @@ export default function SettingsPage() {
                 defaultCollapsed={true}
               />
 
-              {/* 体能说明卡片 */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>体能评估说明</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <h4 className="font-medium mb-2">🎯 评估目的</h4>
-                      <p className="text-sm text-muted-foreground">
-                        帮助系统了解您的体能水平，从而推荐更适合您的行程强度和节奏。
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <h4 className="font-medium mb-2">📊 评估方式</h4>
-                      <p className="text-sm text-muted-foreground">
-                        通过简单问卷和行程反馈，系统会自动校准您的体能模型。
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <h4 className="font-medium mb-2">🔄 持续优化</h4>
-                      <p className="text-sm text-muted-foreground">
-                        每次行程后提交反馈，系统会自动优化推荐的准确度。
-                      </p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <h4 className="font-medium mb-2">🔒 隐私保护</h4>
-                      <p className="text-sm text-muted-foreground">
-                        您的体能数据仅用于行程推荐，不会分享给第三方。
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
               {/* 体能问卷弹窗 */}
               <FitnessQuestionnaireDialog
                 open={fitnessQuestionnaireOpen}
@@ -1193,6 +1191,24 @@ export default function SettingsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {isMemoryConsoleEnabled() ? (
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <Brain className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <div className="font-medium">{MEMORY_CONSOLE_UI_DEFAULT_ZH.page_title}</div>
+                          <div className="text-sm text-muted-foreground">
+                            查看与管理 L0/L1/L2 旅行记忆及行程偏好更新
+                          </div>
+                        </div>
+                      </div>
+                      <Button variant="outline" asChild>
+                        <Link to="/dashboard/settings/memory">打开</Link>
+                      </Button>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
                       <div className="font-medium">导出数据</div>
