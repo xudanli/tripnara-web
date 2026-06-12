@@ -10,6 +10,8 @@ import { RecruitmentDetailDialog } from '../components/RecruitmentDetailDialog';
 import { PlazaSkeleton } from '../components/PlazaSkeleton';
 import { useMatchSquareAccess, useMyRecruitmentHub } from '../hooks/useMatchSquare';
 import { usePlazaMatchContext } from '../hooks/usePlazaMatchContext';
+import { ApplicationDecisionInboxBanner } from '../components/ApplicationDecisionInboxBanner';
+import { TeamFormationInboxBanner } from '../components/TeamFormationInboxBanner';
 import { APPLICATION_STATUS_LABELS } from '../lib/application-status';
 import { plazaLayout } from '../lib/plaza-visual';
 
@@ -99,6 +101,9 @@ export default function MyRecruitmentsPage() {
       </div>
 
       <div className={plazaLayout.content}>
+        <ApplicationDecisionInboxBanner />
+        <TeamFormationInboxBanner />
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             {isLoading

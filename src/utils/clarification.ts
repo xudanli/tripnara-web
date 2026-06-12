@@ -180,9 +180,15 @@ export function normalizeRouteRunClarificationQuestions(raw: unknown): Clarifica
             ? (o.metadata as Record<string, unknown>)
             : undefined;
 
+        const questionHtml =
+          (typeof o.question_html === 'string' && o.question_html.trim()) ||
+          (typeof o.questionHtml === 'string' && o.questionHtml.trim()) ||
+          undefined;
+
         return {
           id: String(o.id ?? `clarify-${idx}`),
           question: qText,
+          ...(questionHtml ? { question_html: questionHtml } : {}),
           type: phaseType as ClarificationQuestion['type'],
           options: optionLabels.length ? optionLabels : undefined,
           optionItems: optionItems.length ? optionItems : undefined,

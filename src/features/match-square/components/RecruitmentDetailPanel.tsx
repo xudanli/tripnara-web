@@ -38,6 +38,7 @@ import { SovereignForceLockEntry } from './SovereignForceLockPanel';
 import { catalogEntryToMatchPlan, getCatalogEntryById } from '../lib/route-template-plaza-bridge';
 import { buildRouteContractLockPlan } from '../lib/route-contract-vault';
 import { normalizeActiveTripPath } from '@/features/active-trip/lib/normalize-active-trip-path';
+import { resolveRecruitmentClosureCopy } from '../lib/team-roster-label';
 import {
   plazaLayout,
   plazaReview,
@@ -59,7 +60,7 @@ export function RecruitmentDetailPanel({
   variant = 'page',
   className,
 }: RecruitmentDetailPanelProps) {
-  const { data: postRaw, isLoading, isError } = usePostDetail(postId);
+  const { data: postRaw, isLoading, isFetching } = usePostDetail(postId);
   const { data: access } = useMatchSquareAccess();
   const { data: applyPreview } = useApplyPreview(postId, Boolean(postId));
   const {
@@ -138,7 +139,7 @@ export function RecruitmentDetailPanel({
   const sectionClass = isDialog ? plazaDetail.dialogSection : plazaDetail.pageSection;
   const overviewInner = isDialog ? plazaDetail.dialogOverviewInner : plazaOverview.block;
 
-  if (isLoading) {
+  if (isLoading && !postRaw) {
     return (
       <div
         className={cn(
@@ -152,7 +153,9 @@ export function RecruitmentDetailPanel({
     );
   }
 
-  if (isError || !post) {
+  if (!post) {
+    const viewerApproved =
+      myApplications?.some((app) => app.postId === postId && app.status === 'approved') ?? false;
     return (
       <div
         className={cn(
@@ -161,11 +164,30 @@ export function RecruitmentDetailPanel({
           className
         )}
       >
-        <p className="text-muted-foreground">招募帖不存在或已下架</p>
+        <p className="text-muted-foreground">
+          {viewerApproved
+            ? '招募已结束，详情暂时无法加载'
+            : '招募帖不存在或已下架'}
+        </p>
+        <p className="max-w-sm text-xs text-muted-foreground">
+          {viewerApproved
+            ? '你已通过入队。可在「我的招募」查看状态，或等待队长发起行程后从侧边栏进入。'
+            : '该招募可能已结束或队长已下架，请返回广场浏览其他招募。'}
+        </p>
         {!isDialog && (
-          <Button variant="outline" asChild>
-            <Link to="/dashboard/tripnara/plaza">返回广场</Link>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            {viewerApproved && (
+              <Button variant="outline" asChild>
+                <Link to="/dashboard/tripnara/plaza/my">我的招募</Link>
+              </Button>
+            )}
+            <Button variant="outline" asChild>
+              <Link to="/dashboard/tripnara/plaza">返回广场</Link>
+            </Button>
+          </div>
+        )}
+        {isFetching && (
+          <p className="text-xs text-muted-foreground">正在重试加载…</p>
         )}
       </div>
     );
@@ -194,6 +216,8 @@ export function RecruitmentDetailPanel({
     post.tripInstantiationResult?.activeTripPath,
     post.tripInstantiationResult?.tripId
   );
+  const closureCopy =
+    post.status === 'closed' ? resolveRecruitmentClosureCopy(post) : null;
 
   const body = (
     <div
@@ -203,6 +227,29 @@ export function RecruitmentDetailPanel({
         className
       )}
     >
+      {closureCopy && (
+        <div
+          className={cn(
+            plazaBanner.base,
+            closureCopy.teamFull ? plazaBanner.confirm : plazaBanner.muted
+          )}
+          role="status"
+        >
+          <p className="text-sm font-medium">{closureCopy.title}</p>
+          <p className="mt-1 text-xs opacity-90">
+            {closureCopy.description}
+            {activeTripPath && (
+              <>
+                {' '}
+                <Link to={activeTripPath} className="underline underline-offset-2">
+                  前往行程
+                </Link>
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
       <section
         className={cn(
           isDialog ? sectionClass : plazaReview.overviewCard,

@@ -82,7 +82,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, RefreshCw, History, Play, Compass, BarChart3, Eye, Info, AlertTriangle, Wallet, Mountain } from 'lucide-react';
+import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, RefreshCw, History, Play, Compass, BarChart3, Eye, Info, AlertTriangle, Wallet, Mountain, Shield } from 'lucide-react';
 import { CollaborativeTaskFlywheelPanel } from '@/features/match-square/components/CollaborativeTaskFlywheelPanel';
 import TripBudgetPage from './budget';
 import BudgetOverviewCard from '@/components/trips/BudgetOverviewCard';
@@ -148,6 +148,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { MessageSquare } from 'lucide-react';
+import { TripRobustnessTabPanel } from '@/components/agent/TripRobustnessTabPanel';
 
 // 团队标签页组件
 function TeamTabContent({
@@ -2533,6 +2534,10 @@ export default function TripDetailPage() {
                 <Users className="w-4 h-4 mr-2" />
                 团队
               </TabsTrigger>
+              <TabsTrigger value="robustness">
+                <Shield className="w-4 h-4 mr-2" />
+                鲁棒性
+              </TabsTrigger>
         </TabsList>
           </div>
 
@@ -2900,6 +2905,18 @@ export default function TripDetailPage() {
             ) : (
               <div className="p-6 text-center text-muted-foreground">
                 <p>无法加载团队信息</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="robustness" className="mt-0">
+            {id ? (
+              <div className="p-3 sm:p-4">
+                <TripRobustnessTabPanel tripId={id} />
+              </div>
+            ) : (
+              <div className="p-6 text-center text-muted-foreground">
+                <p>无法加载鲁棒性数据</p>
               </div>
             )}
           </TabsContent>

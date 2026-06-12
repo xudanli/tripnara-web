@@ -4,6 +4,9 @@ export { default as RecruitmentCreatePage } from './pages/RecruitmentCreatePage'
 export { default as MyRecruitmentsPage } from './pages/MyRecruitmentsPage';
 export { default as RecruitmentManagePage } from './pages/RecruitmentManagePage';
 
+export { ApplicationDecisionGlobalNotifier } from './components/ApplicationDecisionGlobalNotifier';
+export { ApplicationDecisionInboxBanner } from './components/ApplicationDecisionInboxBanner';
+export { TeamFormationInboxBanner } from './components/TeamFormationInboxBanner';
 export { PendingReputationBanner } from './components/PendingReputationBanner';
 export { ReputationGlobalPrompt } from './components/ReputationGlobalPrompt';
 export { ReputationAssetsSection } from './components/ReputationAssetsSection';

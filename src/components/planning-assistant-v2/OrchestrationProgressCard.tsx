@@ -16,6 +16,7 @@ import { Activity, AlertCircle, ChevronRight, Route as RouteIcon, Shield, Tag, W
 import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { looksLikeAnswerHtml, sanitizeRouteRunAnswerHtmlForDisplay } from '@/lib/route-run-answer-text-display';
 import { translateOrchestrationStepForUser } from '@/lib/agent-display-zh';
 import {
   resolveRouteRunGuardianGateView,
@@ -138,6 +139,7 @@ export function OrchestrationProgressCard({
 
   const phaseStr = ui_state?.phase != null ? String(ui_state.phase) : '';
   const displayMessage = ui_state?.message ?? ui_state?.current_step_detail;
+  const displayMessageHtml = ui_state?.current_step_detail_html?.trim() || '';
   const progress =
     ui_state?.progress_percent ?? (phaseStr === 'DONE' ? 100 : undefined);
   const etaMs = ui_state?.estimated_time_remaining_ms;
@@ -165,9 +167,16 @@ export function OrchestrationProgressCard({
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1">
         <div className="bg-muted/50 rounded-md p-2.5 space-y-2 text-xs">
-          {displayMessage && (
+          {displayMessageHtml && looksLikeAnswerHtml(displayMessageHtml) ? (
+            <div
+              className="agent-answer-html text-muted-foreground [&_p]:mb-1.5 [&_ul]:list-disc [&_ul]:pl-4"
+              dangerouslySetInnerHTML={{
+                __html: sanitizeRouteRunAnswerHtmlForDisplay(displayMessageHtml),
+              }}
+            />
+          ) : displayMessage ? (
             <p className="text-muted-foreground">{displayMessage}</p>
-          )}
+          ) : null}
           {etaMs != null && etaMs > 0 && (
             <p className="text-muted-foreground">
               预计剩余：{(etaMs / 1000).toFixed(1)}s

@@ -77,10 +77,17 @@ export function buildRouteRunPayloadDisplayBundle(
   };
 }
 
+import { proactiveToast } from '@/lib/proactive-notification';
+
 export function maybeToastWorkbenchDrift(
   workbenchDisplay: RouteRunWorkbenchDisplay | undefined,
-  toastFn: (message: string) => void
+  toastFn?: (message: string) => void
 ): void {
   if (!workbenchDisplay?.drift_detected) return;
-  toastFn(workbenchDisplay.drift_message_zh ?? '决策说明已按当前 Trip 草案更新');
+  const msg = workbenchDisplay.drift_message_zh ?? '决策说明已按当前 Trip 草案更新';
+  if (toastFn) {
+    toastFn(msg);
+    return;
+  }
+  proactiveToast.info(msg, { priority: 'medium' });
 }

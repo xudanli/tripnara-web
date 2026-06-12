@@ -23,6 +23,7 @@ export async function syncTripDataAfterAgentMutation(queryClient: QueryClient, t
     await queryClient.invalidateQueries({ queryKey: ['trip', tripId] });
     await queryClient.invalidateQueries({ queryKey: ['trips', tripId] });
     await queryClient.invalidateQueries({ queryKey: ['agent', 'itinerary_revision_timeline', tripId] });
+    await queryClient.invalidateQueries({ queryKey: ['agent', 'robustness_dashboard', tripId] });
     await queryClient.invalidateQueries({ queryKey: realtimeKeys.state(tripId) });
     await queryClient.invalidateQueries({
       predicate: (q) => {

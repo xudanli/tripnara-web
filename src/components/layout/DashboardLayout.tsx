@@ -25,7 +25,10 @@ import { Button } from '@/components/ui/button';
 import { Compass } from 'lucide-react';
 import type { EntryPoint } from '@/api/agent';
 import type { TripDetail } from '@/types/trip';
-import { ReputationGlobalPrompt } from '@/features/match-square';
+import {
+  ApplicationDecisionGlobalNotifier,
+  ReputationGlobalPrompt,
+} from '@/features/match-square';
 
 // Context for drawer control
 interface DrawerContextType {
@@ -420,6 +423,9 @@ function DashboardLayoutInner({
 
         {/* Reputation OS — 48h 行后互评全局弹窗 */}
         <ReputationGlobalPrompt enabled={isAuthenticated} />
+
+        {/* 搭子广场 — 入队申请审批结果通知 */}
+        <ApplicationDecisionGlobalNotifier enabled={isAuthenticated} />
       </div>
     </AssistantSidebarProvider>
   );

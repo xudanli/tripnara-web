@@ -8,6 +8,8 @@
  * Base URL: /api/agent
  */
 
+import type { EmotionalContextClient } from '@/types/emotional-context';
+import type { JourneyPresenceContext } from '@/types/journey-presence';
 import apiClient from './client';
 
 /**
@@ -386,6 +388,9 @@ export type JourneyPhase =
   | 'RETURN_DAY'     // 返程当天
   | 'POST_TRIP';     // 旅行结束后
 
+/** journey-assistant 各 POST 请求共用的 presence context */
+export type JourneyAssistantContext = JourneyPresenceContext;
+
 /**
  * 行程对话请求
  */
@@ -394,10 +399,7 @@ export interface JourneyChatRequest {
   userId: string;
   message: string;
   language?: 'en' | 'zh';
-  context?: {
-    currentLocation?: Location;
-    timezone?: string;
-  };
+  context?: JourneyAssistantContext;
 }
 
 /**
@@ -512,6 +514,9 @@ export interface JourneyState {
   lastUpdated: string;
   /** 行程是否已完成：phase 为 POST_TRIP，或 endDate 已过，或 status 为 COMPLETED */
   isCompleted?: boolean;
+  /** 情绪上下文投影（服务端为准） */
+  emotionalContext?: EmotionalContextClient;
+  emotional_context?: EmotionalContextClient;
 }
 
 /**
@@ -569,10 +574,7 @@ export interface HandleEventRequest {
   eventId: string;
   selectedOptionId?: string;
   language?: 'en' | 'zh';
-  context?: {
-    currentLocation?: Location;
-    timezone?: string;
-  };
+  context?: JourneyAssistantContext;
 }
 
 /**
@@ -591,6 +593,7 @@ export interface AdjustScheduleRequest {
     };
   };
   language?: 'en' | 'zh';
+  context?: JourneyAssistantContext;
 }
 
 /**
@@ -600,9 +603,7 @@ export interface EmergencyRequest {
   tripId: string;
   userId: string;
   language?: 'en' | 'zh';
-  context?: {
-    currentLocation?: Location;
-  };
+  context?: JourneyAssistantContext;
 }
 
 /**
@@ -613,9 +614,7 @@ export interface NearbySearchRequest {
   userId: string;
   message: string;
   language?: 'en' | 'zh';
-  context?: {
-    currentLocation?: Location;
-  };
+  context?: JourneyAssistantContext;
 }
 
 /**

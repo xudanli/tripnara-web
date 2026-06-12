@@ -95,6 +95,8 @@ import {
   shouldHidePlanningChrome,
   type InteractionKind,
 } from '@/lib/agent-intent-ui';
+import { sanitizeDecisionLogForClientDisplay } from '@/lib/decision-log-client-display';
+import { PlanGenDayDigestExtras } from '@/lib/plan-gen-day-digest-display';
 import {
   extractKbRagHitFromTrace,
   formatDebugJsonSnippet,
@@ -148,7 +150,17 @@ import {
   safetySurfaceHasRenderableSurface,
   type SafetySurfacePayloadV1,
 } from '@/lib/safety-surface-payload';
-import { sanitizeRouteRunAnswerTextForDisplay } from '@/lib/route-run-answer-text-display';
+import {
+  extractRouteRunAnswerText,
+  looksLikeAnswerHtml,
+  resolveAgentBubbleBodies,
+  sanitizeRouteRunAnswerTextForDisplay,
+} from '@/lib/route-run-answer-text-display';
+import {
+  pickClarificationQuestionHtml,
+  shouldSuppressClarificationChatProse,
+} from '@/lib/clarification-surface';
+import { AssistantAnswerHtml } from '@/components/agent/AssistantAnswerHtml';
 import {
   extractFlightInventorySnapshotFromRouteRun,
   type FlightInventorySnapshot,
@@ -194,12 +206,64 @@ import { WorldConstraintBanner } from '@/components/planning/WorldConstraintBann
 import { pickRouteRunExplainOptimizationForMessage } from '@/lib/route-run-optimization-explain';
 import { pickDecisionCockpitFromRouteRun, hasDecisionCockpitUi } from '@/lib/decision-cockpit';
 import {
+  pickRobustnessDashboardFromRouteRun,
+  pickPartyNegotiationFromRouteRun,
+} from '@/lib/robustness-dashboard';
+import {
+  hasDualTrackItineraryUi,
+  pickDualTrackItineraryFromRouteRun,
+} from '@/lib/dual-track-itinerary-ui';
+import {
+  hasDeliveryArtifactsUi,
+  pickDeliveryArtifactsFromRouteRun,
+} from '@/lib/delivery-artifacts-ui';
+import {
+  hasLegEvidenceCardsUi,
+  pickLegEvidenceCardsFromRouteRun,
+} from '@/lib/leg-evidence-ui';
+import {
+  hasPoiPitfallCardsUi,
+  pickPoiPitfallCardsFromRouteRun,
+} from '@/lib/poi-pitfall-ui';
+import {
+  hasBookingCartUi,
+  pickBookingCartFromRouteRun,
+} from '@/lib/booking-cart-ui';
+import {
+  applyEmotionalContextFromRouteRun,
+  hasSharedMilestoneCardsUi,
+  isAnchoringEmotionalContext,
+} from '@/lib/emotional-context-ui';
+import { DualTrackItineraryBoard } from '@/components/agent/DualTrackItineraryBoard';
+import { DeliveryArtifactsBar } from '@/components/agent/DeliveryArtifactsBar';
+import { LegEvidenceCardsPanel } from '@/components/agent/LegEvidenceCardsPanel';
+import { PoiPitfallCardsPanel } from '@/components/agent/PoiPitfallCardsPanel';
+import { BookingCartPanel } from '@/components/agent/BookingCartPanel';
+import { AnchoringPresencePanel } from '@/components/agent/AnchoringPresencePanel';
+import { SharedMilestoneCards } from '@/components/agent/SharedMilestoneCards';
+import type {
+  PartyNegotiationPayload,
+  RobustnessDashboardPayload,
+} from '@/types/robustness-dashboard';
+import type { DualTrackItineraryPayload } from '@/types/dual-track-itinerary';
+import type { DeliveryArtifactsPayload } from '@/types/delivery-artifacts';
+import type { LegEvidenceCard } from '@/types/leg-evidence';
+import type { PoiPitfallCard } from '@/types/poi-pitfall';
+import type { BookingCartPayload } from '@/types/booking-cart';
+import type { EmotionalContextClient } from '@/types/emotional-context';
+import type { SharedMilestoneUiCard } from '@/types/shared-milestone';
+import { PartyNegotiationPreviewCard } from '@/components/agent/PartyNegotiationPreviewCard';
+import { RobustnessDashboardPanel } from '@/components/agent/RobustnessDashboardPanel';
+import {
   parseItineraryAdjustPayload,
+  parseItineraryAdjustApplyResult,
   buildItineraryAdjustMessageFields,
   shouldSuppressLeftTripRefresh,
   syncItineraryAdjustDraftToPlanStudio,
   itineraryAdjustUiHintMessage,
+  itineraryAdjustApplyFailureMessage,
   ITINERARY_ADJUST_APPLY_DRAFT_MESSAGE,
+  type ItineraryAdjustApplyResult,
   type ItineraryAdjustResult,
 } from '@/lib/itinerary-adjust-response';
 import {
@@ -263,6 +327,9 @@ import { deriveConstraintSinkUiAnchorV1, type ConstraintSinkUiAnchorV1 } from '@
 import { isConstraintSinkEnabled } from '@/lib/memory-feature';
 import { useDrawerOptional } from '@/components/layout/DashboardLayout';
 import { buildRouteAndRunConversationContext } from '@/lib/agent-route-and-run-context';
+import { enrichRouteAndRunRequestWithEmotionalMetadataAsync } from '@/lib/enrich-route-and-run-emotional-metadata';
+import { useTtsEmotionalProsody } from '@/hooks/useTtsEmotionalProsody';
+import { useEmotionContextStore } from '@/store/emotionContextStore';
 import {
   buildFitnessPreferenceProfilePatch,
   mergePreferenceProfileForRouteAndRun,
@@ -585,6 +652,8 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  /** route_and_run result.answer_html：气泡正文优先渲染 */
+  contentHtml?: string;
   timestamp: Date;
   status?: UIStatus;
   routeType?: RouteType;
@@ -639,6 +708,8 @@ interface Message {
   reasoningState?: AgentReasoningState;
   /** NEED_MORE_INFO：`payload.clarificationQuestions` 结构化澄清卡片 */
   clarificationQuestions?: ClarificationQuestion[];
+  /** clarification_meta.suppress_chat_prose：气泡仅短句，长文在 question_html */
+  clarificationSuppressChatProse?: boolean;
   /** 澄清 / 可执行性 / 正文：与 pickRouteRunSurface 对齐 */
   routeRunSurface?: RouteRunUISurface;
   /** 最小渲染分支：clarification | trip_timeline | answer_fallback */
@@ -726,6 +797,14 @@ interface Message {
   itineraryAdjustDraft?: boolean;
   itineraryAdjustScopeDate?: string;
   itineraryAdjustAutoApplyReason?: string;
+  /** orchestrationResult.state.metadata（POI_SLOT_FILL 等 sub_intent） */
+  itineraryAdjustMetadata?: Record<string, unknown>;
+  /** POI_SLOT_FILL 等多稀疏日 append_sparse_days */
+  itineraryAdjustMultiDayAppend?: boolean;
+  /** 用户点「应用到行程」后 payload.itinerary_adjust_apply_result */
+  itineraryAdjustApplyResult?: ItineraryAdjustApplyResult;
+  itineraryAdjustApplyFailed?: boolean;
+  itineraryAdjustApplyFailureMessage?: string;
   /** payload.itinerary_adjust_result：改排优化说明卡 */
   itineraryAdjustResult?: ItineraryAdjustResult;
   /** payload.actionExecution（改排落库 AUTO / 草案 ADVICE_ONLY） */
@@ -736,6 +815,24 @@ interface Message {
   memoryConstraintSinkAnchor?: ConstraintSinkUiAnchorV1;
   /** decision_log 原始 constraint_sink 依据（Drawer 交叉展示） */
   memoryConstraintSinkDecisionLog?: ConstraintSinkDecisionLogEvidence;
+  /** INTAKE D3：decision_metadata.planning_phase_intent.party_negotiation */
+  partyNegotiation?: PartyNegotiationPayload;
+  /** 规划 OK：observability / payload robustness_dashboard */
+  robustnessDashboard?: RobustnessDashboardPayload;
+  /** ui_display.dual_track_itinerary — A/B 双轨看板 */
+  dualTrackItinerary?: DualTrackItineraryPayload;
+  /** ui_display.delivery_artifacts — 默认交付条 */
+  deliveryArtifacts?: DeliveryArtifactsPayload;
+  /** ui_display.leg_evidence_cards — NARRATE 路段证据 */
+  legEvidenceCards?: LegEvidenceCard[];
+  /** ui_display.poi_pitfall_cards — POI 避坑 */
+  poiPitfallCards?: PoiPitfallCard[];
+  /** ui_display.booking_cart — MCP 预订清单 */
+  bookingCart?: BookingCartPayload;
+  /** ui_display.emotional_context — 情绪上下文投影 */
+  emotionalContext?: EmotionalContextClient;
+  /** ui_display.shared_milestone_cards — 跨 trip 共同回忆 */
+  sharedMilestoneCards?: SharedMilestoneUiCard[];
 }
 
 /**
@@ -1317,6 +1414,10 @@ function RouteInfoCard({
 
 /**
  * 决策日志卡片（编排步骤；RAG 文献路径已在条目的「证据引用」等字段中体现，不再单独列出「知识库命中」）
+ * - 主文案：`explain.decision_log[].outputs_summary`（结果）
+ * - 「输入：」行：仅 `inputs_summary`（BFF + `sanitizeDecisionLogForClientDisplay` 用户向中文）
+ * - 按天明细：`metadata.plan_gen_day_digest` 折叠区（旧日志可由 BFF 出站补全）
+ * - 其他技术细节：`metadata` / `OntologyDecisionStepExtras` 折叠，不与「输入」混排
  */
 function DecisionLogCard({
   decisionLog,
@@ -1403,6 +1504,7 @@ function DecisionLogCard({
                 />
               ) : null}
               <OntologyDecisionStepExtras log={log} />
+              <PlanGenDayDigestExtras log={log} />
               {log.metadata?.guardian && (
                 <div className="text-muted-foreground text-[11px] mt-0.5">
                   三人格：{log.metadata.guardian}
@@ -1599,6 +1701,11 @@ function MessageBubble({
   const hasClarifyQuestions = (message.clarificationQuestions?.length ?? 0) > 0;
 
   const mdBody = assistantBodyAfterStructuredOutcome(message);
+  const answerHtmlBody =
+    message.contentHtml?.trim() && looksLikeAnswerHtml(message.contentHtml)
+      ? message.contentHtml.trim()
+      : '';
+  const proseBody = (answerHtmlBody ? mdBody : message.contentHtml?.trim() || mdBody).trim();
   const metaSuppressProse = Boolean(message.poiSuppressAnswerProse);
   const uiSurfaceRaw = typeof message.uiSurface === 'string' ? message.uiSurface.trim() : '';
   const uiSurfaceNorm = uiSurfaceRaw.toLowerCase();
@@ -1669,6 +1776,15 @@ function MessageBubble({
     (showPlanningDashboard &&
       hasItineraryStructuredData &&
       SHOW_PLANNING_ITINERARY_CARDS_IN_AGENT_BUBBLE) ||
+    Boolean(message.partyNegotiation) ||
+    Boolean(message.robustnessDashboard) ||
+    hasDualTrackItineraryUi(message.dualTrackItinerary) ||
+    hasDeliveryArtifactsUi(message.deliveryArtifacts) ||
+    hasLegEvidenceCardsUi(message.legEvidenceCards) ||
+    hasPoiPitfallCardsUi(message.poiPitfallCards) ||
+    hasBookingCartUi(message.bookingCart) ||
+    hasSharedMilestoneCardsUi(message.sharedMilestoneCards) ||
+    isAnchoringEmotionalContext(message.emotionalContext) ||
     (Array.isArray(message.accommodations) && message.accommodations.length > 0) ||
     (!isConsultationSurface && Array.isArray(message.hotels) && message.hotels.length > 0);
   const hideAssistantAnswerProseForAdjust =
@@ -1705,15 +1821,18 @@ function MessageBubble({
     mdBody.trim().length > 0 &&
     !hasConsultationDashboardUi &&
     !hideAssistantAnswerProseForAdjust;
-  /** 知识/RAG 长文常被标成 SYSTEM2：用正文特征补渲染 Markdown，避免表格 raw 显示 */
-  const isKnowledgeAnswer =
+  /** 知识/RAG/含 Markdown 的正文：走 ReactMarkdown，避免 ** / 列表 raw 显示 */
+  const shouldRenderMarkdownProse =
+    !answerHtmlBody &&
     !hideFullAnswerProse &&
     !metaSuppressProse &&
     !isUser &&
     !isError &&
     (message.interactionKind === 'lookup' ||
       message.interactionKind === 'qa' ||
-      looksLikeMarkdown(mdBody));
+      message.interactionKind === 'planning' ||
+      looksLikeMarkdown(proseBody));
+  const isKnowledgeAnswer = shouldRenderMarkdownProse;
 
   const assistantSurface = !isUser
     ? (() => {
@@ -1743,8 +1862,16 @@ function MessageBubble({
   const clarifyTimeGap =
     clarifyCodes.includes('TIME_GAP') || clarifyCodes.includes('MISSING_DATES');
 
-  /** 澄清路径：结构化卡为主，answer_text 仅调试可见 */
-  const suppressAnswerForClarification = showClarificationCard && !debugUiDefaults;
+  /**
+   * 澄清路径：suppress_chat_prose 时气泡保留短句；无 suppress 且无 HTML 时隐藏气泡正文。
+   * 长文仅出现在澄清卡 question_html，勿与 clarificationMessage / question 重复。
+   */
+  const suppressAnswerForClarification =
+    showClarificationCard &&
+    !debugUiDefaults &&
+    !answerHtmlBody &&
+    !proseBody &&
+    !message.clarificationSuppressChatProse;
   const assistantFullWidth = useAgentSidebarContentFullWidth();
   const structuredContentMaxClass = agentStructuredContentMaxClass(assistantFullWidth);
 
@@ -1946,11 +2073,14 @@ function MessageBubble({
               <>
                 {message.ragStructured ? <RagStructuredOutcomeCard outcome={message.ragStructured} /> : null}
                 {(() => {
-                  if (!mdBody.trim()) return null;
-                  return isKnowledgeAnswer ? (
-                    <AssistantMarkdown text={mdBody} isUser={false} />
+                  if (!answerHtmlBody && !proseBody) return null;
+                  if (answerHtmlBody) {
+                    return <AssistantAnswerHtml html={answerHtmlBody} />;
+                  }
+                  return shouldRenderMarkdownProse ? (
+                    <AssistantMarkdown text={proseBody} isUser={false} />
                   ) : (
-                    <p className={cn('text-sm text-foreground', ASSISTANT_BUBBLE_TEXT)}>{mdBody}</p>
+                    <p className={cn('text-sm text-foreground', ASSISTANT_BUBBLE_TEXT)}>{proseBody}</p>
                   );
                 })()}
               </>
@@ -1966,7 +2096,7 @@ function MessageBubble({
               />
             ) : null}
             {/* consultation 面不以「顾问全文」折叠套娃；仅非咨询且带半结构化 Dashboard 时保留 */}
-            {!isConsultationSurface && showConsultationRichDashboard && mdBody.trim() ? (
+            {!isConsultationSurface && showConsultationRichDashboard && (answerHtmlBody || proseBody) ? (
               <Collapsible className="mt-4 rounded-xl border border-border/70 bg-muted/15">
                 <CollapsibleTrigger asChild>
                   <Button
@@ -1981,10 +2111,12 @@ function MessageBubble({
                 </CollapsibleTrigger>
                 <CollapsibleContent className="px-3 pb-3 pt-0 space-y-2">
                   {message.ragStructured ? <RagStructuredOutcomeCard outcome={message.ragStructured} /> : null}
-                  {isKnowledgeAnswer ? (
-                    <AssistantMarkdown text={mdBody} isUser={false} />
+                  {answerHtmlBody ? (
+                    <AssistantAnswerHtml html={answerHtmlBody} />
+                  ) : shouldRenderMarkdownProse ? (
+                    <AssistantMarkdown text={proseBody} isUser={false} />
                   ) : (
-                    <p className={cn('text-sm text-foreground', ASSISTANT_BUBBLE_TEXT)}>{mdBody}</p>
+                    <p className={cn('text-sm text-foreground', ASSISTANT_BUBBLE_TEXT)}>{proseBody}</p>
                   )}
                 </CollapsibleContent>
               </Collapsible>
@@ -2009,6 +2141,36 @@ function MessageBubble({
                 className="mt-2"
               />
             ) : null}
+            {!isConsultationSurface &&
+            showPlanningDashboard &&
+            message.partyNegotiation ? (
+              <PartyNegotiationPreviewCard
+                partyNegotiation={message.partyNegotiation}
+                className="mt-2"
+              />
+            ) : null}
+            {!isConsultationSurface &&
+            showPlanningDashboard &&
+            message.robustnessDashboard ? (
+              <RobustnessDashboardPanel rollout={message.robustnessDashboard} className="mt-2" />
+            ) : null}
+            {!isConsultationSurface &&
+            showPlanningDashboard &&
+            hasDualTrackItineraryUi(message.dualTrackItinerary) &&
+            message.dualTrackItinerary ? (
+              <DualTrackItineraryBoard itinerary={message.dualTrackItinerary} className="mt-2" />
+            ) : null}
+            {!isConsultationSurface &&
+            showPlanningDashboard &&
+            hasDeliveryArtifactsUi(message.deliveryArtifacts) &&
+            message.deliveryArtifacts ? (
+              <DeliveryArtifactsBar
+                artifacts={message.deliveryArtifacts}
+                tripId={activeTripId}
+                disabled={!!chatSending}
+                className="mt-2"
+              />
+            ) : null}
           </>
           )
         ) : null}
@@ -2022,6 +2184,7 @@ function MessageBubble({
             result={message.itineraryAdjustResult}
             autoApplied={message.itineraryAdjustAutoApplied}
             autoApplyReason={message.itineraryAdjustAutoApplyReason}
+            multiDayAppend={message.itineraryAdjustMultiDayAppend}
             debugUiDefaults={debugUiDefaults}
             timelineDayBlocks={message.timelineDayBlocks}
             fallbackTimelineDayBlocks={fallbackTimelineDayBlocks}
@@ -2037,14 +2200,36 @@ function MessageBubble({
         {!isUser &&
         !isError &&
         message.status !== 'thinking' &&
+        message.itineraryAdjustApplyFailed ? (
+          <div className="mb-3 rounded-lg border border-red-200/90 bg-red-50/80 px-3 py-2 text-xs text-red-950 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100">
+            <p className="font-medium">未能写入行程</p>
+            <p className="mt-0.5 text-red-900/80 dark:text-red-200/80">
+              {message.itineraryAdjustApplyFailureMessage ?? '请检查地点是否可解析后重试'}
+            </p>
+            {message.itineraryAdjustApplyResult?.reason === 'unresolved_places' ? (
+              <p className="mt-1 text-red-800/90 dark:text-red-200/90">
+                部分地点无法解析，请修改草案后再次点击「应用到行程」。
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
         isItineraryAdjust &&
         !message.itineraryAdjustResult &&
         message.itineraryAdjustDraft ? (
           <div className="mb-3 rounded-lg border border-amber-200/90 bg-amber-50/80 px-3 py-2 text-xs text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100">
-            <p className="font-medium">优化草案，确认后写入正式行程</p>
+            <p className="font-medium">
+              {message.itineraryAdjustMultiDayAppend
+                ? '多日落库草案（仅追加稀疏日），确认后写入正式行程'
+                : '优化草案，确认后写入正式行程'}
+            </p>
             {message.itineraryAdjustScopeDate ? (
               <p className="mt-0.5 text-amber-900/80 dark:text-amber-200/80">
-                目标日：{message.itineraryAdjustScopeDate}
+                {message.itineraryAdjustMultiDayAppend ? '起始日：' : '目标日：'}
+                {message.itineraryAdjustScopeDate}
               </p>
             ) : null}
             {message.itineraryAdjustAutoApplyReason === 'unresolved_places' ? (
@@ -2119,6 +2304,42 @@ function MessageBubble({
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        !isConsultationSurface &&
+        showPlanningDashboard &&
+        hasLegEvidenceCardsUi(message.legEvidenceCards) &&
+        message.legEvidenceCards ? (
+          <LegEvidenceCardsPanel cards={message.legEvidenceCards} className="mt-2" />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        !isConsultationSurface &&
+        showPlanningDashboard &&
+        hasPoiPitfallCardsUi(message.poiPitfallCards) &&
+        message.poiPitfallCards ? (
+          <PoiPitfallCardsPanel cards={message.poiPitfallCards} className="mt-2" />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        isAnchoringEmotionalContext(message.emotionalContext) &&
+        message.emotionalContext ? (
+          <AnchoringPresencePanel context={message.emotionalContext} className="mt-2" />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        hasSharedMilestoneCardsUi(message.sharedMilestoneCards) &&
+        message.sharedMilestoneCards ? (
+          <SharedMilestoneCards cards={message.sharedMilestoneCards} className="mt-2" />
         ) : null}
 
         {!isUser &&
@@ -2201,6 +2422,20 @@ function MessageBubble({
           <HotelList
             hotels={message.hotels}
             layout={assistantFullWidth ? 'flow' : 'scroll-contained'}
+            className="mt-3"
+          />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        !isConsultationSurface &&
+        hasBookingCartUi(message.bookingCart) &&
+        message.bookingCart ? (
+          <BookingCartPanel
+            cart={message.bookingCart}
+            tripId={activeTripId}
+            disabled={!!chatSending}
             className="mt-3"
           />
         ) : null}
@@ -2364,12 +2599,21 @@ function MessageBubble({
           />
         ) : null}
 
-        {suppressAnswerForClarification && debugUiDefaults && mdBody.trim() ? (
+        {suppressAnswerForClarification && debugUiDefaults && (answerHtmlBody || mdBody.trim()) ? (
           <details className="mt-2 rounded border border-dashed border-border/80 px-2 py-1.5 text-[10px]">
-            <summary className="cursor-pointer text-muted-foreground select-none">answer_text（调试 · 含 L3）</summary>
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono leading-snug text-muted-foreground">
-              {mdBody}
-            </pre>
+            <summary className="cursor-pointer text-muted-foreground select-none">
+              answer_html / answer_text（调试 · 含 L3）
+            </summary>
+            {answerHtmlBody ? (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono leading-snug text-muted-foreground">
+                {answerHtmlBody}
+              </pre>
+            ) : null}
+            {mdBody.trim() ? (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono leading-snug text-muted-foreground">
+                {mdBody}
+              </pre>
+            ) : null}
           </details>
         ) : null}
 
@@ -2502,6 +2746,10 @@ export default function AgentChat({
   const lastRouteRequestRef = useRef<RouteAndRunRequest | null>(null);
   const lastRouteRunDurableTripRunIdRef = useRef<string | undefined>(undefined);
   const planningAssistantSessionIdRef = useRef<string | null>(null);
+  const anxietyTriggered = useEmotionContextStore(
+    (s) => s.emotionalContext?.anxietyTriggered === true
+  );
+  useTtsEmotionalProsody({ autoSpeakSummary: anxietyTriggered });
 
   // Story B/C 调试用约束（emergency_constraints）
   const [constraintsDialogOpen, setConstraintsDialogOpen] = useState(false);
@@ -2979,6 +3227,10 @@ export default function AgentChat({
         preview: preview ?? undefined,
         adjustResult: sourceMessage.itineraryAdjustResult,
         timelineDayBlocks: sourceMessage.timelineDayBlocks,
+        metadata:
+          preview?.metadata ??
+          sourceMessage.itineraryAdjustMetadata ??
+          undefined,
       });
       if (!snapshot) {
         toast.error('缺少草案日程数据，请重新发起改排后再应用');
@@ -3365,8 +3617,11 @@ export default function AgentChat({
           client_session_id: planningSessionId,
         },
       };
-      requestIdForDebug = request.request_id;
-      lastRouteRequestRef.current = request;
+      const requestWithMetadata = await enrichRouteAndRunRequestWithEmotionalMetadataAsync(
+        request
+      );
+      requestIdForDebug = requestWithMetadata.request_id;
+      lastRouteRequestRef.current = requestWithMetadata;
 
       routeRunPollAbortRef.current?.abort();
       const pollAbort = new AbortController();
@@ -3388,7 +3643,7 @@ export default function AgentChat({
         );
       };
 
-      const response: RouteAndRunResponse = await invokeRouteAndRun(request, {
+      const response: RouteAndRunResponse = await invokeRouteAndRun(requestWithMetadata, {
         signal: pollAbort.signal,
         onProgress: onRouteRunProgress,
       });
@@ -3559,8 +3814,8 @@ export default function AgentChat({
       
       // 规范化决策日志：编排 → explain → unified_execution_trace（无 state 轻量路径）
       const rawDecisionLog = pickRawDecisionLogFromRouteRun(response);
-      const decisionLog: DecisionLogEntry[] = rawDecisionLog.map((entry: any) =>
-        normalizeToNewFormat(entry, response.request_id)
+      const decisionLog: DecisionLogEntry[] = sanitizeDecisionLogForClientDisplay(
+        rawDecisionLog.map((entry: any) => normalizeToNewFormat(entry, response.request_id))
       );
       
       const mode = response.route.ui_hint.mode;
@@ -3570,23 +3825,35 @@ export default function AgentChat({
 
       // 处理不同的结果状态
       /**
-       * 气泡正文只绑定 **最终** `result.answer_text`（非 SSE 流式 buffer）。
-       * 流式场景须等 done 再替换；若装配器漏剥标记，见 `sanitizeRouteRunAnswerTextForDisplay`。
+       * 气泡正文优先 `result.answer_html`；`answer_text` 供 RAG/截断/改排等逻辑。
+       * 流式场景须等 done 再替换；若装配器漏剥标记，见 sanitize 系列函数。
        */
-      const answerText =
-        response.result.answer_text != null ? String(response.result.answer_text) : '';
-      let messageContent = answerText;
-      
-      // 确定 UI 状态（展示用 resolveRouteAndRunDisplayStatus，见下方）
-      
-      const clarificationQuestions = normalizeRouteRunClarificationQuestions(
-        response.result.payload?.clarificationQuestions
-      );
-
       const payloadRecord =
         response.result.payload && typeof response.result.payload === 'object'
           ? (response.result.payload as Record<string, unknown>)
           : undefined;
+
+      const clarificationQuestions = normalizeRouteRunClarificationQuestions(
+        response.result.payload?.clarificationQuestions
+      );
+      const primaryQuestionHtml =
+        clarificationQuestions.length > 0
+          ? pickClarificationQuestionHtml(clarificationQuestions[0])
+          : undefined;
+      const clarificationSuppressChatProse =
+        clarificationQuestions.length > 0 &&
+        (shouldSuppressClarificationChatProse(payloadRecord) || Boolean(primaryQuestionHtml));
+
+      const answerText = extractRouteRunAnswerText(response.result);
+      const bubbleBodies = resolveAgentBubbleBodies({
+        result: response.result,
+        payload: payloadRecord,
+        uiState: response.ui_state,
+        skipHtml: response.result.status === 'TIMEOUT',
+        suppressClarificationProse: clarificationSuppressChatProse,
+      });
+      let messageContent = bubbleBodies.content || answerText;
+      let messageContentHtml = bubbleBodies.contentHtml;
 
       const routeRunSurface = pickRouteRunSurface({
         status: response.result.status,
@@ -3598,8 +3865,10 @@ export default function AgentChat({
       // 如果是 NEED_MORE_INFO，需要特殊处理
       if (response.result.status === 'NEED_MORE_INFO') {
         if (routeRunViewMode === 'clarification' && clarificationQuestions.length > 0) {
-          /** 澄清卡为主数据源；勿把 answer_text / clarificationMessage 当气泡正文 */
-          messageContent = '';
+          /** 气泡 HTML：clarification_display.body_html / answer_html；选项仍用 clarificationQuestions */
+          if (!messageContentHtml && !messageContent.trim()) {
+            messageContent = '';
+          }
         } else {
           const clarificationMessage = response.result.payload?.clarificationMessage;
           const clarificationInfo = response.result.payload?.clarificationInfo;
@@ -3635,8 +3904,10 @@ export default function AgentChat({
         }
       } else if (response.result.status === 'TIMEOUT') {
         messageContent = 'TIMEOUT'; // 特殊标记，用于显示优化的错误UI
+        messageContentHtml = undefined;
       } else if (response.result.status === 'FAILED') {
         messageContent = answerText || 'FAILED'; // 特殊标记，用于显示优化的错误UI
+        messageContentHtml = undefined;
       }
 
       /** 结构化 UI 走 payload；正文中 <<<…>>> 块仅展示前剔除（与装配器同语义兜底） */
@@ -3749,9 +4020,7 @@ export default function AgentChat({
         hasItineraryPanelsInPayload,
       } = payloadDisplayBundle;
 
-      maybeToastWorkbenchDrift(payloadDisplayBundle.workbenchDisplay, (msg) => {
-        toast.info(msg);
-      });
+      maybeToastWorkbenchDrift(payloadDisplayBundle.workbenchDisplay);
 
       let poiSuppressAnswerProse =
         extractPoiSuppressAnswerProse(payloadRecord) || routeRunViewMode === 'trip_timeline';
@@ -3768,6 +4037,15 @@ export default function AgentChat({
       const actionExecutionPayload = pickActionExecutionFromPayload(payloadRecord);
       const actionExecutionPending = actionExecutionPayload?.pendingActions;
       const consultationDashboard = parseConsultationDashboard(payloadRecord);
+      const robustnessDashboard = pickRobustnessDashboardFromRouteRun(response);
+      const partyNegotiation = pickPartyNegotiationFromRouteRun(response);
+      const dualTrackItinerary = pickDualTrackItineraryFromRouteRun(response);
+      const deliveryArtifacts = pickDeliveryArtifactsFromRouteRun(response);
+      const legEvidenceCards = pickLegEvidenceCardsFromRouteRun(response);
+      const poiPitfallCards = pickPoiPitfallCardsFromRouteRun(response);
+      const bookingCart = pickBookingCartFromRouteRun(response);
+      const { emotionalContext, sharedMilestoneCards } =
+        applyEmotionalContextFromRouteRun(response);
 
       const flightInventorySnapshot = extractFlightInventorySnapshotFromRouteRun(
         payloadRecord,
@@ -3778,6 +4056,15 @@ export default function AgentChat({
 
       const hasRenderableStructured =
         Boolean(consultationDashboard) ||
+        Boolean(robustnessDashboard) ||
+        hasDualTrackItineraryUi(dualTrackItinerary) ||
+        hasDeliveryArtifactsUi(deliveryArtifacts) ||
+        hasLegEvidenceCardsUi(legEvidenceCards) ||
+        hasPoiPitfallCardsUi(poiPitfallCards) ||
+        hasBookingCartUi(bookingCart) ||
+        hasSharedMilestoneCardsUi(sharedMilestoneCards) ||
+        isAnchoringEmotionalContext(emotionalContext) ||
+        Boolean(partyNegotiation?.organizational_robustness_preview) ||
         (!routeRunConsultationSurface && hasItineraryPanelsInPayload) ||
         (hotelsFromPayload?.length ?? 0) > 0 ||
         (carRentalsForMessage?.length ?? 0) > 0 ||
@@ -3824,24 +4111,55 @@ export default function AgentChat({
         void reloadTripPoiSchedules();
       }
 
-      if (sendOptions?.applyItineraryAdjustDraft && response.result.status === 'OK') {
-        planStudioContext?.clearItineraryAdjustDraftPreview();
-        focusPlanStudioItineraryAdjustTargetDay(
-          planStudioContext?.selectDay,
-          sendOptions.applyItineraryAdjustDraft.snapshot
-        );
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
-        }
-        if (!itineraryAdjust.autoApplied) {
-          toast.success('草案已写入行程');
-          onSystem2Response?.();
-          void reloadTripPoiSchedules();
-        }
-      }
-
       const adjustUiHint = itineraryAdjustUiHintMessage(itineraryAdjust);
       const effectiveUiHintMessage = adjustUiHint ?? uiHintMessage;
+
+      let itineraryAdjustApplyMessageFields: Partial<Message> = {};
+      if (sendOptions?.applyItineraryAdjustDraft) {
+        const applyResult = parseItineraryAdjustApplyResult(payloadRecord);
+        const applyFailed =
+          response.result.status === 'FAILED' ||
+          applyResult?.applied === false;
+        if (applyFailed) {
+          const failureMsg = itineraryAdjustApplyFailureMessage(applyResult, {
+            uiHintMessage: effectiveUiHintMessage,
+            answerText: messageContent,
+          });
+          toast.error(failureMsg);
+          itineraryAdjustApplyMessageFields = {
+            itineraryAdjustApplyFailed: true,
+            itineraryAdjustApplyFailureMessage: failureMsg,
+            ...(applyResult ? { itineraryAdjustApplyResult: applyResult } : {}),
+          };
+        } else if (response.result.status === 'OK') {
+          planStudioContext?.clearItineraryAdjustDraftPreview();
+          focusPlanStudioItineraryAdjustTargetDay(
+            planStudioContext?.selectDay,
+            sendOptions.applyItineraryAdjustDraft.snapshot
+          );
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+          }
+          const addedCount = applyResult?.added_count;
+          const appliedDays = applyResult?.applied_days;
+          const successDetail =
+            appliedDays?.length && appliedDays.length > 1
+              ? `已写入 ${appliedDays.length} 天`
+              : addedCount != null && addedCount > 0
+                ? `已追加 ${addedCount} 项`
+                : '草案已写入行程';
+          if (!itineraryAdjust.autoApplied) {
+            toast.success(successDetail);
+            onSystem2Response?.();
+            void reloadTripPoiSchedules();
+          }
+          if (applyResult) {
+            itineraryAdjustApplyMessageFields = {
+              itineraryAdjustApplyResult: applyResult,
+            };
+          }
+        }
+      }
 
       if (itineraryAdjust.intake) {
         poiSuppressAnswerProse = true;
@@ -3859,6 +4177,7 @@ export default function AgentChat({
             id: `assistant-${Date.now()}`,
             role: 'assistant',
             content: messageContent,
+            ...(messageContentHtml ? { contentHtml: messageContentHtml } : {}),
             timestamp: new Date(),
             status: displayUiStatus,
             routeType,
@@ -3933,6 +4252,15 @@ export default function AgentChat({
             ...(poiCardsByDay && poiCardsByDay.length > 0 ? { poiCardsByDay } : {}),
             ...(poiSuppressAnswerProse ? { poiSuppressAnswerProse: true } : {}),
             ...(consultationDashboard ? { consultationDashboard } : {}),
+            ...(robustnessDashboard ? { robustnessDashboard } : {}),
+            ...(partyNegotiation ? { partyNegotiation } : {}),
+            ...(dualTrackItinerary ? { dualTrackItinerary } : {}),
+            ...(deliveryArtifacts ? { deliveryArtifacts } : {}),
+            ...(legEvidenceCards.length > 0 ? { legEvidenceCards } : {}),
+            ...(poiPitfallCards.length > 0 ? { poiPitfallCards } : {}),
+            ...(bookingCart ? { bookingCart } : {}),
+            ...(emotionalContext ? { emotionalContext } : {}),
+            ...(sharedMilestoneCards.length > 0 ? { sharedMilestoneCards } : {}),
             ...(flightInventorySnapshot ? { flightInventorySnapshot } : {}),
             ...(suggestedOperations ? { suggestedOperations } : {}),
             ...(actionExecutionPayload ? { actionExecution: actionExecutionPayload } : {}),
@@ -3944,6 +4272,10 @@ export default function AgentChat({
             ...(safetySurfaceHasRenderableSurface(safetySurface) ? { safetySurface } : {}),
             ...(itineraryAdjust.intake
               ? (buildItineraryAdjustMessageFields(itineraryAdjust) as Partial<Message>)
+              : {}),
+            ...itineraryAdjustApplyMessageFields,
+            ...(clarificationSuppressChatProse
+              ? { clarificationSuppressChatProse: true as const }
               : {}),
           },
         ];
@@ -5093,28 +5425,42 @@ export default function AgentChat({
                 const routeType = retryResponse.route.route;
                 const isSystem2 = routeType === 'SYSTEM2_REASONING' || routeType === 'SYSTEM2_WEBBROWSE';
                 const rawRetryDecisionLog = pickRawDecisionLogFromRouteRun(retryResponse);
-                const retryDecisionLog: DecisionLogEntry[] = rawRetryDecisionLog.map((entry: any) =>
-                  normalizeToNewFormat(entry, retryResponse.request_id)
+                const retryDecisionLog: DecisionLogEntry[] = sanitizeDecisionLogForClientDisplay(
+                  rawRetryDecisionLog.map((entry: any) =>
+                    normalizeToNewFormat(entry, retryResponse.request_id)
+                  )
                 );
                 const mode = retryResponse.route.ui_hint.mode;
                 
                 setCurrentMode(mode);
                 
-                const retryAnswerText =
-                  retryResponse.result.answer_text != null
-                    ? String(retryResponse.result.answer_text)
-                    : '';
-                let retryMessageContent = retryAnswerText;
-                let retryUiStatus: UIStatus = (retryResponse.route.ui_hint.status || 'done') as UIStatus;
-                
-                const retryClarificationQuestions = normalizeRouteRunClarificationQuestions(
-                  retryResponse.result.payload?.clarificationQuestions
-                );
-
                 const retryPayloadRecord =
                   retryResponse.result.payload && typeof retryResponse.result.payload === 'object'
                     ? (retryResponse.result.payload as Record<string, unknown>)
                     : undefined;
+                const retryClarificationQuestions = normalizeRouteRunClarificationQuestions(
+                  retryResponse.result.payload?.clarificationQuestions
+                );
+                const retryPrimaryQuestionHtml =
+                  retryClarificationQuestions.length > 0
+                    ? pickClarificationQuestionHtml(retryClarificationQuestions[0])
+                    : undefined;
+                const retryClarificationSuppressChatProse =
+                  retryClarificationQuestions.length > 0 &&
+                  (shouldSuppressClarificationChatProse(retryPayloadRecord) ||
+                    Boolean(retryPrimaryQuestionHtml));
+
+                const retryAnswerText = extractRouteRunAnswerText(retryResponse.result);
+                const retryBubbleBodies = resolveAgentBubbleBodies({
+                  result: retryResponse.result,
+                  payload: retryPayloadRecord,
+                  uiState: retryResponse.ui_state,
+                  skipHtml: retryResponse.result.status === 'TIMEOUT',
+                  suppressClarificationProse: retryClarificationSuppressChatProse,
+                });
+                let retryMessageContent = retryBubbleBodies.content || retryAnswerText;
+                let retryMessageContentHtml = retryBubbleBodies.contentHtml;
+                let retryUiStatus: UIStatus = (retryResponse.route.ui_hint.status || 'done') as UIStatus;
 
                 const retryRouteRunSurface = pickRouteRunSurface({
                   status: retryResponse.result.status,
@@ -5132,7 +5478,9 @@ export default function AgentChat({
                   }
 
                   if (retryRouteRunViewMode === 'clarification' && retryClarificationQuestions.length > 0) {
-                    retryMessageContent = '';
+                    if (!retryMessageContentHtml && !retryMessageContent.trim()) {
+                      retryMessageContent = '';
+                    }
                   } else {
                     const clarificationInfo = retryResponse.result.payload?.clarificationInfo;
                     const clarificationMessage = retryResponse.result.payload?.clarificationMessage;
@@ -5158,9 +5506,11 @@ export default function AgentChat({
                   }
                 } else if (retryResponse.result.status === 'TIMEOUT') {
                   retryMessageContent = 'TIMEOUT'; // 特殊标记，用于显示优化的错误UI
+                  retryMessageContentHtml = undefined;
                   retryUiStatus = 'failed';
                 } else if (retryResponse.result.status === 'FAILED') {
                   retryMessageContent = retryAnswerText || 'FAILED'; // 特殊标记，用于显示优化的错误UI
+                  retryMessageContentHtml = undefined;
                   retryUiStatus = 'failed';
                 } else if (retryResponse.result.status === 'OK') {
                   retryUiStatus = (retryResponse.route.ui_hint.status || 'done') as UIStatus;
@@ -5254,9 +5604,7 @@ export default function AgentChat({
                 const retryTimelineDayBlocks = retryPayloadDisplayBundle.timelineDayBlocks;
                 const retrySafetySurface = retryPayloadDisplayBundle.safetySurface;
                 const retryPayloadOrchestrationResult = retryPayloadDisplayBundle.orchestrationResult;
-                maybeToastWorkbenchDrift(retryPayloadDisplayBundle.workbenchDisplay, (msg) => {
-                  toast.info(msg);
-                });
+                maybeToastWorkbenchDrift(retryPayloadDisplayBundle.workbenchDisplay);
                 let retryPoiSuppressAnswerProse =
                   extractPoiSuppressAnswerProse(retryPayloadRecord) ||
                   retryRouteRunViewMode === 'trip_timeline';
@@ -5342,6 +5690,7 @@ export default function AgentChat({
                       id: `assistant-${Date.now()}`,
                       role: 'assistant',
                       content: retryMessageContent,
+                      ...(retryMessageContentHtml ? { contentHtml: retryMessageContentHtml } : {}),
                       timestamp: new Date(),
                       status: retryDisplayStatus,
                       routeType,
@@ -5360,6 +5709,9 @@ export default function AgentChat({
                         retryClarificationQuestions.length > 0
                           ? retryClarificationQuestions
                           : undefined,
+                      ...(retryClarificationSuppressChatProse
+                        ? { clarificationSuppressChatProse: true as const }
+                        : {}),
                       routeRunSurface: retryRouteRunSurface,
                       routeRunViewMode: retryRouteRunViewMode,
                       reasoningState: retryReasoning,

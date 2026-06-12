@@ -37,6 +37,15 @@ import {
 import { getCurrentPosition } from '@/utils/geo';
 import { handleApiError } from '@/utils/errorHandler';
 import { toast } from 'sonner';
+import { applyEmotionalContextFromJourneyState } from '@/lib/emotional-context-ui';
+import {
+  notifyReminderIfAllowed,
+  notifyUserNotificationIfAllowed,
+} from '@/lib/proactive-notification';
+import {
+  buildJourneyPresenceContext,
+  startJourneyPresenceHeartbeat,
+} from '@/services/journeyPresenceReporter';
 
 /**
  * 消息类型
@@ -149,6 +158,38 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
   // 用于生成消息 ID
   const messageIdRef = useRef(0);
   const generateMessageId = () => `journey-msg-${Date.now()}-${++messageIdRef.current}`;
+
+  const seenReminderIdsRef = useRef<Set<string>>(new Set());
+  const remindersInitializedRef = useRef(false);
+
+  const syncRemindersWithGate = useCallback((nextReminders: Reminder[] | undefined) => {
+    if (!Array.isArray(nextReminders)) return;
+    setReminders(nextReminders);
+
+    if (!remindersInitializedRef.current) {
+      nextReminders.forEach((r) => seenReminderIdsRef.current.add(r.id));
+      remindersInitializedRef.current = true;
+      return;
+    }
+
+    for (const reminder of nextReminders) {
+      if (seenReminderIdsRef.current.has(reminder.id)) continue;
+      seenReminderIdsRef.current.add(reminder.id);
+      notifyReminderIfAllowed(
+        reminder.titleCN || reminder.title,
+        reminder.priority,
+        reminder.messageCN || reminder.message
+      );
+    }
+  }, []);
+
+  const resolveRequestContext = useCallback(async (location?: Location) => {
+    return buildJourneyPresenceContext(
+      location
+        ? { location: { lat: location.lat, lng: location.lng }, skipGps: true }
+        : undefined
+    );
+  }, []);
   
   /**
    * 处理助手响应
@@ -159,6 +200,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     if (response.journeyState) {
       setJourneyState(response.journeyState);
       setPhase(response.journeyState.phase);
+      applyEmotionalContextFromJourneyState(response.journeyState);
     }
     
     // 更新当前对话数据
@@ -168,8 +210,14 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     setCurrentSuggestedActions(response.suggestedActions || null);
     
     // 更新提醒（如果有，且为数组）
-    if (Array.isArray(response.reminders)) {
-      setReminders(response.reminders);
+    syncRemindersWithGate(response.reminders);
+    
+    if (response.notification) {
+      notifyUserNotificationIfAllowed(
+        response.notification.messageCN || response.notification.message,
+        response.notification.severity,
+        response.notification.actionRequired
+      );
     }
     
     // 当需要定位时，添加「授权位置并重试」按钮（使用上一条用户消息作为重试 prompt）
@@ -233,7 +281,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     }
     
     return response;
-  }, []);
+  }, [syncRemindersWithGate]);
   
   /**
    * 获取行程状态
@@ -246,13 +294,15 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
       if (response.journeyState) {
         setJourneyState(response.journeyState);
         setPhase(response.journeyState.phase);
+        applyEmotionalContextFromJourneyState(response.journeyState);
       }
+      syncRemindersWithGate(response.reminders);
       return response.journeyState || null;
     } catch (err) {
       console.error('Failed to fetch journey status:', err);
       return null;
     }
-  }, [tripId]);
+  }, [tripId, syncRemindersWithGate]);
   
   /**
    * 获取提醒列表
@@ -263,13 +313,13 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     try {
       const data = await journeyAssistantApi.getReminders(tripId);
       const safeData = Array.isArray(data) ? data : [];
-      setReminders(safeData);
+      syncRemindersWithGate(safeData);
       return safeData;
     } catch (err) {
       console.error('Failed to fetch reminders:', err);
       return [];
     }
-  }, [tripId]);
+  }, [tripId, syncRemindersWithGate]);
   
   /**
    * 发送消息
@@ -293,12 +343,13 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     setError(null);
     
     try {
+      const context = await resolveRequestContext(location);
       const response = await journeyAssistantApi.chat({
         tripId,
         userId,
         message,
         language: 'zh',
-        context: location ? { currentLocation: location } : undefined,
+        context,
       });
       
       return handleAssistantResponse(response);
@@ -319,7 +370,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     } finally {
       setLoading(false);
     }
-  }, [tripId, userId, handleAssistantResponse]);
+  }, [tripId, userId, handleAssistantResponse, resolveRequestContext]);
   
   /**
    * 处理突发事件
@@ -334,12 +385,14 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     setError(null);
     
     try {
+      const context = await resolveRequestContext();
       const response = await journeyAssistantApi.handleEvent({
         tripId,
         userId,
         eventId,
         selectedOptionId,
         language: 'zh',
+        context,
       });
       
       return handleAssistantResponse(response);
@@ -350,7 +403,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     } finally {
       setLoading(false);
     }
-  }, [tripId, userId, handleAssistantResponse]);
+  }, [tripId, userId, handleAssistantResponse, resolveRequestContext]);
   
   /**
    * 调整行程
@@ -369,6 +422,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     setError(null);
     
     try {
+      const context = await resolveRequestContext();
       const response = await journeyAssistantApi.adjustSchedule({
         tripId,
         userId,
@@ -377,6 +431,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
           ...options,
         },
         language: 'zh',
+        context,
       });
       
       return handleAssistantResponse(response);
@@ -387,7 +442,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     } finally {
       setLoading(false);
     }
-  }, [tripId, userId, handleAssistantResponse]);
+  }, [tripId, userId, handleAssistantResponse, resolveRequestContext]);
   
   /**
    * 紧急求助
@@ -401,11 +456,12 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     setError(null);
     
     try {
+      const context = await resolveRequestContext(location);
       const response = await journeyAssistantApi.emergency({
         tripId,
         userId,
         language: 'zh',
-        context: location ? { currentLocation: location } : undefined,
+        context,
       });
       
       return handleAssistantResponse(response);
@@ -416,7 +472,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     } finally {
       setLoading(false);
     }
-  }, [tripId, userId, handleAssistantResponse]);
+  }, [tripId, userId, handleAssistantResponse, resolveRequestContext]);
   
   /**
    * 附近搜索
@@ -440,12 +496,13 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     setError(null);
     
     try {
+      const context = await resolveRequestContext(location);
       const response = await journeyAssistantApi.nearbySearch({
         tripId,
         userId,
         message,
         language: 'zh',
-        context: location ? { currentLocation: location } : undefined,
+        context,
       });
       
       return handleAssistantResponse(response);
@@ -456,7 +513,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     } finally {
       setLoading(false);
     }
-  }, [tripId, userId, handleAssistantResponse]);
+  }, [tripId, userId, handleAssistantResponse, resolveRequestContext]);
   
   /**
    * 执行建议操作
@@ -552,6 +609,16 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     
     return () => clearInterval(intervalId);
   }, [tripId, pollInterval, fetchStatus, fetchReminders]);
+
+  // 前台 presence heartbeat：刷新 proactivityGate（GPS + 时区 + 驾驶时长）
+  useEffect(() => {
+    if (!tripId || !userId) return;
+    return startJourneyPresenceHeartbeat({
+      tripId,
+      userId,
+      intervalMs: pollInterval,
+    });
+  }, [tripId, userId, pollInterval]);
   
   return {
     // 状态

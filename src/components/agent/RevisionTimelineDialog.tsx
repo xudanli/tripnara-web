@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { agentApi } from '@/api/agent';
@@ -14,6 +14,8 @@ import { Lock, RotateCcw } from 'lucide-react';
 import { Info } from 'lucide-react';
 import type { EvidenceBundleDto, EvidenceCardDto, EvidenceCardUiDto } from '@/api/agent';
 import NegotiationDialog from '@/components/agent/NegotiationDialog';
+import { discardReasonLabel } from '@/lib/robustness-dashboard';
+import type { AlignmentTupleSummary } from '@/types/robustness-dashboard';
 
 export interface RevisionTimelineDialogProps {
   open: boolean;
@@ -28,6 +30,7 @@ function kindVariant(kind?: string) {
 }
 
 export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: RevisionTimelineDialogProps) {
+  const queryClient = useQueryClient();
   const [rolling, setRolling] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRevisionId, setDetailRevisionId] = useState<string | null>(null);
@@ -38,6 +41,23 @@ export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: R
     enabled,
     queryFn: async () => agentApi.getItineraryRevisionTimeline(tripId!),
   });
+
+  const { data: robustnessData } = useQuery({
+    queryKey: ['agent', 'robustness_dashboard', tripId],
+    enabled,
+    queryFn: () => agentApi.getTripRobustnessDashboard(tripId!),
+  });
+
+  const alignmentByRevisionId = useMemo(() => {
+    const map = new Map<string, AlignmentTupleSummary>();
+    const tuples = robustnessData?.alignment?.recent_tuples ?? [];
+    for (const t of tuples) {
+      if (t.revision_id && !map.has(t.revision_id)) {
+        map.set(t.revision_id, t);
+      }
+    }
+    return map;
+  }, [robustnessData]);
 
   const revisions = useMemo(() => {
     const res: ItineraryRevisionTimelineResponse | undefined = data;
@@ -109,6 +129,7 @@ export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: R
       await agentApi.rollbackToRevision({ revision_id: revisionId });
       toast.success('已回滚');
       await refetch();
+      await queryClient.invalidateQueries({ queryKey: ['agent', 'robustness_dashboard', tripId] });
     } catch (e: any) {
       toast.error('回滚失败', { description: e?.message || '请稍后重试' });
     } finally {
@@ -166,7 +187,9 @@ export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: R
                 </Card>
               ) : null}
 
-              {revisions.map((rev) => (
+              {revisions.map((rev) => {
+                const alignmentTuple = alignmentByRevisionId.get(rev.revision_id);
+                return (
                 <Card key={rev.revision_id}>
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between gap-3">
@@ -182,6 +205,12 @@ export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: R
                               rev.kind
                             )}
                           </Badge>
+                          {alignmentTuple ? (
+                            <Badge variant="outline" className="text-[10px]">
+                              {discardReasonLabel(alignmentTuple.discard_reason)} · 组织{' '}
+                              {Math.round(alignmentTuple.organizational_penalty * 100)}%
+                            </Badge>
+                          ) : null}
                           <span className="text-sm font-medium truncate">{rev.revision_id}</span>
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">
@@ -225,7 +254,8 @@ export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: R
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              );
+              })}
             </div>
           </ScrollArea>
         )}

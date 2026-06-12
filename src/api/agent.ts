@@ -138,6 +138,10 @@ export interface AgentOptions {
    * 与 v2/chat、accommodations/apply 共用，便于后端关联检索结果与落库索引。
    */
   client_session_id?: string;
+  /**
+   * D3 多人 rollout：各成员 pace / risk / adventure_weight，影响正式组织力评分。
+   */
+  party_negotiation_member_profiles?: import('@/types/robustness-dashboard').PartyNegotiationMemberProfile[];
 }
 
 /** `options.persona_hint`：三人格松紧度偏好（0–1 或后端约定刻度） */
@@ -257,6 +261,8 @@ export interface RouteAndRunRequest {
     cost_sensitivity?: number;
     effort_sensitivity?: number;
     time_sensitivity?: number;
+    preferOffbeatAttractions?: boolean;
+    travel_style_tags?: string[];
     /** 体能档位：`low` | `medium` | `high`（与问卷 `MEDIUM_LOW` 等等级映射） */
     fitness_level?: string;
     party_profile?: {
@@ -275,6 +281,15 @@ export interface RouteAndRunRequest {
   };
   conversation_context?: ConversationContext;
   options?: AgentOptions;
+  /** 规划前实时传感器 / 离线地图等（与后端 DTO metadata 对齐） */
+  metadata?: import('@/types/route-run-emotional-metadata').RouteRunEmotionalMetadata;
+  /** 同行规模 / 体能 / 风险容忍（多人 rollout 评分） */
+  party_profile?: {
+    party_total?: number;
+    fitness_level?: string;
+    risk_tolerance?: string;
+    [key: string]: unknown;
+  };
 }
 
 /** 异步发起响应 / 轮询中间态（SUCCESS 时 data 为完整 route_and_run 响应） */
@@ -631,6 +646,23 @@ export interface HallucinationAuditSampleRowZh {
   [key: string]: unknown;
 }
 
+/** `decision_log[].metadata.plan_gen_day_digest` 单日条目 */
+export interface PlanGenDayDigestEntry {
+  day_number?: number;
+  dayNumber?: number;
+  date_iso?: string;
+  dateIso?: string;
+  outputs_summary?: string;
+  outputsSummary?: string;
+  inputs_summary?: string;
+  inputsSummary?: string;
+  summary_zh?: string;
+  summaryZh?: string;
+  items_count?: number;
+  itemsCount?: number;
+  [key: string]: unknown;
+}
+
 export interface HallucinationAuditZh {
   total?: number;
   verified?: number;
@@ -713,6 +745,12 @@ export interface DecisionLogEntry {
      */
     hallucination_audit_zh?: HallucinationAuditZh;
     hallucinationAuditZh?: HallucinationAuditZh;
+    /**
+     * PLAN_GEN：按天规划 digest（结果/输入可与顶层 outputs_summary、inputs_summary 对齐；
+     * 旧日志可由 BFF 出站补全）。
+     */
+    plan_gen_day_digest?: PlanGenDayDigestEntry[];
+    planGenDayDigest?: PlanGenDayDigestEntry[];
     [key: string]: any;
   };
 }
@@ -770,6 +808,8 @@ export interface ObservabilityMetrics {
   lightweight_knowledge_qa?: boolean;
   /** Memory OS 契约观测（`observability.memory_contract`） */
   memory_contract?: import('@/features/route-and-run/types/observability').MemoryContractObs;
+  /** 正式 Robustness Dashboard（ROBUSTNESS_ROLLOUT_ENABLED=1 且 status=OK） */
+  robustness_dashboard?: import('@/types/robustness-dashboard').RobustnessDashboardPayload;
 }
 
 /**
@@ -934,8 +974,10 @@ export interface OrchestrationUiState {
   progress_percent?: number;
   message?: string;
   requires_user_action?: boolean;
-  /** 当前步骤详情（如「正在评估行程可行性...」） */
+  /** 当前步骤详情（如「请选择极光观测日（点击下方日期按钮）」） */
   current_step_detail?: string;
+  /** 与 result.answer_html 同源；澄清/进度详情 HTML */
+  current_step_detail_html?: string;
   /** 预计剩余时间（ms），后端可选 */
   estimated_time_remaining_ms?: number;
   /** 执行轨迹步骤列表；OrchestrationProgressCard 优先渲染 */
@@ -1117,6 +1159,8 @@ export interface RouteAndRunResponse {
   result: {
     status: ResultStatus;
     answer_text: string;
+    /** 气泡正文优先渲染（后端装配 HTML；无则回退 answer_text） */
+    answer_html?: string;
     payload?: {
       suspensionInfo?: SuspensionInfo;  // 审批挂起信息（当 status === 'NEED_CONFIRMATION' 时）
       clarificationInfo?: ClarificationInfo;  // 澄清信息（当 status === 'NEED_MORE_INFO' 时，向后兼容）
@@ -1134,11 +1178,29 @@ export interface RouteAndRunResponse {
       /** 展示层证据卡 UI props（可直接渲染） */
       ui_display?: {
         evidence_cards_ui?: EvidenceCardUiDto[];
+        /** tripnara.dual_track_itinerary@v1 — A 轴默认段 + B 轴预案分支 */
+        dual_track_itinerary?: import('@/types/dual-track-itinerary').DualTrackItineraryPayload;
+        /** tripnara.delivery_artifacts@v1 — 地图 / 工作台 / 日历 / PDF / 文字版 */
+        delivery_artifacts?: import('@/types/delivery-artifacts').DeliveryArtifactsPayload;
+        /** NARRATE 路段证据卡（相邻 POI 间距离/耗时/避坑） */
+        leg_evidence_cards?: import('@/types/leg-evidence').LegEvidenceCard[] | import('@/types/leg-evidence').LegEvidenceCardsPayload;
+        /** P2：POI 避坑卡（NARRATE RAG / enrichClientUiDisplay） */
+        poi_pitfall_cards?: import('@/types/poi-pitfall').PoiPitfallCard[] | import('@/types/poi-pitfall').PoiPitfallCardsPayload;
+        /** P2：航班/酒店/租车 MCP 聚合预订清单 */
+        booking_cart?: import('@/types/booking-cart').BookingCartPayload;
+        /** 情绪上下文投影（服务端为准） */
+        emotional_context?: import('@/types/emotional-context').EmotionalContextClient;
+        /** 跨 trip 共同回忆卡片 */
+        shared_milestone_cards?: import('@/types/shared-milestone').SharedMilestoneUiCard[];
         [key: string]: any;
       };
       // 澄清消息相关字段（统一在 payload 中）
       needsUserConfirmation?: boolean;
       clarificationMessage?: string;  // 向后兼容：简单字符串格式
+      /** 澄清气泡专用 HTML（优先于 answer_html 展示在智能体消息区） */
+      clarification_display?: { body_html?: string; bodyHtml?: string };
+      /** suppress_chat_prose=true 时气泡仅展示短 answer_html/text，长文走 question_html */
+      clarification_meta?: { suppress_chat_prose?: boolean; suppressChatProse?: boolean };
       clarificationQuestions?: ClarificationQuestion[];  // 结构化澄清问题（Phase 1）
       missingServices?: string[];
       solutions?: string[];
@@ -1153,6 +1215,8 @@ export interface RouteAndRunResponse {
       candidates?: any[];
       evidence?: any[];
       robustness?: number | null;
+      /** tripnara.robustness_dashboard@v1 镜像（与 observability.robustness_dashboard 同形） */
+      robustness_dashboard?: import('@/types/robustness-dashboard').RobustnessDashboardPayload;
       orchestrationResult?: OrchestrationResult;
       /**
        * 咨询可视化 Dashboard（半结构化卡片 + 地图 + 时间轴等）。
@@ -1629,6 +1693,25 @@ export const agentApi = {
   },
 
   /**
+   * 行程鲁棒性 Dashboard（缓存 + 可选强制重算）
+   * GET /agent/trip/:tripId/robustness_dashboard
+   * GET /agent/trip/:tripId/robustness_dashboard?recompute=1
+   */
+  getTripRobustnessDashboard: async (
+    tripId: string,
+    options?: { recompute?: boolean }
+  ): Promise<import('@/types/robustness-dashboard').TripRobustnessDashboardResponse> => {
+    const params = options?.recompute ? { recompute: 1 } : undefined;
+    const response = await apiClient.get<
+      ApiResponseWrapper<import('@/types/robustness-dashboard').TripRobustnessDashboardResponse>
+    >(`/agent/trip/${encodeURIComponent(tripId)}/robustness_dashboard`, { params });
+    if (response.data && !('success' in response.data)) {
+      return response.data as unknown as import('@/types/robustness-dashboard').TripRobustnessDashboardResponse;
+    }
+    return handleResponse(response);
+  },
+
+  /**
    * 单条 revision 详情
    * GET /agent/negotiation_revision/:revisionId
    */
@@ -1866,6 +1949,22 @@ export const agentApi = {
       }
       throw error;
     }
+  },
+
+  /**
+   * P2+ 预订清单 checkout 状态机
+   * POST /agent/booking_cart/apply
+   */
+  applyBookingCartAction: async (
+    data: import('@/types/booking-cart').BookingCartApplyRequest
+  ): Promise<import('@/types/booking-cart').BookingCartApplyResponse> => {
+    const response = await apiClient.post<
+      ApiResponseWrapper<import('@/types/booking-cart').BookingCartApplyResponse>
+    >('/agent/booking_cart/apply', data);
+    if (response.data && !('success' in response.data)) {
+      return response.data as unknown as import('@/types/booking-cart').BookingCartApplyResponse;
+    }
+    return handleResponse(response);
   },
 };
 

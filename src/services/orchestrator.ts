@@ -11,6 +11,7 @@
 import { agentApi, type RouteAndRunRequest, type RouteAndRunResponse } from '@/api/agent';
 import i18n from '@/i18n/config';
 import { localeForAgentConversationContext } from '@/lib/agent-conversation-locale';
+import { enrichRouteAndRunRequestWithMatchSquareParty } from '@/lib/match-square-route-and-run';
 import { buildPreferenceProfileForRouteRun } from '@/lib/route-run-preference-profile';
 import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
 import { pickRawDecisionLogFromRouteRun } from '@/lib/unified-execution-trace';
@@ -129,7 +130,7 @@ class PlanStudioOrchestrator {
       const sanitizedTripId = sanitizeRouteRunTripId(tripId);
 
       // 构建请求
-      const request: RouteAndRunRequest = {
+      const request: RouteAndRunRequest = enrichRouteAndRunRequestWithMatchSquareParty({
         request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         user_id: userId,
         trip_id: sanitizedTripId ?? null,
@@ -145,7 +146,7 @@ class PlanStudioOrchestrator {
           // 对于优化和修复操作，可能需要更多步骤
           max_steps: action === 'optimize_route' || action === 'apply_repairs' ? 50 : 20,
         },
-      };
+      });
 
       // 调用 LangGraph Orchestrator
       const response: RouteAndRunResponse = await agentApi.routeAndRun(request);

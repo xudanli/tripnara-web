@@ -1,5 +1,6 @@
 import { matchSquareApi } from '@/api/match-square';
 import { enrichApplicationsWithApplicantIdentity } from './enrich-applications-applicant-identity';
+import { resolvePostDetailWithFallback } from './resolve-post-detail-fallback';
 import type {
   ApplicationStatus,
   RecruitmentApplicationCard,
@@ -99,7 +100,7 @@ export async function loadMyRecruitmentHub(): Promise<MyRecruitmentHub> {
   const appliedEntries = await Promise.all(
     [...applicationsByPost.entries()].map(async ([postId, application]) => {
       try {
-        const post = await matchSquareApi.getPost(postId);
+        const post = await resolvePostDetailWithFallback(postId);
         return {
           application,
           post: enrichPostWithMyApplication(post, application),

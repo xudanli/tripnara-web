@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { formatMemberIdentityLabel } from '../lib/compact-puzzle-slot-label';
+import { enrichApplicationMatchInsights } from '../lib/match-enrichment';
 import { Loader2, Puzzle, Sparkles, UserRound } from 'lucide-react';
 import {
   Dialog,
@@ -127,27 +129,46 @@ function PuzzleMemberTrustSheet({
 
 function PuzzleMemberApplicationDialog({
   member,
+  post,
   open,
   onOpenChange,
 }: {
   member: RecruitmentApplicationCard | null;
+  post?: RecruitmentPostCard;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  if (!member) return null;
+  const displayMember = useMemo(() => {
+    if (!member) return null;
+    return post ? enrichApplicationMatchInsights(member, post) : member;
+  }, [member, post]);
+
+  if (!displayMember) return null;
+
+  const identitySubtitle = formatMemberIdentityLabel({
+    displayName: resolveApplicantRealName(
+      displayMember,
+      displayMember.applicantVerifiedCredentials
+    ),
+    cardTitle: resolveApplicantCardTitle(
+      displayMember,
+      displayMember.applicantVerifiedCredentials
+    ),
+    interactionModeLabel: displayMember.applicantInteractionModeLabel,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <StackedDialogContent className="max-h-[min(88vh,720px)] max-w-lg overflow-y-auto">
         <DialogHeader className="text-left">
           <DialogTitle>队员详情</DialogTitle>
-          <DialogDescription>
-            {resolveApplicantRealName(member, member.applicantVerifiedCredentials)} ·{' '}
-            {resolveApplicantCardTitle(member, member.applicantVerifiedCredentials)}
-          </DialogDescription>
+          {identitySubtitle && (
+            <DialogDescription>{identitySubtitle}</DialogDescription>
+          )}
         </DialogHeader>
         <ApplicationReviewCard
-          application={member}
+          application={displayMember}
+          embedded
           onApprove={() => undefined}
           onReject={() => undefined}
         />
@@ -290,6 +311,7 @@ export function TeamPuzzleStrip({
     memberDetailMode === 'application' ? (
       <PuzzleMemberApplicationDialog
         member={memberProfile}
+        post={post}
         open={Boolean(memberProfile)}
         onOpenChange={(open) => !open && setMemberProfile(null)}
       />

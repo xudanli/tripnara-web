@@ -15,6 +15,9 @@ export type RouteAndRunTaskSsePayload = {
   data?: RouteAndRunResponse | null;
   intake_stream?: Record<string, unknown>;
   fed_sse?: Record<string, unknown>[];
+  /** PHASE + current_phase === 'NARRATE' 时提前下发 */
+  emotional_context?: import('@/types/emotional-context').EmotionalContextClient;
+  emotionalContext?: import('@/types/emotional-context').EmotionalContextClient;
 };
 
 /** POST .../route_and_run/async 202 */

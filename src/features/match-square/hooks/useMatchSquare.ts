@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { matchSquareApi } from '@/api/match-square';
 import type { PostListFilters, RecruitmentApplicationCard, RecruitmentPostCard, TravelIntentStatus } from '@/types/match-square';
 import { loadMyRecruitmentHub } from '../lib/my-recruitments';
+import { resolvePostDetailWithFallback } from '../lib/resolve-post-detail-fallback';
 import { enrichApplicationsWithApplicantIdentity } from '../lib/enrich-applications-applicant-identity';
 import { buildSpawnPreviewFromPost } from '../lib/trekking-orchestration/build-spawn-preview-from-post';
 
@@ -50,9 +51,10 @@ export function useMatchSquarePlaza(filters: PostListFilters) {
 }
 
 export function usePostDetail(id: string | undefined) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['match-square', 'post', id],
-    queryFn: () => matchSquareApi.getPost(id!),
+    queryFn: () => resolvePostDetailWithFallback(id!, qc),
     enabled: Boolean(id),
     staleTime: 60_000,
   });

@@ -14,6 +14,8 @@ export interface ItineraryAdjustResultCardProps {
   result: ItineraryAdjustResult;
   autoApplied?: boolean;
   autoApplyReason?: string;
+  /** POI_SLOT_FILL：展示全部含条目的稀疏日 */
+  multiDayAppend?: boolean;
   debugUiDefaults?: boolean;
   /** 当轮 payload.timeline → 草案日程卡片（时段） */
   timelineDayBlocks?: ItineraryDayItemsBlock[];
@@ -37,6 +39,7 @@ export function ItineraryAdjustResultCard({
   result,
   autoApplied,
   autoApplyReason,
+  multiDayAppend,
   debugUiDefaults,
   timelineDayBlocks,
   fallbackTimelineDayBlocks,
@@ -55,6 +58,7 @@ export function ItineraryAdjustResultCard({
     fallbackTimelineDayBlocks,
     poiCardsByDay,
     targetDateIso: result.target_date_iso,
+    includeAllSparseDays: multiDayAppend === true,
   });
   const hasScheduleCards = scheduleDays.some((d) => (d.items?.length ?? 0) > 0);
   const draftScheduleZh = result.draft_schedule_zh?.trim();

@@ -7,6 +7,7 @@ import {
 } from '@/lib/route-run-async';
 import { normalizeAgentTaskPollPath } from '@/lib/route-run-task-path';
 import type { RouteAndRunTaskSsePayload } from '@/types/route-and-run-task-sse';
+import { applyEmotionalContextFromSsePayload } from '@/lib/emotional-context-ui';
 
 declare global {
   interface Window {
@@ -134,6 +135,7 @@ export async function subscribeRouteAndRunTaskStream(
         if (data === '{}' || event === 'end') continue;
 
         const payload = JSON.parse(data) as RouteAndRunTaskSsePayload;
+        applyEmotionalContextFromSsePayload(payload);
         options.onPayload(payload);
 
         if (payload.type === 'RESULT' || payload.type === 'ERROR') {

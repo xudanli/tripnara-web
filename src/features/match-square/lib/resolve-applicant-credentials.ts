@@ -120,27 +120,38 @@ function headlinePersonaTitle(identityHeadline: string | undefined | null): stri
 export function resolveApplicantCardTitle(
   application: Pick<
     RecruitmentApplicationCard,
-    'applicantCardTitle' | 'applicantInteractionModeLabel' | 'applicantVerifiedCredentials'
+    | 'applicantCardTitle'
+    | 'applicantDisplayName'
+    | 'applicantInteractionModeLabel'
+    | 'applicantVerifiedCredentials'
   >,
   credentials?: VerifiedCredentials | null,
   apiCardTitle?: string | null
 ): string {
-  if (!isPuzzleDeficitPersonaLabel(application.applicantCardTitle)) {
-    return application.applicantCardTitle;
+  const displayName = resolveApplicantRealName(application, credentials);
+  const cardTitle = application.applicantCardTitle?.trim();
+
+  if (
+    cardTitle &&
+    !isPuzzleDeficitPersonaLabel(cardTitle) &&
+    cardTitle !== displayName
+  ) {
+    return cardTitle;
   }
 
   const candidates = [
     apiCardTitle,
     credentials ? headlinePersonaTitle(credentials.headline?.identityHeadline) : null,
     headlinePersonaTitle(application.applicantVerifiedCredentials?.headline?.identityHeadline),
+    !isPuzzleDeficitPersonaLabel(cardTitle) ? cardTitle : null,
   ];
 
   for (const candidate of candidates) {
     const title = candidate?.trim();
-    if (title && !isPuzzleDeficitPersonaLabel(title)) return title;
+    if (title && !isPuzzleDeficitPersonaLabel(title) && title !== displayName) return title;
   }
 
-  return application.applicantCardTitle;
+  return cardTitle || application.applicantCardTitle;
 }
 
 /** 队员背书 — 去掉误带的「队长 ·」前缀（GET credentials 偶发混入队长视角） */

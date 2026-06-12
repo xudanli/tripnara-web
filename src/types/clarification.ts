@@ -42,6 +42,8 @@ export interface ClarificationOptionItem {
 export interface ClarificationQuestion {
   id: string;
   question: string;
+  /** 澄清卡正文 HTML（优先于 question 纯文本，避免与气泡 answer_html 重复） */
+  question_html?: string;
   type: ClarificationQuestionType;
   /** 展示用文案（legacy）；有 optionItems 时以 optionItems 为准 */
   options?: string[];

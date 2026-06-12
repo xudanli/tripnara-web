@@ -68,7 +68,7 @@ import { usePlaceImages } from '@/hooks/usePlaceImages';
 import { useAuth } from '@/hooks/useAuth';
 import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudioContext';
 import { ItineraryAdjustScheduleDayPreview } from '@/components/plan-studio/ItineraryAdjustScheduleDayPreview';
-import { scheduleDayMatchesItineraryAdjustScope } from '@/lib/itinerary-adjust-response';
+import { scheduleDayMatchesItineraryAdjustDraftPreview } from '@/lib/itinerary-adjust-response';
 import { getPersonaAlertUserBody } from '@/lib/persona-alert-display';
 import {
   canEditSlotTiming,
@@ -1548,10 +1548,7 @@ export default function ScheduleTab({ tripId, refreshKey, onOpenReadinessDrawer 
 
           const showAdjustDraftPreview =
             itineraryAdjustDraftPreview != null &&
-            scheduleDayMatchesItineraryAdjustScope(
-              day.date,
-              itineraryAdjustDraftPreview.scopeDateIso
-            );
+            scheduleDayMatchesItineraryAdjustDraftPreview(day.date, itineraryAdjustDraftPreview);
           
           return (
             <Card key={day.id} className={showAdjustDraftPreview ? 'ring-1 ring-amber-300/60' : undefined}>

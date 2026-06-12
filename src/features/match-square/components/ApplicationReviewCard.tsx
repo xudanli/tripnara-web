@@ -18,7 +18,12 @@ import { CredentialsHeadlineStrip } from './CredentialsHeadlineStrip';
 import { CaptainTrustProfileSheet } from './CaptainTrustProfileSheet';
 import { useUserVerifiedCredentials } from '../hooks/useUserVerifiedCredentials';
 import { DecisionEngineBriefPanel, showDecisionEngineHint } from './DecisionEngineBriefPanel';
-import { pickRicherApplicantCredentials, resolveApplicantRealName, sanitizeMemberApplicantCredentials } from '../lib/resolve-applicant-credentials';
+import {
+  pickRicherApplicantCredentials,
+  resolveApplicantCardTitle,
+  resolveApplicantRealName,
+  sanitizeMemberApplicantCredentials,
+} from '../lib/resolve-applicant-credentials';
 import { isPuzzleDeficitPersonaLabel } from '../lib/compact-puzzle-slot-label';
 import { enrichVerifiedCredentialsDossier } from '../lib/verified-credentials';
 import { plazaBanner, plazaCard, plazaReview } from '../lib/plaza-visual';
@@ -29,6 +34,8 @@ interface ApplicationReviewCardProps {
   onReject: () => void;
   onAskMore?: () => void;
   isReviewing?: boolean;
+  /** 队员详情弹窗内嵌 — 省略与弹窗标题重复的「申请人 · 姓名」 */
+  embedded?: boolean;
 }
 
 export function ApplicationReviewCard({
@@ -37,20 +44,28 @@ export function ApplicationReviewCard({
   onReject,
   onAskMore,
   isReviewing,
+  embedded = false,
 }: ApplicationReviewCardProps) {
   const [trustOpen, setTrustOpen] = useState(false);
-  const embedded = application.applicantVerifiedCredentials;
+  const embeddedCredentials = application.applicantVerifiedCredentials;
   const { data: fetchedCredentials, isLoading: credentialsLoading } = useUserVerifiedCredentials(
     application.applicantUserId,
     {
       postId: application.postId,
       cardTitle: application.applicantCardTitle,
       mbtiType: application.applicantMbtiType,
-      initialData: embedded,
+      initialData: embeddedCredentials,
     }
   );
-  const credentialsRaw = pickRicherApplicantCredentials(embedded, fetchedCredentials ?? null);
+  const credentialsRaw = pickRicherApplicantCredentials(embeddedCredentials, fetchedCredentials ?? null);
   const applicantRealName = resolveApplicantRealName(application, credentialsRaw);
+  const resolvedCardTitle = resolveApplicantCardTitle(application, credentialsRaw);
+  const applicantPersonaTitle =
+    resolvedCardTitle.trim() &&
+    resolvedCardTitle.trim() !== applicantRealName &&
+    !isPuzzleDeficitPersonaLabel(resolvedCardTitle)
+      ? resolvedCardTitle.trim()
+      : null;
   const credentials = credentialsRaw
     ? sanitizeMemberApplicantCredentials(credentialsRaw, applicantRealName)
     : null;
@@ -59,10 +74,14 @@ export function ApplicationReviewCard({
     <>
       <div className={plazaReview.card}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-          <span className="font-medium text-foreground">申请人 · {applicantRealName}</span>
-          <span className="hidden text-muted-foreground sm:inline" aria-hidden>
-            |
-          </span>
+          {!embedded && (
+            <span className="font-medium text-foreground">申请人 · {applicantRealName}</span>
+          )}
+          {!embedded && (
+            <span className="hidden text-muted-foreground sm:inline" aria-hidden>
+              |
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
             <Puzzle className="h-3.5 w-3.5" aria-hidden />
             匹配度
@@ -81,14 +100,14 @@ export function ApplicationReviewCard({
           )}
         </div>
 
-        {!isPuzzleDeficitPersonaLabel(application.applicantCardTitle) && (
+        {applicantPersonaTitle && (
         <div className={cn('mt-2', plazaCard.personaRow)}>
           <span className={cn(plazaCard.personaTitle, 'inline-flex items-center gap-1 text-sm')}>
             <UserRound className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-            {application.applicantCardTitle}
+            {applicantPersonaTitle}
           </span>
           {application.applicantInteractionModeLabel &&
-            application.applicantInteractionModeLabel !== application.applicantCardTitle && (
+            application.applicantInteractionModeLabel !== applicantPersonaTitle && (
               <>
                 <span className="text-muted-foreground">·</span>
                 <span className={cn('inline-flex items-center gap-1 text-sm text-muted-foreground')}>

@@ -1,6 +1,7 @@
 /**
  * route_and_run 澄清路径：剥离 L3-PROOF / 审计标签，供结构化澄清卡展示。
- * answer_text / clarificationMessage 在澄清场景下不作为主 UI。
+ * 澄清场景气泡优先 payload.clarification_display.body_html / answer_html；
+ * 选项仍用 clarificationQuestions[].options；短文案见 ui_state.current_step_detail。
  */
 
 import type { ClarificationQuestion } from '@/types/clarification';
@@ -163,6 +164,25 @@ export function extractFeasibilityDisplayItems(
 }
 
 /** 澄清卡固定黄条文案（约束冲突类澄清） */
+/** payload.clarification_meta.suppress_chat_prose：气泡仅短句，长文走 question_html */
+export function shouldSuppressClarificationChatProse(
+  payload: Record<string, unknown> | undefined | null
+): boolean {
+  const meta = asRecord(payload?.clarification_meta ?? payload?.clarificationMeta);
+  return meta?.suppress_chat_prose === true || meta?.suppressChatProse === true;
+}
+
+export function pickClarificationQuestionHtml(question: ClarificationQuestion): string | undefined {
+  const raw =
+    question.question_html ??
+    (typeof question.metadata?.question_html === 'string'
+      ? question.metadata.question_html
+      : typeof question.metadata?.questionHtml === 'string'
+        ? question.metadata.questionHtml
+        : undefined);
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+}
+
 export function clarificationBannerTitle(
   questions: ClarificationQuestion[],
   reasoningGuidanceHint?: string

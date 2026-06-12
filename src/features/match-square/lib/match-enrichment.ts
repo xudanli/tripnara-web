@@ -165,7 +165,8 @@ export function computeApplicantPostCompatibility(
   application: RecruitmentApplicationCard,
   post: RecruitmentPostCard
 ): number {
-  if (!application.applicantMbtiType || !post.captainMbtiType) return 0;
+  const applicantMbtiType = application.applicantMbtiType?.trim() || 'INTJ';
+  const captainMbtiType = post.captainMbtiType?.trim() || 'INTJ';
 
   const captainCredentials = resolveCaptainCredentials(post);
   const applicantCredentials = application.applicantVerifiedCredentials ?? null;
@@ -173,7 +174,7 @@ export function computeApplicantPostCompatibility(
   const leaderProfile = buildCaptainProfileFromPost(post, captainCredentials);
   const memberProfile = buildMatchEngineProfile({
     userId: application.applicantUserId,
-    mbtiType: application.applicantMbtiType,
+    mbtiType: applicantMbtiType,
     credentials: applicantCredentials,
   });
 
@@ -183,15 +184,25 @@ export function computeApplicantPostCompatibility(
     skipTimeGate: true,
   };
 
-  const applicantScores = estimateScoresFromMbti(application.applicantMbtiType);
-  const captainScores = estimateScoresFromMbti(post.captainMbtiType);
+  const applicantScores = estimateScoresFromMbti(applicantMbtiType);
+  const captainScores = estimateScoresFromMbti(captainMbtiType);
 
-  return computeCompatibilityScore(
+  const structuralScore = computeCompatibilityScore(
     applicantScores,
     captainScores,
     applicantCredentials,
     captainCredentials,
     structuralOpts
+  );
+  if (structuralScore > 0) return structuralScore;
+
+  // 审批页：硬熔断（如圈层带宽）不应把已入队队员展示为 0%
+  return computeCompatibilityScore(
+    applicantScores,
+    captainScores,
+    applicantCredentials,
+    captainCredentials,
+    null
   );
 }
 

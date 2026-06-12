@@ -9,6 +9,19 @@ export interface ItineraryAdjustDraftPreview {
   timelineDayBlocks: ItineraryDayItemsBlock[];
   adjustResult?: ItineraryAdjustResult;
   requestId?: string;
+  /** POI_SLOT_FILL 等多稀疏日：展示与 Apply 用 append_sparse_days */
+  multiDayAppend?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+/** POST apply_itinerary_adjust_draft 落库结果（payload.itinerary_adjust_apply_result） */
+export interface ItineraryAdjustApplyResult {
+  applied?: boolean;
+  reason?: string;
+  added_count?: number;
+  applied_days?: string[];
+  answer_text?: string;
+  [key: string]: unknown;
 }
 
 export type ItineraryAdjustExecutionMode = 'ADVICE_ONLY' | 'SEMI_AUTO' | 'AUTO';
@@ -320,6 +333,21 @@ export function scheduleDayMatchesItineraryAdjustScope(
   return Boolean(a && b && a === b);
 }
 
+/** 左侧 ScheduleTab：单日 scope 或多稀疏日草案预览日匹配 */
+export function scheduleDayMatchesItineraryAdjustDraftPreview(
+  dayDate: string,
+  preview: ItineraryAdjustDraftPreview
+): boolean {
+  if (preview.multiDayAppend) {
+    const normalizedDay = normalizeItineraryAdjustDateIso(dayDate);
+    return preview.timelineDayBlocks.some((d) => {
+      const dDate = normalizeItineraryAdjustDateIso(d.date);
+      return Boolean(dDate && dDate === normalizedDay && (d.items?.length ?? 0) > 0);
+    });
+  }
+  return scheduleDayMatchesItineraryAdjustScope(dayDate, preview.scopeDateIso);
+}
+
 /** 确认 diff：优先 apply_confirmation_lines，勿整段 draft_schedule_zh */
 export function itineraryAdjustConfirmationLines(result: ItineraryAdjustResult): string[] {
   const lines = result.apply_confirmation_lines?.filter((l) => l.trim()) ?? [];
@@ -438,10 +466,20 @@ export function resolveItineraryAdjustScheduleDays(options: {
   fallbackTimelineDayBlocks?: ItineraryDayItemsBlock[];
   poiCardsByDay?: AgentPoiDayBlock[];
   targetDateIso?: string;
+  /** POI_SLOT_FILL：返回全部含条目的稀疏日 */
+  includeAllSparseDays?: boolean;
 }): ItineraryDayItemsBlock[] {
   const target = options.targetDateIso;
+  const pick = (source: ItineraryDayItemsBlock[] | undefined) => {
+    if (!source?.length) return [] as ItineraryDayItemsBlock[];
+    if (options.includeAllSparseDays) {
+      const sparse = source.filter((d) => (d.items?.length ?? 0) > 0);
+      if (sparse.length > 0) return sparse;
+    }
+    return pickItineraryAdjustTimelineDays(source, target);
+  };
   for (const source of [options.timelineDayBlocks, options.fallbackTimelineDayBlocks]) {
-    const picked = pickItineraryAdjustTimelineDays(source, target);
+    const picked = pick(source);
     if (picked.some((d) => (d.items?.length ?? 0) > 0)) return picked;
   }
   return pickItineraryAdjustTimelineDays(
@@ -575,10 +613,67 @@ export function isItineraryAdjustAutoCommitted(p: {
   actionExecution?: ItineraryAdjustActionExecution;
 }): boolean {
   const ax = p.actionExecution;
+  const autoApply = ax?.itinerary_adjust_auto_apply;
+  if (autoApply?.applied !== true) return false;
   return (
-    ax?.mode === 'AUTO' &&
-    ax?.status === 'SUCCEEDED' &&
-    ax?.itinerary_adjust_auto_apply?.applied === true
+    (ax?.mode === 'AUTO' || ax?.mode === 'SEMI_AUTO') && ax?.status === 'SUCCEEDED'
+  );
+}
+
+export function parseItineraryAdjustApplyResult(
+  payload: Record<string, unknown> | undefined | null
+): ItineraryAdjustApplyResult | undefined {
+  if (!payload) return undefined;
+  const raw = payload.itinerary_adjust_apply_result ?? payload.itineraryAdjustApplyResult;
+  const rec = asRecord(raw);
+  if (!rec) return undefined;
+  const applied = rec.applied === true ? true : rec.applied === false ? false : undefined;
+  const reason =
+    typeof rec.reason === 'string' && rec.reason.trim() ? rec.reason.trim() : undefined;
+  const answerText =
+    typeof rec.answer_text === 'string' && rec.answer_text.trim()
+      ? rec.answer_text.trim()
+      : typeof rec.answerText === 'string' && rec.answerText.trim()
+        ? rec.answerText.trim()
+        : undefined;
+  const addedCount =
+    typeof rec.added_count === 'number'
+      ? rec.added_count
+      : typeof rec.addedCount === 'number'
+        ? rec.addedCount
+        : undefined;
+  const appliedDaysRaw = rec.applied_days ?? rec.appliedDays;
+  const applied_days = Array.isArray(appliedDaysRaw)
+    ? appliedDaysRaw.map((d) => String(d).trim()).filter(Boolean)
+    : undefined;
+  if (
+    applied === undefined &&
+    !reason &&
+    !answerText &&
+    addedCount === undefined &&
+    !(applied_days?.length)
+  ) {
+    return undefined;
+  }
+  return {
+    ...(applied !== undefined ? { applied } : {}),
+    ...(reason ? { reason } : {}),
+    ...(answerText ? { answer_text: answerText } : {}),
+    ...(addedCount !== undefined ? { added_count: addedCount } : {}),
+    ...(applied_days?.length ? { applied_days } : {}),
+  };
+}
+
+export function itineraryAdjustApplyFailureMessage(
+  applyResult: ItineraryAdjustApplyResult | undefined,
+  fallbacks?: { uiHintMessage?: string; answerText?: string }
+): string {
+  return (
+    applyResult?.answer_text?.trim() ||
+    applyResult?.reason?.trim() ||
+    fallbacks?.uiHintMessage?.trim() ||
+    fallbacks?.answerText?.trim() ||
+    '未能写入行程，请检查地点是否可解析后重试'
   );
 }
 
@@ -621,6 +716,9 @@ export function buildItineraryAdjustMessageFields(
   outcome: ParsedItineraryAdjustOutcome
 ): Record<string, unknown> {
   if (!outcome.intake) return {};
+  const multiDayAppend =
+    outcome.metadata?.sub_intent === 'POI_SLOT_FILL' ||
+    outcome.metadata?.subIntent === 'POI_SLOT_FILL';
   return {
     itineraryAdjustIntake: true as const,
     itineraryAdjustAutoApplied: outcome.autoApplied,
@@ -628,6 +726,8 @@ export function buildItineraryAdjustMessageFields(
     ...(outcome.scopeDateIso ? { itineraryAdjustScopeDate: outcome.scopeDateIso } : {}),
     ...(outcome.autoApplyReason ? { itineraryAdjustAutoApplyReason: outcome.autoApplyReason } : {}),
     ...(outcome.adjustResult ? { itineraryAdjustResult: outcome.adjustResult } : {}),
+    ...(outcome.metadata ? { itineraryAdjustMetadata: outcome.metadata } : {}),
+    ...(multiDayAppend ? { itineraryAdjustMultiDayAppend: true } : {}),
     ironShieldUiSuppressed: outcome.ironShieldUiSuppressed,
     decisionCockpitUiSuppressed: outcome.decisionCockpitUiSuppressed,
   };
@@ -643,6 +743,10 @@ export function buildItineraryAdjustDraftPreview(
   const scopeDateIso =
     outcome.scopeDateIso ?? outcome.adjustResult?.target_date_iso ?? timelineDayBlocks[0]?.date;
   if (!scopeDateIso?.trim()) return null;
+  const multiDayAppend =
+    (timelineDayBlocks.filter((d) => (d.items?.length ?? 0) > 0).length > 1) ||
+    (outcome.metadata?.sub_intent === 'POI_SLOT_FILL' ||
+      outcome.metadata?.subIntent === 'POI_SLOT_FILL');
   return {
     scopeDateIso: scopeDateIso.trim(),
     ...(outcome.adjustResult?.target_day_number != null
@@ -651,6 +755,8 @@ export function buildItineraryAdjustDraftPreview(
     timelineDayBlocks,
     ...(outcome.adjustResult ? { adjustResult: outcome.adjustResult } : {}),
     ...(requestId ? { requestId } : {}),
+    ...(multiDayAppend ? { multiDayAppend: true } : {}),
+    ...(outcome.metadata ? { metadata: outcome.metadata } : {}),
   };
 }
 

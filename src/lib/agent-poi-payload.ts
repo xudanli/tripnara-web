@@ -42,6 +42,10 @@ export interface AgentPoiCard {
   ontologyRules?: unknown;
   /** Google / 供应商 place_id，便于与 spatial_projection.poi_card_match_keys 对齐 */
   placeId?: string;
+  /** POI_SELECTION 打标：off_beaten_path_quota 等 */
+  planningScoreReasons?: string[];
+  /** metadata.poi_offbeat_quota_applied === true */
+  offbeatQuotaApplied?: boolean;
 }
 
 export interface AgentPoiDayBlock {
@@ -87,6 +91,24 @@ function normalizeDateStr(s: string): string | undefined {
   return undefined;
 }
 
+const OFFBEAT_SCORE_REASON = 'off_beaten_path_quota';
+
+function pickStringArray(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw.map((x) => String(x).trim()).filter(Boolean);
+  return out.length > 0 ? out : undefined;
+}
+
+/** POI 是否因小众配额 / offbeat lane 入选 */
+export function isOffbeatPoiCard(card: Pick<AgentPoiCard, 'planningScoreReasons' | 'offbeatQuotaApplied' | 'tags'>): boolean {
+  if (card.offbeatQuotaApplied === true) return true;
+  if (card.planningScoreReasons?.includes(OFFBEAT_SCORE_REASON)) return true;
+  return (card.tags ?? []).some((t) => {
+    const s = t.toLowerCase();
+    return s.includes('小众') || s.includes('秘境') || s.includes('hidden') || s.includes('offbeat');
+  });
+}
+
 export function normalizePoiCard(raw: unknown): AgentPoiCard | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
@@ -123,6 +145,17 @@ export function normalizePoiCard(raw: unknown): AgentPoiCard | null {
   const lng = pickNum(o, 'lng', 'lon', 'longitude');
 
   const tags = Array.isArray(o.tags) ? o.tags.map((x) => String(x).trim()).filter(Boolean) : [];
+
+  const planningScoreReasons = pickStringArray(
+    o.poi_planning_score_reasons ?? o.poiPlanningScoreReasons
+  );
+
+  const metadata =
+    o.metadata && typeof o.metadata === 'object' && !Array.isArray(o.metadata)
+      ? (o.metadata as Record<string, unknown>)
+      : undefined;
+  const offbeatRaw = metadata?.poi_offbeat_quota_applied ?? metadata?.poiOffbeatQuotaApplied;
+  const offbeatQuotaApplied = offbeatRaw === true;
 
   const matchedFrom = pickStr(o, 'matched_from', 'matchedFrom') as AgentPoiMatchedFrom | undefined;
 
@@ -169,6 +202,8 @@ export function normalizePoiCard(raw: unknown): AgentPoiCard | null {
     ...(resolvedFromPlaceRegistry !== undefined ? { resolvedFromPlaceRegistry } : {}),
     ...(ontologyRules != null ? { ontologyRules } : {}),
     ...(placeId ? { placeId } : {}),
+    ...(planningScoreReasons?.length ? { planningScoreReasons } : {}),
+    ...(offbeatQuotaApplied ? { offbeatQuotaApplied: true } : {}),
   };
 }
 

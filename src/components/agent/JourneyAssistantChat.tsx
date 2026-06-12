@@ -7,6 +7,11 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useJourneyAssistant, type JourneyMessage } from '@/hooks/useJourneyAssistant';
+import { useProactivityGate } from '@/hooks/useProactivityGate';
+import { useTtsEmotionalProsody } from '@/hooks/useTtsEmotionalProsody';
+import { useEmotionContextStore } from '@/store/emotionContextStore';
+import { isAnchoringEmotionalContext } from '@/lib/emotional-context-ui';
+import { AnchoringPresencePanel } from '@/components/agent/AnchoringPresencePanel';
 import { tripsApi } from '@/api/trips';
 import type { 
   JourneyState,
@@ -654,6 +659,14 @@ export default function JourneyAssistantChat({
     nearbySearch,
   } = useJourneyAssistant({ tripId, userId });
 
+  const emotionalContext = useEmotionContextStore((s) => s.emotionalContext);
+  const { proactivityGate } = useProactivityGate();
+  useTtsEmotionalProsody({
+    autoSpeakSummary: emotionalContext?.anxietyTriggered === true,
+  });
+  const showAnchoringPanel = isAnchoringEmotionalContext(emotionalContext);
+  const windLockActive = emotionalContext?.ambienceSignals?.weatherWindLockActive === true;
+
   // 状态概览：有 trip 时用行程 API 真实数据，避免 journey 助手返回 mock；无 trip 时用 journeyState
   const displayState = ((): JourneyState | null => {
     const base = journeyState;
@@ -764,8 +777,19 @@ export default function JourneyAssistantChat({
       {displayState && !compact && (
         <div className="p-3 border-b">
           <StatusOverview state={displayState} currency={currency} />
+          {proactivityGate === 'SILENT' ? (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              静默陪伴模式：仅紧急事项会主动提醒
+            </p>
+          ) : null}
         </div>
       )}
+
+      {showAnchoringPanel && emotionalContext ? (
+        <div className="px-3 pt-3">
+          <AnchoringPresencePanel context={emotionalContext} onEmergency={handleEmergency} />
+        </div>
+      ) : null}
 
       {/* Tab 切换（执行页隐藏今日/提醒，主区已有） */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col min-h-0">
@@ -803,7 +827,10 @@ export default function JourneyAssistantChat({
                     我是你的旅途助手 🧭<br />
                     有任何问题随时问我
                   </p>
-                  <QuickActions actions={quickActions} onAction={handleQuickAction} />
+                  <QuickActions
+                    actions={windLockActive ? quickActions.filter((a) => !/购物|促销|优惠|shop/i.test(a.prompt)) : quickActions}
+                    onAction={handleQuickAction}
+                  />
                 </div>
               ) : (
                 <>
@@ -834,7 +861,7 @@ export default function JourneyAssistantChat({
           </ScrollArea>
 
           {/* 快捷操作（有消息时） */}
-          {messages.length > 0 && (
+          {messages.length > 0 && !windLockActive && (
             <div className="px-3 py-2 border-t">
               <QuickActions actions={quickActions} onAction={handleQuickAction} />
             </div>

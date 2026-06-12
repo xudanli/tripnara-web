@@ -63,3 +63,47 @@ export function formatTeamRosterLabel(
 
   return `${ratio} · 缺 ${counts.remaining} 人`;
 }
+
+/** 招募是否已满员（结束招募 ≠ 组队成功，需单独判断） */
+export function isRecruitmentTeamFull(
+  post: Pick<RecruitmentPostCard, 'teamStatus' | 'teamPuzzle' | 'teamSlots'>
+): boolean {
+  const slots = post.teamPuzzle?.slots ?? post.teamSlots;
+  const counts = resolveTeamRosterCounts(post.teamStatus, slots);
+  if (counts) return counts.remaining <= 0;
+  const remaining = post.teamStatus?.slotsRemaining;
+  return typeof remaining === 'number' && remaining <= 0;
+}
+
+export function resolveRecruitmentClosureCopy(
+  post: Pick<RecruitmentPostCard, 'teamStatus' | 'teamPuzzle' | 'teamSlots' | 'status'>
+): {
+  teamFull: boolean;
+  title: string;
+  description: string;
+  remaining: number;
+} {
+  const slots = post.teamPuzzle?.slots ?? post.teamSlots;
+  const counts = resolveTeamRosterCounts(post.teamStatus, slots);
+  const remaining = counts?.remaining ?? post.teamStatus?.slotsRemaining ?? 0;
+  const teamFull = isRecruitmentTeamFull(post);
+
+  if (teamFull) {
+    return {
+      teamFull: true,
+      remaining: 0,
+      title: '招募已结束 · 组队成功',
+      description: '车队已满员，你仍可查看当时的车队拼图与行程信息。',
+    };
+  }
+
+  return {
+    teamFull: false,
+    remaining: Math.max(0, remaining),
+    title: '招募已结束',
+    description:
+      remaining > 0
+        ? `队长提前结束招募，车队尚缺 ${remaining} 人。你仍可查看招募详情与已通过队员。`
+        : '队长已结束招募，不再接收新申请。你仍可查看招募详情。',
+  };
+}

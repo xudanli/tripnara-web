@@ -843,7 +843,6 @@ function PlanStudioPageContent() {
         />
       )}
 
-
       {showEmbeddedPlanStudio && tripId ? (
         <div className="px-6 pb-2">
           <EmbeddedHikingStatusBar

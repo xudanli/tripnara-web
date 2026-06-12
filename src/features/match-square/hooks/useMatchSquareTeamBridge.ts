@@ -9,6 +9,7 @@ import {
   resolveRecruitmentPostIdFromTrip,
   type MatchSquareRoster,
 } from '@/lib/match-square-trip-roster';
+import { cacheMatchSquarePartySource } from '@/lib/match-square-route-and-run';
 import { usePostApplications, usePostDetail } from './useMatchSquare';
 
 type ImportState = 'idle' | 'importing' | 'done' | 'error';
@@ -48,6 +49,17 @@ export function useMatchSquareTeamBridge({
     }
     return null;
   }, [contextRoster, post, applications]);
+
+  useEffect(() => {
+    if (!roster?.members.length) return;
+    cacheMatchSquarePartySource(tripId, {
+      roster,
+      post: post ?? undefined,
+      applications: post
+        ? (applications ?? []).filter((app) => app.status === 'approved')
+        : undefined,
+    });
+  }, [tripId, roster, post, applications]);
 
   const isMatchSquareTrip = Boolean(recruitmentPostId) || Boolean(contextRoster);
   const rosterLoading = needsFetch && (postLoading || appsLoading);

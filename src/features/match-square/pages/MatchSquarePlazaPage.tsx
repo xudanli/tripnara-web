@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import type { PlazaFeedItem, PostListFilters } from '@/types/match-square';
 import { RecruitmentCard } from '../components/RecruitmentCard';
 import { MatchFlashCard } from '../components/MatchFlashCard';
+import { ApplicationDecisionInboxBanner } from '../components/ApplicationDecisionInboxBanner';
+import { TeamFormationInboxBanner } from '../components/TeamFormationInboxBanner';
 import { OliveBranchInboxBanner } from '../components/OliveBranchInboxBanner';
 import { PlazaViewerContextStrip } from '../components/PlazaViewerContextStrip';
 import { PlazaCommandBar } from '../components/PlazaCommandBar';
@@ -85,6 +87,8 @@ export default function MatchSquarePlazaPage() {
 
       <div className={plazaLayout.content}>
         <PendingReputationBanner />
+        <ApplicationDecisionInboxBanner />
+        <TeamFormationInboxBanner />
         <OliveBranchInboxBanner />
 
         <PlazaCommandBar

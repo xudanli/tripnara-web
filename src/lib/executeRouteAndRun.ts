@@ -14,7 +14,9 @@ import { shouldUseRouteRunAsync } from '@/lib/route-run-async';
 import { normalizeAgentTaskPollPath } from '@/lib/route-run-task-path';
 import { awaitRouteAndRunTaskCompletion } from '@/lib/route-run-task-sse';
 import { enrichRouteAndRunRequestWithPlanningSessionAsync } from '@/lib/enrich-route-and-run-planning-session';
+import { enrichRouteAndRunRequestWithMatchSquareParty } from '@/lib/match-square-route-and-run';
 import { enrichRouteAndRunRequestWithDsoVersion } from '@/lib/trip-dso-version';
+import { enrichRouteAndRunRequestWithEmotionalMetadata } from '@/lib/enrich-route-and-run-emotional-metadata';
 import { markPlanningTaskProcessing } from '@/lib/sync-planning-task-store';
 import { syncPlanningTaskFromPollSnapshot } from '@/lib/sync-planning-task-store';
 
@@ -76,7 +78,10 @@ export async function executeRouteAndRun(
       ? { ...request.options, async_mode: resolvedAsync }
       : { ...request.options },
   });
-  const payload = enrichRouteAndRunRequestWithDsoVersion(withSession);
+  const withParty = enrichRouteAndRunRequestWithMatchSquareParty(withSession);
+  const payload = enrichRouteAndRunRequestWithEmotionalMetadata(
+    enrichRouteAndRunRequestWithDsoVersion(withParty)
+  );
 
   if (import.meta.env.DEV && !payload.options?.client_session_id?.trim()) {
     console.warn('[executeRouteAndRun] missing options.client_session_id after enrich');

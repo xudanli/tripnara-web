@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import type { AgentPoiCard, AgentPoiDayBlock } from '@/lib/agent-poi-payload';
+import { isOffbeatPoiCard } from '@/lib/agent-poi-payload';
 import {
   extractPhysicalHintsForPoiCard,
   mergeRoadIdsFromHints,
@@ -24,6 +25,7 @@ import {
   Database,
   ExternalLink,
   MapPin,
+  Sparkles,
   Star,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -143,6 +145,7 @@ function PoiCard({
     card.startWindow || card.endWindow
       ? [card.startWindow, card.endWindow].filter(Boolean).join(' – ')
       : '';
+  const offbeat = isOffbeatPoiCard(card);
 
   return (
     <Card
@@ -163,6 +166,16 @@ function PoiCard({
             >
               <Database className="h-3 w-3" aria-hidden />
               Place 库
+            </Badge>
+          ) : null}
+          {offbeat ? (
+            <Badge
+              variant="secondary"
+              className="h-5 gap-0.5 border-violet-500/35 bg-violet-100/80 text-[10px] font-medium text-violet-950 dark:bg-violet-950/40 dark:text-violet-100"
+              title="反热门配额 / offbeat lane 入选"
+            >
+              <Sparkles className="h-3 w-3" aria-hidden />
+              小众精选
             </Badge>
           ) : null}
           {showDebugFields && card.matchedFrom ? (
@@ -380,9 +393,22 @@ export function PoiCardsByDayPanel({
   if (!days.length) return null;
 
   const zeroBased = days.some((b) => b.dayIndex === 0);
+  const allCards = days.flatMap((d) => d.cards);
+  const offbeatCount = allCards.filter((c) => isOffbeatPoiCard(c)).length;
+  const offbeatRatio = allCards.length > 0 ? offbeatCount / allCards.length : 0;
 
   return (
     <div className={cn('space-y-5', className)}>
+      {offbeatCount > 0 ? (
+        <div className="rounded-lg border border-violet-500/25 bg-violet-50/40 px-3 py-2 text-xs text-violet-950 dark:bg-violet-950/25 dark:text-violet-100">
+          <span className="font-medium">小众偏好已生效</span>
+          <span className="text-violet-900/80 dark:text-violet-200/80">
+            {' '}
+            · 本批 {offbeatCount}/{allCards.length} 个 POI 为小众精选
+            {offbeatRatio >= 0.2 ? '（已达 ≥20% 配额）' : ''}
+          </span>
+        </div>
+      ) : null}
       {safetySurface ? (
         <div className="rounded-lg border border-amber-200/70 bg-amber-50/25 px-3 py-2 dark:border-amber-900/40 dark:bg-amber-950/20">
           <SafetySmartUpdateStrip surface={safetySurface} />

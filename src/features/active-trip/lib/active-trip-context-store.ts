@@ -1,5 +1,9 @@
 import type { RecruitmentApplicationCard, RecruitmentPostCard } from '@/types/match-square';
 import type { TripInstantiationPlan } from '@/types/trip-instantiation';
+import {
+  buildRosterFromPostAndApplications,
+} from '@/lib/match-square-trip-roster';
+import { cacheMatchSquarePartySource } from '@/lib/match-square-route-and-run';
 
 const CONTEXT_KEY = 'tripnara_active_trip_context_v1';
 const ROLLBACK_KEY = 'tripnara_active_trip_rollback_v1';
@@ -56,6 +60,12 @@ export function setActiveTripInstantiateContext(ctx: ActiveTripInstantiateContex
   const store = readContextStore();
   store[ctx.tripId] = ctx;
   writeContextStore(store);
+  const approved = ctx.approvedApplications.filter((a) => a.status === 'approved');
+  cacheMatchSquarePartySource(ctx.tripId, {
+    roster: buildRosterFromPostAndApplications(ctx.postSnapshot, approved),
+    post: ctx.postSnapshot,
+    applications: approved,
+  });
 }
 
 export function getActiveTripInstantiateContext(

@@ -53,7 +53,7 @@ setOrchestration(session.previousTurn.orchestrationResult);
 | 场景 | 左侧正式行程（Schedule） | 右侧 Agent 预览 |
 |------|--------------------------|-----------------|
 | 改排 **草案**（ADVICE_ONLY） | 保持 DB 旧数据（不 `GET trip` 刷新） | **仅**当轮 `payload.timeline` / `poi_cards` |
-| 改排 **AUTO 落库** | `onSystem2Response` → 重拉 Trip | 当轮 payload + toast「已更新正式行程」 |
+| 改排 **AUTO / SEMI_AUTO 落库** | `onSystem2Response` → 重拉 Trip | 当轮 payload + toast「已更新正式行程」 |
 | 全量重新规划 OK | 可刷新 Trip | 当轮 payload 全量替换 |
 
 ---
@@ -122,11 +122,69 @@ type ActionExecution = {
 | mode | status | auto_apply.applied | 前端行为 |
 |------|--------|-------------------|----------|
 | AUTO | SUCCEEDED | true | 已落库 → 重拉 Trip，无「应用」按钮 |
+| SEMI_AUTO | SUCCEEDED | true | 同 AUTO；**POI_SLOT_FILL 等多稀疏日**已自动追加 → 直接刷新时间轴，勿再点 Apply |
 | ADVICE_ONLY | NOT_STARTED | false | 预览 timeline / poi_cards → 显示「应用到行程」 |
 | AUTO | PENDING_CONFIRM | false | 同草案 |
 | 任意 | — | reason: `unresolved_places` | 提示「部分地点无法写入」，保留草案 |
 
-**草案「应用到行程」（v1）：** 无单独 apply HTTP；再次发送强确认话术「就把这个改动应用到行程里」触发后端 AUTO（置信度够则落库）。
+### 2.3.1 草案「应用到行程」（`apply_itinerary_adjust_draft`）
+
+无单独 apply HTTP；用户点「应用到行程」时再次 `POST route_and_run`，在 `options` 中携带：
+
+```json
+{
+  "message": "应用到行程",
+  "options": {
+    "apply_itinerary_adjust_draft": true,
+    "intent_mode": "TRIP_PLANNING",
+    "durable_trip_run_id": "<上一轮 observability.durable_trip_run_id，可选>",
+    "itinerary_adjust_draft_snapshot": { }
+  }
+}
+```
+
+**单日 `replace_day`（默认）：**
+
+```json
+{
+  "apply_mode": "replace_day",
+  "target_date_iso": "2026-06-02",
+  "target_day_number": 2,
+  "items": [ { "title": "...", "start_window": "09:00" } ]
+}
+```
+
+**POI_SLOT_FILL 多稀疏日 `append_sparse_days`（只追加、不删除）：**
+
+```json
+{
+  "apply_mode": "append_sparse_days",
+  "target_date_iso": "2026-06-03",
+  "days": [
+    { "date_iso": "2026-06-03", "day_number": 3, "items": [ ] },
+    { "date_iso": "2026-06-05", "day_number": 5, "items": [ ] }
+  ]
+}
+```
+
+判定多日落库：`orchestrationResult.state.metadata.sub_intent === 'POI_SLOT_FILL'`，或当轮 `timeline` 含多个有条目的稀疏日。快照构建见 `src/lib/itinerary-adjust-apply-draft.ts`。
+
+**Apply 响应：**
+
+| `result.status` | `payload.itinerary_adjust_apply_result` | 前端 |
+|-----------------|----------------------------------------|------|
+| `OK` + `applied: true` | `added_count` / `applied_days` 等 | 清除草案 preview → `plan-studio:schedule-refresh` → 重拉 Trip |
+| `FAILED` 或 `applied: false` | `reason` / `answer_text`（如 `unresolved_places`） | 红色 banner + toast；**保留**草案 preview，勿刷新 GET trip |
+
+```typescript
+const apply = payload.itinerary_adjust_apply_result;
+const failed = response.result.status === 'FAILED' || apply?.applied === false;
+if (failed) {
+  showBanner(apply?.answer_text ?? apply?.reason ?? response.route.ui_hint.message);
+} else {
+  refreshTripDays();
+}
+```
 
 **实现：**
 
@@ -221,6 +279,8 @@ if (adj) {
 |------|------|
 | 「重新规划第二天…不合理」+ L0/L1 | AUTO + SUCCEEDED，reload 后 D2 变新 POI |
 | 「第二天还能去哪」 | ADVICE_ONLY，草案条 +「应用到行程」 |
+| POI_SLOT_FILL + SEMI_AUTO 成功 | 无 Apply 按钮；时间轴自动刷新 |
+| Apply 失败 `unresolved_places` | 红色 banner + 保留草案；读 `itinerary_adjust_apply_result.answer_text` |
 | 地图 pin | `poi_cards` 仅目标日 2～4 个 |
 | AUTO 成功后 | 勿仍显示旧 D2；必须 GET trip |
 | violations | 与当轮 `gate_result` / `safety_surface` 一致，非上一轮 |

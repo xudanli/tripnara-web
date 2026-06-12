@@ -25,6 +25,7 @@ export function ItineraryAdjustScheduleDayPreview({
   const scheduleDays = resolveItineraryAdjustScheduleDays({
     timelineDayBlocks: preview.timelineDayBlocks,
     targetDateIso: result?.target_date_iso ?? preview.scopeDateIso,
+    includeAllSparseDays: preview.multiDayAppend === true,
   });
   const dayBlock =
     scheduleDays.find((d) => {

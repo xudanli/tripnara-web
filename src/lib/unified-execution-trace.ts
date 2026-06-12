@@ -39,20 +39,23 @@ export function resolveRoutingTaskType(
 }
 
 /**
- * 决策日志：orchestrationResult.decision_log → explain.decision_log → unified_execution_trace.decision_log。
- * 仅当前序非空数组才采用；否则继续 fallback（与「轻量路径无 state」对齐）。
+ * 决策日志来源优先级（与 BFF 出站清洗对齐）：
+ * 1. `explain.decision_log` — 面向客户端的投影；主文案读 `outputs_summary` / `inputs_summary`
+ * 2. `unified_execution_trace.decision_log` — 轻量路径
+ * 3. `orchestrationResult.decision_log` — 编排原始日志（兜底；可能含 Kernel/DSO 等术语）
+ * 按天明细见 `metadata.plan_gen_day_digest`（旧日志可由 BFF 出站补全）。
  */
 export function pickRawDecisionLogFromRouteRun(response: RouteAndRunResponse): unknown[] {
-  const payload = response.result?.payload as Record<string, unknown> | undefined;
-  const orch = payload?.orchestrationResult as { decision_log?: unknown[] } | undefined;
-  if (Array.isArray(orch?.decision_log) && orch.decision_log.length > 0) return orch.decision_log;
-
   const explain = response.explain?.decision_log;
   if (Array.isArray(explain) && explain.length > 0) return explain as unknown[];
 
+  const payload = response.result?.payload as Record<string, unknown> | undefined;
   const trace = getPayloadUnifiedTrace(payload);
   const fromTrace = trace?.decision_log;
   if (Array.isArray(fromTrace) && fromTrace.length > 0) return fromTrace;
+
+  const orch = payload?.orchestrationResult as { decision_log?: unknown[] } | undefined;
+  if (Array.isArray(orch?.decision_log) && orch.decision_log.length > 0) return orch.decision_log;
 
   return [];
 }

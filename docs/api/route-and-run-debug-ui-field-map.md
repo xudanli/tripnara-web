@@ -39,7 +39,12 @@
 |------------------|-----------|
 | 阶段（编排步） | `step` · `OrchestrationStep`：`INTAKE` \| `RESEARCH` \| `GATE_EVAL` \| `PLAN_GEN` \| `VERIFY` \| `REPAIR` \| `NARRATE` \| `DONE` \| `FAILED` 等 |
 | 执行者 | `actor` · `SubAgentType` |
-| 输入/输出摘要 | `inputs_summary` / `outputs_summary` |
+| 智能体气泡 HTML | `result.answer_html` 或 `payload.clarification_display.body_html`（澄清优先）；回落 `ui_state.current_step_detail_html`；短文案 `ui_state.current_step_detail` |
+| 澄清选项 | `payload.clarificationQuestions[].options`（`ClarificationQuestionRouter`） |
+| 澄清卡正文 | `clarificationQuestions[0].question_html`（勿再渲染 `question` / `clarificationMessage` 全文） |
+| 去重开关 | `clarification_meta.suppress_chat_prose === true` 时气泡仅 `answer_html`/`answer_text` 短句 |
+| 输入/输出摘要 | `inputs_summary` / `outputs_summary`（BFF 出站 `sanitizeDecisionLogForClientDisplay` 已洗为用户向中文；前端 `DecisionLogCard` **主文案仅**绑定此二字段） |
+| 按天明细（PLAN_GEN） | `metadata.plan_gen_day_digest[]`（`day_number` / `date_iso` / 当日 `outputs_summary` / `inputs_summary`；旧日志出站时可由 BFF 仅补日期；前端会从同条 `outputs_summary` 解析「第 N 天(日期)：…」回填，**无摘要的天不展示**） |
 | 证据引用 | `evidence_refs[]` |
 | 耗时、工具调用等 | `metadata.duration_ms`、`metadata.tool_calls` 等 |
 
