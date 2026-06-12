@@ -1,9 +1,17 @@
 import type { EntryPoint } from '@/api/agent';
 import { CONFIG } from '@/constants/config';
 import {
+  isTaskLeaseExhausted,
+  resolveTaskLeasePollIntervalMs,
+  taskLeaseProgressLabel,
+} from '@/lib/task-lease-ui';
+import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
+import {
   looksLikeRouteRunLightLookupRequest,
   looksLikeTripPlanningRequest,
 } from '@/lib/route-run-intent-heuristics';
+
+import type { TaskLeaseEchoV1 } from '@/types/task-lease';
 
 export type RouteRunAsyncPhase =
   | 'INTENT_COMPILE'
@@ -14,7 +22,7 @@ export type RouteRunAsyncPhase =
   | 'NARRATE'
   | (string & {});
 
-export type RouteRunAsyncTaskStatus = 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
+export type RouteRunAsyncTaskStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
 
 /** 轮询中间态（SUCCESS 时 data 由调用方泛型约束） */
 export interface RouteRunAsyncTaskStatusSnapshot<TData = unknown> {
@@ -26,6 +34,8 @@ export interface RouteRunAsyncTaskStatusSnapshot<TData = unknown> {
   data?: TData | null;
   request_id?: string;
   updated_at?: string;
+  /** tripnara.route_and_run_task_lease@v1 — 仅 poll task/status 携带 */
+  task_lease_v1?: TaskLeaseEchoV1;
 }
 
 const TERMINAL_STATUSES: ReadonlySet<RouteRunAsyncTaskStatus> = new Set([
@@ -65,9 +75,12 @@ export function phaseDisplayLabel(phase: RouteRunAsyncPhase | string | undefined
 export function formatRouteRunAsyncProgressLabel(
   snap: Pick<
     RouteRunAsyncTaskStatusSnapshot,
-    'message' | 'current_phase' | 'progress_percentage' | 'status'
+    'message' | 'current_phase' | 'progress_percentage' | 'status' | 'task_lease_v1'
   >
 ): string {
+  const leaseLabel = taskLeaseProgressLabel(snap.task_lease_v1);
+  if (leaseLabel) return leaseLabel;
+
   const serverMsg = snap.message?.trim();
   if (serverMsg) {
     const pct =
@@ -86,7 +99,7 @@ export function formatRouteRunAsyncProgressLabel(
     return `${phaseLabel}${pct}`;
   }
 
-  if (snap.status === 'PROCESSING') return '规划师正在处理…';
+  if (snap.status === 'PROCESSING' || snap.status === 'PENDING') return '规划师正在处理…';
   return '规划师正在思考…';
 }
 
@@ -122,7 +135,7 @@ export async function pollRouteRunTaskUntilDone<TData>(
   taskId: string,
   options: PollRouteRunTaskOptions<TData>
 ): Promise<TData> {
-  const intervalMs = options.intervalMs ?? CONFIG.API.ROUTE_RUN_ASYNC_POLL_INTERVAL_MS;
+  const baseIntervalMs = options.intervalMs ?? CONFIG.API.ROUTE_RUN_ASYNC_POLL_INTERVAL_MS;
 
   for (;;) {
     if (options.signal?.aborted) {
@@ -131,6 +144,11 @@ export async function pollRouteRunTaskUntilDone<TData>(
 
     const snap = await options.getTaskStatus(taskId);
     options.onProgress?.(snap);
+
+    const leaseStatus = snap.task_lease_v1?.lease_status;
+    if (isTaskLeaseExhausted(snap.task_lease_v1)) {
+      throw new RouteRunTaskLeaseExhaustedError(snap.message);
+    }
 
     if (snap.status === 'SUCCESS') {
       if (snap.data == null) {
@@ -147,6 +165,7 @@ export async function pollRouteRunTaskUntilDone<TData>(
       throw new Error(snap.message?.trim() || '任务已取消');
     }
 
+    const intervalMs = resolveTaskLeasePollIntervalMs(leaseStatus, baseIntervalMs);
     await sleep(intervalMs, options.signal);
   }
 }

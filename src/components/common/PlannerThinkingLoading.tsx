@@ -6,6 +6,8 @@ export interface PlannerThinkingLoadingProps {
   label?: string;
   /** 0–100，异步 route_and_run 轮询进度 */
   progress?: number;
+  /** STALE / RESUMING 等无确定进度时展示 indeterminate 条 */
+  indeterminate?: boolean;
   size?: number;
   className?: string;
   textClassName?: string;
@@ -26,6 +28,7 @@ const DEFAULT_LABEL = '规划师正在思考...';
 export function PlannerThinkingLoading({
   label = DEFAULT_LABEL,
   progress,
+  indeterminate,
   size = 40,
   className,
   textClassName = 'text-sm text-muted-foreground',
@@ -62,6 +65,10 @@ export function PlannerThinkingLoading({
             className="h-full rounded-full bg-primary/70 transition-[width] duration-500 ease-out"
             style={{ width: `${progressClamped}%` }}
           />
+        </div>
+      ) : indeterminate ? (
+        <div className="h-1 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+          <div className="h-full w-1/3 rounded-full bg-primary/70 animate-pulse" />
         </div>
       ) : null}
     </div>

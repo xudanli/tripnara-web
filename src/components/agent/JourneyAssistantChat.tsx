@@ -662,7 +662,9 @@ export default function JourneyAssistantChat({
   const emotionalContext = useEmotionContextStore((s) => s.emotionalContext);
   const { proactivityGate } = useProactivityGate();
   useTtsEmotionalProsody({
-    autoSpeakSummary: emotionalContext?.anxietyTriggered === true,
+    autoSpeakVoice:
+      emotionalContext?.anxietyTriggered === true ||
+      emotionalContext?.voiceToneModifier === 'empathetic_reassurance',
   });
   const showAnchoringPanel = isAnchoringEmotionalContext(emotionalContext);
   const windLockActive = emotionalContext?.ambienceSignals?.weatherWindLockActive === true;

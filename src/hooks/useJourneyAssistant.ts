@@ -38,6 +38,7 @@ import { getCurrentPosition } from '@/utils/geo';
 import { handleApiError } from '@/utils/errorHandler';
 import { toast } from 'sonner';
 import { applyEmotionalContextFromJourneyState } from '@/lib/emotional-context-ui';
+import { setEmergencyModeActive } from '@/lib/emotional-emergency-mode';
 import {
   notifyReminderIfAllowed,
   notifyUserNotificationIfAllowed,
@@ -451,6 +452,8 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
     location?: Location
   ): Promise<JourneyAssistantResponse | null> => {
     if (!tripId || !userId) return null;
+
+    setEmergencyModeActive(true);
     
     setLoading(true);
     setError(null);

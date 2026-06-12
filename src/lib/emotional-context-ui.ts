@@ -1,5 +1,10 @@
 import type { RouteAndRunResponse } from '@/api/agent';
 import { applyTtsProsody, applyVoiceTone } from '@/lib/emotional-prosody';
+import {
+  EMOTIONAL_CONTEXT_CLIENT_SCHEMA,
+  isAcceptedEmotionalContextSchema,
+  normalizeEmotionalContextSchema,
+} from '@/lib/emotional-context-schema';
 import { applyProactivityGate } from '@/lib/proactivity-gate';
 import { getEmotionContextStoreState } from '@/store/emotionContextStore';
 import type {
@@ -9,7 +14,13 @@ import type {
   ProactivityGate,
 } from '@/types/emotional-context';
 import type { SharedMilestoneUiCard } from '@/types/shared-milestone';
+import { applyVoicePayloadSideEffects, pickVoicePayloadFromRouteRun } from '@/lib/voice-payload-ui';
+import {
+  applyAccommodationHealthSideEffects,
+  pickAccommodationHealthFromRouteRun,
+} from '@/lib/accommodation-health-ui';
 import type { JourneyState } from '@/api/assistant';
+import type { RouteAndRunTaskSsePayload } from '@/types/route-and-run-task-sse';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === 'object' && !Array.isArray(v);
@@ -47,6 +58,15 @@ function normalizeProactivityGate(v: unknown): ProactivityGate | undefined {
 export function normalizeEmotionalContext(raw: unknown): EmotionalContextClient | null {
   if (!isRecord(raw)) return null;
 
+  const schemaRaw = raw.schema;
+  if (!isAcceptedEmotionalContextSchema(schemaRaw)) {
+    if (import.meta.env.DEV) {
+      console.warn('[emotional-context] rejected schema:', schemaRaw);
+    }
+    return null;
+  }
+  const schema = normalizeEmotionalContextSchema(schemaRaw);
+
   const proactivityGate = normalizeProactivityGate(
     raw.proactivityGate ?? raw.proactivity_gate
   );
@@ -62,6 +82,7 @@ export function normalizeEmotionalContext(raw: unknown): EmotionalContextClient 
     : undefined;
 
   const ctx: EmotionalContextClient = {
+    ...(schema ? { schema } : {}),
     ...(raw.anxietyTriggered === true || raw.anxiety_triggered === true
       ? { anxietyTriggered: true }
       : {}),
@@ -77,6 +98,7 @@ export function normalizeEmotionalContext(raw: unknown): EmotionalContextClient 
   };
 
   if (
+    !ctx.schema &&
     !ctx.anxietyTriggered &&
     !ctx.voiceToneModifier &&
     !ctx.proactivityGate &&
@@ -85,6 +107,11 @@ export function normalizeEmotionalContext(raw: unknown): EmotionalContextClient 
     !ctx.ambienceSignals
   ) {
     return null;
+  }
+
+  if (!ctx.schema && import.meta.env.DEV) {
+    // legacy 无 schema 出站：标注为 client@v1 便于调试
+    ctx.schema = EMOTIONAL_CONTEXT_CLIENT_SCHEMA;
   }
 
   return ctx;
@@ -132,15 +159,59 @@ export function normalizeSharedMilestoneCards(raw: unknown): SharedMilestoneUiCa
   return cards.sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
 }
 
-function pickRawEmotionalContext(payload: Record<string, unknown> | undefined): unknown {
+function pickEmotionalContextFromRecord(record: Record<string, unknown> | undefined): unknown {
+  if (!record) return undefined;
+  return record.emotional_context ?? record.emotionalContext;
+}
+
+function pickRawEmotionalContextFromPayload(payload: Record<string, unknown> | undefined): unknown {
   if (!payload) return undefined;
 
+  // 1) 展示层优先
   const uiDisplay = isRecord(payload.ui_display) ? payload.ui_display : undefined;
-  const fromUi = uiDisplay?.emotional_context ?? uiDisplay?.emotionalContext;
+  const fromUi = pickEmotionalContextFromRecord(uiDisplay);
   if (fromUi != null) return fromUi;
 
+  // 2) payload.metadata 镜像（assembler 回放）
+  const payloadMeta = isRecord(payload.metadata) ? payload.metadata : undefined;
+  const fromPayloadMeta = pickEmotionalContextFromRecord(payloadMeta);
+  if (fromPayloadMeta != null) return fromPayloadMeta;
+
+  // 3) orchestrationResult.state / state.metadata
+  const orch = isRecord(payload.orchestrationResult) ? payload.orchestrationResult : undefined;
+  const state = isRecord(orch?.state) ? (orch.state as Record<string, unknown>) : undefined;
+  const fromState = pickEmotionalContextFromRecord(state);
+  if (fromState != null) return fromState;
+
+  const stateMeta = isRecord(state?.metadata) ? (state.metadata as Record<string, unknown>) : undefined;
+  const fromStateMeta = pickEmotionalContextFromRecord(stateMeta);
+  if (fromStateMeta != null) return fromStateMeta;
+
+  // 4) narration 兜底
   const narration = isRecord(payload.narration) ? payload.narration : undefined;
-  return narration?.emotional_context ?? narration?.emotionalContext;
+  return pickEmotionalContextFromRecord(narration);
+}
+
+function pickRawEmotionalContextFromRouteRun(response: RouteAndRunResponse): unknown {
+  const payload = response.result?.payload as Record<string, unknown> | undefined;
+  const fromPayload = pickRawEmotionalContextFromPayload(payload);
+  if (fromPayload != null) return fromPayload;
+
+  // observability / meta 顶层 metadata 镜像
+  for (const root of [
+    response.observability as Record<string, unknown> | undefined,
+    response.meta as Record<string, unknown> | undefined,
+    isRecord(response.meta?.observability)
+      ? (response.meta!.observability as Record<string, unknown>)
+      : undefined,
+  ]) {
+    if (!root) continue;
+    const meta = isRecord(root.metadata) ? (root.metadata as Record<string, unknown>) : root;
+    const fromObs = pickEmotionalContextFromRecord(meta);
+    if (fromObs != null) return fromObs;
+  }
+
+  return undefined;
 }
 
 function pickRawSharedMilestoneCards(payload: Record<string, unknown> | undefined): unknown {
@@ -162,14 +233,13 @@ export function applyEmotionalContextSideEffects(ctx: EmotionalContextClient | n
   if (ctx.voiceToneModifier) applyVoiceTone(ctx.voiceToneModifier);
 }
 
-/** ui_display.emotional_context 优先 */
+/** ui_display.emotional_context 优先；次选 metadata / state 镜像 */
 export function pickEmotionalContextFromRouteRun(
   response: RouteAndRunResponse
 ): EmotionalContextClient | null {
   if (response.result?.status !== 'OK') return null;
 
-  const payload = response.result?.payload as Record<string, unknown> | undefined;
-  return normalizeEmotionalContext(pickRawEmotionalContext(payload));
+  return normalizeEmotionalContext(pickRawEmotionalContextFromRouteRun(response));
 }
 
 export function pickSharedMilestoneCardsFromRouteRun(
@@ -192,24 +262,39 @@ export function hasSharedMilestoneCardsUi(
 export function isAnchoringEmotionalContext(ctx: EmotionalContextClient | null | undefined): boolean {
   if (!ctx) return false;
   return (
-    ctx.anxietyTriggered === true || ctx.voiceToneModifier === 'professional_authoritative'
+    ctx.anxietyTriggered === true ||
+    ctx.voiceToneModifier === 'professional_authoritative' ||
+    ctx.voiceToneModifier === 'empathetic_reassurance'
   );
 }
 
-/** route_and_run OK 终态：写 store + 里程碑卡 */
+export function isReassuranceEmotionalContext(ctx: EmotionalContextClient | null | undefined): boolean {
+  if (!ctx) return false;
+  return ctx.voiceToneModifier === 'empathetic_reassurance';
+}
+
+/** route_and_run OK 终态：写 store + 里程碑卡 + 暖心语音/住宿健康度 */
 export function applyEmotionalContextFromRouteRun(response: RouteAndRunResponse): {
   emotionalContext: EmotionalContextClient | null;
   sharedMilestoneCards: SharedMilestoneUiCard[];
+  voicePayload: import('@/types/voice-payload').VoicePayload | null;
+  accommodationHealth: import('@/types/accommodation-health').AccommodationHealthPayload | null;
 } {
   const emotionalContext = pickEmotionalContextFromRouteRun(response);
   const sharedMilestoneCards = pickSharedMilestoneCardsFromRouteRun(response);
+  const voicePayload = pickVoicePayloadFromRouteRun(response);
+  const accommodationHealth = pickAccommodationHealthFromRouteRun(response);
 
   if (emotionalContext) applyEmotionalContextSideEffects(emotionalContext);
+  if (voicePayload) applyVoicePayloadSideEffects(voicePayload);
+  else applyVoicePayloadSideEffects(null);
+  if (accommodationHealth) applyAccommodationHealthSideEffects(accommodationHealth);
+  else applyAccommodationHealthSideEffects(null);
   if (sharedMilestoneCards.length > 0) {
     getEmotionContextStoreState().setMilestoneCards(sharedMilestoneCards);
   }
 
-  return { emotionalContext, sharedMilestoneCards };
+  return { emotionalContext, sharedMilestoneCards, voicePayload, accommodationHealth };
 }
 
 /** journeyState.emotionalContext / emotional_context */

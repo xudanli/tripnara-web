@@ -43,6 +43,7 @@ export interface BookingCartSelection {
   total_price_numeric?: number;
   total_price_label?: string;
   within_budget?: boolean;
+  budget_limit?: number;
   currency?: string;
   [key: string]: unknown;
 }
@@ -59,6 +60,7 @@ export interface BookingCartBudget {
 export interface BookingCartSavingsOpportunity {
   opportunity_id?: string;
   label_zh?: string;
+  suggestion_zh?: string;
   summary_zh?: string;
   title_zh?: string;
   replace_item_id?: string;
@@ -81,7 +83,10 @@ export interface BookingCartDeepLink {
 }
 
 export interface BookingCartCheckout {
+  status?: 'ready' | 'submitted';
   deep_links?: BookingCartDeepLink[];
+  disclaimer_zh?: string;
+  bundle?: import('@/types/booking-checkout-bundle').BookingCheckoutBundle;
   submitted_at?: string;
   [key: string]: unknown;
 }
@@ -91,6 +96,10 @@ export interface BookingCartPayload {
   items: BookingCartItem[];
   headline_zh?: string;
   summary_zh?: string;
+  /** 全局背包锁定高光锚点后的中文说明 */
+  trade_off_narrative?: string;
+  /** 采样报价，下单前需用户再次确认 */
+  quote_only?: boolean;
   cart_state?: BookingCartState;
   selection?: BookingCartSelection;
   budget?: BookingCartBudget;
@@ -107,6 +116,8 @@ export interface BookingCartApplyRequest {
 }
 
 export interface BookingCartApplyResponse {
+  status?: 'OK' | 'REJECTED';
+  /** 服务端归一化后的购物车（优先 booking_cart，兼容 cart） */
   cart: BookingCartPayload;
   checkout?: BookingCartCheckout;
   message?: string;

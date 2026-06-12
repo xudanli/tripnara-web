@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { BookingCheckoutBundlePanel } from '@/components/agent/BookingCheckoutBundlePanel';
 import {
   applyBookingCartAction,
   deepLinkForCartItem,
@@ -36,6 +37,7 @@ import {
   AlertTriangle,
   Car,
   CheckCircle2,
+  ChevronRight,
   ExternalLink,
   Hotel,
   Loader2,
@@ -49,6 +51,8 @@ export interface BookingCartPanelProps {
   tripId?: string | null;
   disabled?: boolean;
   className?: string;
+  /** is_flawed 时 checkout 前须二次确认 */
+  flawedDraftActive?: boolean;
 }
 
 function iconForKind(kind: BookingCartItem['kind']) {
@@ -117,13 +121,39 @@ function formatBudgetLine(cart: BookingCartPayload): string | null {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }: BookingCartPanelProps) {
+/** draft 仅报价时默认收起；需确认/超预算/已提交时默认展开 */
+function defaultBookingCartExpanded(cartState: BookingCartState): boolean {
+  return cartState !== 'draft';
+}
+
+function collapsedCartSummary(cart: BookingCartPayload, cartState: BookingCartState): string {
+  const headline = cart.headline_zh?.trim();
+  if (headline) return headline;
+  const budget = formatBudgetLine(cart);
+  const count = `${cart.items.length} 项`;
+  if (budget) return `${count} · ${budget}`;
+  if (cartState === 'draft') return `${count}采样报价（未设预算）`;
+  return count;
+}
+
+export function BookingCartPanel({
+  cart: cartProp,
+  tripId,
+  disabled,
+  className,
+  flawedDraftActive,
+}: BookingCartPanelProps) {
   const [cart, setCart] = useState<BookingCartPayload>(cartProp);
   const [busy, setBusy] = useState(false);
   const [overBudgetDialogOpen, setOverBudgetDialogOpen] = useState(false);
+  const [flawedDraftDialogOpen, setFlawedDraftDialogOpen] = useState(false);
+  const [expanded, setExpanded] = useState(() =>
+    defaultBookingCartExpanded(cartProp.cart_state ?? 'draft')
+  );
 
   useEffect(() => {
     setCart(cartProp);
+    setExpanded(defaultBookingCartExpanded(cartProp.cart_state ?? 'draft'));
   }, [cartProp]);
 
   const sanitizedTripId = tripId ? sanitizeRouteRunTripId(tripId) : null;
@@ -134,6 +164,9 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
   const budgetLine = formatBudgetLine(cart);
   const showSelectedHighlight = selectedIds.size > 0;
   const apiEnabled = Boolean(sanitizedTripId);
+  const checkoutBundle = cart.checkout?.bundle;
+  const showQuoteOnlyHint =
+    cart.quote_only !== false && checkoutBundle?.quote_only !== false;
 
   const runApply = useCallback(
     async (
@@ -153,6 +186,9 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
           payload,
         });
         setCart(res.cart);
+        if (defaultBookingCartExpanded(res.cart.cart_state ?? 'draft')) {
+          setExpanded(true);
+        }
         if (res.message) toast.message(res.message);
         return res;
       } catch (err) {
@@ -194,7 +230,18 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
     const submitRes = await runApply('submit_checkout');
     if (!submitRes) return;
 
-    const opened = openBookingCartDeepLinks(submitRes.checkout ?? submitRes.cart.checkout);
+    if (submitRes.status === 'REJECTED') {
+      toast.error(submitRes.message ?? '提交预订被拒绝');
+      return;
+    }
+
+    const checkout = submitRes.checkout ?? submitRes.cart.checkout;
+    if (checkout?.bundle) {
+      toast.success('锁价结算单已生成');
+      return;
+    }
+
+    const opened = openBookingCartDeepLinks(checkout);
     if (opened > 0) {
       toast.success(`已打开 ${opened} 个预订链接`);
     } else {
@@ -203,6 +250,19 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
   };
 
   const handleCheckoutClick = () => {
+    if (flawedDraftActive) {
+      setFlawedDraftDialogOpen(true);
+      return;
+    }
+    if (needsOverBudgetAcknowledge(cart)) {
+      setOverBudgetDialogOpen(true);
+      return;
+    }
+    void runCheckout(false);
+  };
+
+  const proceedCheckoutAfterFlawedAck = () => {
+    setFlawedDraftDialogOpen(false);
     if (needsOverBudgetAcknowledge(cart)) {
       setOverBudgetDialogOpen(true);
       return;
@@ -212,46 +272,79 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
 
   if (!cart.items.length) return null;
 
+  const collapsedSummary = collapsedCartSummary(cart, cartState);
+
   return (
     <>
-      <Card className={cn('border-border/80 bg-card/60', className)}>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4 text-primary" aria-hidden />
-                {cart.headline_zh?.trim() || '预订清单'}
-              </CardTitle>
-              <CardDescription className="text-xs mt-1">
-                {cart.summary_zh?.trim() ||
-                  (apiEnabled
-                    ? '点选条目更新组合；确认后提交预订意向并打开 deep link。'
-                    : '绑定有效行程后可走 checkout API；当前仅展示快照。')}
-              </CardDescription>
+      <Collapsible
+        open={expanded}
+        onOpenChange={setExpanded}
+        className={cn('rounded-lg border border-border/80 bg-card/60', className)}
+      >
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={disabled}
+            className="h-auto w-full justify-between gap-3 rounded-lg px-3 py-3 text-left hover:bg-muted/20 [&[data-state=open]_svg:last-child]:rotate-90"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <ShoppingCart className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                <span className="text-sm font-semibold text-foreground">一键预订</span>
+                <Badge variant="outline" className={cn('text-[10px] gap-1 h-6', stateMeta.className)}>
+                  <StateIcon className="h-3 w-3" aria-hidden />
+                  {BOOKING_CART_STATE_LABELS[cartState]}
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                {collapsedSummary}
+              </p>
             </div>
-            <Badge variant="outline" className={cn('text-[10px] gap-1 h-6', stateMeta.className)}>
-              <StateIcon className="h-3 w-3" aria-hidden />
-              {BOOKING_CART_STATE_LABELS[cartState]}
-            </Badge>
-          </div>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-muted-foreground transition-transform"
+              aria-hidden
+            />
+          </Button>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent className="border-t border-border/60 px-3 pb-3 pt-2 space-y-3">
+          {(cart.headline_zh?.trim() && cart.headline_zh.trim() !== collapsedSummary) ||
+          cart.summary_zh?.trim() ? (
+            <div className="space-y-1">
+              {cart.headline_zh?.trim() && cart.headline_zh.trim() !== collapsedSummary ? (
+                <p className="text-sm font-medium text-foreground">{cart.headline_zh.trim()}</p>
+              ) : null}
+              {cart.summary_zh?.trim() ? (
+                <p className="text-xs text-muted-foreground">{cart.summary_zh.trim()}</p>
+              ) : null}
+            </div>
+          ) : null}
           {budgetLine ? (
-            <p className="text-[11px] text-muted-foreground mt-2 tabular-nums">{budgetLine}</p>
+            <p className="text-[11px] text-muted-foreground tabular-nums">{budgetLine}</p>
+          ) : null}
+          {cart.trade_off_narrative?.trim() ? (
+            <p className="text-xs text-muted-foreground leading-relaxed">{cart.trade_off_narrative.trim()}</p>
+          ) : null}
+          {showQuoteOnlyHint ? (
+            <p className="text-[10px] text-muted-foreground/90 leading-relaxed">
+              价格为采样报价，跳转供应商下单前请再次确认实时价格与库存。
+            </p>
           ) : null}
           {cart.budget?.transport_share_hint || cart.budget?.accommodation_share_hint ? (
-            <p className="text-[10px] text-muted-foreground/90 mt-1 leading-relaxed">
+            <p className="text-[10px] text-muted-foreground/90 leading-relaxed">
               {[cart.budget.transport_share_hint, cart.budget.accommodation_share_hint]
                 .filter(Boolean)
                 .join(' · ')}
             </p>
           ) : null}
           {cartState === 'over_budget' ? (
-            <p className="text-xs text-amber-900/90 dark:text-amber-100/90 mt-2 flex items-start gap-1.5">
+            <p className="text-xs text-amber-900/90 dark:text-amber-100/90 flex items-start gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
               当前组合超出预算，请应用换选建议或确认后继续。
             </p>
           ) : null}
-        </CardHeader>
-        <CardContent className="space-y-3">
+
           {cart.savings_opportunities && cart.savings_opportunities.length > 0 ? (
             <div className="rounded-lg border border-amber-500/25 bg-amber-50/35 px-3 py-2 dark:bg-amber-950/20">
               <div className="text-[10px] font-medium uppercase tracking-wide text-amber-900/80 dark:text-amber-100/80 mb-2">
@@ -270,7 +363,7 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
                   >
                     <RefreshCw className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
                     <span className="flex-1">
-                      {opp.label_zh}
+                      {opp.suggestion_zh ?? opp.label_zh}
                       {opp.savings_label_zh ? (
                         <span className="text-muted-foreground"> · {opp.savings_label_zh}</span>
                       ) : null}
@@ -370,6 +463,13 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
             })}
           </div>
 
+          {checkoutBundle ? (
+            <BookingCheckoutBundlePanel
+              bundle={checkoutBundle}
+              disclaimerZh={cart.checkout?.disclaimer_zh}
+            />
+          ) : null}
+
           {apiEnabled && cartState !== 'checkout_submitted' ? (
             <Button
               type="button"
@@ -378,7 +478,7 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
               onClick={handleCheckoutClick}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-              确认并去预订
+              {cartState === 'ready_to_checkout' ? '提交锁价结算' : '确认并去预订'}
             </Button>
           ) : null}
 
@@ -397,8 +497,8 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
               再次打开全部预订链接
             </Button>
           ) : null}
-        </CardContent>
-      </Card>
+        </CollapsibleContent>
+      </Collapsible>
 
       <AlertDialog open={overBudgetDialogOpen} onOpenChange={setOverBudgetDialogOpen}>
         <AlertDialogContent>
@@ -417,6 +517,23 @@ export function BookingCartPanel({ cart: cartProp, tripId, disabled, className }
               }}
             >
               确认超预算并继续
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={flawedDraftDialogOpen} onOpenChange={setFlawedDraftDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>当前为瑕疵草案</AlertDialogTitle>
+            <AlertDialogDescription>
+              行程尚未完全验证，直接预订可能基于未收敛方案。请确认您已阅读瑕疵说明，仍要继续提交预订意向。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={proceedCheckoutAfterFlawedAck}>
+              我已了解，继续预订
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

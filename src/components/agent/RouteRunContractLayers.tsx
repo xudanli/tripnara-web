@@ -210,6 +210,8 @@ export type RouteRunContractLayersProps = {
   ) => void;
   /** 改排 intake：隐藏三人格门控块，保留同轮 gate violations / verify_issues */
   suppressGuardianPersonas?: boolean;
+  /** 开放世界稀疏区：勿展示「POI 较少请补全」类负面 copy */
+  suppressSparseNegativeCopy?: boolean;
   /** 目的地 IANA 时区；用于 POI_CLOSED 与 timeline 计划时间对齐 */
   timezone?: string;
   /** 已落库行程 POI 计划时间（优先于 Agent timeline） */
@@ -230,6 +232,7 @@ export function RouteRunContractLayers({
   answerTextForDayNarration,
   onSuggestedRouteRun,
   suppressGuardianPersonas = false,
+  suppressSparseNegativeCopy = false,
   timezone,
   tripPoiSchedules,
 }: RouteRunContractLayersProps) {
@@ -284,8 +287,9 @@ export function RouteRunContractLayers({
   );
 
   const sparseDraft =
-    detectRouteRunSparsePoiDraft({ poiCardsByDay: poiCardsByDay ?? undefined, timelineDayBlocks }) ||
-    Boolean(routeRunNoPoiPlanningFlag);
+    !suppressSparseNegativeCopy &&
+    (detectRouteRunSparsePoiDraft({ poiCardsByDay: poiCardsByDay ?? undefined, timelineDayBlocks }) ||
+      Boolean(routeRunNoPoiPlanningFlag));
 
   const issueCodes = verifyIssues
     .map((i) => (typeof i.code === 'string' ? i.code : ''))

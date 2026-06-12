@@ -67,9 +67,20 @@ function listingCoords(item: Accommodation): { lat: number; lng: number } | unde
   return undefined;
 }
 
-function formatAccommodationDistanceLine(item: Accommodation): string | null {
+function formatAccommodationDistanceLine(
+  item: Accommodation,
+  options?: { suppressRawKm?: boolean }
+): string | null {
   const label = item.distanceLabelZh?.trim();
-  if (label) return label;
+  if (label) {
+    if (options?.suppressRawKm && /\d+(\.\d+)?\s*km/i.test(label)) {
+      return item.decisionSupportZh?.trim() || null;
+    }
+    return label;
+  }
+  if (options?.suppressRawKm) {
+    return item.decisionSupportZh?.trim() || null;
+  }
   if (item.distanceToAnchorKm != null) {
     if (item.anchorPoiNameZh?.trim()) {
       return `距「${item.anchorPoiNameZh.trim()}」约 ${item.distanceToAnchorKm.toFixed(1)} km`;
@@ -172,6 +183,8 @@ interface AccommodationListProps {
   tripInfo?: unknown;
   onAddToTripSuccess?: () => void;
   disclaimerZh?: string;
+  /** accommodation_health 存在时隐藏 raw km，改用人话标签 */
+  suppressRawDistanceKm?: boolean;
   layout?: 'scroll-contained' | 'flow';
   className?: string;
 }
@@ -185,6 +198,7 @@ export function AccommodationList({
   defaultCheckOut,
   onAddToTripSuccess,
   disclaimerZh,
+  suppressRawDistanceKm,
   layout = 'scroll-contained',
   className,
 }: AccommodationListProps) {
@@ -329,7 +343,9 @@ export function AccommodationList({
             const hint = parseItineraryHintZh(item.itineraryHintZh);
             const enLine = englishTitleLine(item);
             const stay = item.stayLabelZh?.trim() || formatStayWindow(item.checkIn, item.checkOut);
-            const distanceLine = formatAccommodationDistanceLine(item);
+            const distanceLine = formatAccommodationDistanceLine(item, {
+              suppressRawKm: suppressRawDistanceKm,
+            });
             const mapCoords = listingCoords(item);
             const decisionSupportText = item.decisionSupportZh?.trim() ?? '';
             const cardActions = resolveCardActions(item, canAddToTrip, index);

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { RouteAndRunResponse } from '@/api/agent';
+import type { TaskLeaseEchoV1 } from '@/types/task-lease';
 
 export type PlanningTaskStatus = 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
 
@@ -11,6 +12,7 @@ export interface PlanningTaskState {
   message: string;
   resultData: RouteAndRunResponse | null;
   pollPath: string | null;
+  taskLease: TaskLeaseEchoV1 | null;
   setTask: (patch: Partial<PlanningTaskState>) => void;
   reset: () => void;
 }
@@ -23,6 +25,7 @@ const initialData: Omit<PlanningTaskState, 'setTask' | 'reset'> = {
   message: '',
   resultData: null,
   pollPath: null,
+  taskLease: null,
 };
 
 export const usePlanningTaskStore = create<PlanningTaskState>((set) => ({

@@ -1,6 +1,8 @@
 import type { RouteAndRunResponse } from '@/api/agent';
+import { normalizeBookingCheckoutBundle } from '@/lib/booking-checkout-bundle-ui';
 import type {
   BookingCartBudget,
+  BookingCartCheckout,
   BookingCartItem,
   BookingCartPayload,
   BookingCartSavingsOpportunity,
@@ -91,6 +93,9 @@ function normalizeSelection(v: unknown): BookingCartSelection | undefined {
       : typeof v.withinBudget === 'boolean'
         ? { within_budget: v.withinBudget }
         : {}),
+    ...(pickNum(v.budget_limit) ?? pickNum(v.budgetLimit)
+      ? { budget_limit: pickNum(v.budget_limit) ?? pickNum(v.budgetLimit) }
+      : {}),
     ...(pickStr(v.currency) ? { currency: pickStr(v.currency) } : {}),
   };
 }
@@ -120,6 +125,8 @@ function normalizeSavingsOpportunity(v: unknown, index: number): BookingCartSavi
   const label =
     pickStr(v.label_zh) ??
     pickStr(v.labelZh) ??
+    pickStr(v.suggestion_zh) ??
+    pickStr(v.suggestionZh) ??
     pickStr(v.title_zh) ??
     pickStr(v.titleZh) ??
     pickStr(v.summary_zh) ??
@@ -131,6 +138,9 @@ function normalizeSavingsOpportunity(v: unknown, index: number): BookingCartSavi
       ? { opportunity_id: pickStr(v.opportunity_id) ?? pickStr(v.opportunityId) }
       : { opportunity_id: `savings-${index}` }),
     label_zh: label,
+    ...(pickStr(v.suggestion_zh) ?? pickStr(v.suggestionZh)
+      ? { suggestion_zh: pickStr(v.suggestion_zh) ?? pickStr(v.suggestionZh) }
+      : {}),
     ...(pickStr(v.summary_zh) ?? pickStr(v.summaryZh)
       ? { summary_zh: pickStr(v.summary_zh) ?? pickStr(v.summaryZh) }
       : {}),
@@ -161,7 +171,7 @@ function normalizeSavingsOpportunity(v: unknown, index: number): BookingCartSavi
   };
 }
 
-function normalizeCheckout(v: unknown): import('@/types/booking-cart').BookingCartCheckout | undefined {
+export function normalizeCheckout(v: unknown): BookingCartCheckout | undefined {
   if (!isRecord(v)) return undefined;
   const rawLinks = v.deep_links ?? v.deepLinks;
   const deep_links = Array.isArray(rawLinks)
@@ -183,12 +193,37 @@ function normalizeCheckout(v: unknown): import('@/types/booking-cart').BookingCa
         })
         .filter(Boolean)
     : undefined;
-  return {
-    ...(deep_links?.length ? { deep_links: deep_links as import('@/types/booking-cart').BookingCartDeepLink[] } : {}),
+
+  const statusRaw = pickStr(v.status);
+  const status =
+    statusRaw === 'ready' || statusRaw === 'submitted' ? statusRaw : undefined;
+
+  const bundle = normalizeBookingCheckoutBundle(v.bundle);
+
+  const checkout: BookingCartCheckout = {
+    ...(status ? { status } : {}),
+    ...(deep_links?.length
+      ? { deep_links: deep_links as import('@/types/booking-cart').BookingCartDeepLink[] }
+      : {}),
+    ...(pickStr(v.disclaimer_zh) ?? pickStr(v.disclaimerZh)
+      ? { disclaimer_zh: pickStr(v.disclaimer_zh) ?? pickStr(v.disclaimerZh) }
+      : {}),
+    ...(bundle ? { bundle } : {}),
     ...(pickStr(v.submitted_at) ?? pickStr(v.submittedAt)
       ? { submitted_at: pickStr(v.submitted_at) ?? pickStr(v.submittedAt) }
       : {}),
   };
+
+  if (
+    !checkout.deep_links?.length &&
+    !checkout.submitted_at &&
+    !checkout.bundle &&
+    !checkout.disclaimer_zh &&
+    !checkout.status
+  ) {
+    return undefined;
+  }
+  return checkout;
 }
 
 function normalizeCartState(v: unknown): BookingCartState | undefined {
@@ -234,6 +269,14 @@ export function normalizeBookingCartPayload(raw: unknown): BookingCartPayload | 
     items,
     ...(pickStr(raw.headline_zh) ? { headline_zh: pickStr(raw.headline_zh) } : {}),
     ...(pickStr(raw.summary_zh) ? { summary_zh: pickStr(raw.summary_zh) } : {}),
+    ...(pickStr(raw.trade_off_narrative) ?? pickStr(raw.tradeOffNarrative)
+      ? { trade_off_narrative: pickStr(raw.trade_off_narrative) ?? pickStr(raw.tradeOffNarrative) }
+      : {}),
+    ...(typeof raw.quote_only === 'boolean'
+      ? { quote_only: raw.quote_only }
+      : typeof raw.quoteOnly === 'boolean'
+        ? { quote_only: raw.quoteOnly }
+        : {}),
     ...(normalizeCartState(raw.cart_state ?? raw.cartState)
       ? { cart_state: normalizeCartState(raw.cart_state ?? raw.cartState) }
       : {}),

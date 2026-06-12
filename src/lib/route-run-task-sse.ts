@@ -2,10 +2,15 @@ import type { RouteAndRunResponse, RouteRunAsyncTaskStatusResponse } from '@/api
 import { agentApi } from '@/api/agent';
 import { CONFIG } from '@/constants/config';
 import {
-  pollRouteRunTaskUntilDone,
   type RouteRunAsyncTaskStatusSnapshot,
 } from '@/lib/route-run-async';
 import { normalizeAgentTaskPollPath } from '@/lib/route-run-task-path';
+import {
+  attachTaskLeaseToSnapshot,
+  isTaskLeaseExhausted,
+  resolveTaskLeasePollIntervalMs,
+} from '@/lib/task-lease-ui';
+import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
 import type { RouteAndRunTaskSsePayload } from '@/types/route-and-run-task-sse';
 import { applyEmotionalContextFromSsePayload } from '@/lib/emotional-context-ui';
 
@@ -155,7 +160,102 @@ export type AwaitRouteAndRunTaskCompletionOptions = {
   preferPollingFallback?: boolean;
   pollPath?: string;
   getTaskStatus?: (taskId: string) => Promise<RouteRunAsyncTaskStatusSnapshot<RouteAndRunResponse>>;
+  /** STALE 且 SSE 长时间无事件时可选显式 resume（与 poll 自动 resume 等价） */
+  enableExplicitResumeOnStale?: boolean;
 };
+
+function sleepMs(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(signal!.reason ?? new DOMException('Aborted', 'AbortError'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * 与 SSE 并行：读 task_lease_v1、终态兜底、EXHAUSTED 早停。
+ */
+function startParallelTaskStatusPoll(
+  taskId: string,
+  options: {
+    signal?: AbortSignal;
+    defaultIntervalMs: number;
+    getTaskStatus: (taskId: string) => Promise<RouteRunAsyncTaskStatusSnapshot<RouteAndRunResponse>>;
+    onProgress?: (snap: RouteRunAsyncTaskStatusResponse) => void;
+    isSettled: () => boolean;
+    onTerminalSuccess: (data: RouteAndRunResponse) => void;
+    onTerminalError: (err: Error) => void;
+  }
+): () => void {
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+  };
+
+  void (async () => {
+    let lastStaleResumeAt = 0;
+    try {
+      while (!stopped && !options.isSettled()) {
+        if (options.signal?.aborted) return;
+
+        const raw = await options.getTaskStatus(taskId);
+        const snap = attachTaskLeaseToSnapshot(raw) as RouteRunAsyncTaskStatusResponse;
+        if (stopped || options.isSettled()) return;
+
+        options.onProgress?.(snap);
+
+        if (isTaskLeaseExhausted(snap.task_lease_v1)) {
+          options.onTerminalError(new RouteRunTaskLeaseExhaustedError(snap.message));
+          return;
+        }
+
+        if (snap.status === 'SUCCESS' && snap.data) {
+          options.onTerminalSuccess(snap.data);
+          return;
+        }
+
+        if (snap.status === 'FAILED' || snap.status === 'CANCELLED') {
+          options.onTerminalError(
+            new RouteRunTaskTerminalError(snap.message?.trim() || '规划失败')
+          );
+          return;
+        }
+
+        const leaseStatus = snap.task_lease_v1?.lease_status;
+        if (
+          leaseStatus === 'STALE' &&
+          Date.now() - lastStaleResumeAt > 45_000
+        ) {
+          lastStaleResumeAt = Date.now();
+          try {
+            await agentApi.resumeRouteRunTask(taskId);
+          } catch {
+            /* poll 路径仍会触发后端 auto-resume */
+          }
+        }
+
+        const interval = resolveTaskLeasePollIntervalMs(leaseStatus, options.defaultIntervalMs);
+        await sleepMs(interval, options.signal);
+      }
+    } catch (err) {
+      if (stopped || options.isSettled()) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      options.onTerminalError(err instanceof Error ? err : new Error('任务状态轮询失败'));
+    }
+  })();
+
+  return stop;
+}
 
 /**
  * 主路径：SSE 实时进度；失败时 fallback GET task/status（间隔见 CONFIG）。
@@ -172,6 +272,10 @@ export async function awaitRouteAndRunTaskCompletion(
       : maybeOptions ?? {};
 
   const normalizedPollPath = normalizeAgentTaskPollPath(options.pollPath ?? pollPath, taskId);
+  const defaultIntervalMs = CONFIG.API.ROUTE_RUN_ASYNC_POLL_INTERVAL_MS;
+  const getTaskStatus =
+    options.getTaskStatus ??
+    (() => agentApi.getRouteRunTaskStatusByPath(normalizedPollPath));
 
   let lastProgressKey = '';
   const dedupeKey = (p: RouteAndRunTaskSsePayload) =>
@@ -184,73 +288,64 @@ export async function awaitRouteAndRunTaskCompletion(
     options.onProgress?.(ssePayloadToPollSnapshot(payload));
   };
 
-  const runSse = (): Promise<RouteAndRunResponse> =>
-    new Promise((resolve, reject) => {
-      let settled = false;
+  return new Promise<RouteAndRunResponse>((resolve, reject) => {
+    let settled = false;
+    let stopPoll: (() => void) | undefined;
 
-      void subscribeRouteAndRunTaskStream(taskId, {
-        signal: options.signal,
-        onPayload: (payload) => {
-          emitProgress(payload);
-          if (payload.type === 'RESULT') {
-            if (!payload.data) {
-              if (!settled) {
-                settled = true;
-                reject(new RouteRunTaskTerminalError('任务已完成，但未返回行程数据'));
-              }
-              return;
-            }
-            if (!settled) {
-              settled = true;
-              resolve(payload.data);
-            }
+    const finishSuccess = (data: RouteAndRunResponse) => {
+      if (settled) return;
+      settled = true;
+      stopPoll?.();
+      resolve(data);
+    };
+
+    const finishError = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      stopPoll?.();
+      reject(err);
+    };
+
+    stopPoll = startParallelTaskStatusPoll(taskId, {
+      signal: options.signal,
+      defaultIntervalMs,
+      getTaskStatus,
+      onProgress: options.onProgress,
+      isSettled: () => settled,
+      onTerminalSuccess: finishSuccess,
+      onTerminalError: finishError,
+    });
+
+    void subscribeRouteAndRunTaskStream(taskId, {
+      signal: options.signal,
+      onPayload: (payload) => {
+        emitProgress(payload);
+        if (payload.type === 'RESULT') {
+          if (!payload.data) {
+            finishError(new RouteRunTaskTerminalError('任务已完成，但未返回行程数据'));
             return;
           }
-          if (payload.type === 'ERROR') {
-            if (!settled) {
-              settled = true;
-              reject(
-                new RouteRunTaskTerminalError(
-                  payload.error?.trim() || payload.message?.trim() || '规划失败'
-                )
-              );
-            }
-          }
-        },
-      })
-        .then(() => {
-          if (!settled) {
-            settled = true;
-            reject(new Error('SSE 已结束但未收到 RESULT'));
-          }
-        })
-        .catch((e) => {
-          if (!settled) {
-            settled = true;
-            reject(e);
-          }
-        });
+          finishSuccess(payload.data);
+          return;
+        }
+        if (payload.type === 'ERROR') {
+          finishError(
+            new RouteRunTaskTerminalError(
+              payload.error?.trim() || payload.message?.trim() || '规划失败'
+            )
+          );
+        }
+      },
+    }).catch(() => {
+      /* SSE 断线：parallel poll 继续兜底 */
     });
 
-  try {
-    return await runSse();
-  } catch (err) {
-    if (options.signal?.aborted) {
-      throw options.signal.reason ?? new DOMException('Aborted', 'AbortError');
-    }
-    if (err instanceof RouteRunTaskTerminalError) {
-      throw err;
-    }
-    if (options.preferPollingFallback === false) {
-      throw err instanceof Error ? err : new Error('SSE failed');
-    }
-
-    return pollRouteRunTaskUntilDone(taskId, {
-      signal: options.signal,
-      onProgress: options.onProgress,
-      getTaskStatus:
-        options.getTaskStatus ??
-        (() => agentApi.getRouteRunTaskStatusByPath(normalizedPollPath)),
-    });
-  }
+    options.signal?.addEventListener(
+      'abort',
+      () => {
+        finishError(options.signal!.reason ?? new DOMException('Aborted', 'AbortError'));
+      },
+      { once: true }
+    );
+  });
 }

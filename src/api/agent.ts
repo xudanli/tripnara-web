@@ -7,6 +7,7 @@ import {
   type RouteRunAsyncTaskStatusSnapshot,
 } from '@/lib/route-run-async';
 import { normalizeAgentTaskPollPath } from '@/lib/route-run-task-path';
+import { attachTaskLeaseToSnapshot } from '@/lib/task-lease-ui';
 import { awaitRouteAndRunTaskCompletion } from '@/lib/route-run-task-sse';
 
 export type { RouteRunAsyncPhase, RouteRunAsyncTaskStatus };
@@ -109,6 +110,10 @@ export interface AgentOptions {
    * 与后端 route_and_run DTO 对齐，字段名 snake_case。
    */
   persona_hint?: RouteRunPersonaHint;
+  /**
+   * 为 true 时 REPAIR/效用预算耗尽仍 NARRATE → SUCCESS + flawed_draft_v1（须展示瑕疵 Banner）
+   */
+  allow_flawed_draft_narrate?: boolean;
   /**
    * 为 true 时门控非致命可走影子辩论 LLM，响应中可能出现 `source: 'llm_debate'`；
    * 不传则多为规则投影 `violation_projection_v1`。
@@ -810,6 +815,16 @@ export interface ObservabilityMetrics {
   memory_contract?: import('@/features/route-and-run/types/observability').MemoryContractObs;
   /** 正式 Robustness Dashboard（ROBUSTNESS_ROLLOUT_ENABLED=1 且 status=OK） */
   robustness_dashboard?: import('@/types/robustness-dashboard').RobustnessDashboardPayload;
+  /**
+   * 路由类分叉观测；旧响应可能仅出现在 `trace.route_class_fork_v1`。
+   * 读取：`obs.route_class_fork_v1 ?? obs.trace?.route_class_fork_v1`。
+   */
+  route_class_fork_v1?: import('@/types/route-class-observability').RouteClassForkV1;
+  /**
+   * 路由类漂移评估；旧响应可能仅出现在 `trace.route_class_eval_v1`。
+   * 读取：`obs.route_class_eval_v1 ?? obs.trace?.route_class_eval_v1`。
+   */
+  route_class_eval_v1?: import('@/types/route-class-observability').RouteClassEvalV1;
 }
 
 /**
@@ -1188,8 +1203,18 @@ export interface RouteAndRunResponse {
         poi_pitfall_cards?: import('@/types/poi-pitfall').PoiPitfallCard[] | import('@/types/poi-pitfall').PoiPitfallCardsPayload;
         /** P2：航班/酒店/租车 MCP 聚合预订清单 */
         booking_cart?: import('@/types/booking-cart').BookingCartPayload;
+        /** Phase-4c：抢票倒计时 / 官方预约 / 日历提醒 */
+        booking_priority_list?: import('@/types/booking-priority-list').BookingPriorityListPayload;
+        /** 开放世界稀疏 stub 核实任务（enrichClientUiDisplay） */
+        open_world_discovery?: import('@/types/open-world-discovery').OpenWorldDiscoveryPayload;
+        /** Phase-4d：多图层行程地图（POI / 住宿 / 租车） */
+        unified_map_layer?: import('@/types/unified-map-layer').UnifiedMapLayerPayload;
         /** 情绪上下文投影（服务端为准） */
         emotional_context?: import('@/types/emotional-context').EmotionalContextClient;
+        /** Phase-4c：暖心 TTS 口语全文 */
+        voice_payload?: import('@/types/voice-payload').VoicePayload;
+        /** Phase-4c：住宿健康度（人话标签，不展示 raw km） */
+        accommodation_health?: import('@/types/accommodation-health').AccommodationHealthPayload;
         /** 跨 trip 共同回忆卡片 */
         shared_milestone_cards?: import('@/types/shared-milestone').SharedMilestoneUiCard[];
         [key: string]: any;
@@ -1260,6 +1285,8 @@ export interface RouteAndRunResponse {
        */
       safety_surface?: Record<string, unknown>;
       safetySurface?: Record<string, unknown>;
+      /** P1.1：SUCCESS 但未完全 VERIFIED 的瑕疵草案描述 */
+      flawed_draft_v1?: import('@/types/flawed-draft').FlawedDraftDescriptorV1;
       [key: string]: any;
     };
   };
@@ -1289,6 +1316,8 @@ export interface RouteAndRunResponse {
       dso_version?: string;
       [key: string]: unknown;
     };
+    /** P1.1：与 payload.flawed_draft_v1 同源只读镜像 */
+    flawed_draft_v1?: import('@/types/flawed-draft').FlawedDraftDescriptorV1;
   };
   observability: ObservabilityMetrics;
   /**
@@ -1604,12 +1633,38 @@ export const agentApi = {
 
     const body = response.data;
     if (body && typeof body === 'object' && 'success' in body) {
-      return handleResponse({ data: body as ApiResponseWrapper<RouteRunAsyncTaskStatusResponse> });
+      return attachTaskLeaseToSnapshot(
+        handleResponse({ data: body as ApiResponseWrapper<RouteRunAsyncTaskStatusResponse> })
+      );
     }
     if (body && typeof body === 'object' && 'task_id' in body) {
-      return body as RouteRunAsyncTaskStatusResponse;
+      return attachTaskLeaseToSnapshot(body as RouteRunAsyncTaskStatusResponse);
     }
     throw new Error('无效的任务状态响应');
+  },
+
+  /**
+   * 显式续跑 STALE Worker（与 poll 自动 resume 等价）
+   * POST /agent/task/resume/{task_id}
+   */
+  resumeRouteRunTask: async (
+    taskId: string
+  ): Promise<{ task_id: string; resumed?: boolean }> => {
+    const path = `/agent/task/resume/${encodeURIComponent(taskId)}`;
+    const response = await apiClient.post<
+      ApiResponseWrapper<{ task_id: string; resumed?: boolean }> | { task_id: string; resumed?: boolean }
+    >(path, {}, { validateStatus: (s) => s === 200 || s === 202 });
+
+    const body = response.data;
+    if (body && typeof body === 'object' && 'success' in body) {
+      return handleResponse({
+        data: body as ApiResponseWrapper<{ task_id: string; resumed?: boolean }>,
+      });
+    }
+    if (body && typeof body === 'object' && 'task_id' in body) {
+      return body as { task_id: string; resumed?: boolean };
+    }
+    return { task_id: taskId, resumed: true };
   },
 
   /**
@@ -1963,6 +2018,24 @@ export const agentApi = {
     >('/agent/booking_cart/apply', data);
     if (response.data && !('success' in response.data)) {
       return response.data as unknown as import('@/types/booking-cart').BookingCartApplyResponse;
+    }
+    return handleResponse(response);
+  },
+
+  /**
+   * 开放世界核实回写（mark_verified 等）
+   * POST /agent/open_world_verification/apply
+   */
+  applyOpenWorldVerification: async (
+    data: import('@/types/open-world-discovery').OpenWorldVerificationApplyRequest
+  ): Promise<import('@/types/open-world-discovery').OpenWorldVerificationApplyResponse> => {
+    const response = await apiClient.post<
+      ApiResponseWrapper<
+        import('@/types/open-world-discovery').OpenWorldVerificationApplyResponse
+      >
+    >('/agent/open_world_verification/apply', data);
+    if (response.data && !('success' in response.data)) {
+      return response.data as unknown as import('@/types/open-world-discovery').OpenWorldVerificationApplyResponse;
     }
     return handleResponse(response);
   },

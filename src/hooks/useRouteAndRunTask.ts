@@ -5,6 +5,7 @@ import {
 } from '@/api/agent';
 import { normalizeAgentTaskPollPath } from '@/lib/route-run-task-path';
 import { awaitRouteAndRunTaskCompletion } from '@/lib/route-run-task-sse';
+import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
 import { syncPlanningTaskFromPollSnapshot, markPlanningTaskProcessing } from '@/lib/sync-planning-task-store';
 import { usePlanningTaskStore } from '@/store/planningTaskStore';
 
@@ -47,6 +48,12 @@ export function useRouteAndRunTask() {
         } catch (e) {
           if (ac.signal.aborted) return;
           console.error('[useRouteAndRunTask] SSE/poll failed', e);
+          if (e instanceof RouteRunTaskLeaseExhaustedError) {
+            usePlanningTaskStore.getState().setTask({
+              status: 'FAILED',
+              message: e.message,
+            });
+          }
           options?.onTerminal?.(null, true);
         }
       })();

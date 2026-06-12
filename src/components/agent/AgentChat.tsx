@@ -27,6 +27,8 @@ import {
 } from '@/api/agent';
 import { resolveRouteAndRunDisplayStatus, shouldShowRouteRunThinking } from '@/lib/handleRouteAndRunResponse';
 import { formatRouteRunAsyncProgressLabel } from '@/lib/route-run-async';
+import { isTaskLeaseRecovering } from '@/lib/task-lease-ui';
+import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
 import { invokeRouteAndRun } from '@/lib/executeRouteAndRun';
 import { usePlanningTaskStore } from '@/store/planningTaskStore';
 import {
@@ -230,15 +232,50 @@ import {
   pickBookingCartFromRouteRun,
 } from '@/lib/booking-cart-ui';
 import {
+  hasBookingPriorityListUi,
+  pickBookingPriorityListFromRouteRun,
+} from '@/lib/booking-priority-list-ui';
+import {
+  hasOpenWorldDiscoveryUi,
+  pickOpenWorldDiscoveryFromRouteRun,
+  shouldSuppressSparseNegativeCopy,
+} from '@/lib/open-world-discovery-ui';
+import {
+  hasUnifiedMapLayerUi,
+  pickUnifiedMapLayerFromRouteRun,
+} from '@/lib/unified-map-layer-ui';
+import {
   applyEmotionalContextFromRouteRun,
   hasSharedMilestoneCardsUi,
   isAnchoringEmotionalContext,
+  isReassuranceEmotionalContext,
 } from '@/lib/emotional-context-ui';
+import {
+  hasAccommodationHealthUi,
+} from '@/lib/accommodation-health-ui';
+import {
+  hasVoicePayloadUi,
+} from '@/lib/voice-payload-ui';
 import { DualTrackItineraryBoard } from '@/components/agent/DualTrackItineraryBoard';
 import { DeliveryArtifactsBar } from '@/components/agent/DeliveryArtifactsBar';
 import { LegEvidenceCardsPanel } from '@/components/agent/LegEvidenceCardsPanel';
 import { PoiPitfallCardsPanel } from '@/components/agent/PoiPitfallCardsPanel';
 import { BookingCartPanel } from '@/components/agent/BookingCartPanel';
+import { BookingPriorityListPanel } from '@/components/agent/BookingPriorityListPanel';
+import { OpenWorldDiscoveryPanel } from '@/components/agent/OpenWorldDiscoveryPanel';
+import { UnifiedMapLayerPanel } from '@/components/agent/UnifiedMapLayerPanel';
+import {
+  hasFlawedDraftUi,
+  pickFlawedDraftFromRouteRun,
+} from '@/lib/flawed-draft-ui';
+import {
+  formatRouteClassEvalDebugSnippet,
+  formatRouteClassForkDebugSnippet,
+  pickRouteClassEvalFromRouteRun,
+  pickRouteClassForkFromRouteRun,
+} from '@/lib/route-class-observability';
+import { FlawedDraftBanner } from '@/components/agent/FlawedDraftBanner';
+import { ReassuranceVoiceHealthBlock } from '@/components/agent/ReassuranceVoiceHealthBlock';
 import { AnchoringPresencePanel } from '@/components/agent/AnchoringPresencePanel';
 import { SharedMilestoneCards } from '@/components/agent/SharedMilestoneCards';
 import type {
@@ -250,7 +287,14 @@ import type { DeliveryArtifactsPayload } from '@/types/delivery-artifacts';
 import type { LegEvidenceCard } from '@/types/leg-evidence';
 import type { PoiPitfallCard } from '@/types/poi-pitfall';
 import type { BookingCartPayload } from '@/types/booking-cart';
+import type { BookingPriorityListPayload } from '@/types/booking-priority-list';
+import type { OpenWorldDiscoveryPayload } from '@/types/open-world-discovery';
+import type { UnifiedMapLayerPayload } from '@/types/unified-map-layer';
 import type { EmotionalContextClient } from '@/types/emotional-context';
+import type { VoicePayload } from '@/types/voice-payload';
+import type { AccommodationHealthPayload } from '@/types/accommodation-health';
+import type { FlawedDraftDescriptorV1 } from '@/types/flawed-draft';
+import type { RouteClassEvalV1, RouteClassForkV1 } from '@/types/route-class-observability';
 import type { SharedMilestoneUiCard } from '@/types/shared-milestone';
 import { PartyNegotiationPreviewCard } from '@/components/agent/PartyNegotiationPreviewCard';
 import { RobustnessDashboardPanel } from '@/components/agent/RobustnessDashboardPanel';
@@ -727,6 +771,10 @@ interface Message {
   kbRagCitationCount?: number;
   /** payload.unified_execution_trace.kb_rag_hit（调试条展示） */
   kbRagHit?: unknown;
+  /** observability.route_class_fork_v1（顶层优先，缺省 trace 镜像） */
+  routeClassFork?: RouteClassForkV1 | null;
+  /** observability.route_class_eval_v1（顶层优先，缺省 trace 镜像） */
+  routeClassEval?: RouteClassEvalV1 | null;
   /** 模糊意图二次确认（预留：后端下发 chips 时渲染 IntentActionChips） */
   intentActionChips?: IntentActionChipItem[];
   /** RAG 命中的 JSON 决策块：decision + why 要点 */
@@ -735,6 +783,8 @@ interface Message {
   uiSurface?: string;
   /** 异步 route_and_run 轮询进度 0–100 */
   routeRunAsyncProgress?: number;
+  /** STALE / RESUMING 时 indeterminate 进度条 */
+  routeRunLeaseIndeterminate?: boolean;
   /** route.ui_hint.message：后端给的完成态提示（System 2 常为「咨询已完成」/「处理完成」），展示时优先于前端写死文案 */
   uiHintMessage?: string;
   /** observability.system_mode，便于 Debug 区分 System 1（常无 ui_surface） */
@@ -829,8 +879,20 @@ interface Message {
   poiPitfallCards?: PoiPitfallCard[];
   /** ui_display.booking_cart — MCP 预订清单 */
   bookingCart?: BookingCartPayload;
+  /** ui_display.booking_priority_list — 抢票倒计时 / 官方预约 */
+  bookingPriorityList?: BookingPriorityListPayload;
+  /** ui_display.open_world_discovery — 稀疏 stub 核实任务 */
+  openWorldDiscovery?: OpenWorldDiscoveryPayload;
+  /** ui_display.unified_map_layer — 多图层行程地图 */
+  unifiedMapLayer?: UnifiedMapLayerPayload;
+  /** payload / explain.flawed_draft_v1 — SUCCESS 但未完全 VERIFIED */
+  flawedDraft?: FlawedDraftDescriptorV1;
   /** ui_display.emotional_context — 情绪上下文投影 */
   emotionalContext?: EmotionalContextClient;
+  /** ui_display.voice_payload — 暖心 TTS 口语全文 */
+  voicePayload?: VoicePayload;
+  /** ui_display.accommodation_health — 住宿健康度进度条 */
+  accommodationHealth?: AccommodationHealthPayload;
   /** ui_display.shared_milestone_cards — 跨 trip 共同回忆 */
   sharedMilestoneCards?: SharedMilestoneUiCard[];
 }
@@ -1157,6 +1219,7 @@ function StatusIndicator({
   doneSemantic,
   uiSurface,
   uiHintMessage,
+  isFlawedDraft,
 }: {
   status: UIStatus;
   /** 覆盖「思考中」文案（与启发式 loading 对齐） */
@@ -1167,6 +1230,8 @@ function StatusIndicator({
   uiSurface?: string;
   /** route.ui_hint.message：成功响应首选展示文案（assembleClaudeDynamicResponse / assembler） */
   uiHintMessage?: string;
+  /** flawed_draft_v1.is_flawed — 勿展示绿色「已验证」完成态 */
+  isFlawedDraft?: boolean;
 }) {
   if (status === 'thinking') {
     return (
@@ -1221,6 +1286,15 @@ function StatusIndicator({
           color: 'text-yellow-600',
         };
       case 'done': {
+        if (isFlawedDraft) {
+          const hint = (uiHintMessage ?? '').trim();
+          return {
+            icon: <AlertTriangle className="w-4 h-4 text-amber-600" />,
+            text: hint || '草案已生成 · 尚需您确认',
+            color: 'text-amber-700 dark:text-amber-300',
+          };
+        }
+
         const hint = (uiHintMessage ?? '').trim();
         const u = (uiSurface ?? '').trim().toLowerCase();
         const consultationTone =
@@ -1783,6 +1857,12 @@ function MessageBubble({
     hasLegEvidenceCardsUi(message.legEvidenceCards) ||
     hasPoiPitfallCardsUi(message.poiPitfallCards) ||
     hasBookingCartUi(message.bookingCart) ||
+    hasBookingPriorityListUi(message.bookingPriorityList) ||
+    hasOpenWorldDiscoveryUi(message.openWorldDiscovery) ||
+    hasUnifiedMapLayerUi(message.unifiedMapLayer) ||
+    hasFlawedDraftUi(message.flawedDraft) ||
+    hasVoicePayloadUi(message.voicePayload) ||
+    hasAccommodationHealthUi(message.accommodationHealth) ||
     hasSharedMilestoneCardsUi(message.sharedMilestoneCards) ||
     isAnchoringEmotionalContext(message.emotionalContext) ||
     (Array.isArray(message.accommodations) && message.accommodations.length > 0) ||
@@ -1907,6 +1987,7 @@ function MessageBubble({
                 status={message.status}
                 uiSurface={message.uiSurface}
                 uiHintMessage={message.status === 'done' ? message.uiHintMessage : undefined}
+                isFlawedDraft={hasFlawedDraftUi(message.flawedDraft)}
                 doneSemantic={
                   message.status === 'done'
                     ? message.interactionKind === 'lookup' || message.interactionKind === 'qa'
@@ -1928,6 +2009,28 @@ function MessageBubble({
           <WorldConstraintBanner
             materialization={message.routeRunExplainOptimization?.world_constraint_materialization}
             className="mb-2"
+          />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        showPlanningDashboard &&
+        !isConsultationSurface &&
+        !showClarificationCard &&
+        hasFlawedDraftUi(message.flawedDraft) &&
+        message.flawedDraft ? (
+          <FlawedDraftBanner
+            draft={message.flawedDraft}
+            disabled={!!chatSending}
+            debugUiDefaults={debugUiDefaults}
+            className="mb-2"
+            onConfirmAdjust={() => {
+              toast.message('请在下方确认约束、澄清问题或继续调整行程草案');
+            }}
+            onViewConstraints={() => {
+              toast.message('约束与验证详情已展开在上方瑕疵说明中');
+            }}
           />
         ) : null}
 
@@ -1963,6 +2066,7 @@ function MessageBubble({
             timelineDayBlocks={message.timelineDayBlocks}
             poiCardsByDay={message.poiCardsByDay}
             routeRunNoPoiPlanningFlag={message.routeRunNoPoiPlanningFlag}
+            suppressSparseNegativeCopy={shouldSuppressSparseNegativeCopy(message.openWorldDiscovery)}
             safetySurface={message.safetySurface}
             preferZhLabels={preferZhLabels}
             debugUiDefaults={debugUiDefaults}
@@ -2039,7 +2143,8 @@ function MessageBubble({
               compact
               size={36}
               label={messageContent.trim() || undefined}
-              progress={message.routeRunAsyncProgress}
+              progress={message.routeRunLeaseIndeterminate ? undefined : message.routeRunAsyncProgress}
+              indeterminate={message.routeRunLeaseIndeterminate}
               className="px-0 py-0"
               textClassName="text-sm text-muted-foreground"
             />
@@ -2156,20 +2261,36 @@ function MessageBubble({
             ) : null}
             {!isConsultationSurface &&
             showPlanningDashboard &&
-            hasDualTrackItineraryUi(message.dualTrackItinerary) &&
-            message.dualTrackItinerary ? (
-              <DualTrackItineraryBoard itinerary={message.dualTrackItinerary} className="mt-2" />
-            ) : null}
-            {!isConsultationSurface &&
-            showPlanningDashboard &&
-            hasDeliveryArtifactsUi(message.deliveryArtifacts) &&
-            message.deliveryArtifacts ? (
-              <DeliveryArtifactsBar
-                artifacts={message.deliveryArtifacts}
+            hasBookingPriorityListUi(message.bookingPriorityList) &&
+            message.bookingPriorityList ? (
+              <BookingPriorityListPanel
+                list={message.bookingPriorityList}
                 tripId={activeTripId}
                 disabled={!!chatSending}
                 className="mt-2"
               />
+            ) : null}
+            {!isConsultationSurface &&
+            showPlanningDashboard &&
+            hasUnifiedMapLayerUi(message.unifiedMapLayer) &&
+            message.unifiedMapLayer ? (
+              <UnifiedMapLayerPanel layer={message.unifiedMapLayer} className="mt-2" />
+            ) : null}
+            {!isConsultationSurface &&
+            showPlanningDashboard &&
+            hasDualTrackItineraryUi(message.dualTrackItinerary) &&
+            message.dualTrackItinerary ? (
+              <>
+                {hasFlawedDraftUi(message.flawedDraft) ? (
+                  <Badge
+                    variant="outline"
+                    className="mb-1 text-[10px] border-amber-500/40 bg-amber-50/60 text-amber-950 dark:bg-amber-950/25"
+                  >
+                    瑕疵草案 · 双轨预览
+                  </Badge>
+                ) : null}
+                <DualTrackItineraryBoard itinerary={message.dualTrackItinerary} className="mt-2" />
+              </>
             ) : null}
           </>
           )
@@ -2257,6 +2378,14 @@ function MessageBubble({
         SHOW_PLANNING_ITINERARY_CARDS_IN_AGENT_BUBBLE &&
         !(isItineraryAdjust && message.itineraryAdjustResult) ? (
           <>
+            {hasFlawedDraftUi(message.flawedDraft) ? (
+              <Badge
+                variant="outline"
+                className="mb-2 text-[10px] border-amber-500/40 bg-amber-50/60 text-amber-950 dark:bg-amber-950/25 dark:text-amber-100"
+              >
+                瑕疵草案 · 行程时间轴仅供预览
+              </Badge>
+            ) : null}
             {message.timelineDayBlocks && message.timelineDayBlocks.length > 0 ? (
               <DegradedItineraryPreview
                 variant="timeline"
@@ -2311,6 +2440,36 @@ function MessageBubble({
         message.status !== 'thinking' &&
         !isConsultationSurface &&
         showPlanningDashboard &&
+        hasOpenWorldDiscoveryUi(message.openWorldDiscovery) &&
+        message.openWorldDiscovery ? (
+          <OpenWorldDiscoveryPanel
+            discovery={message.openWorldDiscovery}
+            disabled={!!chatSending}
+            className="mt-3"
+          />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        !isConsultationSurface &&
+        showPlanningDashboard &&
+        hasBookingCartUi(message.bookingCart) &&
+        message.bookingCart ? (
+          <BookingCartPanel
+            cart={message.bookingCart}
+            tripId={activeTripId}
+            disabled={!!chatSending}
+            flawedDraftActive={hasFlawedDraftUi(message.flawedDraft)}
+            className="mt-3"
+          />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        !isConsultationSurface &&
+        showPlanningDashboard &&
         hasLegEvidenceCardsUi(message.legEvidenceCards) &&
         message.legEvidenceCards ? (
           <LegEvidenceCardsPanel cards={message.legEvidenceCards} className="mt-2" />
@@ -2324,6 +2483,37 @@ function MessageBubble({
         hasPoiPitfallCardsUi(message.poiPitfallCards) &&
         message.poiPitfallCards ? (
           <PoiPitfallCardsPanel cards={message.poiPitfallCards} className="mt-2" />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        !isConsultationSurface &&
+        showPlanningDashboard &&
+        hasDeliveryArtifactsUi(message.deliveryArtifacts) &&
+        message.deliveryArtifacts ? (
+          <DeliveryArtifactsBar
+            artifacts={message.deliveryArtifacts}
+            tripId={activeTripId}
+            disabled={!!chatSending}
+            className="mt-2"
+          />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        !isConsultationSurface &&
+        showPlanningDashboard &&
+        (hasVoicePayloadUi(message.voicePayload) ||
+          hasAccommodationHealthUi(message.accommodationHealth)) ? (
+          <ReassuranceVoiceHealthBlock
+            voicePayload={message.voicePayload}
+            accommodationHealth={message.accommodationHealth}
+            emotionalContext={message.emotionalContext}
+            disabled={!!chatSending}
+            className="mt-2"
+          />
         ) : null}
 
         {!isUser &&
@@ -2407,6 +2597,7 @@ function MessageBubble({
             userId={userId}
             onAddToTripSuccess={onTripDataRefresh}
             disclaimerZh={message.accommodationDisclaimerZh}
+            suppressRawDistanceKm={hasAccommodationHealthUi(message.accommodationHealth)}
             layout={assistantFullWidth ? 'flow' : 'scroll-contained'}
             className="mt-3"
           />
@@ -2422,20 +2613,6 @@ function MessageBubble({
           <HotelList
             hotels={message.hotels}
             layout={assistantFullWidth ? 'flow' : 'scroll-contained'}
-            className="mt-3"
-          />
-        ) : null}
-
-        {!isUser &&
-        !isError &&
-        message.status !== 'thinking' &&
-        !isConsultationSurface &&
-        hasBookingCartUi(message.bookingCart) &&
-        message.bookingCart ? (
-          <BookingCartPanel
-            cart={message.bookingCart}
-            tripId={activeTripId}
-            disabled={!!chatSending}
             className="mt-3"
           />
         ) : null}
@@ -2511,7 +2688,9 @@ function MessageBubble({
           message.orchestrationModeFinal ||
           message.isCacheReplay !== undefined ||
           message.kbRagCitationCount != null ||
-          message.kbRagHit !== undefined) ? (
+          message.kbRagHit !== undefined ||
+          message.routeClassFork != null ||
+          message.routeClassEval != null) ? (
           <div className="mt-2 border-t border-dashed pt-2 font-mono text-[10px] text-muted-foreground break-all">
             system_mode: {message.observabilitySystemMode ?? '—'} · ui_surface: {message.uiSurface ?? '—'} ·
             ui_hint.message: {message.uiHintMessage ?? '—'} · routing_task_type: {message.taskType ?? '—'} ·
@@ -2522,6 +2701,12 @@ function MessageBubble({
             {message.kbRagCitationCount != null ? ` · kb_rag_citation_count: ${message.kbRagCitationCount}` : ''}
             {message.kbRagHit !== undefined && message.kbRagHit !== null
               ? ` · kb_rag_hit: ${formatDebugJsonSnippet(message.kbRagHit)}`
+              : ''}
+            {message.routeClassFork != null
+              ? ` · route_class_fork_v1: ${formatRouteClassForkDebugSnippet(message.routeClassFork)}`
+              : ''}
+            {message.routeClassEval != null
+              ? ` · route_class_eval_v1: ${formatRouteClassEvalDebugSnippet(message.routeClassEval)}`
               : ''}
           </div>
         ) : null}
@@ -2746,10 +2931,14 @@ export default function AgentChat({
   const lastRouteRequestRef = useRef<RouteAndRunRequest | null>(null);
   const lastRouteRunDurableTripRunIdRef = useRef<string | undefined>(undefined);
   const planningAssistantSessionIdRef = useRef<string | null>(null);
-  const anxietyTriggered = useEmotionContextStore(
-    (s) => s.emotionalContext?.anxietyTriggered === true
+  const planningTaskLease = usePlanningTaskStore((s) => s.taskLease);
+  const planningTaskLeaseRecovering = isTaskLeaseRecovering(planningTaskLease);
+  const autoSpeakVoice = useEmotionContextStore(
+    (s) =>
+      s.emotionalContext?.anxietyTriggered === true ||
+      s.emotionalContext?.voiceToneModifier === 'empathetic_reassurance'
   );
-  useTtsEmotionalProsody({ autoSpeakSummary: anxietyTriggered });
+  useTtsEmotionalProsody({ autoSpeakVoice });
 
   // Story B/C 调试用约束（emergency_constraints）
   const [constraintsDialogOpen, setConstraintsDialogOpen] = useState(false);
@@ -3631,14 +3820,24 @@ export default function AgentChat({
       const onRouteRunProgress = (snap: RouteRunAsyncTaskStatusResponse) => {
         const label = formatRouteRunAsyncProgressLabel(snap);
         setLoadingUiLabel(label);
+        const leaseRecovering = isTaskLeaseRecovering(snap.task_lease_v1);
         const pct =
-          typeof snap.progress_percentage === 'number' && Number.isFinite(snap.progress_percentage)
+          !leaseRecovering &&
+          typeof snap.progress_percentage === 'number' &&
+          Number.isFinite(snap.progress_percentage)
             ? snap.progress_percentage
             : undefined;
         setRouteRunAsyncProgress(pct);
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === thinkingMessage.id ? { ...m, content: label, routeRunAsyncProgress: pct } : m
+            m.id === thinkingMessage.id
+              ? {
+                  ...m,
+                  content: label,
+                  routeRunAsyncProgress: pct,
+                  routeRunLeaseIndeterminate: leaseRecovering,
+                }
+              : m
           )
         );
       };
@@ -3948,6 +4147,8 @@ export default function AgentChat({
       const ragSources = extractRagSources(payloadRecord);
       const kbRagCitationCount = extractKbRagCitationCount(payloadRecord);
       const kbRagHit = extractKbRagHitFromTrace(payloadRecord);
+      const routeClassFork = pickRouteClassForkFromRouteRun(response);
+      const routeClassEval = pickRouteClassEvalFromRouteRun(response);
       const intentActionChips = pickIntentChipsFromPayload(payloadRecord);
       const ragStructured = extractRagStructuredOutcome(messageContent, payloadRecord);
       const liveSensorAudit =
@@ -4044,7 +4245,11 @@ export default function AgentChat({
       const legEvidenceCards = pickLegEvidenceCardsFromRouteRun(response);
       const poiPitfallCards = pickPoiPitfallCardsFromRouteRun(response);
       const bookingCart = pickBookingCartFromRouteRun(response);
-      const { emotionalContext, sharedMilestoneCards } =
+      const bookingPriorityList = pickBookingPriorityListFromRouteRun(response);
+      const openWorldDiscovery = pickOpenWorldDiscoveryFromRouteRun(response);
+      const unifiedMapLayer = pickUnifiedMapLayerFromRouteRun(response);
+      const flawedDraft = pickFlawedDraftFromRouteRun(response);
+      const { emotionalContext, sharedMilestoneCards, voicePayload, accommodationHealth } =
         applyEmotionalContextFromRouteRun(response);
 
       const flightInventorySnapshot = extractFlightInventorySnapshotFromRouteRun(
@@ -4062,8 +4267,15 @@ export default function AgentChat({
         hasLegEvidenceCardsUi(legEvidenceCards) ||
         hasPoiPitfallCardsUi(poiPitfallCards) ||
         hasBookingCartUi(bookingCart) ||
+        hasBookingPriorityListUi(bookingPriorityList) ||
+        hasOpenWorldDiscoveryUi(openWorldDiscovery) ||
+        hasUnifiedMapLayerUi(unifiedMapLayer) ||
+        hasFlawedDraftUi(flawedDraft) ||
+        hasVoicePayloadUi(voicePayload) ||
+        hasAccommodationHealthUi(accommodationHealth) ||
         hasSharedMilestoneCardsUi(sharedMilestoneCards) ||
         isAnchoringEmotionalContext(emotionalContext) ||
+        isReassuranceEmotionalContext(emotionalContext) ||
         Boolean(partyNegotiation?.organizational_robustness_preview) ||
         (!routeRunConsultationSurface && hasItineraryPanelsInPayload) ||
         (hotelsFromPayload?.length ?? 0) > 0 ||
@@ -4220,6 +4432,8 @@ export default function AgentChat({
             ragSources,
             ...(kbRagCitationCount != null ? { kbRagCitationCount } : {}),
             ...(kbRagHit !== undefined ? { kbRagHit } : {}),
+            ...(routeClassFork != null ? { routeClassFork } : {}),
+            ...(routeClassEval != null ? { routeClassEval } : {}),
             intentActionChips,
             ...(ragStructured ? { ragStructured } : {}),
             ...(uiSurface ? { uiSurface } : {}),
@@ -4259,7 +4473,13 @@ export default function AgentChat({
             ...(legEvidenceCards.length > 0 ? { legEvidenceCards } : {}),
             ...(poiPitfallCards.length > 0 ? { poiPitfallCards } : {}),
             ...(bookingCart ? { bookingCart } : {}),
+            ...(bookingPriorityList ? { bookingPriorityList } : {}),
+            ...(openWorldDiscovery ? { openWorldDiscovery } : {}),
+            ...(unifiedMapLayer ? { unifiedMapLayer } : {}),
+            ...(flawedDraft ? { flawedDraft } : {}),
             ...(emotionalContext ? { emotionalContext } : {}),
+            ...(voicePayload ? { voicePayload } : {}),
+            ...(accommodationHealth ? { accommodationHealth } : {}),
             ...(sharedMilestoneCards.length > 0 ? { sharedMilestoneCards } : {}),
             ...(flightInventorySnapshot ? { flightInventorySnapshot } : {}),
             ...(suggestedOperations ? { suggestedOperations } : {}),
@@ -4314,12 +4534,20 @@ export default function AgentChat({
       if (shouldNotifyTripRefresh && !itineraryAdjust.autoApplied) {
         setTimeout(() => onSystem2Response?.(), 0);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Agent chat error:', error);
+      const leaseExhausted = error instanceof RouteRunTaskLeaseExhaustedError;
       // 移除思考中的消息，添加错误消息（C1 严格模式下 5xx 视为“不可验收输出”）
-      const httpStatus = error?.response?.status as number | undefined;
-      const baseMessage =
-        error?.message != null ? String(error.message) : '出了一点小状况，要不再试一次？';
+      const httpStatus =
+        error != null &&
+        typeof error === 'object' &&
+        'response' in error &&
+        (error as { response?: { status?: number } }).response?.status;
+      const baseMessage = leaseExhausted
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : '出了一点小状况，要不再试一次？';
       const errorMessage =
         httpStatus && httpStatus >= 500
           ? [
@@ -4339,9 +4567,18 @@ export default function AgentChat({
           ? `${errorMessage}\n\nrequest_id: ${ridForBubble}`
           : errorMessage;
 
-      toast.error(httpStatus && httpStatus >= 500 ? '服务暂时不可用' : '请求未完成', {
-        description: describeAgentFailureToast(error, requestIdForDebug),
-      });
+      toast.error(
+        leaseExhausted
+          ? '任务恢复失败'
+          : httpStatus && httpStatus >= 500
+            ? '服务暂时不可用'
+            : '请求未完成',
+        {
+          description: leaseExhausted
+            ? '后台 Worker 多次续跑未成功，请重新发起规划。'
+            : describeAgentFailureToast(error, requestIdForDebug),
+        }
+      );
       const reqSnap = lastRouteRequestRef.current;
       const debugBundle =
         requestIdForDebug || reqSnap
@@ -4991,7 +5228,10 @@ export default function AgentChat({
                   compact
                   size={36}
                   label={loadingUiLabel?.trim() || undefined}
-                  progress={routeRunAsyncProgress}
+                  progress={
+                    planningTaskLeaseRecovering ? undefined : routeRunAsyncProgress
+                  }
+                  indeterminate={planningTaskLeaseRecovering}
                   className="px-3 py-2.5"
                 />
               </div>

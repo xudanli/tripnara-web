@@ -18,11 +18,14 @@ export function AnchoringPresencePanel({
   className,
 }: AnchoringPresencePanelProps) {
   const windLock = context.ambienceSignals?.weatherWindLockActive === true;
+  const isReassurance = context.voiceToneModifier === 'empathetic_reassurance';
   const summary =
     context.userFriendlySummary?.trim() ||
     (windLock
       ? '强风/风暴条件下，请待在安全室内，可变约项已自动标记延期。'
-      : '上下文已锁定，按当前最安全方案执行。');
+      : isReassurance
+        ? '行程里有些住宿需要再核对一下，我已帮你标出要留意的几晚，按下面进度条处理即可。'
+        : '上下文已锁定，按当前最安全方案执行。');
 
   return (
     <Card
@@ -36,7 +39,7 @@ export function AnchoringPresencePanel({
         <div className="flex flex-wrap items-center gap-2">
           <Shield className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden />
           <CardTitle className="text-sm font-semibold text-sky-900 dark:text-sky-100">
-            别慌，有我在
+            {isReassurance ? '别担心，我帮你看过了' : '别慌，有我在'}
           </CardTitle>
           {windLock ? (
             <Badge variant="outline" className="text-[10px] gap-1 border-amber-500/50 text-amber-900">

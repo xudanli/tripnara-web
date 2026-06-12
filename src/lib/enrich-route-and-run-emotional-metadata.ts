@@ -5,6 +5,11 @@ import type { RouteRunEmotionalMetadata } from '@/types/route-run-emotional-meta
 
 let offlineMapsSyncedCache: boolean | undefined;
 
+function resolveTimezoneFromRequest(request: RouteAndRunRequest): string | undefined {
+  const tz = request.conversation_context?.timezone?.trim();
+  return tz || undefined;
+}
+
 /** 刷新离线地图同步态：至少一个 pack 且 tileCache 已写入 */
 export async function refreshOfflineMapsSyncedState(): Promise<boolean> {
   try {
@@ -20,9 +25,13 @@ export function getOfflineMapsSyncedSnapshot(): boolean | undefined {
   return offlineMapsSyncedCache;
 }
 
-export function buildRouteRunEmotionalMetadataSync(): RouteRunEmotionalMetadata {
+export function buildRouteRunEmotionalMetadataSync(
+  request?: RouteAndRunRequest
+): RouteRunEmotionalMetadata {
   const metadata: RouteRunEmotionalMetadata = {
-    emotional_realtime_signals: buildEmotionalRealtimeSignals(),
+    emotional_realtime_signals: buildEmotionalRealtimeSignals({
+      timezone: request ? resolveTimezoneFromRequest(request) : undefined,
+    }),
   };
   if (offlineMapsSyncedCache === true) {
     metadata.offline_maps_synced = true;
@@ -30,9 +39,11 @@ export function buildRouteRunEmotionalMetadataSync(): RouteRunEmotionalMetadata 
   return metadata;
 }
 
-export async function buildRouteRunEmotionalMetadataAsync(): Promise<RouteRunEmotionalMetadata> {
+export async function buildRouteRunEmotionalMetadataAsync(
+  request?: RouteAndRunRequest
+): Promise<RouteRunEmotionalMetadata> {
   await refreshOfflineMapsSyncedState();
-  return buildRouteRunEmotionalMetadataSync();
+  return buildRouteRunEmotionalMetadataSync(request);
 }
 
 function mergeMetadata(
@@ -53,7 +64,7 @@ function mergeMetadata(
 export function enrichRouteAndRunRequestWithEmotionalMetadata(
   request: RouteAndRunRequest
 ): RouteAndRunRequest {
-  const emotional = buildRouteRunEmotionalMetadataSync();
+  const emotional = buildRouteRunEmotionalMetadataSync(request);
   const hasSignals = Boolean(
     emotional.emotional_realtime_signals &&
       Object.keys(emotional.emotional_realtime_signals).length > 0
@@ -71,7 +82,7 @@ export function enrichRouteAndRunRequestWithEmotionalMetadata(
 export async function enrichRouteAndRunRequestWithEmotionalMetadataAsync(
   request: RouteAndRunRequest
 ): Promise<RouteAndRunRequest> {
-  const emotional = await buildRouteRunEmotionalMetadataAsync();
+  const emotional = await buildRouteRunEmotionalMetadataAsync(request);
   return {
     ...request,
     metadata: mergeMetadata(request.metadata, emotional),

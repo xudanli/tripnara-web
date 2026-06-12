@@ -6,7 +6,7 @@ import { usePlanningTaskStore } from '@/store/planningTaskStore';
 function mapTaskStatus(status: string | undefined): PlanningTaskStatus {
   if (status === 'SUCCESS') return 'SUCCESS';
   if (status === 'FAILED' || status === 'CANCELLED') return 'FAILED';
-  if (status === 'PROCESSING') return 'PROCESSING';
+  if (status === 'PENDING' || status === 'PROCESSING') return 'PROCESSING';
   return 'PROCESSING';
 }
 
@@ -29,6 +29,7 @@ export function syncPlanningTaskFromPollSnapshot(snap: RouteRunAsyncTaskStatusRe
     message: snap.message ?? '',
     status: mapTaskStatus(snap.status),
     resultData,
+    taskLease: snap.task_lease_v1 ?? null,
   });
 }
 

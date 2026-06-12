@@ -1,4 +1,5 @@
 import { drivingDurationTracker, resolveJourneyTimezone } from '@/services/journeyPresenceReporter';
+import { resolveEmergencyModeForMetadata } from '@/lib/emotional-emergency-mode';
 
 const STATIONARY_THRESHOLD_DEG = 0.00015;
 let lastMovementAtMs = Date.now();
@@ -40,10 +41,16 @@ export function formatLocalTimeHHmm(timezone?: string): string {
 }
 
 /** 同步构建实时传感器信号（规划前 route_and_run metadata 用） */
-export function buildEmotionalRealtimeSignals(): import('@/types/route-run-emotional-metadata').EmotionalRealtimeSignals {
-  return {
+export function buildEmotionalRealtimeSignals(options?: {
+  timezone?: string;
+}): import('@/types/route-run-emotional-metadata').EmotionalRealtimeSignals {
+  const signals: import('@/types/route-run-emotional-metadata').EmotionalRealtimeSignals = {
     continuousDrivingSeconds: drivingDurationTracker.elapsedSeconds,
     stationaryMinutes: getStationaryMinutes(),
-    localTime: formatLocalTimeHHmm(),
+    localTime: formatLocalTimeHHmm(options?.timezone),
   };
+  if (resolveEmergencyModeForMetadata()) {
+    signals.emergency_mode = true;
+  }
+  return signals;
 }
