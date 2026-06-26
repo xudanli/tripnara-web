@@ -59,7 +59,7 @@ export default function BudgetAlertBanner({
   const isOverBudget = usagePercent >= 100;
   const isNearBudget = usagePercent >= 80 && usagePercent < 100;
   const isUnderBudget = remaining < 0 && budget.totalBudget > 0;
-  const projectedOverBudget = false; // TODO: 需要从预算趋势接口获取预计总支出
+  const ____projectedOverBudget = false; // TODO: 需要从预算趋势接口获取预计总支出
 
   // 如果没有需要预警的情况，不显示
   if (!isOverBudget && !isNearBudget && !isUnderBudget && hasConstraint) {

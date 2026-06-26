@@ -95,7 +95,7 @@ function LoadingSkeleton() {
 }
 
 /** 错误展示 */
-function ErrorDisplay({ error, onRetry }: { error: Error; onRetry?: () => void }) {
+function ____ErrorDisplay({ error, onRetry }: { error: Error; onRetry?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <AlertCircle className="h-12 w-12 text-destructive mb-4" />

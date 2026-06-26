@@ -1,60 +1,38 @@
 /**
- * Budget Tab 骨架屏
+ * Budget Tab 骨架屏 — 与 TripBudgetPanel 卡片布局对齐
  */
 
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+
+function skeletonCard(className?: string) {
+  return cn('rounded-lg border border-border/80 bg-card p-4 sm:p-5 shadow-sm space-y-4', className);
+}
 
 export function BudgetTabSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('space-y-6', className)}>
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-4 w-48 mt-1" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-32" />
-            </div>
-            <Skeleton className="h-3 w-full" />
+    <div className={cn('mx-auto max-w-3xl space-y-4', className)}>
+      <div className={skeletonCard()}>
+        <div className="flex items-start gap-3">
+          <Skeleton className="h-9 w-9 rounded-md shrink-0" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-8 w-40" />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="p-4 border rounded-lg space-y-1">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-7 w-24" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">费用汇总</TabsTrigger>
-          <TabsTrigger value="unpaid">未支付项</TabsTrigger>
-          <TabsTrigger value="log">决策日志</TabsTrigger>
-        </TabsList>
-        <div className="mt-4 space-y-4">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-5 w-32" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <Skeleton className="h-8 w-20 shrink-0" />
         </div>
-      </Tabs>
+        <Skeleton className="h-2 w-full" />
+        <Skeleton className="h-12 w-full rounded-md" />
+      </div>
+      <div className={skeletonCard()}>
+        <div className="flex justify-between">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-8 w-24" />
+        </div>
+        <Skeleton className="h-10 w-full rounded-md" />
+        <Skeleton className="h-11 w-full rounded-md" />
+        <Skeleton className="h-11 w-full rounded-md" />
+      </div>
     </div>
   );
 }

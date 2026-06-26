@@ -72,9 +72,7 @@ export function useEvidenceStatus(
       const coverageData = await readinessApi.getCoverageMapData(tripId);
       
       if (coverageData?.summary) {
-        const summary = coverageData.summary;
-        // 兼容不同的字段名称
-        const evidenceStatus = coverageData.evidenceStatusSummary || {};
+        const evidenceSummary = coverageData.evidenceStatusSummary;
         
         // 检查 gaps 中是否有天气相关的缺失
         const gaps = coverageData.gaps || [];
@@ -89,15 +87,15 @@ export function useEvidenceStatus(
         );
         
         setStatus({
-          missingCount: summary.missing || 0,
+          missingCount: evidenceSummary?.missing ?? 0,
           // 如果没有对应的 gap，且已获取数量大于0，则认为已有证据
-          hasWeather: !hasWeatherGap && (evidenceStatus.fetched || summary.fetched || 0) > 0,
+          hasWeather: !hasWeatherGap && (evidenceSummary?.fetched ?? 0) > 0,
           hasOpeningHours: !hasOpeningHoursGap,
           hasRoadClosure: !hasRoadClosureGap,
-          totalCount: evidenceStatus.total || summary.total || 0,
-          fetchedCount: evidenceStatus.fetched || summary.fetched || 0,
-          fetchingCount: evidenceStatus.fetching || 0,
-          failedCount: evidenceStatus.failed || summary.failed || 0,
+          totalCount: evidenceSummary?.total ?? 0,
+          fetchedCount: evidenceSummary?.fetched ?? 0,
+          fetchingCount: evidenceSummary?.fetching ?? 0,
+          failedCount: evidenceSummary?.failed ?? 0,
         });
       } else {
         // 如果没有数据，假设需要获取证据

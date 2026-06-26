@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RoutePlanning } from '@/components/illustrations/SceneIllustrations';
 import { Mountains, PersonThinking, Compass, Route } from '@/components/illustrations/SimpleIllustrations';
+import TrustGovernanceSection from './sections/TrustGovernanceSection';
 
 export default function ProductPage() {
   const { t } = useTranslation();
@@ -60,12 +61,18 @@ export default function ProductPage() {
     },
   ];
 
-  const workflowSteps = [
-    t('product.workflow.step1'),
-    t('product.workflow.step2'),
-    t('product.workflow.step3'),
-    t('product.workflow.step4'),
-  ];
+  const workflowSteps = [1, 2, 3, 4, 5] as const;
+
+  const reliableCards = [
+    { key: 'firstPrinciples', icon: PersonThinking },
+    { key: 'trustGovernance', icon: Route },
+    { key: 'dataRigorous', icon: Mountains },
+    { key: 'aiStructure', icon: Compass },
+  ] as const;
+
+  const comparisonRows = [1, 2, 3, 4, 5] as const;
+
+  const systemSteps = [1, 2, 3, 4, 5, 6] as const;
 
   return (
     <div style={{ backgroundColor: '#fff' }}>
@@ -101,9 +108,9 @@ export default function ProductPage() {
             marginBottom: '3rem',
           }}
         >
-          <p style={{ marginBottom: '1rem' }}>我们并不是推荐更多地点，</p>
-          <p style={{ marginBottom: '1rem' }}>而是帮助你判断一条路线是否应该存在，</p>
-          <p>并把它转化为真正能执行的旅行方案。</p>
+          <p style={{ marginBottom: '1rem' }}>{t('product.hero.line1')}</p>
+          <p style={{ marginBottom: '1rem' }}>{t('product.hero.line2')}</p>
+          <p>{t('product.hero.line3')}</p>
         </div>
 
         <div
@@ -171,6 +178,8 @@ export default function ProductPage() {
         </div>
       </section>
 
+      <TrustGovernanceSection showRoles={true} />
+
       {/* SECTION 2 · 模块矩阵（核心功能卡片） */}
       <section
         style={{
@@ -179,6 +188,31 @@ export default function ProductPage() {
         }}
       >
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <h2
+            style={{
+              fontSize: 'clamp(2rem, 4vw, 2.5rem)',
+              fontWeight: '700',
+              marginBottom: '1rem',
+              textAlign: 'center',
+              color: '#000',
+            }}
+          >
+            {t('product.modules.title')}
+          </h2>
+          <p
+            style={{
+              fontSize: '1rem',
+              textAlign: 'center',
+              color: '#666',
+              marginBottom: '3rem',
+              lineHeight: '1.7',
+              maxWidth: '640px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}
+          >
+            {t('product.modules.subtitle')}
+          </p>
           <div
             style={{
               display: 'grid',
@@ -200,7 +234,7 @@ export default function ProductPage() {
                       ? 'plan-b'
                       : idx === 3
                       ? 'risk-dem'
-                      : 'travel-readiness'
+                      : 'trusted-projects'
                   }
                   style={{
                     padding: '2.5rem',
@@ -313,9 +347,9 @@ export default function ProductPage() {
               }}
             />
 
-            {workflowSteps.map((step, idx) => (
+            {workflowSteps.map((stepNum, idx) => (
               <div
-                key={idx}
+                key={stepNum}
                 style={{
                   position: 'relative',
                   marginBottom: idx < workflowSteps.length - 1 ? '3rem' : '0',
@@ -343,7 +377,7 @@ export default function ProductPage() {
                     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                   }}
                 >
-                  {String(idx + 1).padStart(2, '0')}
+                  {String(stepNum).padStart(2, '0')}
                 </div>
 
                 {/* Step card */}
@@ -373,7 +407,7 @@ export default function ProductPage() {
                       marginBottom: '0.5rem',
                     }}
                   >
-                    {step}
+                    {t(`product.workflow.step${stepNum}`)}
                   </h3>
                   <p
                     style={{
@@ -383,9 +417,7 @@ export default function ProductPage() {
                       margin: 0,
                     }}
                   >
-                    {t(`product.workflow.step${idx + 1}Desc`, {
-                      defaultValue: '从目标出发，判断这段路是否值得存在',
-                    })}
+                    {t(`product.workflow.step${stepNum}Desc`)}
                   </p>
                 </div>
 
@@ -432,119 +464,48 @@ export default function ProductPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
               gap: '2rem',
               marginBottom: '3rem',
             }}
           >
-            <div
-              style={{
-                padding: '2rem',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                borderRadius: '12px',
-                transition: 'all 0.3s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
-                <PersonThinking size={80} color="#000" />
-              </div>
-              <h3
+            {reliableCards.map(({ key, icon: Icon }) => (
+              <div
+                key={key}
                 style={{
-                  fontSize: '1.3rem',
-                  fontWeight: '600',
-                  marginBottom: '1rem',
-                  color: '#000',
+                  padding: '2rem',
+                  backgroundColor: '#fff',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '12px',
+                  transition: 'all 0.3s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                {t('product.reliable.firstPrinciples')}
-              </h3>
-              <p style={{ color: '#666', lineHeight: '1.7' }}>
-                {t('product.reliable.firstPrinciplesDesc', {
-                  defaultValue: '从最基础的问题出发：这条路线是否应该存在？',
-                })}
-              </p>
-            </div>
-            <div
-              style={{
-                padding: '2rem',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                borderRadius: '12px',
-                transition: 'all 0.3s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
-                <Route size={80} color="#000" />
+                <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+                  <Icon size={80} color="#000" />
+                </div>
+                <h3
+                  style={{
+                    fontSize: '1.3rem',
+                    fontWeight: '600',
+                    marginBottom: '1rem',
+                    color: '#000',
+                  }}
+                >
+                  {t(`product.reliable.${key}`)}
+                </h3>
+                <p style={{ color: '#666', lineHeight: '1.7' }}>
+                  {t(`product.reliable.${key}Desc`)}
+                </p>
               </div>
-              <h3
-                style={{
-                  fontSize: '1.3rem',
-                  fontWeight: '600',
-                  marginBottom: '1rem',
-                  color: '#000',
-                }}
-              >
-                {t('product.reliable.dataRigorous')}
-              </h3>
-              <p style={{ color: '#666', lineHeight: '1.7' }}>
-                {t('product.reliable.dataRigorousDesc', {
-                  defaultValue: '基于真实地形数据、天气数据、历史经验，而非猜测',
-                })}
-              </p>
-            </div>
-            <div
-              style={{
-                padding: '2rem',
-                backgroundColor: '#fff',
-                border: '1px solid #e0e0e0',
-                borderRadius: '12px',
-                transition: 'all 0.3s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-4px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
-                <Compass size={80} color="#000" />
-              </div>
-              <h3
-                style={{
-                  fontSize: '1.3rem',
-                  fontWeight: '600',
-                  marginBottom: '1rem',
-                  color: '#000',
-                }}
-              >
-                {t('product.reliable.aiStructure')}
-              </h3>
-              <p style={{ color: '#666', lineHeight: '1.7' }}>
-                {t('product.reliable.aiStructureDesc', {
-                  defaultValue: 'AI 提供智能建议，结构化算法确保可执行性',
-                })}
-              </p>
-            </div>
+            ))}
           </div>
 
           {/* Expandable details */}
@@ -619,9 +580,7 @@ export default function ProductPage() {
                       lineHeight: '1.7',
                     }}
                   >
-                    • {t('product.reliable.expandPoint1', {
-                      defaultValue: '是否值得存在（第一性原则）',
-                    })}
+                    • {t('product.reliable.expandPoint1')}
                   </li>
                   <li
                     style={{
@@ -631,9 +590,17 @@ export default function ProductPage() {
                       lineHeight: '1.7',
                     }}
                   >
-                    • {t('product.reliable.expandPoint2', {
-                      defaultValue: '是否可以执行（结构与节奏）',
-                    })}
+                    • {t('product.reliable.expandPoint2')}
+                  </li>
+                  <li
+                    style={{
+                      padding: '0.75rem 0',
+                      borderBottom: '1px solid #f0f0f0',
+                      color: '#666',
+                      lineHeight: '1.7',
+                    }}
+                  >
+                    • {t('product.reliable.expandPoint3')}
                   </li>
                   <li
                     style={{
@@ -642,9 +609,7 @@ export default function ProductPage() {
                       lineHeight: '1.7',
                     }}
                   >
-                    • {t('product.reliable.expandPoint3', {
-                      defaultValue: '是否具备安全性与恢复能力（决策与备选）',
-                    })}
+                    • {t('product.reliable.expandPoint4')}
                   </li>
                 </ul>
               </div>
@@ -700,12 +665,12 @@ export default function ProductPage() {
                       fontSize: '1rem',
                     }}
                   >
-                    功能维度
+                    {t('product.comparison.columnDimension')}
                   </th>
                   <th
                     className="p-5 text-left font-semibold text-destructive border-b-2 border-border text-base"
                   >
-                    普通旅行 App
+                    {t('product.comparison.columnTraditional')}
                   </th>
                   <th
                     style={{
@@ -717,47 +682,16 @@ export default function ProductPage() {
                       fontSize: '1rem',
                     }}
                   >
-                    TripNARA
+                    {t('product.comparison.columnTripnara')}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  {
-                    dimension: t('product.comparison.dimension1', { defaultValue: '起点逻辑' }),
-                    traditional: t('product.comparison.traditional1', { defaultValue: '景点推荐列表' }),
-                    tripnara: t('product.comparison.tripnara1', {
-                      defaultValue: '路线是否应存在的判断逻辑',
-                    }),
-                  },
-                  {
-                    dimension: t('product.comparison.dimension2', { defaultValue: '结构生成' }),
-                    traditional: t('product.comparison.traditional2', { defaultValue: '按兴趣拼景点' }),
-                    tripnara: t('product.comparison.tripnara2', {
-                      defaultValue: '节奏+余量平衡的结构算法',
-                    }),
-                  },
-                  {
-                    dimension: t('product.comparison.dimension3', { defaultValue: '应变能力' }),
-                    traditional: t('product.comparison.traditional3', { defaultValue: '无 / 靠用户修改' }),
-                    tripnara: t('product.comparison.tripnara3', {
-                      defaultValue: '自动生成 Plan B 结构化替代',
-                    }),
-                  },
-                  {
-                    dimension: t('product.comparison.dimension4', { defaultValue: '风险处理' }),
-                    traditional: t('product.comparison.traditional4', {
-                      defaultValue: '手动检查天气/安全',
-                    }),
-                    tripnara: t('product.comparison.tripnara4', {
-                      defaultValue: '地形+条件+算法评估',
-                    }),
-                  },
-                ].map((row, idx) => (
+                {comparisonRows.map((rowNum, idx) => (
                   <tr
-                    key={idx}
+                    key={rowNum}
                     style={{
-                      borderBottom: idx < 3 ? '1px solid #f0f0f0' : 'none',
+                      borderBottom: idx < comparisonRows.length - 1 ? '1px solid #f0f0f0' : 'none',
                     }}
                   >
                     <td
@@ -768,13 +702,13 @@ export default function ProductPage() {
                         backgroundColor: '#fafafa',
                       }}
                     >
-                      {row.dimension}
+                      {t(`product.comparison.dimension${rowNum}`)}
                     </td>
                     <td style={{ padding: '1.25rem', color: '#666', lineHeight: '1.6' }}>
-                      {row.traditional}
+                      {t(`product.comparison.traditional${rowNum}`)}
                     </td>
                     <td style={{ padding: '1.25rem', color: '#333', lineHeight: '1.6' }}>
-                      {row.tripnara}
+                      {t(`product.comparison.tripnara${rowNum}`)}
                     </td>
                   </tr>
                 ))}
@@ -821,75 +755,27 @@ export default function ProductPage() {
                 alignItems: 'center',
               }}
             >
-              {/* Step 1 */}
-              <div className="px-8 py-6 rounded-xl border-2 border-primary text-center min-w-[300px] shadow-sm bg-primary/10">
-                <div className="font-semibold text-foreground text-base">
-                  {t('product.systemDiagram.step1', { defaultValue: '用户输入（目标/偏好）' })}
+              {systemSteps.map((stepNum) => (
+                <div key={stepNum} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}>
+                  <div
+                    style={{
+                      padding: '1.5rem 2rem',
+                      backgroundColor: stepNum === 6 ? '#fefce8' : '#fff',
+                      borderRadius: '12px',
+                      border: `2px solid ${stepNum === 6 ? 'oklch(0.5 0.15 0)' : 'oklch(0.205 0 0)'}`,
+                      textAlign: 'center',
+                      minWidth: '300px',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                    }}
+                  >
+                    <div style={{ fontWeight: '600', color: '#000', fontSize: '1rem' }}>
+                      {t(`product.systemDiagram.step${stepNum}`)}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '2rem', color: 'oklch(0.205 0 0)' }}>↓</div>
                 </div>
-              </div>
-              <div className="text-4xl text-primary">↓</div>
+              ))}
 
-              {/* Step 2 */}
-              <div className="px-8 py-6 rounded-xl border-2 border-primary text-center min-w-[300px] shadow-sm bg-destructive/10">
-                <div className="font-semibold text-foreground text-base">
-                  {t('product.systemDiagram.step2', {
-                    defaultValue: '路线可行性评估模块（RouteDirection）',
-                  })}
-                </div>
-              </div>
-              <div className="text-4xl text-primary">↓</div>
-
-              {/* Step 3 */}
-              <div className="px-8 py-6 rounded-xl border-2 border-primary text-center min-w-[300px] shadow-sm bg-persona-dre/10">
-                <div className="font-semibold text-foreground text-base">
-                  {t('product.systemDiagram.step3', {
-                    defaultValue: '结构生成模块（节奏 / 时间 / 节点）',
-                  })}
-                </div>
-              </div>
-              <div style={{ fontSize: '2rem', color: 'oklch(0.205 0 0)' }}>↓</div>
-
-              {/* Step 4 */}
-              <div
-                style={{
-                  padding: '1.5rem 2rem',
-                  backgroundColor: '#eff6ff',
-                  borderRadius: '12px',
-                  border: '2px solid oklch(0.205 0 0)',
-                  textAlign: 'center',
-                  minWidth: '300px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-                }}
-              >
-                <div style={{ fontWeight: '600', color: '#000', fontSize: '1rem' }}>
-                  {t('product.systemDiagram.step4', {
-                    defaultValue: '风险评估模块（地形 / 气候 / 安全）',
-                  })}
-                </div>
-              </div>
-              <div style={{ fontSize: '2rem', color: 'oklch(0.205 0 0)' }}>↓</div>
-
-              {/* Step 5 */}
-              <div
-                style={{
-                  padding: '1.5rem 2rem',
-                  backgroundColor: '#fefce8',
-                  borderRadius: '12px',
-                  border: '2px solid oklch(0.5 0.15 0)',
-                  textAlign: 'center',
-                  minWidth: '300px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-                }}
-              >
-                <div style={{ fontWeight: '600', color: '#000', fontSize: '1rem' }}>
-                  {t('product.systemDiagram.step5', {
-                    defaultValue: 'Plan B 替代推荐模块',
-                  })}
-                </div>
-              </div>
-              <div style={{ fontSize: '2rem', color: 'oklch(0.205 0 0)' }}>↓</div>
-
-              {/* Output */}
               <div
                 style={{
                   padding: '1.5rem 2rem',
@@ -901,9 +787,7 @@ export default function ProductPage() {
                 }}
               >
                 <div style={{ fontWeight: '700', color: '#fff', fontSize: '1.1rem' }}>
-                  {t('product.systemDiagram.output', {
-                    defaultValue: '最终输出：可执行行程结构（含备用）',
-                  })}
+                  {t('product.systemDiagram.output')}
                 </div>
               </div>
             </div>
@@ -920,33 +804,41 @@ export default function ProductPage() {
         }}
       >
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <Link
-            to="/login"
-            style={{
-              display: 'inline-block',
-              padding: '1.25rem 3rem',
-              backgroundColor: 'oklch(0.205 0 0)',
-              color: '#fff',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              fontWeight: '600',
-              fontSize: '1.2rem',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.2)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px) scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.3)';
-              e.currentTarget.style.backgroundColor = 'oklch(0.25 0 0)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0) scale(1)';
-              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.2)';
-              e.currentTarget.style.backgroundColor = 'oklch(0.205 0 0)';
-            }}
-          >
-            {t('product.cta.text')}
-          </Link>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link
+              to="/login"
+              style={{
+                display: 'inline-block',
+                padding: '1.25rem 3rem',
+                backgroundColor: 'oklch(0.205 0 0)',
+                color: '#fff',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '1.2rem',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.2)',
+              }}
+            >
+              {t('product.cta.text')}
+            </Link>
+            <Link
+              to="/trusted-projects"
+              style={{
+                display: 'inline-block',
+                padding: '1.25rem 3rem',
+                backgroundColor: 'transparent',
+                color: '#000',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '1.2rem',
+                border: '2px solid #e0e0e0',
+              }}
+            >
+              {t('product.cta.trustedProjects')}
+            </Link>
+          </div>
         </div>
       </section>
     </div>

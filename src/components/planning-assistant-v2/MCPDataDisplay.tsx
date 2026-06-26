@@ -15,7 +15,7 @@ import { WeatherDisplay } from './WeatherDisplay';
 import { SearchResults } from './SearchResults';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plane, Languages, DollarSign, Image as ImageIcon } from 'lucide-react';
+import { Languages, DollarSign, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TripDetail } from '@/types/trip';
 import type { ChatMessage } from '@/hooks/useChatV2';

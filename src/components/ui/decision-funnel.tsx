@@ -7,13 +7,12 @@
  * 3. 判断（Judge）- 做出决策
  */
 
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { ChevronRight, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { DataCard } from './data-card';
 import { RiskScoreDisplay } from './risk-score-display';
 

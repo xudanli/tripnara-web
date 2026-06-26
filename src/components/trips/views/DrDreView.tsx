@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TripDetail, ItineraryItem, TripMetricsResponse } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,6 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Brain, TrendingUp, Clock, Activity, Lock, RefreshCw, BarChart3, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { format } from 'date-fns';
-import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import type { DrDreViewData } from '@/utils/trip-data-extractors';
 import { cn } from '@/lib/utils';

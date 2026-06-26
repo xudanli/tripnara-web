@@ -1,7 +1,10 @@
 /**
  * 用户决策点确认弹窗
- * 
- * 当优化结果需要用户确认时展示
+ *
+ * 当优化结果需要用户确认时展示。
+ *
+ * @deprecated 单点 CHOOSE / 扁平选项优先 {@link GuardianChooseModal}；
+ * 多题结构化 `userJudgmentPoints` 仍用本组件，写回见 `submitGuardianHumanChoice`。
  */
 
 import * as React from 'react';

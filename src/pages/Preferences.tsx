@@ -284,9 +284,9 @@ export default function PreferencesPage() {
               <div className="space-y-2">
                 <Label htmlFor="nationality">{t('preferences.nationality') || '国籍'}</Label>
                 <Select
-                  value={formData.nationality || '__none__'}
+                  value={formData.nationality || '_none__'}
                   onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, nationality: value === '__none__' ? undefined : value }))
+                    setFormData((prev) => ({ ...prev, nationality: value === '_none__' ? undefined : value }))
                   }
                   disabled={countriesLoading}
                 >
@@ -294,7 +294,7 @@ export default function PreferencesPage() {
                     <SelectValue placeholder={countriesLoading ? (t('preferences.loading') || '加载中...') : (t('preferences.selectNationality') || '选择国籍')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">{t('preferences.notSet') || '未设置'}</SelectItem>
+                    <SelectItem value="_none__">{t('preferences.notSet') || '未设置'}</SelectItem>
                     {countries.map((country) => (
                       <SelectItem key={country.isoCode} value={country.isoCode}>
                         {currentLang === 'zh' ? country.nameCN : country.nameEN} ({country.isoCode})
@@ -308,9 +308,9 @@ export default function PreferencesPage() {
               <div className="space-y-2">
                 <Label htmlFor="residencyCountry">{t('preferences.residencyCountry') || '居住国'}</Label>
                 <Select
-                  value={formData.residencyCountry || '__none__'}
+                  value={formData.residencyCountry || '_none__'}
                   onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, residencyCountry: value === '__none__' ? undefined : value }))
+                    setFormData((prev) => ({ ...prev, residencyCountry: value === '_none__' ? undefined : value }))
                   }
                   disabled={countriesLoading}
                 >
@@ -318,7 +318,7 @@ export default function PreferencesPage() {
                     <SelectValue placeholder={countriesLoading ? (t('preferences.loading') || '加载中...') : (t('preferences.selectResidencyCountry') || '选择居住国')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">{t('preferences.notSet') || '未设置'}</SelectItem>
+                    <SelectItem value="_none__">{t('preferences.notSet') || '未设置'}</SelectItem>
                     {countries.map((country) => (
                       <SelectItem key={country.isoCode} value={country.isoCode}>
                         {currentLang === 'zh' ? country.nameCN : country.nameEN} ({country.isoCode})

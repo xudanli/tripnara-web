@@ -53,7 +53,7 @@ const statusLabel: Record<HikePlanStatus, string> = {
 
 type PlansByTab = Record<HikeTab, HikePlanRecord[]>;
 
-function bucketPlans(plans: HikePlanRecord[]): PlansByTab {
+function ____bucketPlans(plans: HikePlanRecord[]): PlansByTab {
   const map: PlansByTab = { planning: [], active: [], completed: [] };
   for (const p of plans) {
     map[planTab(p.status)].push(p);

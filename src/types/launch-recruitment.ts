@@ -11,6 +11,8 @@ export type LaunchRecruitmentFromTemplateRequest = {
   budgetMinCents?: number;
   budgetMaxCents?: number;
   captainMessage?: string;
+  routeTemplateCatalogId?: string;
+  routeTemplateTitleZh?: string;
 };
 
 export type LaunchRecruitmentFromTemplateResponse = {

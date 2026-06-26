@@ -45,8 +45,8 @@ export function gridLayout(
  */
 export function hierarchicalLayout(
   steps: DecisionStep[],
-  nodeWidth: number = 240,
-  nodeHeight: number = 180,
+  _nodeWidth: number = 240,
+  _nodeHeight: number = 180,
   horizontalSpacing: number = 300,
   verticalSpacing: number = 200
 ): Map<string, NodePosition> {
@@ -124,7 +124,7 @@ export function hierarchicalLayout(
   // 计算位置
   layers.forEach((layer, layerIndex) => {
     const layerY = layerIndex * verticalSpacing + 100; // 添加顶部边距
-    const layerWidth = layer.length * horizontalSpacing;
+    const ____layerWidth = layer.length * horizontalSpacing;
     const startX = 100; // 添加左侧边距
     
     layer.forEach((step, stepIndex) => {
@@ -145,8 +145,8 @@ export function hierarchicalLayout(
  */
 export function forceDirectedLayout(
   steps: DecisionStep[],
-  nodeWidth: number = 240,
-  nodeHeight: number = 180,
+  _nodeWidth: number = 240,
+  _nodeHeight: number = 180,
   iterations: number = 100
 ): Map<string, NodePosition> {
   const positions = new Map<string, NodePosition>();

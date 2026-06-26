@@ -5,8 +5,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import IntentTab from './IntentTab';
 import ScheduleTab from './ScheduleTab';
+import CoverageMapTab from './CoverageMapTab';
 import PlanGateDrawer from '@/components/plan-studio/PlanGateDrawer';
 import BudgetTab from './BudgetTab';
+import TasksTab from './TasksTab';
+import TeamTab from './TeamTab';
 // PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
 // PlanStudioSidebar 已移除 - 策略概览功能已整合到 AI 助手侧边栏
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
@@ -32,44 +35,41 @@ import { cn } from '@/lib/utils';
 import { tripsApi } from '@/api/trips';
 import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
-import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
 import type { PipelineStatus, PipelineStage, TripListItem, TripDetail } from '@/types/trip';
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
-import { Settings2, Zap, Footprints, Wallet, Sparkles, Mountain } from 'lucide-react';
+import { Settings2, Zap, Footprints, Wallet } from 'lucide-react';
 import {
-  TrailPlanPreviewDialog,
-  HikingGeneratePlanResultDialog,
+  FeasibilityReportSheet,
+  FeasibilityReportTrigger,
+} from '@/components/feasibility-report';
+import {
+  ReadinessRepairLoopSheet,
+  ReadinessRepairLoopTrigger,
+} from '@/components/trip-loop';
+import { isTripLoopReadinessEnabled } from '@/lib/trip-loop-feature';
+import { resolveLoopValidationPresentation } from '@/lib/trip-loop-display';
+import { notifyLoopReadinessChanged } from '@/lib/plan-studio-loop-events';
+import { PrivateWishDialog } from '@/components/wishlist';
+import { StructuredNegotiationDialog } from '@/components/domain-influence/StructuredNegotiationDialog';
+import { DecisionProfilingHubDialog } from '@/components/decision-profiling';
+import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
+import { SilentVoteHubDialog } from '@/components/silent-vote';
+import { useTripWishSummary } from '@/hooks/useTripWishes';
+import { useAuth } from '@/hooks/useAuth';
+import {
   EmbeddedHikingStatusBar,
   HikingTrailSegmentsOverview,
 } from '@/components/hiking';
 import {
-  tripIncludesHiking,
-  isPrimaryHikingTrip,
   isEmbeddedHikingTrip,
-  buildHikingAuditMetadata,
 } from '@/lib/trip-hiking';
 import { getTripHikingTrailSegments } from '@/lib/hiking-day-card';
 import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
 import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
-import {
-  buildGeneratePlanRequestForHiking,
-  saveHikingGenerateLog,
-  loadHikingGenerateLog,
-} from '@/lib/hiking-generate-plan';
-import { decisionEngineApi } from '@/api/decision-engine';
-import { useFitnessContext } from '@/contexts/FitnessContext';
 import { PlanStudioProvider, usePlanStudio } from '@/contexts/PlanStudioContext';
 import { formatCurrency } from '@/utils/format';
 import { WeatherCard } from '@/components/weather/WeatherCard';
-import { toast } from 'sonner';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Progress } from '@/components/ui/progress';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
@@ -77,12 +77,35 @@ import { TripGeneratingPlaceholder } from '@/components/trips/TripGeneratingPlac
 import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
 import { format } from 'date-fns';
 import { PlanningBanner } from '@/components/planning/PlanningBanner';
+import { NarrativeThemeSection } from '@/components/narrative/NarrativeThemeSection';
+import { TripExperienceIntentPanel, shouldShowTripExperienceIntentPanel } from '@/components/experience-fulfillment';
 import { WorldConstraintBanner } from '@/components/planning/WorldConstraintBanner';
 import { DecisionCockpitPanel } from '@/components/agent/DecisionCockpitPanel';
 import { hasDecisionCockpitUi } from '@/lib/decision-cockpit';
 import { formatOptimizationMethodZh } from '@/lib/route-run-optimization-explain';
 import { resetWorldModelGuardsStore } from '@/lib/world-model-guards';
 import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
+import { isSelfDrivePlanningTrip } from '@/lib/trip-self-drive';
+import {
+  ACTIONABLE_READINESS_HORIZON_DAYS,
+  getDaysUntilTripStart,
+} from '@/lib/trip-readiness-phase.util';
+import {
+  dispatchPlanStudioSelectScheduleDay,
+  type PlanStudioScheduleNavigateDetail,
+  resolveScheduleDayIndex,
+} from '@/lib/plan-studio-schedule-navigation';
+import { resolveTravelItemIdsFromTrip } from '@/lib/feasibility-travel-timing';
+import {
+  getPlanStudioPipelineStageAction,
+  pipelineStageActionLabel,
+} from '@/lib/plan-studio-pipeline-navigation';
+import { DecisionStrip } from '@/components/plan-studio/DecisionStrip';
+import { useDecisionStripModel } from '@/hooks/useDecisionStripModel';
+import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
+import { useDrawerOptional } from '@/components/layout/DashboardLayout';
+import type { DecisionStripCtaType } from '@/lib/decision-strip-model';
+import { trackDecisionStripEvidenceOpen } from '@/utils/plan-studio-decision-strip-analytics';
 
 /** 工作台标题副文案：与侧栏行程列表展示逻辑对齐 */
 function planStudioTripHeadingLabel(trip: TripDetail): string {
@@ -98,21 +121,37 @@ function planStudioTripHeadingLabel(trip: TripDetail): string {
   return trip.destination || '行程';
 }
 
+/** 将 URL tab 参数规范为可展示的 Tab value */
+function resolvePlanStudioTab(tabParam: string | null): string {
+  const removedTabs = new Set(['optimize', 'what-if', 'decision-draft', 'bookings', 'workbench', 'feasibility']);
+  const tab = tabParam || 'schedule';
+  const normalized = removedTabs.has(tab) ? 'schedule' : tab;
+  if (normalized === 'intent' || normalized === 'places') return 'schedule';
+  return normalized;
+}
+
+function buildFeasibilityPagePath(tripId: string, issueId?: string | null) {
+  const params = new URLSearchParams({ tripId });
+  if (issueId) params.set('issueId', issueId);
+  return `/dashboard/feasibility?${params.toString()}`;
+}
+
 function PlanStudioPageContent() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const tripId = searchParams.get('tripId');
-  const defaultTab = searchParams.get('tab') || 'schedule';
-  // 如果访问已移除的 tab，重定向到 schedule
-  const removedTabs = new Set(['optimize', 'what-if', 'decision-draft', 'bookings', 'workbench']);
-  const normalizedTab = removedTabs.has(defaultTab) ? 'schedule' : defaultTab;
-  const [activeTab, setActiveTab] = useState(
-    normalizedTab === 'intent' || normalizedTab === 'places' ? 'schedule' : normalizedTab
+  const [activeTab, setActiveTab] = useState(() =>
+    resolvePlanStudioTab(searchParams.get('tab')),
   );
   const planStudio = usePlanStudio();
+  const decisionStrip = useDecisionStripModel(tripId);
+  const { openAssistant, sendAssistantMessage } = useAssistantSidebar();
+  const drawer = useDrawerOptional();
   const planGateUrlHandledRef = useRef(false);
+  const { user } = useAuth();
+  const { summary: wishSummary, reload: reloadWishSummary } = useTripWishSummary(tripId);
   
   // 意图与约束弹窗
   const [showIntentDialog, setShowIntentDialog] = useState(false);
@@ -123,8 +162,12 @@ function PlanStudioPageContent() {
   const [tripExists, setTripExists] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
-  const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
-  const [highlightFindingId, setHighlightFindingId] = useState<string | undefined>(undefined);
+  const [structuredNegotiationOpen, setStructuredNegotiationOpen] = useState(false);
+  const [feasibilitySheetOpen, setFeasibilitySheetOpen] = useState(false);
+  const [feasibilityInitialIssueId, setFeasibilityInitialIssueId] = useState<string | null>(null);
+  const [decisionProfilingHubOpen, setDecisionProfilingHubOpen] = useState(false);
+  const [decisionProfilingQuizRequest, setDecisionProfilingQuizRequest] =
+    useState<DecisionProfilingStep | null>(null);
   
   // 行程状态相关
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(null);
@@ -133,7 +176,7 @@ function PlanStudioPageContent() {
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   
   // 行程相关（用于检查是否有行程和显示欢迎页面）
-  const [allTrips, setAllTrips] = useState<TripListItem[]>([]);
+  const [_allTrips, setAllTrips] = useState<TripListItem[]>([]);
   const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
   
   // 当前行程详情（用于摘要条显示）
@@ -144,28 +187,12 @@ function PlanStudioPageContent() {
     isEmbeddedHikingEnabled() &&
     embeddedHiking.embedded &&
     isEmbeddedHikingTrip(currentTrip);
-  /** 整单硬核 Trail（与混合出行互斥） */
-  const showPrimaryTrailPlanStudio =
-    Boolean(tripId && tripExists && currentTrip) &&
-    isPrimaryHikingTrip(currentTrip) &&
-    !showEmbeddedPlanStudio;
 
   // 对话框状态
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
-  
-  // 生成方案相关状态
-  const [generatingPlan, setGeneratingPlan] = useState(false);
-  const [generatingProgress, setGeneratingProgress] = useState(0);
-  const [generatingStage, setGeneratingStage] = useState('');
-  const [trailPreviewOpen, setTrailPreviewOpen] = useState(false);
-  const [hikingResultOpen, setHikingResultOpen] = useState(false);
-  const [lastHikingGenerateLog, setLastHikingGenerateLog] = useState<Record<
-    string,
-    unknown
-  > | null>(null);
-  const { profile: fitnessProfile } = useFitnessContext();
+
   const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
   const explainOptimization = useWorldModelGuardsStore((s) => s.explainOptimization);
   const decisionCockpit = useWorldModelGuardsStore((s) => s.decisionCockpit);
@@ -193,8 +220,12 @@ function PlanStudioPageContent() {
     setActiveTab(value);
     const newParams = new URLSearchParams(searchParams);
     newParams.set('tab', value);
+    if (value !== 'team') {
+      newParams.delete('roundId');
+      newParams.delete('roundDomain');
+    }
     setSearchParams(newParams);
-    
+
     // 不再需要切换 personaMode，三人格由系统自动调用
   };
 
@@ -206,15 +237,196 @@ function PlanStudioPageContent() {
   }, []);
 
   useEffect(() => {
-    const onSelectScheduleDay = () => {
+    const onSwitchTab = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (!tab) return;
+      if (tab === 'feasibility') {
+        if (tripId) navigate(buildFeasibilityPagePath(tripId));
+        return;
+      }
+      setActiveTab(tab);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('tab', tab);
+      if (tab !== 'team') {
+        newParams.delete('roundId');
+        newParams.delete('roundDomain');
+      }
+      setSearchParams(newParams);
+    };
+    window.addEventListener('plan-studio:switch-tab', onSwitchTab);
+    return () => window.removeEventListener('plan-studio:switch-tab', onSwitchTab);
+  }, [searchParams, setSearchParams, navigate, tripId]);
+
+  // URL ?tab= 变化时同步 Tab（例如时间轴卡片「查看报告」仅改 query）
+  useEffect(() => {
+    const tabFromUrl = resolvePlanStudioTab(searchParams.get('tab'));
+    if (tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams, activeTab]);
+
+  const handleNavigateToScheduleFromFeasibility = (detail: PlanStudioScheduleNavigateDetail) => {
+    let highlightItemIds = detail.highlightItemIds;
+    if (
+      !highlightItemIds?.length &&
+      currentTrip &&
+      detail.fromPlaceLabel &&
+      detail.toPlaceLabel
+    ) {
+      highlightItemIds = resolveTravelItemIdsFromTrip(
+        currentTrip,
+        detail.fromPlaceLabel,
+        detail.toPlaceLabel,
+        detail.dayNumber,
+      );
+    }
+    dispatchPlanStudioSelectScheduleDay({
+      ...detail,
+      highlightItemIds,
+    });
+  };
+
+  const handleDecisionStripPrimaryCta = (type: DecisionStripCtaType) => {
+    switch (type) {
+      case 'open_plan_gate':
+        planStudio.openPlanGate();
+        break;
+      case 'adjust_schedule':
+        handleTabChange('schedule');
+        break;
+      case 'open_feasibility':
+        if (tripId) navigate(buildFeasibilityPagePath(tripId));
+        break;
+      case 'optimize':
+        sendAssistantMessage(decisionStrip.optimizeMessage ?? '请帮我优化当前行程方案');
+        break;
+      case 'open_assistant':
+      default:
+        openAssistant();
+        break;
+    }
+  };
+
+  const handleDecisionStripOpenEvidence = () => {
+    if (!drawer || !tripId) return;
+    trackDecisionStripEvidenceOpen({ tripId, source: 'drawer' });
+    drawer.setDrawerTab('decision');
+    drawer.setDrawerOpen(true);
+  };
+
+  useEffect(() => {
+    const onSelectScheduleDay = (event: Event) => {
+      const detail = (event as CustomEvent<PlanStudioScheduleNavigateDetail>).detail ?? {};
       setActiveTab('schedule');
       const newParams = new URLSearchParams(searchParams);
       newParams.set('tab', 'schedule');
       setSearchParams(newParams, { replace: true });
+
+      const dayIndex = resolveScheduleDayIndex(detail);
+      if (typeof dayIndex === 'number' && dayIndex >= 0) {
+        window.setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('plan-studio:scroll-schedule-day', {
+              detail,
+            }),
+          );
+        }, 150);
+      }
     };
     window.addEventListener('plan-studio:select-schedule-day', onSelectScheduleDay);
     return () => window.removeEventListener('plan-studio:select-schedule-day', onSelectScheduleDay);
   }, [searchParams, setSearchParams]);
+
+  // URL ?tab=feasibility 深链 → 可执行证明全页
+  useEffect(() => {
+    if (!tripId || searchParams.get('tab') !== 'feasibility') return;
+    navigate(buildFeasibilityPagePath(tripId), { replace: true });
+  }, [tripId, searchParams, navigate]);
+
+  useEffect(() => {
+    const onOpenFeasibility = (event: Event) => {
+      if (!tripId) return;
+      const issueId = (event as CustomEvent<{ issueId?: string }>).detail?.issueId;
+      navigate(buildFeasibilityPagePath(tripId, issueId ?? null));
+    };
+    window.addEventListener('plan-studio:open-feasibility', onOpenFeasibility);
+    return () => window.removeEventListener('plan-studio:open-feasibility', onOpenFeasibility);
+  }, []);
+
+  const roundIdParam = searchParams.get('roundId');
+  useEffect(() => {
+    if (!tripId || !roundIdParam) return;
+    setStructuredNegotiationOpen(true);
+  }, [tripId, roundIdParam]);
+
+  useEffect(() => {
+    const onOpenStructuredNegotiation = (event: Event) => {
+      const detail = (event as CustomEvent<{ tripId?: string }>).detail;
+      if (!tripId || detail?.tripId !== tripId) return;
+      setStructuredNegotiationOpen(true);
+    };
+    window.addEventListener('plan-studio:open-structured-negotiation', onOpenStructuredNegotiation);
+    return () =>
+      window.removeEventListener('plan-studio:open-structured-negotiation', onOpenStructuredNegotiation);
+  }, [tripId]);
+
+  const handleStructuredNegotiationOpenChange = (open: boolean) => {
+    setStructuredNegotiationOpen(open);
+    if (!open) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('roundId');
+      next.delete('roundDomain');
+      setSearchParams(next, { replace: true });
+    }
+  };
+
+  const decisionProfilingStepParam = searchParams.get('decisionProfilingStep');
+  const openDecisionProfilingParam = searchParams.get('openDecisionProfiling') === '1';
+  const decisionProfilingActionParam = searchParams.get('decisionProfilingAction');
+  const decisionProfilingForceReuse = decisionProfilingActionParam === 'reuse';
+
+  useEffect(() => {
+    if (
+      !tripId ||
+      (!openDecisionProfilingParam && !decisionProfilingStepParam && !decisionProfilingForceReuse)
+    ) {
+      return;
+    }
+    setDecisionProfilingHubOpen(true);
+  }, [tripId, openDecisionProfilingParam, decisionProfilingStepParam, decisionProfilingForceReuse]);
+
+  useEffect(() => {
+    const onOpenDecisionProfiling = (event: Event) => {
+      const detail = (event as CustomEvent<{ tripId?: string; step?: DecisionProfilingStep }>).detail;
+      if (!tripId || detail?.tripId !== tripId) return;
+      setDecisionProfilingHubOpen(true);
+      setDecisionProfilingQuizRequest(detail?.step ?? 'travel_style');
+    };
+    window.addEventListener('plan-studio:open-decision-profiling', onOpenDecisionProfiling);
+    return () =>
+      window.removeEventListener('plan-studio:open-decision-profiling', onOpenDecisionProfiling);
+  }, [tripId]);
+
+  const handleDecisionProfilingHubOpenChange = (open: boolean) => {
+    setDecisionProfilingHubOpen(open);
+    if (!open) {
+      setDecisionProfilingQuizRequest(null);
+      const next = new URLSearchParams(searchParams);
+      next.delete('openDecisionProfiling');
+      next.delete('decisionProfilingStep');
+      next.delete('decisionProfilingAction');
+      next.delete('decisionProfilingPrefill');
+      setSearchParams(next, { replace: true });
+    }
+  };
+
+  const decisionProfilingInitialStep =
+    decisionProfilingQuizRequest ??
+    (decisionProfilingStepParam === 'money_dna' || decisionProfilingStepParam === 'travel_style'
+      ? decisionProfilingStepParam
+      : null);
+  const decisionProfilingForceQuiz =
+    (openDecisionProfilingParam || decisionProfilingQuizRequest !== null) && !decisionProfilingForceReuse;
 
   useEffect(() => {
     planGateUrlHandledRef.current = false;
@@ -245,7 +457,6 @@ function PlanStudioPageContent() {
     next.delete('decisionCockpit');
     setSearchParams(next, { replace: true });
   }, [showDecisionCockpitDeepLink, decisionCockpit, searchParams, setSearchParams]);
-
 
   // 加载国家信息
   useEffect(() => {
@@ -397,38 +608,13 @@ function PlanStudioPageContent() {
     return () => clearInterval(interval);
   }, [tripId, tripExists]);
 
-  // 构建规划上下文
-  const buildPlanningContext = () => {
-    if (!currentTrip) return null;
-
-    const destinationParts = currentTrip.destination?.split(',') || [];
-    const country = destinationParts[0]?.trim().toUpperCase() || '';
-    const city = destinationParts.length > 1 ? destinationParts.slice(1).join(',').trim() : undefined;
-
-    const days = currentTrip.TripDay?.length || 0;
-    if (days === 0) {
-      toast.error('行程天数不能为0，请先设置行程日期');
-      return null;
-    }
-
-    const constraints: any = {};
-    if (currentTrip.totalBudget) {
-      constraints.budget = {
-        total: currentTrip.totalBudget,
-        currency: currentTrip.budgetConfig?.currency || 'CNY',
-      };
-    }
-
-    return {
-      destination: {
-        country,
-        city,
-      },
-      days,
-      travelMode: 'mixed' as const,
-      constraints: Object.keys(constraints).length > 0 ? constraints : undefined,
-    };
-  };
+  // 方案提交 / 时间轴变更后刷新 Pipeline 进度
+  useEffect(() => {
+    if (!tripId || !tripExists) return;
+    const handler = () => void loadPipelineStatus();
+    window.addEventListener('plan-studio:schedule-refresh', handler);
+    return () => window.removeEventListener('plan-studio:schedule-refresh', handler);
+  }, [tripId, tripExists]);
 
   // 加载行程数据
   const loadTrip = async () => {
@@ -439,110 +625,27 @@ function PlanStudioPageContent() {
         setCurrentTrip(trip);
         setTripExists(true);
       }
-      setLastHikingGenerateLog(loadHikingGenerateLog(tripId));
     } catch (err: any) {
       console.error('Failed to load trip:', err);
     }
   };
 
-  const runHikingDecisionGenerate = async () => {
-    if (!tripId || !currentTrip) return;
+  const executePipelineStageAction = (stage: PipelineStage) => {
+    if (!tripId) return;
+    const action = getPlanStudioPipelineStageAction(stage, tripId);
+    if (!action) return;
+    setShowStatusDialog(false);
 
-    setGeneratingStage('决策引擎 · Trail 计划生成中...');
-    setGeneratingProgress(30);
-
-    const body = buildGeneratePlanRequestForHiking(currentTrip, { fitnessProfile });
-    const data = await decisionEngineApi.generatePlan(body);
-
-    setGeneratingProgress(85);
-    setGeneratingStage('解析 Trail 段...');
-
-    const log = (data.log ?? {}) as Record<string, unknown>;
-    saveHikingGenerateLog(tripId, log);
-    setLastHikingGenerateLog(log);
-
-    let tripAfter = currentTrip;
-    try {
-      tripAfter = await tripsApi.getById(tripId);
-      setCurrentTrip(tripAfter);
-    } catch (e) {
-      console.warn('[Plan Studio] 刷新行程失败，使用本地 log 合并 metadata:', e);
-      const hardTrek = log.hardTrekTrailPlan;
-      if (hardTrek && typeof hardTrek === 'object') {
-        tripAfter = {
-          ...currentTrip,
-          metadata: {
-            ...currentTrip.metadata,
-            hardTrekTrailPlan: hardTrek,
-            routeDirectionName:
-              (log.routeDirection as { selected?: { name?: string } })?.selected?.name ??
-              currentTrip.metadata?.routeDirectionName,
-          },
-        };
-        setCurrentTrip(tripAfter);
-      }
-    }
-
-    const hikingMeta = buildHikingAuditMetadata({
-      hikingLevel:
-        (tripAfter.metadata?.hikingLevel as 'light' | 'hiking-heavy' | undefined) ??
-        'hiking-heavy',
-      destination: tripAfter.destination,
-    });
-    if (hikingMeta) {
-      try {
-        await tripsApi.update(tripId, {
-          metadata: { ...tripAfter.metadata, ...hikingMeta },
-        });
-        const merged = await tripsApi.getById(tripId);
-        setCurrentTrip(merged);
-      } catch (e) {
-        console.warn('[Plan Studio] 徒步 audit metadata 同步失败:', e);
-      }
-    }
-
-    setGeneratingProgress(100);
-    setGeneratingStage('完成');
-    setHikingResultOpen(true);
-
-    toast.success('徒步 Trail 计划已生成', {
-      description: log.hardTrekTrailPlan ? '已解析按日 Trail 段' : '请查看决策日志或 POI 日程',
-    });
-  };
-
-  // 生成方案：徒步行程走决策引擎 generate-plan，其余走规划工作台
-  const handleGeneratePlan = async () => {
-    if (!tripId || !currentTrip) {
-      toast.error('请先选择行程');
-      return;
-    }
-
-    if (!tripIncludesHiking(currentTrip) && !buildPlanningContext()) {
-      return;
-    }
-
-    if (!showPrimaryTrailPlanStudio) {
-      planStudio.openPlanGate({ autoGenerate: true });
-      toast.success('正在生成方案预览', {
-        description: '请在右侧抽屉查看三人格评估与提交',
-      });
-      return;
-    }
-
-    setGeneratingPlan(true);
-    setGeneratingProgress(0);
-    setGeneratingStage('准备中...');
-
-    try {
-      await runHikingDecisionGenerate();
-      await loadTrip();
-    } catch (err: unknown) {
-      console.error('生成方案失败:', err);
-      toast.error((err as Error).message || '生成方案失败，请稍后重试');
-      setGeneratingProgress(0);
-      setGeneratingStage('');
-    } finally {
-      setGeneratingPlan(false);
+    switch (action.type) {
+      case 'tab':
+        handleTabChange(action.tab);
+        break;
+      case 'intent':
+        setShowIntentDialog(true);
+        break;
+      case 'external':
+        navigate(action.path);
+        break;
     }
   };
 
@@ -646,11 +749,32 @@ function PlanStudioPageContent() {
   }, [currentTrip]);
 
   // 判断是否是冰岛（用于显示详细风速信息）
+  const showSelfDriveCoverageTab = useMemo(
+    () => isSelfDrivePlanningTrip(currentTrip),
+    [currentTrip],
+  );
+
   const isIceland = useMemo(() => {
     if (!currentTrip?.destination) return false;
     const countryCode = currentTrip.destination.split(',')[0]?.trim().toUpperCase();
     return countryCode === 'IS';
   }, [currentTrip?.destination]);
+
+  /** 远期规划不展示实时天气（与准备度「出发前 14 天内再查」一致） */
+  const showPlanStudioLiveWeather = useMemo(() => {
+    if (!currentTrip?.startDate) return false;
+    const daysUntilStart = getDaysUntilTripStart(currentTrip.startDate);
+    return daysUntilStart >= 0 && daysUntilStart <= ACTIONABLE_READINESS_HORIZON_DAYS;
+  }, [currentTrip?.startDate]);
+
+  useEffect(() => {
+    if (activeTab === 'coverage' && !showSelfDriveCoverageTab) {
+      setActiveTab('schedule');
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', 'schedule');
+      setSearchParams(next, { replace: true });
+    }
+  }, [activeTab, showSelfDriveCoverageTab, searchParams, setSearchParams]);
 
   const handleWelcomeComplete = (experienceType: 'steady' | 'balanced' | 'exploratory') => {
     setShowWelcomeModal(false);
@@ -734,65 +858,58 @@ function PlanStudioPageContent() {
             </p>
           </div>
           
-          {/* 右侧操作区：生成方案按钮 + Pipeline状态 */}
+          {/* 右侧操作区：顶栏工具 + Pipeline 状态 */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {/* 生成方案按钮 */}
-            {showPrimaryTrailPlanStudio && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="hidden sm:flex items-center gap-1.5 text-xs"
-                onClick={() => setTrailPreviewOpen(true)}
-                disabled={generatingPlan}
-              >
-                <Mountain className="w-3.5 h-3.5" />
-                Trail 预演
-              </Button>
+            {tripId && tripExists && (
+              <DecisionProfilingHubDialog
+                tripId={tripId}
+                open={decisionProfilingHubOpen}
+                onOpenChange={handleDecisionProfilingHubOpenChange}
+                initialStep={decisionProfilingInitialStep}
+                forceOpenQuiz={decisionProfilingForceQuiz}
+                forceReuseProfile={decisionProfilingForceReuse}
+              />
             )}
             {tripId && tripExists && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex flex-col items-end gap-1">
-                      <Button
-                        onClick={handleGeneratePlan}
-                        disabled={generatingPlan || !currentTrip}
-                        size="sm"
-                        className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
-                      >
-                        {generatingPlan ? (
-                          <>
-                            <Spinner className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span className="hidden xs:inline sm:hidden">{generatingStage || '生成中'}</span>
-                            <span className="hidden sm:inline">{generatingStage || '生成中...'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
-                            <span className="hidden xs:inline sm:hidden">生成</span>
-                            <span className="hidden sm:inline">重新生成方案</span>
-                          </>
-                        )}
-                      </Button>
-                      {generatingPlan && generatingProgress > 0 && (
-                        <div className="w-full max-w-[80px] sm:max-w-[120px]">
-                          <Progress value={generatingProgress} className="h-1" />
-                        </div>
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <p className="text-sm">
-                      {showPrimaryTrailPlanStudio
-                        ? '徒步行程将调用决策引擎 generate-plan，并解析 log.hardTrekTrailPlan。'
-                        : showEmbeddedPlanStudio
-                          ? '混合出行仅重新生成自驾/日程；徒步片段请在行程详情登记。'
-                          : '基于您在时间轴的修改，生成新的行程方案。生成后可在决策评估中查看和提交。'}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <StructuredNegotiationDialog
+                tripId={tripId}
+                open={structuredNegotiationOpen}
+                onOpenChange={handleStructuredNegotiationOpenChange}
+                initialRoundId={searchParams.get('roundId')}
+                initialRoundDomain={searchParams.get('roundDomain')}
+                showTrigger
+              />
+            )}
+            {tripId && tripExists && (
+              <SilentVoteHubDialog tripId={tripId} />
+            )}
+            {tripId && tripExists && (
+              <PrivateWishDialog
+                tripId={tripId}
+                destinationLabel={currentTrip?.destination?.trim() || '冰岛'}
+                userDisplayName={user?.displayName ?? user?.email ?? '我'}
+                onOpenChange={(open) => {
+                  if (!open) void reloadWishSummary();
+                }}
+              />
+            )}
+            {tripId && tripExists && (
+              isTripLoopReadinessEnabled() ? (
+                <ReadinessRepairLoopTrigger
+                  tripId={tripId}
+                  loopPhaseLabel={
+                    decisionStrip.loopUi
+                      ? resolveLoopValidationPresentation(decisionStrip.loopUi).phaseLabel
+                      : null
+                  }
+                  onClick={() => setFeasibilitySheetOpen(true)}
+                />
+              ) : (
+                <FeasibilityReportTrigger
+                  tripId={tripId}
+                  onClick={() => setFeasibilitySheetOpen(true)}
+                />
+              )
             )}
 
             {/* Pipeline 状态指示器 */}
@@ -802,9 +919,10 @@ function PlanStudioPageContent() {
                   <Spinner className="w-3 h-3 sm:w-4 sm:h-4" />
                 ) : pipelineStatus ? (
                   <button
+                    type="button"
                     onClick={() => setShowStatusDialog(true)}
                     className="hover:opacity-80 transition-opacity"
-                    title="点击查看详细状态"
+                    title="点击查看各阶段详情"
                   >
                     <PipelineStatusIndicator status={pipelineStatus} />
                   </button>
@@ -818,8 +936,8 @@ function PlanStudioPageContent() {
           </div>
         </div>
 
-        {/* 第二行：天气卡片 */}
-        {tripId && tripExists && weatherLocation && (
+        {/* 出发前 14 天内才显示目的地实时天气 */}
+        {tripId && tripExists && weatherLocation && showPlanStudioLiveWeather && (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-2 sm:pt-0 border-t sm:border-t-0">
             <div className="flex-shrink-0">
               <WeatherCard
@@ -843,6 +961,51 @@ function PlanStudioPageContent() {
         />
       )}
 
+      {tripId && tripExists && (
+        <NarrativeThemeSection
+          tripId={tripId}
+          promptOnCreate={(location.state as { from?: string } | null)?.from === 'create'}
+        />
+      )}
+
+      {tripId && tripExists && (
+        <div className="px-6 space-y-3 pb-2">
+          <DecisionStrip
+            tripId={tripId}
+            model={decisionStrip}
+            hasGuards={Boolean(worldModelGuards)}
+            onPrimaryCta={handleDecisionStripPrimaryCta}
+            onOpenEvidence={drawer ? handleDecisionStripOpenEvidence : undefined}
+          />
+          {!decisionStrip.hidePlanningBanner ? (
+            <PlanningBanner guards={worldModelGuards} />
+          ) : null}
+          <WorldConstraintBanner
+            materialization={explainOptimization?.world_constraint_materialization}
+            className="-mt-2 mb-3"
+          />
+          {optimizationMethodLabel ? (
+            <p className="text-xs text-muted-foreground -mt-2 mb-4 px-1">
+              优化方式：{optimizationMethodLabel}
+            </p>
+          ) : null}
+          {hasDecisionCockpitUi(decisionCockpit) ? (
+            <div ref={decisionCockpitRef} className="mb-4">
+              <DecisionCockpitPanel
+                cockpit={decisionCockpit}
+                defaultOpen={showDecisionCockpitDeepLink}
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {tripId && tripExists && currentTrip && shouldShowTripExperienceIntentPanel(currentTrip.metadata) && (
+        <div className="px-6 pb-2">
+          <TripExperienceIntentPanel metadata={currentTrip.metadata} defaultOpen />
+        </div>
+      )}
+
       {showEmbeddedPlanStudio && tripId ? (
         <div className="px-6 pb-2">
           <EmbeddedHikingStatusBar
@@ -864,26 +1027,6 @@ function PlanStudioPageContent() {
         </div>
       ) : null}
 
-      {tripId && tripExists && (
-        <div className="px-6">
-          <PlanningBanner guards={worldModelGuards} />
-          <WorldConstraintBanner
-            materialization={explainOptimization?.world_constraint_materialization}
-            className="-mt-2 mb-3"
-          />
-          {optimizationMethodLabel ? (
-            <p className="text-xs text-muted-foreground -mt-2 mb-4 px-1">
-              优化方式：{optimizationMethodLabel}
-            </p>
-          ) : null}
-          {hasDecisionCockpitUi(decisionCockpit) ? (
-            <div ref={decisionCockpitRef} className="mb-4">
-              <DecisionCockpitPanel cockpit={decisionCockpit} defaultOpen={showDecisionCockpitDeepLink} />
-            </div>
-          ) : null}
-        </div>
-      )}
-
       {/* 主内容区：Tab导航 + 内容 */}
       <div className="flex-1 overflow-hidden flex">
         {/* 主内容区 */}
@@ -892,23 +1035,33 @@ function PlanStudioPageContent() {
             <div className="border-b bg-white px-6">
               <TabsList className="justify-start">
                 <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
+                {showSelfDriveCoverageTab ? (
+                  <TabsTrigger value="coverage">{t('planStudio.tabs.coverage')}</TabsTrigger>
+                ) : null}
                 <TabsTrigger value="budget">预算管理</TabsTrigger>
+                <TabsTrigger value="tasks">行前准备</TabsTrigger>
+                <TabsTrigger value="team">团队</TabsTrigger>
               </TabsList>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-              {/* 主内容区 */}
-              <div className="max-w-5xl mx-auto">
+              <div
+                className={cn(
+                  'mx-auto',
+                  activeTab === 'coverage' ? 'max-w-6xl' : 'max-w-5xl',
+                )}
+              >
                 <TabsContent value="schedule" className="mt-0">
-                  {tripId ? (
-                    <ScheduleTab 
-                      tripId={tripId} 
+                  {tripId && activeTab === 'schedule' ? (
+                    <ScheduleTab
+                      tripId={tripId}
                       refreshKey={refreshKey}
-                      onOpenReadinessDrawer={(findingId?: string) => {
-                        setHighlightFindingId(findingId);
-                        setReadinessDrawerOpen(true);
-                      }}
+                      wishImpactByDay={wishSummary?.impactByDay}
                     />
+                  ) : tripId ? (
+                    <div className="flex items-center justify-center p-8 min-h-[200px]">
+                      <p className="text-sm text-muted-foreground">切换到「时间轴」查看日程与领域分解</p>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center p-8">
                       <div className="text-center">
@@ -917,8 +1070,33 @@ function PlanStudioPageContent() {
                     </div>
                   )}
                 </TabsContent>
+                {showSelfDriveCoverageTab && tripId ? (
+                  <TabsContent value="coverage" className="mt-0">
+                    <CoverageMapTab tripId={tripId} refreshKey={refreshKey} />
+                  </TabsContent>
+                ) : null}
                 <TabsContent value="budget" className="mt-0">
                   <BudgetTab tripId={tripId!} />
+                </TabsContent>
+                <TabsContent value="tasks" className="mt-0">
+                  {tripId ? (
+                    <TasksTab
+                      tripId={tripId}
+                      initialSubTab={
+                        searchParams.get('subtab') === 'packing' ? 'packing' : 'tasks'
+                      }
+                    />
+                  ) : null}
+                </TabsContent>
+                <TabsContent value="team" className="mt-0">
+                  {tripId && activeTab === 'team' ? (
+                    <TeamTab
+                      tripId={tripId}
+                      trip={currentTrip}
+                      onTripRefetch={loadTrip}
+                      onGoToSchedule={() => handleTabChange('schedule')}
+                    />
+                  ) : null}
                 </TabsContent>
               </div>
             </div>
@@ -927,32 +1105,6 @@ function PlanStudioPageContent() {
       </div>
 
       <PlanGateDrawer tripId={tripId} />
-
-      {/* 准备度抽屉 */}
-      <ReadinessDrawer
-        open={readinessDrawerOpen}
-        onClose={() => {
-          setReadinessDrawerOpen(false);
-          setHighlightFindingId(undefined);
-        }}
-        tripId={tripId}
-        highlightFindingId={highlightFindingId}
-      />
-
-      {showPrimaryTrailPlanStudio && currentTrip && (
-        <TrailPlanPreviewDialog
-          trip={currentTrip}
-          open={trailPreviewOpen}
-          onOpenChange={setTrailPreviewOpen}
-          onConfirmGenerate={() => void handleGeneratePlan()}
-        />
-      )}
-
-      <HikingGeneratePlanResultDialog
-        open={hikingResultOpen}
-        onOpenChange={setHikingResultOpen}
-        log={lastHikingGenerateLog}
-      />
 
       {/* Pipeline 状态详情对话框 */}
       {pipelineStatus && (
@@ -966,7 +1118,11 @@ function PlanStudioPageContent() {
             </DialogHeader>
             <div className="space-y-4 mt-4">
               {pipelineStatus.stages.map((stage) => (
-                <PipelineStageCard key={stage.id} stage={stage} />
+                <PipelineStageCard
+                  key={stage.id}
+                  stage={stage}
+                  onAction={tripId ? executePipelineStageAction : undefined}
+                />
               ))}
             </div>
           </DialogContent>
@@ -1022,6 +1178,40 @@ function PlanStudioPageContent() {
           open={collaboratorsDialogOpen}
           onOpenChange={setCollaboratorsDialogOpen}
         />
+      )}
+
+      {tripId && tripExists && (
+        isTripLoopReadinessEnabled() ? (
+          <ReadinessRepairLoopSheet
+            tripId={tripId}
+            open={feasibilitySheetOpen}
+            onOpenChange={(open) => {
+              setFeasibilitySheetOpen(open);
+              if (!open) setFeasibilityInitialIssueId(null);
+            }}
+            initialIssueId={feasibilityInitialIssueId}
+            onNavigateToSchedule={handleNavigateToScheduleFromFeasibility}
+            onApplied={() => {
+              setRefreshKey((k) => k + 1);
+              if (tripId) {
+                tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
+                notifyLoopReadinessChanged(tripId);
+                void decisionStrip.reloadLoopValidation();
+              }
+            }}
+          />
+        ) : (
+          <FeasibilityReportSheet
+            tripId={tripId}
+            open={feasibilitySheetOpen}
+            onOpenChange={(open) => {
+              setFeasibilitySheetOpen(open);
+              if (!open) setFeasibilityInitialIssueId(null);
+            }}
+            initialIssueId={feasibilityInitialIssueId}
+            onNavigateToSchedule={handleNavigateToScheduleFromFeasibility}
+          />
+        )
       )}
     </div>
   );
@@ -1121,53 +1311,34 @@ function TripSummaryBar({
 
 // Pipeline 状态指示器组件
 function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
-  // 计算当前进度
   const totalStages = status.stages.length;
   const completedStages = status.stages.filter(s => s.status === 'completed').length;
   const riskStages = status.stages.filter(s => s.status === 'risk').length;
   const inProgressStages = status.stages.filter(s => s.status === 'in-progress').length;
-  
-  // 获取当前阶段
-  const currentStage = status.stages.find(s => s.status === 'in-progress' || s.status === 'risk');
-  
-  // 计算进度百分比
+
   const progressPercentage = totalStages > 0 ? (completedStages / totalStages) * 100 : 0;
-  
-  // 获取进度条颜色
-  const progressColorClass = riskStages > 0 
+
+  const progressColorClass = riskStages > 0
     ? getPipelineProgressColor('risk')
     : inProgressStages > 0
-    ? getPipelineProgressColor('in-progress')
-    : getPipelineProgressColor('completed');
+      ? getPipelineProgressColor('in-progress')
+      : getPipelineProgressColor('completed');
   
   return (
     <div className="flex items-center gap-3 text-xs">
-      {/* 进度条 */}
+      {/* 进度摘要（不展示当前阶段名称，避免与顶栏功能入口重复） */}
       <div className="flex items-center gap-2">
         <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div 
+          <div
             className={cn('h-full transition-all', progressColorClass)}
             style={{ width: `${progressPercentage}%` }}
           />
         </div>
-        <span className="text-muted-foreground min-w-[3rem]">
+        <span className="text-muted-foreground min-w-[3rem] tabular-nums">
           {completedStages}/{totalStages}
         </span>
       </div>
-      
-      {/* 当前阶段 */}
-      {currentStage && (
-        <div className="flex items-center gap-1">
-          <div className={cn(
-            'w-2 h-2 rounded-full animate-pulse',
-            getPipelineProgressColor(currentStage.status as PipelineStageStatus)
-          )} />
-          <span className="text-muted-foreground">
-            {currentStage.name}
-          </span>
-        </div>
-      )}
-      
+
       {/* 风险提示 */}
       {riskStages > 0 && (
         <div className={cn('flex items-center gap-1', getPipelineStatusClasses('risk'))}>
@@ -1180,10 +1351,17 @@ function PipelineStatusIndicator({ status }: { status: PipelineStatus }) {
 }
 
 // Pipeline 阶段卡片组件
-function PipelineStageCard({ stage }: { stage: PipelineStage }) {
+function PipelineStageCard({
+  stage,
+  onAction,
+}: {
+  stage: PipelineStage;
+  onAction?: (stage: PipelineStage) => void;
+}) {
   const stageStatus = stage.status as PipelineStageStatus;
   const StatusIcon = getPipelineStatusIcon(stageStatus);
   const statusClasses = getPipelineStatusClasses(stageStatus);
+  const actionable = Boolean(onAction);
   
   // 对于 in-progress 状态，添加动画
   const iconClasses = cn(
@@ -1193,7 +1371,25 @@ function PipelineStageCard({ stage }: { stage: PipelineStage }) {
   );
 
   return (
-    <div className="flex items-start gap-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+    <div
+      role={actionable ? 'button' : undefined}
+      tabIndex={actionable ? 0 : undefined}
+      onClick={actionable ? () => onAction?.(stage) : undefined}
+      onKeyDown={
+        actionable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onAction?.(stage);
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        'flex items-start gap-4 p-4 border rounded-lg transition-colors',
+        actionable && 'cursor-pointer hover:bg-muted/40 hover:border-muted-foreground/20',
+      )}
+    >
       <div className="flex-shrink-0 mt-0.5">
         <StatusIcon className={iconClasses} />
       </div>

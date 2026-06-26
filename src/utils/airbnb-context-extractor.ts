@@ -4,8 +4,13 @@
  * 从对话上下文、推荐目的地、用户偏好中提取位置和日期信息
  */
 
-import type { PlanningMessage, DestinationRecommendation } from '@/api/assistant';
+import type { DestinationRecommendation } from '@/api/assistant';
 import type { UserPreferenceSummaryResponse } from '@/api/assistant';
+
+export interface PlanningMessage {
+  role?: string;
+  content?: string;
+}
 
 export interface ExtractedSearchParams {
   location: string;

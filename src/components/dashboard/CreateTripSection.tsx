@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, FileText, Maximize2, Minimize2, X } from 'lucide-react';
+import { MessageSquare, FileText, Maximize2, Minimize2, X, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import NLChatInterface from '@/components/trips/NLChatInterface';
 import { tripsApi } from '@/api/trips';
@@ -74,6 +74,10 @@ export default function CreateTripSection({
 
   const handleFormCreate = () => {
     navigate('/dashboard/trips/new');
+  };
+
+  const handleQuickPlanCreate = () => {
+    navigate('/dashboard/trips/new?mode=quick');
   };
 
   const handleTripCreated = (tripId: string) => {
@@ -181,24 +185,41 @@ export default function CreateTripSection({
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* 对话创建 */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {/* 快速规划 */}
             <Button
-              onClick={handleChatCreate}
+              onClick={handleQuickPlanCreate}
               className={cn(
-                "h-auto flex-col gap-2.5 p-5",
-                "bg-slate-900 hover:bg-slate-800",
-                "text-white border-0",
-                "transition-all duration-200 hover:scale-[1.02]"
+                'h-auto flex-col gap-2.5 p-5',
+                'bg-slate-900 hover:bg-slate-800',
+                'border-0 text-white',
+                'transition-all duration-200 hover:scale-[1.02]'
               )}
               size="default"
             >
-              <MessageSquare className="w-6 h-6" />
+              <Sparkles className="h-6 w-6" />
               <div className="flex flex-col gap-1 text-center">
-                <span className="font-semibold text-sm">对话创建</span>
-                <span className="text-xs opacity-90">
-                  通过自然语言对话创建行程
-                </span>
+                <span className="text-sm font-semibold">快速规划</span>
+                <span className="text-xs opacity-90">一句话生成预览，确认后落库</span>
+              </div>
+            </Button>
+
+            {/* 对话创建 */}
+            <Button
+              onClick={handleChatCreate}
+              variant="outline"
+              className={cn(
+                'h-auto flex-col gap-2.5 p-5',
+                'border border-slate-300 bg-white',
+                'hover:border-slate-400 hover:bg-slate-50',
+                'transition-all duration-200 hover:scale-[1.02]'
+              )}
+              size="default"
+            >
+              <MessageSquare className="h-6 w-6 text-gray-700" />
+              <div className="flex flex-col gap-1 text-center">
+                <span className="text-sm font-semibold text-gray-900">对话创建</span>
+                <span className="text-xs text-gray-600">通过自然语言对话创建行程</span>
               </div>
             </Button>
 
@@ -207,19 +228,17 @@ export default function CreateTripSection({
               onClick={handleFormCreate}
               variant="outline"
               className={cn(
-                "h-auto flex-col gap-2.5 p-5",
-                "bg-white border border-slate-300",
-                "hover:bg-slate-50 hover:border-slate-400",
-                "transition-all duration-200 hover:scale-[1.02]"
+                'h-auto flex-col gap-2.5 p-5',
+                'border border-slate-300 bg-white',
+                'hover:border-slate-400 hover:bg-slate-50',
+                'transition-all duration-200 hover:scale-[1.02]'
               )}
               size="default"
             >
-              <FileText className="w-6 h-6 text-gray-700" />
+              <FileText className="h-6 w-6 text-gray-700" />
               <div className="flex flex-col gap-1 text-center">
-                <span className="font-semibold text-sm text-gray-900">表单创建</span>
-                <span className="text-xs text-gray-600">
-                  使用标准表单创建行程
-                </span>
+                <span className="text-sm font-semibold text-gray-900">表单创建</span>
+                <span className="text-xs text-gray-600">使用标准表单创建行程</span>
               </div>
             </Button>
           </div>

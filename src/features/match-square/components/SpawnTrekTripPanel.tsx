@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Dna, Loader2, MapPin, Rocket, Download } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,7 +13,6 @@ import {
 } from '../hooks/useMatchSquare';
 import type { RecruitmentPostCard } from '@/types/match-square';
 import { buildSpawnPreviewFromPost } from '../lib/trekking-orchestration/build-spawn-preview-from-post';
-import { useMemo } from 'react';
 
 type SpawnTrekTripPanelProps = {
   postId: string;

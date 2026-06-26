@@ -82,7 +82,7 @@ export function AddFlightToTripDialog({
   open,
   onOpenChange,
   flight,
-  tripId,
+  tripId: _tripId,
   tripInfo,
   onSuccess,
 }: AddFlightToTripDialogProps) {

@@ -12,7 +12,7 @@
  * - 信息层级清晰（任务状态 → 进度条 → 当前处理项 → 预计剩余时间）
  */
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -26,7 +26,6 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle2, XCircle, AlertCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { gateStatusTokens, typographyTokens } from '@/utils/design-tokens';
 import type { FetchEvidenceResponse } from '@/api/planning-workbench';
 
 interface TaskProgressDialogProps {
@@ -57,10 +56,10 @@ export default function TaskProgressDialog({
   error,
   onCancel,
   onClose,
-  pollingInterval = 2000,
+  pollingInterval: _pollingInterval = 2000,
 }: TaskProgressDialogProps) {
   const { t } = useTranslation();
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const ____intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 格式化剩余时间
   const formatRemainingTime = (seconds?: number): string => {

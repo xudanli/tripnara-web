@@ -5,15 +5,14 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useDecisionDraft } from '@/hooks/useDecisionDraft';
-import type { DecisionStep, UserMode, GateStatus, DecisionDraft } from '@/types/decision-draft';
+import type { UserMode, GateStatus } from '@/types/decision-draft';
 import DecisionNode from './DecisionNode';
 import EvidenceNode from './EvidenceNode';
-import ImpactNode from './ImpactNode';
 import DecisionCanvasToolbar, { type LayoutType } from './DecisionCanvasToolbar';
 import { Card } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { calculateLayout } from '@/utils/layout-algorithms';
 import { normalizeGateStatus } from '@/lib/gate-status';
@@ -46,7 +45,7 @@ export default function DecisionCanvas({
     autoLoad: true,
   });
 
-  const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(new Set());
+  const [highlightedNodeIds, _setHighlightedNodeIds] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [nodePositions, setNodePositions] = useState<Map<string, NodePosition>>(new Map());

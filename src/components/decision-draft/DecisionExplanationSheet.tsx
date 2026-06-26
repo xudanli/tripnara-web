@@ -18,6 +18,17 @@ import { decisionDraftApi } from '@/api/decision-draft';
 import type { DecisionExplanation, UserMode } from '@/types/decision-draft';
 import { AlertCircle } from 'lucide-react';
 
+type DecisionExplanationView = DecisionExplanation & {
+  status?: string;
+  confidence?: number;
+  conclusion?: string;
+  title?: string;
+  explanation?: string;
+  summary?: string;
+  evidence?: Array<string | { title?: string; source_title?: string }>;
+  reasoning?: string;
+};
+
 export interface DecisionExplanationSheetProps {
   draftId: string;
   stepId: string;
@@ -60,15 +71,16 @@ export default function DecisionExplanationSheet({
     }
   };
 
-  const gateStatus = explanation?.status ? normalizeGateStatus(explanation.status) : null;
-  const confidence = explanation?.confidence ? `${Math.round(explanation.confidence * 100)}%` : null;
-  const conclusion = explanation?.conclusion || explanation?.summary || '暂无结论';
+  const view = explanation as DecisionExplanationView | null;
+  const gateStatus = view?.status ? normalizeGateStatus(view.status) : null;
+  const confidence = view?.confidence ? `${Math.round(view.confidence * 100)}%` : null;
+  const conclusion = view?.conclusion || view?.summary || '暂无结论';
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent side="right" className="w-[400px] sm:w-full sm:max-w-[400px] overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{explanation?.title || '决策解释'}</SheetTitle>
+          <SheetTitle>{view?.title || '决策解释'}</SheetTitle>
           <SheetDescription>
             查看系统如何做出这个决策
           </SheetDescription>
@@ -91,7 +103,7 @@ export default function DecisionExplanationSheet({
             </div>
           )}
 
-          {!loading && !error && explanation && (
+          {!loading && !error && view && (
             <>
               {/* 基本信息 */}
               <div>
@@ -116,21 +128,21 @@ export default function DecisionExplanationSheet({
               </div>
 
               {/* 自然语言解释 */}
-              {(explanation.explanation || explanation.summary) && (
+              {(view.explanation || view.summary) && (
                 <div className="border-t pt-6">
                   <h3 className="text-sm font-medium mb-3">解释</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {explanation.explanation || explanation.summary}
+                    {view.explanation || view.summary}
                   </p>
                 </div>
               )}
 
               {/* 关键证据 */}
-              {explanation.evidence && explanation.evidence.length > 0 && (
+              {view.evidence && view.evidence.length > 0 && (
                 <div className="border-t pt-6">
                   <h3 className="text-sm font-medium mb-3">关键证据</h3>
                   <ul className="space-y-2">
-                    {explanation.evidence.map((evidence, index) => (
+                    {view.evidence.map((evidence: string | { title?: string; source_title?: string }, index: number) => (
                       <li key={index} className="flex items-start gap-2 text-sm">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
                         <span className="flex-1">
@@ -143,11 +155,11 @@ export default function DecisionExplanationSheet({
               )}
 
               {/* 推理过程（Expert 模式） */}
-              {userMode !== 'toc' && explanation.reasoning && (
+              {userMode !== 'toc' && view.reasoning && (
                 <div className="border-t pt-6">
                   <h3 className="text-sm font-medium mb-3">推理过程</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                    {explanation.reasoning}
+                    {view.reasoning}
                   </p>
                 </div>
               )}

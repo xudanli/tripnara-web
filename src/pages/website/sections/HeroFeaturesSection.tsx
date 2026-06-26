@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Route, Compass, Mountains } from '@/components/illustrations/SimpleIllustrations';
+import { Route, Compass, Mountains, PersonThinking } from '@/components/illustrations/SimpleIllustrations';
 import { WebsiteSection } from '@/components/website/WebsiteSection';
 import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,12 @@ export default function HeroFeaturesSection() {
       description: t('heroFeatures.card3.description', {
         defaultValue: '关闭？天气？体力不支？系统会自动生成最优替换方案。',
       }),
+    },
+    {
+      icon: PersonThinking,
+      title: t('heroFeatures.card4.title'),
+      description: t('heroFeatures.card4.description'),
+      tag: t('heroFeatures.card4.tag'),
     },
   ];
 
@@ -64,7 +70,7 @@ export default function HeroFeaturesSection() {
       
       <div className="relative z-10">
         {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-16">
           {features.map((feature, idx) => {
             const IconComponent = feature.icon;
             return (

@@ -1,52 +1,62 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
-import { Card, CardContent } from '@/components/ui/card';
 import ChecklistSection from '@/components/readiness/ChecklistSection';
-import RiskCard from '@/components/readiness/RiskCard';
-import ReadinessDrawerHeader from '@/components/readiness/ReadinessDrawerHeader';
+import ReadinessDrawerHeader, {
+  type ReadinessDrawerSection,
+} from '@/components/readiness/ReadinessDrawerHeader';
 import ReadinessDrawerActions from '@/components/readiness/ReadinessDrawerActions';
+import ReadinessRiskSection from '@/components/readiness/ReadinessRiskSection';
+import CascadeImpactPanel from '@/components/readiness/CascadeImpactPanel';
 import ReadinessDisclaimerComponent from '@/components/readiness/ReadinessDisclaimer'; // 🆕 免责声明组件
 import { 
   Bug,
-  ExternalLink,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAssistantDrawerRightOffset } from '@/hooks/use-assistant-drawer-offset';
 import { tripsApi } from '@/api/trips';
 import { readinessApi } from '@/api/readiness';
 import type { TripDetail } from '@/types/trip';
-import type { ReadinessCheckResult, ReadinessFindingItem, ScoreBreakdownResponse, CoverageMapResponse, EvidenceType, Risk, EnhancedRisk, RiskWarningsResponse } from '@/api/readiness';
+import type { ReadinessCheckResult, ReadinessFindingItem, ScoreBreakdownResponse, CoverageMapResponse, EvidenceType, EnhancedRisk, RiskWarningsResponse } from '@/api/readiness';
 import { toast } from 'sonner';
 import { 
   inferPackingListParams, 
   isTemplateSupported 
 } from '@/utils/packing-list-inference';
 import { useAutoFetchEvidence } from '@/hooks';
-import { useAuth } from '@/hooks/useAuth'; // 🆕 获取用户ID
-import { countNestedFindingItems } from '@/lib/readiness-nested-counts';
+import { useAuth } from '@/hooks/useAuth';
+import { useReadinessPreparationTasks } from '@/hooks/useReadinessPreparationTasks';
+import { computeReadinessGate } from '@/lib/readiness-drawer-stats';
+import { countRemainingPackMust, collectPackMustItems, completionUnitsForMustItem, checklistItemKey, isMustItemComplete } from '@/lib/readiness-pack-must-progress';
+import { isTaskCheckKey, parentKeyFromTaskKey } from '@/lib/readiness-place-display.util';
 import { isCoverageGapFindingId } from '@/lib/readiness-coverage-gap';
+import { getReadinessCategoryDisplay } from '@/lib/readiness-category-labels.util';
+import { normalizeCascadeUiHints } from '@/lib/readiness-cascade.util';
+import { resolveCascadeHintsForDev } from '@/lib/readiness-cascade-mock.util';
 
 interface ReadinessDrawerProps {
   open: boolean;
   onClose: () => void;
   tripId?: string | null;
-  highlightFindingId?: string; // 用于定位到特定 finding
+  highlightFindingId?: string;
+  onOpenTasksTab?: () => void;
 }
-
-type GateStatus = 'BLOCK' | 'WARN' | 'PASS';
 
 export default function ReadinessDrawer({
   open,
   onClose,
   tripId,
   highlightFindingId,
+  onOpenTasksTab,
 }: ReadinessDrawerProps) {
   const assistantRightOffset = useAssistantDrawerRightOffset();
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const { user } = useAuth(); // 🆕 获取当前用户信息
+  const { user } = useAuth();
   
   // 获取当前语言代码（'zh' 或 'en'）
   const getLangCode = () => {
@@ -62,14 +72,14 @@ export default function ReadinessDrawer({
   const [coverageMapData, setCoverageMapData] = useState<CoverageMapResponse | null>(null);
   const [riskWarnings, setRiskWarnings] = useState<RiskWarningsResponse | null>(null); // 🆕 增强版风险预警数据
   const [checkedMustItems, setCheckedMustItems] = useState<Set<string>>(new Set());
-  const [expandedEvidence, setExpandedEvidence] = useState<Set<string>>(new Set());
-  const [showShouldOptional, setShowShouldOptional] = useState(false);
+  const [_expandedEvidence, _setExpandedEvidence] = useState<Set<string>>(new Set());
+  const [_showShouldOptional, _setShowShouldOptional] = useState(false);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [loadingCheckedStatus, setLoadingCheckedStatus] = useState(false); // 用于显示加载状态（将来使用）
-  const [savingCheckedStatus, setSavingCheckedStatus] = useState(false);
-  const [selectedBlockerId, setSelectedBlockerId] = useState<string | null>(null);
+  const [_savingCheckedStatus, setSavingCheckedStatus] = useState(false);
+  const [_selectedBlockerId, setSelectedBlockerId] = useState<string | null>(null);
   const [solutions, setSolutions] = useState<any[]>([]); // 用于显示解决方案对话框（将来使用）
-  const [loadingSolutions, setLoadingSolutions] = useState(false);
+  const [_loadingSolutions, setLoadingSolutions] = useState(false);
   
   // 暂时引用这些变量以避免 lint 警告（将来会在 UI 中使用）
   if (false) {
@@ -90,6 +100,41 @@ export default function ReadinessDrawer({
   
   const blockerRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const mustRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const scrollContentRef = useRef<HTMLDivElement>(null);
+  const isZh = (i18n.language || 'en').startsWith('zh');
+
+  const taskViewer = useMemo(
+    () => (user ? { id: user.id, name: user.displayName } : null),
+    [user?.id, user?.displayName],
+  );
+
+  const {
+    preparationTasksById,
+    riskMitigationProgress,
+    handleToggleTask,
+  } = useReadinessPreparationTasks(tripId, {
+    enabled: open && !!tripId,
+    viewer: taskViewer,
+    isZh,
+  });
+
+  const openTasksTab = () => {
+    onClose();
+    if (onOpenTasksTab) {
+      onOpenTasksTab();
+      return;
+    }
+    if (tripId) {
+      navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=tasks&subtab=packing`);
+    }
+  };
+
+  const scrollToSection = (section: ReadinessDrawerSection) => {
+    const root = scrollContentRef.current;
+    if (!root) return;
+    const target = root.querySelector(`[data-readiness-section="${section}"]`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // 从后端加载已勾选的项
   const loadCheckedStatus = async () => {
@@ -138,36 +183,42 @@ export default function ReadinessDrawer({
     }
   }, [tripId, open]);
 
-  // 计算 gate：阻塞/必须优先与清单同源（嵌套 findings）；无树时再退回 score.summary
-  const gateStatus: GateStatus = (() => {
-    const nested = countNestedFindingItems(readinessResult);
-    const useNestedTree = !!(readinessResult?.findings && readinessResult.findings.length > 0);
-
-    if (scoreBreakdown?.score?.overall !== undefined) {
-      const score = scoreBreakdown.score.overall;
-      const blockers = useNestedTree
-        ? nested.blockers
-        : scoreBreakdown.summary?.blockers ?? 0;
-      const must = useNestedTree
-        ? nested.must
-        : scoreBreakdown.summary?.must ?? scoreBreakdown.summary?.warnings ?? 0;
-
-      if (blockers > 0) return 'BLOCK';
-      if (score < 60 || must > 0) return 'WARN';
-      return 'PASS';
-    }
-    if (readinessResult) {
-      if (useNestedTree) {
-        if (nested.blockers > 0) return 'BLOCK';
-        if (nested.must > 0) return 'WARN';
-        return 'PASS';
+  const allDrawerRisks = useMemo(() => {
+    const risks: EnhancedRisk[] = [];
+    if (riskWarnings != null) {
+      risks.push(...(riskWarnings.risks ?? []));
+    } else {
+      if (readinessResult?.risks?.length) {
+        risks.push(...(readinessResult.risks as EnhancedRisk[]));
       }
-      if (readinessResult.summary.totalBlockers > 0) return 'BLOCK';
-      if (readinessResult.summary.totalMust > 0) return 'WARN';
-      return 'PASS';
+      if (readinessResult?.findings?.length) {
+        readinessResult.findings.forEach((finding) => {
+          if (finding.risks?.length) {
+            risks.push(...(finding.risks as EnhancedRisk[]));
+          }
+        });
+      }
     }
-    return 'PASS';
-  })();
+    return risks;
+  }, [riskWarnings, readinessResult]);
+
+  const excludedFindingIds = useMemo(() => {
+    const ids = new Set<string>();
+    notApplicableItems.forEach((id) => ids.add(id));
+    laterItems.forEach((id) => ids.add(id));
+    return ids;
+  }, [notApplicableItems, laterItems]);
+
+  const packMustProgress = useMemo(
+    () => countRemainingPackMust(readinessResult, checkedMustItems, excludedFindingIds),
+    [readinessResult, checkedMustItems, excludedFindingIds],
+  );
+
+  const { status: gateStatus, warnReason: gateWarnReason } = computeReadinessGate(
+    readinessResult,
+    scoreBreakdown,
+    { remainingPackMust: packMustProgress.remaining },
+  );
 
   // 加载数据
   useEffect(() => {
@@ -335,21 +386,21 @@ export default function ReadinessDrawer({
       const destination = trip.destination || 'IS';
       const useTemplate = isTemplateSupported(destination);
       const inferredParams = inferPackingListParams(trip);
-      
+
       console.log('🔄 [Readiness] 生成打包清单，推断参数:', {
         useTemplate,
         ...inferredParams,
       });
-      
-      // 调用生成接口，传递推断的参数
+
+      const packingLang = (i18n.language || 'en').startsWith('zh') ? 'zh' : 'en';
       const packingList = await readinessApi.generatePackingList(tripId, {
         includeOptional: true,
-        // 模板模式参数
         useTemplate,
         season: inferredParams.season,
         route: inferredParams.route,
         userType: inferredParams.userType,
         activities: inferredParams.activities,
+        lang: packingLang as 'zh' | 'en',
       });
       
       // 跳转到打包清单页面
@@ -358,7 +409,7 @@ export default function ReadinessDrawer({
           count: packingList.items.length 
         }));
         // 跳转到打包清单标签页
-        window.location.href = `/dashboard/readiness?tripId=${tripId}&tab=packing-list`;
+        window.location.href = `/dashboard/plan-studio?tripId=${tripId}&tab=tasks&subtab=packing`;
       } else {
         toast.warning('打包清单为空，请检查行程信息');
       }
@@ -371,7 +422,6 @@ export default function ReadinessDrawer({
       setGeneratingPackingList(false);
     }
   };
-
 
   const handleViewSolution = async (blockerId: string) => {
     if (!tripId) return;
@@ -397,7 +447,7 @@ export default function ReadinessDrawer({
     }
   };
 
-  const handleMarkNotApplicable = async (findingId: string, reason?: string) => {
+  const ____handleMarkNotApplicable = async (findingId: string, reason?: string) => {
     if (!tripId) return;
     try {
       await readinessApi.markNotApplicable(tripId, findingId, reason);
@@ -415,7 +465,7 @@ export default function ReadinessDrawer({
     }
   };
 
-  const handleUnmarkNotApplicable = async (findingId: string) => {
+  const ____handleUnmarkNotApplicable = async (findingId: string) => {
     if (!tripId) return;
     try {
       await readinessApi.unmarkNotApplicable(tripId, findingId);
@@ -433,7 +483,7 @@ export default function ReadinessDrawer({
     }
   };
 
-  const handleAddToLater = async (findingId: string, reminderDate?: string, note?: string) => {
+  const ____handleAddToLater = async (findingId: string, reminderDate?: string, note?: string) => {
     if (!tripId) return;
     try {
       await readinessApi.addToLater(tripId, findingId, reminderDate, note);
@@ -449,7 +499,7 @@ export default function ReadinessDrawer({
     }
   };
 
-  const handleRemoveFromLater = async (findingId: string) => {
+  const ____handleRemoveFromLater = async (findingId: string) => {
     if (!tripId) return;
     try {
       await readinessApi.removeFromLater(tripId, findingId);
@@ -487,12 +537,51 @@ export default function ReadinessDrawer({
 
   const handleToggleMustItem = async (itemId: string) => {
     const newChecked = new Set(checkedMustItems);
-    const wasChecked = newChecked.has(itemId);
-    if (wasChecked) {
-      newChecked.delete(itemId);
+    const packItems = collectPackMustItems(readinessResult);
+
+    if (isTaskCheckKey(itemId)) {
+      const wasChecked = newChecked.has(itemId);
+      if (wasChecked) {
+        newChecked.delete(itemId);
+      } else {
+        newChecked.add(itemId);
+      }
+      const parentKey = parentKeyFromTaskKey(itemId);
+      packItems.forEach((item, index) => {
+        const key = checklistItemKey(item, index);
+        if (key !== parentKey && item.id !== parentKey) return;
+        const units = completionUnitsForMustItem(item, index);
+        if (units.every((unit) => newChecked.has(unit))) {
+          newChecked.add(key);
+        } else {
+          newChecked.delete(key);
+        }
+      });
     } else {
-      newChecked.add(itemId);
+      let targetItem: (typeof packItems)[number] | undefined;
+      let targetIndex = -1;
+      packItems.forEach((item, index) => {
+        const key = checklistItemKey(item, index);
+        if (key === itemId || item.id === itemId) {
+          targetItem = item;
+          targetIndex = index;
+        }
+      });
+      if (targetItem && targetIndex >= 0) {
+        const key = checklistItemKey(targetItem, targetIndex);
+        const complete = isMustItemComplete(targetItem, targetIndex, checkedMustItems);
+        const units = [...completionUnitsForMustItem(targetItem, targetIndex), key];
+        units.forEach((k) => {
+          if (complete) newChecked.delete(k);
+          else newChecked.add(k);
+        });
+      } else if (newChecked.has(itemId)) {
+        newChecked.delete(itemId);
+      } else {
+        newChecked.add(itemId);
+      }
     }
+
     setCheckedMustItems(newChecked);
     
     // 保存勾选状态到后端
@@ -502,10 +591,15 @@ export default function ReadinessDrawer({
         await readinessApi.updateChecklistStatus(tripId, {
           checkedItems: Array.from(newChecked),
         });
-        // 同时保存到 localStorage 作为备份
         localStorage.setItem(`readiness_checked_${tripId}`, JSON.stringify(Array.from(newChecked)));
-        // 显示提示
-        if (wasChecked) {
+        const wasCheckedBefore = isTaskCheckKey(itemId)
+          ? checkedMustItems.has(itemId)
+          : packItems.some(
+              (item, index) =>
+                (checklistItemKey(item, index) === itemId || item.id === itemId) &&
+                isMustItemComplete(item, index, checkedMustItems),
+            );
+        if (wasCheckedBefore) {
           toast.info(t('dashboard.readiness.page.drawer.actions.itemUnchecked'));
         } else {
           toast.success(t('dashboard.readiness.page.drawer.actions.itemChecked'));
@@ -619,14 +713,13 @@ export default function ReadinessDrawer({
     other: '其他',
   };
 
-  // 维度分类映射
-  const categoryLabels: Record<string, string> = {
-    evidence: '证据覆盖',
-    schedule: '行程可行性',
-    transport: '交通确定性',
-    safety: '安全风险',
-    buffer: '缓冲时间',
-  };
+  // 维度分类映射（证据类型标签仍用于 enhanceMessage）
+  const isPackSafetyCategory = (category: string) =>
+    category === 'safety_hazards' ||
+    category === 'safety' ||
+    category === 'weather' ||
+    category === 'gear' ||
+    category === 'gear_packing';
 
   // 增强消息显示：如果消息包含地点名称且coverageMapData有数据，显示具体的缺失证据类型
   const enhanceMessage = (message: string, item: ReadinessFindingItem): string => {
@@ -676,40 +769,45 @@ export default function ReadinessDrawer({
       style={{ right: assistantRightOffset }}
     >
       <div className="h-full flex flex-col">
-        {/* 顶部汇总区（使用新组件） */}
+        {/* 顶栏：标题 + 关闭 */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+          <h2 className="text-sm font-semibold text-slate-900">
+            {t('dashboard.readiness.page.drawer.title', '安全准备检查')}
+          </h2>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
         <ReadinessDrawerHeader
           scoreBreakdown={scoreBreakdown}
           gateStatus={gateStatus}
+          gateWarnReason={gateWarnReason}
           readinessResult={readinessResult}
           riskWarnings={riskWarnings}
+          packMustProgress={packMustProgress}
+          onNavigateToSection={scrollToSection}
         />
-        
-        {/* 操作按钮（使用新组件） */}
+
         <ReadinessDrawerActions
           onRefresh={handleRefresh}
           onGeneratePackingList={handleGeneratePackingList}
-          onClose={onClose}
           refreshing={refreshing}
           generatingPackingList={generatingPackingList}
         />
 
-        {/* 核心内容区 */}
         <ScrollArea className="flex-1">
-          <div className="p-4 space-y-4">
+          <div ref={scrollContentRef} className="p-4 space-y-4">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Spinner className="w-6 h-6" />
               </div>
             ) : readinessResult ? (
               <>
-                {/* 🆕 免责声明（必须显示） */}
-                {readinessResult.disclaimer && (
-                  <ReadinessDisclaimerComponent disclaimer={readinessResult.disclaimer} />
-                )}
                 {/* 按 finding 分组显示，与准备度页面保持一致 */}
                 {(() => {
                   // 检查 readinessResult.findings 是否有数据
-                  const hasFindingsData = readinessResult.findings && readinessResult.findings.length > 0 && 
+                  const ____hasFindingsData = readinessResult.findings && readinessResult.findings.length > 0 && 
                     readinessResult.findings.some(f => 
                       (f.blockers && f.blockers.length > 0) ||
                       (f.must && f.must.length > 0) ||
@@ -724,10 +822,20 @@ export default function ReadinessDrawer({
                   // 从 readinessResult.findings 收集
                   if (readinessResult.findings && readinessResult.findings.length > 0) {
                     readinessResult.findings.forEach(finding => {
-                      finding.blockers?.forEach(item => allItems.push({item, category: item.category || 'other', level: 'blocker'}));
-                      finding.must?.forEach(item => allItems.push({item, category: item.category || 'other', level: 'must'}));
-                      finding.should?.forEach(item => allItems.push({item, category: item.category || 'other', level: 'should'}));
-                      finding.optional?.forEach(item => allItems.push({item, category: item.category || 'other', level: 'optional'}));
+                      const skip = (item: ReadinessFindingItem) =>
+                        !!(item.id && excludedFindingIds.has(item.id));
+                      finding.blockers?.forEach(item => {
+                        if (!skip(item)) allItems.push({ item, category: item.category || 'other', level: 'blocker' });
+                      });
+                      finding.must?.forEach(item => {
+                        if (!skip(item)) allItems.push({ item, category: item.category || 'other', level: 'must' });
+                      });
+                      finding.should?.forEach(item => {
+                        if (!skip(item)) allItems.push({ item, category: item.category || 'other', level: 'should' });
+                      });
+                      finding.optional?.forEach(item => {
+                        if (!skip(item)) allItems.push({ item, category: item.category || 'other', level: 'optional' });
+                      });
                     });
                     console.log('📊 [ReadinessDrawer] 从 readinessResult.findings 收集到的项:', {
                       total: allItems.length,
@@ -792,7 +900,7 @@ export default function ReadinessDrawer({
                     <div className="space-y-4">
                       {/* 🎯 优先显示所有阻塞项（跨分类） */}
                       {allBlockers.length > 0 && (
-                        <div className="space-y-3">
+                        <div className="space-y-3" data-readiness-section="blockers">
                           <h4 className="text-xs font-medium text-red-700 uppercase font-semibold">
                             {t('dashboard.readiness.page.blockers')}
                           </h4>
@@ -804,7 +912,7 @@ export default function ReadinessDrawer({
                             trip={trip as any} // 类型兼容性处理
                             tripId={tripId || undefined}
                             onViewBlockerSolution={(blockerId) => void handleViewSolution(blockerId)}
-                            onFindingUpdated={async (findingId, updatedFinding) => {
+                            onFindingUpdated={async (_findingId, _updatedFinding) => {
                               // 重新加载数据以反映更新
                               await loadData();
                             }}
@@ -820,19 +928,45 @@ export default function ReadinessDrawer({
                                             items.optional.length > 0;
                         if (!hasOtherItems) return null;
                         
+                        const drawerCompactMust =
+                          items.must.length > 0 &&
+                          (isPackSafetyCategory(category) || category === 'logistics');
+
+                        const categoryDisplay = getReadinessCategoryDisplay(category, isZh);
+
                         return (
-                          <div key={category} className="space-y-3">
-                            <h4 className="text-xs font-medium text-muted-foreground uppercase">
-                              {categoryLabels[category] || category}
-                            </h4>
+                          <div
+                            key={category}
+                            className="space-y-3"
+                            data-readiness-section={items.must.length > 0 ? 'must' : items.should.length > 0 ? 'should' : undefined}
+                          >
+                            <div className="space-y-0.5">
+                              <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                                <span aria-hidden>{categoryDisplay.icon}</span>
+                                <span>{categoryDisplay.title}</span>
+                              </h4>
+                              {categoryDisplay.subtitle ? (
+                                <p className="text-[11px] text-slate-400 pl-6">{categoryDisplay.subtitle}</p>
+                              ) : null}
+                            </div>
                             <div className="space-y-3">
                               {items.must.length > 0 && (
                                 <ChecklistSection
-                                  title={t('dashboard.readiness.page.must')}
+                                  title={
+                                    isPackSafetyCategory(category)
+                                      ? t('dashboard.readiness.page.drawer.stats.mustSafety', '安全准备')
+                                      : t('dashboard.readiness.page.must')
+                                  }
                                   items={items.must}
                                   level="must"
+                                  titleVariant={isPackSafetyCategory(category) ? 'safety' : 'default'}
+                                  hideSectionHeader={drawerCompactMust}
+                                  checkable={drawerCompactMust}
+                                  checkedItemIds={checkedMustItems}
+                                  onToggleChecked={handleToggleMustItem}
+                                  collapseWhenMany={drawerCompactMust && items.must.length > 1}
                                   tripStartDate={tripStartDate}
-                                  trip={trip as any} // 类型兼容性处理
+                                  trip={trip as any}
                                 />
                               )}
                               {items.should.length > 0 && (
@@ -852,7 +986,7 @@ export default function ReadinessDrawer({
                                   tripStartDate={tripStartDate}
                                   trip={trip as any} // 类型兼容性处理
                                   tripId={tripId || undefined}
-                                  onFindingUpdated={async (findingId, updatedFinding) => {
+                                  onFindingUpdated={async (_findingId, _updatedFinding) => {
                                     // 重新加载数据以反映更新
                                     await loadData();
                                   }}
@@ -868,80 +1002,42 @@ export default function ReadinessDrawer({
 
                 {/* 风险：与 risk-warnings 一致；成功加载该接口后仅用其 risks，勿与 GET .../score 的 risks 混用 */}
                 {(() => {
-                  const allRisks: EnhancedRisk[] = [];
-                  if (riskWarnings != null) {
-                    allRisks.push(...(riskWarnings.risks ?? []));
-                  } else {
-                    if (readinessResult?.risks?.length) {
-                      allRisks.push(...(readinessResult.risks as EnhancedRisk[]));
-                    }
-                    if (readinessResult?.findings?.length) {
-                      readinessResult.findings.forEach(finding => {
-                        if (finding.risks?.length) {
-                          allRisks.push(...(finding.risks as EnhancedRisk[]));
-                        }
-                      });
-                    }
-                  }
-                  
-                  if (allRisks.length === 0) return null;
-                  
                   return (
-                  <div className="space-y-3 mt-6">
-                    <h3 className="text-sm font-semibold">{t('dashboard.readiness.page.risks')}</h3>
-                    <div className="space-y-3">
-                        {allRisks.map((risk, index) => (
-                        <RiskCard key={index} risk={risk} trip={trip} />
-                      ))}
+                    <div data-readiness-section="risks">
+                      <ReadinessRiskSection
+                        risks={allDrawerRisks}
+                        riskWarnings={riskWarnings}
+                        trip={trip}
+                        preparationTasksById={preparationTasksById}
+                        onToggleMitigation={handleToggleTask}
+                        onPoiNavigate={onClose}
+                        onGoToTasks={openTasksTab}
+                        mitigationProgress={riskMitigationProgress}
+                      />
                     </div>
-                    {/* 🆕 显示所有官方来源汇总 */}
-                    {riskWarnings?.packSources && riskWarnings.packSources.length > 0 && (
-                      <Card className="border-blue-200 bg-blue-50/50 mt-4">
-                        <CardContent className="p-4">
-                          <div className="space-y-2">
-                            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                              <span>📚</span>
-                              <span>{t('dashboard.readiness.page.allOfficialSources', { defaultValue: '所有官方来源' })}</span>
-                            </h4>
-                            <ul className="space-y-2">
-                              {riskWarnings.packSources.map((source, index) => (
-                                <li key={source.sourceId || index} className="text-xs text-muted-foreground">
-                                  <div className="flex items-start gap-2">
-                                    <span className="text-muted-foreground/50 mt-1">•</span>
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="font-medium text-foreground">
-                                          {source.authority}
-                                        </span>
-                                        {source.title && (
-                                          <span className="text-muted-foreground">
-                                            - {source.title}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {source.canonicalUrl && (
-                                        <a
-                                          href={source.canonicalUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline mt-0.5"
-                                        >
-                                          <ExternalLink className="w-3 h-3" />
-                                          <span className="truncate max-w-[200px]">{source.canonicalUrl}</span>
-                                        </a>
-                                      )}
-                                    </div>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
                   );
                 })()}
+
+                {(() => {
+                  const { hints: cascadeHints } = resolveCascadeHintsForDev(
+                    normalizeCascadeUiHints(scoreBreakdown?.cascadeUiHints)
+                  );
+                  if (cascadeHints.length === 0) return null;
+                  return (
+                    <div data-readiness-section="cascade">
+                      <CascadeImpactPanel
+                        hints={cascadeHints}
+                        causalPreAnalysis={scoreBreakdown?.causalPreAnalysis}
+                        compact
+                        showCardActions={false}
+                      />
+                    </div>
+                  );
+                })()}
+
+                {readinessResult.disclaimer ? (
+                  <ReadinessDisclaimerComponent disclaimer={readinessResult.disclaimer} />
+                ) : null}
               </>
             ) : (
               <div className="text-center py-12 text-gray-500 text-sm">

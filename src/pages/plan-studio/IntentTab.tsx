@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { X, MapPin, Plus, ChevronDown, ChevronUp, Wallet, ExternalLink, Info } from 'lucide-react';
+import { X, MapPin, Plus, ChevronDown, ChevronUp, ExternalLink, Info } from 'lucide-react';
 import { tripsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
 import type { PlaceWithDistance } from '@/types/places-routes';
@@ -34,7 +34,7 @@ interface IntentTabProps {
 export default function IntentTab({ tripId, compact = false }: IntentTabProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [_searchParams, _setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   
   // 审批相关状态
@@ -56,7 +56,7 @@ export default function IntentTab({ tripId, compact = false }: IntentTabProps) {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   
   // Preference options with translation keys
-  const preferenceOptions = [
+  const ____preferenceOptions = [
     'nature', 'city', 'photography', 'food', 'history', 'art', 'shopping', 'nightlife'
   ];
 
@@ -82,7 +82,7 @@ export default function IntentTab({ tripId, compact = false }: IntentTabProps) {
   }>({});
   const [alertThreshold, setAlertThreshold] = useState<number>(0.8);
   const [budgetConstraint, setBudgetConstraint] = useState<import('@/api/planning-workbench').BudgetConstraint | null>(null);
-  const [loadingBudgetConstraint, setLoadingBudgetConstraint] = useState(false);
+  const [_loadingBudgetConstraint, setLoadingBudgetConstraint] = useState(false);
   const [planningPolicy, setPlanningPolicy] = useState<'safe' | 'experience' | 'challenge'>('safe');
 
   // 地点搜索状态

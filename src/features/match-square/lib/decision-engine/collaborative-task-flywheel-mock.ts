@@ -65,6 +65,7 @@ export function mockGetCollaborativeTasks(tripId: string): CollaborativeTasksRes
     tripId,
     flywheel,
     tasks: flywheel?.tasks ?? [],
+    negotiationTasks: [],
   };
 }
 
@@ -99,5 +100,6 @@ export function mockPostCollaborativeTaskEvent(
     tripId,
     flywheel: updated,
     tasks,
+    negotiationTasks: [],
   };
 }

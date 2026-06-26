@@ -15,6 +15,16 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import type { TeamNegotiationResponse } from '@/types/optimization-v2';
 import {
+  collectTeamNegotiationCriticalConcerns,
+  canShowGuardianChoose,
+  extractChooseOptions,
+  resolveTeamNegotiationHardBlocked,
+} from '@/lib/guardian-presentation.util';
+import { GuardianChooseModal } from '@/components/guardian/GuardianChooseModal';
+import { GuardianPresentationPanel } from '@/components/guardian/GuardianPresentationPanel';
+import { useGuardianHumanChoice } from '@/hooks/useGuardianHumanChoice';
+import type { GuardianPersonaPresentation } from '@/types/guardian-presentation';
+import {
   Users,
   AlertTriangle,
   MessageSquare,
@@ -22,6 +32,8 @@ import {
   ChevronDown,
   ChevronRight,
   Lightbulb,
+  Shield,
+  HelpCircle,
 } from 'lucide-react';
 
 // ==================== 配置 ====================
@@ -51,7 +63,9 @@ function MemberEvaluationRow({
   displayName: string;
   utility: number;
 }) {
-  const percentage = Math.round(Math.max(0, Math.min(1, utility)) * 100);
+  const safeUtility =
+    typeof utility === 'number' && Number.isFinite(utility) ? utility : 0;
+  const percentage = Math.round(Math.max(0, Math.min(1, safeUtility)) * 100);
   const label = getScoreLabel(percentage);
 
   return (
@@ -144,6 +158,10 @@ export interface TeamNegotiationResultCardProps {
   className?: string;
   /** 是否嵌入模式（不渲染外层 Card） */
   embedded?: boolean;
+  /** 是否展示成员 utility 分数（默认 false，对齐 Guardian P1） */
+  showMemberUtilityScores?: boolean;
+  /** 登录用户 ID（Team CHOOSE 写回） */
+  userId?: string | null;
 }
 
 export function TeamNegotiationResultCard({
@@ -152,8 +170,13 @@ export function TeamNegotiationResultCard({
   onGoToPlan,
   className,
   embedded = false,
+  showMemberUtilityScores = false,
+  userId,
 }: TeamNegotiationResultCardProps) {
   const navigate = useNavigate();
+  const [chooseOpen, setChooseOpen] = React.useState(false);
+  const [postChoosePresentation, setPostChoosePresentation] =
+    React.useState<GuardianPersonaPresentation | null>(null);
 
   const handleGoToPlan =
     onGoToPlan ?? (tripId ? () => navigate(`/dashboard/plan-studio?tripId=${tripId}`) : undefined);
@@ -167,13 +190,101 @@ export function TeamNegotiationResultCard({
           ? '有条件通过'
           : '需人工决策';
 
-  const consensusPercent = Math.round(result.consensusLevel * 100);
+  const consensusPercent = Math.round(
+    Number.isFinite(result.consensusLevel) ? result.consensusLevel * 100 : 0
+  );
+
+  const constraintsSatisfied = result.teamConstraintsSatisfied !== false;
+  const criticalConcerns = collectTeamNegotiationCriticalConcerns(result);
+  const hardBlocked = resolveTeamNegotiationHardBlocked(result);
+  const chooseOptions = extractChooseOptions({ teamNegotiation: result });
+  const [activeChooseOptions, setActiveChooseOptions] = React.useState(chooseOptions);
+
+  React.useEffect(() => {
+    setActiveChooseOptions(chooseOptions);
+    setPostChoosePresentation(null);
+  }, [result, chooseOptions.join('|')]);
+
+  const showChoose = canShowGuardianChoose({
+    decision: result.decision,
+    hardConstraintBlocked: hardBlocked,
+    chooseOptions: activeChooseOptions,
+  });
+
+  const { submitChoice, isSubmitting: isChooseSubmitting } = useGuardianHumanChoice({
+    userId,
+    tripId,
+    source: 'team_negotiation',
+    decisionPoints: activeChooseOptions,
+    onPresentation: (next) => {
+      setPostChoosePresentation(next);
+      const refreshed = extractChooseOptions({
+        presentation: next,
+        teamNegotiation: result,
+      });
+      if (refreshed.length > 0) setActiveChooseOptions(refreshed);
+    },
+  });
 
   const conflictsWithSuggestion = (result.conflicts ?? []).filter((c) => c.suggestedResolution?.trim());
   const conflictsWithoutSuggestion = (result.conflicts ?? []).filter((c) => !c.suggestedResolution?.trim());
 
   const content = (
     <div className={cn('space-y-4', embedded ? '' : 'pt-4')}>
+        {criticalConcerns.length > 0 ? (
+          <div
+            className={cn(
+              'rounded-lg border px-3 py-2 text-sm',
+              hardBlocked
+                ? 'border-red-200 bg-red-50 text-red-900'
+                : 'border-amber-200 bg-amber-50 text-amber-950',
+            )}
+          >
+            <p className="font-medium flex items-center gap-1.5 mb-1">
+              <Shield className="h-4 w-4 shrink-0" />
+              {hardBlocked ? 'Abu 硬风险摘要' : '关键关注点'}
+            </p>
+            <ul className="space-y-1 text-xs sm:text-sm">
+              {criticalConcerns.map((c, i) => (
+                <li key={i}>• {c}</li>
+              ))}
+            </ul>
+            {hardBlocked ? (
+              <p className="text-xs mt-2 text-red-800">
+                存在不可忽略的安全/合规或最弱链约束，请先修改方案后再协调软约束分歧。
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {postChoosePresentation ? (
+          <GuardianPresentationPanel presentation={postChoosePresentation} />
+        ) : null}
+
+        {showChoose ? (
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              variant="default"
+              disabled={isChooseSubmitting}
+              onClick={() => setChooseOpen(true)}
+            >
+              <HelpCircle className="h-3.5 w-3.5 mr-1.5" />
+              做出团队价值取舍
+            </Button>
+            <GuardianChooseModal
+              open={chooseOpen}
+              onOpenChange={setChooseOpen}
+              points={activeChooseOptions}
+              title="团队协商 — 需要您选择"
+              description="以下为软约束分歧，不会覆盖已判定的硬风险或最弱链约束。"
+              onConfirm={(idx, text) => {
+                void submitChoice(idx, text, activeChooseOptions);
+              }}
+            />
+          </div>
+        ) : null}
+
         {/* L1：共识度 + 结论 */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b">
           <div className="flex items-center gap-2">
@@ -192,14 +303,16 @@ export function TeamNegotiationResultCard({
             >
               {decisionLabel}
             </Badge>
-            <Badge variant={result.teamConstraintsSatisfied ? 'outline' : 'destructive'}>
-              {result.teamConstraintsSatisfied ? '约束满足' : '存在冲突'}
+            <Badge variant={constraintsSatisfied ? 'outline' : 'destructive'}>
+              {constraintsSatisfied ? '约束满足' : '约束未满足'}
             </Badge>
           </div>
         </div>
 
-        {/* L2：成员评估 */}
-        {result.memberEvaluations && result.memberEvaluations.length > 0 && (
+        {/* L2：成员评估（默认隐藏 utility 气泡） */}
+        {showMemberUtilityScores &&
+        result.memberEvaluations &&
+        result.memberEvaluations.length > 0 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground flex items-center gap-2">
               <Users className="h-3.5 w-3.5" />
@@ -211,7 +324,7 @@ export function TeamNegotiationResultCard({
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* L3：建议你先做（有 suggestedResolution 的冲突，≤5 条首屏，超出折叠，HCI Miller's Law） */}
         {conflictsWithSuggestion.length > 0 && (

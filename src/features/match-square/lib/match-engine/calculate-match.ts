@@ -1,7 +1,6 @@
 import type { ControlStyleBand, MatchEngineProfile } from './types';
 import { computeMbtiSynergy } from './mbti-synergy';
 import {
-  passesSocialBandwidthGate,
   passesTimeLocationGate,
 } from './hard-gates';
 import type {
@@ -60,8 +59,8 @@ function teamworkInsightLabel(leader: MatchEngineProfile, member: MatchEnginePro
 }
 
 function socialBandwidthInsight(
-  leader: MatchEngineProfile,
-  member: MatchEngineProfile,
+  _leader: MatchEngineProfile,
+  _member: MatchEngineProfile,
   gap: number
 ): StructuralMatchInsight {
   if (gap === 0) {
@@ -163,18 +162,13 @@ export function calculateStructuralMatch(
   options: CalculateStructuralMatchOptions = {}
 ): StructuralMatchResult {
   const minOverlap = options.minOverlapDays ?? 3;
-  const maxSocialGap = options.maxSocialTierGap ?? 3;
 
   const memberTrip = options.memberTrip ?? member.trip;
   const timeGate = options.skipTimeGate
     ? { pass: true as const, overlapDays: null as number | null }
     : passesTimeLocationGate(leader.trip, memberTrip, minOverlap);
 
-  const socialGate = passesSocialBandwidthGate(
-    leader.socialTier,
-    member.socialTier,
-    maxSocialGap
-  );
+  const socialGate = { pass: true as const, gap: 0 };
 
   if (!timeGate.pass) {
     return {
@@ -193,20 +187,6 @@ export function calculateStructuralMatch(
           detail: timeGate.reason ?? '出行窗口不重叠',
         },
       ],
-    };
-  }
-
-  if (!socialGate.pass) {
-    return {
-      score: 0,
-      blocked: true,
-      blockReason: socialGate.reason,
-      timeOverlapDays: timeGate.overlapDays,
-      socialBandwidthGap: socialGate.gap,
-      teamworkFit: 0,
-      stressFit: 0,
-      mbtiSynergy: 0,
-      insights: [socialBandwidthInsight(leader, member, socialGate.gap)],
     };
   }
 

@@ -2,16 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { planningPolicyApi } from '@/api/planning-policy';
 import { tripsApi } from '@/api/trips';
-import type {
-  RobustnessMetrics,
-  Candidate,
-  DayScheduleResult,
-  PlanningPolicy,
-  OptimizationSuggestion,
-  EvaluateCandidatesResponse,
-  WorldModelContext,
-} from '@/types/strategy';
-import type { TripDetail, ScheduleResponse, ItineraryItem } from '@/types/trip';
+import type { RobustnessMetrics, Candidate, DayScheduleResult, PlanningPolicy, OptimizationSuggestion, EvaluateCandidatesResponse } from '@/types/strategy';
+import type { TripDetail, ScheduleResponse } from '@/types/trip';
+import {
+  buildScheduleResponseFromTripDay,
+  hasScheduleItems,
+  normalizeTripDateString,
+  resolveWhatIfScheduleDate,
+} from '@/lib/what-if-trip-schedule';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +30,6 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { RiskScoreDisplay, RiskScoreBadge } from '@/components/ui/risk-score-display';
-import type { RiskDimension } from '@/components/ui/risk-score-display';
 import { toast } from 'sonner';
 // V2 优化组件
 import { 
@@ -45,6 +42,7 @@ import {
   useNegotiation, 
   useRiskAssessment,
 } from '@/hooks/useOptimizationV2';
+import { useAuth } from '@/hooks/useAuth';
 import type { RoutePlanDraft, WorldModelContext as WorldModelContextV2 } from '@/types/optimization-v2';
 
 /**
@@ -64,10 +62,12 @@ export default function WhatIfPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tripId = searchParams.get('tripId');
-  const date = searchParams.get('date') || format(new Date(), 'yyyy-MM-dd');
+  const urlDateParam = searchParams.get('date');
 
-  const [, setTrip] = useState<TripDetail | null>(null);
+  const [trip, setTrip] = useState<TripDetail | null>(null);
   const [schedule, setSchedule] = useState<ScheduleResponse | null>(null);
+  const [scheduleDate, setScheduleDate] = useState<string>(() => urlDateParam || format(new Date(), 'yyyy-MM-dd'));
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,29 +79,89 @@ export default function WhatIfPage() {
   const [applying, setApplying] = useState(false);
 
   useEffect(() => {
-    if (tripId) {
-      loadTrip();
-      loadSchedule();
+    if (!tripId) {
+      setTrip(null);
+      setSchedule(null);
+      setError('请从规划工作台进入，或带上 tripId 参数');
+      return;
     }
-  }, [tripId, date]);
+    void initializeTripAndSchedule();
+  }, [tripId, urlDateParam]);
+
+  const loadScheduleForTrip = async (id: string, dateStr: string, tripData: TripDetail) => {
+    let resolved = await tripsApi.getSchedule(id, dateStr).catch(() => null);
+
+    if (!hasScheduleItems(resolved)) {
+      const fromTripDay = buildScheduleResponseFromTripDay(tripData, dateStr);
+      if (fromTripDay) {
+        resolved = fromTripDay;
+      }
+    }
+
+    if (!hasScheduleItems(resolved) && tripData.TripDay?.length) {
+      const firstDate = normalizeTripDateString(tripData.TripDay[0].date);
+      if (firstDate && firstDate !== dateStr) {
+        const alt = await tripsApi.getSchedule(id, firstDate).catch(() => null);
+        if (hasScheduleItems(alt)) {
+          setScheduleDate(firstDate);
+          setSchedule(alt);
+          return;
+        }
+        const fromFirstDay = buildScheduleResponseFromTripDay(tripData, firstDate);
+        if (fromFirstDay) {
+          setScheduleDate(firstDate);
+          setSchedule(fromFirstDay);
+          return;
+        }
+      }
+    }
+
+    if (hasScheduleItems(resolved)) {
+      setSchedule(resolved);
+      setError(null);
+      return;
+    }
+
+    setSchedule(null);
+    setError('当前行程暂无可用日程，请先在规划工作台完善时间轴后再做 What-If 分析');
+  };
+
+  const initializeTripAndSchedule = async () => {
+    if (!tripId) return;
+    setScheduleLoading(true);
+    setError(null);
+    try {
+      const data = await tripsApi.getById(tripId);
+      setTrip(data);
+      const resolvedDate = resolveWhatIfScheduleDate(data, urlDateParam);
+      setScheduleDate(resolvedDate);
+      await loadScheduleForTrip(tripId, resolvedDate, data);
+    } catch (err: unknown) {
+      setTrip(null);
+      setSchedule(null);
+      setError((err as Error).message || '加载行程失败');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
 
   const loadTrip = async () => {
     if (!tripId) return;
     try {
       const data = await tripsApi.getById(tripId);
       setTrip(data);
-    } catch (err: any) {
-      setError(err.message || '加载行程失败');
+    } catch (err: unknown) {
+      setError((err as Error).message || '加载行程失败');
     }
   };
 
   const loadSchedule = async () => {
-    if (!tripId) return;
+    if (!tripId || !trip) return;
+    setScheduleLoading(true);
     try {
-      const data = await tripsApi.getSchedule(tripId, date);
-      setSchedule(data);
-    } catch (err: any) {
-      console.error('Failed to load schedule:', err);
+      await loadScheduleForTrip(tripId, scheduleDate, trip);
+    } finally {
+      setScheduleLoading(false);
     }
   };
 
@@ -205,7 +265,7 @@ export default function WhatIfPage() {
   };
 
   const handleEvaluateDay = async () => {
-    if (!tripId || !schedule) {
+    if (!tripId || !schedule || !hasScheduleItems(schedule)) {
       setError('请先加载行程和日程');
       return;
     }
@@ -232,8 +292,8 @@ export default function WhatIfPage() {
         policy,
         schedule: daySchedule,
         dayEndMin: 1200,
-        dateISO: date,
-        dayOfWeek: new Date(date).getDay(),
+        dateISO: scheduleDate,
+        dayOfWeek: new Date(scheduleDate).getDay(),
         config: {
           samples: 300,
           seed: 42,
@@ -312,8 +372,8 @@ export default function WhatIfPage() {
         policy,
         schedule: daySchedule,
         dayEndMin: 1200,
-        dateISO: date,
-        dayOfWeek: new Date(date).getDay(),
+        dateISO: scheduleDate,
+        dayOfWeek: new Date(scheduleDate).getDay(),
         config: {
           samples: 300,
           seed: 42,
@@ -351,15 +411,15 @@ export default function WhatIfPage() {
           placeId: stop.kind === 'POI' ? Number(stop.id) : 0,
           placeName: stop.name || '',
           type: stop.kind === 'POI' ? 'ACTIVITY' : stop.kind === 'REST' ? 'REST' : 'MEAL_FLOATING',
-          startTime: minutesToTimeString(stop.startMin, date),
-          endTime: minutesToTimeString(stop.endMin, date),
+          startTime: minutesToTimeString(stop.startMin, scheduleDate),
+          endTime: minutesToTimeString(stop.endMin, scheduleDate),
           metadata: {},
         })),
         totalDuration: result.schedule.metrics.totalTravelMin,
       };
 
       // 保存到数据库
-      await tripsApi.saveSchedule(tripId, date, scheduleForSave);
+      await tripsApi.saveSchedule(tripId, scheduleDate, scheduleForSave);
 
       // 重新加载日程
       await loadSchedule();
@@ -378,7 +438,7 @@ export default function WhatIfPage() {
   };
 
   const handleOneClickEvaluate = async () => {
-    if (!tripId || !schedule) {
+    if (!tripId || !schedule || !hasScheduleItems(schedule)) {
       setError('请先加载行程和日程');
       return;
     }
@@ -405,8 +465,8 @@ export default function WhatIfPage() {
         policy,
         schedule: daySchedule,
         dayEndMin: 1200,
-        dateISO: date,
-        dayOfWeek: new Date(date).getDay(),
+        dateISO: scheduleDate,
+        dayOfWeek: new Date(scheduleDate).getDay(),
         config: {
           samples: 300,
           seed: 42,
@@ -439,8 +499,39 @@ export default function WhatIfPage() {
         <div>
           <h1 className="text-3xl font-bold">What-If 分析</h1>
           <p className="text-muted-foreground mt-1">稳健度评估和行程优化建议</p>
+          {trip ? (
+            <p className="text-xs text-muted-foreground mt-1">
+              {trip.name || trip.destination || '当前行程'}
+              {scheduleLoading ? ' · 日程加载中…' : hasScheduleItems(schedule) ? ` · 评估日 ${scheduleDate}` : ' · 暂无日程'}
+            </p>
+          ) : null}
         </div>
       </div>
+
+      {scheduleLoading && (
+        <Card className="border-muted">
+          <CardContent className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            正在加载行程与日程…
+          </CardContent>
+        </Card>
+      )}
+
+      {!tripId && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="pt-6 flex flex-wrap items-center gap-3">
+            <p className="text-amber-900 text-sm">缺少 tripId，无法加载行程数据。</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => navigate('/dashboard/plan-studio')}
+            >
+              返回规划工作台
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50">
@@ -458,7 +549,7 @@ export default function WhatIfPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2 flex-wrap">
-            <Button onClick={handleEvaluateDay} disabled={loading || !tripId} variant="outline">
+            <Button onClick={handleEvaluateDay} disabled={loading || scheduleLoading || !hasScheduleItems(schedule)} variant="outline">
               {loading && currentStep === 'evaluate' ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
@@ -490,7 +581,11 @@ export default function WhatIfPage() {
               )}
               步骤3: 评估候选方案
             </Button>
-            <Button onClick={handleOneClickEvaluate} disabled={loading || !tripId} variant="default">
+            <Button
+              onClick={handleOneClickEvaluate}
+              disabled={loading || scheduleLoading || !hasScheduleItems(schedule)}
+              variant="default"
+            >
               <Zap className="w-4 h-4 mr-2" />
               一键评估
             </Button>
@@ -825,7 +920,7 @@ export default function WhatIfPage() {
 
         {/* V2 优化评估 */}
         <TabsContent value="v2optimize" className="space-y-4">
-          <V2OptimizeTab tripId={tripId} schedule={schedule} date={date} />
+          <V2OptimizeTab tripId={tripId} schedule={schedule} date={scheduleDate} />
         </TabsContent>
       </Tabs>
     </div>
@@ -842,6 +937,7 @@ function V2OptimizeTab({
   schedule: ScheduleResponse | null;
   date: string;
 }) {
+  const { user } = useAuth();
   const evaluateMutation = useEvaluatePlan();
   const negotiationMutation = useNegotiation();
   const riskMutation = useRiskAssessment();
@@ -1037,6 +1133,7 @@ function V2OptimizeTab({
         <NegotiationResultCard
           result={negotiationMutation.data}
           tripId={tripId ?? undefined}
+          userId={user?.id}
           compact
         />
       )}

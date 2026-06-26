@@ -24,7 +24,6 @@ type Phase = 'loading' | 'quiz' | 'card' | 'trust' | 'trip_meta' | 'matching' | 
 
 function phaseFromStatus(status: OdysseyOnboardingStatus): Phase {
   if (!status.quizComplete) return 'quiz';
-  if (status.nextStep === 'trust_verify' || !status.trustVerified) return 'trust';
   if (status.nextStep === 'view_card' && status.cardReady) return 'card';
   if (!status.canMatch) return 'trip_meta';
   if (status.nextStep === 'match' || status.canMatch) return 'matching';
@@ -139,12 +138,12 @@ export default function OdysseyIntakePage() {
     }
   };
 
-  const handleTrustVerify = async (provider: 'zhima_credit', authToken?: string) => {
+  const handleTrustContinue = async () => {
     setSubmitting(true);
     try {
-      const result = await odysseyIntakeApi.verifyTrust({ provider, authToken });
       await statusQuery.refetch();
-      setPhase(result.onboarding.canMatch ? 'matching' : 'trip_meta');
+      const status = statusQuery.data;
+      setPhase(status?.canMatch ? 'matching' : 'trip_meta');
     } finally {
       setSubmitting(false);
     }
@@ -193,7 +192,7 @@ export default function OdysseyIntakePage() {
   }
 
   if (phase === 'trust') {
-    return <TrustVerifyStep onVerify={handleTrustVerify} isLoading={submitting} />;
+    return <TrustVerifyStep onContinue={handleTrustContinue} isLoading={submitting} />;
   }
 
   if (phase === 'trip_meta') {
@@ -244,19 +243,14 @@ export default function OdysseyIntakePage() {
                 className="flex-1"
                 variant="outline"
                 onClick={() => {
-                  if (!statusQuery.data?.trustVerified) setPhase('trust');
-                  else if (!statusQuery.data?.canMatch) setPhase('trip_meta');
+                  if (!statusQuery.data?.canMatch) setPhase('trip_meta');
                   else {
                     matchStartedRef.current = false;
                     void runMatch();
                   }
                 }}
               >
-                {!statusQuery.data?.trustVerified
-                  ? '继续安全授权'
-                  : !statusQuery.data?.canMatch
-                    ? '设置行程并匹配'
-                    : '查看旅伴推荐'}
+                {!statusQuery.data?.canMatch ? '设置行程并匹配' : '查看旅伴推荐'}
               </Button>
             )}
             <Button className="flex-1" variant="outline" onClick={startRetake}>

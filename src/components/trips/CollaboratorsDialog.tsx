@@ -36,6 +36,10 @@ const roleLabels: Record<CollaboratorRole, string> = {
   OWNER: '所有者',
 };
 
+function collaboratorDisplayName(collaborator: Collaborator): string {
+  return collaborator.displayName?.trim() || collaborator.email?.trim() || '未知用户';
+}
+
 export function CollaboratorsDialog({ tripId, open, onOpenChange }: CollaboratorsDialogProps) {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [loading, setLoading] = useState(false);
@@ -83,11 +87,12 @@ export function CollaboratorsDialog({ tripId, open, onOpenChange }: Collaborator
     }
   };
 
-  const handleRemoveCollaborator = async (userId: string) => {
-    if (!confirm('确定要移除这位协作者吗？')) return;
+  const handleRemoveCollaborator = async (collaborator: Collaborator) => {
+    const label = collaboratorDisplayName(collaborator);
+    if (!confirm(`确定要移除协作者「${label}」吗？`)) return;
 
     try {
-      await tripsApi.removeCollaborator(tripId, userId);
+      await tripsApi.removeCollaborator(tripId, collaborator.userId);
       await loadCollaborators();
     } catch (err: any) {
       setError(err.message || '移除协作者失败');
@@ -96,7 +101,7 @@ export function CollaboratorsDialog({ tripId, open, onOpenChange }: Collaborator
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[720px]">
         <DialogHeader>
           <DialogTitle>协作者管理</DialogTitle>
           <DialogDescription>添加和管理行程的协作者，设置他们的权限</DialogDescription>
@@ -167,7 +172,8 @@ export function CollaboratorsDialog({ tripId, open, onOpenChange }: Collaborator
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>用户 ID</TableHead>
+                      <TableHead>用户名称</TableHead>
+                      <TableHead>邮箱</TableHead>
                       <TableHead>权限</TableHead>
                       <TableHead>添加时间</TableHead>
                       <TableHead className="w-[100px]">操作</TableHead>
@@ -176,8 +182,11 @@ export function CollaboratorsDialog({ tripId, open, onOpenChange }: Collaborator
                   <TableBody>
                     {collaborators.map((collaborator) => (
                       <TableRow key={collaborator.id}>
-                        <TableCell className="font-mono text-sm">
-                          {collaborator.userId}
+                        <TableCell className="text-sm font-medium">
+                          {collaboratorDisplayName(collaborator)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {collaborator.email ?? '—'}
                         </TableCell>
                         <TableCell>
                           <span className="text-sm">{roleLabels[collaborator.role]}</span>
@@ -190,7 +199,7 @@ export function CollaboratorsDialog({ tripId, open, onOpenChange }: Collaborator
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleRemoveCollaborator(collaborator.userId)}
+                              onClick={() => handleRemoveCollaborator(collaborator)}
                               className="text-red-500 hover:text-red-700"
                             >
                               <Trash2 className="w-4 h-4" />

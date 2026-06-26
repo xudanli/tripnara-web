@@ -6,11 +6,7 @@ import type { MatchDimensionBreakdown, VerifiedCredentials } from '@/types/match
 import type { OdysseyCognitiveScores } from '@/types/odyssey-travel-persona';
 import { resolveMbtiAxes } from '@/features/odyssey-intake/lib/mbti-resolver';
 import { MATCH_DIMENSION_WEIGHTS } from './constants';
-import {
-  backgroundBonusToDimensionScore,
-  computeBackgroundBonus,
-  passesTrustHardGate,
-} from './verified-credentials';
+import { backgroundBonusToDimensionScore } from './verified-credentials';
 import {
   calculateStructuralMatch,
   type MatchEngineProfile,
@@ -96,18 +92,17 @@ export function passesMatchHardGates(
 function legacyDimensionBreakdown(
   self: OdysseyCognitiveScores,
   other: OdysseyCognitiveScores,
-  viewerCredentials?: VerifiedCredentials | null,
-  captainCredentials?: VerifiedCredentials | null
+  _viewerCredentials?: VerifiedCredentials | null,
+  _captainCredentials?: VerifiedCredentials | null
 ): MatchDimensionBreakdown {
-  const { bonus } = computeBackgroundBonus(viewerCredentials, captainCredentials);
   return {
     planning: planningScore(classifyPlanning(self), classifyPlanning(other)),
     socialEnergy: socialScore(classifySocial(self), classifySocial(other)),
     decisionSpeed: decisionScore(classifyDecision(self), classifyDecision(other)),
     riskTolerance: riskScore(classifyRisk(self), classifyRisk(other)),
     spending: spendingScore(classifySpending(self), classifySpending(other)),
-    socialBackground: backgroundBonusToDimensionScore(bonus),
-    backgroundBonus: bonus,
+    socialBackground: backgroundBonusToDimensionScore(0),
+    backgroundBonus: 0,
   };
 }
 
@@ -164,12 +159,10 @@ export function computeCompatibilityScore(
   if (structural) {
     const result = computeStructuralMatch(structural);
     if (result.blocked) return 0;
-    if (captainCredentials && !passesTrustHardGate(captainCredentials)) return 0;
     return result.score;
   }
 
   if (!passesMatchHardGates(self, other)) return 0;
-  if (captainCredentials && !passesTrustHardGate(captainCredentials)) return 0;
 
   const breakdown = legacyDimensionBreakdown(self, other, viewerCredentials, captainCredentials);
   const weighted =
@@ -252,12 +245,6 @@ export function buildMatchInsights(
 
   if (breakdown.decisionSpeed <= 15) {
     warnings.push('决策速度存在差异，出现迷路或延误时可能需要更多耐心沟通。');
-  }
-
-  if (breakdown.backgroundBonus != null && breakdown.backgroundBonus >= 15) {
-    highlights.push('教育与行业背景相近，高压行中沟通成本预期较低。');
-  } else if (breakdown.backgroundBonus != null && breakdown.backgroundBonus <= 4) {
-    warnings.push('圈层背景差异较大，建议出发前对齐消费与决策习惯。');
   }
 
   if (highlights.length === 0) {

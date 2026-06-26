@@ -10,16 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { decisionDraftApi } from '@/api/decision-draft';
-import type {
-  DecisionStep,
-  DecisionExplanation,
-  TocExplanation,
-  ExpertExplanation,
-  StudioExplanation,
-  UserMode,
-} from '@/types/decision-draft';
-import { X, FileText, Brain, Zap, TrendingUp } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import type { DecisionExplanation, TocExplanation, ExpertExplanation, StudioExplanation, UserMode } from '@/types/decision-draft';
+import { FileText, Brain, Zap, TrendingUp } from 'lucide-react';
 
 export interface ExplanationPanelProps {
   draftId: string;

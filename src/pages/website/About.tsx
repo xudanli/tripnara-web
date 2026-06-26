@@ -53,6 +53,10 @@ export default function AboutPage() {
       point: t('about.believe.point5'),
       desc: t('about.believe.point5Desc'),
     },
+    {
+      point: t('about.believe.point6'),
+      desc: t('about.believe.point6Desc'),
+    },
   ];
 
   return (

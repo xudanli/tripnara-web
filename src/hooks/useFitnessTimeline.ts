@@ -4,7 +4,7 @@
  * @module hooks/useFitnessTimeline
  */
 
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { fitnessAnalyticsApi } from '@/api/fitness-analytics';
 import type { TimelineEvent, TimelineEventType } from '@/types/fitness-analytics';
 

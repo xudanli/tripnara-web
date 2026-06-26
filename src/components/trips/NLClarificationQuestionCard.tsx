@@ -111,7 +111,7 @@ export function NLClarificationQuestionCard({
         .filter(Boolean)
         .map((s) => s.trim());
     }
-    const selectedValue = selectedValues.join(','); // 用于日志；匹配时逐个检查
+    const ____selectedValue = selectedValues.join(','); // 用于日志；匹配时逐个检查
 
     // 🐛 调试日志：检查匹配情况
     console.log('[NLClarificationQuestionCard] 检查条件输入字段:', {

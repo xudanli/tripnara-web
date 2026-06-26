@@ -25,10 +25,6 @@ import { Button } from '@/components/ui/button';
 import { Compass } from 'lucide-react';
 import type { EntryPoint } from '@/api/agent';
 import type { TripDetail } from '@/types/trip';
-import {
-  ApplicationDecisionGlobalNotifier,
-  ReputationGlobalPrompt,
-} from '@/features/match-square';
 
 // Context for drawer control
 interface DrawerContextType {
@@ -251,20 +247,20 @@ function DashboardLayoutInner({
   drawerOpen,
   setDrawerOpen,
   drawerTab,
-  setDrawerTab,
+  setDrawerTab: _setDrawerTab,
   highlightItemId,
-  setHighlightItemId,
+  setHighlightItemId: _setHighlightItemId,
   highlightPatchId,
-  setHighlightPatchId,
+  setHighlightPatchId: _setHighlightPatchId,
   memoryConstraintSink,
-  setMemoryConstraintSink,
+  setMemoryConstraintSink: _setMemoryConstraintSink,
   constraintSinkDecisionLog,
-  setConstraintSinkDecisionLog,
-  highlightItineraryItemIds,
+  setConstraintSinkDecisionLog: _setConstraintSinkDecisionLog,
+  highlightItineraryItemIds: _highlightItineraryItemIds,
   setHighlightItineraryItemIds,
   sidebarExpanded,
   setSidebarExpanded,
-  activeTrip,
+  activeTrip: _activeTrip,
   activeTripId,
   entryPoint,
   isDashboardPage,
@@ -325,6 +321,7 @@ function DashboardLayoutInner({
       value={{
         expanded: showAssistantArea && sidebarExpanded && !isMobile,
         width: showAssistantArea && !isMobile ? assistantSidebarWidth : 0,
+        onRequestExpand: () => setSidebarExpanded(true),
       }}
     >
     <div className="fixed inset-0 z-0 flex flex-col overflow-hidden bg-gray-50">
@@ -421,11 +418,7 @@ function DashboardLayoutInner({
         {/* Toast 通知组件 */}
         <Toaster position="top-right" richColors />
 
-        {/* Reputation OS — 48h 行后互评全局弹窗 */}
-        <ReputationGlobalPrompt enabled={isAuthenticated} />
-
-        {/* 搭子广场 — 入队申请审批结果通知 */}
-        <ApplicationDecisionGlobalNotifier enabled={isAuthenticated} />
+        {/* Reputation OS 互评已冻结（Gate 0-1 信任体系重构） */}
       </div>
     </AssistantSidebarProvider>
   );

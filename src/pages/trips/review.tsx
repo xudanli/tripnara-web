@@ -15,6 +15,9 @@ import Insights from '@/components/trips/review/Insights';
 import Anchors from '@/components/trips/review/Anchors';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { useAuth } from '@/hooks/useAuth';
+import { isSelfEvolutionEnabled } from '@/lib/self-evolution-feature';
+import { TripSelfEvolutionSection } from '@/features/self-evolution';
 
 export default function TripReviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +32,8 @@ export default function TripReviewPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'timeline' | 'insights' | 'anchors'>('timeline');
+  const { user } = useAuth();
+  const selfEvolutionEnabled = isSelfEvolutionEnabled();
 
   useEffect(() => {
     if (tripId) {
@@ -164,6 +169,9 @@ export default function TripReviewPage() {
             )}
           </CardContent>
         </Card>
+        {selfEvolutionEnabled && trip && user?.id && (
+          <TripSelfEvolutionSection trip={trip} userId={user.id} className="mt-6" />
+        )}
       </div>
     );
   }
@@ -212,6 +220,16 @@ export default function TripReviewPage() {
         {summary && (
           <div className="mb-6">
             <SummaryBar summary={summary} />
+          </div>
+        )}
+
+        {selfEvolutionEnabled && trip && user?.id && (
+          <div className="mb-6">
+            <TripSelfEvolutionSection
+              trip={trip}
+              userId={user.id}
+              reviewSummary={summary}
+            />
           </div>
         )}
 

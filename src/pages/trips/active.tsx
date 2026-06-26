@@ -79,7 +79,7 @@ export default function ActiveTripPage() {
     <div className="mx-auto min-h-full w-full max-w-3xl px-4 py-6 sm:px-6">
       <DashboardSubpageHeader
         backTo={matchSquare?.recruitmentPostId
-          ? `/dashboard/tripnara/plaza/${matchSquare.recruitmentPostId}`
+          ? `/dashboard/trusted-projects/${matchSquare.recruitmentPostId}`
           : `/dashboard/trips/${trip.tripId}`}
         title={trip.name}
         subtitle="Active Trip · 行中指挥台"
@@ -130,8 +130,8 @@ export default function ActiveTripPage() {
             </Button>
             {matchSquare?.recruitmentPostId && (
               <Button size="sm" variant="ghost" className="text-muted-foreground" asChild>
-                <Link to={`/dashboard/tripnara/plaza/${matchSquare.recruitmentPostId}`}>
-                  招募帖
+                <Link to={`/dashboard/trusted-projects/${matchSquare.recruitmentPostId}`}>
+                  可信项目
                 </Link>
               </Button>
             )}

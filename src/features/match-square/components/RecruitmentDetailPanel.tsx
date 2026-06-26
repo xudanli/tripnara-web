@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 import { CaptainTrustProfileSheet } from './CaptainTrustProfileSheet';
 import { ApplyToRecruitmentDialog } from './ApplyToRecruitmentDialog';
 import { PermissionGateBanner } from './PermissionGateBanner';
-import { ContractInterpretationSection } from './ContractInterpretationSection';
 import { ItineraryTimelineSection } from './ItineraryTimelineSection';
 import { HardGatesSummaryStrip } from './HardGatesSummaryStrip';
 import { MatchInsightGatePrompt } from './MatchInsightGatePrompt';
@@ -39,6 +38,7 @@ import { catalogEntryToMatchPlan, getCatalogEntryById } from '../lib/route-templ
 import { buildRouteContractLockPlan } from '../lib/route-contract-vault';
 import { normalizeActiveTripPath } from '@/features/active-trip/lib/normalize-active-trip-path';
 import { resolveRecruitmentClosureCopy } from '../lib/team-roster-label';
+import { RecruitingOutcomeSection } from './RecruitingOutcomeSection';
 import {
   plazaLayout,
   plazaReview,
@@ -369,6 +369,10 @@ export function RecruitmentDetailPanel({
             <span>&ldquo;{post.captainMessage}&rdquo;</span>
           </p>
         </section>
+      )}
+
+      {captain && (
+        <RecruitingOutcomeSection outcome={post.outcome} className={sectionClass} />
       )}
 
       {!gate.canApply && !captain && <PermissionGateBanner access={gate} action="apply" />}

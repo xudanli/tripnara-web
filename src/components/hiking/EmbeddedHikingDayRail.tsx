@@ -7,6 +7,7 @@ import {
 } from '@/lib/hard-trek-trail-plan';
 import {
   hikingDayCardDayLabel,
+  readTripDayHikingDayCard,
   resolveHikingDayCardForTripDay,
   tripHasHikingDayCardsApi,
 } from '@/lib/hiking-day-card';

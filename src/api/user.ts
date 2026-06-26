@@ -140,8 +140,21 @@ export class UserProfileApiError extends Error {
 }
 
 /**
- * 用户信息 API 错误类
+ * 按邮箱查找用户（添加团队成员）
  */
+export interface UserLookupResult {
+  found: boolean;
+  user?: Pick<User, 'id' | 'email' | 'displayName'>;
+}
+
+export type UserAdminSearchResponse = SuccessResponse<{
+  users: Array<Pick<User, 'id' | 'email' | 'displayName'>>;
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}>;
+
 export class UserApiError extends Error {
   constructor(
     public code: string,
@@ -567,6 +580,47 @@ export const userApi = {
       
       // 处理其他错误
       throw new Error(error.message || '更新用户偏好失败，请稍后重试');
+    }
+  },
+
+  /**
+   * 按邮箱查找已注册用户
+   * 使用 GET /users/admin?search=（精确匹配邮箱）
+   * 若后端后续提供 /users/lookup 可再切换
+   */
+  lookupByEmail: async (email: string): Promise<UserLookupResult> => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
+      return { found: false };
+    }
+    try {
+      const response = await apiClient.get<UserAdminSearchResponse>('/users/admin', {
+        params: { search: normalized, limit: 10, page: 1 },
+      });
+      if (!response.data.success) {
+        return { found: false };
+      }
+      const match = response.data.data.users.find(
+        (u) => u.email?.trim().toLowerCase() === normalized,
+      );
+      if (!match?.id) {
+        return { found: false };
+      }
+      return {
+        found: true,
+        user: {
+          id: match.id,
+          email: match.email,
+          displayName: match.displayName,
+        },
+      };
+    } catch (error: any) {
+      const message =
+        error.response?.data?.error?.message ??
+        error.response?.data?.message ??
+        error.message ??
+        '查找用户失败';
+      throw new UserApiError('LOOKUP_FAILED', message);
     }
   },
 };

@@ -39,7 +39,7 @@ function TrendIcon({ trend, className }: { trend: TrendType; className?: string 
 }
 
 function TrendContent({ trend, showChart }: { trend: FitnessTrend; showChart: boolean }) {
-  const { t, i18n } = useTranslation();
+  const { t: _t, i18n } = useTranslation();
   const config = TREND_TYPE_CONFIG[trend.trend];
   const isZh = i18n.language === 'zh';
   
@@ -107,7 +107,7 @@ export function FitnessTrendCard({
   onViewDetails,
   className,
 }: FitnessTrendCardProps) {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const { data: trend, isLoading, error, refetch, isRefetching } = useFitnessTrend(periodDays);
 
   return (

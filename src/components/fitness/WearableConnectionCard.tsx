@@ -34,7 +34,7 @@ function StravaConnectionItem() {
   const {
     isConnected, lastSyncAt, isLoading,
     authorize, isAuthorizing,
-    disconnect, isDisconnecting,
+    disconnect, isDisconnecting: _isDisconnecting,
     sync, isSyncing,
   } = useStravaConnection();
   
@@ -81,7 +81,7 @@ function StravaConnectionItem() {
               </Button>
             </>
           ) : (
-            <Button variant="outline" size="sm" onClick={() => authorize()} disabled={isAuthorizing}>
+            <Button variant="outline" size="sm" onClick={() => authorize(undefined)} disabled={isAuthorizing}>
               {isAuthorizing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Link className="w-4 h-4 mr-1" />}
               连接
             </Button>

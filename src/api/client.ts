@@ -22,6 +22,7 @@ import {
 declare global {
   interface Window {
     __CONFIG__?: { apiBaseUrl?: string };
+    _CONFIG__?: { apiBaseUrl?: string };
   }
 }
 
@@ -31,7 +32,9 @@ declare global {
 // 3. 默认使用同域 /api（推荐，避免 Mixed Content，需要 Nginx 反代）
 const runtimeBase =
   window.__CONFIG__?.apiBaseUrl ||
-  (window as any).__CONFIG__?.apiBaseUrl; // 防御不同写法
+  window._CONFIG__?.apiBaseUrl ||
+  (window as any).__CONFIG__?.apiBaseUrl ||
+  (window as any)._CONFIG__?.apiBaseUrl; // 防御不同写法
 
 // ✅ 默认用同域 /api，避免 Mixed Content
 // 这样前端在 https://tripnara.com 下请求会变成 https://tripnara.com/api/...
@@ -39,7 +42,7 @@ const baseURL = runtimeBase || import.meta.env.VITE_API_BASE_URL || '/api';
 
 // 调试日志：显示最终使用的 baseURL
 console.log('[API Client] 初始化配置:', {
-  windowConfig: window.__CONFIG__,
+  windowConfig: window.__CONFIG__ ?? window._CONFIG__,
   runtimeBase,
   viteEnv: import.meta.env.VITE_API_BASE_URL,
   finalBaseURL: baseURL,
@@ -105,15 +108,17 @@ async function handleTripOrchestration409(
   if (status !== 409 || !body?.code) return null;
 
   if (body.code === TRIP_ORCHESTRATION_BUSY_CODE) {
-    const n = originalRequest.__busyRetryCount ?? 0;
+    const n = originalRequest._busyRetryCount ?? 0;
     if (n < 3) {
       if (n === 0) toastTripOrchestrationBusyWaiting();
-      originalRequest.__busyRetryCount = n + 1;
+      originalRequest._busyRetryCount = n + 1;
       await sleep(computeBusyRetryDelayMs(n));
       return apiClient(originalRequest);
     }
     toastTripOrchestrationBusyExhausted();
-    const busyErr = new Error(body.message?.trim() || '行程保存繁忙，请稍后再试') as TripnaraHttpError;
+    const busyErr = new Error(
+      (typeof body.message === 'string' ? body.message.trim() : '') || '行程保存繁忙，请稍后再试',
+    ) as TripnaraHttpError;
     busyErr.code = TRIP_ORCHESTRATION_BUSY_CODE;
     busyErr.response = error.response;
     busyErr.config = originalRequest;
@@ -123,7 +128,9 @@ async function handleTripOrchestration409(
 
   if (body.code === STALE_PLAN_VERSION_CODE) {
     await handleStalePlanVersionConflict(body);
-    const staleErr = new Error(body.message?.trim() || '行程版本已过期，请刷新后重试') as TripnaraHttpError;
+    const staleErr = new Error(
+      (typeof body.message === 'string' ? body.message.trim() : '') || '行程版本已过期，请刷新后重试',
+    ) as TripnaraHttpError;
     staleErr.code = STALE_PLAN_VERSION_CODE;
     staleErr.response = error.response;
     staleErr.config = originalRequest;
@@ -513,4 +520,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-

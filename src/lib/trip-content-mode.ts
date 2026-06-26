@@ -5,6 +5,7 @@
  */
 
 import type { TripDetail, TripListItem } from '@/types/trip';
+import { normalizeTripStatusFromApi } from '@/lib/in-trip-execution';
 import { getMatchSquareInstantiation } from '@/lib/match-square-trip-metadata';
 import { getTripHikingProfile } from '@/lib/trip-hiking';
 
@@ -27,7 +28,7 @@ function parseTripContentMode(value: unknown): TripContentMode | undefined {
     : undefined;
 }
 
-function readRecord(value: unknown): Record<string, unknown> | undefined {
+function ____readRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 }
 
@@ -61,6 +62,101 @@ export function resolveTripGeneratingItems(
     return true;
   }
   return false;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+export type TripPlanningAvailability =
+  | 'ready'
+  | 'draft'
+  | 'collecting_info'
+  | 'initializing'
+  | 'ready_to_generate'
+  | 'generating'
+  | 'failed';
+
+export function resolveTripPlanningAvailability(
+  trip:
+    | {
+        status?: string;
+        generatingItems?: boolean;
+        metadata?: Record<string, unknown>;
+      }
+    | null
+    | undefined
+): TripPlanningAvailability {
+  if (!trip) return 'ready';
+
+  const md = trip.metadata ?? {};
+  const progress = readRecord(md.generationProgress ?? md.generation_progress);
+  const progressStatus = readString(progress?.status)?.toLowerCase();
+  if (progressStatus === 'failed') return 'failed';
+  if (progressStatus === 'completed') return 'ready';
+  if (resolveTripGeneratingItems(trip)) return 'generating';
+
+  const nlDraft = readRecord(md.nlDraft ?? md.nl_draft);
+  const lifecycle = (
+    readString(md.lifecycleStatus) ??
+    readString(md.lifecycle_status) ??
+    readString(nlDraft?.lifecycleStatus) ??
+    readString(nlDraft?.lifecycle_status) ??
+    (readString(trip.status)?.toUpperCase() === 'DRAFT' ? readString(trip.status) : undefined)
+  )?.toUpperCase();
+
+  const readiness = readRecord(md.planningReadiness ?? md.planning_readiness);
+  const readinessStatus = readString(readiness?.status)?.toUpperCase();
+  const canInitialize = readiness?.canInitializePlanning ?? readiness?.can_initialize_planning;
+  const hasNlDraft = Boolean(nlDraft || md.createdFromNaturalLanguage === true);
+
+  if (lifecycle === 'DRAFT') {
+    if (readinessStatus === 'INSUFFICIENT' || canInitialize === false) return 'collecting_info';
+    return 'draft';
+  }
+
+  if (hasNlDraft && readinessStatus === 'READY_FOR_ITINERARY') return 'ready_to_generate';
+  if (lifecycle === 'READY_TO_GENERATE' || lifecycle === 'GENERATING') return 'generating';
+
+  return 'ready';
+}
+
+export function isTripPlanningUnavailable(
+  trip:
+    | {
+        status?: string;
+        generatingItems?: boolean;
+        metadata?: Record<string, unknown>;
+      }
+    | null
+    | undefined
+): boolean {
+  return resolveTripPlanningAvailability(trip) !== 'ready';
+}
+
+export function getTripPlanningAvailabilityLabel(state: TripPlanningAvailability): string {
+  switch (state) {
+    case 'draft':
+      return '草稿已保存';
+    case 'collecting_info':
+      return '待补充信息';
+    case 'initializing':
+      return '正在初始化';
+    case 'ready_to_generate':
+      return '待生成方案';
+    case 'generating':
+      return '正在生成';
+    case 'failed':
+      return '生成失败';
+    case 'ready':
+      return '可查看';
+  }
 }
 
 /** 解析 tripContentMode（API 优先，metadata / 徒步 / Match Square 兜底） */
@@ -172,6 +268,9 @@ export function normalizeTripApiFields<T extends TripApiShape>(trip: T): T {
 
   return {
     ...trip,
+    ...(trip.status
+      ? { status: normalizeTripStatusFromApi(trip.status as string) }
+      : {}),
     ...(generatingItems !== undefined ? { generatingItems } : {}),
     ...(tripContentMode ? { tripContentMode } : {}),
     ...(hikingTrailSegments.length > 0 ? { hikingTrailSegments } : {}),
@@ -202,6 +301,9 @@ export function normalizeTripListItemFields(item: TripListItem): TripListItem {
 
   return {
     ...item,
+    ...(item.status
+      ? { status: normalizeTripStatusFromApi(item.status as string) }
+      : {}),
     ...(generatingItems !== undefined ? { generatingItems } : {}),
     ...(tripContentMode ? { tripContentMode } : {}),
   };

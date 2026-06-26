@@ -3,6 +3,10 @@
  */
 
 import { formatHmInDestinationTimezone } from '@/utils/opening-hours-schedule-check';
+import {
+  getItineraryItemTypeShortLabel,
+  isItineraryItemType,
+} from '@/lib/itinerary-item-type-display';
 
 const TIME_IN_STR = /(\d{1,2}):(\d{1,2})/;
 
@@ -96,11 +100,14 @@ export function categoryLabelZh(categoryOrType: string | undefined): string | un
     DRIVE: '自驾',
     RAIL: '铁路',
     FLIGHT: '航班',
-    ACTIVITY: '活动',
+    ACTIVITY: '游玩',
+    MEAL_ANCHOR: '正餐',
+    MEAL_FLOATING: '简餐',
     SHOPPING: '购物',
     REST: '休息',
   };
   if (table[u]) return table[u];
+  if (isItineraryItemType(u)) return getItineraryItemTypeShortLabel(u);
   if (/餐|食|饭|restaurant|dining/i.test(raw)) return '餐厅';
   if (/景|游|attraction|sight/i.test(raw)) return '景点';
   if (/酒|宿|hotel/i.test(raw)) return '酒店';

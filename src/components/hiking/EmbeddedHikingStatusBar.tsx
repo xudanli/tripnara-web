@@ -18,7 +18,8 @@ type Props = {
 function primaryCta(
   phase: HikingPhase,
   plans: HikePlanRecord[],
-  tripId: string,
+  _tripId: string,
+  navigate: ReturnType<typeof useNavigate>,
   onAddSegment?: () => void
 ): { label: string; action: () => void } | null {
   const inProgress = plans.find((p) => p.status === 'in_progress');
@@ -61,7 +62,7 @@ export function EmbeddedHikingStatusBar({
   onAddSegment,
 }: Props) {
   const navigate = useNavigate();
-  const cta = primaryCta(phase, plans, tripId, onAddSegment);
+  const cta = primaryCta(phase, plans, tripId, navigate, onAddSegment);
 
   return (
     <div className="rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50/90 to-white px-4 py-3 flex flex-wrap items-center justify-between gap-3">

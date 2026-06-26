@@ -11,7 +11,7 @@ type HikePlanStorageSwitchProps = {
 
 /** 切换 HikePlan/GPS：云端 API（需登录） vs 本地 IndexedDB */
 export function HikePlanStorageSwitch({ className, compact }: HikePlanStorageSwitchProps) {
-  const { mode, isApiMode, isAuthenticated, setMode } = useHikePlanStorage();
+  const { mode: _mode, isApiMode, isAuthenticated, setMode } = useHikePlanStorage();
 
   const handleToggle = (checked: boolean) => {
     if (checked && !isAuthenticated) return;

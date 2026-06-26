@@ -12,7 +12,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Activity, AlertCircle, ChevronRight, Route as RouteIcon, Shield, Tag, Wrench } from 'lucide-react';
+import { Activity, ChevronRight, Route as RouteIcon, Shield, Tag, Wrench } from 'lucide-react';
 import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';

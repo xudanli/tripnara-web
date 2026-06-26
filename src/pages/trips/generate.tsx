@@ -24,6 +24,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ItineraryPresentationPanel } from '@/components/experience-fulfillment';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -681,6 +682,18 @@ export default function GenerateTripPage() {
                 </CardContent>
               </Card>
               
+              {draft.itineraryPresentation && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>行程预览</CardTitle>
+                    <CardDescription>灵感与可信信息（用户向展示）</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ItineraryPresentationPanel presentation={draft.itineraryPresentation} />
+                  </CardContent>
+                </Card>
+              )}
+
               {/* 每日行程 */}
               <div className="space-y-4">
                 {draft.draftDays.map((day, dayIndex) => (

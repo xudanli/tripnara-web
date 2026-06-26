@@ -228,16 +228,45 @@ export function formatCost(amount: number | null | undefined, currency: string =
   if (amount === null || amount === undefined) {
     return '-';
   }
-  
+
   const currencySymbols: Record<string, string> = {
     'CNY': '¥',
+    'RMB': '¥',
     'USD': '$',
     'EUR': '€',
     'JPY': '¥',
     'GBP': '£',
+    'AUD': 'A$',
+    'CAD': 'C$',
+    'CHF': 'Fr',
+    'SEK': 'kr',
+    'NOK': 'kr',
+    'DKK': 'kr',
+    'ISK': 'kr',
+    'KRW': '₩',
+    'SGD': 'S$',
+    'HKD': 'HK$',
+    'TWD': 'NT$',
+    'THB': '฿',
+    'MYR': 'RM',
+    'IDR': 'Rp',
+    'PHP': '₱',
+    'VND': '₫',
+    'INR': '₹',
+    'AED': 'د.إ',
+    'SAR': '﷼',
+    'ZAR': 'R',
+    'BRL': 'R$',
+    'MXN': '$',
+    'ARS': '$',
+    'CLP': '$',
+    'COP': '$',
+    'PEN': 'S/',
+    'NZD': 'NZ$',
+    'FJD': 'FJ$',
   };
-  
-  const symbol = currencySymbols[currency] || currency;
+
+  const symbol = currencySymbols[currency.toUpperCase()] || currency;
   return `${symbol}${amount.toFixed(2)}`;
 }
 

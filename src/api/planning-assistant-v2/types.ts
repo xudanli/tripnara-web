@@ -168,6 +168,13 @@ export interface ChatResponse {
   ui_state?: OrchestrationUiState;
   /** 编排结果（state、gate_result、decision_log、decisionState） */
   orchestrationResult?: OrchestrationResult;
+  /** P1/P2 三人格单主角（与 PlanningChatResponse 同路径） */
+  personaEvaluation?: import('@/api/planning-workbench').PersonaShellOutput;
+  workbenchResponse?: {
+    data?: { uiOutput?: import('@/api/planning-workbench').UIOutput };
+    uiOutput?: import('@/api/planning-workbench').UIOutput;
+  };
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
   /** 酒店搜索元信息（如 disclaimer_zh） */
   hotelSearchMeta?: {
     disclaimer_zh?: string;

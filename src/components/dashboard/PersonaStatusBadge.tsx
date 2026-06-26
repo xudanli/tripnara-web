@@ -4,7 +4,6 @@
  */
 
 import { Shield, Activity, Compass, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export type PersonaType = 'ABU' | 'DR_DRE' | 'NEPTUNE';

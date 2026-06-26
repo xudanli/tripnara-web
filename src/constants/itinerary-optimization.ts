@@ -71,6 +71,8 @@ export const TRIP_TRAVEL_MODE_MAP: Record<string, 'TRANSIT' | 'WALKING' | 'DRIVI
 export const INTENT_TRAVEL_MODE_MAP: Record<string, 'TRANSIT' | 'WALKING' | 'DRIVING'> = {
   WALK: 'WALKING',
   DRIVE: 'DRIVING',
+  DRIVING: 'DRIVING',
+  PUBLIC_TRANSIT: 'TRANSIT',
   MIXED: 'TRANSIT',
 };
 

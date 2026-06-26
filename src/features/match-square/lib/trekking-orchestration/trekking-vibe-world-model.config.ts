@@ -1,12 +1,4 @@
-import type {
-  TrekkingRecruitmentScriptId,
-  TrekkingRouteDirectionCandidate,
-  TrekkingSharedGearDeficit,
-  TrekkingEventStreamMilestone,
-  TrekkingToolchainItem,
-  TrekkingWorldModel,
-  TrekkingDnaEvolution,
-} from '@/types/trekking-vibe-orchestration';
+import type { TrekkingRecruitmentScriptId, TrekkingSharedGearDeficit, TrekkingEventStreamMilestone, TrekkingToolchainItem, TrekkingWorldModel, TrekkingDnaEvolution } from '@/types/trekking-vibe-orchestration';
 
 type TrekkingScriptWorldBinding = {
   worldModel: TrekkingWorldModel;

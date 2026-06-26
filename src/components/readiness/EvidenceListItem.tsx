@@ -12,6 +12,16 @@ import { toast } from 'sonner';
 import { canEditEvidence } from '@/utils/trip-permissions';
 import type { CollaboratorRole } from '@/types/trip';
 
+type TripsApiWithEvidence = typeof tripsApi & {
+  updateEvidence: (
+    tripId: string,
+    evidenceId: string,
+    data: { status?: EvidenceStatus; userNote?: string }
+  ) => Promise<{ evidenceId: string; status: string; updatedAt: string; userNote?: string }>;
+};
+
+const tripsApiWithEvidence = tripsApi as TripsApiWithEvidence;
+
 interface EvidenceListItemProps {
   evidence: EvidenceItem;
   tripId: string;
@@ -120,7 +130,7 @@ export default function EvidenceListItem({
 
     setIsUpdating(true);
     try {
-      await tripsApi.updateEvidence(tripId, evidence.id, {
+      await tripsApiWithEvidence.updateEvidence(tripId, evidence.id, {
         status: newStatus,
         userNote: userNote || undefined,
       });
@@ -140,7 +150,7 @@ export default function EvidenceListItem({
   const handleNoteSave = async () => {
     setIsUpdating(true);
     try {
-      await tripsApi.updateEvidence(tripId, evidence.id, {
+      await tripsApiWithEvidence.updateEvidence(tripId, evidence.id, {
         userNote: userNote || undefined,
       });
 

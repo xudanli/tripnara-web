@@ -91,11 +91,15 @@ export interface AgentOptions {
    */
   use_claude_orchestration?: boolean;
   /**
-   * 开启实时工具链。`true` 表示按后端默认启用；或传通道列表，如
-   * `["weather","flight","hotel","car_rental"]`（与 route-and-run.dto 一致）。
+   * 强制使用状态机编排。规划/改稿请求应显式传 true，避免后端环境默认值把深规划落到 LEGACY。
+   */
+  use_state_machine_orchestration?: boolean;
+  /**
+   * 开启实时工具链。前端发送时应传明确通道列表，如
+   * `["weather","flight","hotel","car_rental"]`（历史客户端传 true 时由后端兼容为默认集）。
    * 酒店/租车等常需 `trip_id` 且行程带日期方生效；**flight** 由服务端凭证调用 Amadeus / Flight MCP。
    */
-  enable_live_tools?: boolean | string[];
+  enable_live_tools?: string[];
   /**
    * 意图标记位，用于可控触发特定工具/路由（如天气）。
    * 可为键值对象或字符串数组，以后端约定为准。
@@ -780,6 +784,8 @@ export interface ObservabilityMetrics {
   latency_ms: number;
   router_ms: number;
   system_mode: 'SYSTEM1' | 'SYSTEM2' | 'REDIRECT';
+  /** 后端统一判定的产品侧思考档位：fast=快答；balanced=交互式推理；deep=深规划/状态机 */
+  thinking_mode_resolved?: 'fast' | 'balanced' | 'deep';
   tool_calls: number;
   browser_steps: number;
   tokens_est: number;
@@ -1185,6 +1191,10 @@ export interface RouteAndRunResponse {
       negotiation_payload?: NegotiationPayload;
       /** C1 证据包：verification_status + failure_reason_codes */
       evidence_bundle?: EvidenceBundleDto;
+      /** F3 过程公平性：Agent 自动发起偏好轮次 */
+      process_fairness?: import('@/types/process-fairness').ProcessFairnessPayload;
+      /** PDI-4 决策风格画像：Agent 自动发起行前调查 */
+      decision_profiling?: import('@/types/trip-decision-profiling').DecisionProfilingPayload;
       /** 审计/逻辑层证据卡 */
       decision_metadata?: {
         evidence_cards?: EvidenceCardDto[];
@@ -1217,6 +1227,9 @@ export interface RouteAndRunResponse {
         accommodation_health?: import('@/types/accommodation-health').AccommodationHealthPayload;
         /** 跨 trip 共同回忆卡片 */
         shared_milestone_cards?: import('@/types/shared-milestone').SharedMilestoneUiCard[];
+        /** Schema.org 发现层（SEO / 外部分摄入；规划 UI 可忽略） */
+        schema_org_discovery?: import('@/types/schema-org-discovery').SchemaOrgDiscoveryPayload;
+        schemaOrgDiscovery?: import('@/types/schema-org-discovery').SchemaOrgDiscoveryPayload;
         [key: string]: any;
       };
       // 澄清消息相关字段（统一在 payload 中）
@@ -1270,6 +1283,9 @@ export interface RouteAndRunResponse {
       actionExecution?: ActionExecutionPayload;
       action_execution?: ActionExecutionPayload;
       action_execution_preview?: ActionExecutionPreviewPayload;
+      /** L1 行程本体执行态摘要 */
+      travel_ontology_state?: import('@/types/travel-ontology-state').TravelOntologyState;
+      travelOntologyState?: import('@/types/travel-ontology-state').TravelOntologyState;
       /**
        * 统一执行轨迹（轻量路径）：可含 routing_task_type、decision_log、kb_rag_hit 等，
        * 与 explain / orchestration 并行下发。
@@ -1318,6 +1334,16 @@ export interface RouteAndRunResponse {
     };
     /** P1.1：与 payload.flawed_draft_v1 同源只读镜像 */
     flawed_draft_v1?: import('@/types/flawed-draft').FlawedDraftDescriptorV1;
+    /** 级联影响 UI 卡片（snake_case，与 readiness cascadeUiHints 同形） */
+    cascade_ui_hints?: import('@/types/readiness-cascade').CascadeUiHint[];
+    /** 完整依赖影响结构，一般不必直接渲染 */
+    dependency_impact?: Record<string, unknown>;
+    /** Travel Runtime 图（节点 + 边 + trigger），专家/调试视图 */
+    travel_runtime_graph?: import('@/types/travel-runtime-graph').TravelRuntimeGraph;
+    travelRuntimeGraph?: import('@/types/travel-runtime-graph').TravelRuntimeGraph;
+    /** L4 数据边界脚注 */
+    coverage_disclosure?: import('@/types/coverage-disclosure').CoverageDisclosure;
+    coverageDisclosure?: import('@/types/coverage-disclosure').CoverageDisclosure;
   };
   observability: ObservabilityMetrics;
   /**
@@ -2040,4 +2066,3 @@ export const agentApi = {
     return handleResponse(response);
   },
 };
-

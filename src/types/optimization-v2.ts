@@ -400,6 +400,10 @@ export interface RiskAssessmentResponse {
   };
   /** 下行风险 */
   downsideRisk: number;
+  /** 风险因素列表（UI 展示用） */
+  riskFactors?: Array<{ factor: string; severity?: string; description?: string }>;
+  /** 综合建议 */
+  recommendation?: string;
 }
 
 // ==================== 三守护者协商 ====================
@@ -439,6 +443,8 @@ export interface NegotiationRequest {
 export interface NegotiationResponse {
   /** 决策结果：批准 / 附条件批准 / 拒绝 / 需人工决策 */
   decision: NegotiationDecision;
+  /** 结构化硬约束门控（优先于 criticalConcerns 关键词兜底） */
+  hardConstraintBlocked?: boolean;
   /** 共识度 (0-1)，前端 ×100 显示为百分比 */
   consensusLevel: number;
   /** 分歧所在（如 "NEPTUNE 支持 vs DRE 反对"），前端可改写为用户可读 */
@@ -691,6 +697,20 @@ export interface TeamMember {
 }
 
 /**
+ * 团队成员更新请求，只包含服务端允许 PATCH 的可变字段。
+ */
+export type UpdateTeamMemberRequest = Partial<Pick<
+  TeamMember,
+  | 'displayName'
+  | 'role'
+  | 'decisionWeight'
+  | 'fitnessLevel'
+  | 'experienceLevel'
+  | 'personalWeights'
+  | 'specialConstraints'
+>>;
+
+/**
  * 团队约束配置
  */
 export interface TeamConstraintsConfig {
@@ -733,6 +753,14 @@ export interface Team {
 export interface TeamNegotiationResponse {
   decision: NegotiationDecision;
   consensusLevel: number;
+  /** 结构化硬约束门控 */
+  hardConstraintBlocked?: boolean;
+  /** 关键风险摘要（与 NegotiationResponse.evaluationSummary 对齐） */
+  evaluationSummary?: {
+    criticalConcerns: string[];
+  };
+  /** 团队 CHOOSE 扁平选项（NEEDS_HUMAN 且非硬约束） */
+  humanDecisionPointsFlat?: string[];
   /** 各成员评估 */
   memberEvaluations: Array<{
     userId: string;

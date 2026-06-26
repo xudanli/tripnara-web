@@ -40,7 +40,7 @@ export default function DecisionComparisonSection() {
         <div className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground leading-tight">
           👉 {questionParts[0]}
           <Badge className="ml-2 mr-2 bg-yellow-100 text-primary font-extrabold inline-flex">
-            存在
+            {t('decisionComparison.existBadge')}
           </Badge>
           {questionParts[1]}
         </div>
@@ -69,11 +69,15 @@ export default function DecisionComparisonSection() {
               <Badge variant="outline" className="px-5 py-2 text-base font-medium -rotate-[1.5deg] bg-background/90 border-dashed">
                 {t('decisionComparison.traditionalStep3', { defaultValue: '拼成"行程"' })}
               </Badge>
+              <span className="text-xl text-muted-foreground">→</span>
+              <Badge variant="outline" className="px-5 py-2 text-base font-medium rotate-1 bg-background/90 border-dashed">
+                {t('decisionComparison.traditionalStep4')}
+              </Badge>
             </div>
 
             {/* Traditional Focus */}
             <div className="p-4 bg-background/60 rounded-lg text-sm text-muted-foreground italic text-center">
-              只关注"去哪"
+              {t('decisionComparison.traditionalFocus')}
             </div>
           </CardContent>
         </WebsiteCard>
@@ -186,9 +190,22 @@ export default function DecisionComparisonSection() {
                       {t('decisionComparison.step4', { defaultValue: '可执行' })}
                     </Badge>
                     <div className="text-xs text-muted-foreground leading-relaxed pl-1">
-                      {t('decisionComparison.step4Desc', {
-                        defaultValue: '生成可执行的完整路线方案',
-                      })}
+                      {t('decisionComparison.step4Desc')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 5: 可信组队 */}
+                <div className="relative flex items-start gap-4">
+                  <div className="absolute -left-7 top-1 w-12 h-12 rounded-full bg-yellow-100 border-4 border-yellow-500 flex items-center justify-center shadow-md z-10">
+                    <span className="text-yellow-800 text-lg font-bold">🤝</span>
+                  </div>
+                  <div className="flex-1 pl-6">
+                    <Badge className="px-4 py-2 text-sm font-bold mb-2 bg-yellow-100 border-yellow-500 text-foreground shadow-sm">
+                      {t('decisionComparison.step5')}
+                    </Badge>
+                    <div className="text-xs text-muted-foreground leading-relaxed pl-1">
+                      {t('decisionComparison.step5Desc')}
                     </div>
                   </div>
                 </div>
@@ -197,7 +214,7 @@ export default function DecisionComparisonSection() {
 
             {/* TripNARA Focus */}
             <div className="p-4 px-5 bg-yellow-50 rounded-lg text-sm text-foreground font-semibold text-center border-none">
-              ✅ 关注"应不应该去" 而不是"能去哪"
+              {t('decisionComparison.tripnaraFocus')}
             </div>
           </CardContent>
         </WebsiteCard>

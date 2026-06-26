@@ -10,16 +10,9 @@ import type { NLConversation } from '@/types/trip';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
-import { 
-  MessageSquare, 
-  Plus, 
-  ChevronLeft, 
-  ChevronRight,
-  Calendar,
-  MapPin,
-} from 'lucide-react';
+import { MessageSquare, Plus, ChevronLeft, Calendar, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
 interface ConversationHistorySidebarProps {

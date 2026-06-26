@@ -15,12 +15,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { FitnessProfile } from '@/types/fitness';
-import { 
-  FITNESS_LEVEL_CONFIG, 
-  CONFIDENCE_LEVEL_CONFIG,
-  AGE_MODIFIERS,
-  DEFAULT_FITNESS_PROFILE,
-} from '@/constants/fitness';
+import { FITNESS_LEVEL_CONFIG, CONFIDENCE_LEVEL_CONFIG, DEFAULT_FITNESS_PROFILE } from '@/constants/fitness';
 import { FitnessLevelBadge } from './FitnessLevelBadge';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { DimensionRadarChart } from './DimensionRadarChart';
@@ -57,7 +52,7 @@ export function FitnessProfileCard({
 }: FitnessProfileCardProps) {
   const [expanded, setExpanded] = useState(!compact);
   const levelConfig = FITNESS_LEVEL_CONFIG[profile.fitnessLevel] || FITNESS_LEVEL_CONFIG.MEDIUM;
-  const confidenceConfig = CONFIDENCE_LEVEL_CONFIG[profile.confidence] || CONFIDENCE_LEVEL_CONFIG.LOW;
+  const ____confidenceConfig = CONFIDENCE_LEVEL_CONFIG[profile.confidence] || CONFIDENCE_LEVEL_CONFIG.LOW;
   const dimensions = profile.dimensions ?? DEFAULT_FITNESS_PROFILE.dimensions;
 
   // 埋点

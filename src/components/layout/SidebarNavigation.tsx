@@ -1,21 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import {
-  Home,
-  MapPin,
-  Compass,
-  Play,
-  Menu,
-  X,
-  Globe,
-  ChevronDown,
-  ChevronRight,
-  LogOut,
-  MessageCircle,
-  ClipboardCheck,
-  Settings,
-} from 'lucide-react';
+import { Home, MapPin, Compass, Menu, X, ChevronDown, ChevronRight, LogOut, MessageCircle, Settings, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +54,12 @@ const navItems: NavItem[] = [
     label: '', // Will be set in component
     icon: Compass,
     path: '/dashboard/plan-studio',
+  },
+  {
+    key: 'participant-projects',
+    label: '',
+    icon: Users,
+    path: '/dashboard/participant/projects',
   },
   // 其他功能（国家数据库、执行、准备度）通过对话界面访问
   // 徒步和复盘模块已删除

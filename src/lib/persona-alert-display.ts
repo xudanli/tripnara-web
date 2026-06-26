@@ -44,6 +44,31 @@ export function getPersonaAlertUserBody(alert: {
   return stripPersonaMessageTechnicalTail(raw);
 }
 
+const INTERNAL_ALERT_PATTERNS = [
+  /ResearchPatch\s+scope\s+violation/i,
+  /\bscope\s+violation\b/i,
+  /\bkey=cost_estimate\b/i,
+  /\bstack\b/i,
+  /\btrace\b/i,
+];
+
+export function isUserVisiblePersonaAlert(alert: {
+  name?: string;
+  title?: string;
+  message?: string;
+  explanation?: string;
+  metadata?: {
+    reasonCodes?: string[];
+    [key: string]: unknown;
+  };
+}): boolean {
+  const body = `${alert.name || ''}\n${alert.title || ''}\n${alert.explanation || ''}\n${alert.message || ''}`;
+  if (!body.trim()) return false;
+  if (INTERNAL_ALERT_PATTERNS.some((pattern) => pattern.test(body))) return false;
+  if (alert.metadata?.reasonCodes?.some((code) => PIPELINE_REASON_CODES.has(code))) return false;
+  return true;
+}
+
 export function normalizeSuggestionForDisplay(suggestion: Suggestion): Suggestion {
   return {
     ...suggestion,

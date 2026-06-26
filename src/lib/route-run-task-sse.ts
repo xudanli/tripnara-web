@@ -16,13 +16,13 @@ import { applyEmotionalContextFromSsePayload } from '@/lib/emotional-context-ui'
 
 declare global {
   interface Window {
-    __CONFIG__?: { apiBaseUrl?: string };
+    _CONFIG__?: { apiBaseUrl?: string };
   }
 }
 
 function resolveApiBase(): string {
   return (
-    window.__CONFIG__?.apiBaseUrl ||
+    window._CONFIG__?.apiBaseUrl ||
     import.meta.env.VITE_API_BASE_URL ||
     CONFIG.API_BASE_URL ||
     '/api'

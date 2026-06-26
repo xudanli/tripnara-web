@@ -59,6 +59,7 @@ export interface PlannerMessage {
   // 🆕 三人格守护者系统
   personaInsights?: PersonaInsight[];
   guardianEvaluation?: GuardianEvaluation;
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
   disclaimer?: Disclaimer;
   // 🆕 意图消歧系统
   meta?: PlannerResponseMeta;
@@ -216,6 +217,8 @@ export function useTripPlannerAssistant({
       // 三人格守护者系统
       personaInsights: response.personaInsights,
       guardianEvaluation: response.guardianEvaluation,
+      guardianPresentation:
+        extractGuardianPresentation(response) ?? response.guardianPresentation,
       disclaimer: response.disclaimer,
       // 意图消歧系统
       meta: response.meta,

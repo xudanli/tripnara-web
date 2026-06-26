@@ -5,14 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { decisionDraftApi } from '@/api/decision-draft';
-import type {
-  DecisionDraft,
-  DecisionStep,
-  ImpactPreviewResult,
-  UpdateDecisionStepRequest,
-  PreviewImpactRequest,
-  UserMode,
-} from '@/types/decision-draft';
+import type { DecisionDraft, DecisionStep, ImpactPreviewResult, UpdateDecisionStepRequest, UserMode } from '@/types/decision-draft';
 import { toast } from 'sonner';
 
 export interface UseDecisionDraftOptions {
@@ -38,7 +31,7 @@ export interface UseDecisionDraftReturn {
 
 export function useDecisionDraft({
   draftId,
-  userMode = 'toc',
+  userMode: _userMode = 'toc',
   autoLoad = true,
 }: UseDecisionDraftOptions): UseDecisionDraftReturn {
   const [draft, setDraft] = useState<DecisionDraft | null>(null);

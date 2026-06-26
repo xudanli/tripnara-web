@@ -5,11 +5,7 @@
 
 import type { TripDetail } from '@/types/trip';
 import { inferSeasonFromMonth, type Season } from '@/config/season-rules';
-import { 
-  getRouteSignaturesByCountry, 
-  type RouteType, 
-  type RouteSignature 
-} from '@/config/route-signatures';
+import { getRouteSignaturesByCountry, type RouteType } from '@/config/route-signatures';
 
 export type UserType = 
   | 'first_timer'          // 首次旅行者

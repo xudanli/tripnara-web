@@ -58,6 +58,6 @@ export const vibeLlmApi = {
   parse: (payload: VibeLlmParseRequest): Promise<VibeLlmParseResponse> =>
     withVibeLlmFallback(
       () => parseLive(payload),
-      () => buildVibeLlmParseResponse(payload)
+      () => Promise.resolve(buildVibeLlmParseResponse(payload))
     ),
 };

@@ -22,10 +22,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Activity, AlertCircle, AlertTriangle, ChevronRight, Shield, Tag, Wrench } from 'lucide-react';
+import { Activity, AlertCircle, AlertTriangle, Shield, Tag, Wrench } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PersonaAvatar } from '@/components/common/PersonaAvatar';
-import { cn } from '@/lib/utils';
 import {
   resolveRouteRunGuardianGateView,
   type RouteRunExplainGuardianMirror,
@@ -37,7 +36,6 @@ import {
   extractDayByDayParagraphsFromAnswerText,
   extractOrchestrationNarration,
   extractVerifyIssuesFromSamePayload,
-  mergeRouteRunDecisionLogs,
   timelineEchoesVerifyIssueCodes,
   advisoryIssueDisplayText,
   type OrchestrationNarrationSlice,
@@ -244,11 +242,6 @@ export function RouteRunContractLayers({
   const dayFromAnswer = useMemo(
     () => extractDayByDayParagraphsFromAnswerText(answerTextForDayNarration ?? ''),
     [answerTextForDayNarration]
-  );
-
-  const mergedLog = useMemo(
-    () => mergeRouteRunDecisionLogs(decisionLog, orchestrationResult?.decision_log ?? null),
-    [decisionLog, orchestrationResult]
   );
 
   const verifyIssues = useMemo(

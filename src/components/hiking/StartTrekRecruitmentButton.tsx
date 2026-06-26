@@ -7,6 +7,7 @@ import {
   resolveTrekVisionSeed,
   type TrekActivityProfile,
 } from '@/features/match-square/lib/trek-plaza-bridge';
+import { useCanPublishTrustedProject } from '@/hooks/useCanPublishTrustedProject';
 
 type StartTrekRecruitmentButtonProps = {
   routeDirectionId: number;
@@ -30,6 +31,7 @@ export function StartTrekRecruitmentButton({
   variant = 'secondary',
 }: StartTrekRecruitmentButtonProps) {
   const navigate = useNavigate();
+  const { canPublish, isLoading } = useCanPublishTrustedProject();
 
   const activityProfile =
     activityProfileProp ??
@@ -39,6 +41,10 @@ export function StartTrekRecruitmentButton({
       tags,
     }) ??
     undefined;
+
+  if (isLoading || !canPublish) {
+    return null;
+  }
 
   const handleClick = () => {
     const vibeSeed = activityProfile ? resolveTrekVisionSeed(activityProfile) : undefined;

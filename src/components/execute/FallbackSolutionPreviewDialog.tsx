@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { executionApi, type PreviewFallbackResponse } from '@/api/execution';
 import { toast } from 'sonner';
-import { CheckCircle2, X, Plus, Minus, Edit, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Plus, Minus, Edit, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
 import { formatScheduleTime, formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';
 import { cn } from '@/lib/utils';
 

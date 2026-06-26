@@ -19,8 +19,16 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { AlertCircle, CheckCircle2, AlertTriangle, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { gateStatusTokens, cardVariants, typographyTokens } from '@/utils/design-tokens';
+import { gateStatusTokens, cardVariants } from '@/utils/design-tokens';
 import type { EvidenceType } from '@/types/trip';
+
+const EVIDENCE_TYPE_LABELS: Record<EvidenceType, string> = {
+  opening_hours: '营业时间',
+  weather: '天气',
+  road_closure: '道路状况',
+  booking: '预订确认',
+  other: '其他',
+};
 
 interface EvidenceCompletenessCardProps {
   completenessScore: number; // 0-1
@@ -41,6 +49,9 @@ interface EvidenceCompletenessCardProps {
   onFetchEvidence?: (evidenceTypes: EvidenceType[], affectedPois: number[]) => void;
   loading?: boolean;
   className?: string;
+  readinessPhase?: 'planning' | 'pre_departure' | 'in_trip' | 'past';
+  phaseHint?: string;
+  deferredEvidenceCount?: number;
 }
 
 export default function EvidenceCompletenessCard({
@@ -50,6 +61,9 @@ export default function EvidenceCompletenessCard({
   onFetchEvidence,
   loading = false,
   className,
+  readinessPhase,
+  phaseHint,
+  deferredEvidenceCount,
 }: EvidenceCompletenessCardProps) {
   const { t } = useTranslation();
 
@@ -99,6 +113,24 @@ export default function EvidenceCompletenessCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {(readinessPhase === 'planning' || readinessPhase === 'in_trip') && phaseHint && (
+          <div
+            className={cn(
+              'rounded-lg border px-3 py-2 text-xs',
+              readinessPhase === 'in_trip'
+                ? 'border-sky-200 bg-sky-50 text-sky-900'
+                : 'border-blue-200 bg-blue-50 text-blue-800',
+            )}
+          >
+            {phaseHint}
+            {readinessPhase === 'planning' && deferredEvidenceCount != null && deferredEvidenceCount > 0 && (
+              <span className="ml-1 text-blue-700">
+                （{deferredEvidenceCount} 项实时证据将在出发前 14 天内检查）
+              </span>
+            )}
+          </div>
+        )}
+
         {/* 完整性评分进度条 */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
@@ -153,7 +185,7 @@ export default function EvidenceCompletenessCard({
                         <div className="flex flex-wrap gap-1.5">
                           {item.missingTypes.map((type) => (
                             <Badge key={type} variant="outline" className="text-[10px] bg-white">
-                              {type}
+                              {EVIDENCE_TYPE_LABELS[type] ?? type}
                             </Badge>
                           ))}
                         </div>
@@ -200,7 +232,7 @@ export default function EvidenceCompletenessCard({
                         <div className="flex flex-wrap gap-1.5">
                           {rec.evidenceTypes.map((type) => (
                             <Badge key={type} variant="outline" className="text-[10px] bg-white">
-                              {type}
+                              {EVIDENCE_TYPE_LABELS[type] ?? type}
                             </Badge>
                           ))}
                         </div>

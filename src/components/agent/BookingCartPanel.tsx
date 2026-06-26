@@ -474,7 +474,7 @@ export function BookingCartPanel({
             <Button
               type="button"
               className="w-full gap-2"
-              disabled={disabled || busy || cartState === 'checkout_submitted'}
+              disabled={disabled || busy}
               onClick={handleCheckoutClick}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}

@@ -292,6 +292,17 @@ export interface PlanningChatResponse {
   
   // V2.1 新增：用户通知
   notification?: UserNotification;
+
+  /**
+   * 场景 2 单主角 — `POST /api/agent/planning-assistant/chat` 直读
+   * `personaEvaluation.presentation`（PersonaShellOutput，与 workbench 同型）
+   */
+  personaEvaluation?: import('@/api/planning-workbench').PersonaShellOutput;
+  workbenchResponse?: {
+    data?: { uiOutput?: import('@/api/planning-workbench').UIOutput };
+    uiOutput?: import('@/api/planning-workbench').UIOutput;
+  };
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
 }
 
 /**
@@ -563,6 +574,14 @@ export interface JourneyAssistantResponse {
   
   // V2.1 新增：用户通知
   notification?: UserNotification;
+
+  /** P1/P2 三人格单主角表达层 */
+  personaEvaluation?: import('@/api/planning-workbench').PersonaShellOutput;
+  workbenchResponse?: {
+    data?: { uiOutput?: import('@/api/planning-workbench').UIOutput };
+    uiOutput?: import('@/api/planning-workbench').UIOutput;
+  };
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
 }
 
 /**

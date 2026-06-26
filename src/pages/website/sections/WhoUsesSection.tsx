@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { PersonThinking, Compass, Mountains, Route } from '@/components/illustrations/SimpleIllustrations';
+import { PersonThinking, Compass, Route, PersonSitting } from '@/components/illustrations/SimpleIllustrations';
 import { WebsiteSection } from '@/components/website/WebsiteSection';
 import { WebsiteHeading } from '@/components/website/WebsiteHeading';
 import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
@@ -7,22 +7,10 @@ import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
 export default function WhoUsesSection() {
   const { t } = useTranslation();
   const users = [
-    {
-      name: t('whoUses.deepTravelers'),
-      icon: PersonThinking,
-    },
-    {
-      name: t('whoUses.expeditionTeams'),
-      icon: Compass,
-    },
-    {
-      name: t('whoUses.insurance'),
-      icon: Mountains,
-    },
-    {
-      name: t('whoUses.travelDesigners'),
-      icon: Route,
-    },
+    { name: t('whoUses.travelers'), icon: PersonThinking },
+    { name: t('whoUses.organizers'), icon: Compass },
+    { name: t('whoUses.agencies'), icon: Route },
+    { name: t('whoUses.teams'), icon: PersonSitting },
   ];
 
   return (

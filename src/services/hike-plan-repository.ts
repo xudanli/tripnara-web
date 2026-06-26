@@ -15,19 +15,7 @@ import {
   isUserAuthenticated,
   resolveHikePlanStorageMode,
 } from '@/lib/hike-plan-storage';
-import type {
-  CreateHikePlanRequest,
-  GenerateHikeReviewRequest,
-  GpsTrackResponse,
-  HikePlanPrepData,
-  HikePlanRecord,
-  HikeReviewResponse,
-  OnTrailLiveStateDto,
-  UpdateHikePlanPrepRequest,
-  UpdateHikePlanRequest,
-  UpdateOnTrailLiveStateRequest,
-  UploadTrackPointsRequest,
-} from '@/types/hike-plan';
+import type { CreateHikePlanRequest, GenerateHikeReviewRequest, GpsTrackResponse, HikePlanRecord, HikeReviewResponse, UpdateHikePlanPrepRequest, UpdateHikePlanRequest, UpdateOnTrailLiveStateRequest, UploadTrackPointsRequest } from '@/types/hike-plan';
 import type { HikeReview } from '@/types/trail';
 import { summarizeTrackPoints } from '@/lib/geo-track';
 import { normalizeHikePlanPrep } from '@/lib/normalize-hike-plan-prep';

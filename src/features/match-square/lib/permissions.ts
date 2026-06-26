@@ -1,21 +1,36 @@
 import type { MatchSquareAccess } from '@/types/match-square';
+import type { AccountCapabilities } from '@/types/account-governance';
 import type { OdysseyOnboardingStatus } from '@/types/odyssey-intake';
+import {
+  defaultMatchSquareAccessR0,
+  deriveMatchSquareAccessFromCapabilities,
+  publishingBlockReason,
+} from '@/lib/account-governance';
 
+/**
+ * Match Square 访问权限（R0：与订阅/入网解耦，公开发布依赖 PublishingPermission）
+ */
 export function deriveMatchSquareAccess(
-  onboarding: OdysseyOnboardingStatus | undefined
+  onboarding?: OdysseyOnboardingStatus,
+  capabilities?: AccountCapabilities | null
 ): MatchSquareAccess {
-  const quizComplete = onboarding?.quizComplete === true;
-  return {
-    canBrowse: true,
-    canPost: quizComplete,
-    canApply: quizComplete,
-    quizComplete,
-  };
+  if (capabilities) {
+    return deriveMatchSquareAccessFromCapabilities(capabilities);
+  }
+
+  const base = defaultMatchSquareAccessR0();
+  if (onboarding?.quizComplete) {
+    return { ...base, canApply: true, quizComplete: true };
+  }
+  return base;
 }
 
-export function permissionBlockMessage(action: 'post' | 'apply'): string {
+export function permissionBlockMessage(
+  action: 'post' | 'apply',
+  capabilities?: AccountCapabilities | null
+): string {
   if (action === 'post') {
-    return '完成 Odyssey Premium 入网（MBTI 自选 + 背书 + 行中博弈题）后，才能发起招募帖。';
+    return publishingBlockReason(capabilities?.publishingPermission ?? null);
   }
-  return '完成 Odyssey Premium 入网后，才能申请加入队伍。';
+  return '请完成手机号或邮箱验证后，再申请加入项目。';
 }

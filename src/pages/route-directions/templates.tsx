@@ -184,7 +184,7 @@ export default function RouteTemplatesPage() {
     
     // 显示成功提示（优先展示接口返回的 message）
     toast.success('行程创建成功', {
-      description: message ?? '正在跳转到行程库...',
+      description: message ?? '正在跳转到规划工作台...',
       duration: 3000,
     });
     
@@ -205,11 +205,10 @@ export default function RouteTemplatesPage() {
         // 不阻止导航，可能只是暂时的权限问题
       }
       
-      // 导航到行程库（显示新创建的行程）
-      console.log('🔄 [RouteTemplates] 导航到行程库');
-      // 设置刷新标记（备用机制）
+      // 导航到规划工作台（与 NL 建行程一致，便于立即查看 POI 时间轴）
+      console.log('🔄 [RouteTemplates] 导航到规划工作台');
       sessionStorage.setItem('trips-page-should-refresh', 'true');
-      navigate('/dashboard/trips', { state: { from: 'create', tripId } });
+      navigate(`/dashboard/plan-studio?tripId=${tripId}`, { state: { from: 'create', tripId } });
     } catch (err: any) {
       console.error('❌ [RouteTemplates] 创建行程后导航失败:', err);
       toast.error('行程创建成功，但跳转失败，请手动访问行程库');
@@ -516,6 +515,7 @@ export default function RouteTemplatesPage() {
           defaultDurationDays={selectedTemplate.durationDays}
           defaultPacePreference={selectedTemplate.defaultPacePreference}
           defaultDestination={selectedTemplate.routeDirection?.countryCode} // 🆕 从模板中获取目的地
+          dayPlans={selectedTemplate.dayPlans}
           open={createDialogOpen}
           onOpenChange={(open) => {
             setCreateDialogOpen(open);

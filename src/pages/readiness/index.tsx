@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { tripsApi } from '@/api/trips';
 import { readinessApi } from '@/api/readiness';
+import { buildDimensionFindingsFallback } from '@/lib/readiness-dimension-detail.util';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,24 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { 
-  AlertTriangle, 
-  CheckCircle2, 
-  Share2, 
-  Download, 
-  Eye,
-  RefreshCw,
-  Play,
-  Wrench,
-  Calendar,
-  MapPin,
-  MoreVertical,
-  ListChecks,
-  ExternalLink,
-  Cloud,
-  Shield,
-  Route,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Share2, Download, Eye, RefreshCw, Play, Wrench, Calendar, MapPin, MoreVertical, ExternalLink, Cloud, Shield, Route } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import type { TripDetail, EvidenceItem as TripEvidenceItem, EvidenceType } from '@/types/trip';
@@ -70,7 +54,13 @@ import { adaptTripEvidenceListToReadiness } from '@/utils/evidence-adapter'; // 
 import { useTripPermissions, useAuth } from '@/hooks'; // 🆕 权限 Hook 和用户认证
 import ReadinessStatusBadge from '@/components/readiness/ReadinessStatusBadge';
 import ScoreGauge from '@/components/readiness/ScoreGauge';
-import BlockerCard from '@/components/readiness/BlockerCard';
+import ReadinessScoreDimensions from '@/components/readiness/ReadinessScoreDimensions';
+import BlockerWithCascadeCard from '@/components/readiness/BlockerWithCascadeCard';
+import CoverageDisclosureFootnote from '@/components/readiness/CoverageDisclosureFootnote';
+import RepairConsensusGate from '@/components/readiness/RepairConsensusGate';
+import { partitionCascadeHintsByBlockers } from '@/lib/blocker-cascade-match.util';
+import { normalizeCoverageDisclosure } from '@/lib/coverage-disclosure.util';
+import type { CoverageDisclosure } from '@/types/coverage-disclosure';
 import RepairOptionCard from '@/components/readiness/RepairOptionCard';
 import BreakdownBarList from '@/components/readiness/BreakdownBarList';
 import EvidenceListItem from '@/components/readiness/EvidenceListItem'; // 🆕 启用证据列表项组件
@@ -81,7 +71,6 @@ import TaskProgressDialog from '@/components/readiness/TaskProgressDialog'; // �
 import EvidenceFilters, { type EvidenceFiltersState } from '@/components/readiness/EvidenceFilters'; // 🆕 证据过滤和排序组件
 import CoverageMiniMap from '@/components/readiness/CoverageMiniMap';
 import RiskCard from '@/components/readiness/RiskCard';
-import ChecklistSection from '@/components/readiness/ChecklistSection';
 import PackingListTab from '@/components/readiness/PackingListTab';
 import ReadinessDisclaimerComponent from '@/components/readiness/ReadinessDisclaimer'; // 🆕 免责声明组件
 import { planningWorkbenchApi } from '@/api/planning-workbench'; // 🆕 规划工作台 API
@@ -90,6 +79,23 @@ import { HikingTrailReadinessPanel } from '@/components/hiking/HikingTrailReadin
 import { HikingAuditCard } from '@/components/hiking/HikingAuditCard';
 import { tripIncludesHiking } from '@/lib/trip-hiking';
 import { inferIcelandInfoParams } from '@/utils/iceland-info-inference'; // 🆕 冰岛信息源参数推断
+import CapabilityPackCard from '@/components/readiness/CapabilityPackCard';
+import PreparationChecklistPanel from '@/components/readiness/PreparationChecklistPanel';
+import CascadeImpactPanel from '@/components/readiness/CascadeImpactPanel';
+import CascadeImpactTab from '@/components/readiness/CascadeImpactTab';
+import GuardianNegotiationPanel from '@/components/readiness/GuardianNegotiationPanel';
+import { getDaysUntilTripStart, getTripReadinessPhase, getTripReadinessPhaseFromTrip, getCapabilityPackPhaseHint } from '@/lib/trip-readiness-phase.util';
+import type { CascadeAffectedItem, CascadeCausalPreAnalysis, CascadeUiHint } from '@/types/readiness-cascade';
+import type { GuardianNegotiationResult } from '@/types/readiness-guardian-negotiation';
+import {
+  extractAffectedFromDependencyImpact,
+  normalizeCascadeUiHints,
+} from '@/lib/readiness-cascade.util';
+import { normalizeGuardianNegotiationResult } from '@/lib/readiness-guardian-negotiation.util';
+import {
+  resolveCascadeHintsForDev,
+  resolveGuardianNegotiationForDev,
+} from '@/lib/readiness-cascade-mock.util';
 // import CapabilityPackPersonaInsights from '@/components/readiness/CapabilityPackPersonaInsights'; // 暂时移除：信息重复
 
 export default function ReadinessPage() {
@@ -118,7 +124,7 @@ export default function ReadinessPage() {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [readinessData, setReadinessData] = useState<ReadinessData | null>(null);
   const [rawReadinessResult, setRawReadinessResult] = useState<ReadinessCheckResult | null>(null);
-  const [riskWarnings, setRiskWarnings] = useState<RiskWarningsResponse | null>(null); // 🆕 增强版风险预警数据
+  const [riskWarnings, _setRiskWarnings] = useState<RiskWarningsResponse | null>(null); // 🆕 增强版风险预警数据
   const [selectedBlockerId, setSelectedBlockerId] = useState<string | null>(null);
   const [selectedRepairOptionId, setSelectedRepairOptionId] = useState<string | null>(null);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -149,6 +155,9 @@ export default function ReadinessPage() {
       evidenceTypes: EvidenceType[];
       affectedPois: number[];
     }>;
+    readinessPhase?: 'planning' | 'pre_departure' | 'in_trip' | 'past';
+    phaseHint?: string;
+    deferredEvidenceCount?: number;
   } | null>(null);
   const [loadingCompleteness, setLoadingCompleteness] = useState(false);
   // 🆕 证据获取建议状态
@@ -230,6 +239,12 @@ export default function ReadinessPage() {
   const [loadingScoreBreakdown, setLoadingScoreBreakdown] = useState(false);  // 分数加载状态
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);  // 当前选中的维度（用于显示 findings）
   const [selectedBlockerMessage, setSelectedBlockerMessage] = useState<string | null>(null);  // 当前选中的阻塞项描述
+  const [repairCascadeHints, setRepairCascadeHints] = useState<CascadeUiHint[]>([]);
+  const [repairCascadePreAnalysis, setRepairCascadePreAnalysis] = useState<CascadeCausalPreAnalysis | null>(null);
+  const [repairDependencyImpact, setRepairDependencyImpact] = useState<Record<string, unknown> | null>(null);
+  const [repairGuardianNegotiation, setRepairGuardianNegotiation] = useState<GuardianNegotiationResult | null>(null);
+  const [repairGuardianMock, setRepairGuardianMock] = useState(false);
+  const [repairForceConfirmed, setRepairForceConfirmed] = useState(false);
 
   useEffect(() => {
     if (trailRouteId != null) {
@@ -1374,6 +1389,7 @@ export default function ReadinessPage() {
   const handleFixBlocker = async (blockerId: string) => {
     if (!tripId) return;
     setSelectedBlockerId(blockerId);
+    setRepairForceConfirmed(false);
     
     try {
       // 调用 API 获取修复方案
@@ -1382,6 +1398,24 @@ export default function ReadinessPage() {
       
       // 保存阻塞项描述
       setSelectedBlockerMessage(response.blockerMessage || null);
+      const { hints: cascadeHints } = resolveCascadeHintsForDev(
+        normalizeCascadeUiHints(response.cascadeUiHints)
+      );
+      setRepairCascadeHints(cascadeHints);
+      setRepairCascadePreAnalysis(response.causalPreAnalysis ?? null);
+      setRepairDependencyImpact(
+        response.dependencyImpact ??
+          ((response as { dependency_impact?: Record<string, unknown> }).dependency_impact ?? null)
+      );
+
+      const guardianRaw =
+        response.guardianNegotiation ??
+        (response as { guardian_negotiation?: unknown }).guardian_negotiation;
+      const { data: guardianData, isMock: guardianIsMock } = resolveGuardianNegotiationForDev(
+        normalizeGuardianNegotiationResult(guardianRaw)
+      );
+      setRepairGuardianNegotiation(guardianData);
+      setRepairGuardianMock(guardianIsMock);
       
       setReadinessData((prev) => {
         if (!prev) return null;
@@ -1402,6 +1436,12 @@ export default function ReadinessPage() {
       // 显示错误信息，而不是使用模拟数据
       console.error('Failed to load repair options, showing error instead of mock data');
       
+      setRepairCascadeHints([]);
+      setRepairCascadePreAnalysis(null);
+      setRepairDependencyImpact(null);
+      setRepairGuardianNegotiation(null);
+      setRepairGuardianMock(false);
+      
       // 清除之前选中的 blocker，避免显示不相关的数据
       setReadinessData((prev) => {
         if (!prev) return null;
@@ -1417,6 +1457,18 @@ export default function ReadinessPage() {
     }
   };
 
+  const scrollToRepairPreview = () => {
+    document.getElementById('readiness-repair-preview')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
+
+  const handleDiscussCascadeWithAi = (_hint: CascadeUiHint) => {
+    if (!tripId) return;
+    navigate(`/dashboard/plan-studio?tripId=${tripId}&assistant=open`);
+  };
+
   const handleApplyFix = async (optionId: string) => {
     if (!tripId || !selectedBlockerId) return;
     
@@ -1427,6 +1479,11 @@ export default function ReadinessPage() {
       await loadData();
       setSelectedBlockerId(null);
       setSelectedRepairOptionId(null);
+      setRepairCascadeHints([]);
+      setRepairCascadePreAnalysis(null);
+      setRepairDependencyImpact(null);
+      setRepairGuardianNegotiation(null);
+      setRepairGuardianMock(false);
       setMobileSheetOpen(false);
     } catch (err) {
       console.error('Failed to apply fix:', err);
@@ -1521,7 +1578,7 @@ export default function ReadinessPage() {
       
       // 显示成功提示
       alert(t('dashboard.readiness.page.addToChecklistSuccess', {
-        defaultValue: `已成功添加 ${response.addedCount} 条规则到准备清单`,
+        defaultValue: `已成功添加 ${response.addedCount} 条到行前准备清单`,
         count: response.addedCount,
       }));
       
@@ -1540,6 +1597,33 @@ export default function ReadinessPage() {
   const displayedBlockers = showAllBlockers 
     ? readinessData?.blockers || []
     : (readinessData?.blockers || []).slice(0, 3);
+
+  const scoreCascadeDisplay = useMemo(
+    () => resolveCascadeHintsForDev(scoreBreakdown?.cascadeUiHints),
+    [scoreBreakdown?.cascadeUiHints]
+  );
+
+  const repairCascadeAffected = useMemo((): CascadeAffectedItem[] => {
+    const fromDependency = extractAffectedFromDependencyImpact(repairDependencyImpact);
+    return fromDependency.length > 0 ? fromDependency : [];
+  }, [repairDependencyImpact]);
+
+  const scoreCoverageDisclosure = useMemo((): CoverageDisclosure | null => {
+    const raw =
+      scoreBreakdown?.coverageDisclosure ??
+      (scoreBreakdown as { coverage_disclosure?: unknown } | null)?.coverage_disclosure;
+    return normalizeCoverageDisclosure(raw);
+  }, [scoreBreakdown]);
+
+  const cascadePartition = useMemo(() => {
+    return partitionCascadeHintsByBlockers(
+      readinessData?.blockers ?? [],
+      scoreCascadeDisplay.hints
+    );
+  }, [readinessData?.blockers, scoreCascadeDisplay.hints]);
+
+  const repairApplyBlocked =
+    repairGuardianNegotiation?.consensus === 'BLOCKED' && !repairForceConfirmed;
 
   if (trailRouteId != null) {
     return (
@@ -1605,9 +1689,13 @@ export default function ReadinessPage() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold">{trip.destination || t('dashboard.readiness.page.untitledTrip')}</h1>
                 <Badge variant="outline" className="text-xs">
-                  {trip.pacingConfig?.level === 'STEADY' ? t('dashboard.readiness.page.pacingLevel.steady') :
-                   trip.pacingConfig?.level === 'BALANCED' ? t('dashboard.readiness.page.pacingLevel.balanced') :
-                   trip.pacingConfig?.level === 'EXPLORATORY' ? t('dashboard.readiness.page.pacingLevel.exploratory') : t('dashboard.readiness.page.pacingLevel.standard')}
+                  {(() => {
+                    const level = trip.pacingConfig?.level as string | undefined;
+                    return level === 'STEADY' || level === 'steady' ? t('dashboard.readiness.page.pacingLevel.steady') :
+                      level === 'BALANCED' || level === 'balanced' ? t('dashboard.readiness.page.pacingLevel.balanced') :
+                      level === 'EXPLORATORY' || level === 'exploratory' ? t('dashboard.readiness.page.pacingLevel.exploratory') :
+                      t('dashboard.readiness.page.pacingLevel.standard');
+                  })()}
                 </Badge>
               </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -1630,9 +1718,17 @@ export default function ReadinessPage() {
             </div>
 
             {/* 中间：Readiness 状态和分数 */}
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-3 min-w-[200px]">
               <ReadinessStatusBadge status={readinessData.status} size="lg" />
               <ScoreGauge score={readinessData.score.overall} size={100} />
+              {scoreBreakdown?.score ? (
+                <ReadinessScoreDimensions
+                  score={scoreBreakdown.score}
+                  softenLowScores={isReady}
+                  defaultCollapsed
+                  className="w-full max-w-xs"
+                />
+              ) : null}
               {readinessData.executableWindow && (
                 <div className="text-xs text-muted-foreground text-center">
                   Best window: {readinessData.executableWindow.start}–{readinessData.executableWindow.end}
@@ -1705,6 +1801,22 @@ export default function ReadinessPage() {
               </div>
             </div>
           )}
+
+          {scoreBreakdown?.guardianNegotiation ? (
+            <div className="mt-4">
+              <GuardianNegotiationPanel
+                negotiation={scoreBreakdown.guardianNegotiation}
+                compact
+              />
+            </div>
+          ) : null}
+
+          {scoreCoverageDisclosure ? (
+            <div className="mt-3">
+              <CoverageDisclosureFootnote disclosure={scoreCoverageDisclosure} />
+            </div>
+          ) : null}
+
         </div>
       </div>
 
@@ -1791,7 +1903,7 @@ export default function ReadinessPage() {
                               ...risk,
                               // 将 ScoreRisk 转换为 EnhancedRisk 格式
                               affectedPois: Array.isArray(risk.affectedPois) && typeof risk.affectedPois[0] === 'string'
-                                ? risk.affectedPois.map((id, idx) => ({ id, name: id }))
+                                ? risk.affectedPois.map((id, _idx) => ({ id, name: id }))
                                 : risk.affectedPois,
                             })) as EnhancedRisk[];
                         
@@ -1854,7 +1966,7 @@ export default function ReadinessPage() {
                   ) : readinessData.watchlist && readinessData.watchlist.length > 0 ? (
                     // 回退到旧的 watchlist 数据
                     readinessData.watchlist.map((blocker) => (
-                      <BlockerCard
+                      <BlockerWithCascadeCard
                         key={blocker.id}
                         blocker={blocker}
                         onFix={handleFixBlocker}
@@ -1873,9 +1985,11 @@ export default function ReadinessPage() {
                 <div className="space-y-3">
                   {displayedBlockers.length > 0 ? (
                     displayedBlockers.map((blocker) => (
-                      <BlockerCard
+                      <BlockerWithCascadeCard
                         key={blocker.id}
                         blocker={blocker}
+                        cascadeHints={cascadePartition.byBlockerId[blocker.id]}
+                        causalPreAnalysis={scoreBreakdown?.causalPreAnalysis}
                         onFix={handleFixBlocker}
                       />
                     ))
@@ -1889,12 +2003,60 @@ export default function ReadinessPage() {
                   )}
                 </div>
               )}
+
+              {cascadePartition.orphanHints.length > 0 ? (
+                <CascadeImpactPanel
+                  hints={cascadePartition.orphanHints}
+                  causalPreAnalysis={scoreBreakdown?.causalPreAnalysis}
+                  onViewRepairOptions={() => {
+                    const targetBlockerId =
+                      selectedBlockerId ??
+                      readinessData.blockers[0]?.id ??
+                      scoreBreakdown?.findings?.find((f) => f.type === 'blocker')?.id;
+                    if (targetBlockerId) {
+                      void handleFixBlocker(targetBlockerId);
+                    } else {
+                      scrollToRepairPreview();
+                    }
+                  }}
+                  onDiscussWithAi={handleDiscussCascadeWithAi}
+                />
+              ) : null}
             </div>
 
             {/* 右列：Repair Preview (桌面端) */}
-            <div className="hidden lg:block">
+            <div id="readiness-repair-preview" className="hidden lg:block">
               <h2 className="text-lg font-semibold mb-4">{t('dashboard.readiness.page.repairPreview')}</h2>
-              {readinessData.repairOptions && readinessData.repairOptions.length > 0 ? (
+              {repairCascadeHints.length > 0 ? (
+                <div className="mb-4">
+                  <CascadeImpactPanel
+                    hints={repairCascadeHints}
+                    causalPreAnalysis={repairCascadePreAnalysis}
+                    affectedItems={repairCascadeAffected.length > 0 ? repairCascadeAffected : undefined}
+                    modeLabel={t('dashboard.readiness.cascade.previewMode', {
+                      defaultValue: '修复前预分析',
+                    })}
+                    compact
+                    showCardActions={false}
+                  />
+                </div>
+              ) : null}
+              {repairGuardianNegotiation ? (
+                <div className="mb-4">
+                  <GuardianNegotiationPanel
+                    negotiation={repairGuardianNegotiation}
+                    compact
+                    isMock={repairGuardianMock}
+                  />
+                </div>
+              ) : null}
+              <RepairConsensusGate
+                consensus={repairGuardianNegotiation?.consensus}
+                forceConfirmed={repairForceConfirmed}
+                onForceConfirm={() => setRepairForceConfirmed(true)}
+                className="mb-4"
+              />
+              {readinessData.repairOptions && readinessData.repairOptions.length > 0 && !repairApplyBlocked ? (
                 <div className="space-y-3">
                   {/* 显示阻塞项描述 */}
                   {selectedBlockerMessage && (
@@ -1912,13 +2074,21 @@ export default function ReadinessPage() {
                       key={option.id}
                       option={option}
                       isSelected={selectedRepairOptionId === option.id}
+                      applyDisabled={repairApplyBlocked}
+                      applyDisabledReason={
+                        repairApplyBlocked
+                          ? t('dashboard.readiness.repair.applyBlockedReason', {
+                              defaultValue: '三人格暂未达成共识，请先确认各方立场。',
+                            })
+                          : undefined
+                      }
                       onSelect={setSelectedRepairOptionId}
                       onApply={handleApplyFix}
                       onPreview={handlePreviewFix}
                     />
                   ))}
                 </div>
-              ) : (
+              ) : !repairApplyBlocked ? (
                 <Card>
                   <CardContent className="py-12 text-center">
                     <Wrench className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
@@ -1928,7 +2098,7 @@ export default function ReadinessPage() {
                     </p>
                   </CardContent>
                 </Card>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -1945,13 +2115,24 @@ export default function ReadinessPage() {
               }} 
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-3 md:grid-cols-6">
                 <TabsTrigger value="breakdown">{t('dashboard.readiness.page.tabs.readinessBreakdown')}</TabsTrigger>
+                <TabsTrigger value="cascade">{t('dashboard.readiness.page.tabs.cascadeImpact', { defaultValue: '级联影响' })}</TabsTrigger>
                 <TabsTrigger value="capability">{t('dashboard.readiness.page.tabs.capabilityPacks')}</TabsTrigger>
                 <TabsTrigger value="evidence">{t('dashboard.readiness.page.tabs.evidenceChain')}</TabsTrigger>
                 <TabsTrigger value="coverage">{t('dashboard.readiness.page.tabs.coverageMap')}</TabsTrigger>
                 <TabsTrigger value="packing">{t('dashboard.readiness.page.tabs.packingList')}</TabsTrigger>
               </TabsList>
+
+              <TabsContent value="cascade" className="mt-6">
+                {tripId ? (
+                  <CascadeImpactTab
+                    tripId={tripId}
+                    initialHints={scoreBreakdown?.cascadeUiHints}
+                    initialPreAnalysis={scoreBreakdown?.causalPreAnalysis}
+                  />
+                ) : null}
+              </TabsContent>
 
               <TabsContent value="breakdown" className="mt-6">
                 <Card>
@@ -2063,186 +2244,63 @@ export default function ReadinessPage() {
                       </div>
                     ) : (evaluatedPacks.length > 0 || capabilityPacks.length > 0) ? (
                       <div className="space-y-4">
-                        {/* 触发统计 */}
-                        <div className="text-sm text-muted-foreground mb-4">
-                          {evaluatedPacks.length > 0 ? (
-                            t('dashboard.readiness.page.packsTriggered', {
-                              triggered: evaluatedPacks.filter((p) => p.triggered).length,
-                              total: evaluatedPacks.length,
+                        <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground leading-relaxed">
+                          {t('dashboard.readiness.page.capabilityPacksIntro', {
+                            defaultValue: 'TripNARA 会根据路线长度、季节和地形，自动识别需要额外准备的场景。下方是提前准备建议，不是实时警报。',
+                          })}
+                          {trip?.startDate && getTripReadinessPhaseFromTrip(trip) === 'planning' && (
+                            <p className="mt-1.5 text-blue-700">
+                              {getCapabilityPackPhaseHint(
+                                getTripReadinessPhaseFromTrip(trip),
+                                getDaysUntilTripStart(trip.startDate),
+                                getLangCode() === 'zh' ? 'zh' : 'en',
+                              )}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="text-sm text-muted-foreground">
+                          {evaluatedPacks.filter((p) => p.triggered).length > 0 ? (
+                            t('dashboard.readiness.page.packsIdentified', {
+                              count: evaluatedPacks.filter((p) => p.triggered).length,
+                              defaultValue: `识别到 ${evaluatedPacks.filter((p) => p.triggered).length} 类特殊场景`,
                             })
                           ) : (
                             t('dashboard.readiness.page.noPacksTriggered', {
-                              defaultValue: '当前行程未触发任何能力包',
+                              defaultValue: '当前行程未识别到特殊准备场景',
                             })
                           )}
                         </div>
                         
-                        {/* 触发的能力包详情 */}
                         {evaluatedPacks.filter(p => p.triggered).length > 0 && (
                           <div className="space-y-4">
-                            <h4 className="text-sm font-medium">
-                              {t('dashboard.readiness.page.triggeredPacksTitle', { defaultValue: '已触发的能力包' })}
-                            </h4>
-                            {evaluatedPacks.filter(p => p.triggered).map((result, index) => {
-                              // 从能力包列表中查找详细信息
+                            {evaluatedPacks.filter(p => p.triggered).map((result) => {
                               const packInfo = capabilityPacks.find(p => p.type === result.packType);
-                              // 优先使用翻译，其次使用 API 返回的 displayName
                               const displayName = t(`dashboard.readiness.page.capabilityPackName.${result.packType}`, { 
                                 defaultValue: packInfo?.displayName || result.packType 
                               });
-                              const description = packInfo?.description || '';
-                              
+                              const tripPhase = getTripReadinessPhaseFromTrip(trip);
+                              const daysUntil = trip?.startDate ? getDaysUntilTripStart(trip.startDate) : undefined;
+
                               return (
-                                <Card key={index} className="border-primary">
-                                  <CardContent className="p-4">
-                                    <div className="space-y-3">
-                                      {/* 能力包标题和状态 */}
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div className="flex-1">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <h3 className="font-semibold text-sm">{displayName}</h3>
-                                            <Badge className="bg-primary text-primary-foreground text-xs">
-                                              {t('dashboard.readiness.page.triggered')}
-                                            </Badge>
-                                          </div>
-                                          {description && (
-                                            <p className="text-xs text-muted-foreground">
-                                              {description}
-                                            </p>
-                                          )}
-                                          {/* 触发原因（新增） */}
-                                          {result.triggerReason && (
-                                            <p className="text-xs text-primary mt-1 flex items-center gap-1">
-                                              <span className="font-medium">
-                                                {t('dashboard.readiness.page.triggerReason', { defaultValue: '触发原因' })}:
-                                              </span>
-                                              <span>{result.triggerReason}</span>
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                      
-                                      {/* 触发的规则 */}
-                                      {result.rules && result.rules.length > 0 && (
-                                        <div className="space-y-2">
-                                          <h4 className="text-xs font-medium text-muted-foreground">
-                                            {t('dashboard.readiness.page.triggeredRules', { defaultValue: '触发的规则' })}
-                                          </h4>
-                                          <div className="space-y-1">
-                                            {result.rules.filter(r => r.triggered).map((rule, ruleIndex) => (
-                                              <div
-                                                key={ruleIndex}
-                                                className={`p-2 rounded text-xs ${
-                                                  rule.level === 'blocker' ? 'bg-red-50 border border-red-200' :
-                                                  rule.level === 'must' ? 'bg-orange-50 border border-orange-200' :
-                                                  rule.level === 'should' ? 'bg-yellow-50 border border-yellow-200' :
-                                                  'bg-gray-50 border border-gray-200'
-                                                }`}
-                                              >
-                                                <div className="flex items-start gap-2">
-                                                  <Badge
-                                                    variant="outline"
-                                                    className={`text-[10px] shrink-0 ${
-                                                      rule.level === 'blocker' ? 'border-red-500 text-red-700' :
-                                                      rule.level === 'must' ? 'border-orange-500 text-orange-700' :
-                                                      rule.level === 'should' ? 'border-yellow-600 text-yellow-700' :
-                                                      'border-gray-500 text-gray-700'
-                                                    }`}
-                                                  >
-                                                    {t(`dashboard.readiness.page.ruleLevel.${rule.level}`, { defaultValue: rule.level })}
-                                                  </Badge>
-                                                  <span className="flex-1">{rule.message}</span>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                      
-                                      {/* 危险/风险警告 */}
-                                      {result.hazards && result.hazards.length > 0 && (
-                                        <div className="space-y-2">
-                                          <h4 className="text-xs font-medium text-muted-foreground">
-                                            {t('dashboard.readiness.page.hazards', { defaultValue: '风险警告' })}
-                                          </h4>
-                                          <div className="space-y-1">
-                                            {result.hazards.map((hazard, hazardIndex) => (
-                                              <div
-                                                key={hazardIndex}
-                                                className={`p-2 rounded text-xs flex items-start gap-2 ${
-                                                  hazard.severity === 'high' ? 'bg-red-50 border border-red-200' :
-                                                  hazard.severity === 'medium' ? 'bg-yellow-50 border border-yellow-200' :
-                                                  'bg-blue-50 border border-blue-200'
-                                                }`}
-                                              >
-                                                <AlertTriangle className={`h-3 w-3 shrink-0 mt-0.5 ${
-                                                  hazard.severity === 'high' ? 'text-red-600' :
-                                                  hazard.severity === 'medium' ? 'text-yellow-600' :
-                                                  'text-blue-600'
-                                                }`} />
-                                                <div className="flex-1">
-                                                  <div className="flex items-center gap-1 mb-0.5">
-                                                    <span className="font-medium">
-                                                      {t(`dashboard.readiness.page.hazardType.${hazard.type}`, { defaultValue: hazard.type })}
-                                                    </span>
-                                                    <Badge
-                                                      variant="outline"
-                                                      className={`text-[10px] ${
-                                                        hazard.severity === 'high' ? 'border-red-500 text-red-700' :
-                                                        hazard.severity === 'medium' ? 'border-yellow-600 text-yellow-700' :
-                                                        'border-blue-500 text-blue-700'
-                                                      }`}
-                                                    >
-                                                      {t(`dashboard.readiness.page.hazardSeverity.${hazard.severity}`, { defaultValue: hazard.severity })}
-                                                    </Badge>
-                                                  </div>
-                                                  <p className="text-muted-foreground">{hazard.summary}</p>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                      
-                                      {/* 操作按钮 */}
-                                      <div className="flex items-center gap-2 pt-2 border-t">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="text-xs"
-                                          disabled={addingToChecklist === result.packType || !result.rules?.length}
-                                          onClick={() => {
-                                            if (result.rules && result.rules.length > 0) {
-                                              handleAddCapabilityPackRulesToChecklist(
-                                                result.packType,
-                                                result.rules.filter(r => r.triggered)
-                                              );
-                                            }
-                                          }}
-                                        >
-                                          {addingToChecklist === result.packType ? (
-                                            <Spinner className="h-3 w-3 mr-1" />
-                                          ) : (
-                                            <ListChecks className="h-3 w-3 mr-1" />
-                                          )}
-                                          {addingToChecklist === result.packType
-                                            ? t('dashboard.readiness.page.adding', { defaultValue: '添加中...' })
-                                            : t('dashboard.readiness.page.addRulesToChecklist', { defaultValue: '添加到清单' })
-                                          }
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="text-xs"
-                                          onClick={() => setActiveTab('evidence')}
-                                        >
-                                          <ExternalLink className="h-3 w-3 mr-1" />
-                                          {t('dashboard.readiness.page.viewInEvidenceChain', { defaultValue: '查看证据' })}
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </CardContent>
-                                </Card>
+                                <CapabilityPackCard
+                                  key={result.packType}
+                                  result={result}
+                                  displayName={displayName}
+                                  description={packInfo?.description}
+                                  readinessPhase={tripPhase}
+                                  daysUntilStart={daysUntil}
+                                  addingToChecklist={addingToChecklist === result.packType}
+                                  onAddToChecklist={() => {
+                                    if (result.rules && result.rules.length > 0) {
+                                      handleAddCapabilityPackRulesToChecklist(
+                                        result.packType,
+                                        result.rules.filter(r => r.triggered),
+                                      );
+                                    }
+                                  }}
+                                  onViewChecklist={() => setActiveTab('evidence')}
+                                />
                               );
                             })}
                           </div>
@@ -2395,173 +2453,19 @@ export default function ReadinessPage() {
                         </div>
                       )}
 
-                      {/* Capability Pack Checklist Items Section */}
-                      <div className="space-y-3">
-                        <h3 className="text-sm font-semibold">
-                          {t('dashboard.readiness.page.capabilityPackChecklist', { defaultValue: '能力包准备清单' })}
-                        </h3>
-                        {loadingChecklistItems ? (
-                          <div className="flex items-center justify-center py-4">
-                            <Spinner className="w-5 h-5" />
-                          </div>
-                        ) : capabilityPackChecklistItems.length > 0 ? (
-                          <div className="space-y-2">
-                            {capabilityPackChecklistItems.map((item) => (
-                              <div 
-                                key={item.id}
-                                className={`p-3 border rounded-lg text-sm ${
-                                  item.checked ? 'bg-green-50 border-green-200' :
-                                  item.level === 'blocker' ? 'bg-red-50 border-red-200' :
-                                  item.level === 'must' ? 'bg-orange-50 border-orange-200' :
-                                  item.level === 'should' ? 'bg-yellow-50 border-yellow-200' :
-                                  'bg-gray-50 border-gray-200'
-                                }`}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={item.checked}
-                                    onChange={async (e) => {
-                                      if (!tripId) return;
-                                      try {
-                                        await readinessApi.updateCapabilityPackChecklistItemStatus(
-                                          tripId,
-                                          item.id,
-                                          e.target.checked
-                                        );
-                                        // 重新加载清单项
-                                        loadCapabilityPackChecklistItems(tripId);
-                                      } catch (err) {
-                                        console.error('更新清单项状态失败:', err);
-                                      }
-                                    }}
-                                    className="mt-0.5 h-4 w-4 rounded border-gray-300"
-                                  />
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <Badge
-                                        variant="outline"
-                                        className={`text-[10px] ${
-                                          item.level === 'blocker' ? 'border-red-500 text-red-700' :
-                                          item.level === 'must' ? 'border-orange-500 text-orange-700' :
-                                          item.level === 'should' ? 'border-yellow-600 text-yellow-700' :
-                                          'border-gray-500 text-gray-700'
-                                        }`}
-                                      >
-                                        {t(`dashboard.readiness.page.ruleLevel.${item.level}`, { defaultValue: item.level })}
-                                      </Badge>
-                                      <span className="text-xs text-muted-foreground">
-                                        {t(`dashboard.readiness.page.capabilityPackName.${item.sourcePackType}`, { 
-                                          defaultValue: item.sourcePackType 
-                                        })}
-                                      </span>
-                                    </div>
-                                    <p className={item.checked ? 'line-through text-muted-foreground' : ''}>
-                                      {item.message}
-                                    </p>
-                                    {item.tasks && item.tasks.length > 0 && (
-                                      <ul className="mt-2 text-xs text-muted-foreground space-y-1">
-                                        {item.tasks.map((task, taskIndex) => (
-                                          <li key={taskIndex} className="flex items-start gap-1">
-                                            <span>•</span>
-                                            <span>{task}</span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-center py-4 text-muted-foreground text-sm border rounded-lg bg-muted/30">
-                            {t('dashboard.readiness.page.noCapabilityPackChecklist', { 
-                              defaultValue: '暂无能力包清单项，可在"能力包"标签页中添加' 
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Checklists Section */}
-                      {rawReadinessResult && rawReadinessResult.findings && rawReadinessResult.findings.length > 0 && (
-                        <div className="space-y-4">
-                          <h3 className="text-sm font-semibold">{t('dashboard.readiness.page.checklists')}</h3>
-                          {rawReadinessResult.findings.map((finding, findingIndex) => {
-                            // 收集所有 blockers/must/should/optional 项目
-                            const allBlockers: any[] = finding.blockers || [];
-                            const allMust: any[] = finding.must || [];
-                            const allShould: any[] = finding.should || [];
-                            const allOptional: any[] = finding.optional || [];
-
-                            if (allBlockers.length === 0 && allMust.length === 0 && allShould.length === 0 && allOptional.length === 0) {
-                              return null;
-                            }
-
-                            // 获取行程开始日期用于计算截止日期
-                            const tripStartDate = trip?.startDate;
-
-                            // 使用 destinationId 或 packId 作为标题
-                            const findingTitle = finding.destinationId || finding.packId;
-
-                            return (
-                              <div key={findingIndex} className="space-y-3">
-                                {findingTitle && (
-                                  <h4 className="text-xs font-medium text-muted-foreground uppercase">{findingTitle}</h4>
-                                )}
-                                <div className="space-y-3">
-                                  {allBlockers.length > 0 && (
-                                    <ChecklistSection
-                                      title={t('dashboard.readiness.page.blockers')}
-                                      items={allBlockers}
-                                      level="blocker"
-                                      tripStartDate={tripStartDate}
-                                      trip={trip}
-                                      tripId={tripId || undefined}
-                                      onViewBlockerSolution={(blockerId) => void handleFixBlocker(blockerId)}
-                                    />
-                                  )}
-                                  {allMust.length > 0 && (
-                                    <ChecklistSection
-                                      title={t('dashboard.readiness.page.must')}
-                                      items={allMust}
-                                      level="must"
-                                      tripStartDate={tripStartDate}
-                                      trip={trip}
-                                      tripId={tripId || undefined}
-                                      onFindingUpdated={async (findingId, updatedFinding) => {
-                                        // 重新加载数据以反映更新
-                                        await loadData();
-                                      }}
-                                    />
-                                  )}
-                                  {allShould.length > 0 && (
-                                    <ChecklistSection
-                                      title={t('dashboard.readiness.page.should')}
-                                      items={allShould}
-                                      level="should"
-                                      tripStartDate={tripStartDate}
-                                    />
-                                  )}
-                                  {allOptional.length > 0 && (
-                                    <ChecklistSection
-                                      title={t('dashboard.readiness.page.optional')}
-                                      items={allOptional}
-                                      level="optional"
-                                      tripStartDate={tripStartDate}
-                                      tripId={tripId || undefined}
-                                      onFindingUpdated={async (findingId, updatedFinding) => {
-                                        // 重新加载数据以反映更新
-                                        await loadData();
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <PreparationChecklistPanel
+                        tripId={tripId || undefined}
+                        trip={trip}
+                        readinessResult={rawReadinessResult}
+                        capabilityPackItems={capabilityPackChecklistItems}
+                        loadingCapabilityPack={loadingChecklistItems}
+                        onReloadCapabilityPack={() => {
+                          if (tripId) loadCapabilityPackChecklistItems(tripId);
+                        }}
+                        onViewBlockerSolution={(blockerId) => void handleFixBlocker(blockerId)}
+                        onReloadReadiness={loadData}
+                        onGoToCapabilityPacks={() => setActiveTab('capability')}
+                      />
 
                       {/* 🆕 证据完整性检查卡片 */}
                       {completenessData && (
@@ -2569,6 +2473,9 @@ export default function ReadinessPage() {
                           completenessScore={completenessData.completenessScore}
                           missingEvidence={completenessData.missingEvidence}
                           recommendations={completenessData.recommendations}
+                          readinessPhase={completenessData.readinessPhase}
+                          phaseHint={completenessData.phaseHint}
+                          deferredEvidenceCount={completenessData.deferredEvidenceCount}
                           onFetchEvidence={(evidenceTypes, affectedPois) =>
                             handleFetchEvidence(evidenceTypes, affectedPois, false)
                           }
@@ -3038,7 +2945,12 @@ export default function ReadinessPage() {
                 buffers: 'buffer',
               };
               const category = selectedDimension ? categoryMap[selectedDimension] : '';
-              const dimensionFindings = scoreBreakdown?.findings?.filter(f => f.category === category) || [];
+              const apiDimensionFindings =
+                scoreBreakdown?.findings?.filter((f) => f.category === category) || [];
+              const dimensionFindings =
+                apiDimensionFindings.length > 0
+                  ? apiDimensionFindings
+                  : buildDimensionFindingsFallback(selectedDimension, coverageMapData);
               const dimensionRisks = selectedDimension === 'safetyRisk' ? (scoreBreakdown?.risks || []) : [];
               const dimensionScore = selectedDimension ? readinessData?.score?.[selectedDimension as keyof typeof readinessData.score] : 0;
               
@@ -3071,16 +2983,41 @@ export default function ReadinessPage() {
                       ) : (
                         <>
                           <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-3" />
-                          <p className="text-sm text-muted-foreground">
-                            {t('dashboard.readiness.page.noDetailedFindings', { 
-                              defaultValue: '暂无详细发现项。分数基于行程整体情况计算。' 
-                            })}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {t('dashboard.readiness.page.scoreExplanation', {
-                              defaultValue: '分数反映了该维度的整体健康程度，可能受多种因素影响。'
-                            })}
-                          </p>
+                          {selectedDimension === 'evidenceCoverage' && coverageMapData?.summary ? (
+                            <div className="text-sm text-muted-foreground space-y-2 text-left px-2">
+                              <p>
+                                {t('dashboard.readiness.page.evidenceSummary', {
+                                  defaultValue:
+                                    'POI 证据：{{covered}}/{{total}} 完整覆盖，{{partial}} 部分，{{uncovered}} 未覆盖',
+                                  covered: coverageMapData.summary.coveredPois,
+                                  total: coverageMapData.summary.totalPois,
+                                  partial: coverageMapData.summary.partialPois,
+                                  uncovered: coverageMapData.summary.uncoveredPois,
+                                })}
+                              </p>
+                              <p className="text-xs">
+                                {t('dashboard.readiness.page.scoreExplanation', {
+                                  defaultValue:
+                                    '分数反映了该维度的整体健康程度，可能受多种因素影响。',
+                                })}
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm text-muted-foreground">
+                                {t('dashboard.readiness.page.noDetailedFindings', {
+                                  defaultValue:
+                                    '暂无详细发现项。分数基于行程整体情况计算。',
+                                })}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                {t('dashboard.readiness.page.scoreExplanation', {
+                                  defaultValue:
+                                    '分数反映了该维度的整体健康程度，可能受多种因素影响。',
+                                })}
+                              </p>
+                            </>
+                          )}
                         </>
                       )}
                     </div>
@@ -3181,7 +3118,31 @@ export default function ReadinessPage() {
             <SheetTitle>{t('dashboard.readiness.page.repairOptions', { defaultValue: '修复选项' })}</SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-3 overflow-y-auto">
-            {readinessData.repairOptions && readinessData.repairOptions.length > 0 ? (
+            {repairCascadeHints.length > 0 ? (
+              <CascadeImpactPanel
+                hints={repairCascadeHints}
+                causalPreAnalysis={repairCascadePreAnalysis}
+                affectedItems={repairCascadeAffected.length > 0 ? repairCascadeAffected : undefined}
+                modeLabel={t('dashboard.readiness.cascade.previewMode', {
+                  defaultValue: '修复前预分析',
+                })}
+                compact
+                showCardActions={false}
+              />
+            ) : null}
+            {repairGuardianNegotiation ? (
+              <GuardianNegotiationPanel
+                negotiation={repairGuardianNegotiation}
+                compact
+                isMock={repairGuardianMock}
+              />
+            ) : null}
+            <RepairConsensusGate
+              consensus={repairGuardianNegotiation?.consensus}
+              forceConfirmed={repairForceConfirmed}
+              onForceConfirm={() => setRepairForceConfirmed(true)}
+            />
+            {readinessData.repairOptions && readinessData.repairOptions.length > 0 && !repairApplyBlocked ? (
               <>
                 {/* 显示阻塞项描述 */}
                 {selectedBlockerMessage && (
@@ -3199,17 +3160,25 @@ export default function ReadinessPage() {
                     key={option.id}
                     option={option}
                     isSelected={selectedRepairOptionId === option.id}
+                    applyDisabled={repairApplyBlocked}
+                    applyDisabledReason={
+                      repairApplyBlocked
+                        ? t('dashboard.readiness.repair.applyBlockedReason', {
+                            defaultValue: '三人格暂未达成共识，请先确认各方立场。',
+                          })
+                        : undefined
+                    }
                     onSelect={setSelectedRepairOptionId}
                     onApply={handleApplyFix}
                     onPreview={handlePreviewFix}
                   />
                 ))}
               </>
-            ) : (
+            ) : !repairApplyBlocked ? (
               <div className="text-center py-8 text-muted-foreground">
                 {t('dashboard.readiness.page.noRepairOptions', { defaultValue: '暂无修复选项' })}
               </div>
-            )}
+            ) : null}
           </div>
         </SheetContent>
       </Sheet>

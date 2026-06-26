@@ -6,11 +6,10 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { decisionDraftApi } from '@/api/decision-draft';
 import type { DecisionDraftVersion, VersionDiff } from '@/types/decision-draft';
-import { History, GitCompare, RotateCcw, Copy } from 'lucide-react';
+import { History, GitCompare } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -28,12 +27,12 @@ export interface VersionViewerProps {
 
 export default function VersionViewer({
   draftId,
-  onVersionSelect,
+  onVersionSelect: _onVersionSelect,
 }: VersionViewerProps) {
   const [versions, setVersions] = useState<DecisionDraftVersion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [_selectedVersionId, _setSelectedVersionId] = useState<string | null>(null);
   const [compareVersionId1, setCompareVersionId1] = useState<string | null>(null);
   const [compareVersionId2, setCompareVersionId2] = useState<string | null>(null);
   const [versionDetail, setVersionDetail] = useState<DecisionDraftVersion | null>(null);

@@ -33,9 +33,7 @@ function planMatchesSegment(plan: HikePlanRecord, segment: HikingSegment): boole
 }
 
 function isPrepComplete(plan: HikePlanRecord): boolean {
-  return Boolean(
-    plan.checklistComplete ?? plan.checklistCompleted ?? plan.permitsComplete ?? plan.permitsObtained
-  );
+  return Boolean(plan.checklistCompleted ?? plan.permitsObtained);
 }
 
 function readinessBlocked(segment: HikingSegment): boolean {

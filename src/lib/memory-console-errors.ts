@@ -1,9 +1,5 @@
 import type { AxiosError } from 'axios';
-import {
-  resolveHttpErrorUserMessage,
-  resolveLocalizedErrorMessage,
-  type TripnaraHttpError,
-} from '@/types/http-error';
+import { resolveHttpErrorUserMessage, type TripnaraHttpError } from '@/types/http-error';
 
 export const MEMORY_CONSOLE_ERROR_CODES = {
   L2_NOT_FOUND: '6003',

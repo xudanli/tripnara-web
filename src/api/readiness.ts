@@ -2,6 +2,19 @@ import apiClient from './client';
 import type {
   RepairOption,
 } from '@/types/readiness';
+import type {
+  FeasibilityIssueKind,
+  FeasibilityIssueAnchorsDto,
+  FeasibilityIssueUiHintsDto,
+  FeasibilityIssuePriority,
+  FeasibilityRepairOptionDto,
+} from '@/types/trip-feasibility-report';
+import type {
+  CascadeCausalPreAnalysis,
+  CascadeImpactResponse,
+  CascadeUiHint,
+} from '@/types/readiness-cascade';
+import type { GuardianNegotiationResult } from '@/types/readiness-guardian-negotiation';
 
 // 文档中的响应格式是 { success: true, data: T }
 interface SuccessResponse<T> {
@@ -505,6 +518,16 @@ export interface EnhancedRisk extends Risk {
   sourceType?: 'readiness' | 'capability_pack';  // 来源类型
   sourcePackType?: CapabilityPackType | string;  // 能力包类型（当 sourceType='capability_pack' 时）
   originalSeverity?: 'low' | 'medium' | 'high';   // 🆕 原始严重程度（AI增强前）
+  typeDescription?: string;
+  sources?: Array<{
+    name?: string;
+    url?: string;
+    type?: string;
+    sourceId?: string;
+    authority?: string;
+    title?: string;
+    canonicalUrl?: string;
+  }>;
 }
 
 /**
@@ -1090,6 +1113,8 @@ export const readinessApi = {
       activities?: string[];               // 活动列表
       vehicleType?: string;                // 车辆类型
       specialNeeds?: string[];            // 特殊需求
+      /** 语言：zh 时后端可返回中文名称 */
+      lang?: 'zh' | 'en';
     }
   ): Promise<{
     tripId: string;
@@ -1168,12 +1193,18 @@ export const readinessApi = {
    * 
    * 获取推荐的打包顺序步骤，帮助用户有序打包
    */
-  getPackingOrderSteps: async (): Promise<{
+  getPackingOrderSteps: async (
+    lang?: 'zh' | 'en',
+  ): Promise<{
     steps: Array<{
       order: number;
       title: string;
       description: string;
       items: string[];
+      titleZh?: string;
+      title_zh?: string;
+      descriptionZh?: string;
+      description_zh?: string;
     }>;
   }> => {
     const response = await apiClient.get<ApiResponseWrapper<{
@@ -1182,8 +1213,14 @@ export const readinessApi = {
         title: string;
         description: string;
         items: string[];
+        titleZh?: string;
+        title_zh?: string;
+        descriptionZh?: string;
+        description_zh?: string;
       }>;
-    }>>('/readiness/packing-order-steps');
+    }>>('/readiness/packing-order-steps', {
+      params: lang ? { lang } : undefined,
+    });
     return handleResponse(response);
   },
 
@@ -1193,12 +1230,18 @@ export const readinessApi = {
    * 
    * 获取出发前24小时的最终检查清单
    */
-  getPreDepartureChecklist: async (): Promise<{
+  getPreDepartureChecklist: async (
+    lang?: 'zh' | 'en',
+  ): Promise<{
     checklist: Array<{
       id: string;
       category: string;
       title: string;
       checked: boolean;
+      titleZh?: string;
+      title_zh?: string;
+      categoryZh?: string;
+      category_zh?: string;
     }>;
   }> => {
     const response = await apiClient.get<ApiResponseWrapper<{
@@ -1207,8 +1250,14 @@ export const readinessApi = {
         category: string;
         title: string;
         checked: boolean;
+        titleZh?: string;
+        title_zh?: string;
+        categoryZh?: string;
+        category_zh?: string;
       }>;
-    }>>('/readiness/pre-departure-checklist');
+    }>>('/readiness/pre-departure-checklist', {
+      params: lang ? { lang } : undefined,
+    });
     return handleResponse(response);
   },
 
@@ -1457,6 +1506,17 @@ export const readinessApi = {
   },
 
   /**
+   * 获取级联影响只读快照
+   * GET /readiness/trip/:tripId/cascade-impact
+   */
+  getCascadeImpact: async (tripId: string): Promise<CascadeImpactResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<CascadeImpactResponse>>(
+      `/readiness/trip/${tripId}/cascade-impact`
+    );
+    return handleResponse(response);
+  },
+
+  /**
    * 获取规则的用户决策问题列表
    * GET /api/readiness/trips/:tripId/decisions/:ruleId/questions
    * 
@@ -1600,6 +1660,7 @@ export interface CoverageMapPoi {
   evidenceCount: number;
   evidenceTypes: EvidenceType[];
   missingEvidence?: EvidenceType[];
+  metadata?: Record<string, any>;
 }
 
 /** 覆盖地图路段 */
@@ -1632,7 +1693,12 @@ export interface CoverageGap {
   // 优化后的新字段
   affectedDays?: number[];        // 受影响的天数列表
   affectedPois?: string[];       // 受影响的 POI ID 列表
-  evidenceStatus?: EvidenceStatus; // 证据获取状态
+  evidenceStatus?: EvidenceStatus | Array<{
+    type: EvidenceType;
+    status: EvidenceStatus;
+    lastUpdated?: string;
+    source?: string;
+  }>; // 证据获取状态
   lastUpdated?: string;          // 最后更新时间
   dataSource?: string;           // 数据来源
 }
@@ -1690,6 +1756,10 @@ export interface CoverageMapResponse {
   evidenceStatusSummary?: EvidenceStatusSummary; // 证据状态摘要
   calculatedAt?: string;                     // 计算时间戳
   dataFreshness?: DataFreshness;             // 数据新鲜度
+  readinessPhase?: 'planning' | 'pre_departure' | 'in_trip' | 'past';
+  daysUntilStart?: number;
+  phaseHint?: string;
+  deferredLiveGapCount?: number;
 }
 
 // ==================== 准备度分数类型定义 ====================
@@ -1712,10 +1782,18 @@ export interface ScoreFinding {
   category: 'evidence' | 'schedule' | 'transport' | 'safety' | 'buffer';
   message: string;
   severity: 'high' | 'medium' | 'low';
+  /** BFF / assembler 显式指定时沿用 */
+  priority?: FeasibilityIssuePriority;
+  /** 来自冲突检测时用于 priority 判定 */
+  conflictType?: string;
   affectedDays?: number[];
   actionRequired?: string;
   /** 与树形 findings 一致的可选锚点（扁平 /score 里来自覆盖缺口的项） */
   tripScope?: ReadinessTripScope;
+  issueKind?: FeasibilityIssueKind;
+  anchors?: FeasibilityIssueAnchorsDto;
+  uiHints?: FeasibilityIssueUiHintsDto;
+  repairOptions?: FeasibilityRepairOptionDto[];
 }
 
 /** 准备度风险项 */
@@ -1755,6 +1833,13 @@ export interface ScoreBreakdownResponse {
   risks: ScoreRisk[];
   summary: ScoreSummary;
   calculatedAt: string;
+  readinessPhase?: 'planning' | 'pre_departure' | 'in_trip' | 'past';
+  daysUntilStart?: number;
+  phaseHint?: string;
+  cascadeUiHints?: CascadeUiHint[];
+  causalPreAnalysis?: CascadeCausalPreAnalysis;
+  coverageDisclosure?: import('@/types/coverage-disclosure').CoverageDisclosure;
+  guardianNegotiation?: import('@/types/readiness-guardian-negotiation').GuardianNegotiationResult;
 }
 
 /** 修复选项响应 */
@@ -1762,5 +1847,9 @@ export interface RepairOptionsResponse {
   blockerId: string;
   blockerMessage: string;
   options: RepairOption[];
+  cascadeUiHints?: CascadeUiHint[];
+  causalPreAnalysis?: CascadeCausalPreAnalysis;
+  /** 原始依赖影响分析（与 route-and-run explain.dependency_impact 同形） */
+  dependencyImpact?: Record<string, unknown>;
+  guardianNegotiation?: GuardianNegotiationResult;
 }
-

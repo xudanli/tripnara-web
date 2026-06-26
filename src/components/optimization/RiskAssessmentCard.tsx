@@ -7,7 +7,6 @@
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
   Tooltip,
   TooltipContent,
@@ -16,18 +15,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { RiskAssessmentResponse, RiskFactor } from '@/types/optimization-v2';
-import {
-  AlertTriangle,
-  CheckCircle,
-  TrendingUp,
-  TrendingDown,
-  Activity,
-  Target,
-  Shield,
-  Info,
-  BarChart3,
-  Gauge,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle, TrendingDown, Target, Shield, Info, BarChart3, Gauge } from 'lucide-react';
 
 // ==================== 配置 ====================
 

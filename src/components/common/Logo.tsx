@@ -12,7 +12,7 @@ export default function Logo({
   className, 
   size = 48, 
   variant = 'full',
-  color = 'currentColor'
+  color: _color = 'currentColor'
 }: LogoProps) {
   if (variant === 'text') {
     return (

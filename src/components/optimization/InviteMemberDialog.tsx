@@ -37,7 +37,7 @@ export function InviteMemberDialog({
 }: InviteMemberDialogProps) {
   const [inviteUrl, setInviteUrl] = React.useState<string | null>(null);
   const [invites, setInvites] = React.useState<TeamInviteItem[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [_loading, setLoading] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
 
   const loadInvites = React.useCallback(async () => {

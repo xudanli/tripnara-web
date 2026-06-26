@@ -29,7 +29,7 @@ interface AssistantCenterProps {
 type FilterTab = 'all' | 'abu' | 'drdre' | 'neptune';
 // type ScopeFilter = 'all' | 'trip' | 'day' | 'item'; // 暂时未使用
 
-const personaConfig = {
+const ____personaConfig = {
   abu: {
     icon: Shield,
     label: '风险',
@@ -50,7 +50,7 @@ const personaConfig = {
 export function AssistantCenter({
   suggestions,
   loading = false,
-  trip,
+  trip: _trip,
   onSuggestionClick,
   onActionClick,
   onDismissSuggestion,

@@ -425,6 +425,7 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
                   { value: 'SHOPPING' as const, key: 'shopping' },
                   { value: 'HOTEL' as const, key: 'hotel' },
                   { value: 'TRANSIT_HUB' as const, key: 'transitHub' },
+                  { value: 'HOSPITAL' as const, key: 'hospital' },
                 ]).map(({ value, key }) => (
                   <Button
                     key={value}

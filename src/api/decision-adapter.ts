@@ -80,11 +80,12 @@ export const decisionAdapter = {
     data: ValidateSafetyRequest
   ): Promise<ValidateSafetyResponse['data']> => {
     if (USE_V1) {
-      return decisionEngineApi.validateSafety({
+      const result = await decisionEngineApi.validateSafety({
         tripId: data.tripId ?? '',
         plan: data.plan as any,
-        worldContext: data.worldContext as Record<string, unknown>,
+        worldContext: data.worldContext as unknown as Record<string, unknown>,
       });
+      return result as ValidateSafetyResponse['data'];
     }
     return decisionApi.validateSafety(data);
   },
@@ -115,12 +116,16 @@ export const decisionAdapter = {
         state: data.state,
         plan: data.plan,
       });
+      const feasible = Boolean((result as { feasible?: boolean }).feasible);
+      const violations = (result as { violations?: unknown }).violations;
+      const infeasibilityExplanation = (result as { infeasibilityExplanation?: unknown })
+        .infeasibilityExplanation;
       return {
-        isValid: result.feasible,
-        violations: result.violations as any,
+        isValid: feasible,
+        violations: violations as any,
         summary: { errorCount: 0, warningCount: 0, infoCount: 0 },
         conflicts: { conflicts: [], has_conflicts: false, critical_count: 0, high_count: 0, medium_count: 0, low_count: 0 },
-        infeasibilityExplanation: result.infeasibilityExplanation as any ?? { feasible: result.feasible, reasons: [], summary: '' },
+        infeasibilityExplanation: (infeasibilityExplanation as any) ?? { feasible, reasons: [], summary: '' },
       };
     }
     return decisionApi.checkConstraintsWithExplanation(data);
@@ -129,15 +134,42 @@ export const decisionAdapter = {
   generateMultiplePlans: async (
     data: GenerateMultiplePlansRequest
   ): Promise<GenerateMultiplePlansResponse['data']> => {
+    const payload = {
+      tripId: data.tripId,
+      state: data.state,
+      constraints: data.constraints,
+      count: data.count ?? 3,
+    };
+
+    if (!payload.state || !payload.constraints) {
+      throw new Error('state 和 constraints 是必需的参数');
+    }
+
+    const runV1 = async () => {
+      const result = await decisionEngineApi.generateMultiplePlans(payload);
+      const variants =
+        (result as { variants?: Array<{ id: string; plan?: any; score?: Record<string, number>; tradeoffs?: any[]; [key: string]: any }> }).variants ?? [];
+      const log =
+        (result as { log?: { runId?: string; explanation?: string; [key: string]: unknown } }).log ?? {};
+      return mapVariantsToLegacy(variants, log);
+    };
+
     if (USE_V1) {
-      const result = await decisionEngineApi.generateMultiplePlans({
+      return runV1();
+    }
+
+    try {
+      return await runV1();
+    } catch (v1Err: unknown) {
+      const status = (v1Err as { response?: { status?: number } })?.response?.status;
+      if (status && status !== 404 && status !== 501) {
+        throw v1Err;
+      }
+      return decisionApi.generateMultiplePlans({
         state: data.state,
         constraints: data.constraints,
-        count: 3,
       });
-      return mapVariantsToLegacy(result.variants, result.log);
     }
-    return decisionApi.generateMultiplePlans(data);
   },
 
   // 以下接口新 API 暂无，始终走旧 API

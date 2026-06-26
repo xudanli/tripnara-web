@@ -5,7 +5,6 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   CheckCircle2, 
   AlertTriangle, 
@@ -80,7 +79,7 @@ const DECISION_CONFIG: Record<DecisionType, {
 
 export default function DecisionMatrixCard({
   decisionResult,
-  destinationName,
+  destinationName: _destinationName,
   onContinue,
   onAlternative,
   onCancel,

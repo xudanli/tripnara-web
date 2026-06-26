@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { tripsApi } from '@/api/trips';
 // decisionApi 已移除 - 不再直接调用决策接口，改为通过 LangGraph Orchestrator
-import { readinessApi } from '@/api/readiness';
+import { planningWorkbenchApi } from '@/api/planning-workbench';
 import type { PersonaAlert, TripDetail, TripMetricsResponse, IntentResponse } from '@/types/trip';
 import { getPersonaAlertUserBody } from '@/lib/persona-alert-display';
 // 以下类型已移除，因为不再直接调用决策接口

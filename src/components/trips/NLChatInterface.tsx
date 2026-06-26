@@ -5,7 +5,7 @@
  * 支持多轮对话、快捷回复、信息确认等功能
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +24,11 @@ import { getConditionalInputStorageKey, getTriggeredConditionalInputs } from '@/
 import { StructuredContentTypewriter } from './StructuredContentTypewriter';
 import ConversationGuide from './ConversationGuide';
 import { CreateTripWelcomeScreen } from './CreateTripWelcomeScreen';
-import GateWarningCard, { type GateAlternative } from './GateWarningCard';
+import {
+  ExperienceExplanationCardView,
+  TravelUnderstandingCard,
+} from '@/components/experience-fulfillment';
+import GateWarningCard from './GateWarningCard';
 import PersonaInfoCard from './PersonaInfoCard';
 import RecommendedRoutesCard from './RecommendedRoutesCard';
 import SafetyWarningCard from './SafetyWarningCard';
@@ -35,31 +39,21 @@ import {
   getUnansweredCriticalFields,
   extractGateWarningMessage,
 } from '@/utils/nl-conversation-adapter';
+import {
+  CONFIRM_INFERRED_INFO_ID,
+  CONFIRM_PHASE_BANNER,
+  CONFIRM_PHASE_INPUT_PLACEHOLDER,
+  getConfirmInferredAnswer,
+  isConfirmInferredPending,
+  matchShortConfirmPhrase,
+  shouldBlockFreeTextDuringConfirmPhase,
+} from '@/lib/nl-confirm-inferred.util';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { 
-  User, 
-  MapPin, 
-  Calendar, 
-  Users, 
-  Wallet,
-  Target,
-  AlertTriangle,
-  CheckCircle2,
-  Edit3,
-  Loader2,
-  ArrowRight,
-  Plus,
-  Compass,
-  Search,
-  ChevronDown,
-  ChevronUp,
-  Brain,
-  Square,
-} from 'lucide-react';
+import { MapPin, Calendar, Users, Wallet, Target, AlertTriangle, CheckCircle2, Edit3, Loader2, ArrowRight, Plus, Compass, Search, ChevronDown, ChevronUp, Brain, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
 import { useAuth } from '@/hooks/useAuth';
@@ -321,6 +315,10 @@ interface ChatMessage {
   progressSteps?: ProgressStep[];
   /** 阶段指示器（如 硬约束确认 1/4） */
   phaseIndicator?: { phase: number; phaseName: string; progress: string; totalPhases: number };
+  /** 体验兑现 — 旅行理解卡 */
+  experienceUnderstanding?: import('@/types/experience-fulfillment').TravelUnderstandingCard;
+  /** 体验兑现 — 四级确定性解释 */
+  experienceExplanation?: import('@/types/experience-fulfillment').ExperienceExplanationCard;
   // 🆕 用户终止后的重试提示
   isCancelledNotice?: boolean;
   retryPayload?: { text: string; answers?: Record<string, string | string[] | number | boolean | null> };
@@ -1507,6 +1505,18 @@ function MessageBubble({
           })()
         )}
 
+        {/* 体验兑现：旅行理解 + 为什么推荐（确认前展示） */}
+        {!isUser && !isTyping && message.experienceUnderstanding && (
+          <TravelUnderstandingCard data={message.experienceUnderstanding} className="mt-4 max-w-md" />
+        )}
+        {!isUser && !isTyping && message.experienceExplanation && (
+          <ExperienceExplanationCardView
+            data={message.experienceExplanation}
+            compact
+            className="mt-4 max-w-md"
+          />
+        )}
+
         {/* 信息确认卡片 - 打字完成后显示 */}
         {!isUser && message.showConfirmCard && message.parsedParams && isLatest && !isTyping && (
           <TripSummaryCard
@@ -1679,6 +1689,9 @@ function TripSummaryCard({
         )}
 
         {/* 操作按钮 */}
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          请优先点选上方「确认无误」等选项；也可点下方按钮。勿仅输入长段描述而不确认。
+        </p>
         <div className="flex gap-2 pt-2">
           <Button
             variant="outline"
@@ -1743,7 +1756,7 @@ export default function NLChatInterface({
   // 🆕 自动提交倒计时状态（符合反馈原则）
   const [autoSubmitCountdown, setAutoSubmitCountdown] = useState<number | null>(null);
   const [autoSubmitTimerId, setAutoSubmitTimerId] = useState<NodeJS.Timeout | null>(null);
-  const [autoSubmitCancelId, setAutoSubmitCancelId] = useState<string | null>(null);
+  const [_autoSubmitCancelId, setAutoSubmitCancelId] = useState<string | null>(null);
   // 🆕 防重复提交：记录正在自动提交的消息ID，避免重复触发（用 ref 实现同步检查）
   const autoSubmittingMessageIdRef = useRef<string | null>(null);
   // 🆕 防重复提交：记录最近提交的消息内容，避免重复提交（用 ref 实现同步检查）
@@ -1909,8 +1922,6 @@ export default function NLChatInterface({
     }
   }, [conversationContext]);
 
-
-
   // 🆕 新建对话处理函数（暴露给外部调用）
   const handleNewConversation = useCallback(() => {
     // 清空当前会话
@@ -1980,6 +1991,8 @@ export default function NLChatInterface({
                 progressSteps: (msg.metadata as { progressSteps?: ProgressStep[] })?.progressSteps,
                 phaseIndicator: (msg.metadata as { phaseIndicator?: ChatMessage['phaseIndicator'] })
                   ?.phaseIndicator,
+                experienceUnderstanding: msg.metadata?.experienceUnderstanding,
+                experienceExplanation: msg.metadata?.experienceExplanation,
               };
             });
             setMessages(restoredMessages);
@@ -2204,6 +2217,8 @@ export default function NLChatInterface({
                 progressSteps: (msg.metadata as { progressSteps?: ProgressStep[] })?.progressSteps,
                 phaseIndicator: (msg.metadata as { phaseIndicator?: ChatMessage['phaseIndicator'] })
                   ?.phaseIndicator,
+                experienceUnderstanding: msg.metadata?.experienceUnderstanding,
+                experienceExplanation: msg.metadata?.experienceExplanation,
               };
             });
             setMessages(restoredMessages);
@@ -2442,9 +2457,61 @@ export default function NLChatInterface({
     // 🆕 发送新消息时清除多选题待确认状态
     setPendingMultiChoiceConfirm(null);
 
+    let resolvedText = text.trim();
+    let resolvedProvidedAnswers = providedAnswers;
+
+    const latestAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+    const confirmPending = latestAssistant ? isConfirmInferredPending(latestAssistant) : false;
+
+    // 阶段 1：confirm_inferred_info — 优先 PUT / 点选，勿仅发长段描述
+    if (confirmPending) {
+      if (
+        shouldBlockFreeTextDuringConfirmPhase(
+          resolvedText,
+          true,
+          resolvedProvidedAnswers,
+        )
+      ) {
+        toast.warning('请先点选上方确认选项', {
+          description: '或输入「确认无误」等简短确认语；不要只发送长段描述。',
+        });
+        return;
+      }
+
+      const shortConfirm = matchShortConfirmPhrase(resolvedText);
+      if (shortConfirm && latestAssistant?.id && sessionId) {
+        try {
+          await tripsApi.updateMessageQuestionAnswers(sessionId, latestAssistant.id, {
+            [CONFIRM_INFERRED_INFO_ID]: shortConfirm,
+          });
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === latestAssistant.id
+                ? {
+                    ...m,
+                    questionAnswers: {
+                      ...(m.questionAnswers || {}),
+                      [CONFIRM_INFERRED_INFO_ID]: shortConfirm,
+                    },
+                  }
+                : m,
+            ),
+          );
+          resolvedProvidedAnswers = {
+            ...(latestAssistant.questionAnswers || {}),
+            ...(resolvedProvidedAnswers || {}),
+            [CONFIRM_INFERRED_INFO_ID]: shortConfirm,
+          };
+          resolvedText = shortConfirm;
+        } catch (err) {
+          console.warn('[NLChatInterface] PUT confirm_inferred_info 失败:', err);
+        }
+      }
+    }
+
     // 🆕 防重复提交：用 ref 同步检查，避免 state 异步导致的重复
     const messageId = `user-${Date.now()}`;
-    const messageContent = text.trim();
+    const messageContent = resolvedText;
     
     if (lastSubmittedContentRef.current === messageContent) {
       console.warn('[NLChatInterface] 检测到重复提交，已忽略:', messageContent.substring(0, 30));
@@ -2499,13 +2566,13 @@ export default function NLChatInterface({
 
     // 在 try 外声明，便于 catch 中（用户终止时）用于 retryPayload
     let questionAnswers: Record<string, string | string[] | number | boolean | null> =
-      providedAnswers || collectQuestionAnswers();
+      resolvedProvidedAnswers || collectQuestionAnswers();
 
     try {
       // 🆕 尝试构建上下文包（如果可能）
       // 从用户文本或 latestParams 中提取目的地信息
       const destinationCountry = latestParams?.destination?.split(',')[0]?.trim().toUpperCase();
-      const contextPackageId = await buildContextForNL(text.trim(), destinationCountry);
+      const contextPackageId = await buildContextForNL(resolvedText, destinationCountry);
 
       // 🆕 如果 questionAnswers 为空，尝试从用户输入的文本中提取答案
       // 这可以处理用户直接在输入框输入答案的情况
@@ -2528,7 +2595,7 @@ export default function NLChatInterface({
             ];
             
             for (const pattern of patterns) {
-              const match = text.trim().match(pattern);
+              const match = resolvedText.match(pattern);
               if (match && match[1]) {
                 const answerText = match[1].trim();
                 
@@ -2580,7 +2647,7 @@ export default function NLChatInterface({
       
       // 构建请求参数
       const requestData: import('@/types/trip').CreateTripFromNLRequest = {
-        text: text.trim(),
+        text: resolvedText,
         // 🆕 创建新对话：不传递 sessionId，后端会自动清空旧会话
         // 🆕 继续对话：传递 sessionId，继续对话
         ...(isFirstMessageAfterReset ? {} : (sessionId && { sessionId })), // 如果是新对话的第一条消息，不传递 sessionId
@@ -2626,8 +2693,8 @@ export default function NLChatInterface({
         }),
       };
 
-      // Trips NL v2：解析阶段引入可行性预检（Ontology + Solver pre-check）
-      const response = await tripsApi.createFromNLv2(requestData, { signal: controller.signal });
+      // Trips NL v3：draft-first，先创建 DRAFT Trip，再补齐规划信息
+      const response = await tripsApi.createFromNLv3(requestData, { signal: controller.signal });
       
       // 🐛 调试：打印后端返回的完整响应
       console.log('[NLChatInterface] 后端返回的完整响应:', {
@@ -2871,6 +2938,8 @@ export default function NLChatInterface({
           thinkingProcess: response.thinkingProcess,
           progressSteps: response.progressSteps,
           phaseIndicator: response.phaseIndicator,
+          experienceUnderstanding: response.experienceUnderstanding,
+          experienceExplanation: response.experienceExplanation,
         };
         setMessages(prev => [...prev, aiMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
@@ -2930,7 +2999,7 @@ export default function NLChatInterface({
         // 🐛 消除 linter 警告：使用 conversationContext（虽然主要用于存储，但在恢复时使用）
         // 注意：conversationContext 主要用于存储后端返回的上下文，前端通过 sessionId 管理上下文
         if (response.conversationContext) {
-          const _ = conversationContext; // 读取 state 以消除警告
+          void conversationContext;
           console.log('[NLChatInterface] 对话上下文已更新:', {
             hasContext: !!response.conversationContext,
             sessionId: response.sessionId,
@@ -2958,6 +3027,122 @@ export default function NLChatInterface({
           }
         }
       } else if (response.trip) {
+        const shouldInitializePlanning =
+          response.planningReadiness?.canInitializePlanning === true ||
+          response.lifecycleStatus === 'READY_TO_GENERATE' ||
+          ((response.lifecycleStatus === 'DRAFT' || (response.trip.status as string | undefined) === 'DRAFT') &&
+            response.planningReadiness?.canInitializePlanning !== false);
+
+        if (shouldInitializePlanning) {
+          const planningParams = (response.parsedParams ?? response.partialParams ?? {}) as Record<string, any>;
+          toast.info('正在初始化规划', {
+            description: '已创建草稿，正在进入规划阶段...',
+            duration: 2500,
+          });
+
+          try {
+            const initializeResult = await tripsApi.initializeTripPlanning(response.trip.id, {
+              destinationCountryCode:
+                typeof planningParams.destination === 'string' ? planningParams.destination : response.destination,
+              startDate: typeof planningParams.startDate === 'string' ? planningParams.startDate : response.trip.startDate,
+              endDate: typeof planningParams.endDate === 'string' ? planningParams.endDate : response.trip.endDate,
+              totalBudget: typeof planningParams.totalBudget === 'number' ? planningParams.totalBudget : undefined,
+              currency: typeof planningParams.currency === 'string' ? planningParams.currency : undefined,
+              pace:
+                typeof planningParams.pace === 'string'
+                  ? planningParams.pace
+                  : typeof planningParams.preferences?.pace === 'string'
+                    ? planningParams.preferences.pace
+                    : undefined,
+              travelers: Array.isArray(planningParams.travelers) ? planningParams.travelers : undefined,
+            });
+
+            if (!initializeResult.initialized) {
+              const missingFields = initializeResult.missingFields ?? [];
+              const messageId = `ai-${Date.now()}`;
+              const missingMessage: ChatMessage = {
+                id: messageId,
+                role: 'assistant',
+                content:
+                  missingFields.length > 0
+                    ? `我已经先保存了行程草稿，但还缺少这些规划信息：${missingFields.join('、')}。补齐后我再开始规划。`
+                    : initializeResult.message || '我已经先保存了行程草稿，但还需要补齐规划信息后才能开始规划。',
+                timestamp: new Date(),
+                responseBlocks: response.plannerResponseBlocks,
+                parsedParams: response.partialParams ?? response.parsedParams,
+                thinkingProcess: response.thinkingProcess,
+                progressSteps: response.progressSteps,
+                phaseIndicator: response.phaseIndicator,
+                experienceUnderstanding: response.experienceUnderstanding,
+                experienceExplanation: response.experienceExplanation,
+              };
+              setMessages(prev => [...prev, missingMessage]);
+              setNewMessageId(messageId);
+              if (response.partialParams || response.parsedParams) {
+                setLatestParams((response.partialParams ?? response.parsedParams) as ParsedTripParams);
+              }
+              toast.warning('还不能开始规划', {
+                description: missingFields.length > 0 ? `缺少：${missingFields.join('、')}` : initializeResult.message,
+                duration: 5000,
+              });
+              return;
+            }
+
+            if (initializeResult.generationQueued) {
+              const messageId = `ai-${Date.now()}`;
+              const queuedMessage: ChatMessage = {
+                id: messageId,
+                role: 'assistant',
+                content: '行程草稿已创建，规划骨架已初始化，正在后台生成 POI 行程项。生成完成前可以在行程列表查看状态。',
+                timestamp: new Date(),
+                responseBlocks: response.plannerResponseBlocks,
+                parsedParams: response.partialParams ?? response.parsedParams,
+                thinkingProcess: response.thinkingProcess,
+                progressSteps: response.progressSteps,
+                phaseIndicator: response.phaseIndicator,
+                experienceUnderstanding: response.experienceUnderstanding,
+                experienceExplanation: response.experienceExplanation,
+              };
+              setMessages(prev => [...prev, queuedMessage]);
+              setNewMessageId(messageId);
+              toast.info('正在生成行程方案', {
+                description: 'POI 行程项会在后台生成，完成前无法进入详情页。',
+                duration: 5000,
+              });
+              if (onTripCreated) {
+                onTripCreated(response.trip.id);
+              }
+              setTimeout(() => {
+                navigate('/dashboard/trips', { state: { from: 'create', tripId: response.trip!.id } });
+              }, 800);
+              return;
+            }
+          } catch (err) {
+            console.error('[NLChatInterface] 初始化规划失败:', err);
+            const messageId = `ai-${Date.now()}`;
+            const failedMessage: ChatMessage = {
+              id: messageId,
+              role: 'assistant',
+              content: '行程草稿已经创建，但初始化规划失败了。请稍后重试，或继续补充日期、目的地、预算等规划信息。',
+              timestamp: new Date(),
+              responseBlocks: response.plannerResponseBlocks,
+              parsedParams: response.partialParams ?? response.parsedParams,
+              thinkingProcess: response.thinkingProcess,
+              progressSteps: response.progressSteps,
+              phaseIndicator: response.phaseIndicator,
+              experienceUnderstanding: response.experienceUnderstanding,
+              experienceExplanation: response.experienceExplanation,
+            };
+            setMessages(prev => [...prev, failedMessage]);
+            setNewMessageId(messageId);
+            toast.error('初始化规划失败', {
+              description: err instanceof Error ? err.message : '请稍后重试',
+              duration: 5000,
+            });
+            return;
+          }
+        }
+
         // 行程创建成功：补充 intent 默认值（创建时可能缺失 travelMode、dailyWalkLimit 等）
         tripsApi.supplementIntentAfterCreate(response.trip.id).catch(() => {});
         const messageId = `ai-${Date.now()}`;
@@ -2967,7 +3152,7 @@ export default function NLChatInterface({
           content:
             response.message ||
             response.plannerReply?.trim() ||
-            '太棒了！我已经为您创建好行程了 🎉',
+            (shouldInitializePlanning ? '太棒了！我已经创建行程并进入规划阶段。' : '太棒了！我已经为您创建好行程了 🎉'),
           timestamp: new Date(),
           // 🐛 如果有 responseBlocks，也显示结构化内容
           responseBlocks: response.plannerResponseBlocks,
@@ -3069,6 +3254,8 @@ export default function NLChatInterface({
             thinkingProcess: response.thinkingProcess,
             progressSteps: response.progressSteps,
             phaseIndicator: response.phaseIndicator,
+            experienceUnderstanding: response.experienceUnderstanding,
+            experienceExplanation: response.experienceExplanation,
           };
           setMessages(prev => [...prev, confirmMessage]);
           setNewMessageId(messageId);  // 触发打字机效果
@@ -3089,6 +3276,8 @@ export default function NLChatInterface({
           thinkingProcess: response.thinkingProcess,
           progressSteps: response.progressSteps,
           phaseIndicator: response.phaseIndicator,
+          experienceUnderstanding: response.experienceUnderstanding,
+          experienceExplanation: response.experienceExplanation,
         };
         setMessages(prev => [...prev, aiMessage]);
         setNewMessageId(messageId);  // 触发打字机效果
@@ -3113,7 +3302,7 @@ export default function NLChatInterface({
           content: '',
           timestamp: new Date(),
           isCancelledNotice: true,
-          retryPayload: { text: text.trim(), answers: questionAnswers },
+          retryPayload: { text: resolvedText, answers: questionAnswers },
         };
         setMessages((prev) => [...prev, cancelledMessage]);
         return;
@@ -3152,7 +3341,7 @@ export default function NLChatInterface({
             const contextPackageId = currentContextPackage?.id;
             
             const retryRequestData: import('@/types/trip').CreateTripFromNLRequest = {
-              text: text.trim(),
+              text: resolvedText,
               ...(sessionId && { sessionId }), // 🆕 传递会话ID
               ...(contextPackageId && { contextPackageId }),
               ...(!contextPackageId && destinationCountry && {
@@ -3164,7 +3353,7 @@ export default function NLChatInterface({
               }),
             };
             
-            const retryResponse = await tripsApi.createFromNLv2(retryRequestData);
+            const retryResponse = await tripsApi.createFromNLv3(retryRequestData);
             
             // 🆕 保存会话ID
             if (retryResponse.sessionId && retryResponse.sessionId !== sessionId) {
@@ -3201,17 +3390,89 @@ export default function NLChatInterface({
               if (retryResponse.conversationContext) {
                 setConversationContext(retryResponse.conversationContext);
                 // 🐛 消除 linter 警告：使用 conversationContext（虽然主要用于存储，但在恢复时使用）
-                const _ = conversationContext; // 读取 state 以消除警告
+                void conversationContext;
               }
               if (retryResponse.partialParams) {
                 setLatestParams(retryResponse.partialParams);
               }
             } else if (retryResponse.trip) {
+              const shouldInitializePlanning =
+                retryResponse.planningReadiness?.canInitializePlanning === true ||
+                retryResponse.lifecycleStatus === 'READY_TO_GENERATE' ||
+                ((retryResponse.lifecycleStatus === 'DRAFT' ||
+                  (retryResponse.trip.status as string | undefined) === 'DRAFT') &&
+                  retryResponse.planningReadiness?.canInitializePlanning !== false);
+
+              if (shouldInitializePlanning) {
+                const planningParams = (retryResponse.parsedParams ?? retryResponse.partialParams ?? {}) as Record<string, any>;
+                const initializeResult = await tripsApi.initializeTripPlanning(retryResponse.trip.id, {
+                  destinationCountryCode:
+                    typeof planningParams.destination === 'string' ? planningParams.destination : retryResponse.destination,
+                  startDate: typeof planningParams.startDate === 'string' ? planningParams.startDate : retryResponse.trip.startDate,
+                  endDate: typeof planningParams.endDate === 'string' ? planningParams.endDate : retryResponse.trip.endDate,
+                  totalBudget: typeof planningParams.totalBudget === 'number' ? planningParams.totalBudget : undefined,
+                  currency: typeof planningParams.currency === 'string' ? planningParams.currency : undefined,
+                  pace:
+                    typeof planningParams.pace === 'string'
+                      ? planningParams.pace
+                      : typeof planningParams.preferences?.pace === 'string'
+                        ? planningParams.preferences.pace
+                        : undefined,
+                  travelers: Array.isArray(planningParams.travelers) ? planningParams.travelers : undefined,
+                });
+
+                if (!initializeResult.initialized) {
+                  const missingFields = initializeResult.missingFields ?? [];
+                  const messageId = `ai-${Date.now()}`;
+                  const missingMessage: ChatMessage = {
+                    id: messageId,
+                    role: 'assistant',
+                    content:
+                      missingFields.length > 0
+                        ? `我已经先保存了行程草稿，但还缺少这些规划信息：${missingFields.join('、')}。补齐后我再开始规划。`
+                        : initializeResult.message || '我已经先保存了行程草稿，但还需要补齐规划信息后才能开始规划。',
+                    timestamp: new Date(),
+                    responseBlocks: retryResponse.plannerResponseBlocks,
+                    parsedParams: retryResponse.partialParams ?? retryResponse.parsedParams,
+                  };
+                  setMessages(prev => [...prev, missingMessage]);
+                  setNewMessageId(messageId);
+                  return;
+                }
+
+                if (initializeResult.generationQueued) {
+                  const messageId = `ai-${Date.now()}`;
+                  const queuedMessage: ChatMessage = {
+                    id: messageId,
+                    role: 'assistant',
+                    content: '行程草稿已创建，规划骨架已初始化，正在后台生成 POI 行程项。生成完成前可以在行程列表查看状态。',
+                    timestamp: new Date(),
+                    responseBlocks: retryResponse.plannerResponseBlocks,
+                    parsedParams: retryResponse.partialParams ?? retryResponse.parsedParams,
+                  };
+                  setMessages(prev => [...prev, queuedMessage]);
+                  setNewMessageId(messageId);
+                  toast.info('正在生成行程方案', {
+                    description: 'POI 行程项会在后台生成，完成前无法进入详情页。',
+                    duration: 5000,
+                  });
+                  if (onTripCreated) {
+                    onTripCreated(retryResponse.trip.id);
+                  }
+                  setTimeout(() => {
+                    navigate('/dashboard/trips', { state: { from: 'create', tripId: retryResponse.trip!.id } });
+                  }, 800);
+                  return;
+                }
+              }
+
               const messageId = `ai-${Date.now()}`;
               const successMessage: ChatMessage = {
                 id: messageId,
                 role: 'assistant',
-                content: retryResponse.message || '太棒了！我已经为您创建好行程了 🎉',
+                content:
+                  retryResponse.message ||
+                  (shouldInitializePlanning ? '太棒了！我已经创建行程并进入规划阶段。' : '太棒了！我已经为您创建好行程了 🎉'),
                 timestamp: new Date(),
                 parsedParams: retryResponse.parsedParams,
                 showConfirmCard: false,
@@ -3264,7 +3525,7 @@ export default function NLChatInterface({
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [isLoading, navigate, onTripCreated, refreshToken, buildContextForNL, latestParams, currentContextPackage, sessionId, conversationContext, collectQuestionAnswers]);
+  }, [isLoading, navigate, onTripCreated, refreshToken, buildContextForNL, latestParams, currentContextPackage, sessionId, conversationContext, collectQuestionAnswers, messages, ensureAllAnswersSaved]);
 
   // 🆕 用户终止当前对话轮次
   const handleTerminate = useCallback(() => {
@@ -3319,6 +3580,37 @@ export default function NLChatInterface({
           latestMessage.questionAnswers || {}
         );
         setError(`请先回答所有必填（安全相关）问题：${unansweredCritical.map(q => q.text).join('、')}`);
+        return;
+      }
+    }
+
+    // 阶段 1：确认创建前先 PUT confirm_inferred_info（若尚未提交）
+    const latestAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (
+      latestAssistant &&
+      isConfirmInferredPending(latestAssistant) &&
+      !getConfirmInferredAnswer(latestAssistant.questionAnswers)
+    ) {
+      try {
+        await tripsApi.updateMessageQuestionAnswers(sessionId, latestAssistant.id, {
+          [CONFIRM_INFERRED_INFO_ID]: '确认无误',
+        });
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === latestAssistant.id
+              ? {
+                  ...m,
+                  questionAnswers: {
+                    ...(m.questionAnswers || {}),
+                    [CONFIRM_INFERRED_INFO_ID]: '确认无误',
+                  },
+                }
+              : m,
+          ),
+        );
+      } catch (err) {
+        console.warn('[NLChatInterface] 确认创建前 PUT confirm_inferred_info 失败:', err);
+        setError('请先点选上方确认选项，或输入「确认无误」后再创建');
         return;
       }
     }
@@ -3450,7 +3742,7 @@ export default function NLChatInterface({
           }
         }
         // 🐛 消除 linter 警告：使用 conversationContext（虽然主要用于存储，但在恢复时使用）
-        const _ = conversationContext; // 读取 state 以消除警告
+        void conversationContext;
       }
       if (response.partialParams) {
         setLatestParams(response.partialParams);
@@ -3619,6 +3911,11 @@ export default function NLChatInterface({
     setAutoSubmitCancelId(null);
     autoSubmittingMessageIdRef.current = null;
   }, [autoSubmitTimerId]);
+
+  const confirmPhasePending = useMemo(() => {
+    const latestAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+    return latestAssistant ? isConfirmInferredPending(latestAssistant) : false;
+  }, [messages]);
 
   // 🆕 如果没有消息，显示优化后的欢迎界面
   if (messages.length === 0 && !isLoading) {
@@ -4216,6 +4513,12 @@ export default function NLChatInterface({
         {/* 🆕 Gemini风格：大输入框容器 */}
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex flex-col gap-2">
+            {confirmPhasePending && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{CONFIRM_PHASE_BANNER}</span>
+              </div>
+            )}
             {/* Gemini风格：统一的输入条容器 - 更大更突出 */}
             <div className={cn(
               'flex items-center gap-2',
@@ -4244,7 +4547,11 @@ export default function NLChatInterface({
                 onChange={(e) => setInputValue(e.target.value)}
                 onFocus={cancelPendingAutoSubmit}
                 onMouseDown={cancelPendingAutoSubmit}
-                placeholder="例如：3 月和家人去日本 7 天，节奏轻松"
+                placeholder={
+                  confirmPhasePending
+                    ? CONFIRM_PHASE_INPUT_PLACEHOLDER
+                    : '例如：3 月和家人去日本 7 天，节奏轻松'
+                }
                 disabled={isLoading || isCreating}
                 className={cn(
                   'flex-1 h-14 text-base',

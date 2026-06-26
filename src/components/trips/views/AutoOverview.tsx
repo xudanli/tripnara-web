@@ -7,11 +7,7 @@ import { useState, useMemo } from 'react';
 import type { TripDetail } from '@/types/trip';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Eye,
-  ChevronUp,
-  ChevronDown
-} from 'lucide-react';
+import { Eye, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPersonaIconColorClasses, getPersonaBackgroundClasses } from '@/lib/persona-colors';
 import { PersonaAvatar } from '@/components/common/PersonaAvatar';
@@ -33,11 +29,11 @@ interface AutoOverviewProps {
 }
 
 export default function AutoOverview({ 
-  trip, 
+  trip: _trip, 
   overallMetrics, 
   abuData, 
-  drDreData, 
-  neptuneData,
+  drDreData: _drDreData, 
+  neptuneData: _neptuneData,
   onViewClick,
   onRequestDetailView
 }: AutoOverviewProps) {

@@ -256,9 +256,12 @@ export const placesApi = {
     );
       console.log('[Places API] searchPlaces 响应:', {
         success: response.data?.success,
-        dataType: typeof response.data?.data,
-        isArray: Array.isArray(response.data?.data),
-        dataLength: Array.isArray(response.data?.data) ? response.data.data.length : 'N/A',
+        dataType: response.data?.success ? typeof response.data.data : 'N/A',
+        isArray: response.data?.success ? Array.isArray(response.data.data) : false,
+        dataLength:
+          response.data?.success && Array.isArray(response.data.data)
+            ? response.data.data.length
+            : 'N/A',
         rawData: response.data,
       });
       const result = handleResponse(response);

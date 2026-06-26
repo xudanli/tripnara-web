@@ -4,7 +4,6 @@
  * 用于检测行程项时间重叠、验证时间逻辑等
  */
 
-import type { ItineraryItemDetail } from '@/types/trip';
 
 /**
  * 检测两个时间段是否重叠

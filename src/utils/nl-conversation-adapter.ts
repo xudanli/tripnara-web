@@ -316,7 +316,7 @@ function parseStructuredOptionsFromLabel(
 
 /**
  * 根据选项文本推断条件输入字段（后端未提供时使用）
- * 例如：「不准确,需要修改具体日期」→ date_range；「需要调整,我的总预算是____元」→ number
+ * 例如：「不准确,需要修改具体日期」→ date_range；「需要调整,我的总预算是__元」→ number
  */
 function inferConditionalInputsFromOptions(
   options: any[],
@@ -341,7 +341,7 @@ function inferConditionalInputsFromOptions(
       });
     }
     // 预算相关：需要调整 + 预算/元
-    if (/需要调整|不符合|调整/.test(textForInfer) && /预算|元|____/.test(textForInfer)) {
+    if (/需要调整|不符合|调整/.test(textForInfer) && /预算|元|__/.test(textForInfer)) {
       result.push({
         triggerValue: triggerVal,
         inputType: 'number',

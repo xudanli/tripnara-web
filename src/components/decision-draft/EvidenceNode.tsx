@@ -7,7 +7,6 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Paperclip, ExternalLink, Clock, User } from 'lucide-react';
 import type { EvidenceRef } from '@/types/decision-draft';
 import { cn } from '@/lib/utils';

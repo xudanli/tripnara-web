@@ -64,4 +64,6 @@ export type CollaborativeTasksResponse = {
   tripId: string;
   flywheel: CollaborativeTaskFlywheelMetadata | null;
   tasks: CollaborativeTaskView[];
+  /** 中/高交叉领域的结构化协商任务 */
+  negotiationTasks: import('@/types/domain-negotiation-task').DomainNegotiationTask[];
 };

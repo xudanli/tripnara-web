@@ -1,6 +1,11 @@
 import type { BaseEntity } from './common';
 import type { PlaceCategory } from './places-routes';
 import type { DrivingFatiguePreferences } from './user-travel-profile';
+import type {
+  ExperienceExplanationCard,
+  ItineraryPresentationBundle,
+  TravelUnderstandingCard,
+} from './experience-fulfillment';
 
 // ==================== 基础类型 ====================
 
@@ -217,6 +222,8 @@ export interface ItineraryItem {
   bookedAt?: string | null;                    // 预订时间
   // 跨天信息（后端返回）
   crossDayInfo?: CrossDayInfo | null;          // 跨天显示信息
+  /** 客户端扩展元数据（如 timelineDisplayRole、source 等） */
+  metadata?: Record<string, unknown> | null;
   /** 当天展示序（顶层冗余，优先于 crossDayInfo.displaySortIndex） */
   displaySortIndex?: number;
 }
@@ -278,7 +285,8 @@ export interface TripDetail extends BaseEntity {
   TripDay: TripDay[];
   statistics: TripStatistics;
   pacingConfig?: PacingConfig;
-  budgetConfig?: BudgetConfig;
+  revision?: number;
+  revisionLabel?: string;
   // 新增字段
   pipelineStatus?: PipelineStatus;
   activeAlertsCount?: number;
@@ -293,6 +301,21 @@ export interface TripDetail extends BaseEntity {
     generationProgress?: GenerationProgress;
     /** ✅ 新增字段（2026-01-29）：每日主题映射，key 为天数（1, 2, 3...），value 为主题字符串 */
     dayThemes?: Record<string, string>;
+    /** 约束求解器 — 最近一次可执行性报告快照（validate 写入） */
+    feasibilityReportSnapshot?: {
+      verifiedAt?: string;
+      verifiedForTripVersion?: string;
+    };
+    /** 行程修订序号（revision 回退来源） */
+    revision?: number;
+    /** 体验兑现 — 规划期旅行理解卡 */
+    experienceUnderstanding?: import('@/types/experience-fulfillment').TravelUnderstandingCard;
+    /** 体验兑现 — 规划期体验解释（若后端持久化） */
+    experienceExplanation?: import('@/types/experience-fulfillment').ExperienceExplanationCard;
+    /** 体验兑现 — 用户向日程展示（双层灵感卡） */
+    itineraryPresentation?: import('@/types/experience-fulfillment').ItineraryPresentationBundle;
+    /** 体验兑现 — 行中微调查记录 */
+    experienceOutcomeGraph?: unknown[];
     [key: string]: any;
   };
 }
@@ -555,7 +578,8 @@ export type PlannerResponseBlockType =
   | 'question_card'    // 澄清问题卡片（独立组件）
   | 'highlight'        // 高亮信息（重要提示）
   | 'budget_summary'   // 预算摘要
-  | 'itinerary_overview'; // 行程概览
+  | 'itinerary_overview' // 行程概览
+  | 'why_recommended'; // 确认页「为什么推荐」（体验兑现系统）
 
 /**
  * 规划师回复内容块
@@ -623,6 +647,16 @@ export interface PlannerResponseBlock {
     theme?: string;  // "自驾探索冰岛南岸"
     route?: string;  // "以雷克雅未克为起点和终点..."
     dailyStructure?: string;  // "每天的驾驶时间会控制在2-3小时以内..."
+  };
+
+  // why_recommended 类型（体验兑现系统）
+  bullets?: string[];
+  overallLabel?: string;
+  overallSummary?: string;
+  dimensions?: {
+    routeFeasibility?: string;
+    experienceMatch?: string;
+    changingFactors?: string[] | string;
   };
 }
 
@@ -817,6 +851,18 @@ export interface ProgressStep {
   icon?: string;    // 可选：search/check/loading 等
 }
 
+export type TripLifecycleStatus = 'DRAFT' | 'PLANNING' | 'READY_TO_GENERATE' | 'GENERATING' | 'READY';
+export type PlanningReadinessStatus = 'INSUFFICIENT' | 'PARTIAL' | 'READY';
+export type FeasibilityStatus = 'NOT_CHECKED' | 'CHECKING' | 'FEASIBLE' | 'INFEASIBLE' | 'NEEDS_REPAIR';
+
+export interface PlanningReadiness {
+  status: PlanningReadinessStatus;
+  missingFields: string[];
+  canInitializePlanning: boolean;
+  canGeneratePlan: boolean;
+  nextQuestionPolicy?: Record<string, any>;
+}
+
 /**
  * `POST /trips/from-natural-language`（及 v2）解包后的业务体。
  *
@@ -973,6 +1019,12 @@ export interface CreateTripFromNLResponse {
   /** 进展步骤 [{ id, label, detail, status }] */
   progressSteps?: ProgressStep[];
 
+  /** 体验兑现 — 旅行理解卡（PRD §9.2） */
+  experienceUnderstanding?: TravelUnderstandingCard;
+
+  /** 体验兑现 — 四级确定性解释（PRD §13.5） */
+  experienceExplanation?: ExperienceExplanationCard;
+
   /**
    * 🆕 v2 可行性预检结果（Ontology + Solver pre-check）
    * - isPossible=false 时，表示“物理/约束不可行”，应优先展示 conflictReason.message
@@ -992,6 +1044,16 @@ export interface CreateTripFromNLResponse {
    * 用于 debug/徽标等展示（例如 'SOLVER'）
    */
   generationEngine?: 'SOLVER' | string;
+
+  /** v3 生命周期状态：draft-first 创建后通常为 DRAFT */
+  lifecycleStatus?: TripLifecycleStatus;
+
+  /** v3 规划信息完备度，用于决定继续追问还是初始化规划 */
+  planningReadiness?: PlanningReadiness;
+
+  /** v3 可行性状态；DRAFT 阶段通常还未检查 */
+  feasibilityStatus?: FeasibilityStatus;
+
   /**
    * 阶段指示器（当前对话所处的收集阶段）
    * 例如：{ phase: 1, phaseName: "硬约束确认", progress: "1/4", totalPhases: 4 }
@@ -1063,7 +1125,7 @@ export interface UpdateTripRequest {
   endDate?: string;
   totalBudget?: number;
   travelers?: Traveler[];
-  status?: TripStatus; // ✅ 行程状态（需要后端API支持）
+  status?: TripStatus | 'TRAVELING'; // TRAVELING：行中 API 写入值，读取时归一化为 IN_PROGRESS
   metadata?: Record<string, unknown>; // 元数据（如 teamId 等）
 }
 
@@ -1106,6 +1168,13 @@ export interface TripState {
   eta?: string;
   timezone: string;
   now: string;
+  /** Abu / Gate 裁决（行中执行页状态徽章） */
+  abuVerdict?: string;
+  gateStatus?: string;
+  gateVerdict?: string;
+  executionStatus?: string;
+  needsRepair?: boolean;
+  abu?: { verdict?: string; status?: string };
 }
 
 // ==================== Schedule ====================
@@ -1189,6 +1258,8 @@ export interface Collaborator {
   id: string;
   tripId: string;
   userId: string;
+  email?: string | null;
+  displayName?: string | null;
   role: CollaboratorRole;
   createdAt: string;
 }
@@ -1611,6 +1682,8 @@ export interface GenerateTrailVideoDataResponse {
 
 // ==================== 分享行程 ====================
 
+import type { SchemaOrgDiscoveryPayload } from '@/types/schema-org-discovery';
+
 export interface SharedTripResponse {
   trip: {
     id: string;
@@ -1634,6 +1707,9 @@ export interface SharedTripResponse {
   };
   permission: string;
   shareToken: string;
+  /** 可选：分享页 Schema.org 发现层（后端透出时优先于客户端投影） */
+  schemaOrgDiscovery?: SchemaOrgDiscoveryPayload;
+  schema_org_discovery?: SchemaOrgDiscoveryPayload;
 }
 
 export interface ImportTripFromShareRequest {
@@ -1788,6 +1864,8 @@ export interface UpdateItineraryItemRequest {
    * - 'none': 只调整当前项，不影响后续行程项
    */
   cascadeMode?: 'auto' | 'none';
+  /** 元数据（如 timelineDisplayRole） */
+  metadata?: Record<string, unknown>;
   // 费用相关字段
   estimatedCost?: number;
   actualCost?: number;
@@ -2079,6 +2157,10 @@ export interface ItemCostRequest {
   costNote?: string;
   isPaid?: boolean;
   paidBy?: string;
+  /** L3：参与分摊的 userId 列表 */
+  splitAmongUserIds?: string[];
+  /** 默认 true：已付时自动写入 ledger */
+  autoLedger?: boolean;
 }
 
 /**
@@ -2202,6 +2284,10 @@ export interface BudgetSummary {
   remaining: number;
   dailyBudget: number;
   dailySpent: Record<string, number>;
+  currency?: string;
+  totalDays?: number;
+  totalActual?: number;
+  todaySpent?: number;
   categoryBreakdown: {
     accommodation: number;
     transportation: number;
@@ -2316,6 +2402,8 @@ export interface GetBudgetConstraintResponse {
   updatedAt: string;
 }
 
+export type BudgetConstraint = GetBudgetConstraintResponse['budgetConstraint'];
+
 /**
  * 删除预算约束响应
  */
@@ -2401,6 +2489,10 @@ export interface BudgetMonitorResponse {
   dailySpent: Record<string, number>;
   alerts: BudgetAlert[];
   lastUpdated: string;
+  currency?: string;
+  todayBudget?: number;
+  projectedTotal?: number;
+  totalBudget?: number;
 }
 
 // ==================== 预算评估 ====================
@@ -2579,6 +2671,17 @@ export interface DecisionLogEntry {
     steps_executed?: Record<string, unknown>;
     /** 与编排 outputs_summary 对齐时的冗余字段（可选） */
     outputs_summary?: string;
+    revalidationPass?: 'POST_NEPTUNE_REPAIR';
+    guardianExpressionPhase?: 'planning' | 'in_trip';
+    guardianLeadSpeaker?: 'ABU' | 'DR_DRE' | 'NEPTUNE';
+    guardianScenario?: import('@/types/guardian-presentation').LeadSpeakerScenario;
+    guardianStructuredStatus?: import('@/types/guardian-presentation').PersonaStructuredStatus;
+    guardianActions?: Partial<
+      Record<
+        'abu' | 'dre' | 'neptune' | 'user',
+        import('@/types/guardian-presentation').GuardianAction
+      >
+    >;
     [key: string]: any;
   };
 }
@@ -2755,6 +2858,8 @@ export interface TripDraftResponse {
   draftDays: DraftDay[];
   candidatesCount: number; // 候选地点总数
   validationWarnings?: string[]; // 校验警告
+  /** 体验兑现 — 用户向日程展示层（PRD §13.3） */
+  itineraryPresentation?: ItineraryPresentationBundle;
   metadata?: {
     generationTime?: number; // 毫秒
     llmProvider?: string;

@@ -10,7 +10,7 @@ import { AlertCircle } from 'lucide-react';
 import KeyDecisionCard from './KeyDecisionCard';
 import DecisionExplanationSheet from './DecisionExplanationSheet';
 import { decisionDraftApi } from '@/api/decision-draft';
-import type { DecisionDraft, DecisionStep, UserMode } from '@/types/decision-draft';
+import type { DecisionDraft, UserMode } from '@/types/decision-draft';
 import { cn } from '@/lib/utils';
 
 export interface DecisionCardsGridProps {

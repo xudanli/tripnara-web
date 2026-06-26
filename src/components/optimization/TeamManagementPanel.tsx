@@ -11,15 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,7 +32,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import type {
   Team,
@@ -119,6 +110,10 @@ function MemberCard({
   readonly = false,
   /** 归一化后的决策权重（0-100），用于展示；未传时用原始 decisionWeight */
   displayWeightPercent,
+  /** 隐藏权重百分比（团队 Tab 重构） */
+  hideWeight = false,
+  /** 自定义角色文案 */
+  roleLabel,
 }: {
   member: TeamMember;
   isLeader?: boolean;
@@ -126,10 +121,13 @@ function MemberCard({
   onRemove?: (userId: string) => void;
   readonly?: boolean;
   displayWeightPercent?: number;
+  hideWeight?: boolean;
+  roleLabel?: string;
 }) {
   const roleConfig = ROLE_CONFIG[member.role as MemberRole] ?? ROLE_CONFIG.MEMBER;
   const fitnessConfig = FITNESS_LEVEL_CONFIG[member.fitnessLevel as FitnessLevelType] ?? FITNESS_LEVEL_CONFIG.INTERMEDIATE;
   const RoleIcon = roleConfig?.icon ?? User;
+  const resolvedRoleLabel = roleLabel ?? roleConfig.label;
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
@@ -141,15 +139,22 @@ function MemberCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium truncate">{member.displayName}</span>
-          <RoleIcon className={cn('h-4 w-4', roleConfig.color)} />
+          {isLeader ? <RoleIcon className={cn('h-4 w-4', roleConfig.color)} /> : null}
         </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <Badge variant="outline" className={cn('text-xs', fitnessConfig.color)}>
-            {fitnessConfig.label}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            权重 {displayWeightPercent !== undefined ? Math.round(displayWeightPercent) : Math.round(member.decisionWeight * 100)}%
-          </span>
+        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+          <span>角色：{resolvedRoleLabel}</span>
+          {!hideWeight ? (
+            <>
+              <Badge variant="outline" className={cn('text-xs', fitnessConfig.color)}>
+                {fitnessConfig.label}
+              </Badge>
+              <span>
+                权重 {displayWeightPercent !== undefined ? Math.round(displayWeightPercent) : Math.round(member.decisionWeight * 100)}%
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground/80">偏好强度：{fitnessConfig.label}</span>
+          )}
         </div>
       </div>
 
@@ -299,10 +304,12 @@ function AddMemberDialog({
   open,
   onOpenChange,
   onAdd,
+  hideDecisionWeight = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (member: Omit<TeamMember, 'userId' | 'personalWeights'>) => void;
+  hideDecisionWeight?: boolean;
 }) {
   const [name, setName] = React.useState('');
   const [role, setRole] = React.useState<MemberRole>('MEMBER');
@@ -404,21 +411,23 @@ function AddMemberDialog({
             </Select>
           </div>
           
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label>决策权重</Label>
-              <span className="text-sm text-muted-foreground">
-                {Math.round(weight[0] * 100)}%
-              </span>
+          {!hideDecisionWeight ? (
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label>决策权重</Label>
+                <span className="text-sm text-muted-foreground">
+                  {Math.round(weight[0] * 100)}%
+                </span>
+              </div>
+              <Slider
+                value={weight}
+                onValueChange={setWeight}
+                max={1}
+                step={0.05}
+                className="py-2"
+              />
             </div>
-            <Slider
-              value={weight}
-              onValueChange={setWeight}
-              max={1}
-              step={0.05}
-              className="py-2"
-            />
-          </div>
+          ) : null}
         </div>
         
         <DialogFooter>
@@ -441,12 +450,14 @@ function EditMemberDialog({
   member,
   onSave,
   isSubmitting,
+  hideDecisionWeight = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: TeamMember | null;
   onSave: (updated: TeamMember) => void;
   isSubmitting?: boolean;
+  hideDecisionWeight?: boolean;
 }) {
   const [name, setName] = React.useState('');
   const [role, setRole] = React.useState<MemberRole>('MEMBER');
@@ -485,7 +496,9 @@ function EditMemberDialog({
         <DialogHeader>
           <DialogTitle>编辑成员</DialogTitle>
           <DialogDescription>
-            修改成员的角色、体能等级与决策权重
+            {hideDecisionWeight
+              ? '修改成员的角色与偏好强度'
+              : '修改成员的角色、体能等级与决策权重'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -538,13 +551,15 @@ function EditMemberDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label>决策权重</Label>
-              <span className="text-sm text-muted-foreground">{Math.round(weight[0] * 100)}%</span>
+          {!hideDecisionWeight ? (
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label>决策权重</Label>
+                <span className="text-sm text-muted-foreground">{Math.round(weight[0] * 100)}%</span>
+              </div>
+              <Slider value={weight} onValueChange={setWeight} max={1} step={0.05} className="py-2" />
             </div>
-            <Slider value={weight} onValueChange={setWeight} max={1} step={0.05} className="py-2" />
-          </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>取消</Button>
@@ -656,7 +671,7 @@ export function TeamManagementPanel({
   const teamTypeConfig = TEAM_TYPE_CONFIG[team.type as TeamType] ?? TEAM_TYPE_CONFIG.CUSTOM;
   const decisionModeConfig = DECISION_MODE_CONFIG[team.decisionWeightMode as DecisionWeightMode] ?? DECISION_MODE_CONFIG.EQUAL;
   const TeamIcon = teamTypeConfig?.icon ?? Users;
-  const leader = team.members.find(m => m.role === 'LEADER');
+  const ____leader = team.members.find(m => m.role === 'LEADER');
 
   return (
     <Card className={className} data-team-management-panel>
@@ -863,4 +878,4 @@ export function TeamManagementPanel({
 // ==================== 导出 ====================
 
 export default TeamManagementPanel;
-export { MemberCard, TeamConstraintsDisplay, WeightsDistribution, AddMemberDialog };
+export { MemberCard, TeamConstraintsDisplay, WeightsDistribution, AddMemberDialog, EditMemberDialog };

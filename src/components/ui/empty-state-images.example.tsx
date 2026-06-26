@@ -4,7 +4,7 @@
  * 展示如何在项目中使用空状态图片组件
  */
 
-import { EmptyStateImage, EmptyStateCard, type EmptyStateType } from './empty-state-images';
+import { EmptyStateImage, EmptyStateCard } from './empty-state-images';
 import { Button } from './button';
 
 // 示例1：单独使用图片

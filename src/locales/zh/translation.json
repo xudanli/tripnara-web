@@ -18,17 +18,18 @@
       "executableSchedule": "可执行日程生成",
       "planB": "Plan B 备选系统",
       "riskDem": "Risk & DEM 风险评估",
-      "travelReadiness": "Travel Readiness 行前准备"
+      "travelReadiness": "可信项目 & 项目适合度"
     }
   },
   "hero": {
     "title": "你的梦想，不只是 空想 的。",
-    "subtitle1": "TripNARA 帮你把「我想去」变成真正能走完的旅行路线。",
-    "subtitle2": "从路线方向、风险评估到可执行日程，我们确保计划不仅美好，而且现实、可靠。",
+    "subtitle1": "TripNARA 帮你把「我想去」变成真正能走完的路线——需要组队时，通过可信项目与项目适合度完成可验证的匹配。",
+    "subtitle2": "路线方向、风险评估、可执行日程与四层信任治理，同一套决策逻辑；不做综合信用分。",
     "cta1": "开始规划我的路线",
     "cta2": "看 TripNARA 如何做决定",
-    "microCopy1": "灵感 ✓ → 路线 → 日程 → 可执行清单",
-    "microCopy2": "梦想，可以被计算为可执行方案。"
+    "cta3": "浏览可信项目",
+    "microCopy1": "灵感 → 路线 → 日程 → 可信组队",
+    "microCopy2": "梦想可被计算为可执行方案；信任可被拆成可验证的四层。"
   },
   "heroFeatures": {
     "card1": {
@@ -44,16 +45,21 @@
       "title": "如果情况变化，也不会崩盘",
       "description": "关闭？天气？体力不支？系统会自动生成最优替换方案。"
     },
+    "card4": {
+      "title": "组队可验证，而不是信用分排名",
+      "description": "通过可信项目发布与四档项目适合度评估入队，取代搭子广场公开招募。",
+      "tag": "四层信任 · 可信项目"
+    },
     "bottomCTA": "把梦想变成路线 →",
     "testimonial1": {
-      "quote": "终于不用再担心\"计划赶不上变化\"了。TripNARA 让我第一次真正走完了整条路线。",
+      "quote": "终于不用再担心「计划赶不上变化」了。TripNARA 让我第一次真正走完了整条路线。",
       "author": "张明",
-      "role": "深度旅行者"
+      "role": "旅行者"
     },
     "testimonial2": {
-      "quote": "作为户外领队，TripNARA 的风险评估功能帮我们避免了很多潜在问题。",
+      "quote": "作为 Professional 认证领队，可信项目 + 适合度评估让我们组队更踏实，不再依赖陌生人信用分。",
       "author": "李华",
-      "role": "户外领队"
+      "role": "Professional · Organizer"
     }
   },
   "problem": {
@@ -86,14 +92,20 @@
     "step2Desc": "梳理节点与节奏，形成逻辑闭环",
     "step3": "风险验证",
     "step3Desc": "评估安全性与可行性，确保路线可执行",
-    "step4": "可执行",
-    "step4Desc": "生成可执行的完整路线方案",
-    "description1": "我们不是从\"推荐更多景点\"开始，",
+    "step4": "可执行方案",
+    "step4Desc": "生成含 Plan B 的完整可执行行程",
+    "step5": "可信组队",
+    "step5Desc": "可信项目 + 四档适合度，取代广场招募与信用分",
+    "description1": "我们不是从「推荐更多景点」开始，",
     "description2": "而是从一个更基础的问题出发：",
     "question": "这条路线，是否本身就应该存在？",
     "traditionalStep1": "景点清单",
     "traditionalStep2": "排序",
-    "traditionalStep3": "拼成\"行程\""
+    "traditionalStep3": "拼成「行程」",
+    "traditionalStep4": "广场招募 / 信用分",
+    "traditionalFocus": "只关注「去哪」和「跟谁走」的流量匹配",
+    "tripnaraFocus": "关注「应不应该去」与「是否适合组队」—— 可验证，不排名",
+    "existBadge": "存在"
   },
   "personas": {
     "title": "帮助你做出更好旅行决定的三位合伙人",
@@ -162,10 +174,32 @@
   "planStudio": {
     "title": "规划工作台",
     "subtitle": "让路线\"可执行\"：从意图到时间表",
+    "decisionStrip": {
+      "idleHeadline": "向助手描述需求，或在下方日程中微调",
+      "compareLabel": "方案对比推荐",
+      "scoreLabel": "行程评分",
+      "viewDetails": "查看依据",
+      "recommendedOption": "推荐方案",
+      "openEvidence": "打开决策证据",
+      "collapse": "收起",
+      "kernelOverride": "Kernel 门控覆盖 LLM 推荐",
+      "verifyStep": "可执行性验证",
+      "decisionLogTitle": "最近决策",
+      "decisionLogLoading": "加载决策记录…",
+      "cta": {
+        "openAssistant": "打开助手",
+        "openPlanGate": "查看方案对比",
+        "adjustSchedule": "微调时间",
+        "openFeasibility": "调整方案",
+        "optimize": "一键优化",
+        "viewProgress": "查看进度"
+      }
+    },
     "tabs": {
       "intent": "意图与约束",
       "places": "找点",
       "schedule": "时间轴",
+      "coverage": "路线覆盖",
       "workbench": "方案预览与提交",
       "planGate": "方案预览与提交",
       "bookings": "预订"
@@ -319,15 +353,10 @@
         "all": "全部",
         "attraction": "景点",
         "restaurant": "餐厅",
-        "cafe": "咖啡厅",
-        "bar": "酒吧",
         "shopping": "购物",
         "hotel": "酒店",
-        "museum": "博物馆",
-        "park": "公园",
-        "transport": "交通枢纽",
         "transitHub": "交通枢纽",
-        "other": "其他"
+        "hospital": "医疗"
       }
     },
     "optimizeTab": {
@@ -651,84 +680,152 @@
     "fatigue": "疲劳趋势"
   },
   "userStories": {
-    "title": "看看大家如何使用 TripNARA",
+    "title": "真实用户如何用 TripNARA",
     "story1": {
       "title": "冰岛环岛",
       "subtitle": "先判断可行域"
     },
     "story2": {
       "title": "新西兰徒步",
-      "subtitle": "风险管理"
+      "subtitle": "风险管理与节奏"
     },
     "story3": {
       "title": "欧洲火车",
-      "subtitle": "结构化路线"
-    }
+      "subtitle": "结构化衔接"
+    },
+    "story4": {
+      "title": "川西徒步 · 可信组队",
+      "subtitle": "项目适合度 + 四层信任"
+    },
+    "viewAll": "查看更多故事 →"
   },
   "professionalUsers": {
-    "title": "TripNARA 也被这些人使用",
-    "user1": "旅行顾问",
-    "user2": "徒步领队",
-    "user3": "探索摄影师",
-    "user4": "户外向导",
-    "description": "可信 · 专业 · 决策能力"
+    "title": "谁在使用 TripNARA",
+    "user1": "旅行者",
+    "user2": "Professional 专业认证",
+    "user3": "Agency 机构",
+    "user4": "Organizer 项目组织者",
+    "description": "验证 · 资质 · 项目适合度 · 声誉 —— 四层独立可查，不做综合信用分"
+  },
+  "websiteTrust": {
+    "title": "信任与角色：我们怎样判断「谁可以带队」",
+    "subtitle": "没有综合信用分，也没有陌生人打分。身份验证、资质认证、项目适合度与声誉记录彼此独立，逐项可查。",
+    "noCreditScore": "我们不展示综合信用分，也不接入第三方信用分。",
+    "pillarsTitle": "四层信任体系",
+    "pillars": {
+      "verification": {
+        "title": "身份验证",
+        "description": "手机、邮箱、实名与年龄等基础验证。证明「你是谁」，不代表具备带队资质或项目适合度。"
+      },
+      "qualification": {
+        "title": "资质认证",
+        "description": "Professional 个人认证与 Agency 机构认证。审核从业背景与合规材料，决定能否公开发布可信项目。"
+      },
+      "projectFit": {
+        "title": "项目适合度",
+        "description": "针对具体可信项目的四维评估（意愿、能力、节奏、风险承受）。结果分四档，不做 0–100 综合分。"
+      },
+      "reputation": {
+        "title": "声誉记录",
+        "description": "基于可核实事实的计数与记录（如完成项目、争议处理）。不合成陌生人信用分，也不做公开排名。"
+      }
+    },
+    "rolesTitle": "账户与项目角色",
+    "rolesSubtitle": "订阅解锁工具能力；Professional / Agency 认证决定发布资格；Organizer 是项目内角色，不是会员等级。",
+    "roles": {
+      "traveler": {
+        "title": "旅行者",
+        "description": "规划私人行程、参与可信项目申请。完成身份验证后可浏览市场与提交项目适合度评估。"
+      },
+      "professional": {
+        "title": "Professional",
+        "description": "个人领队、顾问、向导等。通过专业认证后可申请发布权限，在可信项目市场招募队员。"
+      },
+      "agency": {
+        "title": "Agency 机构",
+        "description": "工作室、旅行社、探险团队等机构空间。机构认证通过后，成员可在机构上下文发布与管理项目。"
+      },
+      "organizer": {
+        "title": "Organizer 组织者",
+        "description": "某个可信项目的组织与发布角色。创建或接管项目后获得，项目结束后历史保留，不随订阅升降。"
+      }
+    },
+    "trustedProjects": {
+      "title": "可信项目，取代公开广场招募",
+      "description": "带队与组队通过「可信项目」完成：发布前需认证与审核，队员通过项目适合度评估后入队。搭子广场公开招募已停用。",
+      "cta": "浏览可信项目 →"
+    }
   },
   "faq": {
     "title": "常见问题",
     "question1": "TripNARA 会替我决定一切吗？",
-    "answer1": "不会。我们会给你\"建议 + 证据 + 备选\"。"
+    "answer1": "不会。我们会给你「建议 + 证据 + 备选」，最终判断权在你。",
+    "question2": "TripNARA 有信用分吗？",
+    "answer2": "没有。我们不展示综合信用分，也不对陌生人做打分排名。身份验证、Professional / Agency 资质、项目适合度评估与声誉记录四层独立，可在账户治理中心逐项查看。",
+    "question3": "账户角色有哪些？",
+    "answer3": "旅行者用于个人规划与参与项目；Professional 与 Agency 是资质认证（需审核）；Organizer 是具体可信项目内的组织角色。订阅计划只解锁工具，不替代专业或机构认证。",
+    "question4": "如何发布带队项目？",
+    "answer4": "在「可信项目」创建 listing，需完成 Professional 或 Agency 认证并开通发布权限。队员通过项目适合度问卷评估后申请入队，不再使用搭子广场公开招募。"
   },
   "finalCTA": {
-    "title": "让梦想变成真正能走完的路线",
+    "title": "让梦想变成真正能走完、组好队的路线",
     "button1": "开始规划 →",
-    "button2": "看看 TripNARA 如何做决定 →"
+    "button2": "看看 TripNARA 如何做决定 →",
+    "button3": "浏览可信项目 →"
   },
   "tiers": {
     "title": "产品层级",
     "explorer": {
-      "name": "探索者",
-      "description": "适合个人旅行者"
+      "name": "免费版 · 旅行者",
+      "description": "个人规划与参与可信项目"
     },
     "navigator": {
-      "name": "导航者",
-      "description": "适合小团队"
+      "name": "Pro",
+      "description": "小团队协作规划"
     },
     "pathfinder": {
-      "name": "探路者",
-      "description": "适合专业人士"
+      "name": "Professional Pro",
+      "description": "专业团队与机构全量工具（认证单独申请）"
     }
   },
   "whoUses": {
     "title": "谁在使用 TripNARA",
-    "deepTravelers": "深度旅行者",
-    "expeditionTeams": "探险团队",
-    "insurance": "保险与合规",
-    "travelDesigners": "高端旅行设计师"
+    "travelers": "旅行者",
+    "organizers": "Professional · Organizer",
+    "agencies": "Agency 机构",
+    "teams": "小团队协作规划"
   },
   "closing": {
-    "title": "我们不优化行程。\n我们帮助您避免不应该做的决定。",
+    "title": "我们不优化行程，也不卖信用分。\n我们帮助您避免不应该做的决定，并完成可验证的组队。",
     "cta": "开始规划"
   },
   "product": {
-    "title": "TripNARA 是一套「路线与决策系统」",
+    "title": "TripNARA 是一套「路线、决策与信任系统」",
     "hero": {
-      "subtitle": "我们并不是推荐更多地点，而是帮助你判断一条路线是否应该存在，并把它转化为真正能执行的旅行方案。",
+      "line1": "我们并不是推荐更多地点，",
+      "line2": "而是帮助你判断一条路线是否应该存在，",
+      "line3": "并在需要组队时，通过可信项目与项目适合度完成可验证的匹配。",
+      "subtitle": "路线决策 + 四层信任 + 可信项目组队 —— 不做综合信用分。",
       "cta1": "开始制定我的路线 →",
       "cta2": "查看系统原理 →"
+    },
+    "modules": {
+      "title": "核心产品模块",
+      "subtitle": "从个人路线规划到可信项目组队，同一套决策逻辑贯穿始终"
     },
     "module1": {
       "title": "RouteDirection™",
       "description": "路线方向引擎",
       "scene": "适用场景",
-      "sceneContent": "计划中跨地域、多日程、多变量不确定行程",
+      "sceneContent": "跨地域、多日程、多变量不确定的复杂行程",
       "value": "价值",
-      "valueContent": "保证每一步都有数据支持 + 可落地替代选项"
+      "valueContent": "先判断路线是否值得存在，再进入结构与日程"
     },
     "module2": {
       "title": "可执行日程生成",
       "description": "把路线转化为每天可执行的结构",
       "scene": "适用场景",
-      "sceneContent": "需要精确时间安排、节奏控制的复杂行程",
+      "sceneContent": "需要精确时间安排与节奏控制的行程",
       "value": "价值",
       "valueContent": "自动平衡车程、停留、余量，确保每天可完成"
     },
@@ -736,78 +833,91 @@
       "title": "Plan B 备选",
       "description": "自动生成替换方案",
       "scene": "适用场景",
-      "sceneContent": "天气变化、地点关闭、体力不支等突发情况",
+      "sceneContent": "天气、关闭、体力等突发变化",
       "value": "价值",
-      "valueContent": "自动生成结构化替代方案，保持路线完整性"
+      "valueContent": "结构化替代方案，保持路线完整性"
     },
     "module4": {
       "title": "风险 & DEM",
       "description": "基于地形的风险评估",
       "scene": "适用场景",
-      "sceneContent": "涉及地形、海拔、天气的户外或复杂路线",
+      "sceneContent": "户外、高海拔与复杂地形路线",
       "value": "价值",
-      "valueContent": "基于真实地形数据评估可行性，避免纸上谈兵"
+      "valueContent": "真实地形数据验证可行性，避免纸上谈兵"
     },
     "module5": {
-      "title": "行前准备",
-      "description": "完整的旅行准备清单",
+      "title": "可信项目 & 项目适合度",
+      "description": "可验证的组队与发布流程",
       "scene": "适用场景",
-      "sceneContent": "需要全面准备、风险控制的深度旅行",
+      "sceneContent": "带队招募、队员申请、Organizer 审核入队",
       "value": "价值",
-      "valueContent": "系统化检查清单，确保不遗漏关键准备项"
+      "valueContent": "四层信任 + 四档适合度结果，取代广场招募与信用分排名"
     },
     "workflow": {
-      "title": "工作流程",
-      "step1": "先判断路线是否成立",
-      "step1Desc": "从目标出发，判断这段路是否值得存在",
-      "step2": "自动生成可执行日程",
-      "step2Desc": "梳理节点与节奏，形成逻辑闭环",
-      "step3": "风险评估与余量控制",
-      "step3Desc": "评估安全性与可行性，确保路线可执行",
-      "step4": "Plan B 替换与修复",
-      "step4Desc": "自动生成结构化替代方案，保持路线完整性"
+      "title": "完整工作流程",
+      "step1": "判断路线是否成立",
+      "step1Desc": "从目标与约束出发，确认这段路是否值得存在",
+      "step2": "生成可执行结构与日程",
+      "step2Desc": "梳理节点、节奏与余量，形成逻辑闭环",
+      "step3": "风险评估与 Plan B",
+      "step3Desc": "地形与条件验证，并准备结构化替代方案",
+      "step4": "可信项目与适合度匹配",
+      "step4Desc": "发布或加入 listing，完成四档适合度评估与入队审核",
+      "step5": "行中执行与声誉归档",
+      "step5Desc": "Abu/Dr.Dre/Neptune 行中守护，结束后声誉与记录留存"
     },
     "reliable": {
       "title": "为什么可靠",
       "firstPrinciples": "第一性原理",
-      "firstPrinciplesDesc": "从最基础的问题出发：这条路线是否应该存在？",
-      "dataRigorous": "数据/逻辑严谨性",
-      "dataRigorousDesc": "基于真实地形数据、天气数据、历史经验，而非猜测",
+      "firstPrinciplesDesc": "从「这条路线是否应该存在」出发，而非堆叠更多景点",
+      "trustGovernance": "四层信任治理",
+      "trustGovernanceDesc": "验证、资质、项目适合度、声誉彼此独立可查，不做综合信用分",
+      "dataRigorous": "数据与证据",
+      "dataRigorousDesc": "DEM 地形、天气与决策日志支撑每一个判断，而非猜测",
       "aiStructure": "AI + 结构化算法",
-      "aiStructureDesc": "AI 提供智能建议，结构化算法确保可执行性",
-      "expandTitle": "TripNARA 基于旅行最核心问题的还原：",
-      "expandPoint1": "是否值得存在（第一性原则）",
+      "aiStructureDesc": "AI 提供建议，结构化算法与四档适合度确保可执行、可解释",
+      "expandTitle": "TripNARA 还原旅行与组队的核心问题：",
+      "expandPoint1": "路线是否值得存在（第一性原则）",
       "expandPoint2": "是否可以执行（结构与节奏）",
-      "expandPoint3": "是否具备安全性与恢复能力（决策与备选）",
+      "expandPoint3": "是否具备安全性与恢复能力（风险与 Plan B）",
+      "expandPoint4": "组队是否可验证（可信项目 + 适合度，而非信用分排名）",
       "expandButton": "展开详情",
       "collapseButton": "收起"
     },
     "cta": {
-      "text": "开始制定我的路线 →"
+      "text": "开始制定我的路线 →",
+      "trustedProjects": "浏览可信项目 →"
     },
     "comparison": {
       "title": "我们和普通工具的区别",
+      "columnDimension": "功能维度",
+      "columnTraditional": "普通旅行 App",
+      "columnTripnara": "TripNARA",
       "dimension1": "起点逻辑",
       "dimension2": "结构生成",
       "dimension3": "应变能力",
       "dimension4": "风险处理",
+      "dimension5": "组队与信任",
       "traditional1": "景点推荐列表",
       "traditional2": "按兴趣拼景点",
       "traditional3": "无 / 靠用户修改",
       "traditional4": "手动检查天气/安全",
+      "traditional5": "广场招募、综合信用分、陌生人打分",
       "tripnara1": "路线是否应存在的判断逻辑",
-      "tripnara2": "节奏+余量平衡的结构算法",
+      "tripnara2": "节奏 + 余量平衡的结构算法",
       "tripnara3": "自动生成 Plan B 结构化替代",
-      "tripnara4": "地形+条件+算法评估"
+      "tripnara4": "地形 + 条件 + 算法评估",
+      "tripnara5": "可信项目 + 四档适合度 + 四层信任治理"
     },
     "systemDiagram": {
       "title": "系统架构",
-      "step1": "用户输入（目标/偏好）",
-      "step2": "路线可行性评估模块（RouteDirection）",
-      "step3": "结构生成模块（节奏 / 时间 / 节点）",
-      "step4": "风险评估模块（地形 / 气候 / 安全）",
-      "step5": "Plan B 替代推荐模块",
-      "output": "最终输出：可执行行程结构（含备用）"
+      "step1": "用户输入（目标 / 偏好 / 组队需求）",
+      "step2": "路线可行性评估（RouteDirection）",
+      "step3": "结构生成（节奏 / 时间 / 节点）",
+      "step4": "风险评估（地形 / 气候 / 安全）",
+      "step5": "Plan B 替代推荐",
+      "step6": "信任与适合度（可信项目 listing / 四档评估）",
+      "output": "输出：可执行行程 + 可验证组队结构（含备用）"
     },
     "firstPrinciples": {
       "title": "第一性原理",
@@ -837,67 +947,70 @@
   "professionals": {
     "hero": {
       "title": "TripNARA PRO",
-      "subtitle": "为专业创作者提供「路线责任工具」"
+      "subtitle": "为专业创作者提供路线责任工具 —— 配合四层信任体系与可信项目发布流程"
     },
     "users": {
       "title": "用户是谁？",
-      "travelConsultant": "旅行咨询师",
-      "travelConsultantDesc": "为个人或团队提供专业旅行规划建议的顾问",
-      "outdoorLeader": "户外领队",
-      "outdoorLeaderDesc": "组织并带领户外活动，负责路线安全与团队管理",
-      "photographyTeacher": "摄影旅拍老师",
-      "photographyTeacherDesc": "设计摄影路线，平衡创作需求与行程可行性",
-      "explorationPlanner": "探险/极地计划者",
-      "explorationPlannerDesc": "规划极端环境旅行，需要严谨的风险评估与备选方案",
-      "b2bProductManager": "B 端旅行产品经理",
-      "b2bProductManagerDesc": "组织复杂多人旅行产品的设计者"
+      "subtitle": "TripNARA 按账户角色与项目角色区分能力。订阅解锁工具；Professional / Agency 认证决定发布资格；Organizer 随具体可信项目而生。",
+      "traveler": "旅行者",
+      "travelerDesc": "规划私人行程，浏览可信项目并提交项目适合度评估。完成身份验证即可参与组队。",
+      "professional": "Professional",
+      "professionalDesc": "个人领队、顾问、向导等。通过专业认证后可申请发布权限，在可信项目市场招募队员。",
+      "agency": "Agency 机构",
+      "agencyDesc": "工作室、旅行社、探险团队等机构空间。机构认证后，成员可在机构上下文发布与管理项目。",
+      "organizer": "Organizer",
+      "organizerDesc": "某个可信项目的组织与发布角色。创建或接管项目后获得，不是会员等级，项目结束后历史保留。"
     },
     "coreValues": {
       "title": "核心功能模块",
-      "subtitle": "Step 1 → Step 2 → Step 3 → Step 4",
-      "feasibility": {
-        "title": "成立性评估",
-        "subtitle": "输入路线 → 输出成立报告",
-        "riskRating": "风险评级",
-        "fatigueModel": "疲劳模型",
-        "alternativePoints": "替代点",
-        "tradeoffAdvice": "权衡建议"
+      "subtitle": "认证 → 发布 → 适合度 → 组队执行",
+      "trustGovernance": {
+        "title": "四层信任治理",
+        "subtitle": "账户治理中心统一查看，彼此独立、不做综合分",
+        "verification": "身份验证：手机、邮箱、实名、年龄",
+        "qualification": "资质认证：Professional / Agency 审核",
+        "projectFit": "项目适合度：针对具体 listing 的四维评估",
+        "reputation": "声誉记录：可核实事实计数，不合成信用分"
       },
-      "compliance": {
-        "title": "合规支持",
-        "visa": "签证",
-        "permit": "许可",
-        "environmental": "环保区域",
-        "drone": "无人机限制",
-        "mountain": "登山管理"
+      "trustedListing": {
+        "title": "可信项目发布",
+        "subtitle": "取代搭子广场公开招募的正式上架流程",
+        "create": "创建 listing，绑定路线模板与行程上下文",
+        "review": "配置适合度规则、押金与文档要求",
+        "publish": "listing 审核通过后公开发布",
+        "manage": "Organizer 管理申请、入队与项目状态"
       },
-      "riskCalculation": {
-        "title": "风险演算",
-        "subtitle": "假设变化：",
-        "assumptions": "假设变化",
-        "weather": "天气",
-        "physical": "体力",
-        "vehicle": "车况",
-        "pace": "节奏",
-        "output": "重新计算成立性"
+      "projectFit": {
+        "title": "项目适合度评估",
+        "subtitle": "队员申请入队前的结构化问卷",
+        "assumptions": "评估维度",
+        "intent": "参与意愿",
+        "capability": "能力匹配",
+        "pace": "节奏预期",
+        "riskTolerance": "风险承受",
+        "output": "输出四档适合度结果（非 0–100 综合分）"
       },
-      "teamCommunication": {
-        "title": "协作与沟通",
-        "collaboration": "多人协作",
-        "transparency": "决策透明",
-        "attribution": "责任归因明确"
+      "teamOps": {
+        "title": "组队与行中协作",
+        "subtitle": "从申请审核到行中执行的一体化工具",
+        "application": "申请中心：队员提交、Organizer 审核",
+        "appeal": "申诉与争议：适合度申诉、声誉争议处理",
+        "execution": "路线规划、风险验证与 Plan B 行中守护",
+        "reputation": "项目结束后声誉与记录归档"
       }
     },
-    "infrastructure": "你在构建 行业基础设施",
+    "infrastructure": "你在构建可验证的带队责任基础设施 —— 不是流量平台，是路线与信任系统",
     "voice": {
       "title": "品牌语气指南（Voice & Tone）",
-      "subtitle": "TripNARA 的语气 = 冷静、尊重现实、但始终站在人这一边",
+      "subtitle": "TripNARA 的语气 = 冷静、尊重现实、可验证、始终站在人这一边",
       "not": {
         "title": "不是什么",
         "mystical": "神棍式 AI",
         "sales": "销售腔",
         "viral": "网红煽情",
-        "overpromise": "过度承诺"
+        "overpromise": "过度承诺",
+        "creditScore": "综合信用分或陌生人打分排名",
+        "plazaRecruitment": "搭子广场式公开招募"
       },
       "is": {
         "title": "而是",
@@ -905,7 +1018,8 @@
         "transparency": "透明",
         "understanding": "帮助用户理解世界",
         "human": "懂人",
-        "boundary": "有底线"
+        "boundary": "有底线",
+        "evidenceBased": "基于证据的判断与四档适合度"
       },
       "examples": {
         "risk": {
@@ -914,127 +1028,149 @@
         },
         "rejection": {
           "title": "【当需要拒绝】",
-          "text": "出于安全原因，我们不会推荐这条路线，这是我们对旅行负责的方式。"
+          "text": "出于安全原因，我们不会推荐这条路线；同样，项目适合度未达要求时，也不会让不适合的人入队。"
+        },
+        "fit": {
+          "title": "【当适合度不足】",
+          "text": "根据你对节奏与风险的回答，这个项目当前档位为「需沟通」。建议先与 Organizer 对齐预期，或选择更匹配 listing。"
         },
         "success": {
           "title": "【当旅程成功】",
-          "text": "真正让旅程成立的，是你的选择与投入，我们只是你的合作伙伴。"
+          "text": "真正让旅程成立的，是你的选择与投入，以及经过验证的组队匹配。我们只是你的合作伙伴。"
         }
       }
     },
     "journey": {
-      "title": "真实用户旅程图（Journey Map）",
-      "subtitle": "你现在的产品旅程已经很清晰",
+      "title": "专业用户旅程图",
+      "subtitle": "从认证到发布可信项目、组队带队、行中执行的完整路径",
       "discovery": {
-        "title": "初识阶段",
-        "description": "用户想旅行但感到不确定、不想走流水线、想「认真一点」→ 进入 TripNARA"
+        "title": "了解四层信任",
+        "description": "进入 TripNARA PRO，理解验证、资质、项目适合度与声誉如何独立运作 —— 没有综合信用分。"
       },
       "understanding": {
-        "title": "认知阶段",
-        "description": "他发现：哦，这不是旅游App，这是——路线责任系统。信任 + 松一口气"
+        "title": "完成认证与权限",
+        "description": "申请 Professional 或 Agency 认证，开通发布权限。订阅只解锁工具，不替代资质审核。"
       },
       "profile": {
-        "title": "能力建模",
-        "description": "完成 3 问题，生成 HumanCapabilityModel"
+        "title": "完善账户治理",
+        "description": "在账户治理中心查看四层信任状态，按需补充验证材料与机构信息。"
       },
       "routeDirection": {
-        "title": "路线策略制定",
-        "description": "系统给出：最优方向、解释、风险提示 → 理性 + 人性"
+        "title": "创建可信项目",
+        "description": "新建 listing，绑定路线模板或既有行程，成为该项目的 Organizer。"
       },
       "planning": {
-        "title": "协同构建",
-        "description": "用户参与，不是消费。TripNARA 像伙伴，不像「导游」"
+        "title": "配置适合度规则",
+        "description": "设置项目适合度问卷、规则模板、押金与文档要求，准备审核上架。"
       },
       "preparation": {
-        "title": "风险预案与准备",
-        "description": "风险兜底、预算监控、节奏平衡、替补方案 → 心理安全感↑↑↑"
+        "title": "审核上架与招募",
+        "description": "listing 通过审核后公开发布。队员浏览市场、提交适合度评估并申请入队。"
       },
       "execution": {
-        "title": "路线执行",
-        "description": "Abu/Dr.Dre/Neptune 持续守护"
+        "title": "审核入队与行中执行",
+        "description": "Organizer 在申请中心审核队员。确认组队后，路线规划、风险验证与 Abu/Dr.Dre/Neptune 行中守护同步进行。"
       },
       "review": {
-        "title": "成果回顾",
-        "description": "旅程被理解，价值留存"
+        "title": "项目结束与声誉归档",
+        "description": "行程结束后项目状态归档，声誉记录与 Organizer 角色历史保留，供后续 listing 参考。"
       }
     },
     "manifesto": {
       "title": "品牌宣言",
-      "line1": "TripNARA 不是卖旅行，是认真对待「路应该怎么走」",
+      "line1": "TripNARA 不是卖旅行，是认真对待「路应该怎么走、队应该怎么带」",
       "line2": "我们相信，",
-      "line3": "旅行不是逃离现实，",
-      "line4": "而是以更体面、更成熟的方式面对世界。",
-      "line5": "路线成立，我们才推荐。",
-      "commitment": "——这，是我们给世界的承诺。"
+      "line3": "信任不应被压缩成一个分数，",
+      "line4": "而应被拆成可验证、可申诉、可复盘的责任链条。",
+      "line5": "路线成立、组队匹配、我们才推荐。",
+      "commitment": "——这，是我们给专业用户与队员的承诺。"
     }
   },
   "pricing": {
     "title": "清晰、简单、无隐藏收费",
-    "heroSubtitle": "拒绝复杂捆绑，我们的定价就像路线——清晰、透明、可信。",
+    "heroSubtitle": "订阅解锁规划工具。Professional / Agency 资质认证与可信项目发布权限需单独申请，不包含在下列价格中。",
+    "subscriptionNote": "以下为订阅计划。认证与发布权限独立于订阅，可在账户治理中心申请。",
     "free": "免费版",
     "pro": "Pro",
-    "professional": "Professional / Team",
+    "professional": "Professional Pro",
     "custom": "定制",
     "perMonth": "/月",
     "explorer": {
-      "name": "免费版",
+      "name": "免费版 · 旅行者",
       "price": "免费",
-      "description": "适合个人旅行者",
+      "description": "个人规划与参与可信项目",
       "features": {
-        "basic": "基础路线验证工具",
+        "basic": "基础路线验证与决策日志",
         "dem": "地形信息查看（DEM）",
-        "log": "决策日志记录"
+        "trustedProjects": "浏览可信项目并提交适合度评估",
+        "log": "身份验证与账户治理查看"
       }
     },
     "navigator": {
       "name": "Pro",
       "price": "$29/月",
-      "description": "适合小团队",
+      "description": "适合 2–6 人小团队协作规划",
       "features": {
-        "advanced": "智能路线建议系统",
-        "personas": "多用户能力画像",
-        "routeDirection": "路线策略访问权限",
-        "support": "快速响应支持"
+        "advanced": "高级路线建议与可行性验证",
+        "personas": "多人能力画像与节奏匹配",
+        "routeDirection": "RouteDirection 路线策略",
+        "support": "优先响应支持"
       }
     },
     "pathfinder": {
-      "name": "Professional / Team",
+      "name": "Professional Pro",
       "price": "定制",
-      "description": "适合专业人士",
+      "description": "专业团队与机构的全量工具包",
       "features": {
-        "full": "全量路线决策工具",
+        "full": "全量路线决策与协作工具",
         "compliance": "企业安全与合规配置",
-        "integrations": "系统级定制集成（API、权限管理、白标等）",
+        "integrations": "API、权限管理与白标集成",
         "dedicated": "一对一专属顾问支持"
       }
     },
+    "certification": {
+      "title": "资质认证（单独申请 · 非订阅项）",
+      "description": "要在可信项目市场公开发布带队 listing，需完成 Professional 或 Agency 认证，并开通发布权限。认证审核免费，与上述订阅相互独立。",
+      "professionalTitle": "Professional 个人认证",
+      "professionalDesc": "领队、顾问、向导等个人从业者。审核背景与合规材料后，可申请发布权限。",
+      "agencyTitle": "Agency 机构认证",
+      "agencyDesc": "工作室、旅行社、探险团队等。机构成员可在机构空间协作发布项目。",
+      "cta": "了解专业用户与认证 →"
+    },
     "faq": {
       "title": "常见问题",
-      "cancelable": "是否可取消",
-      "teamSupport": "是否有团队支持",
-      "dataPrivacy": "数据隐私",
-      "countrySupport": "国家支持"
+      "cancelable": "订阅可以随时取消吗？",
+      "cancelableAnswer": "可以。Pro 等订阅按月计费，随时可在账户设置中取消，取消后当前周期内仍可使用。",
+      "teamSupport": "订阅和认证是一回事吗？",
+      "teamSupportAnswer": "不是。订阅只解锁规划工具；Professional / Agency 认证决定能否公开发布可信项目。Organizer 是项目内角色，随你创建或接管的项目产生。",
+      "dataPrivacy": "发布可信项目还需要什么？",
+      "dataPrivacyAnswer": "除 Professional 或 Agency 认证外，还需开通发布权限，listing 经审核后上架。队员通过项目适合度评估申请入队，不做综合信用分排名。",
+      "countrySupport": "免费版能做什么？",
+      "countrySupportAnswer": "免费版可完成个人路线规划、浏览可信项目市场、提交项目适合度评估，并在账户治理中心查看四层信任信息。"
     },
     "cta": {
       "try": "开始试用 →",
-      "contact": "加入我们 →",
-      "hint": "不确定选哪种？我们可以帮你分析你的路线需求。"
+      "contact": "联系我们 →",
+      "hint": "不确定选哪种？我们可以帮你分析路线需求与认证路径。"
     }
   },
   "stories": {
     "title": "真实旅行，真实决定",
-    "subtitle": "每一次真实的旅行决策，背后都有一段独特的逻辑与坚持。",
-    "subtitle2": "来看看他们如何把「我想去」变成「走得成」的路线。",
+    "subtitle": "每一次旅行决策，背后都有一段可复盘逻辑——从路线成立到可信组队。",
+    "subtitle2": "来看看他们如何把「我想去」变成「走得成、组得好」的路线。",
+    "allCategories": "全部",
+    "trustedProjectsCta": "浏览可信项目 →",
     "categories": {
       "hiking": "徒步",
       "photography": "摄影",
       "roadTrip": "自驾",
       "family": "亲子",
       "polar": "极地/探索",
-      "europeanRail": "欧洲铁路"
+      "europeanRail": "欧洲铁路",
+      "teamFormation": "可信组队"
     },
     "card": {
-      "travelerType": "旅人类型",
+      "travelerType": "角色",
       "destination": "目的地",
       "keyDecision": "关键决策点",
       "risk": "风险",
@@ -1046,21 +1182,61 @@
       "clickToView": "点击查看路线详情"
     },
     "story1": {
+      "title": "冰岛环岛",
+      "travelerType": "旅行者",
+      "destination": "冰岛",
       "goal": "完整一圈冰岛公路，在风雪中看到蓝冰洞",
-      "keywords": "F-Road 风险评估｜天气备选方案｜节奏优化"
+      "keywords": "F-Road 风险评估｜天气备选方案｜节奏优化",
+      "tags": {
+        "risk": "F-road 风险评估",
+        "replacement": "天气备选方案",
+        "rhythm": "每日节奏优化",
+        "elevation": "海拔适应"
+      }
     },
     "story2": {
+      "title": "新西兰徒步",
+      "travelerType": "旅行者",
+      "destination": "新西兰",
       "goal": "挑战新西兰经典徒步路线，匹配个人体力节奏",
-      "keywords": "体力节奏匹配｜天气替换机制｜线路结构化生成"
+      "keywords": "体力节奏匹配｜天气替换机制｜线路结构化生成",
+      "tags": {
+        "risk": "地形难度评估",
+        "replacement": "路线替换",
+        "rhythm": "体力匹配",
+        "elevation": "累积爬升"
+      }
     },
     "story3": {
+      "title": "欧洲火车之旅",
+      "travelerType": "旅行者",
+      "destination": "欧洲",
       "goal": "欧洲多城市深度探索，确保行程衔接顺畅",
-      "keywords": "行程衔接优化｜班次替换方案｜城市停留节奏"
+      "keywords": "行程衔接优化｜班次替换方案｜城市停留节奏",
+      "tags": {
+        "risk": "行程衔接风险",
+        "replacement": "班次替换",
+        "rhythm": "城市停留节奏",
+        "elevation": "—"
+      }
+    },
+    "story4": {
+      "title": "川西高海拔徒步 · 可信项目",
+      "travelerType": "Professional · Organizer",
+      "destination": "四川川西",
+      "goal": "通过可信项目招募 6 人小团，用适合度评估替代广场招募",
+      "keywords": "四档适合度｜Organizer 审核｜四层信任可查",
+      "tags": {
+        "risk": "适合度规则配置",
+        "replacement": "申诉与复核",
+        "rhythm": "队员节奏匹配",
+        "elevation": "高海拔门槛"
+      }
     },
     "testimonial": {
-      "quote": "我们本以为计划是'去哪里'，TripNARA 让我意识到其实更重要的是'能不能走完'。",
+      "quote": "我们本以为计划是「去哪里、跟谁走」。TripNARA 让我意识到更重要的是「能不能走完」以及「这支队是否匹配」—— 不需要信用分排名。",
       "author": "Z 同学",
-      "role": "2023年冰岛F-Road计划用户"
+      "role": "冰岛 F-Road 计划 · 可信项目队员"
     },
     "detail": {
       "background": "旅行背景",
@@ -1073,24 +1249,26 @@
     }
   },
   "about": {
-    "title": "我们关心的不是\"去更多地方\"，而是「你是否真正走完一段路」。",
-    "titleEn": "We care not about how many places you've been, but whether you've truly walked through a path.",
+    "title": "我们关心的不只是「去更多地方」，而是「你是否真正走完一段路、带好一支队」。",
+    "titleEn": "We care whether you've truly walked a path — and formed a team that belongs on it.",
     "mission": {
       "title": "使命",
-      "text": "让每一次出发，都成为值得的决定。"
+      "text": "让每一次出发与每一次组队，都成为值得的决定。"
     },
     "believe": {
       "title": "我们相信",
       "point1": "我们相信，旅行不只是去更多地方，而是走对路径。",
-      "point1Desc": "一个好的旅程，不该是\"累加景点\"，而是\"完成过程\"。",
+      "point1Desc": "一个好的旅程，不该是「累加景点」，而是「完成过程」。",
       "point2": "我们相信，路线不是默认存在的，它应当被验证与质疑。",
-      "point2Desc": "决策的第一步，是问\"这条路是否成立\"。",
+      "point2Desc": "决策的第一步，是问「这条路是否成立」。",
       "point3": "我们相信，AI 是决策助手，而不是替你决定的工具。",
       "point3Desc": "技术应当服务于判断，而不是取代思考。",
       "point4": "我们相信，方向先于细节，结构重于碎片。",
       "point4Desc": "你不需要更多信息，你需要更好的框架。",
       "point5": "我们相信，好的路线是可执行的，而不是理想化的。",
-      "point5Desc": "\"浪漫\"要落地，才是真实。"
+      "point5Desc": "「浪漫」要落地，才是真实。",
+      "point6": "我们相信，信任不应被压缩成一个分数。",
+      "point6Desc": "验证、资质、项目适合度与声誉应彼此独立、可申诉、可复盘——通过可信项目，而非广场招募。"
     },
     "team": {
       "title": "团队介绍",
@@ -1174,14 +1352,14 @@
         ],
         "impact": "她相信，一个值得存在的系统，不能只被理解，还要被信任。"
       },
-      "mission": "想要构建新一代的旅行决策系统，必须打破「App推荐-用户选择」的旧范式，TripNARA 团队正是以此为使命集结 —— 既来自系统设计一线，也深陷路线实践一线。"
+      "mission": "想要构建新一代的旅行决策与信任系统，必须打破「App 推荐 - 用户选择」与「广场招募 - 信用分排名」的旧范式。TripNARA 团队正是以此为使命集结。"
     },
     "contact": {
       "title": "联系方式"
     },
     "recruiting": {
       "title": "招募",
-      "text": "如果你也相信旅行不止于打卡，欢迎加入。",
+      "text": "如果你也相信旅行不止于打卡，且信任不应被压缩成一个分数，欢迎加入。",
       "cta": "了解我们开放的岗位 →",
       "positions": {
         "product": {
@@ -1255,7 +1433,7 @@
     "origin": {
       "title": "TripNARA 的诞生",
       "quote": "有些路线，是从地图上开始的；有些路线，是从一个问题开始的。",
-      "description": "我们关注\"路线是否该存在\"这个问题，因为真正的旅行不是打卡，而是完成一段值得的旅程。"
+      "description": "我们关注「路线是否该存在、队伍是否该同行」—— 通过四层信任与可信项目，而不是综合信用分。"
     }
   },
   "contact": {
@@ -1265,10 +1443,10 @@
     "message": "消息",
     "send": "发送消息",
     "recruiting": {
-      "title": "我们不是在找\"员工\"，我们在找判断者。",
-      "subtitle": "加入我们，不是为了去更多地方，而是为了走对一段路。",
-      "intro": "在 TripNARA，我们不急于发布更多路线。我们花更多时间判断：这条路是否应该存在。",
-      "intro2": "所以，我们寻找的不是\"能做\"，而是\"该做\"的人。",
+      "title": "我们不是在找「员工」，我们在找判断者。",
+      "subtitle": "加入我们，不是为了去更多地方，而是为了走对一段路、建好一套可验证的信任。",
+      "intro": "在 TripNARA，我们不急于堆功能或做流量平台。我们花时间判断：这条路是否应该存在，这支队是否应该同行。",
+      "intro2": "我们寻找的不是「能做」，而是「该做」的人—— 愿意把四层信任、项目适合度与路线决策当成产品核心的人。",
       "intro3": "如果你愿意把职业当成一次真实路径的选择，欢迎加入我们。",
       "apply": {
         "title": "投递方式",
@@ -1278,7 +1456,7 @@
       },
       "positions": {
         "product": {
-          "tagline": "我们不是用功能堆砌产品，而是用逻辑判断需求。",
+          "tagline": "我们不是用功能堆砌产品，而是用逻辑判断需求——含可信项目与信任治理。",
           "expectations": [
             "熟悉系统 1 / 系统 2 的思维模型",
             "能处理不确定输入，辅助判断",
@@ -1329,16 +1507,16 @@
       "applyButton": "我要投递",
       "viewFullDesc": "查看完整职位描述",
       "closing": {
-        "quote": "🛤️ 有些路，地图上没有，但你知道它存在。",
-        "text": "如果你也相信，不是所有路线都值得存在，那我们可能正好缺你一个人。"
+        "quote": "🛤️ 有些路，地图上没有，但你知道它存在；有些队，信用分排不出来，但你知道是否匹配。",
+        "text": "如果你也相信，不是所有路线都值得存在、也不是所有组队都该靠排名—— 那我们可能正好缺你一个人。"
       }
     }
   },
   "routeIntelligence": {
     "title": "一条路线，应该如何被理解？",
-    "subtitle": "TripNARA 的路线哲学",
+    "subtitle": "TripNARA 的路线哲学 —— 从个人决策到可信组队",
     "corePoints": {
-      "title": "四个核心观点",
+      "title": "五个核心观点",
       "point1": "一条路线不是景点清单",
       "point1Desc": "而是连接目标、节奏、可行性与安全的结构性路径。",
       "point2": "方向先于细节",
@@ -1347,6 +1525,8 @@
       "point3Desc": "想法固然美好，落地才是旅行能真正发生的前提。",
       "point4": "变化是常态",
       "point4Desc": "旅行中永远会有变量，系统必须预设替代与弹性。",
+      "point5": "组队需要可验证的信任",
+      "point5Desc": "带队与入队通过可信项目与四档适合度完成，不做综合信用分或陌生人排名。",
       "expandAll": "展开全部",
       "collapseAll": "收起全部"
     },
@@ -1365,8 +1545,8 @@
     },
     "ai": {
       "title": "AI 于我们意味着什么",
-      "subtitle": "不是 AI 玩具，而是决策助手",
-      "description": "TripNARA 并非生成推荐景点或行程清单的 AI。我们构建的是一套基于「是否值得走」的结构判断逻辑，让 AI 成为旅途中真正的\"决策辅助者\"，而非\"选项堆叠者\"。"
+      "subtitle": "不是 AI 玩具，而是决策与信任助手",
+      "description": "TripNARA 并非生成推荐景点或堆叠选项的 AI。我们构建的是「路线是否值得走、队员是否适合队」的结构判断逻辑——含四层信任与项目适合度，不做综合信用分。"
     },
     "manifesto": {
       "en": "We decide whether a route should exist.",
@@ -1471,7 +1651,9 @@
     "legal": "法律",
     "terms": "服务条款",
     "privacy": "隐私政策",
-    "contact": "联系我们"
+    "contact": "联系我们",
+    "tagline": "路线与决策系统 · 四层信任 · 可信项目",
+    "trustedProjects": "可信项目"
   },
   "contactUs": {
     "title": "联系我们",
@@ -1561,6 +1743,40 @@
       "blockers": "个阻塞项",
       "continueLastTrip": "继续上次行程",
       "completeReadiness": "完成准备度",
+      "cascade": {
+        "title": "级联影响",
+        "triggerSummary": "触发：{{trigger}} · {{count}} 项受影响",
+        "previewMode": "修复前预分析",
+        "viewRepairOptions": "查看修复选项",
+        "discussWithAi": "与 AI 讨论",
+        "userConfirmationTitle": "需自行确认",
+        "userConfirmationDisclaimer": "以上事项需您自行处理，TripNARA 不代订。",
+        "confidence": "置信度",
+        "cardTrigger": "触发：{{trigger}}",
+        "impactChain": "影响链详情",
+        "nestedUnderBlocker": "可能影响",
+        "tabDescription": "只读级联快照；无数据时会先触发分数重算。",
+        "refresh": "刷新快照",
+        "empty": "暂无级联影响快照。请先解决阻塞项或刷新分数。",
+        "triggerCompute": "触发计算",
+        "updatedAt": "快照更新",
+        "mockBanner": "开发 mock 数据（VITE_READINESS_CASCADE_MOCK=true）"
+      },
+      "coverageDisclosure": {
+        "title": "数据边界",
+        "checked": "已检查：{{sources}}",
+        "unchecked": "未检查：{{dims}}"
+      },
+      "repair": {
+        "consensusBlockedTitle": "三人格暂未达成共识",
+        "consensusBlockedBody": "当前修复方向存在明显分歧，系统不会自动执行。请仔细阅读各方立场后，自行确认是否继续。",
+        "forceProceed": "我已了解，仍要查看修复选项",
+        "applyBlockedReason": "三人格暂未达成共识，请先确认各方立场。"
+      },
+      "guardian": {
+        "title": "三人格共识",
+        "userBoundary": "决策取舍需您自行确认；TripNARA 不会代您执行预订或改签。"
+      },
       "page": {
         "startExecute": "开始执行",
         "runRepair": "运行修复",
@@ -1575,6 +1791,7 @@
         "noPotentialRisks": "未发现潜在风险",
         "tabs": {
           "readinessBreakdown": "准备度分解",
+          "cascadeImpact": "级联影响",
           "capabilityPacks": "能力包",
           "evidenceChain": "证据链",
           "coverageMap": "覆盖地图",
@@ -1658,14 +1875,26 @@
         "topBlocker": "主要阻塞项: {{title}}",
         "fixNow": "立即修复",
         "systemCapabilityPacks": "系统能力包触发情况",
-        "capabilityPacksDescription": "根据行程特征自动触发的系统能力包，帮助您为特殊旅行场景做好准备",
+        "capabilityPacksDescription": "根据路线特征识别需要额外准备的场景，并给出可执行的准备建议",
+        "capabilityPacksIntro": "TripNARA 会根据路线长度、季节和地形，自动识别需要额外准备的场景。下方是提前准备建议，不是实时警报。",
+        "packsIdentified": "识别到 {{count}} 类特殊场景",
         "packsTriggered": "{{triggered}} / {{total}} 个能力包已触发",
-        "noPacksTriggered": "当前行程未触发任何能力包",
-        "triggeredPacksTitle": "已触发的能力包",
+        "noPacksTriggered": "当前行程未识别到特殊准备场景",
+        "triggeredPacksTitle": "需要关注的场景",
+        "appliesToTrip": "本行程适用",
+        "whyTriggered": "为什么出现",
+        "mainRisk": "主要风险",
+        "planningRiskNote": "提前了解",
+        "disclaimer": {
+          "title": "免责声明"
+        },
+        "capabilityPackPlanningHint": "距离出发还有 {{days}} 天。现在只需提前准备装备和路线意识；具体路况出发前 14 天内再查即可。",
+        "preparationTasks": "准备事项",
+        "viewChecklist": "查看行前准备清单",
         "triggered": "已触发",
         "triggeredRules": "触发的规则",
         "hazards": "风险警告",
-        "addRulesToChecklist": "添加到清单",
+        "addRulesToChecklist": "加入行前准备清单",
         "viewInEvidenceChain": "查看证据",
         "addToChecklistPending": "此功能需要后端支持，规则将被添加到准备清单",
         "personaAnalysis": "三人格分析",
@@ -1684,7 +1913,7 @@
         "geoEnhanced": "地理增强",
         "evaluationContext": "评估上下文",
         "adding": "添加中...",
-        "addToChecklistSuccess": "已成功添加 {{count}} 条规则到准备清单",
+        "addToChecklistSuccess": "已成功添加 {{count}} 条到行前准备清单",
         "addToChecklistFailed": "添加失败，请稍后重试",
         "noSpecialPreparation": "您的行程无需特殊准备",
         "noSpecialPreparationHint": "当前行程不涉及高海拔、偏远地区、季节性道路等特殊场景",
@@ -1702,14 +1931,20 @@
         },
         "ruleLevel": {
           "blocker": "阻塞",
-          "must": "必须",
+          "must": "必做",
           "should": "建议",
           "optional": "可选"
         },
         "hazardType": {
           "supply_shortage": "补给不足",
-          "road_closure": "道路封闭",
+          "road_closure": "道路风险",
           "weather_risk": "天气风险",
+          "COLD": "低温风险",
+          "cold": "低温风险",
+          "HEAT": "高温风险",
+          "heat": "高温风险",
+          "VOLCANIC": "火山/地热风险",
+          "volcanic": "火山/地热风险",
           "altitude_sickness": "高原反应",
           "communication_failure": "通讯中断",
           "emergency_access": "紧急救援困难",
@@ -1730,7 +1965,17 @@
           "emergency": "紧急救援准备"
         },
         "capabilityPackChecklist": "能力包准备清单",
-        "noCapabilityPackChecklist": "暂无能力包清单项，可在「能力包」标签页中添加",
+        "noCapabilityPackChecklist": "暂无能力包项；可在「能力包」标签页加入行前准备清单",
+        "unifiedChecklistTitle": "行前准备清单",
+        "unifiedChecklistDescription": "系统根据行程评估生成的待办；在「能力包」标签页添加的建议也会出现在下方。",
+        "unifiedChecklistEmpty": "暂无待办项",
+        "unifiedChecklistCount": "共 {{total}} 项",
+        "checklistSourceSystem": "系统评估 {{count}} 项",
+        "checklistSourceFromPacks": "能力包 {{count}} 项",
+        "checklistSystemSection": "系统评估",
+        "checklistFromCapabilityPacks": "来自能力包（{{count}}）",
+        "goToCapabilityPacks": "前往能力包添加准备项 →",
+        "checklistSourceCapabilityPack": "能力包",
         "coverageMap": "覆盖地图",
         "coverageRate": "覆盖率",
         "coverageGap": "覆盖缺口",
@@ -1797,10 +2042,32 @@
           "empty": {
             "title": "还没有打包清单",
             "description": "点击下方按钮生成个性化的打包清单，系统会根据您的行程自动推断季节、路线类型等信息。"
-          }
+          },
+          "categories": {
+            "clothing": "衣物",
+            "electronics": "电子设备",
+            "toiletries": "洗漱用品",
+            "documents": "证件文件",
+            "food": "食品",
+            "safety": "安全装备",
+            "gear": "装备",
+            "medication": "药品",
+            "other": "其他"
+          },
+          "priorities": {
+            "must": "必需",
+            "should": "建议",
+            "optional": "可选"
+          },
+          "packingOrder": "打包顺序",
+          "packingOrderTitle": "推荐打包顺序",
+          "packingOrderDescription": "按照以下顺序打包，让您的旅行更有序",
+          "preDeparture": "出发前检查",
+          "preDepartureTitle": "出发前24小时检查清单",
+          "preDepartureDescription": "出发前最后确认，确保万无一失"
         },
         "risks": "风险信息",
-        "checklists": "准备清单",
+        "checklists": "行前准备清单",
         "must": "必须",
         "should": "建议",
         "optional": "可选",
@@ -1819,18 +2086,53 @@
           "standard": "标准"
         },
         "drawer": {
+          "title": "安全准备检查",
           "status": {
             "block": "存在阻塞项，需优先解决",
             "warn": "需完善关键准备项",
+            "warnSafety": "建议完善安全准备",
+            "warnEvidence": "行程证据待补充",
             "pass": "准备度达标"
           },
           "stats": {
+            "title": "有待处理的事项",
+            "safetyHint": "行程可继续规划，以下为目的地安全与打包建议",
+            "mustSafety": "安全准备",
+            "risksLabel": "风险信息",
+            "safetyRemaining": "{{remaining}} 项待办",
+            "safetyAllDone": "已全部完成",
             "blockers": "阻塞项({{count}})",
             "must": "必须项({{count}})",
             "suggestions": "建议项({{count}})",
             "risks": "风险({{count}})"
           },
+          "score": {
+            "breakdownTitle": "分数构成",
+            "weakestHint": "主要受「{{label}}」影响",
+            "weakestShort": "最弱项",
+            "evidence": "证据覆盖",
+            "schedule": "行程可行",
+            "transport": "交通确定",
+            "safety": "安全风险",
+            "buffers": "缓冲时间"
+          },
+          "risks": {
+            "title": "目的地风险参考",
+            "hint": "以下为目的地通用风险提示。应对措施会同步为行前任务，可在「任务」Tab 中分配队员。",
+            "expand": "展开其余 {{count}} 条",
+            "collapse": "收起"
+          },
+          "tasks": {
+            "tab": "任务",
+            "overviewTab": "概览",
+            "teamTitle": "团队任务",
+            "personalTitle": "个人任务",
+            "goToTasks": "前往任务 Tab 分配"
+          },
           "actions": {
+            "recheck": "重新检查",
+            "refreshing": "检查中…",
+            "generating": "生成中…",
             "refresh": "刷新准备度",
             "refreshSuccess": "准备度已刷新",
             "refreshFailed": "刷新失败，请稍后重试",
@@ -1944,6 +2246,7 @@
     "trails": "徒步",
     "readiness": "准备度",
     "insights": "复盘",
+    "participant-projects": "成员项目",
     "settings": "设置",
     "contact": "联系我们"
   },
@@ -2293,6 +2596,43 @@
         }
       }
     }
+  },
+  "agent": {
+    "physicalGate": {
+      "title": "现实约束预警",
+      "pendingCount": "待确认 {{count}}",
+      "highRiskCount": "高风险 {{count}}",
+      "dedupeNote": "若正文已含同类预警，可与下列卡片去重阅读。",
+      "violationTitle": "现实约束未满足",
+      "debugValidation": "校验详情（调试）",
+      "preconditions": "需满足的前置条件",
+      "healingOptions": "建议调整方案",
+      "blockedNoHeal": "当前约束下无法自动给出调整方案，请手动修改行程。",
+      "adoptPreview": "预览调整效果",
+      "shiftDaysHint": "若整体平移 {{days}} 天，行程内其它日期通常需同步平移相同天数。"
+    },
+    "pendingActions": {
+      "title": "待您确认的调整",
+      "disclaimer": "以下为建议性动作，需您自行确认；TripNARA 不代订、不自动改签。",
+      "confirm": "确认"
+    },
+    "travelOntology": {
+      "title": "行程状态",
+      "pendingCount": "{{count}} 项待确认",
+      "verbs": "系统建议动作",
+      "flights": "航班",
+      "hotels": "住宿",
+      "activities": "活动",
+      "disclaimer": "以上为系统理解的行程状态摘要，需您自行确认后才会执行任何变更。"
+    },
+    "travelRuntimeGraph": {
+      "title": "影响传播",
+      "collapsedSummary": "{{trigger}}影响 {{nodes}} 个节点 · {{edges}} 条传播",
+      "debugBadge": "专家 / 调试",
+      "trigger": "触发",
+      "nodes": "受影响节点（{{count}}）",
+      "edges": "传播路径（{{count}}）",
+      "rawJson": "原始 JSON（调试）"
+    }
   }
 }
-

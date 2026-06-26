@@ -4,7 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import type { RouteAndRunRequest, RouteAndRunResponse, RouteType } from '@/api/agent';
 import { invokeRouteAndRun } from '@/lib/executeRouteAndRun';
+import { pickProcessFairnessFromPayload } from '@/lib/normalize-process-fairness';
+import { pickDecisionProfilingFromPayload } from '@/lib/normalize-decision-profiling';
+import {
+  isProcessFairnessActivated,
+  navigateToStructuredNegotiation,
+} from '@/lib/process-fairness-navigation';
+import { DecisionProfilingRouteRunCta } from '@/components/decision-profiling';
+import type { DecisionProfilingPayload } from '@/types/trip-decision-profiling';
 import { resolveRouteAndRunDisplayStatus } from '@/lib/handleRouteAndRunResponse';
+import { formatRouteRunAsyncProgressLabel } from '@/lib/route-run-async';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +49,7 @@ interface Message {
   routeType?: RouteType;
   decisionLogCount?: number;
   hasPlan?: boolean; // 是否有 plan 或调整结果
+  decisionProfiling?: DecisionProfilingPayload;
 }
 
 export default function AgentChatSidebar({ activeTripId, onSystem2Response }: AgentChatSidebarProps) {
@@ -268,6 +278,32 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
         messageContent += `\n\n📊 已生成 ${decisionLogCount} 条决策记录，可在决策看板中查看详情。`;
       }
 
+      const payloadRecord =
+        response.result.payload && typeof response.result.payload === 'object'
+          ? (response.result.payload as Record<string, unknown>)
+          : undefined;
+      let decisionProfilingForMessage: DecisionProfilingPayload | undefined;
+      const decisionProfiling = pickDecisionProfilingFromPayload(payloadRecord);
+      if (decisionProfiling?.triggered && status === 'OK') {
+        if (decisionProfiling.agentIntroZh && !messageContent.includes(decisionProfiling.agentIntroZh)) {
+          messageContent = decisionProfiling.agentIntroZh + (messageContent.trim() ? `\n\n${messageContent}` : '');
+        }
+        decisionProfilingForMessage = decisionProfiling;
+      }
+
+      const processFairness = pickProcessFairnessFromPayload(payloadRecord);
+      if (
+        !decisionProfiling?.triggered &&
+        status === 'OK' &&
+        processFairness &&
+        isProcessFairnessActivated(processFairness)
+      ) {
+        if (processFairness.agentIntroZh && !messageContent.includes(processFairness.agentIntroZh)) {
+          messageContent = processFairness.agentIntroZh + (messageContent.trim() ? `\n\n${messageContent}` : '');
+        }
+        navigateToStructuredNegotiation(navigate, processFairness);
+      }
+
       // 确定 UI 状态（以 result.status 为准，避免 ui_state.thinking 盖过澄清）
       let uiStatus: Message['status'] = resolveRouteAndRunDisplayStatus(response) as Message['status'];
 
@@ -285,6 +321,7 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
             routeType,
             decisionLogCount: decisionLogCount > 0 ? decisionLogCount : undefined,
             hasPlan: isSystem2, // System2 通常会有 plan 或调整结果
+            ...(decisionProfilingForMessage ? { decisionProfiling: decisionProfilingForMessage } : {}),
           },
         ];
       });
@@ -380,6 +417,10 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
                     )}
                   >
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+
+                    {message.role === 'assistant' && message.decisionProfiling?.triggered ? (
+                      <DecisionProfilingRouteRunCta payload={message.decisionProfiling} disabled={loading} />
+                    ) : null}
                     
                     {/* 根据 routeType 显示额外信息 */}
                     {message.role === 'assistant' && message.routeType && (

@@ -89,7 +89,7 @@ export function AddRailToTripDialog({
   open,
   onOpenChange,
   route,
-  tripId,
+  tripId: _tripId,
   tripInfo,
   onSuccess,
 }: AddRailToTripDialogProps) {

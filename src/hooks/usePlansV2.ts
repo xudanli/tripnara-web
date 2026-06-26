@@ -4,7 +4,7 @@
  * 提供方案生成、对比、优化、确认等功能
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   plansApi,
   type GeneratePlanRequest,
@@ -78,7 +78,7 @@ export function usePlansV2(): UsePlansV2Return {
   const confirmMutation = useMutation({
     mutationFn: ({ planId, data }: { planId: string; data: ConfirmPlanRequest }) =>
       plansApi.confirm(planId, data),
-    onSuccess: (data) => {
+    onSuccess: (_data) => {
       // 确认成功后，可以跳转到行程页面
       queryClient.invalidateQueries({ queryKey: ['planning-session-v2'] });
     },

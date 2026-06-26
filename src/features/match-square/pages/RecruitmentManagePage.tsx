@@ -27,9 +27,16 @@ import { enrichApplicationsWithDecisionBriefs } from '../lib/decision-engine/enr
 import { enrichApplicationsWithMatchInsights } from '../lib/match-enrichment';
 import { resolveTeamSlots } from '../lib/slot-filling';
 import { mergeApprovedMembersIntoPost } from '../lib/team-puzzle';
+import { buildReviewAttributionContext } from '../lib/recruiting-attribution.util';
+import { RecruitingOutcomeSection } from '../components/RecruitingOutcomeSection';
+import { useAuth } from '@/hooks/useAuth';
+import { isSelfEvolutionEnabled } from '@/lib/self-evolution-feature';
+import { CalibrationStatus, onRecruitmentMatched } from '@/features/self-evolution';
 
 export default function RecruitmentManagePage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const selfEvolutionEnabled = isSelfEvolutionEnabled();
   const { data: post, isLoading: detailLoading } = usePostDetail(id);
   const { data: applications, isLoading: appsLoading, isError: appsError, refetch: refetchApps } =
     usePostApplications(id, 'pending');
@@ -78,10 +85,38 @@ export default function RecruitmentManagePage() {
     [applications, post]
   );
 
-  const handleReview = async (applicationId: string, action: 'approve' | 'reject') => {
-    if (!id) return;
+  const handleReview = async (
+    applicationId: string,
+    action: 'approve' | 'reject',
+    manualOverrides?: { captainPreference?: string }
+  ) => {
+    if (!id || !post) return;
+    const application =
+      pendingApplications?.find((app) => app.id === applicationId) ??
+      allApplications?.find((app) => app.id === applicationId);
+    if (!application) return;
+
+    const attributionContext = buildReviewAttributionContext(
+      application,
+      post,
+      approvedApplications,
+      manualOverrides
+    );
+
     try {
-      await review.mutateAsync({ postId: id, applicationId, action });
+      await review.mutateAsync({
+        postId: id,
+        applicationId,
+        action,
+        attributionContext,
+      });
+      if (action === 'approve' && selfEvolutionEnabled) {
+        onRecruitmentMatched(
+          id,
+          applicationId,
+          (application.compatibilityPercent ?? 0) / 100
+        );
+      }
       toast.success(action === 'approve' ? '已通过申请' : '已拒绝申请');
     } catch {
       toast.error('操作失败');
@@ -186,6 +221,12 @@ export default function RecruitmentManagePage() {
 
         {post.status === 'active' && <CaptainRadarPanel postId={post.id} />}
 
+        <RecruitingOutcomeSection outcome={post.outcome} />
+
+        {selfEvolutionEnabled && user?.id && (
+          <CalibrationStatus userId={user.id} />
+        )}
+
         {approvedMemberCards.length > 0 && (
           <section>
             <h2 className="mb-4 text-lg font-semibold text-foreground">已通过队员</h2>
@@ -222,8 +263,8 @@ export default function RecruitmentManagePage() {
                   key={app.id}
                   application={app}
                   isReviewing={review.isPending}
-                  onApprove={() => handleReview(app.id, 'approve')}
-                  onReject={() => handleReview(app.id, 'reject')}
+                  onApprove={(overrides) => handleReview(app.id, 'approve', overrides)}
+                  onReject={(overrides) => handleReview(app.id, 'reject', overrides)}
                   onAskMore={() => toast.info('私信功能即将上线')}
                 />
               ))}

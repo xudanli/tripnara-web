@@ -13,7 +13,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import type { AbuViewData } from '@/utils/trip-data-extractors';
 import {

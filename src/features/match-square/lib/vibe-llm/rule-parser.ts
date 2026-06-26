@@ -1,11 +1,4 @@
-import type {
-  TeamworkContractModel,
-  VibeEducationBaseline,
-  VibeHardGates,
-  VibeLlmParseRequest,
-  VibeLlmParseResponse,
-  VibeLlmParseResult,
-} from '@/types/vibe-llm';
+import type { TeamworkContractModel, VibeHardGates, VibeLlmParseRequest, VibeLlmParseResponse, VibeLlmParseResult } from '@/types/vibe-llm';
 import { buildContractHint, contractsForChips } from './contract-dictionary';
 import { buildVibeLlmParseResponse } from './normalize-api';
 import {
@@ -73,7 +66,7 @@ export function parseVibeIntentRuleMock(
   slotsNeeded = 3
 ): VibeLlmParseResult {
   const trimmed = text.trim();
-  const matched = matchLexiconRules(trimmed);
+  const ____matched = matchLexiconRules(trimmed);
   const vibe_chips = chipsFromLexicon(trimmed);
 
   if (vibe_chips.length === 0 && trimmed.length >= 8) {

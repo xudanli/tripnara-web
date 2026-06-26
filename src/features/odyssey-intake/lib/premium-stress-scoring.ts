@@ -10,7 +10,7 @@ import type {
 import { applySelfSelectedMbti } from './mbti-from-type';
 
 function resolveQuestionsForAnswers(
-  stressAnswers: Record<string, PremiumStressAnswerChoice>,
+  _stressAnswers: Record<string, PremiumStressAnswerChoice>,
   questions?: PremiumStressQuestion[]
 ): PremiumStressQuestion[] {
   if (questions?.length) return questions;

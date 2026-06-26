@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { MapPin, Calendar, Clock, Mountain, Utensils, Coffee, Car, Hotel, Sparkles, CheckCircle2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ITINERARY_ITEM_TYPE_DISPLAY } from '@/lib/itinerary-item-type-display';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { formatValidationMessage } from '@/utils/openingHoursFormatter';
@@ -37,14 +38,7 @@ interface CreateItineraryItemDialogProps {
   onSuccess: () => void;
 }
 
-// ✅ 行程类型配置（图标 + 名称）
-const typeConfig: Record<ItineraryItemType, { label: string; icon: typeof MapPin; description: string }> = {
-  ACTIVITY: { label: '游玩活动', icon: MapPin, description: '景点、博物馆、公园等' },
-  MEAL_ANCHOR: { label: '必吃大餐', icon: Utensils, description: '需要订位的餐厅' },
-  MEAL_FLOATING: { label: '随便吃吃', icon: Coffee, description: '小吃、咖啡、简餐' },
-  REST: { label: '休息/咖啡', icon: Coffee, description: '休息、咖啡、茶歇' },
-  TRANSIT: { label: '交通移动', icon: Car, description: '乘车、步行、换乘' },
-};
+const typeConfig = ITINERARY_ITEM_TYPE_DISPLAY;
 
 export function CreateItineraryItemDialog({
   tripDayId,
@@ -664,7 +658,7 @@ export function CreateItineraryItemDialog({
                 <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
                   <div className="flex items-center gap-2 text-sm text-blue-700">
                     <Hotel className="w-4 h-4" />
-                    <span>提示：必吃大餐通常需要提前预订，建议关联具体餐厅地点</span>
+                    <span>提示：预约用餐通常需要提前预订，建议关联具体餐厅地点</span>
                   </div>
                 </div>
               )}

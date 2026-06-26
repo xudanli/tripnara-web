@@ -196,7 +196,7 @@ function puzzleAlreadyShowsApproved(
 /** 将已通过申请与 filled 拼图位一一配对（避免多个 slot 命中同一人 / 共用缺位 AI 文案） */
 export function assignApprovedMembersToFilledSlots(
   slots: TeamSlot[],
-  postId: string,
+  _postId: string,
   approvedMembers: RecruitmentApplicationCard[]
 ): Map<string, RecruitmentApplicationCard> {
   const map = new Map<string, RecruitmentApplicationCard>();

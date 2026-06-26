@@ -7,6 +7,7 @@ import ThreePersonasSection from './sections/ThreePersonasSection';
 import DEMTopographySection from './sections/DEMTopographySection';
 import UserStoriesSection from './sections/UserStoriesSection';
 import ProfessionalUsersSection from './sections/ProfessionalUsersSection';
+import TrustGovernanceSection from './sections/TrustGovernanceSection';
 import FAQSection from './sections/FAQSection';
 import FinalCTASection from './sections/FinalCTASection';
 import GoogleOneTap from '@/components/auth/GoogleOneTap';
@@ -38,6 +39,7 @@ export default function HomePage() {
       <ThreePersonasSection />
       <DEMTopographySection />
       <UserStoriesSection />
+      <TrustGovernanceSection />
       <ProfessionalUsersSection />
       <FAQSection />
       <FinalCTASection />

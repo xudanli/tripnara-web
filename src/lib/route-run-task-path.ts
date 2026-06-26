@@ -1,6 +1,6 @@
 function normalizeAgentTaskRelativePath(
   rawPath: string | undefined,
-  taskId: string,
+  _taskId: string,
   fallback: string
 ): string {
   if (!rawPath?.trim()) return fallback;

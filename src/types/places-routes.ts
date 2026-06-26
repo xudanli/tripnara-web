@@ -12,22 +12,15 @@
  * - 行程项中的地点（trip API）
  * - 前端组件显示和筛选
  * 
- * 注意：
- * - TRANSPORT 和 TRANSIT_HUB 是同义词，后端可能返回任意一个
- * - 前端组件需要同时支持两者以确保兼容性
+ * 注意：必须与后端 Prisma PlaceCategory 枚举保持一致。
  */
 export type PlaceCategory = 
   | 'ATTRACTION'    // 景点
   | 'RESTAURANT'    // 餐厅
-  | 'CAFE'          // 咖啡厅
-  | 'BAR'           // 酒吧
-  | 'HOTEL'         // 酒店
-  | 'MUSEUM'        // 博物馆
-  | 'PARK'          // 公园
   | 'SHOPPING'      // 购物
-  | 'TRANSPORT'     // 交通枢纽（与 TRANSIT_HUB 同义）
-  | 'TRANSIT_HUB'   // 交通枢纽（与 TRANSPORT 同义）
-  | 'OTHER';         // 其他
+  | 'HOTEL'         // 酒店
+  | 'TRANSIT_HUB'   // 交通枢纽
+  | 'HOSPITAL';      // 医疗
 
 export type RouteDifficulty = 'EASY' | 'MODERATE' | 'HARD' | 'EXTREME';
 
@@ -815,4 +808,3 @@ export interface CreateTripFromTemplateResponse {
   };
   error: null;
 }
-

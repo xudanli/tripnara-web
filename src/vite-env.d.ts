@@ -7,42 +7,48 @@ declare module 'axios' {
     /** 根据 URL 划分的 API 分层，供响应拦截器附加诊断信息 */
     tripnaraApiKind?: 'agent' | 'decision_engine' | 'default';
     /** TRIP_ORCHESTRATION_BUSY 指数退避重试计数 */
-    __busyRetryCount?: number;
+    _busyRetryCount?: number;
     _retry?: boolean;
   }
 }
 
-// Web Speech API (语音识别)
-interface SpeechRecognitionEvent extends Event {
-  readonly resultIndex: number;
-  readonly results: SpeechRecognitionResultList;
+// Web Speech API (语音识别) — 须在 declare global 内，否则本文件因 import 成为模块后类型不全局可见
+declare global {
+  interface SpeechRecognitionEvent extends Event {
+    readonly resultIndex: number;
+    readonly results: SpeechRecognitionResultList;
+  }
+  interface SpeechRecognitionResultList {
+    readonly length: number;
+    item(index: number): SpeechRecognitionResult;
+    [index: number]: SpeechRecognitionResult;
+  }
+  interface SpeechRecognitionResult {
+    readonly length: number;
+    item(index: number): SpeechRecognitionAlternative;
+    [index: number]: SpeechRecognitionAlternative;
+    readonly isFinal: boolean;
+  }
+  interface SpeechRecognitionAlternative {
+    readonly transcript: string;
+    readonly confidence: number;
+  }
+  interface SpeechRecognition extends EventTarget {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    start(): void;
+    stop(): void;
+    onresult: ((e: SpeechRecognitionEvent) => void) | null;
+    onend: (() => void) | null;
+  }
+  // eslint-disable-next-line no-var
+  var SpeechRecognition: { new (): SpeechRecognition };
+  // eslint-disable-next-line no-var
+  var webkitSpeechRecognition: { new (): SpeechRecognition };
 }
-interface SpeechRecognitionResultList {
-  readonly length: number;
-  item(index: number): SpeechRecognitionResult;
-  [index: number]: SpeechRecognitionResult;
-}
-interface SpeechRecognitionResult {
-  readonly length: number;
-  item(index: number): SpeechRecognitionAlternative;
-  [index: number]: SpeechRecognitionAlternative;
-  readonly isFinal: boolean;
-}
-interface SpeechRecognitionAlternative {
-  readonly transcript: string;
-  readonly confidence: number;
-}
-interface SpeechRecognition extends EventTarget {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  stop(): void;
-  onresult: ((e: SpeechRecognitionEvent) => void) | null;
-  onend: (() => void) | null;
-}
-declare var SpeechRecognition: { new (): SpeechRecognition };
-declare var webkitSpeechRecognition: { new (): SpeechRecognition };
+
+export {};
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string;
@@ -51,6 +57,8 @@ interface ImportMetaEnv {
   readonly VITE_HIKE_PLAN_STORAGE?: string;
   readonly VITE_FEATURE_MEMORY_CONSOLE?: string;
   readonly VITE_FEATURE_MEMORY_CONSTRAINT_SINK?: string;
+  /** Narrative Engine V1 · 与后端 NARRATIVE_THEME_V1 对齐 */
+  readonly VITE_FEATURE_NARRATIVE_THEME_V1?: string;
   readonly VITE_MEMORY_CONSOLE_MOCK?: string;
   /** Match Square：开发环境默认 mock；设为 0 走真实后端 */
   readonly VITE_MATCH_SQUARE_MOCK?: string;

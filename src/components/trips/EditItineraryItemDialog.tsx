@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { itineraryItemsApi } from '@/api/trips';
 import type { ItineraryItem, UpdateItineraryItemRequest, ItineraryItemType, CostCategory, TravelMode, BookingStatus } from '@/types/trip';
@@ -11,16 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import CascadeConfirmDialog from '@/components/trips/CascadeConfirmDialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  resolveItineraryRequiresConfirmation,
+  type ItineraryRequiresConfirmation,
+} from '@/lib/itinerary-cascade-confirm.util';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,16 +28,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle, Info, DollarSign, MapPin, Utensils, Coffee, Car, Navigation, CalendarCheck, Link2, AlertTriangle } from 'lucide-react';
+import { AlertCircle, Info, DollarSign, Navigation, CalendarCheck, Link2 } from 'lucide-react';
+import { ITINERARY_ITEM_TYPE_OPTIONS } from '@/lib/itinerary-item-type-display';
+import { ItinerarySpecialDisplayRoleField } from '@/components/trips/ItinerarySpecialDisplayRoleField';
+import { extractHmFromWindow } from '@/lib/itinerary-item-card-format';
+import { buildAirportLandingUtcTimes } from '@/lib/itinerary-item-cross-day-form';
+import {
+  applySpecialDisplayRoleDefaults,
+  buildSpecialDisplayMetadata,
+  findTripDayIdForIsoEnd,
+  getItineraryRoleEndTimeLabel,
+  getItineraryRoleStartTimeLabel,
+  itineraryRoleSupportsCrossDay,
+  itineraryRoleUsesDepartureTime,
+  itineraryRoleUsesLandingTime,
+  itineraryRoleUsesSingleHubMoment,
+  normalizeTripDayDateKey,
+  mergeTimelineDisplayRoleIntoNote,
+  resolveItinerarySpecialDisplayRole,
+  stripTimelineDisplayRoleFromNote,
+  type ItinerarySpecialDisplayRole,
+} from '@/lib/itinerary-special-display';
+import { getEndDayOptions } from '@/lib/itinerary-item-cross-day-form';
+import { CalendarDays } from 'lucide-react';
 
-// 行程类型选项
-const ITEM_TYPE_OPTIONS: { value: ItineraryItemType; label: string; icon: typeof MapPin }[] = [
-  { value: 'ACTIVITY', label: '景点/活动', icon: MapPin },
-  { value: 'MEAL_ANCHOR', label: '固定用餐', icon: Utensils },
-  { value: 'MEAL_FLOATING', label: '灵活用餐', icon: Coffee },
-  { value: 'REST', label: '休息', icon: Coffee },
-  { value: 'TRANSIT', label: '交通', icon: Car },
-];
+// 行程类型选项（与 time轴列表统一）
+const ITEM_TYPE_OPTIONS = ITINERARY_ITEM_TYPE_OPTIONS;
 
 // 交通方式选项
 const TRAVEL_MODE_OPTIONS: { value: TravelMode; label: string; icon: string }[] = [
@@ -72,7 +83,7 @@ interface EditItineraryItemDialogProps {
   item: ItineraryItem;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
   /** 目的地时区（IANA 格式，如 "Atlantic/Reykjavik"），用于正确转换时间 */
   timezone?: string;
   /** @deprecated 后端已自动处理跨天 tripDayId 更新，此参数不再需要 */
@@ -87,22 +98,24 @@ export function EditItineraryItemDialog({
   onOpenChange,
   onSuccess,
   timezone = 'UTC',
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  tripDays: _tripDays,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  currentTripDayId: _currentTripDayId,
+  tripDays = [],
+  currentTripDayId,
 }: EditItineraryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [originalStartTime, setOriginalStartTime] = useState<string>('');
+  const [displayRole, setDisplayRole] = useState<ItinerarySpecialDisplayRole>('normal');
+  const [endTripDayId, setEndTripDayId] = useState('');
+  const [landingTime, setLandingTime] = useState('10:00');
   const [showCostFields, setShowCostFields] = useState(false);
   const [showTravelFields, setShowTravelFields] = useState(false);
   const [showBookingFields, setShowBookingFields] = useState(false);
   // 级联影响确认弹窗
   const [showCascadeConfirm, setShowCascadeConfirm] = useState(false);
-  const [cascadeCount, setCascadeCount] = useState(0);
-  const [cascadeMessage, setCascadeMessage] = useState('');
+  const [cascadeConfirmation, setCascadeConfirmation] = useState<ItineraryRequiresConfirmation | null>(
+    null
+  );
   const [formData, setFormData] = useState<UpdateItineraryItemRequest & {
     travelFromPreviousDuration?: number;
     travelFromPreviousDistance?: number;
@@ -136,14 +149,24 @@ export function EditItineraryItemDialog({
     if (open && item) {
       // 使用目的地时区转换时间
       const startTime = item.startTime ? utcToDatetimeLocal(item.startTime, timezone) : '';
+      const endTimeLocal = item.endTime ? utcToDatetimeLocal(item.endTime, timezone) : '';
       const hasCostData = !!(item.estimatedCost || item.actualCost || item.costCategory || item.costNote);
       const hasTravelData = !!(item.travelFromPreviousDuration || item.travelFromPreviousDistance || item.travelMode);
       const hasBookingData = !!(item.bookingStatus || item.bookingConfirmation || item.bookingUrl);
+      const resolvedRole = resolveItinerarySpecialDisplayRole(item);
+      const tripDayRows = tripDays.map((d) => ({ id: d.id, date: d.date }));
+      const endDayId =
+        findTripDayIdForIsoEnd(item.endTime, tripDayRows) ??
+        currentTripDayId ??
+        item.tripDayId ??
+        tripDays[0]?.id ??
+        '';
+
       setFormData({
         type: item.type,
         startTime,
-        endTime: item.endTime ? utcToDatetimeLocal(item.endTime, timezone) : '',
-        note: item.note || '',
+        endTime: endTimeLocal,
+        note: stripTimelineDisplayRoleFromNote(item.note),
         estimatedCost: item.estimatedCost || undefined,
         actualCost: item.actualCost || undefined,
         costCategory: item.costCategory || undefined,
@@ -159,6 +182,11 @@ export function EditItineraryItemDialog({
         bookingUrl: item.bookingUrl || '',
         bookedAt: item.bookedAt ? utcToDatetimeLocal(item.bookedAt, timezone) : '',
       });
+      setDisplayRole(resolvedRole);
+      setEndTripDayId(endDayId);
+      setLandingTime(
+        item.startTime ? extractHmFromWindow(item.startTime, timezone) : '10:00',
+      );
       setOriginalStartTime(startTime);
       setShowCostFields(hasCostData);
       setShowTravelFields(hasTravelData);
@@ -166,7 +194,57 @@ export function EditItineraryItemDialog({
       setError(null);
       setWarning(null);
     }
-  }, [item, open, timezone]);
+  }, [item, open, timezone, tripDays, currentTripDayId]);
+
+  const startTripDayId =
+    currentTripDayId ?? item.tripDayId ?? tripDays[0]?.id ?? '';
+  const endDayOptions = useMemo(
+    () =>
+      getEndDayOptions(
+        tripDays.map((d) => ({ id: d.id, date: d.date, ItineraryItem: [] })),
+        startTripDayId,
+      ),
+    [tripDays, startTripDayId],
+  );
+  const isLandingPointMode = itineraryRoleUsesLandingTime(displayRole);
+  const isDeparturePointMode = itineraryRoleUsesDepartureTime(displayRole);
+  const isHubMomentMode = itineraryRoleUsesSingleHubMoment(displayRole);
+  const supportsCrossDayEnd =
+    itineraryRoleSupportsCrossDay(displayRole) && endDayOptions.length > 1;
+  const supportsLandingArriveDay =
+    isLandingPointMode && endDayOptions.length > 1;
+  const supportsDepartureDay =
+    isDeparturePointMode && endDayOptions.length > 1;
+  const startTimeLabel = getItineraryRoleStartTimeLabel(displayRole);
+  const endTimeLabel = getItineraryRoleEndTimeLabel(displayRole);
+
+  const applyDisplayRole = (role: ItinerarySpecialDisplayRole) => {
+    setDisplayRole(role);
+    const defaults = applySpecialDisplayRoleDefaults(
+      role,
+      tripDays.map((d) => ({ id: d.id, date: d.date, ItineraryItem: [] })),
+      startTripDayId,
+    );
+    setFormData((prev) => ({
+      ...prev,
+      type: defaults.itemType ?? prev.type,
+      costCategory: defaults.costCategory ?? prev.costCategory,
+    }));
+    if (defaults.showCostFields) setShowCostFields(true);
+    if (defaults.endTripDayId) setEndTripDayId(defaults.endTripDayId);
+    if (defaults.landingTime) setLandingTime(defaults.landingTime);
+  };
+
+  const handleEndTripDayChange = (dayId: string) => {
+    setEndTripDayId(dayId);
+    const day = tripDays.find((d) => d.id === dayId);
+    if (!day || !formData.endTime) return;
+    const timePart = formData.endTime.includes('T')
+      ? formData.endTime.split('T')[1]
+      : '10:00';
+    const dateKey = normalizeTripDayDateKey(day.date);
+    setFormData({ ...formData, endTime: `${dateKey}T${timePart}` });
+  };
 
   // 检测开始时间是否改变（用于显示智能调整提示）
   const startTimeChanged = formData.startTime !== originalStartTime;
@@ -181,11 +259,45 @@ export function EditItineraryItemDialog({
       // 只需发送 startTime 和 cascadeMode，后端会处理 tripDayId 的更新
 
       // 1. 更新基本信息（使用目的地时区转换时间为 UTC）
+      let startTimeUtc: string | undefined;
+      let endTimeUtc: string | undefined;
+
+      if (isHubMomentMode) {
+        const arriveDay =
+          tripDays.find((d) => d.id === endTripDayId) ??
+          tripDays.find((d) => d.id === startTripDayId);
+        if (!landingTime.trim()) {
+          setError(isDeparturePointMode ? '请填写值机时间' : '请填写落地时间');
+          setLoading(false);
+          return;
+        }
+        if (!arriveDay) {
+          setError(isDeparturePointMode ? '无法确定出发日期' : '无法确定落地日期');
+          setLoading(false);
+          return;
+        }
+        const built = buildAirportLandingUtcTimes(
+          arriveDay.date,
+          landingTime.trim(),
+          timezone,
+        );
+        startTimeUtc = built.startTimeUTC;
+        endTimeUtc = built.endTimeUTC;
+      } else {
+        startTimeUtc = formData.startTime
+          ? datetimeLocalToUTC(formData.startTime, timezone)
+          : undefined;
+        endTimeUtc = formData.endTime
+          ? datetimeLocalToUTC(formData.endTime, timezone)
+          : undefined;
+      }
+
       const updateData: UpdateItineraryItemRequest = {
         type: formData.type,
-        startTime: formData.startTime ? datetimeLocalToUTC(formData.startTime, timezone) : undefined,
-        endTime: formData.endTime ? datetimeLocalToUTC(formData.endTime, timezone) : undefined,
-        note: formData.note || undefined,
+        startTime: startTimeUtc,
+        endTime: endTimeUtc,
+        note: mergeTimelineDisplayRoleIntoNote(formData.note, displayRole) || undefined,
+        metadata: buildSpecialDisplayMetadata(displayRole, item.metadata ?? undefined),
         forceCreate, // 强制更新标志
         // 级联调整模式：'auto' 调整后续（默认） | 'none' 只调整当前项
         // 只有在用户明确选择时才发送，否则使用后端默认值 'auto'
@@ -238,36 +350,23 @@ export function EditItineraryItemDialog({
         description: '您的行程项信息已成功保存',
         duration: 3000,
       });
-      onSuccess();
+      await onSuccess();
       onOpenChange(false);
     } catch (err: any) {
       const errorMessage = err.message || '更新行程项失败';
-      
-      // 移除 Toast 错误通知，避免与内联错误消息重复
-      // 模态框内的操作错误应该只使用内联错误消息
-      // 级联警告和时间警告会通过 UI 显示（setWarning），不需要 Toast
-      
-      // 检查是否是级联影响警告（需要确认弹窗）
-      // 匹配多种格式：
-      // - "影响后续 1 个行程项"
-      // - "修改时间将影响后续行程：3个活动将顺延"
-      // - "此修改将影响后续 1 个行程项"
-      // - "「钻石沙滩」将顺延+21小时15分钟"
-      const isCascadeWarning = errorMessage.includes('影响后续') || errorMessage.includes('将顺延');
-      const isTimeWarning = errorMessage.includes('时间可能不合理') || errorMessage.includes('建议开始时间') || errorMessage.includes('预计需要');
-      
-      if (isCascadeWarning && !forceCreate) {
-        // 尝试解析影响的行程项数量
-        const cascadeMatch = errorMessage.match(/(\d+)\s*个(行程项|活动)/);
-        const count = cascadeMatch ? parseInt(cascadeMatch[1], 10) : 1;
-        setCascadeCount(count);
-        setCascadeMessage(errorMessage); // 保存完整的警告消息
+
+      const confirmation = resolveItineraryRequiresConfirmation(err);
+      const isTimeWarning =
+        errorMessage.includes('时间可能不合理') ||
+        errorMessage.includes('建议开始时间') ||
+        errorMessage.includes('预计需要');
+
+      if (confirmation && !forceCreate) {
+        setCascadeConfirmation(confirmation);
         setShowCascadeConfirm(true);
         setError(null);
         setWarning(null);
-      }
-      // 检查是否是时间不合理的警告
-      else if (isTimeWarning) {
+      } else if (isTimeWarning) {
         setWarning(errorMessage);
         setError(null);
       } else {
@@ -357,10 +456,99 @@ export function EditItineraryItemDialog({
               </Select>
             </div>
 
-            {/* 时间 */}
+            <ItinerarySpecialDisplayRoleField
+              value={displayRole}
+              onChange={applyDisplayRole}
+            />
+
+            {supportsCrossDayEnd && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" />
+                  {displayRole === 'car_rental' ? '还车日期' : '退房日期'}
+                </Label>
+                <Select value={endTripDayId} onValueChange={handleEndTripDayChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择结束日期" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {endDayOptions.map((day) => (
+                      <SelectItem key={day.id} value={day.id}>
+                        {normalizeTripDayDateKey(day.date)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {supportsLandingArriveDay && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" />
+                  抵达日期
+                </Label>
+                <Select value={endTripDayId} onValueChange={setEndTripDayId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择抵达日期" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {endDayOptions.map((day) => (
+                      <SelectItem key={day.id} value={day.id}>
+                        {normalizeTripDayDateKey(day.date)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  航班跨日抵达时，选择落地所在日期。
+                </p>
+              </div>
+            )}
+
+            {supportsDepartureDay && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  <CalendarDays className="w-3 h-3" />
+                  出发日期
+                </Label>
+                <Select value={endTripDayId} onValueChange={setEndTripDayId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择出发日期" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {endDayOptions.map((day) => (
+                      <SelectItem key={day.id} value={day.id}>
+                        {normalizeTripDayDateKey(day.date)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {isHubMomentMode ? (
+              <div className="space-y-2">
+                <Label htmlFor="landingTime">
+                  {isDeparturePointMode ? '值机时间' : '落地时间'}
+                </Label>
+                <Input
+                  id="landingTime"
+                  type="time"
+                  value={landingTime}
+                  onChange={(e) => setLandingTime(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  {isDeparturePointMode
+                    ? '只需填写到机场值机/抵达时刻；系统会按此后约 30 分钟作为出发缓冲。'
+                    : '只需填写落地时刻；系统会按落地后约 30 分钟作为离站缓冲。'}
+                </p>
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="startTime">开始时间</Label>
+                <Label htmlFor="startTime">{startTimeLabel}</Label>
                 <Input
                   id="startTime"
                   type="datetime-local"
@@ -374,7 +562,7 @@ export function EditItineraryItemDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endTime">结束时间</Label>
+                <Label htmlFor="endTime">{endTimeLabel}</Label>
                 <Input
                   id="endTime"
                   type="datetime-local"
@@ -384,6 +572,7 @@ export function EditItineraryItemDialog({
                 />
               </div>
             </div>
+            )}
 
             {/* 备注 */}
             <div className="space-y-2">
@@ -675,42 +864,14 @@ export function EditItineraryItemDialog({
       </DialogContent>
 
       {/* 级联影响确认弹窗 */}
-      <AlertDialog open={showCascadeConfirm} onOpenChange={setShowCascadeConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              确认时间调整
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="text-left space-y-3">
-                <p>
-                  此修改将影响后续 <span className="font-semibold text-foreground">{cascadeCount}</span> 个行程项。
-                </p>
-                {cascadeMessage && (
-                  <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                    {cascadeMessage.replace(/确认继续[？?]?/, '').trim()}
-                  </div>
-                )}
-                <p className="text-muted-foreground">请选择处理方式：</p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="mt-0">取消</AlertDialogCancel>
-            <Button
-              variant="outline"
-              onClick={handleConfirmCascadeNone}
-              className="border-blue-200 text-blue-700 hover:bg-blue-50"
-            >
-              只调整当前项
-            </Button>
-            <AlertDialogAction onClick={handleConfirmCascadeAuto}>
-              级联调整后续
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <CascadeConfirmDialog
+        open={showCascadeConfirm}
+        onOpenChange={setShowCascadeConfirm}
+        confirmation={cascadeConfirmation}
+        loading={loading}
+        onConfirmAuto={handleConfirmCascadeAuto}
+        onConfirmNone={handleConfirmCascadeNone}
+      />
     </Dialog>
   );
 }

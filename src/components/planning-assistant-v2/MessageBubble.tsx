@@ -15,6 +15,8 @@ import type { ChatMessage } from '@/hooks/useChatV2';
 import { MCPDataDisplay } from './MCPDataDisplay';
 import { OrchestrationProgressCard } from './OrchestrationProgressCard';
 import { PlanningPipelineProgress } from '@/components/agent/PlanningPipelineProgress';
+import { GuardianAssistantBlock } from '@/components/guardian';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -171,6 +173,7 @@ export function MessageBubble({
   onAddToTripSuccess,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const { user } = useAuth();
 
   return (
     <div
@@ -219,8 +222,22 @@ export function MessageBubble({
           <PlanningPipelineProgress compact className="mt-2" />
         ) : null}
 
+        {!isUser && message.guardianPresentation ? (
+          <div className="mt-3">
+            <GuardianAssistantBlock
+              presentation={message.guardianPresentation}
+              tripId={tripId}
+              userId={user?.id}
+              source="presentation"
+            />
+          </div>
+        ) : null}
+
         {/* 编排进度：仅执行阶段 Agent 展示；规划工作台不涉及 route_and_run */}
-        {!isUser && !hideExecutionOrchestration && (message.ui_state || message.orchestrationResult) && (
+        {!isUser &&
+        !message.guardianPresentation &&
+        !hideExecutionOrchestration &&
+        (message.ui_state || message.orchestrationResult) && (
           <OrchestrationProgressCard
             ui_state={message.ui_state}
             orchestrationResult={message.orchestrationResult}

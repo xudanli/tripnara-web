@@ -12,6 +12,11 @@ import { useMatchSquareAccess, useMyRecruitmentHub } from '../hooks/useMatchSqua
 import { usePlazaMatchContext } from '../hooks/usePlazaMatchContext';
 import { ApplicationDecisionInboxBanner } from '../components/ApplicationDecisionInboxBanner';
 import { TeamFormationInboxBanner } from '../components/TeamFormationInboxBanner';
+import {
+  ACCOUNT_GOVERNANCE_SETTINGS_PATH,
+  TRUSTED_PROJECT_CREATE_PATH,
+  TRUSTED_PROJECTS_MARKET_PATH,
+} from '@/lib/trusted-projects-routes';
 import { APPLICATION_STATUS_LABELS } from '../lib/application-status';
 import { plazaLayout } from '../lib/plaza-visual';
 
@@ -51,7 +56,7 @@ function PublishedEmptyState({
         </Button>
       ) : (
         <Button variant="outline" asChild>
-          <Link to="/dashboard/tripnara/odyssey">完成 Odyssey 入网后发起招募</Link>
+          <Link to={ACCOUNT_GOVERNANCE_SETTINGS_PATH}>申请发布权限后发布可信项目</Link>
         </Button>
       )}
     </div>
@@ -111,15 +116,15 @@ export default function MyRecruitmentsPage() {
               : `共 ${totalCount} 条 · 发起 ${published.length} · 申请 ${applied.length}`}
           </p>
           {gate.canPost ? (
-            <Button size="sm" onClick={() => navigate('/dashboard/tripnara/plaza/new')}>
+            <Button size="sm" onClick={() => navigate(TRUSTED_PROJECT_CREATE_PATH)}>
               <Plus className="mr-1.5 h-4 w-4" />
-              发起招募
+              发布可信项目
             </Button>
           ) : (
             <Button size="sm" variant="outline" asChild>
-              <Link to="/dashboard/tripnara/odyssey">
+              <Link to={ACCOUNT_GOVERNANCE_SETTINGS_PATH}>
                 <Plus className="mr-1.5 h-4 w-4" />
-                发起招募
+                发布可信项目
               </Link>
             </Button>
           )}
@@ -135,13 +140,13 @@ export default function MyRecruitmentsPage() {
           <div className="flex flex-col items-center gap-4 py-16 text-center">
             <p className="text-sm text-muted-foreground">你还没有发布招募，也没有入队申请</p>
             {gate.canPost ? (
-              <Button onClick={() => navigate('/dashboard/tripnara/plaza/new')}>
+              <Button onClick={() => navigate(TRUSTED_PROJECT_CREATE_PATH)}>
                 <Plus className="mr-1.5 h-4 w-4" />
-                发布第一条招募
+                发布第一条可信项目
               </Button>
             ) : (
               <Button variant="outline" asChild>
-                <Link to="/dashboard/tripnara/plaza">去广场看看招募</Link>
+                <Link to={TRUSTED_PROJECTS_MARKET_PATH}>浏览可信项目市场</Link>
               </Button>
             )}
           </div>
@@ -170,7 +175,7 @@ export default function MyRecruitmentsPage() {
               {published.length === 0 ? (
                 <PublishedEmptyState
                   canPost={gate.canPost}
-                  onCreate={() => navigate('/dashboard/tripnara/plaza/new')}
+                  onCreate={() => navigate(TRUSTED_PROJECT_CREATE_PATH)}
                 />
               ) : (
                 published.map((post) => (

@@ -14,7 +14,8 @@ import {
   useTripPlannerAssistant, 
   type PlannerMessage,
 } from '@/hooks/useTripPlannerAssistant';
-import type { 
+import { useAuth } from '@/hooks/useAuth';
+import type {
   QuickAction, 
   RichContent,
   ComparisonRichContent,
@@ -36,6 +37,8 @@ import type {
 } from '@/api/trip-planner';
 import { IntentUncertainty } from '@/api/trip-planner';
 import { GuardianPanel, DisclaimerBanner } from './guardian';
+import { GuardianAssistantBlock } from '@/components/guardian';
+import { shouldShowPersonaInsightCards } from '@/lib/guardian-presentation.util';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -1907,7 +1910,7 @@ function ClarificationOptions({
  * 缺口检测面板
  * 视觉设计：简洁的警告卡片，显示午餐、住宿等未安排的缺口
  */
-function DetectedGapsPanel({ gaps }: { gaps: DetectedGap[] }) {
+function ____DetectedGapsPanel({ gaps }: { gaps: DetectedGap[] }) {
   if (!gaps || gaps.length === 0) return null;
   
   // 缺口类型配置
@@ -2296,7 +2299,7 @@ function MessageBubble({
   itemNameMap,
   tripId,
   sessionId,
-  onTripUpdate,
+  onTripUpdate: _onTripUpdate,
   gapPreferences,
   selectedGaps = [],
   onSelectGaps,
@@ -2305,6 +2308,7 @@ function MessageBubble({
   onIgnoreGapsBatch,
   onUnignoreGap,
   onUnignoreGapsBatch,
+  userId,
 }: {
   message: PlannerMessage;
   onFollowUpSelect?: (value: string) => void;
@@ -2335,6 +2339,7 @@ function MessageBubble({
   onIgnoreGapsBatch?: (gapIds: string[]) => Promise<void>;
   onUnignoreGap?: (gapId: string) => Promise<void>;
   onUnignoreGapsBatch?: (gapIds: string[]) => Promise<void>;
+  userId?: string | null;
 }) {
   const isUser = message.role === 'user';
   
@@ -2353,8 +2358,15 @@ function MessageBubble({
     return message.personaInsights.filter(insight => !hiddenPersonas.has(insight.persona));
   }, [message.personaInsights, hiddenPersonas]);
 
-  // 是否显示守护者面板
-  const showGuardianPanel = !isUser && visibleInsights && visibleInsights.length > 0 && !isTyping;
+  // 是否显示守护者面板（P1：有 presentation 时默认不展示三人卡片）
+  const showGuardianPresentation =
+    !isUser && message.guardianPresentation && !isTyping;
+  const showGuardianPanel =
+    !isUser &&
+    visibleInsights &&
+    visibleInsights.length > 0 &&
+    !isTyping &&
+    shouldShowPersonaInsightCards(message.guardianPresentation);
 
   // 🆕 是否是澄清响应
   const isClarification = !isUser && isClarificationResponse(message.meta);
@@ -2443,7 +2455,19 @@ function MessageBubble({
           </div>
         )}
 
-        {/* 🆕 守护者面板 - 带动画效果 */}
+        {/* P2 单主角简报 / 规划期 advisory */}
+        {showGuardianPresentation && message.guardianPresentation ? (
+          <div className="mt-3 w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+            <GuardianAssistantBlock
+              presentation={message.guardianPresentation}
+              tripId={tripId}
+              userId={userId}
+              source="presentation"
+            />
+          </div>
+        ) : null}
+
+        {/* 守护者面板 — 无 presentation 或 decision_committee 时保留三人卡片 */}
         {showGuardianPanel && (
           <div className="mt-3 w-full animate-in fade-in slide-in-from-bottom-2 duration-500">
             <GuardianPanel
@@ -2529,7 +2553,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
   // 缺口偏好状态
   const [gapPreferences, setGapPreferences] = useState<GapDisplayPreferences | null>(null);
   const [selectedGaps, setSelectedGaps] = useState<string[]>([]);
-  const [loadingPreferences, setLoadingPreferences] = useState(false);
+  const [_loadingPreferences, _setLoadingPreferences] = useState(false);
 
   // 左右联动上下文
   const { 
@@ -2569,6 +2593,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
       setTripUpdateCount(prev => prev + 1);
     },
   });
+  const { user } = useAuth();
 
   // 🆕 加载缺口偏好
   // ⚠️ 接口已删除，等待重新规划 - 使用默认偏好
@@ -3025,6 +3050,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
                       onIgnoreGapsBatch={handleIgnoreGapsBatch}
                       onUnignoreGap={handleUnignoreGap}
                       onUnignoreGapsBatch={handleUnignoreGapsBatch}
+                      userId={user?.id}
                     />
                   </MeasuredMessageWrapper>
                 ))}
@@ -3061,6 +3087,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
                 onIgnoreGapsBatch={handleIgnoreGapsBatch}
                 onUnignoreGap={handleUnignoreGap}
                 onUnignoreGapsBatch={handleUnignoreGapsBatch}
+                userId={user?.id}
               />
             ))}
           </div>

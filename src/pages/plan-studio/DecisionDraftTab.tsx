@@ -13,7 +13,6 @@ import { DecisionCanvas, ExplanationPanel, ImpactPreview, ReplayController, Vers
 import { useDecisionDraft } from '@/hooks/useDecisionDraft';
 import type { UserMode } from '@/types/decision-draft';
 import { ExternalLink, FileText } from 'lucide-react';
-import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
 
 interface DecisionDraftTabProps {

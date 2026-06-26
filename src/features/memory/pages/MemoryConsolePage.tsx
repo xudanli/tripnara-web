@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Brain } from 'lucide-react';
+import { ArrowLeft, Brain, HeartHandshake } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -14,9 +14,15 @@ import { TripConstraintPatchesSection } from '@/features/memory/components/TripC
 import { MemoryExportSection } from '@/features/memory/components/MemoryExportSection';
 import { resolveMemoryConsoleErrorUi } from '@/lib/memory-console-errors';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { isSelfEvolutionEnabled } from '@/lib/self-evolution-feature';
+import { LifeEventModal, MemoryTimeline } from '@/features/self-evolution';
 
 export default function MemoryConsolePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [lifeEventOpen, setLifeEventOpen] = useState(false);
+  const selfEvolutionEnabled = isSelfEvolutionEnabled();
   const [searchParams] = useSearchParams();
   const tripId = searchParams.get('trip_id') ?? undefined;
 
@@ -180,6 +186,26 @@ export default function MemoryConsolePage() {
                   exporting={exportGdpr.isPending}
                   onExport={() => exportGdpr.mutateAsync()}
                 />
+              ) : null}
+
+              {selfEvolutionEnabled && user?.id ? (
+                <section className="rounded-xl border border-border bg-card p-4 space-y-4">
+                  <MemoryTimeline userId={user.id} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setLifeEventOpen(true)}
+                  >
+                    <HeartHandshake className="h-4 w-4" />
+                    生活事件调整偏好
+                  </Button>
+                  <LifeEventModal
+                    userId={user.id}
+                    open={lifeEventOpen}
+                    onOpenChange={setLifeEventOpen}
+                  />
+                </section>
               ) : null}
             </>
           )}

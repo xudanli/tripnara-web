@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -38,7 +38,7 @@ export function AirbnbSearchCard({
   onAddToTrip,
   className,
   compact = false,
-  searchParams,
+  searchParams: _searchParams,
 }: AirbnbSearchCardProps) {
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);

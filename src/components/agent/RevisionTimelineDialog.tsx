@@ -15,6 +15,7 @@ import { Info } from 'lucide-react';
 import type { EvidenceBundleDto, EvidenceCardDto, EvidenceCardUiDto } from '@/api/agent';
 import NegotiationDialog from '@/components/agent/NegotiationDialog';
 import { discardReasonLabel } from '@/lib/robustness-dashboard';
+import { useDecisionDnaConsentNudge } from '@/hooks/useDecisionDna';
 import type { AlignmentTupleSummary } from '@/types/robustness-dashboard';
 
 export interface RevisionTimelineDialogProps {
@@ -31,6 +32,7 @@ function kindVariant(kind?: string) {
 
 export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: RevisionTimelineDialogProps) {
   const queryClient = useQueryClient();
+  const { triggerAfterRollback } = useDecisionDnaConsentNudge();
   const [rolling, setRolling] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRevisionId, setDetailRevisionId] = useState<string | null>(null);
@@ -128,6 +130,7 @@ export default function RevisionTimelineDialog({ open, onOpenChange, tripId }: R
     try {
       await agentApi.rollbackToRevision({ revision_id: revisionId });
       toast.success('已回滚');
+      void triggerAfterRollback();
       await refetch();
       await queryClient.invalidateQueries({ queryKey: ['agent', 'robustness_dashboard', tripId] });
     } catch (e: any) {

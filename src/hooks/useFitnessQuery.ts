@@ -7,15 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { fitnessApi, FitnessApiError } from '@/api/fitness';
 import { longestHikeFromProfile, clampLongestHike } from '@/lib/longest-hike-resolve';
-import type { 
-  QuestionnaireSubmitData, 
-  FeedbackSubmitData,
-  FitnessProfile,
-  QuestionnaireResponse,
-  FeedbackStats,
-  CalibrationResult,
-  QuestionnaireSubmitResult,
-} from '@/types/fitness';
+import type { QuestionnaireSubmitData, FeedbackSubmitData, FitnessProfile, CalibrationResult, QuestionnaireSubmitResult } from '@/types/fitness';
 import { DEFAULT_FITNESS_PROFILE } from '@/constants/fitness';
 import { toast } from 'sonner';
 

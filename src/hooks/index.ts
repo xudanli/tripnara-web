@@ -41,6 +41,9 @@ export type {
   UseJourneyAssistantReturn 
 } from './useJourneyAssistant';
 
+export { useGuardianHumanChoice } from './useGuardianHumanChoice';
+export type { UseGuardianHumanChoiceOptions } from './useGuardianHumanChoice';
+
 // Context API
 export { useContextApi, useContextMetrics } from './useContextApi';
 export type { 

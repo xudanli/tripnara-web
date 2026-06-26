@@ -4,6 +4,8 @@ import type {
   TrekActivityProfile,
 } from '@/types/match-square';
 
+export type { TrekActivityProfile };
+
 export type TrekScenarioMeta = {
   id: TrekActivityProfile;
   label: string;
@@ -125,7 +127,7 @@ export function buildTrekRecruitmentUrl(input: {
   if (input.routeDirectionName) q.set('routeDirectionName', input.routeDirectionName);
   if (input.activityProfile) q.set('activityProfile', input.activityProfile);
   if (input.vibeSeed) q.set('vibeSeed', input.vibeSeed);
-  return `/dashboard/tripnara/plaza/new?${q.toString()}`;
+  return `/dashboard/trusted-projects/new?${q.toString()}`;
 }
 
 /** 端午前后默认窗口（6 月下旬） */

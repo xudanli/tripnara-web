@@ -77,7 +77,7 @@ export function useIsWearableConnected(provider: WearableProvider, enabled = tru
  * 获取 Strava 授权 URL
  */
 export function useStravaAuth() {
-  const queryClient = useQueryClient();
+  const ____queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async () => {

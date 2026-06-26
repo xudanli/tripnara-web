@@ -18,6 +18,7 @@ import {
   filterBlocksByPriority,
   filterBlocksByType,
   type BuildContextRequest,
+  type BuildContextPackageRequest,
   type CompressContextRequest,
   type ProjectStateRequest,
   type WriteBackRequest,

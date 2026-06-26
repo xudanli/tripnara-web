@@ -24,7 +24,7 @@ interface QuickExpenseEditorProps {
 }
 
 export default function QuickExpenseEditor({
-  itemId,
+  itemId: _itemId,
   itemName,
   currentAmount,
   currency = 'CNY',

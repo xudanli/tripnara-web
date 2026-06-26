@@ -3,7 +3,6 @@
  */
 
 import type { ClarificationAnswer, ClarificationQuestion } from '@/types/clarification';
-import type { StructuredTravelInput } from '@/api/agent';
 import { resolveClarificationRenderer } from '@/lib/route-run-clarification';
 import { GuardianDebateClarificationCard } from '@/components/agent/GuardianDebateClarificationCard';
 import { AgentRouteRunClarificationGenericBlock } from '@/components/agent/AgentRouteRunClarificationGenericBlock';

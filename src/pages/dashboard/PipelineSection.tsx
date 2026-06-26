@@ -140,7 +140,7 @@ export default function PipelineSection({ activeTrip }: PipelineSectionProps) {
       case '5':
         return `/dashboard/trips/what-if?tripId=${activeTrip.id}`;
       case '6':
-        return `/dashboard/trips/${activeTrip.id}`;
+        return `/dashboard/plan-studio?tripId=${encodeURIComponent(activeTrip.id)}&tab=tasks`;
       default:
         return undefined;
     }

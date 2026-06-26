@@ -21,11 +21,9 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { GuardianTimelineBadges } from '@/components/guardian';
+import { enrichWorkbenchDecisionLogEntry } from '@/lib/guardian-decision-log-display';
 
 export interface DecisionLogEntry {
   id: string;
@@ -36,6 +34,8 @@ export interface DecisionLogEntry {
   reason?: string;
   evidenceRefs?: string[];
   planVersion?: number;
+  /** P2 guardian metadata（revalidationPass / guardianLeadSpeaker 等） */
+  metadata?: Record<string, unknown>;
 }
 
 export interface DecisionTimelineProps {
@@ -129,7 +129,7 @@ function DecisionTimelineEntry({
   isLast,
   onEvidenceClick 
 }: { 
-  entry: DecisionLogEntry; 
+  entry: ReturnType<typeof enrichWorkbenchDecisionLogEntry>; 
   isLast: boolean;
   onEvidenceClick?: (evidenceRef: string) => void;
 }) {
@@ -194,6 +194,7 @@ function DecisionTimelineEntry({
               v{entry.planVersion}
             </span>
           )}
+          <GuardianTimelineBadges metadata={entry.metadata} />
         </div>
 
         {/* 动作描述 */}
@@ -203,6 +204,9 @@ function DecisionTimelineEntry({
         {entry.reason && (
           <p className="text-xs text-muted-foreground">{entry.reason}</p>
         )}
+        {!entry.reason && entry.guardianView?.actionsSummary ? (
+          <p className="text-xs text-muted-foreground">{entry.guardianView.actionsSummary}</p>
+        ) : null}
 
         {/* 证据引用 */}
         {entry.evidenceRefs && entry.evidenceRefs.length > 0 && (
@@ -234,7 +238,9 @@ export function DecisionTimeline({
 
   // 按时间倒序排列
   const sortedEntries = useMemo(() => {
-    return [...entries].sort((a, b) => 
+    return [...entries]
+      .map(enrichWorkbenchDecisionLogEntry)
+      .sort((a, b) => 
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
   }, [entries]);

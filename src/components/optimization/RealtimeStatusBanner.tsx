@@ -8,7 +8,6 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import {
   Tooltip,
   TooltipContent,
@@ -26,30 +25,7 @@ import type {
   RoadStatusType,
   SeverityLevel,
 } from '@/types/optimization-v2';
-import {
-  Cloud,
-  CloudRain,
-  CloudSnow,
-  Sun,
-  Wind,
-  Eye,
-  EyeOff,
-  Thermometer,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  MinusCircle,
-  Car,
-  Activity,
-  Mountain,
-  RefreshCw,
-  ChevronDown,
-  ChevronUp,
-  Bell,
-  BellOff,
-  Wifi,
-  WifiOff,
-} from 'lucide-react';
+import { Cloud, CloudRain, CloudSnow, Sun, Wind, Eye, EyeOff, Thermometer, AlertTriangle, CheckCircle, XCircle, MinusCircle, Car, Activity, Mountain, RefreshCw, ChevronDown, ChevronUp, Bell, Wifi, WifiOff } from 'lucide-react';
 
 // ==================== 配置 ====================
 
@@ -212,7 +188,7 @@ function RoadStatusBlock({
     'OPEN';
   
   const statusConfig = ROAD_STATUS_CONFIG[overallStatus];
-  const StatusIcon = statusConfig.icon;
+  const ____StatusIcon = statusConfig.icon;
 
   return (
     <div className="flex items-center gap-3">
@@ -380,7 +356,7 @@ export function RealtimeStatusBanner({
   compact = false,
   collapsible = false,
   defaultExpanded = true,
-  minSeverity = 'INFO',
+  minSeverity: _minSeverity = 'INFO',
   className,
 }: RealtimeStatusBannerProps) {
   const [expanded, setExpanded] = React.useState(defaultExpanded);

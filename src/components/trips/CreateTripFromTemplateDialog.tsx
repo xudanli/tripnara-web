@@ -11,7 +11,11 @@ import { AlertCircle } from 'lucide-react';
 import { routeDirectionsApi } from '@/api/route-directions';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
-import type { CreateTripFromTemplateRequest } from '@/types/places-routes';
+import type { CreateTripFromTemplateRequest, DayPlan } from '@/types/places-routes';
+import {
+  shouldSyncTemplatePoisAfterCreate,
+  syncTemplatePoisToTrip,
+} from '@/lib/sync-template-pois-to-trip';
 import type { Country } from '@/types/country';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -24,6 +28,8 @@ interface CreateTripFromTemplateDialogProps {
   defaultDurationDays?: number;
   defaultPacePreference?: 'RELAXED' | 'BALANCED' | 'INTENSE' | 'CHALLENGE';
   defaultDestination?: string; // 🆕 模板的目的地（国家代码），如 "IS", "JP"
+  /** 模板每日计划；用于 create-trip 未写入 POI 时按名称补同步 */
+  dayPlans?: DayPlan[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (tripId: string, message?: string) => void;
@@ -35,6 +41,7 @@ export function CreateTripFromTemplateDialog({
   defaultDurationDays,
   defaultPacePreference,
   defaultDestination, // 🆕 模板的目的地
+  dayPlans,
   open,
   onOpenChange,
   onSuccess,
@@ -208,9 +215,43 @@ export function CreateTripFromTemplateDialog({
 
       tripsApi.supplementIntentAfterCreate(tripId).catch(() => {});
 
+      let successMessage = result.message;
+
+      // 模板 POI 无 id 时后端 create-trip 可能只建天空行程，按名称补同步
+      if (shouldSyncTemplatePoisAfterCreate(result.stats?.totalItems, dayPlans)) {
+        try {
+          const syncResult = await syncTemplatePoisToTrip({
+            tripId,
+            dayPlans: dayPlans ?? [],
+            destinationCountryCode: formData.destination || defaultDestination,
+          });
+          if (syncResult.created > 0) {
+            successMessage = `已根据模板写入 ${syncResult.created} 个行程点${
+              syncResult.failed > 0 ? `（${syncResult.failed} 个未能匹配地点库）` : ''
+            }`;
+          } else if (syncResult.failed > 0) {
+            successMessage =
+              '行程已创建，但模板中的地点未能匹配到地点库，请在规划工作台手动添加 POI';
+          }
+        } catch (syncErr) {
+          console.warn('[CreateTripFromTemplate] 模板 POI 补同步失败:', syncErr);
+          successMessage =
+            successMessage ??
+            '行程已创建，但未能自动导入模板 POI，请在规划工作台手动添加';
+        }
+      } else if (
+        result.stats &&
+        result.stats.placesMissing > 0 &&
+        result.stats.placesMatched === 0
+      ) {
+        successMessage =
+          successMessage ??
+          `模板中有 ${result.stats.placesMissing} 个地点未匹配到地点库，部分行程点可能为空`;
+      }
+
       // 调用成功回调（会处理导航），传入接口返回的 message 供展示
       try {
-        onSuccess(tripId, result.message);
+        onSuccess(tripId, successMessage);
         console.log('✅ [CreateTripFromTemplate] 成功回调已调用');
       } catch (callbackErr: any) {
         console.error('❌ [CreateTripFromTemplate] 调用成功回调失败:', callbackErr);

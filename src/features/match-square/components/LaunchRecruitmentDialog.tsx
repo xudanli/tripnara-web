@@ -99,6 +99,8 @@ export function LaunchRecruitmentDialog({
           captainMessage: captainMessage.trim() || undefined,
           budgetMinCents: defaults.budgetMinCents,
           budgetMaxCents: defaults.budgetMaxCents,
+          routeTemplateCatalogId: catalogEntry?.catalogId,
+          routeTemplateTitleZh: catalogEntry?.titleZh,
         },
         template
       );

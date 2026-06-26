@@ -13,37 +13,35 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Package, 
-  RefreshCw, 
-  CheckCircle2, 
-  Circle,
-  Edit2,
-  Save,
-  X,
-  Plus,
-  Download,
-  Filter,
-  ListChecks,
-} from 'lucide-react';
+import { Package, RefreshCw, CheckCircle2, Edit2, Save, X, Plus, Filter, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { readinessApi } from '@/api/readiness';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 import type { TripDetail } from '@/types/trip';
 import { 
   inferPackingListParams, 
   isTemplateSupported 
 } from '@/utils/packing-list-inference';
+import {
+  isPackingListZhLang,
+  packingListCategoryLabel,
+  packingListChecklistTitle,
+  packingListItemName,
+  packingListItemReason,
+  packingListKnownName,
+  packingListPriorityLabel,
+  packingListStepDescription,
+  packingListStepTitle,
+  packingListUnitLabel,
+  type PackingListItemLike,
+  type PackingListLang,
+} from '@/lib/packing-list-display.util';
 
-interface PackingListItem {
+interface PackingListItem extends PackingListItemLike {
   id: string;
-  name: string;
-  category: string;
   quantity: number;
-  unit?: string;
-  priority: 'must' | 'should' | 'optional';
-  reason?: string;
   sourceFindingId?: string;
   checked: boolean;
   note?: string;
@@ -83,7 +81,8 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const packingLang: PackingListLang = isPackingListZhLang(i18n.language) ? 'zh' : 'en';
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [packingList, setPackingList] = useState<PackingListData | null>(null);
@@ -151,6 +150,7 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
         route: inferredParams.route,
         userType: inferredParams.userType,
         activities: inferredParams.activities,
+        lang: packingLang,
       });
       
       // 重新加载清单
@@ -230,7 +230,7 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
   const loadPackingOrderSteps = async () => {
     try {
       setLoadingPackingOrder(true);
-      const result = await readinessApi.getPackingOrderSteps();
+      const result = await readinessApi.getPackingOrderSteps(packingLang);
       setPackingOrderSteps(result.steps);
     } catch (err) {
       console.error('Failed to load packing order steps:', err);
@@ -244,7 +244,7 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
   const loadPreDepartureChecklist = async () => {
     try {
       setLoadingPreDeparture(true);
-      const result = await readinessApi.getPreDepartureChecklist();
+      const result = await readinessApi.getPreDepartureChecklist(packingLang);
       setPreDepartureChecklist(result.checklist);
     } catch (err) {
       console.error('Failed to load pre-departure checklist:', err);
@@ -387,7 +387,9 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
           <CardContent>
             <div className="text-sm text-muted-foreground">
               {t('dashboard.readiness.page.packingList.lastGenerated', {
-                date: format(new Date(packingList.lastGeneratedAt), 'MMM dd, yyyy HH:mm'),
+                date: packingLang === 'zh'
+                  ? format(new Date(packingList.lastGeneratedAt), 'yyyy年MM月dd日 HH:mm', { locale: zhCN })
+                  : format(new Date(packingList.lastGeneratedAt), 'MMM dd, yyyy HH:mm'),
               })}
             </div>
           </CardContent>
@@ -414,12 +416,14 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                     {step.order}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold mb-1">{step.title}</h4>
-                    <p className="text-sm text-muted-foreground mb-2">{step.description}</p>
+                    <h4 className="font-semibold mb-1">{packingListStepTitle(step, packingLang)}</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {packingListStepDescription(step, packingLang)}
+                    </p>
                     {step.items.length > 0 && (
                       <ul className="text-sm text-muted-foreground list-disc list-inside">
                         {step.items.map((item, idx) => (
-                          <li key={idx}>{item}</li>
+                          <li key={idx}>{packingListKnownName(item, packingLang)}</li>
                         ))}
                       </ul>
                     )}
@@ -455,10 +459,10 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                     }}
                   />
                   <div className="flex-1">
-                    <Label className="font-medium">{item.title}</Label>
+                    <Label className="font-medium">{packingListChecklistTitle(item, packingLang)}</Label>
                     {item.category && (
                       <Badge variant="outline" className="ml-2">
-                        {item.category}
+                        {packingListCategoryLabel(item.category, packingLang)}
                       </Badge>
                     )}
                   </div>
@@ -519,7 +523,9 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                     >
                       <option value="all">{t('dashboard.readiness.page.packingList.allCategories')}</option>
                       {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                        <option key={cat} value={cat}>
+                          {packingListCategoryLabel(cat, packingLang)}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -551,7 +557,7 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                       variant="outline"
                       className={cn(CATEGORY_COLORS[category] || CATEGORY_COLORS.other)}
                     >
-                      {category}
+                      {packingListCategoryLabel(category, packingLang)}
                     </Badge>
                     <span className="text-sm text-muted-foreground">
                       ({items.length} {t('dashboard.readiness.page.packingList.items')})
@@ -584,7 +590,7 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                                 item.checked && 'line-through text-muted-foreground'
                               )}
                             >
-                              {item.name}
+                              {packingListItemName(item, packingLang)}
                             </span>
                             <Badge
                               variant="outline"
@@ -593,14 +599,17 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                                 PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.optional
                               )}
                             >
-                              {item.priority}
+                              {packingListPriorityLabel(item.priority, packingLang)}
                             </Badge>
                           </div>
-                          {item.reason && (
+                          {(() => {
+                            const reason = packingListItemReason(item, packingLang);
+                            return reason ? (
                             <p className="text-xs text-muted-foreground mb-1">
-                              {item.reason}
+                              {reason}
                             </p>
-                          )}
+                            ) : null;
+                          })()}
                           {editingItemId === item.id ? (
                             <div className="space-y-2 mt-2">
                               <div className="flex items-center gap-2">
@@ -612,7 +621,8 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                                   className="w-20"
                                 />
                                 <span className="text-sm text-muted-foreground">
-                                  {item.unit || t('dashboard.readiness.page.packingList.pieces')}
+                                  {packingListUnitLabel(item.unit, packingLang) ||
+                                    t('dashboard.readiness.page.packingList.pieces')}
                                 </span>
                               </div>
                               <Textarea
@@ -643,7 +653,9 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                           ) : (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <span>
-                                {item.quantity} {item.unit || t('dashboard.readiness.page.packingList.pieces')}
+                                {item.quantity}{' '}
+                                {packingListUnitLabel(item.unit, packingLang) ||
+                                  t('dashboard.readiness.page.packingList.pieces')}
                               </span>
                               {item.note && (
                                 <>

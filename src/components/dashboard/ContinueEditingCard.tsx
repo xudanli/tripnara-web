@@ -13,7 +13,6 @@ import { zhCN } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { TripListItem } from '@/types/trip';
 import { planningWorkbenchApi } from '@/api/planning-workbench';
-import type { PlanBudgetEvaluationResponse } from '@/types/trip';
 import DecisionStatusIndicator, { type DecisionStatus } from './DecisionStatusIndicator';
 
 interface ContinueEditingCardProps {
@@ -31,7 +30,7 @@ export default function ContinueEditingCard({
 }: ContinueEditingCardProps) {
   const navigate = useNavigate();
   const [decisionStatus, setDecisionStatus] = useState<DecisionStatus | null>(null);
-  const [loadingDecision, setLoadingDecision] = useState(false);
+  const [_loadingDecision, setLoadingDecision] = useState(false);
 
   // 计算行程天数
   const getTripDays = (): number => {

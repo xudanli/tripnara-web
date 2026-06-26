@@ -11,6 +11,7 @@ import {
   formatDurationBetweenWindows,
   isTransitLikeItemType,
 } from '@/lib/itinerary-item-card-format';
+import { formatCost } from '@/hooks/useItineraryCost';
 
 export interface ItineraryDayItemsBlock {
   date?: string;
@@ -90,8 +91,7 @@ function buildPriceLabel(o: Record<string, unknown>): string | undefined {
     return display.includes('参考') || display.includes('约') ? display : `参考价 ${display}`;
   }
   if (amount != null && amount > 0) {
-    const sym = currency === 'CNY' || currency === 'RMB' ? '¥' : `${currency} `;
-    return `参考价 ${sym}${amount}`;
+    return `参考价 ${formatCost(amount, currency)}`;
   }
   if (level != null && level >= 1 && level <= 4) {
     return `价位 · ${'¥'.repeat(Math.min(level, 4))}`;

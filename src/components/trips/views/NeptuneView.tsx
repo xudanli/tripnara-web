@@ -13,7 +13,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import type { NeptuneViewData } from '@/utils/trip-data-extractors';
 import { tripsApi } from '@/api/trips';

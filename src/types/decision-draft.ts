@@ -5,6 +5,8 @@
 
 import type { GateStatus } from '@/lib/gate-status';
 
+export type { GateStatus };
+
 // ==================== 基础类型 ====================
 
 export type UserMode = 'toc' | 'expert' | 'studio';
@@ -144,6 +146,11 @@ export interface DecisionStep {
   // 元数据
   created_at: string;
   updated_at: string;
+
+  /** 是否关键决策步骤 */
+  is_key?: boolean;
+  /** 步骤结论摘要 */
+  conclusion?: string;
 }
 
 // ==================== Step Draft（技术层） ====================

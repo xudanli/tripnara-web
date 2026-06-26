@@ -11,6 +11,7 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import NLChatInterface from '@/components/trips/NLChatInterface';
 import { useFitnessPrompt } from '@/hooks/useFitnessPrompt';
 import { FitnessPromptCard, FitnessQuestionnaireDialog } from '@/components/fitness';
+import { ParticipantProjectsBanner } from '@/features/participant-portal';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -82,6 +83,11 @@ export default function DashboardPage() {
         }}
         onComplete={handleWelcomeComplete}
       />
+
+      {/* 成员项目入口（登录用户有进行中的 Participant Portal 项目时显示） */}
+      <div className="px-4 pt-2">
+        <ParticipantProjectsBanner compact />
+      </div>
 
       {/* 体能评估提示横幅 - 在聊天界面顶部显示 */}
       {shouldShow && (

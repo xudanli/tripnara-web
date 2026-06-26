@@ -243,7 +243,7 @@ export function enrichRouteAndRunRequestWithMatchSquareParty(
   const existingPrefParty = asRecord(request.preference_profile?.party_profile) ?? undefined;
 
   const nextTopParty = mergePartyProfileFields(existingTopParty, fields.party_profile);
-  const nextPrefParty = mergePartyProfileFields(existingPrefParty, fields.party_profile);
+  const ____nextPrefParty = mergePartyProfileFields(existingPrefParty, fields.party_profile);
 
   const nextOptions = { ...request.options };
   if (!hasPartyNegotiationMemberProfiles(nextOptions)) {

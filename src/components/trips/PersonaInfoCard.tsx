@@ -29,7 +29,7 @@ export default function PersonaInfoCard({
     return 'text-slate-600';
   };
   
-  const getProgressColor = (confidence: number) => {
+  const ____getProgressColor = (confidence: number) => {
     if (confidence >= 0.8) return 'bg-green-500';
     if (confidence >= 0.6) return 'bg-blue-500';
     if (confidence >= 0.4) return 'bg-amber-500';

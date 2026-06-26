@@ -220,7 +220,7 @@ export default function ApprovalCard({ approvalId, onDecision, onClose }: Approv
     );
   }
 
-  const RiskIcon = riskLevelIcons[approval.riskLevel];
+  const ____RiskIcon = riskLevelIcons[approval.riskLevel];
 
   return (
     <Card className="border-2">

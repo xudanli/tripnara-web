@@ -35,7 +35,7 @@ export function PlanningAssistant({ userId, tripId, countryCode, userCountryCode
     resetSession,
   } = usePlanningSessionV2(userId);
 
-  const { messages, sendMessage, clearMessages, isLoading: chatLoading } = useChatV2(
+  const { messages, sendMessage, clearMessages, isLoading: _chatLoading } = useChatV2(
     sessionId,
     userId,
     tripId || countryCode || userCountryCode
@@ -76,7 +76,7 @@ export function PlanningAssistant({ userId, tripId, countryCode, userCountryCode
   // 处理欢迎界面的快速开始
   const handleQuickStart = async (prompt: string) => {
     if (!sessionId) {
-      const newSessionId = await createSession(userId);
+      const ____newSessionId = await createSession(userId);
       // 等待会话创建完成后再发送消息
       setTimeout(() => {
         sendMessage(prompt);

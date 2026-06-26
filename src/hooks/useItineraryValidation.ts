@@ -9,14 +9,7 @@
 
 import { useState, useCallback } from 'react';
 import { itineraryItemsApi } from '@/api/trips';
-import type {
-  CreateItineraryItemRequest,
-  ValidateItineraryItemResponse,
-  BatchValidateItineraryResponse,
-  ValidationResult,
-  TravelInfo,
-  CascadeImpact,
-} from '@/types/trip';
+import type { CreateItineraryItemRequest, ValidateItineraryItemResponse, BatchValidateItineraryResponse, ValidationResult } from '@/types/trip';
 
 export interface UseItineraryValidationReturn {
   // 预校验

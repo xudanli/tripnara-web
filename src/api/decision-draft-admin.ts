@@ -18,7 +18,6 @@ import type {
   GetStatsResponse,
   UpdateStepResponse,
   GenerateDraftResponse,
-  UserMode,
 } from '@/types/decision-draft';
 
 // 文档中的响应格式是 { success: true, data: T }

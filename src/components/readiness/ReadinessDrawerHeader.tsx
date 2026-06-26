@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/components/ui/badge';
 import { AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
@@ -7,199 +6,247 @@ import type {
   ReadinessCheckResult,
   RiskWarningsResponse,
 } from '@/api/readiness';
-import { gateStatusTokens as designTokens, typographyTokens, spacingTokens } from '@/utils/design-tokens';
-import { countNestedFindingItems } from '@/lib/readiness-nested-counts';
+import { gateStatusTokens as designTokens, spacingTokens } from '@/utils/design-tokens';
+import {
+  type GateStatus,
+  type GateWarnReason,
+  getReadinessDrawerStats,
+} from '@/lib/readiness-drawer-stats';
+import ReadinessScoreDimensions from '@/components/readiness/ReadinessScoreDimensions';
+import ScoreGauge from '@/components/readiness/ScoreGauge';
 
-type GateStatus = 'BLOCK' | 'WARN' | 'PASS';
+export type ReadinessDrawerSection = 'blockers' | 'must' | 'should' | 'risks';
 
 interface ReadinessDrawerHeaderProps {
   scoreBreakdown: ScoreBreakdownResponse | null;
   gateStatus: GateStatus;
+  gateWarnReason?: GateWarnReason;
   readinessResult: ReadinessCheckResult | null;
-  /** GET /readiness/risk-warnings：顶部「风险」数字以此 summary.totalRisks 为准，勿用 /score 内 risks 条数混用 */
   riskWarnings?: RiskWarningsResponse | null;
+  packMustProgress?: { done: number; total: number; remaining: number };
+  onNavigateToSection?: (section: ReadinessDrawerSection) => void;
 }
 
-// GateStatus 视觉 Token（使用统一设计 Token）
 const gateStatusTokens = {
-  BLOCK: {
-    ...designTokens.BLOCK,
-    icon: AlertCircle,
-  },
-  WARN: {
-    ...designTokens.WARN,
-    icon: AlertTriangle,
-  },
-  PASS: {
-    ...designTokens.PASS,
-    icon: CheckCircle2,
-  },
+  BLOCK: { ...designTokens.BLOCK, icon: AlertCircle },
+  WARN: { ...designTokens.WARN, icon: AlertTriangle },
+  PASS: { ...designTokens.PASS, icon: CheckCircle2 },
 };
+
+function StatTile({
+  count,
+  label,
+  active,
+  muted,
+  badge,
+  onClick,
+}: {
+  count: number;
+  label: string;
+  active?: boolean;
+  muted?: boolean;
+  badge?: string;
+  onClick?: () => void;
+}) {
+  const clickable = !!onClick && (active || !!badge);
+  return (
+    <button
+      type="button"
+      disabled={!clickable}
+      onClick={clickable ? onClick : undefined}
+      className={cn(
+        'relative rounded-xl px-2 py-2.5 text-center transition-colors',
+        muted
+          ? 'bg-slate-50 text-slate-400'
+          : active
+            ? 'bg-slate-100 text-slate-900 shadow-sm ring-1 ring-slate-200/80'
+            : 'bg-slate-50/80 text-slate-700 hover:bg-slate-100/90',
+        clickable && 'cursor-pointer',
+        !clickable && 'cursor-default',
+      )}
+    >
+      {badge ? (
+        <span className="absolute -top-1.5 -right-1 rounded-full bg-amber-500 px-1.5 py-px text-[9px] font-semibold text-white leading-none shadow-sm">
+          {badge}
+        </span>
+      ) : null}
+      <div className={cn('text-xl font-semibold tabular-nums leading-none', muted && 'font-normal')}>
+        {count}
+      </div>
+      <div className="mt-1 text-[11px] leading-tight text-inherit opacity-90">{label}</div>
+    </button>
+  );
+}
 
 export default function ReadinessDrawerHeader({
   scoreBreakdown,
   gateStatus,
+  gateWarnReason,
   readinessResult,
   riskWarnings,
+  packMustProgress,
+  onNavigateToSection,
 }: ReadinessDrawerHeaderProps) {
-  const { t } = useTranslation();
-  
+  const { t, i18n } = useTranslation();
+  const isZh = i18n.language.startsWith('zh');
+
   const StatusIcon = gateStatusTokens[gateStatus].icon;
-  const statusLabel = gateStatus === 'BLOCK'
-    ? t('dashboard.readiness.page.drawer.status.block')
-    : gateStatus === 'WARN'
-    ? t('dashboard.readiness.page.drawer.status.warn')
-    : t('dashboard.readiness.page.drawer.status.pass');
+  const stats = getReadinessDrawerStats(readinessResult, scoreBreakdown, riskWarnings, {
+    remainingPackMust: packMustProgress?.remaining,
+  });
+  const overall = scoreBreakdown?.score?.overall;
+  const softenScore = stats.coverageBlockers === 0;
+
+  const statusLabel =
+    gateStatus === 'BLOCK'
+      ? t('dashboard.readiness.page.drawer.status.block')
+      : gateStatus === 'WARN'
+        ? gateWarnReason === 'pack_must'
+          ? t('dashboard.readiness.page.drawer.status.warnSafety', '建议完善安全准备')
+          : gateWarnReason === 'low_score'
+            ? t('dashboard.readiness.page.drawer.status.warnEvidence', '行程证据待补充')
+            : t('dashboard.readiness.page.drawer.status.warn')
+        : t('dashboard.readiness.page.drawer.status.pass');
+
+  const scoreSubtitle =
+    gateStatus === 'PASS'
+      ? isZh
+        ? '安全准备度良好'
+        : 'Readiness looks good'
+      : gateStatus === 'WARN' && gateWarnReason === 'pack_must'
+        ? isZh
+          ? '安全准备度：中等，请完善打包与衣物准备'
+          : 'Moderate readiness — finish safety prep'
+        : isZh
+          ? '仍有待完善项，请查看下方清单'
+          : 'Items below still need attention';
+
+  const { displayBlockers: blockers, displayMust: must, displayShould: should, displayRisks: risks, mustIsPackSafety } =
+    stats;
+  const safetyAllDone =
+    mustIsPackSafety && packMustProgress != null && packMustProgress.total > 0 && packMustProgress.remaining === 0;
+
+  const isPlanningPhase = scoreBreakdown?.readinessPhase === 'planning';
+  const planningPhaseHint =
+    scoreBreakdown?.phaseHint ||
+    (isPlanningPhase && scoreBreakdown?.daysUntilStart != null
+      ? isZh
+        ? `行程尚早（${scoreBreakdown.daysUntilStart} 天后出发）。分数仅反映当前可准备的项；路况与逐日天气将在出发前 14 天内纳入。`
+        : `Trip starts in ${scoreBreakdown.daysUntilStart} days. Score reflects prep you can do now; live road/weather count within 14 days of departure.`
+      : '');
+
+  const weakestKey = scoreBreakdown?.score
+    ? (
+        [
+          ['transportCertainty', t('dashboard.readiness.page.drawer.score.transport', '交通确定')],
+          ['evidenceCoverage', t('dashboard.readiness.page.drawer.score.evidence', '证据覆盖')],
+          ['scheduleFeasibility', t('dashboard.readiness.page.drawer.score.schedule', '行程可行')],
+          ['safetyRisk', t('dashboard.readiness.page.drawer.score.safety', '安全风险')],
+          ['buffers', t('dashboard.readiness.page.drawer.score.buffers', '缓冲时间')],
+        ] as const
+      )
+        .map(([key, label]) => ({
+          label,
+          value: Math.round(Math.max(0, Math.min(100, (scoreBreakdown.score as any)[key] ?? 0))),
+        }))
+        .sort((a, b) => a.value - b.value)[0]
+    : null;
 
   return (
-    <div className="flex-shrink-0 border-b border-gray-200 bg-white">
-      {/* 层级1：核心状态（最高优先级） */}
-      <div className={cn(spacingTokens.drawerPadding, spacingTokens.drawerPaddingTop, spacingTokens.drawerPaddingBottomSmall)}>
-        <div className="flex items-center gap-3">
-          {/* 分数圆圈 */}
-          {scoreBreakdown?.score?.overall !== undefined && (
-            <div className={cn(
-              'flex-shrink-0 w-16 h-16 rounded-full flex flex-col items-center justify-center border-2',
-              scoreBreakdown.score.overall < 60 
-                ? 'border-red-600 bg-red-50 text-red-700'
-                : scoreBreakdown.score.overall < 80
-                ? 'border-amber-600 bg-amber-50 text-amber-700'
-                : 'border-green-600 bg-green-50 text-green-700'
-            )}>
-              <span className={typographyTokens.score}>{scoreBreakdown.score.overall}</span>
-              <span className={typographyTokens.scoreDenominator}>/100</span>
+    <div className="flex-shrink-0 border-b border-slate-200 bg-white">
+      <div className={cn(spacingTokens.drawerPadding, 'pt-4 pb-3')}>
+        <div className="flex items-start gap-4">
+          {overall !== undefined ? (
+            <ScoreGauge score={overall} size={80} className="shrink-0" />
+          ) : null}
+
+          <div className="flex-1 min-w-0 pt-0.5 space-y-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {overall !== undefined ? (
+                <span className="text-lg font-bold text-slate-900 tabular-nums">
+                  {overall}
+                  <span className="text-sm font-normal text-slate-500">{isZh ? ' 分' : ' pts'}</span>
+                </span>
+              ) : null}
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full',
+                  gateStatusTokens[gateStatus].bg,
+                  gateStatusTokens[gateStatus].text,
+                )}
+              >
+                <StatusIcon className={cn('h-3 w-3', gateStatusTokens[gateStatus].iconColor)} />
+                {statusLabel}
+              </span>
             </div>
-          )}
-          
-          {/* 状态标签 */}
-          <div className="flex-1">
-            <Badge
-              variant="outline"
-              className={cn(
-                'w-full justify-center py-2 text-sm font-semibold',
-                gateStatusTokens[gateStatus].border,
-                gateStatusTokens[gateStatus].bg,
-                gateStatusTokens[gateStatus].text
-              )}
-            >
-              <StatusIcon className={cn('mr-2 h-4 w-4', gateStatusTokens[gateStatus].iconColor)} />
-              {statusLabel}
-            </Badge>
+            <p className="text-xs text-slate-600 leading-relaxed">{scoreSubtitle}</p>
+            {isPlanningPhase && planningPhaseHint ? (
+              <p className="text-[11px] text-slate-400 leading-relaxed">{planningPhaseHint}</p>
+            ) : null}
+            {weakestKey && weakestKey.value < 80 ? (
+              <p className="text-xs text-slate-500">
+                {isZh ? '主要薄弱项：' : 'Weakest: '}
+                <span className="font-medium text-slate-700">
+                  {weakestKey.label} {weakestKey.value}
+                  {isZh ? ' 分' : ''}
+                </span>
+              </p>
+            ) : null}
           </div>
         </div>
+
+        {scoreBreakdown?.score ? (
+          <ReadinessScoreDimensions
+            score={scoreBreakdown.score}
+            softenLowScores={softenScore}
+            className="mt-3 border-0 bg-transparent px-0 py-0"
+            defaultCollapsed
+          />
+        ) : null}
       </div>
 
-      {/* 层级2：关键统计（次要优先级） */}
-      {/* ✅ 显示4个状态：阻塞、必须、建议、风险 */}
-      {(() => {
-        // 清单只渲染 findings[].blockers / must / …；顶部数字在有聚合树时与之对齐，避免 /score 的 summary 与树结构不一致（例如阻塞只记在扁平统计里）
-        const nested = countNestedFindingItems(readinessResult);
-        const useNestedTree = !!(readinessResult?.findings && readinessResult.findings.length > 0);
-        const blockers = useNestedTree
-          ? nested.blockers
-          : scoreBreakdown?.summary?.blockers ?? readinessResult?.summary?.totalBlockers ?? 0;
-        const must = useNestedTree
-          ? nested.must
-          : scoreBreakdown?.summary?.must ??
-            scoreBreakdown?.summary?.warnings ??
-            readinessResult?.summary?.totalMust ??
-            0;
-        const should = useNestedTree
-          ? nested.should
-          : scoreBreakdown?.summary?.should ??
-            scoreBreakdown?.summary?.suggestions ??
-            readinessResult?.summary?.totalShould ??
-            0;
-        // 风险条数：优先 risk-warnings 接口的 summary.totalRisks；勿与 GET .../score 返回的 risks 数组混算
-        const risks =
-          riskWarnings != null
-            ? riskWarnings.summary?.totalRisks ?? riskWarnings.risks?.length ?? 0
-            : (readinessResult?.risks?.length ?? 0) +
-                (readinessResult?.findings?.reduce((sum, f) => sum + (f.risks?.length || 0), 0) ?? 0);
-
-        return (
-          <div className={cn(spacingTokens.drawerPadding, spacingTokens.drawerPaddingBottomSmall)}>
-            <div className="mb-2">
-              <h3 className="text-sm font-medium text-muted-foreground">
-                {t('dashboard.readiness.page.drawer.stats.title', '有待处理的事项')}
-              </h3>
-            </div>
-            <div className={cn('grid grid-cols-2 gap-2 text-center')}>
-              {/* 阻塞项 */}
-              <div className={cn(
-                'p-2 rounded-lg border',
-                blockers > 0 
-                  ? 'bg-red-50 border-red-200 text-red-700' 
-                  : 'bg-white border-gray-200 text-gray-600'
-              )}>
-                <div className={cn(
-                  typographyTokens.statNumber,
-                  blockers > 0 && 'font-bold text-lg'
-                )}>
-                  {blockers}
-                </div>
-                <div className={cn(typographyTokens.statLabel, 'mt-0.5', blockers > 0 && 'font-medium')}>
-                  {t('dashboard.readiness.page.blockers', '阻塞')}
-                </div>
-              </div>
-              
-              {/* 必须项 */}
-              <div className={cn(
-                'p-2 rounded-lg border',
-                must > 0 
-                  ? 'bg-amber-50 border-amber-200 text-amber-700' 
-                  : 'bg-white border-gray-200 text-gray-600'
-              )}>
-                <div className={cn(
-                  typographyTokens.statNumber,
-                  must > 0 && 'font-semibold'
-                )}>
-                  {must}
-                </div>
-                <div className={cn(typographyTokens.statLabel, 'mt-0.5')}>
-                  {t('dashboard.readiness.page.must', '必须')}
-                </div>
-              </div>
-              
-              {/* 建议项 */}
-              <div className={cn(
-                'p-2 rounded-lg border',
-                should > 0 
-                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                  : 'bg-white border-gray-200 text-gray-600'
-              )}>
-                <div className={cn(
-                  typographyTokens.statNumber,
-                  should > 0 && 'font-semibold'
-                )}>
-                  {should}
-                </div>
-                <div className={cn(typographyTokens.statLabel, 'mt-0.5')}>
-                  {t('dashboard.readiness.page.should', '建议')}
-                </div>
-              </div>
-              
-              {/* 风险项 */}
-              <div className={cn(
-                'p-2 rounded-lg border',
-                risks > 0 
-                  ? 'bg-red-50 border-red-200 text-red-700' 
-                  : 'bg-white border-gray-200 text-gray-600'
-              )}>
-                <div className={cn(
-                  typographyTokens.statNumber,
-                  risks > 0 && 'font-semibold'
-                )}>
-                  {risks}
-                </div>
-                <div className={cn(typographyTokens.statLabel, 'mt-0.5')}>
-                  {t('dashboard.readiness.page.risks', '风险')}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <div className={cn(spacingTokens.drawerPadding, 'pb-3')}>
+        <div className="grid grid-cols-4 gap-1.5">
+          <StatTile
+            count={blockers}
+            label={t('dashboard.readiness.page.blockers', '阻塞')}
+            muted={blockers === 0}
+            active={blockers > 0}
+            onClick={() => onNavigateToSection?.('blockers')}
+          />
+          <StatTile
+            count={must}
+            label={
+              mustIsPackSafety
+                ? t('dashboard.readiness.page.drawer.stats.mustSafety', '安全准备')
+                : t('dashboard.readiness.page.must', '必须')
+            }
+            active={must > 0 && !safetyAllDone}
+            muted={must === 0 || safetyAllDone}
+            badge={
+              mustIsPackSafety && packMustProgress && packMustProgress.remaining > 0
+                ? isZh
+                  ? `${packMustProgress.remaining}待办`
+                  : `${packMustProgress.remaining}`
+                : undefined
+            }
+            onClick={() => onNavigateToSection?.('must')}
+          />
+          <StatTile
+            count={should}
+            label={t('dashboard.readiness.page.should', '建议')}
+            muted
+            active={should > 0}
+            onClick={() => onNavigateToSection?.('should')}
+          />
+          <StatTile
+            count={risks}
+            label={t('dashboard.readiness.page.drawer.stats.risksLabel', '风险')}
+            active={risks > 0}
+            onClick={() => onNavigateToSection?.('risks')}
+          />
+        </div>
+      </div>
     </div>
   );
 }

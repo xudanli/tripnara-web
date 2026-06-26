@@ -25,20 +25,7 @@ import type {
   SubmitFeedbackRequest,
   ObjectiveFunctionWeights,
 } from '@/types/optimization-v2';
-import {
-  Star,
-  Shield,
-  Sparkles,
-  Gauge,
-  Compass,
-  Battery,
-  Activity,
-  Edit,
-  CheckCircle,
-  XCircle,
-  Send,
-  Loader2,
-} from 'lucide-react';
+import { Star, Shield, Sparkles, Gauge, Compass, Battery, Edit, CheckCircle, XCircle, Send, Loader2 } from 'lucide-react';
 import { optimizationApi } from '@/api/optimization-v2';
 
 // ==================== 配置 ====================

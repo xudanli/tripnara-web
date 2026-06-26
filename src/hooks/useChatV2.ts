@@ -84,6 +84,8 @@ export interface ChatMessage {
   };
   /** ASYNC_POLLING：轮询完成前展示 PlanningPipelineProgress */
   asyncTaskPending?: boolean;
+  /** P1/P2 三人格单主角表达层 */
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
 }
 
 export interface UseChatV2Return {
@@ -163,6 +165,7 @@ export function useChatV2(
         suggestedActions: data.suggestedActions,
         ui_state: data.ui_state,
         orchestrationResult: data.orchestrationResult,
+        guardianPresentation: mapped.guardianPresentation,
       };
       setMessages((prev) => [...prev, aiMessage]);
       

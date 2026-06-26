@@ -3,6 +3,8 @@ import {
   extractHotelSearchDisclaimerZh,
   normalizeAccommodationsList,
 } from '@/lib/agent-accommodation-payload';
+import { extractPlanningAssistantPresentation } from '@/lib/guardian-presentation.util';
+import type { GuardianPersonaPresentation } from '@/types/guardian-presentation';
 
 const ACCOMMODATION_ROUTING_TARGETS: RoutingTarget[] = ['hotel', 'accommodation', 'airbnb'];
 
@@ -43,6 +45,7 @@ export function assistantFieldsFromChatResponse(data: ChatResponse): {
   ui_state?: ChatResponse['ui_state'];
   orchestrationResult?: ChatResponse['orchestrationResult'];
   accommodationDisclaimerZh?: string;
+  guardianPresentation?: GuardianPersonaPresentation;
 } {
   const accommodations = normalizeAccommodationsList(data.accommodations);
   const accommodationDisclaimerZh = pickAccommodationDisclaimer(data);
@@ -59,5 +62,6 @@ export function assistantFieldsFromChatResponse(data: ChatResponse): {
     ui_state: data.ui_state,
     orchestrationResult: data.orchestrationResult,
     ...(accommodationDisclaimerZh ? { accommodationDisclaimerZh } : {}),
+    guardianPresentation: extractPlanningAssistantPresentation(data),
   };
 }

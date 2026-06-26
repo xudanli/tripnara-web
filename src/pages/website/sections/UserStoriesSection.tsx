@@ -1,39 +1,29 @@
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { WebsiteSection } from '@/components/website/WebsiteSection';
 import { WebsiteHeading } from '@/components/website/WebsiteHeading';
 import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
+import { Button } from '@/components/ui/button';
 
 export default function UserStoriesSection() {
   const { t } = useTranslation();
 
-  const stories = [
-    {
-      title: t('userStories.story1.title', { defaultValue: '冰岛环岛' }),
-      subtitle: t('userStories.story1.subtitle', { defaultValue: '先判断可行域' }),
-    },
-    {
-      title: t('userStories.story2.title', { defaultValue: '新西兰徒步' }),
-      subtitle: t('userStories.story2.subtitle', { defaultValue: '风险管理' }),
-    },
-    {
-      title: t('userStories.story3.title', { defaultValue: '欧洲火车' }),
-      subtitle: t('userStories.story3.subtitle', { defaultValue: '结构化路线' }),
-    },
-  ];
+  const stories = [1, 2, 3, 4].map((id) => ({
+    title: t(`userStories.story${id}.title`),
+    subtitle: t(`userStories.story${id}.subtitle`),
+  }));
 
   return (
     <WebsiteSection variant="default" padding="xl" maxWidth="xl">
       <WebsiteHeading level={2} align="center" className="mb-16">
-        {t('userStories.title', {
-          defaultValue: '看看大家如何使用 TripNARA',
-        })}
+        {t('userStories.title')}
       </WebsiteHeading>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
         {stories.map((story, idx) => (
           <WebsiteCard key={idx} hover>
             <CardContent className="p-10">
-              <h3 className="text-2xl font-bold mb-2 text-foreground">
+              <h3 className="text-xl font-bold mb-2 text-foreground">
                 {story.title}
               </h3>
               <p className="text-base text-muted-foreground">
@@ -42,6 +32,12 @@ export default function UserStoriesSection() {
             </CardContent>
           </WebsiteCard>
         ))}
+      </div>
+
+      <div className="text-center">
+        <Button asChild variant="outline" size="lg" className="border-2">
+          <Link to="/stories">{t('userStories.viewAll')}</Link>
+        </Button>
       </div>
     </WebsiteSection>
   );

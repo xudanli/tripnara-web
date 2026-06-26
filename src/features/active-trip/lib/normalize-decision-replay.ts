@@ -157,7 +157,7 @@ function normalizePersonaSection(
 function normalizePersonaSections(raw: unknown): DecisionReplayResponse['personaSections'] {
   if (Array.isArray(raw)) {
     return raw
-      .map((item, index) => normalizePersonaSection(item))
+      .map((item, _index) => normalizePersonaSection(item))
       .filter((item): item is NonNullable<typeof item> => item != null);
   }
 

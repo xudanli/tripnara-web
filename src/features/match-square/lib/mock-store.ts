@@ -16,6 +16,10 @@ import type { SpawnTrekTripPreview, SpawnTrekTripRequest, SpawnTrekTripResult } 
 import type { InstantiateTripRequest, TripInstantiationPreview, TripInstantiationResult } from '@/types/trip-instantiation';
 import { enrichApplicationsWithDecisionBriefs } from './decision-engine/enrich-application-decision-brief';
 import { enrichApplicationsWithMatchInsights } from './match-enrichment';
+import {
+  buildReviewAttributionContext,
+  synthesizeAttributionFromContext,
+} from './recruiting-attribution.util';
 import { PLANNING_STYLE_CAPSULES } from './constants';
 import { buildClarifyDestinationRegions } from './destination-options';
 import { applyVibeParseToPost } from './vibe-llm/puzzle-from-vibe';
@@ -61,7 +65,7 @@ let nextAppId = 100;
 
 const MOCK_ACCESS: MatchSquareAccess = {
   canBrowse: true,
-  canPost: true,
+  canPost: false,
   canApply: true,
   quizComplete: true,
 };
@@ -403,10 +407,21 @@ export const matchSquareMockStore = {
     if (!list) return delay(null);
     const idx = list.findIndex((a) => a.id === applicationId);
     if (idx < 0) return delay(null);
+
+    const post = posts.find((p) => p.id === postId);
+    const approved = approvedApplicationsForPost(postId);
+    const application = list[idx];
+    const context =
+      post != null
+        ? buildReviewAttributionContext(application, post, approved, payload)
+        : payload;
+    const attribution = synthesizeAttributionFromContext(payload.action, context);
+
     list[idx] = {
       ...list[idx],
       status: payload.action === 'approve' ? 'approved' : 'rejected',
       decidedAt: new Date().toISOString(),
+      attribution,
     };
 
     let teamPuzzle;

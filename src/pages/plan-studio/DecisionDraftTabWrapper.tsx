@@ -6,9 +6,8 @@
 import { useState, useEffect } from 'react';
 import { planningWorkbenchApi } from '@/api/planning-workbench';
 import DecisionDraftTab from './DecisionDraftTab';
-import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 
 interface DecisionDraftTabWrapperProps {
   tripId: string;

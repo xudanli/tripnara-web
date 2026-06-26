@@ -27,7 +27,11 @@ export type ContextBlockType =
   | 'PLAN_DAY'
   | 'DECISION_LOG'
   | 'USER_PROFILE'
-  | 'CONSTRAINTS';
+  | 'CONSTRAINTS'
+  | 'DOMAIN_INFLUENCE_TEAM'
+  | 'DOMAIN_INFLUENCE_PRIVATE'
+  | 'WISHLIST_PRIVATE'
+  | 'WISHLIST_TEAM';
 
 /**
  * 上下文块
@@ -63,19 +67,45 @@ export interface ContextPackage {
 }
 
 /**
- * 构建上下文请求参数
+ * POST /context/build 请求体 — 与后端 `BuildContextPackageDto` 对齐。
+ *
+ * @example 协作记忆（领域影响力 + 私密愿望）
+ * ```json
+ * {
+ *   "tripId": "trip-123",
+ *   "userId": "当前登录用户 id",
+ *   "phase": "planning",
+ *   "agent": "PLANNER",
+ *   "userQuery": "...",
+ *   "includePrivate": true
+ * }
+ * ```
  */
-export interface BuildContextRequest {
+export interface BuildContextPackageRequest {
   tripId?: string;
+  /**
+   * 当前登录用户 ID。
+   * 与 `includePrivate: true` 联用时注入：领域影响力 snapshot、愿望单私密块、负责人私密约束。
+   * 后端缓存 key 含 userId，避免不同用户私密块互相命中。
+   */
+  userId?: string;
   phase: string;
   agent: string;
   userQuery: string;
   tokenBudget?: number;
+  /**
+   * 注入协作记忆私密块：`WISHLIST_PRIVATE`、`DOMAIN_INFLUENCE_PRIVATE`。
+   * 仅传 `includePrivate: true` 而不传 `userId` 时，团队可见块
+   *（`WISHLIST_TEAM`、`DOMAIN_INFLUENCE_TEAM`）仍可能部分生效，私密相关块不完整。
+   */
   includePrivate?: boolean;
   requiredTopics?: string[];
   excludeTopics?: string[];
   useCache?: boolean;
 }
+
+/** @deprecated 使用 {@link BuildContextPackageRequest} */
+export type BuildContextRequest = BuildContextPackageRequest;
 
 /**
  * 构建上下文响应
@@ -403,16 +433,23 @@ export const contextApi = {
    * POST /context/build
    *
    * 根据 tripId、phase、agent、userQuery 构建 Context Package。
-   * 自动调用相关 skills，处理 Token 预算和压缩，支持缓存。
+   * 多人行程需传 `userId` + `includePrivate: true` 以注入完整协作记忆块。
    */
-  build: async (data: BuildContextRequest): Promise<BuildContextResponse> => {
+  build: async (data: BuildContextPackageRequest): Promise<BuildContextResponse> => {
     try {
+      if (data.includePrivate && !data.userId) {
+        console.warn(
+          '[Context API] includePrivate 未传 userId：WISHLIST_TEAM / DOMAIN_INFLUENCE_TEAM 可能部分生效，私密块不完整'
+        );
+      }
       console.log('[Context API] 发送 build 请求:', {
         tripId: data.tripId,
+        userId: data.userId,
         phase: data.phase,
         agent: data.agent,
         userQuery: data.userQuery?.substring(0, 50) + '...',
         tokenBudget: data.tokenBudget,
+        includePrivate: data.includePrivate,
         requiredTopics: data.requiredTopics,
         useCache: data.useCache,
       });

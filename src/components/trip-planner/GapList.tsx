@@ -33,8 +33,8 @@ export function GapList({
   onSelectGaps,
   onIgnoreGap,
   onIgnoreGapsBatch,
-  onUnignoreGap,
-  onUnignoreGapsBatch,
+  onUnignoreGap: _onUnignoreGap,
+  onUnignoreGapsBatch: _onUnignoreGapsBatch,
 }: GapListProps) {
   const [loading, setLoading] = useState<string | null>(null);
 

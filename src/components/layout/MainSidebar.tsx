@@ -3,7 +3,7 @@
  * 
  * Phase 1: 核心导航项
  * - Logo
- * - 新行程 / 我的行程 / 搭子广场 / 路线模版 / 徒步
+ * - 新行程 / 我的行程 / 可信项目 / 路线模版 / 徒步
  * - 收藏（展开显示收藏的行程）
  * - 规划中（展开显示规划中的行程）
  * - 进行中（展开显示进行中的行程）
@@ -37,31 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  Plus,
-  Route,
-  MapPin,
-  Heart,
-  ChevronDown,
-  ChevronRight,
-  User,
-  Settings,
-  LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Share2,
-  Edit,
-  MoreVertical,
-  RefreshCw,
-  Users,
-  Trash2,
-  CreditCard,
-  Bell,
-  HelpCircle,
-  Search,
-  Mountain,
-  MessageCircle,
-} from 'lucide-react';
+import { Plus, Route, MapPin, Heart, ChevronDown, ChevronRight, User, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Share2, Edit, MoreVertical, RefreshCw, Users, Trash2, CreditCard, Bell, Mountain, MessageCircle, Shield, BadgeCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 import { getTripHikingProfile } from '@/lib/trip-hiking';
@@ -269,9 +245,6 @@ export default function MainSidebar({ className }: MainSidebarProps) {
       // "我的行程"：精确匹配，排除具体行程页面（/dashboard/trips/xxx）
       return location.pathname === '/dashboard/trips' || location.pathname === '/dashboard/trips/';
     }
-    if (path === '/dashboard/tripnara/plaza') {
-      return location.pathname.startsWith('/dashboard/tripnara/plaza');
-    }
     return location.pathname.startsWith(path);
   };
   
@@ -280,10 +253,12 @@ export default function MainSidebar({ className }: MainSidebarProps) {
     navigate(path);
   };
   
-  // 处理行程点击：规划中行程跳转到规划工作台，其他跳转到行程详情页
+  // 处理行程点击：规划中 → 规划工作台；进行中 → 行中执行页；其余 → 详情
   const handleTripClick = (tripId: string, status?: TripStatus) => {
     if (status === 'PLANNING') {
       navigate(`/dashboard/plan-studio?tripId=${tripId}`);
+    } else if (status === 'IN_PROGRESS') {
+      navigate(`/dashboard/execute?tripId=${tripId}`);
     } else {
       navigate(`/dashboard/trips/${tripId}`);
     }
@@ -394,7 +369,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             icon={Plus}
             label="新行程"
             onClick={() => handleNavClick('/dashboard')}
-            active={isActive('/dashboard') && !isActive('/dashboard/trips') && !isActive('/dashboard/plan-studio') && !isActive('/dashboard/tripnara/plaza')}
+            active={isActive('/dashboard') && !isActive('/dashboard/trips') && !isActive('/dashboard/plan-studio') && !isActive('/dashboard/trusted-projects')}
             collapsed={collapsed}
           />
           
@@ -407,12 +382,12 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             collapsed={collapsed}
           />
 
-          {/* 搭子广场 — 行程确定「去哪」后，匹配「同行人」；位于行程与灵感内容之间 */}
+          {/* 可信旅行项目 */}
           <NavItem
-            icon={Users}
-            label="搭子广场"
-            onClick={() => handleNavClick('/dashboard/tripnara/plaza')}
-            active={isActive('/dashboard/tripnara/plaza')}
+            icon={BadgeCheck}
+            label="可信项目"
+            onClick={() => handleNavClick('/dashboard/trusted-projects')}
+            active={isActive('/dashboard/trusted-projects')}
             collapsed={collapsed}
           />
           
@@ -590,6 +565,16 @@ export default function MainSidebar({ className }: MainSidebarProps) {
               >
                 <User className="mr-2 h-4 w-4" />
                 <span>我的主页</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  navigate('/dashboard/settings?tab=governance');
+                  setUserMenuOpen(false);
+                }}
+                className="cursor-pointer"
+              >
+                <Shield className="mr-2 h-4 w-4" />
+                <span>身份与权限</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {

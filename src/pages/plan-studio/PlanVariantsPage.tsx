@@ -5,19 +5,20 @@ import { planningWorkbenchApi } from '@/api/planning-workbench';
 import { tripsApi } from '@/api/trips';
 import PlanVariantsComparison from '@/components/constraints/PlanVariantsComparison';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, ArrowLeft } from 'lucide-react';
-import type { PlanVariant, ConstraintDSL } from '@/types/constraints';
+import type { PlanVariant } from '@/types/constraints';
 import { toast } from 'sonner';
-import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
+import { buildGenerateMultiplePlansRequest } from '@/lib/plan-variants-request';
+import type { TripDetail } from '@/types/trip';
 
 export default function PlanVariantsPage() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
   const [variants, setVariants] = useState<PlanVariant[]>([]);
   const [loading, setLoading] = useState(false);
-  const [trip, setTrip] = useState<any>(null);
+  const [_trip, setTrip] = useState<TripDetail | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,9 +30,9 @@ export default function PlanVariantsPage() {
   const loadTrip = async () => {
     if (!tripId) return;
     try {
-      const tripData = await tripsApi.getTrip(tripId);
+      const tripData = await tripsApi.getById(tripId);
       setTrip(tripData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('加载行程失败:', error);
       toast.error('加载行程失败，请稍后重试');
     }
@@ -39,13 +40,12 @@ export default function PlanVariantsPage() {
 
   const handleGenerateVariants = async () => {
     if (!tripId) return;
-    
+
     setLoading(true);
     try {
-      // 加载当前状态和约束
       const [planStateData, tripData] = await Promise.all([
         planningWorkbenchApi.getState(tripId).catch(() => null),
-        tripsApi.getTrip(tripId).catch(() => null),
+        tripsApi.getById(tripId).catch(() => null),
       ]);
 
       if (!tripData) {
@@ -53,74 +53,17 @@ export default function PlanVariantsPage() {
         return;
       }
 
-      // 构建约束DSL
-      const constraints: ConstraintDSL = {
-        hard_constraints: {},
-        soft_constraints: {},
-      };
-
-      // 添加预算约束
-      if (tripData.budgetConfig?.totalBudget) {
-        constraints.hard_constraints.budget = {
-          max: tripData.budgetConfig.totalBudget,
-          currency: tripData.budgetConfig.currency || 'CNY',
-          flexible: false,
-        };
-      }
-
-      // 添加日期窗口约束
-      if (tripData.startDate && tripData.endDate) {
-        constraints.hard_constraints.date_window = {
-          start: tripData.startDate,
-          end: tripData.endDate,
-          flexible: false,
-        };
-      }
-
-      // 添加节奏偏好（如果有）
-      if (tripData.preferences?.pace) {
-        const paceMap: Record<string, 'relaxed' | 'moderate' | 'intense'> = {
-          'relaxed': 'relaxed',
-          'moderate': 'moderate',
-          'intense': 'intense',
-          '轻松': 'relaxed',
-          '中等': 'moderate',
-          '紧凑': 'intense',
-        };
-        const pacePreference = paceMap[tripData.preferences.pace.toLowerCase()] || 'moderate';
-        constraints.soft_constraints.pace = {
-          preference: pacePreference,
-          weight: 0.8,
-        };
-      }
-
-      // 构建状态对象
-      const state = {
-        context: {
-          destination: tripData.destination,
-          startDate: tripData.startDate,
-          durationDays: tripData.durationDays || 7,
-          preferences: tripData.preferences || {},
-          budget: tripData.budgetConfig || {},
-        },
-        candidatesByDate: planStateData?.candidatesByDate || {},
-        signals: planStateData?.signals || {},
-        policies: {
-          constraintDSL: constraints,
-        },
-      };
-
-      const result = await decisionAdapter.generateMultiplePlans({
-        state,
-        constraints,
-      });
+      const request = buildGenerateMultiplePlansRequest(tripData, planStateData);
+      const result = await decisionAdapter.generateMultiplePlans(request);
 
       setVariants(result.variants);
-      setRunId(result.log.runId); // 保存 runId 用于反馈
+      setRunId(result.log.runId);
       toast.success(`成功生成 ${result.variants.length} 个方案`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('生成方案失败:', error);
-      toast.error(error.message || '生成方案失败，请稍后重试');
+      const message =
+        error instanceof Error ? error.message : '生成方案失败，请稍后重试';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -133,25 +76,23 @@ export default function PlanVariantsPage() {
     }
 
     try {
-      // TODO: 应用选中的方案
-      // 这里需要调用规划工作台的API来应用方案
-      // await planningWorkbenchApi.applyPlan(tripId, variant.plan);
-      
-      toast.success(`已选择${variant.id === 'conservative' ? '保守' : variant.id === 'balanced' ? '平衡' : '激进'}方案`);
-      
-      // 返回规划工作台
+      toast.success(
+        `已选择${variant.id === 'conservative' ? '保守' : variant.id === 'balanced' ? '平衡' : '激进'}方案`,
+      );
+
       setTimeout(() => {
         navigate(`/dashboard/plan-studio?tripId=${tripId}`);
       }, 1500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('应用方案失败:', error);
-      toast.error(error.message || '应用方案失败，请稍后重试');
+      const message =
+        error instanceof Error ? error.message : '应用方案失败，请稍后重试';
+      toast.error(message);
     }
   };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* 头部 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button
@@ -169,10 +110,7 @@ export default function PlanVariantsPage() {
             </p>
           </div>
         </div>
-        <Button 
-          onClick={handleGenerateVariants} 
-          disabled={loading || !tripId}
-        >
+        <Button onClick={handleGenerateVariants} disabled={loading || !tripId}>
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -184,25 +122,23 @@ export default function PlanVariantsPage() {
         </Button>
       </div>
 
-      {/* 方案对比 */}
       {variants.length > 0 && (
         <PlanVariantsComparison
           variants={variants}
           onSelect={handleSelectVariant}
           runId={runId || undefined}
           tripId={tripId}
-          userId={undefined} // TODO: 从用户上下文获取
+          userId={undefined}
         />
       )}
 
-      {/* 空状态 */}
       {!loading && variants.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="text-center">
               <h3 className="text-lg font-semibold mb-2">还没有生成方案</h3>
               <p className="text-muted-foreground mb-4">
-                点击"生成多个方案"按钮，系统将为您生成保守、平衡、激进三种方案供您对比选择
+                点击「生成多个方案」按钮，系统将为您生成保守、平衡、激进三种方案供您对比选择
               </p>
               <Button onClick={handleGenerateVariants} disabled={!tripId}>
                 生成多个方案
@@ -212,15 +148,12 @@ export default function PlanVariantsPage() {
         </Card>
       )}
 
-      {/* 加载状态 */}
       {loading && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <LogoLoading size={40} className="mb-4" />
             <p className="text-muted-foreground">正在生成方案，请稍候...</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              这可能需要 10-30 秒
-            </p>
+            <p className="text-sm text-muted-foreground mt-2">这可能需要 10-30 秒</p>
           </CardContent>
         </Card>
       )}

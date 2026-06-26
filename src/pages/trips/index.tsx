@@ -10,19 +10,24 @@ import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, EmptyMedia } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, DollarSign, Heart, Share2, Users, ArrowRight, CloudSun, MessageSquare, FileText, Maximize2, Minimize2, X, MapPin } from 'lucide-react';
+import { Calendar, DollarSign, Heart, Share2, Users, ArrowRight, MessageSquare, FileText, Maximize2, Minimize2, X, MapPin } from 'lucide-react';
 import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import { format } from 'date-fns';
 import { TripPlanning } from '@/components/illustrations';
 import { cn } from '@/lib/utils';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
+import NLChatInterface from '@/components/trips/NLChatInterface';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/utils/format';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
+import {
+  getTripPlanningAvailabilityLabel,
+  resolveTripPlanningAvailability,
+} from '@/lib/trip-content-mode';
 import { TripCardWeather } from '@/components/weather/WeatherCard';
-import NLChatInterface from '@/components/trips/NLChatInterface';
+import { ParticipantProjectsBanner } from '@/features/participant-portal';
 import {
   Dialog,
   DialogContent,
@@ -392,7 +397,7 @@ export default function TripsPage() {
     setCollaboratorsDialogOpen(true);
   };
 
-  const handleCreateTrip = () => {
+  const ____handleCreateTrip = () => {
     navigate('/dashboard/trips/new');
   };
 
@@ -432,10 +437,10 @@ export default function TripsPage() {
     setNlDialogOpen(false);
     setIsFullscreen(false);
     loadTrips();
-    navigate(`/dashboard/trips/${tripId}`);
+    navigate('/dashboard/trips', { state: { from: 'create', tripId } });
   };
 
-  const handleFormTripCreated = (tripId: string) => {
+  const ____handleFormTripCreated = (tripId: string) => {
     setFormDialogOpen(false);
     loadTrips();
     navigate(`/dashboard/trips/${tripId}`);
@@ -518,9 +523,46 @@ export default function TripsPage() {
 
   const handleTripClick = async (tripId: string) => {
     if (checkingTripId === tripId) return;
+    const listItem = trips.find((trip) => trip.id === tripId);
+    const listAvailability = resolveTripPlanningAvailability(listItem);
+    const listRepair = (listItem?.metadata as Record<string, any> | undefined)?.repairContract;
+    const listGenerationProgress = (listItem?.metadata as Record<string, any> | undefined)?.generationProgress;
+    if (listAvailability !== 'ready') {
+      toast.info(getTripPlanningAvailabilityLabel(listAvailability), {
+        description:
+          listAvailability === 'collecting_info'
+            ? '这个行程草稿还缺少规划信息，请继续在创建对话里补齐。'
+            : listAvailability === 'failed'
+              ? (typeof listGenerationProgress?.message === 'string'
+                  ? listGenerationProgress.message
+                  : listRepair?.violation === 'INSUFFICIENT_POI_CANDIDATES'
+                    ? 'POI 候选不足，请补充城市/区域或导入目的地 POI 数据。'
+                    : '生成失败，请稍后重试或重新创建行程。')
+              : listAvailability === 'ready_to_generate'
+                ? '规划骨架已初始化，但还没有生成 POI 方案。'
+                : '行程规划还没完成，完成后才能进入详情页。',
+      });
+      return;
+    }
+
     setCheckingTripId(tripId);
     try {
       const trip = await tripsApi.getById(tripId);
+      const detailAvailability = resolveTripPlanningAvailability(trip);
+      if (detailAvailability !== 'ready') {
+        toast.info(getTripPlanningAvailabilityLabel(detailAvailability), {
+          description:
+            detailAvailability === 'collecting_info'
+              ? '这个行程草稿还缺少规划信息，请继续补齐后再查看详情。'
+              : detailAvailability === 'failed'
+                ? '生成失败，请稍后重试或重新创建行程。'
+                : detailAvailability === 'ready_to_generate'
+                  ? '规划骨架已初始化，但还没有生成 POI 方案。'
+                  : '行程规划还没完成，完成后才能进入详情页。',
+        });
+        await loadTrips();
+        return;
+      }
       if (shouldShowNlItemsGeneratingPlaceholder(trip)) {
         const progress = trip.metadata?.generationProgress;
         if (progress?.status === 'failed') {
@@ -635,6 +677,8 @@ export default function TripsPage() {
         </div>
       </div>
 
+      <ParticipantProjectsBanner className="max-w-3xl" />
+
       {trips.length === 0 ? (
         <Card>
           <CardContent className="py-12">
@@ -725,11 +769,20 @@ export default function TripsPage() {
               <>
                 {filteredTrips.map((trip) => {
                   if (!trip || !trip.id) return null;
+                  const planningAvailability = resolveTripPlanningAvailability(trip);
+                  const isPlanningUnavailable = planningAvailability !== 'ready';
+                  const generationProgress = (trip.metadata as Record<string, any> | undefined)?.generationProgress;
+                  const repairContract = (trip.metadata as Record<string, any> | undefined)?.repairContract;
               
               return (
                 <Card
                   key={trip.id}
-                  className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+                  className={cn(
+                    "transition-all",
+                    isPlanningUnavailable
+                      ? "cursor-not-allowed border-dashed bg-muted/20"
+                      : "cursor-pointer hover:shadow-lg hover:border-primary/50"
+                  )}
                   onClick={() => handleTripClick(trip.id)}
                 >
                   <CardHeader>
@@ -745,10 +798,18 @@ export default function TripsPage() {
                         )}
                       </CardTitle>
                       <Badge 
-                        className={getTripStatusClasses((trip.status || 'PLANNING') as any)} 
+                        className={
+                          isPlanningUnavailable
+                            ? planningAvailability === 'failed'
+                              ? 'bg-red-50 text-red-700 border-red-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                            : getTripStatusClasses((trip.status || 'PLANNING') as any)
+                        }
                         variant="outline"
                       >
-                        {getTripStatusLabel((trip.status || 'PLANNING') as any)}
+                        {isPlanningUnavailable
+                          ? getTripPlanningAvailabilityLabel(planningAvailability)
+                          : getTripStatusLabel((trip.status || 'PLANNING') as any)}
                       </Badge>
                     </div>
                     <CardDescription>
@@ -774,6 +835,21 @@ export default function TripsPage() {
                             startDate={trip.startDate}
                             showOnlyUpcoming={true}
                           />
+                        </div>
+                      )}
+                      {isPlanningUnavailable && (
+                        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                          {planningAvailability === 'collecting_info'
+                            ? '草稿已保存，补齐目的地、日期等信息后才会进入规划。'
+                            : planningAvailability === 'failed'
+                              ? (typeof generationProgress?.message === 'string'
+                                  ? generationProgress.message
+                                  : repairContract?.violation === 'INSUFFICIENT_POI_CANDIDATES'
+                                    ? 'POI 候选不足，请补充城市/区域或导入目的地 POI 数据。'
+                                    : '行程生成失败，暂时无法进入详情页。')
+                              : planningAvailability === 'ready_to_generate'
+                                ? '规划骨架已初始化，但 POI 方案还没有开始生成。'
+                                : '行程正在生成中，完成前暂时无法进入详情页。'}
                         </div>
                       )}
                     </CardDescription>
@@ -860,12 +936,14 @@ export default function TripsPage() {
                     {/* 进入行程按钮 */}
                     <Button
                       className="w-full"
+                      disabled={checkingTripId === trip.id}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleTripClick(trip.id);
                       }}
+                      variant={isPlanningUnavailable ? 'outline' : 'default'}
                     >
-                      进入行程
+                      {isPlanningUnavailable ? getTripPlanningAvailabilityLabel(planningAvailability) : '进入行程'}
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </CardContent>

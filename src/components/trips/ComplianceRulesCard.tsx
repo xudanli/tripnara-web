@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { useRag } from '@/hooks';
 import type { ExtractComplianceRulesResponse } from '@/api/rag';
-import { Shield, CheckCircle2, AlertTriangle, RefreshCw, ExternalLink } from 'lucide-react';
+import { Shield, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Collapsible,

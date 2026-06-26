@@ -3,12 +3,12 @@
  * 显示安全第一原则的警告信息和替代方案
  */
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import GateWarningCard, { type GateAlternative } from './GateWarningCard';
+import type { GateAlternative } from '@/components/trips/GateWarningCard';
 
 interface SafetyWarningCardProps {
   warningMessage: string;

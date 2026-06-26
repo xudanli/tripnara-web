@@ -41,21 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { 
-  MapPin, 
-  Utensils, 
-  Coffee, 
-  Car, 
-  Search,
-  Star,
-  Clock,
-  Info,
-  Plus,
-  Navigation,
-  Sparkles,
-  X,
-  ChevronLeft,
-} from 'lucide-react';
+import { MapPin, Utensils, Coffee, Car, Search, Star, Clock, Plus, Navigation, Sparkles, X, ChevronLeft, CalendarDays, LocateFixed, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
@@ -63,12 +49,41 @@ import { getDefaultCostCategory } from '@/hooks';
 import { DollarSign } from 'lucide-react';
 import type { CostCategory } from '@/types/trip';
 import { EmptyStateCard } from '@/components/ui/empty-state-images';
+import {
+  ITINERARY_ITEM_TYPE_DISPLAY,
+  ITINERARY_ITEM_TYPE_OPTIONS,
+} from '@/lib/itinerary-item-type-display';
+import {
+  applyHotelCrossDayDefaults,
+  buildAirportLandingUtcTimes,
+  buildItineraryItemUtcTimes,
+  getEndDayOptions,
+  isAirportHubPlace,
+  itineraryItemSupportsCrossDay,
+} from '@/lib/itinerary-item-cross-day-form';
+import { ItinerarySpecialDisplayRoleField } from '@/components/trips/ItinerarySpecialDisplayRoleField';
+import {
+  applySpecialDisplayRoleDefaults,
+  buildSpecialDisplayMetadata,
+  inferItinerarySpecialDisplayRole,
+  itineraryRoleSupportsCrossDay,
+  itineraryRoleUsesDepartureTime,
+  itineraryRoleUsesLandingTime,
+  itineraryRoleUsesSingleHubMoment,
+  getItineraryRoleEndTimeLabel,
+  getItineraryRoleStartTimeLabel,
+  mergeTimelineDisplayRoleIntoNote,
+  stripTimelineDisplayRoleFromNote,
+  type ItinerarySpecialDisplayRole,
+} from '@/lib/itinerary-special-display';
 
 // ==================== 类型定义 ====================
 
 interface EnhancedAddItineraryItemDialogProps {
   tripDay: TripDay;
   tripId: string;
+  /** 整趟日程，用于跨天结束日期选择 */
+  tripDays?: TripDay[];
   countryCode?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -96,63 +111,51 @@ interface EnhancedAddItineraryItemDialogProps {
   };
 }
 
-interface ItemTypeOption {
-  value: ItineraryItemType;
+// ==================== 配置 ====================
+
+const SEARCH_MODE_OPTIONS: Array<{
+  value: SearchMode;
   label: string;
-  icon: typeof MapPin;
   description: string;
-}
+  icon: typeof Search;
+}> = [
+  {
+    value: 'search',
+    label: '搜索',
+    description: '按名称查找地点',
+    icon: Search,
+  },
+  {
+    value: 'nearby',
+    label: '附近',
+    description: '基于当前位置或选中地点',
+    icon: Navigation,
+  },
+  {
+    value: 'recommend',
+    label: '推荐',
+    description: '按行程目的地推荐',
+    icon: Sparkles,
+  },
+];
 
 type SearchMode = 'search' | 'nearby' | 'recommend';
 
-// ==================== 配置 ====================
+const MANUAL_ITEM_SHORTCUTS = (['REST', 'TRANSIT', 'MEAL_FLOATING'] as const).map((type) => ({
+  type,
+  ...ITINERARY_ITEM_TYPE_DISPLAY[type],
+}));
 
-const ITEM_TYPE_OPTIONS: ItemTypeOption[] = [
-  {
-    value: 'ACTIVITY',
-    label: '景点/活动',
-    icon: MapPin,
-    description: '参观景点、体验活动',
-  },
-  {
-    value: 'MEAL_ANCHOR',
-    label: '固定用餐',
-    icon: Utensils,
-    description: '预约餐厅、重要用餐',
-  },
-  {
-    value: 'MEAL_FLOATING',
-    label: '灵活用餐',
-    icon: Coffee,
-    description: '随机用餐、小吃',
-  },
-  {
-    value: 'REST',
-    label: '休息',
-    icon: Coffee,
-    description: '酒店休息、自由时间',
-  },
-  {
-    value: 'TRANSIT',
-    label: '交通',
-    icon: Car,
-    description: '火车、飞机、巴士等',
-  },
-];
+const ITEM_TYPE_OPTIONS = ITINERARY_ITEM_TYPE_OPTIONS;
 
 const CATEGORY_OPTIONS: { value: PlaceCategory | 'all'; labelKey: string }[] = [
   { value: 'all', labelKey: 'all' },
   { value: 'ATTRACTION', labelKey: 'attraction' },
   { value: 'RESTAURANT', labelKey: 'restaurant' },
-  { value: 'CAFE', labelKey: 'cafe' },
-  { value: 'BAR', labelKey: 'bar' },
   { value: 'SHOPPING', labelKey: 'shopping' },
   { value: 'HOTEL', labelKey: 'hotel' },
-  { value: 'MUSEUM', labelKey: 'museum' },
-  { value: 'PARK', labelKey: 'park' },
-  { value: 'TRANSPORT', labelKey: 'transport' },
   { value: 'TRANSIT_HUB', labelKey: 'transitHub' },
-  { value: 'OTHER', labelKey: 'other' },
+  { value: 'HOSPITAL', labelKey: 'hospital' },
 ];
 
 // ==================== 工具函数 ====================
@@ -164,6 +167,23 @@ const getSeason = (date: Date): 'spring' | 'summer' | 'autumn' | 'winter' => {
   if (month >= 6 && month <= 8) return 'summer';
   if (month >= 9 && month <= 11) return 'autumn';
   return 'winter'; // 12, 1, 2
+};
+
+const formatTripDayLabel = (dateText: string): string => {
+  if (!dateText) return '未选择日期';
+  const date = new Date(dateText);
+  if (Number.isNaN(date.getTime())) return dateText;
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  }).format(date);
+};
+
+const formatDistanceLabel = (distance?: number): string | null => {
+  if (!distance || distance <= 0) return null;
+  return distance > 1000 ? `${(distance / 1000).toFixed(1)} km` : `${Math.round(distance)} m`;
 };
 
 // 解析包含季节信息的开放时间字符串
@@ -228,6 +248,7 @@ const formatOpeningHours = (openingHours: any, tripDate: string): string | null 
 export function EnhancedAddItineraryItemDialog({
   tripDay,
   tripId,
+  tripDays = [],
   countryCode,
   open,
   onOpenChange,
@@ -263,6 +284,9 @@ export function EnhancedAddItineraryItemDialog({
   const [itemType, setItemType] = useState<ItineraryItemType>('ACTIVITY');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
+  const [landingTime, setLandingTime] = useState('10:00');
+  const [endTripDayId, setEndTripDayId] = useState(tripDay.id);
+  const [displayRole, setDisplayRole] = useState<ItinerarySpecialDisplayRole>('normal');
   const [note, setNote] = useState('');
   
   // 费用相关状态
@@ -286,6 +310,55 @@ export function EnhancedAddItineraryItemDialog({
   const [error, setError] = useState<string | null>(null);
 
   const debouncedQuery = useDebounce(searchQuery, 300);
+
+  const endDayOptions = useMemo(
+    () => getEndDayOptions(tripDays.length > 0 ? tripDays : [tripDay], tripDay.id),
+    [tripDays, tripDay],
+  );
+
+  const supportsCrossDay = useMemo(
+    () =>
+      itineraryRoleSupportsCrossDay(displayRole) ||
+      itineraryItemSupportsCrossDay(
+        itemType,
+        selectedPlace?.category,
+        costCategory,
+        displayRole,
+      ),
+    [itemType, selectedPlace?.category, costCategory, displayRole],
+  );
+
+  const isHotelLike = displayRole === 'hotel';
+  const isTransit = itemType === 'TRANSIT';
+  const isLandingPointMode = itineraryRoleUsesLandingTime(displayRole);
+  const isDeparturePointMode = itineraryRoleUsesDepartureTime(displayRole);
+  const isHubMomentMode = itineraryRoleUsesSingleHubMoment(displayRole);
+  const supportsLandingArriveDay =
+    isLandingPointMode && endDayOptions.length > 1;
+  const supportsDepartureDay =
+    isDeparturePointMode && endDayOptions.length > 1;
+  const startTimeLabel = getItineraryRoleStartTimeLabel(displayRole);
+  const endTimeLabel = getItineraryRoleEndTimeLabel(displayRole);
+
+  const resolveItemTimes = () => {
+    const endDay =
+      endDayOptions.find((d) => d.id === endTripDayId) ??
+      endDayOptions[endDayOptions.length - 1] ??
+      tripDay;
+
+    if (isHubMomentMode) {
+      const hubHm = landingTime.trim();
+      return buildAirportLandingUtcTimes(endDay.date, hubHm, timezone);
+    }
+
+    return buildItineraryItemUtcTimes(
+      tripDay.date,
+      endDay.date,
+      startTime,
+      endTime,
+      timezone,
+    );
+  };
 
   // 获取用户位置（如果没有提供初始位置）
   useEffect(() => {
@@ -321,6 +394,9 @@ export function EnhancedAddItineraryItemDialog({
     setItemType('ACTIVITY');
     setStartTime('09:00');
     setEndTime('10:00');
+    setLandingTime('10:00');
+    setEndTripDayId(tripDay.id);
+    setDisplayRole('normal');
     setNote('');
     setError(null);
     // 重置费用字段
@@ -333,7 +409,26 @@ export function EnhancedAddItineraryItemDialog({
     // 重置搜索范围（默认使用当前位置，如果有的话）
     setSearchScope(userLocation ? 'current' : 'destination');
     setSearchWarning(null);
-  }, [userLocation]);
+  }, [userLocation, tripDay.id]);
+
+  const applyDisplayRole = useCallback(
+    (role: ItinerarySpecialDisplayRole) => {
+      setDisplayRole(role);
+      const defaults = applySpecialDisplayRoleDefaults(
+        role,
+        tripDays.length > 0 ? tripDays : [tripDay],
+        tripDay.id,
+      );
+      if (defaults.itemType) setItemType(defaults.itemType);
+      if (defaults.costCategory) setCostCategory(defaults.costCategory);
+      if (defaults.showCostFields) setShowCostFields(true);
+      if (defaults.startTime) setStartTime(defaults.startTime);
+      if (defaults.endTime) setEndTime(defaults.endTime);
+      if (defaults.endTripDayId) setEndTripDayId(defaults.endTripDayId);
+      if (defaults.landingTime) setLandingTime(defaults.landingTime);
+    },
+    [tripDay, tripDays],
+  );
 
   // 打开时重置表单或设置初始状态
   useEffect(() => {
@@ -362,7 +457,13 @@ export function EnhancedAddItineraryItemDialog({
         resetForm();
       }
     }
-  }, [open, resetForm, initialSearchMode, initialLocation, initialCategory, initialInsertMeal, initialInsertLunch]);
+  }, [open, resetForm, initialSearchMode, initialLocation, initialCategory, initialInsertMeal, initialInsertLunch, tripDay.id]);
+
+  useEffect(() => {
+    if (!supportsCrossDay && endTripDayId !== tripDay.id) {
+      setEndTripDayId(tripDay.id);
+    }
+  }, [supportsCrossDay, endTripDayId, tripDay.id]);
 
   // 搜索地点
   const handleSearch = useCallback(async (query: string, mode: SearchMode, category: PlaceCategory | 'all') => {
@@ -423,37 +524,12 @@ export function EnhancedAddItineraryItemDialog({
       } else if (mode === 'nearby') {
         // 优先使用新接口：基于行程项搜索附近POI
         if (itemId) {
-          // 将 PlaceCategory 转换为 API 需要的类别字符串
-          // API 支持的类别：ATTRACTION, RESTAURANT, HOTEL, GAS_STATION, REST_AREA
-          // 注意：ItineraryItemRow 中"休息点"使用的是 'CAFE'，"加油站"使用的是 'TRANSPORT'
-          // 这里需要特殊处理这些映射
-          let apiCategory: string | undefined;
-          if (category !== 'all') {
-            // 特殊处理：ItineraryItemRow 传递的特殊值
-            if (category === 'CAFE') {
-              // ItineraryItemRow 中"休息点"使用 'CAFE'，映射为 'REST_AREA'
-              apiCategory = 'REST_AREA';
-            } else if (category === 'TRANSPORT') {
-              // ItineraryItemRow 中"加油站"使用 'TRANSPORT'，映射为 'GAS_STATION'
-              apiCategory = 'GAS_STATION';
-            } else {
-              // 标准映射
-              const categoryMap: Record<PlaceCategory, string> = {
-                ATTRACTION: 'ATTRACTION',
-                RESTAURANT: 'RESTAURANT',
-                HOTEL: 'HOTEL',
-                CAFE: 'RESTAURANT', // 咖啡厅归类为餐厅（但通常会被上面的特殊处理拦截）
-                BAR: 'RESTAURANT', // 酒吧归类为餐厅
-                MUSEUM: 'ATTRACTION', // 博物馆归类为景点
-                PARK: 'ATTRACTION', // 公园归类为景点
-                SHOPPING: 'ATTRACTION', // 购物归类为景点
-                TRANSPORT: 'REST_AREA', // 交通枢纽归类为休息点（但通常会被上面的特殊处理拦截）
-                TRANSIT_HUB: 'REST_AREA', // 交通枢纽归类为休息点
-                OTHER: 'ATTRACTION', // 其他归类为景点
-              };
-              apiCategory = categoryMap[category];
-            }
-          }
+          const nearbySupportedCategories: Partial<Record<PlaceCategory, string>> = {
+            ATTRACTION: 'ATTRACTION',
+            RESTAURANT: 'RESTAURANT',
+            HOTEL: 'HOTEL',
+          };
+          const apiCategory = category !== 'all' ? nearbySupportedCategories[category] : undefined;
           
           const categories = apiCategory ? [apiCategory] : undefined;
           
@@ -471,8 +547,8 @@ export function EnhancedAddItineraryItemDialog({
             ATTRACTION: 'ATTRACTION',
             RESTAURANT: 'RESTAURANT',
             HOTEL: 'HOTEL',
-            GAS_STATION: 'OTHER', // 加油站映射为 OTHER（因为 PlaceCategory 没有 GAS_STATION）
-            REST_AREA: 'OTHER', // 休息点映射为 OTHER（因为 PlaceCategory 没有 REST_AREA）
+            GAS_STATION: 'TRANSIT_HUB',
+            REST_AREA: 'TRANSIT_HUB',
           };
           
           results = nearbyPoiResults.map((poi) => {
@@ -514,7 +590,7 @@ export function EnhancedAddItineraryItemDialog({
               id: poi.id,
               nameCN: poi.nameCN,
               nameEN: poi.nameEN,
-              category: apiToPlaceCategory[poi.category] || 'OTHER',
+              category: apiToPlaceCategory[poi.category] || 'TRANSIT_HUB',
               address: poi.address,
               rating: poi.rating,
               latitude: poi.lat,
@@ -524,32 +600,12 @@ export function EnhancedAddItineraryItemDialog({
             };
           });
         } else if (userLocation) {
-          // 如果没有 itemId，使用新接口的坐标模式
-          // 将 PlaceCategory 转换为 API 需要的类别字符串
-          let apiCategory: string | undefined;
-          if (category !== 'all') {
-            // 特殊处理：ItineraryItemRow 传递的特殊值
-            if (category === 'CAFE') {
-              apiCategory = 'REST_AREA';
-            } else if (category === 'TRANSPORT') {
-              apiCategory = 'GAS_STATION';
-            } else {
-              const categoryMap: Record<PlaceCategory, string> = {
-                ATTRACTION: 'ATTRACTION',
-                RESTAURANT: 'RESTAURANT',
-                HOTEL: 'HOTEL',
-                CAFE: 'RESTAURANT',
-                BAR: 'RESTAURANT',
-                MUSEUM: 'ATTRACTION',
-                PARK: 'ATTRACTION',
-                SHOPPING: 'ATTRACTION',
-                TRANSPORT: 'REST_AREA',
-                TRANSIT_HUB: 'REST_AREA',
-                OTHER: 'ATTRACTION',
-              };
-              apiCategory = categoryMap[category];
-            }
-          }
+          const nearbySupportedCategories: Partial<Record<PlaceCategory, string>> = {
+            ATTRACTION: 'ATTRACTION',
+            RESTAURANT: 'RESTAURANT',
+            HOTEL: 'HOTEL',
+          };
+          const apiCategory = category !== 'all' ? nearbySupportedCategories[category] : undefined;
           
           const categories = apiCategory ? [apiCategory] : undefined;
           
@@ -566,8 +622,8 @@ export function EnhancedAddItineraryItemDialog({
             ATTRACTION: 'ATTRACTION',
             RESTAURANT: 'RESTAURANT',
             HOTEL: 'HOTEL',
-            GAS_STATION: 'OTHER',
-            REST_AREA: 'OTHER',
+            GAS_STATION: 'TRANSIT_HUB',
+            REST_AREA: 'TRANSIT_HUB',
           };
           
           results = nearbyPoiResults.map((poi) => {
@@ -605,7 +661,7 @@ export function EnhancedAddItineraryItemDialog({
               id: poi.id,
               nameCN: poi.nameCN,
               nameEN: poi.nameEN,
-              category: apiToPlaceCategory[poi.category] || 'OTHER',
+              category: apiToPlaceCategory[poi.category] || 'TRANSIT_HUB',
               address: poi.address,
               rating: poi.rating,
               latitude: poi.lat,
@@ -627,14 +683,7 @@ export function EnhancedAddItineraryItemDialog({
           return;
         }
         
-        // 转换 category，只支持推荐接口的类别
-        let recommendCategory: 'ATTRACTION' | 'RESTAURANT' | 'SHOPPING' | 'HOTEL' | undefined;
-        if (category !== 'all') {
-          // 只转换支持的类别，TRANSIT_HUB 不支持
-          if (category === 'ATTRACTION' || category === 'RESTAURANT' || category === 'SHOPPING' || category === 'HOTEL') {
-            recommendCategory = category;
-          }
-        }
+        const recommendCategory = category !== 'all' ? category : undefined;
         
         const recommendations = await placesApi.getRecommendedActivities({
           countryCode: countryCode.toUpperCase(),
@@ -789,25 +838,63 @@ export function EnhancedAddItineraryItemDialog({
     }
   };
 
+  useEffect(() => {
+    if (open && initialCategory === 'HOTEL') {
+      applyDisplayRole('hotel');
+    }
+  }, [open, initialCategory, applyDisplayRole]);
+
   // 选择地点，进入配置模式
   const handleSelectPlace = (place: PlaceWithDistance) => {
     setSelectedPlace(place);
     setViewMode('configure');
-    
-    // 根据地点类型自动设置行程类型
-    if (place.category === 'RESTAURANT') {
-      setItemType('MEAL_ANCHOR');
-    } else if (place.category === 'HOTEL') {
-      setItemType('REST');
-    } else if (place.category === 'TRANSIT_HUB') {
-      setItemType('TRANSIT');
+
+    const inferredRole = inferItinerarySpecialDisplayRole({
+      Place: place,
+      type: itemType,
+      costCategory: costCategory || undefined,
+      note,
+    });
+    const isLastTripDay =
+      tripDays.length > 0 && tripDay.id === tripDays[tripDays.length - 1].id;
+
+    if (
+      isLastTripDay &&
+      (isAirportHubPlace(place) || place.category === 'TRANSIT_HUB')
+    ) {
+      applyDisplayRole('departure_point');
     } else {
-      setItemType('ACTIVITY');
+      applyDisplayRole(inferredRole);
     }
-    
-    // 根据典型时长自动设置结束时间
+
+    // 根据地点类型自动设置行程类型（非特殊角色时）
+    if (inferredRole === 'normal' && !isLastTripDay) {
+      if (place.category === 'RESTAURANT') {
+        setItemType('MEAL_ANCHOR');
+      } else if (place.category === 'HOTEL') {
+        applyDisplayRole('hotel');
+      } else if (place.category === 'TRANSIT_HUB' || isAirportHubPlace(place)) {
+        applyDisplayRole('landing_point');
+      } else {
+        setItemType('ACTIVITY');
+      }
+    } else if (inferredRole === 'normal' && isLastTripDay) {
+      if (place.category === 'RESTAURANT') {
+        setItemType('MEAL_ANCHOR');
+      } else if (place.category === 'HOTEL') {
+        applyDisplayRole('hotel');
+      } else if (!isAirportHubPlace(place) && place.category !== 'TRANSIT_HUB') {
+        setItemType('ACTIVITY');
+      }
+    }
+
+    // 根据典型时长自动设置结束时间（酒店/租车/落地预设已设置则跳过）
     const typicalDuration = (place as any).typicalDuration || place.metadata?.typicalDuration;
-    if (typicalDuration) {
+    if (
+      typicalDuration &&
+      inferredRole === 'normal' &&
+      place.category !== 'HOTEL'
+    ) {
       const durationHours = Math.ceil(typicalDuration / 60);
       const [startHour] = startTime.split(':').map(Number);
       const endHour = Math.min(startHour + durationHours, 23);
@@ -835,34 +922,19 @@ export function EnhancedAddItineraryItemDialog({
       return;
     }
 
-    if (!startTime || !endTime) {
+    if (isHubMomentMode) {
+      if (!landingTime.trim()) {
+        setError(isDeparturePointMode ? '请填写值机时间' : '请填写落地时间');
+        return;
+      }
+    } else if (!startTime || !endTime) {
       setError('请设置开始和结束时间');
       return;
     }
 
-    // 获取 TripDay 的日期（格式: 2026-01-26T00:00:00.000Z -> 2026-01-26）
-    const dayDateStr = tripDay.date.split('T')[0];
-    
-    // 使用目的地时区构建正确的 UTC 时间
-    const startTimeUTC = localTimeToUTC(dayDateStr, startTime, timezone);
-    const endTimeUTC = localTimeToUTC(dayDateStr, endTime, timezone);
-    
-    // 用于本地校验的 Date 对象
-    const startDateTime = new Date(startTimeUTC);
-    const endDateTime = new Date(endTimeUTC);
+    const { startTimeUTC, endTimeUTC, startMs, endMs } = resolveItemTimes();
 
-    console.log('[EnhancedAddItineraryItemDialog] 时间转换:', {
-      dayDateStr,
-      startTime,
-      endTime,
-      timezone,
-      startTimeUTC,
-      endTimeUTC,
-      startDateTime: startDateTime.toISOString(),
-      endDateTime: endDateTime.toISOString(),
-    });
-
-    if (endDateTime <= startDateTime) {
+    if (endMs <= startMs) {
       setError('结束时间必须晚于开始时间');
       return;
     }
@@ -875,9 +947,10 @@ export function EnhancedAddItineraryItemDialog({
         tripDayId: tripDay.id,
         type: itemType,
         placeId: selectedPlace.id,
-        startTime: startTimeUTC,  // 已经是正确的 UTC 时间
-        endTime: endTimeUTC,      // 已经是正确的 UTC 时间
-        note: note.trim() || undefined,
+        startTime: startTimeUTC,
+        endTime: endTimeUTC,
+        note: mergeTimelineDisplayRoleIntoNote(note.trim(), displayRole) || undefined,
+        metadata: buildSpecialDisplayMetadata(displayRole),
       };
       
       // 添加费用字段（如果有填写）
@@ -930,34 +1003,19 @@ export function EnhancedAddItineraryItemDialog({
     e.preventDefault();
     console.log('[EnhancedAddItineraryItemDialog] handleManualSubmit called', { itemType, startTime, endTime, timezone });
 
-    if (!startTime || !endTime) {
+    if (isHubMomentMode) {
+      if (!landingTime.trim()) {
+        setError(isDeparturePointMode ? '请填写值机时间' : '请填写落地时间');
+        return;
+      }
+    } else if (!startTime || !endTime) {
       setError('请设置开始和结束时间');
       return;
     }
 
-    // 获取 TripDay 的日期（格式: 2026-01-26T00:00:00.000Z -> 2026-01-26）
-    const dayDateStr = tripDay.date.split('T')[0];
-    
-    // 使用目的地时区构建正确的 UTC 时间
-    const startTimeUTC = localTimeToUTC(dayDateStr, startTime, timezone);
-    const endTimeUTC = localTimeToUTC(dayDateStr, endTime, timezone);
-    
-    // 用于本地校验的 Date 对象
-    const startDateTime = new Date(startTimeUTC);
-    const endDateTime = new Date(endTimeUTC);
+    const { startTimeUTC, endTimeUTC, startMs, endMs } = resolveItemTimes();
 
-    console.log('[EnhancedAddItineraryItemDialog] 时间转换 (手动添加):', {
-      dayDateStr,
-      startTime,
-      endTime,
-      timezone,
-      startTimeUTC,
-      endTimeUTC,
-      startDateTime: startDateTime.toISOString(),
-      endDateTime: endDateTime.toISOString(),
-    });
-
-    if (endDateTime <= startDateTime) {
+    if (endMs <= startMs) {
       setError('结束时间必须晚于开始时间');
       return;
     }
@@ -969,9 +1027,10 @@ export function EnhancedAddItineraryItemDialog({
       const data: CreateItineraryItemRequest = {
         tripDayId: tripDay.id,
         type: itemType,
-        startTime: startTimeUTC,  // 已经是正确的 UTC 时间
-        endTime: endTimeUTC,      // 已经是正确的 UTC 时间
-        note: note.trim() || undefined,
+        startTime: startTimeUTC,
+        endTime: endTimeUTC,
+        note: mergeTimelineDisplayRoleIntoNote(note.trim(), displayRole) || undefined,
+        metadata: buildSpecialDisplayMetadata(displayRole),
       };
       
       // 添加费用字段（如果有填写）
@@ -1010,50 +1069,62 @@ export function EnhancedAddItineraryItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col p-0">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] flex flex-col overflow-hidden p-0">
         {/* 固定头部 - 显示目标日期 */}
-        <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
-          <DialogTitle className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-blue-600" />
-            添加行程项
-          </DialogTitle>
-          <DialogDescription className="flex items-center gap-2">
-            <Badge variant="secondary" className="font-medium">
-              {tripDay.date}
-            </Badge>
+        <DialogHeader className="border-b bg-slate-50 px-6 py-5">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-lg bg-slate-900 p-2 text-white">
+              <Plus className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-xl font-semibold tracking-tight">添加行程项</DialogTitle>
+              <DialogDescription className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="gap-1.5 bg-white font-medium text-slate-700">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {formatTripDayLabel(tripDay.date)}
+                </Badge>
+                <span className="text-xs text-muted-foreground">先选地点，也可以直接添加休息、交通或用餐</span>
           </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
         {/* 主内容区 */}
         <div className="flex-1 min-h-0 overflow-hidden">
           {viewMode === 'browse' ? (
             /* 浏览模式：找点 */
-            <div className="flex flex-col h-full min-h-0">
+            <div className="flex h-full min-h-0 flex-col bg-white">
               {/* 搜索模式切换 */}
-              <div className="px-6 pt-4 flex-shrink-0">
+              <div className="flex-shrink-0 border-b bg-white px-6 py-4">
                 <Tabs value={searchMode} onValueChange={(v) => handleModeChange(v as SearchMode)}>
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="search" className="flex items-center gap-1.5">
-                      <Search className="w-4 h-4" />
-                      搜索
-                    </TabsTrigger>
-                    <TabsTrigger value="nearby" className="flex items-center gap-1.5">
-                      <Navigation className="w-4 h-4" />
-                      附近
-                    </TabsTrigger>
-                    <TabsTrigger value="recommend" className="flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4" />
-                      推荐
-                    </TabsTrigger>
+                  <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1">
+                    {SEARCH_MODE_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <TabsTrigger
+                          key={option.value}
+                          value={option.value}
+                          className="h-auto flex-col items-start gap-1 rounded-md px-4 py-3 text-left data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                        >
+                          <span className="flex items-center gap-2 text-sm font-semibold">
+                            <Icon className="h-4 w-4" />
+                            {option.label}
+                          </span>
+                          <span className="hidden text-xs font-normal text-muted-foreground sm:block">
+                            {option.description}
+                          </span>
+                        </TabsTrigger>
+                      );
+                    })}
                   </TabsList>
                 </Tabs>
               </div>
 
-              {/* 搜索框（仅搜索模式显示） */}
-              {searchMode === 'search' && (
-                <div className="px-6 pt-3 flex-shrink-0 space-y-2">
+              <div className="flex-shrink-0 space-y-3 border-b bg-white px-6 py-4">
+                {/* 搜索框（仅搜索模式显示） */}
+                {searchMode === 'search' ? (
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
                       value={searchQuery}
                       onChange={(e) => {
@@ -1062,15 +1133,53 @@ export function EnhancedAddItineraryItemDialog({
                         setSearchQuery(value);
                       }}
                       placeholder="搜索地点名称..."
-                      className="pl-10"
+                      className="h-11 rounded-lg border-slate-200 pl-11 text-base shadow-sm"
                       autoFocus
                     />
                   </div>
-                  {/* 搜索范围切换 */}
-                  {userLocation && countryCode && (
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-muted-foreground">搜索范围：</span>
-                      <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
+                ) : (
+                  <div className="flex items-center justify-between rounded-lg border bg-slate-50 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {searchMode === 'nearby' ? (
+                        <LocateFixed className="h-5 w-5 text-slate-500" />
+                      ) : (
+                        <Sparkles className="h-5 w-5 text-slate-500" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-slate-950">
+                          {searchMode === 'nearby' ? '查找附近可加入的地点' : '获取目的地推荐'}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {searchMode === 'nearby'
+                            ? itemId
+                              ? '基于当前行程项周边 5 公里'
+                              : userLocation
+                              ? '基于当前位置周边 5 公里'
+                              : '需要授权位置后使用'
+                            : countryCode
+                            ? `按 ${countryCode.toUpperCase()} 行程目的地筛选`
+                            : '需要行程目的地国家代码'}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSearch(searchQuery, searchMode, selectedCategory)}
+                      disabled={searching || (searchMode === 'nearby' && !userLocation && !itemId)}
+                    >
+                      {searching ? <Spinner className="mr-2 h-4 w-4" /> : null}
+                      刷新
+                    </Button>
+                  </div>
+                )}
+
+                {/* 搜索范围切换 */}
+                {searchMode === 'search' && userLocation && countryCode && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">搜索范围</span>
+                    <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
                         <button
                           type="button"
                           onClick={() => {
@@ -1081,10 +1190,10 @@ export function EnhancedAddItineraryItemDialog({
                             }
                           }}
                           className={cn(
-                            "px-2 py-1 rounded text-xs transition-colors",
+                            "rounded-md px-3 py-1.5 text-xs transition-colors",
                             searchScope === 'current'
-                              ? "bg-white text-gray-900 shadow-sm font-medium"
-                              : "text-gray-600 hover:text-gray-900"
+                              ? "bg-white text-slate-950 shadow-sm font-medium"
+                              : "text-slate-600 hover:text-slate-950"
                           )}
                         >
                           当前位置
@@ -1099,46 +1208,51 @@ export function EnhancedAddItineraryItemDialog({
                             }
                           }}
                           className={cn(
-                            "px-2 py-1 rounded text-xs transition-colors",
+                            "rounded-md px-3 py-1.5 text-xs transition-colors",
                             searchScope === 'destination'
-                              ? "bg-white text-gray-900 shadow-sm font-medium"
-                              : "text-gray-600 hover:text-gray-900"
+                              ? "bg-white text-slate-950 shadow-sm font-medium"
+                              : "text-slate-600 hover:text-slate-950"
                           )}
                         >
                           行程目的地
                         </button>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
 
               {/* 类型筛选 */}
-              <div className="px-6 pt-3 pb-2 flex-shrink-0">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-slate-400" />
+                  <div className="flex gap-2 overflow-x-auto pb-1">
                   {CATEGORY_OPTIONS.map(({ value, labelKey }) => (
                     <Button
                       key={value}
                       variant={selectedCategory === value ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => handleCategoryChange(value)}
-                      className="h-7 text-xs"
+                        className={cn(
+                          "h-8 shrink-0 rounded-full px-4 text-xs",
+                          selectedCategory === value
+                            ? "bg-slate-950 text-white hover:bg-slate-800"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        )}
                     >
                       {t(`planStudio.placesTab.categories.${labelKey}`)}
                     </Button>
                   ))}
+                  </div>
                 </div>
               </div>
 
               {/* 搜索结果 - 固定最大高度实现滚动 */}
-              <div className="max-h-[calc(85vh-280px)] overflow-y-auto px-6">
+              <div className="min-h-[360px] flex-1 overflow-y-auto bg-slate-50/50 px-6 py-4">
                 {searching ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-white">
                     <LogoLoading size={32} />
                     <span className="text-sm text-muted-foreground">搜索中...</span>
                   </div>
                 ) : searchResults.length > 0 ? (
-                  <div className="space-y-2 pb-4">
+                  <div className="space-y-3 pb-4">
                     {/* 搜索结果警告 */}
                     {searchWarning && (
                       <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 mb-2">
@@ -1151,15 +1265,15 @@ export function EnhancedAddItineraryItemDialog({
                     {searchResults.map((place) => (
                       <Card 
                         key={place.id} 
-                        className="cursor-pointer hover:border-blue-400 hover:shadow-sm transition-all"
+                        className="cursor-pointer border-slate-200 bg-white transition-all hover:border-slate-400 hover:shadow-sm"
                         onClick={() => handleSelectPlace(place)}
                       >
-                        <CardContent className="p-3">
+                        <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <MapPin className="h-4 w-4 text-blue-500 flex-shrink-0" />
-                                <span className="font-medium truncate">
+                                <MapPin className="h-4 w-4 text-slate-500 flex-shrink-0" />
+                                <span className="truncate font-semibold text-slate-950">
                                   {place.nameCN || place.nameEN}
                                 </span>
                                 {place.rating && (
@@ -1171,7 +1285,7 @@ export function EnhancedAddItineraryItemDialog({
                               </div>
                               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                 {place.category && (
-                                  <Badge variant="outline" className="text-xs h-5">
+                                  <Badge variant="outline" className="h-5 border-slate-200 bg-slate-50 text-xs">
                                     {place.category}
                                   </Badge>
                                 )}
@@ -1193,10 +1307,9 @@ export function EnhancedAddItineraryItemDialog({
                                   </span>
                                 )}
                                 {place.distance && place.distance > 0 && (
-                                  <span>
-                                    {place.distance > 1000 
-                                      ? `${(place.distance / 1000).toFixed(1)}km` 
-                                      : `${place.distance}m`}
+                                  <span className="flex items-center gap-1">
+                                    <Navigation className="w-3 h-3" />
+                                    {formatDistanceLabel(place.distance)}
                                   </span>
                                 )}
                               </div>
@@ -1206,7 +1319,7 @@ export function EnhancedAddItineraryItemDialog({
                                 </p>
                               )}
                             </div>
-                            <Button size="sm" variant="ghost" className="flex-shrink-0">
+                            <Button size="sm" variant="outline" className="flex-shrink-0 rounded-full">
                               <Plus className="w-4 h-4" />
                             </Button>
                           </div>
@@ -1215,53 +1328,60 @@ export function EnhancedAddItineraryItemDialog({
                     ))}
                   </div>
                 ) : (
-                  <EmptyStateCard
-                    type={searchMode === 'recommend' ? 'no-recommended-places' : 'no-recommended-places'}
-                    title={
-                      searchMode === 'search' 
-                        ? '输入关键词搜索地点'
-                        : searchMode === 'nearby'
-                        ? userLocation ? '暂无附近地点' : '无法获取位置信息'
-                        : '暂无推荐地点'
-                    }
-                    imageWidth={120}
-                    imageHeight={120}
-                    className="py-8"
-                  />
+                  <div className="flex min-h-[320px] items-center justify-center rounded-lg border border-dashed bg-white">
+                    <EmptyStateCard
+                      type="no-recommended-places"
+                      title={
+                        searchMode === 'search'
+                          ? '输入关键词搜索地点'
+                          : searchMode === 'nearby'
+                          ? userLocation || itemId ? '暂无附近地点' : '无法获取位置信息'
+                          : '暂无推荐地点'
+                      }
+                      description={
+                        searchMode === 'search'
+                          ? '试试景点、餐厅、酒店或地标名称，也可以直接手动添加。'
+                          : searchMode === 'nearby'
+                          ? '可以切换类别，或使用底部快捷项先记录交通、休息和用餐。'
+                          : '可以切换类别刷新推荐，或通过搜索精确查找地点。'
+                      }
+                      imageWidth={112}
+                      imageHeight={112}
+                      className="py-8"
+                    />
+                  </div>
                 )}
               </div>
 
               {/* 手动添加区域 */}
-              <div className="px-6 py-4 border-t bg-gray-50 flex-shrink-0">
-                <p className="text-xs text-muted-foreground mb-2">或手动添加</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleManualAdd('REST')}
-                    className="h-8"
-                  >
-                    <Coffee className="w-4 h-4 mr-1.5" />
-                    休息
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleManualAdd('TRANSIT')}
-                    className="h-8"
-                  >
-                    <Car className="w-4 h-4 mr-1.5" />
-                    交通
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleManualAdd('MEAL_FLOATING')}
-                    className="h-8"
-                  >
-                    <Utensils className="w-4 h-4 mr-1.5" />
-                    用餐
-                  </Button>
+              <div className="flex-shrink-0 border-t bg-white px-6 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-950">不需要绑定地点？</p>
+                    <p className="text-xs text-muted-foreground">直接添加一个时间块，之后也可以再补地点。</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+                    {MANUAL_ITEM_SHORTCUTS.map((shortcut) => {
+                      const Icon = shortcut.icon;
+                      return (
+                        <Button
+                          key={shortcut.type}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleManualAdd(shortcut.type)}
+                          className="h-auto justify-start gap-2 rounded-lg px-3 py-2"
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span className="text-left">
+                            <span className="block text-sm font-medium">{shortcut.label}</span>
+                            <span className="hidden text-xs font-normal text-muted-foreground md:block">
+                              {shortcut.description}
+                            </span>
+                          </span>
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1339,12 +1459,111 @@ export function EnhancedAddItineraryItemDialog({
                   )}
                 </div>
 
-                {/* 时间设置 */}
+                <ItinerarySpecialDisplayRoleField
+                  value={displayRole}
+                  onChange={applyDisplayRole}
+                />
+
+                {/* 跨天结束日（酒店 / 租车） */}
+                {supportsCrossDay && !isHubMomentMode && endDayOptions.length > 1 && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <CalendarDays className="w-3 h-3" />
+                      {displayRole === 'car_rental' ? '还车日期' : '结束日期'}
+                    </Label>
+                    <Select value={endTripDayId} onValueChange={setEndTripDayId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择结束日期" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {endDayOptions.map((day, index) => (
+                          <SelectItem key={day.id} value={day.id}>
+                            {formatTripDayLabel(day.date)}
+                            {index === 0 ? '（入住/出发日）' : index === 1 ? '（次日）' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {displayRole === 'hotel'
+                        ? '酒店通常当晚入住、次日退房；也可选择更晚的退房日。'
+                        : displayRole === 'car_rental'
+                          ? '选择还车日期，时间轴将在还车日显示还车卡。'
+                          : '长途交通可跨天抵达，请选择抵达日期。'}
+                    </p>
+                  </div>
+                )}
+
+                {supportsLandingArriveDay && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <CalendarDays className="w-3 h-3" />
+                      抵达日期
+                    </Label>
+                    <Select value={endTripDayId} onValueChange={setEndTripDayId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择抵达日期" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {endDayOptions.map((day) => (
+                          <SelectItem key={day.id} value={day.id}>
+                            {formatTripDayLabel(day.date)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      航班跨日抵达时，选择落地所在日期。
+                    </p>
+                  </div>
+                )}
+
+                {supportsDepartureDay && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <CalendarDays className="w-3 h-3" />
+                      出发日期
+                    </Label>
+                    <Select value={endTripDayId} onValueChange={setEndTripDayId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择出发日期" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {endDayOptions.map((day) => (
+                          <SelectItem key={day.id} value={day.id}>
+                            {formatTripDayLabel(day.date)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {isHubMomentMode ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="landingTime" className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {isDeparturePointMode ? '值机时间' : '落地时间'}
+                    </Label>
+                    <Input
+                      id="landingTime"
+                      type="time"
+                      value={landingTime}
+                      onChange={(e) => setLandingTime(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {isDeparturePointMode
+                        ? '只需填写到机场值机/抵达时刻；系统会按此后约 30 分钟作为出发缓冲，用于与前序交通衔接。'
+                        : '只需填写航班落地时刻；系统会按落地后约 30 分钟作为离站时间用于交通衔接。'}
+                    </p>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="startTime" className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      开始时间
+                      {startTimeLabel}
                     </Label>
                     <Input
                       id="startTime"
@@ -1357,7 +1576,7 @@ export function EnhancedAddItineraryItemDialog({
                   <div className="space-y-2">
                     <Label htmlFor="endTime" className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      结束时间
+                      {endTimeLabel}
                     </Label>
                     <Input
                       id="endTime"
@@ -1368,6 +1587,7 @@ export function EnhancedAddItineraryItemDialog({
                     />
                   </div>
                 </div>
+                )}
 
                 {/* 备注 */}
                 <div className="space-y-2">

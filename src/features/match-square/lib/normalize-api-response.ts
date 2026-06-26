@@ -1,10 +1,12 @@
 import type {
   ApplicationStatus,
   ApplyPreview,
+  BudgetRange,
   CaptainRadarResponse,
   DestinationRegionOption,
   MatchFlashPayload,
   MatchInsightDrawer,
+  MatchSquareAccess,
   MatchSquareFilterOptions,
   PhysicalFitnessGate,
   PhysicalFitnessReport,
@@ -28,6 +30,7 @@ import type {
   VibeLlmCardBlock,
   ViewerPuzzleMatch,
 } from '@/types/match-square';
+import { normalizeRecruitingAttribution, normalizeRecruitingOutcome } from './normalize-recruiting-runtime';
 import {
   formatFilledPuzzleSlotLabel,
   peelPuzzleOpenSlotDecorations,
@@ -57,24 +60,82 @@ function asNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+function readNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function readNullableNumber(record: Record<string, unknown>, camel: string, snake: string): number | null {
+  const value = readNumber(record[camel] ?? record[snake]);
+  return value ?? null;
+}
+
+function readTripMoodTag(raw: unknown): TripMoodTag | null {
+  if (raw === 'relax' || raw === 'adventure' || raw === 'healing' || raw === 'social') {
+    return raw;
+  }
+  return null;
+}
+
+function readTravelMode(raw: unknown): TravelMode | null {
+  if (raw === 'self_drive' || raw === 'public_transit' || raw === 'mixed' || raw === 'other') {
+    return raw;
+  }
+  return null;
+}
+
+function normalizeBudgetRange(record: Record<string, unknown>): BudgetRange | null {
+  const budgetRaw = record.budgetRange ?? record.budget_range;
+  if (budgetRaw && typeof budgetRaw === 'object') {
+    const budget = budgetRaw as Record<string, unknown>;
+    const minCents = readNumber(budget.minCents ?? budget.min_cents);
+    const maxCents = readNumber(budget.maxCents ?? budget.max_cents);
+    if (minCents != null || maxCents != null) {
+      return { minCents: minCents ?? null, maxCents: maxCents ?? null };
+    }
+  }
+
+  const minTop = readNumber(record.budgetMinCents ?? record.budget_min_cents);
+  const maxTop = readNumber(record.budgetMaxCents ?? record.budget_max_cents);
+  if (minTop != null || maxTop != null) {
+    return { minCents: minTop ?? null, maxCents: maxTop ?? null };
+  }
+
+  return null;
+}
+
+/** GET /match-square/access */
+export function normalizeMatchSquareAccess(raw: unknown): MatchSquareAccess {
+  const record = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const readBool = (camel: string, snake: string): boolean | undefined => {
+    const value = record[camel] ?? record[snake];
+    if (value === true || value === 1 || value === 'true') return true;
+    if (value === false || value === 0 || value === 'false') return false;
+    return undefined;
+  };
+
+  const access: MatchSquareAccess = {
+    canBrowse: readBool('canBrowse', 'can_browse') ?? true,
+    canPost: readBool('canPost', 'can_post') ?? false,
+    canApply: readBool('canApply', 'can_apply') ?? false,
+    quizComplete: readBool('quizComplete', 'quiz_complete') ?? false,
+  };
+  // R0：公开发布需 PublishingPermission，忽略后端基于 quizComplete 的旧 canPost
+  return { ...access, canPost: false };
+}
+
 function normalizeTeamStatus(raw: Record<string, unknown>): TeamStatus {
-  const nested = raw.teamStatus as Record<string, unknown> | undefined;
+  const nested = (raw.teamStatus ?? raw.team_status) as Record<string, unknown> | undefined;
   const slotsNeeded =
-    typeof nested?.slotsNeeded === 'number'
-      ? nested.slotsNeeded
-      : typeof raw.slotsNeeded === 'number'
-        ? raw.slotsNeeded
-        : 1;
+    readNumber(nested?.slotsNeeded ?? nested?.slots_needed) ??
+    readNumber(raw.slotsNeeded ?? raw.slots_needed) ??
+    1;
   const slotsFilled =
-    typeof nested?.slotsFilled === 'number'
-      ? nested.slotsFilled
-      : typeof raw.slotsFilled === 'number'
-        ? raw.slotsFilled
-        : 0;
+    readNumber(nested?.slotsFilled ?? nested?.slots_filled) ??
+    readNumber(raw.slotsFilled ?? raw.slots_filled) ??
+    0;
   const slotsRemaining =
-    typeof nested?.slotsRemaining === 'number'
-      ? nested.slotsRemaining
-      : Math.max(0, slotsNeeded - slotsFilled);
+    readNumber(nested?.slotsRemaining ?? nested?.slots_remaining) ??
+    Math.max(0, slotsNeeded - slotsFilled);
 
   return { slotsFilled, slotsNeeded, slotsRemaining };
 }
@@ -150,7 +211,7 @@ function normalizeTeamPuzzle(raw: unknown): TeamPuzzle | undefined {
   }
 
   return {
-    progressLabel: asString(record.progressLabel, '车队拼图进度'),
+    progressLabel: asString(record.progressLabel ?? record.progress_label, '车队拼图进度'),
     algorithm:
       record.algorithm === 'team_deficit_pomdp_v1' ? 'team_deficit_pomdp_v1' : undefined,
     slots,
@@ -161,10 +222,13 @@ function normalizeTeamPuzzle(raw: unknown): TeamPuzzle | undefined {
 function normalizeRadarHint(raw: unknown): RadarHint | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const record = raw as Record<string, unknown>;
-  if (typeof record.eligibleCount !== 'number') return undefined;
+  const eligibleCount = readNumber(record.eligibleCount ?? record.eligible_count);
+  if (eligibleCount == null) return undefined;
   return {
-    eligibleCount: record.eligibleCount,
-    topPickDisplayName: asNullableString(record.topPickDisplayName),
+    eligibleCount,
+    topPickDisplayName: asNullableString(
+      record.topPickDisplayName ?? record.top_pick_display_name
+    ),
   };
 }
 
@@ -251,21 +315,24 @@ function normalizeFeedItem(raw: unknown): PlazaFeedItem | null {
 }
 
 function attachTeamPuzzle(card: RecruitmentPostCard, record: Record<string, unknown>): void {
-  const teamPuzzle = normalizeTeamPuzzle(record.teamPuzzle);
+  const teamPuzzle = normalizeTeamPuzzle(record.teamPuzzle ?? record.team_puzzle);
   if (teamPuzzle) {
     card.teamPuzzle = teamPuzzle;
     card.teamSlots = teamPuzzle.slots;
-  } else if (Array.isArray(record.teamSlots)) {
-    card.teamSlots = (record.teamSlots as TeamSlot[]).map((s, i) => ({
-      id: s.id ?? `slot-${i}`,
-      kind: s.kind === 'captain' || s.kind === 'filled' ? 'captain' : 'open',
-      label: s.label,
-      filledBy: s.filledBy ?? null,
-      highlightForViewer: Boolean(s.highlightForViewer),
-    }));
+  } else {
+    const legacySlots = record.teamSlots ?? record.team_slots;
+    if (Array.isArray(legacySlots)) {
+      card.teamSlots = (legacySlots as TeamSlot[]).map((s, i) => ({
+        id: s.id ?? `slot-${i}`,
+        kind: s.kind === 'captain' ? 'captain' : s.kind === 'filled' ? 'filled' : 'open',
+        label: s.label,
+        filledBy: s.filledBy ?? null,
+        highlightForViewer: Boolean(s.highlightForViewer),
+      }));
+    }
   }
 
-  const radarHint = normalizeRadarHint(record.radarHint);
+  const radarHint = normalizeRadarHint(record.radarHint ?? record.radar_hint);
   if (radarHint) {
     card.radarHint = radarHint;
   }
@@ -496,7 +563,7 @@ export function normalizeApplyPreview(raw: unknown): ApplyPreview {
       record.teamworkCommitmentPrompt ?? record.teamwork_commitment_prompt
     ),
     compatibilityPercent:
-      typeof record.compatibilityPercent === 'number' ? record.compatibilityPercent : undefined,
+      readNumber(record.compatibilityPercent ?? record.compatibility_percent) ?? undefined,
     highlights: Array.isArray(record.highlights)
       ? record.highlights.filter((x): x is string => typeof x === 'string')
       : undefined,
@@ -567,51 +634,56 @@ export function normalizePostCard(raw: unknown): RecruitmentPostCard {
   }
 
   const record = raw as Record<string, unknown>;
-  const budget = record.budgetRange as
-    | { minCents?: number | null; maxCents?: number | null }
-    | undefined;
 
   const card: RecruitmentPostCard & { isCaptain?: boolean } = {
     id: asString(record.id),
     status: (asString(record.status, 'active') as RecruitmentPostStatus) || 'active',
-    captainUserId: asString(record.captainUserId),
+    captainUserId: asString(record.captainUserId ?? record.captain_user_id),
     captainDisplayName: asNullableString(record.captainDisplayName ?? record.captain_display_name),
-    captainCardTitle: asString(record.captainCardTitle),
-    captainMbtiType: asString(record.captainMbtiType),
-    captainInteractionMode: asString(record.captainInteractionMode),
-    captainInteractionModeLabel: asString(record.captainInteractionModeLabel),
-    captainReputationStars:
-      typeof record.captainReputationStars === 'number' ? record.captainReputationStars : null,
-    compatibilityPercent:
-      typeof record.compatibilityPercent === 'number' ? record.compatibilityPercent : null,
+    captainCardTitle: asString(record.captainCardTitle ?? record.captain_card_title),
+    captainMbtiType: asString(record.captainMbtiType ?? record.captain_mbti_type),
+    captainInteractionMode: asString(
+      record.captainInteractionMode ?? record.captain_interaction_mode
+    ),
+    captainInteractionModeLabel: asString(
+      record.captainInteractionModeLabel ?? record.captain_interaction_mode_label
+    ),
+    captainReputationStars: readNullableNumber(
+      record,
+      'captainReputationStars',
+      'captain_reputation_stars'
+    ),
+    compatibilityPercent: readNullableNumber(record, 'compatibilityPercent', 'compatibility_percent'),
     destination: asString(record.destination),
     recruitmentVision: asNullableString(
       record.recruitmentVision ?? record.recruitment_vision ?? record.vibeFreeText ?? record.vibe_free_text
     ),
     title: asNullableString(record.title ?? record.postTitle ?? record.post_title),
-    departureLabel: asNullableString(record.departureLabel),
-    startDate: asString(record.startDate),
-    endDate: asString(record.endDate),
+    departureLabel: asNullableString(record.departureLabel ?? record.departure_label),
+    startDate: asString(record.startDate ?? record.start_date),
+    endDate: asString(record.endDate ?? record.end_date),
     teamStatus: normalizeTeamStatus(record),
-    captainMessage: asNullableString(record.captainMessage),
+    captainMessage: asNullableString(record.captainMessage ?? record.captain_message),
     itinerarySummary: asString(
-      record.itineraryDetail ?? record.fullItinerarySummary ?? record.itinerarySummary
+      record.itineraryDetail ??
+        record.fullItinerarySummary ??
+        record.itinerarySummary ??
+        record.itinerary_summary
     ),
-    budgetRange: budget
-      ? {
-          minCents: budget.minCents ?? null,
-          maxCents: budget.maxCents ?? null,
-        }
-      : null,
-    tripMoodTag: (record.tripMoodTag as TripMoodTag | null) ?? null,
-    travelMode: (record.travelMode as TravelMode | null) ?? null,
-    vehicleInfo: asNullableString(record.vehicleInfo),
-    preferences: asNullableString(record.preferences ?? record.preferenceNotes),
-    publishedAt: asNullableString(record.publishedAt),
+    budgetRange: normalizeBudgetRange(record),
+    tripMoodTag: readTripMoodTag(record.tripMoodTag ?? record.trip_mood_tag),
+    travelMode: readTravelMode(record.travelMode ?? record.travel_mode),
+    vehicleInfo: asNullableString(record.vehicleInfo ?? record.vehicle_info),
+    preferences: asNullableString(
+      record.preferences ?? record.preferenceNotes ?? record.preference_notes
+    ),
+    publishedAt: asNullableString(record.publishedAt ?? record.published_at),
   };
 
-  if (typeof record.isCaptain === 'boolean') {
-    card.isCaptain = record.isCaptain;
+  if (record.isCaptain === true || record.is_captain === true) {
+    card.isCaptain = true;
+  } else if (record.isCaptain === false || record.is_captain === false) {
+    card.isCaptain = false;
   }
 
   const highlights = record.matchHighlights ?? record.highlights;
@@ -787,6 +859,9 @@ export function normalizePostCard(raw: unknown): RecruitmentPostCard {
     if (sovereignLock) card.sovereignLock = sovereignLock;
   }
 
+  const outcome = normalizeRecruitingOutcome(record.outcome);
+  if (outcome) card.outcome = outcome;
+
   syncRecruitmentVisionFields(card);
   reconcileVibeBudgetCoherence(card);
 
@@ -828,8 +903,9 @@ export function normalizePostDetail(data: unknown): RecruitmentPostCard {
   const record = data as Record<string, unknown>;
   if (record.post && typeof record.post === 'object') {
     const post = normalizePostCard(record.post);
-    if (!post.id && typeof record.id === 'string') {
-      return { ...post, id: record.id };
+    const wrapperId = asString(record.id ?? record.postId ?? record.post_id, '');
+    if (!post.id && wrapperId) {
+      return { ...post, id: wrapperId };
     }
     return post;
   }
@@ -1226,6 +1302,7 @@ export function normalizeApplicationCard(raw: unknown): RecruitmentApplicationCa
         record.physicalFitnessReport ?? record.physical_fitness_report ?? fromBrief
       );
     })(),
+    attribution: normalizeRecruitingAttribution(record.attribution),
   };
 }
 

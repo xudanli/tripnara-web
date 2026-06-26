@@ -12,23 +12,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { 
-  journeyAssistantApi,
-  type JourneyPhase,
-  type JourneyAssistantResponse,
-  type JourneyState,
-  type ScheduleItem,
-  type Reminder,
-  type TripEvent,
-  type EmergencyOption,
-  type AdjustmentResult,
-  type SearchResults,
-  type SuggestedAction,
-  type Location,
-  type NarrativeSection,
-  type ExpertCitation,
-  type DegradationInfo,
-} from '@/api/assistant';
+import { journeyAssistantApi, type JourneyPhase, type JourneyAssistantResponse, type JourneyState, type Reminder, type TripEvent, type EmergencyOption, type AdjustmentResult, type SearchResults, type SuggestedAction, type Location, type NarrativeSection, type ExpertCitation, type DegradationInfo } from '@/api/assistant';
 import {
   DEFAULT_QUICK_ACTIONS,
   QUICK_ACTION_ICON_MAP,
@@ -36,6 +20,7 @@ import {
 } from '@/constants/journey-assistant';
 import { getCurrentPosition } from '@/utils/geo';
 import { handleApiError } from '@/utils/errorHandler';
+import { extractGuardianPresentation } from '@/lib/guardian-presentation.util';
 import { toast } from 'sonner';
 import { applyEmotionalContextFromJourneyState } from '@/lib/emotional-context-ui';
 import { setEmergencyModeActive } from '@/lib/emotional-emergency-mode';
@@ -71,6 +56,7 @@ export interface JourneyMessage {
   sections?: NarrativeSection[];
   citations?: ExpertCitation[];
   degradation?: DegradationInfo;
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
 }
 
 /**
@@ -252,6 +238,8 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
           sections: response.sections,
           citations: response.citations,
           degradation: response.degradation,
+          guardianPresentation:
+            extractGuardianPresentation(response),
         };
         return [...prev, assistantMessage];
       });
@@ -271,6 +259,7 @@ export function useJourneyAssistant(config: UseJourneyAssistantConfig): UseJourn
         sections: response.sections,
         citations: response.citations,
         degradation: response.degradation,
+        guardianPresentation: extractGuardianPresentation(response),
       };
       setMessages((prev) => [...prev, assistantMessage]);
     }

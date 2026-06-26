@@ -6,9 +6,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import { TravelPersonaCard, TravelPersonaCardEmpty } from '../components/TravelPersonaCard';
-import { ReputationAssetsSection } from '@/features/match-square';
-import { useReputationProfileMe } from '@/features/match-square/hooks/useReputation';
 import { IdentityHubSection } from '../components/IdentityHubSection';
+import {
+  MyQualificationsSection,
+  TrustProfileSummarySection,
+} from '@/components/trust-profile';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
 
@@ -29,7 +31,6 @@ export default function ProfilePage() {
     dismissShimmer,
     refetch,
   } = useOdysseyProfileCard();
-  const { data: reputation } = useReputationProfileMe();
 
   const initials = (user?.displayName?.[0] ?? user?.email?.[0] ?? 'U').toUpperCase();
   const profile = cardView?.profile;
@@ -137,8 +138,11 @@ export default function ProfilePage() {
           <IdentityHubSection completed={completed} className="mt-6" />
         )}
 
-        {completed && reputation && (
-          <ReputationAssetsSection profile={reputation} className="mt-6" />
+        {user?.id && (
+          <div className="mt-6 space-y-6">
+            <TrustProfileSummarySection userId={user.id} />
+            <MyQualificationsSection userId={user.id} />
+          </div>
         )}
       </div>
     </div>

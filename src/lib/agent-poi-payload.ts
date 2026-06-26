@@ -6,6 +6,8 @@
  * `display_name` 命中库时为 nameCN || nameEN（由后端下发）。
  */
 
+import { parseJsonFromLlmText } from '@/lib/parse-json-from-llm';
+
 /** `matched_from`：库命中方式或草案（与后端 dehydrator 对齐） */
 export type AgentPoiMatchedFrom =
   | 'place_id'
@@ -174,9 +176,9 @@ export function normalizePoiCard(raw: unknown): AgentPoiCard | null {
   let ontologyRules: unknown = o.ontology_rules ?? o.ontologyRules;
   if (typeof ontologyRules === 'string') {
     const t = ontologyRules.trim();
-    if (t.startsWith('{') || t.startsWith('[')) {
+    if (t.startsWith('{') || t.startsWith('[') || t.includes('```')) {
       try {
-        ontologyRules = JSON.parse(t) as unknown;
+        ontologyRules = parseJsonFromLlmText(t);
       } catch {
         ontologyRules = t;
       }

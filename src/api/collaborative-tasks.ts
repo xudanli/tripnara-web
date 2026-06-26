@@ -11,6 +11,10 @@ import {
   normalizeCollaborativeTaskFlywheel,
   normalizeCollaborativeTaskView,
 } from '@/features/match-square/lib/decision-engine/normalize-collaborative-tasks';
+import {
+  isDomainNegotiationTaskRaw,
+  normalizeDomainNegotiationTasksResponse,
+} from '@/lib/normalize-domain-negotiation-tasks';
 
 interface SuccessResponse<T> {
   success: true;
@@ -31,11 +35,19 @@ async function liveList(tripId: string): Promise<CollaborativeTasksResponse> {
     record.flywheel ?? record.collaborativeTaskFlywheel
   );
   const tasksRaw = record.tasks;
-  const tasks = Array.isArray(tasksRaw)
-    ? tasksRaw.map(normalizeCollaborativeTaskView).filter((x): x is NonNullable<typeof x> => x != null)
-    : (flywheel?.tasks ?? []);
+  const negotiationTasks = normalizeDomainNegotiationTasksResponse(raw);
 
-  return { tripId, flywheel, tasks };
+  let tasks: CollaborativeTasksResponse['tasks'] = [];
+  if (Array.isArray(tasksRaw)) {
+    const flywheelRaw = tasksRaw.filter((item) => !isDomainNegotiationTaskRaw(item));
+    tasks = flywheelRaw
+      .map(normalizeCollaborativeTaskView)
+      .filter((x): x is NonNullable<typeof x> => x != null);
+  } else if (flywheel?.tasks?.length) {
+    tasks = flywheel.tasks;
+  }
+
+  return { tripId, flywheel, tasks, negotiationTasks };
 }
 
 async function livePostEvent(
@@ -53,11 +65,19 @@ async function livePostEvent(
     record.flywheel ?? record.collaborativeTaskFlywheel
   );
   const tasksRaw = record.tasks;
-  const tasks = Array.isArray(tasksRaw)
-    ? tasksRaw.map(normalizeCollaborativeTaskView).filter((x): x is NonNullable<typeof x> => x != null)
-    : (flywheel?.tasks ?? []);
+  const negotiationTasks = normalizeDomainNegotiationTasksResponse(raw);
 
-  return { tripId, flywheel, tasks };
+  let tasks: CollaborativeTasksResponse['tasks'] = [];
+  if (Array.isArray(tasksRaw)) {
+    const flywheelRaw = tasksRaw.filter((item) => !isDomainNegotiationTaskRaw(item));
+    tasks = flywheelRaw
+      .map(normalizeCollaborativeTaskView)
+      .filter((x): x is NonNullable<typeof x> => x != null);
+  } else if (flywheel?.tasks?.length) {
+    tasks = flywheel.tasks;
+  }
+
+  return { tripId, flywheel, tasks, negotiationTasks };
 }
 
 async function withMockFallback<T>(live: () => Promise<T>, mock: () => T): Promise<T> {

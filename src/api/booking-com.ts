@@ -7,6 +7,36 @@
 
 import apiClient from './client';
 
+interface SuccessResponse<T> {
+  success: true;
+  data: T;
+}
+
+interface ErrorResponse {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+type ApiResponseWrapper<T> = SuccessResponse<T> | ErrorResponse;
+
+function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
+  const payload = response?.data;
+  if (!payload || !payload.success) {
+    const message =
+      payload && !payload.success
+        ? payload.error?.message || '租车查询失败'
+        : '租车查询失败';
+    throw new Error(message);
+  }
+  if (payload.data == null) {
+    throw new Error('租车查询响应为空');
+  }
+  return payload.data;
+}
+
 export interface BookingComSearchRequest {
   pick_up_latitude: number;
   pick_up_longitude: number;
@@ -49,20 +79,22 @@ export const bookingComApi = {
    * POST /api/booking-com/search
    */
   search: async (params: BookingComSearchRequest): Promise<BookingComSearchResponse> => {
-    const response = await apiClient.post<BookingComSearchResponse>(
+    const response = await apiClient.post<ApiResponseWrapper<BookingComSearchResponse>>(
       '/booking-com/search',
-      params
+      params,
     );
-    return response.data;
+    return handleResponse(response);
   },
 
   /**
    * 服务健康检查
    * GET /api/booking-com/health
    */
-  health: async (): Promise<{ status?: string; ok?: boolean }> => {
-    const response = await apiClient.get('/booking-com/health');
-    return response.data;
+  health: async (): Promise<{ available?: boolean; ok?: boolean; service?: string }> => {
+    const response = await apiClient.get<
+      ApiResponseWrapper<{ available: boolean; service: string }>
+    >('/booking-com/health');
+    return handleResponse(response);
   },
 
   /**

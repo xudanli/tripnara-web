@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PlanVariant } from '@/types/constraints';
 import PlanVariantFeedbackCard from '@/components/feedback/PlanVariantFeedbackCard';
-import type { VariantStrategy, UserChoice } from '@/types/feedback';
+import type { VariantStrategy } from '@/types/feedback';
 
 interface PlanVariantsComparisonProps {
   variants: PlanVariant[];

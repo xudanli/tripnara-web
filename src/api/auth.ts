@@ -33,6 +33,8 @@ export interface RegisterWithEmailRequest {
   email: string;
   code: string;
   displayName?: string;
+  /** PRD §6.1 · 注册意图（可选，后端未支持时忽略） */
+  registrationIntent?: string;
 }
 
 export interface RegisterWithEmailResponse {
@@ -179,12 +181,18 @@ export const authApi = {
   registerWithEmail: async (
     email: string,
     code: string,
-    displayName?: string
+    displayName?: string,
+    registrationIntent?: string
   ): Promise<RegisterWithEmailResponse> => {
     try {
       const response = await apiClient.post<any>(
         '/auth/email/register',
-        { email, code, displayName }
+        {
+          email,
+          code,
+          displayName,
+          ...(registrationIntent ? { registrationIntent } : {}),
+        }
       );
       
       // 处理可能的响应格式

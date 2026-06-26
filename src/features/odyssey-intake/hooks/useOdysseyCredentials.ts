@@ -81,6 +81,7 @@ export function useVerifyProfessionOAuth() {
   });
 }
 
+/** @deprecated 芝麻信用已下线 — 请勿在新代码中调用 */
 export function useVerifyOdysseyZhima() {
   const qc = useQueryClient();
   return useMutation({

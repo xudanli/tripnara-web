@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { CreatePostRequest, PlanningStyle, RecruitmentPostCard, TrekActivityProfile } from '@/types/match-square';
+import type { CreatePostRequest, PlanningStyle, TrekActivityProfile } from '@/types/match-square';
 import type { VibeLlmParseResponse } from '@/types/vibe-llm';
 import {
   ITINERARY_SUMMARY_MAX,

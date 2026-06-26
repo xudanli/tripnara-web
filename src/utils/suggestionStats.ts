@@ -49,7 +49,7 @@ export function calculateSuggestionStats(
 
   for (const suggestion of suggestions) {
     // 按人格统计
-    const personaStats = stats.byPersona[suggestion.persona];
+    const personaStats = stats.byPersona[suggestion.persona as keyof typeof stats.byPersona];
     if (personaStats) {
       personaStats.total++;
       personaStats.bySeverity[suggestion.severity]++;

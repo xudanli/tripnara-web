@@ -4,12 +4,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, Eye, Clock, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import type { EvidenceItem, EvidenceStatus } from '@/types/readiness';
 import { tripsApi } from '@/api/trips';
 import { toast } from 'sonner';
 import { canEditEvidence } from '@/utils/trip-permissions';
 import type { CollaboratorRole } from '@/types/trip';
+
+type TripsApiWithEvidence = typeof tripsApi & {
+  batchUpdateEvidence: (
+    tripId: string,
+    updates: Array<{ evidenceId: string; status?: EvidenceStatus; userNote?: string }>
+  ) => Promise<{
+    updated: number;
+    failed: number;
+    errors?: Array<{ evidenceId: string; error: string }>;
+  }>;
+};
+
+const tripsApiWithEvidence = tripsApi as TripsApiWithEvidence;
 
 interface EvidenceBatchActionsProps {
   evidenceList: EvidenceItem[];
@@ -66,7 +78,7 @@ export default function EvidenceBatchActions({
   };
 
   // 🎯 切换单个选择
-  const handleToggleSelect = (evidenceId: string) => {
+  const ____handleToggleSelect = (evidenceId: string) => {
     const newSelected = new Set(selectedIds);
     if (newSelected.has(evidenceId)) {
       newSelected.delete(evidenceId);
@@ -95,12 +107,12 @@ export default function EvidenceBatchActions({
         status: batchStatus as EvidenceStatus,
       }));
 
-      const result = await tripsApi.batchUpdateEvidence(tripId, updates);
+      const result = await tripsApiWithEvidence.batchUpdateEvidence(tripId, updates);
 
       if (result.failed > 0) {
         toast.warning(`成功更新 ${result.updated} 个，失败 ${result.failed} 个`);
         if (result.errors) {
-          result.errors.forEach(err => {
+          result.errors.forEach((err: { evidenceId: string; error: string }) => {
             console.error(`证据 ${err.evidenceId} 更新失败: ${err.error}`);
           });
         }
@@ -154,7 +166,7 @@ export default function EvidenceBatchActions({
           <div className="flex items-center gap-2">
             <Select
               value={batchStatus}
-              onValueChange={(value) => setBatchStatus(value)}
+              onValueChange={(value) => setBatchStatus(value as EvidenceStatus | '')}
               disabled={isUpdating}
             >
               <SelectTrigger className="h-8 w-[140px] text-xs">

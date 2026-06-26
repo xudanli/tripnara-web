@@ -16,6 +16,7 @@ import type {
   SubmitFeedbackRequest,
   CreateTeamRequest,
   TeamMember,
+  UpdateTeamMemberRequest,
   SubscribeRequest,
   FieldReportRequest,
   RoutePlanDraft,
@@ -203,7 +204,7 @@ export function useUpdateTeamMember(teamId: string) {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ userId, updates }: { userId: string; updates: Partial<TeamMember> }) =>
+    mutationFn: ({ userId, updates }: { userId: string; updates: UpdateTeamMemberRequest }) =>
       teamApi.updateMember(teamId, userId, updates),
     onSuccess: (data) => {
       queryClient.setQueryData(teamKeys.detail(teamId), data);

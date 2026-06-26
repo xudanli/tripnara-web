@@ -7,7 +7,7 @@
  */
 
 import type { TripDetail, ItineraryItem } from '@/types/trip';
-import type { RoutePlanDraft, DayPlan, DaySegment } from '@/types/optimization-v2';
+import type { RoutePlanDraft, DayPlan } from '@/types/optimization-v2';
 
 /**
  * 从行程项获取地点名称

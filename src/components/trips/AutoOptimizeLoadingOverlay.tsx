@@ -5,7 +5,6 @@
 
 import { Spinner } from '@/components/ui/spinner';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
 
 interface AutoOptimizeLoadingOverlayProps {
   open: boolean;

@@ -15,8 +15,8 @@ import {
   ReplayController,
   VersionViewer,
 } from '@/components/decision-draft';
+import DraftExplanationView from '@/components/decision-draft/DraftExplanationView';
 import type { UserMode } from '@/types/decision-draft';
-import { Settings, Play, History } from 'lucide-react';
 
 export default function DecisionDraftPage() {
   const [searchParams] = useSearchParams();
@@ -26,7 +26,7 @@ export default function DecisionDraftPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [explanationOpen, setExplanationOpen] = useState(false);
   const [impactPreviewOpen, setImpactPreviewOpen] = useState(false);
-  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [_editingStepId, setEditingStepId] = useState<string | null>(null);
   const [previewStepId, setPreviewStepId] = useState<string | null>(null);
 
   if (!draftId) {

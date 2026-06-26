@@ -12,6 +12,8 @@ import {
   useCollaborativeTaskEvent,
   useCollaborativeTasks,
 } from '../hooks/useCollaborativeTasks';
+import { decisionDnaApi } from '@/api/decision-dna';
+import { triggerDecisionDnaConsentNudge } from '@/lib/decision-dna-consent-nudge';
 
 const STATUS_LABELS: Record<CollaborativeTaskView['status'], string> = {
   pending: '待确认',
@@ -46,6 +48,9 @@ function TaskCard({
     try {
       await eventMutation.mutateAsync({ taskId: task.id, body: { action } });
       toast.success(action === 'confirm' ? '任务已确认' : action === 'rollback' ? '任务已回滚' : '已记录超时');
+      if (action === 'rollback') {
+        void triggerDecisionDnaConsentNudge(() => decisionDnaApi.getConsent());
+      }
       onMutated();
     } catch {
       toast.error('任务状态更新失败');

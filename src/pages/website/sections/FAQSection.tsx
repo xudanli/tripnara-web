@@ -6,16 +6,11 @@ import { WebsiteCard, CardContent } from '@/components/website/WebsiteCard';
 export default function FAQSection() {
   const { t } = useTranslation();
 
-  const faqs = [
-    {
-      question: t('faq.question1', {
-        defaultValue: 'TripNARA 会替我决定一切吗？',
-      }),
-      answer: t('faq.answer1', {
-        defaultValue: '不会。我们会给你"建议 + 证据 + 备选"。',
-      }),
-    },
-  ];
+  const faqKeys = ['1', '2', '3', '4'] as const;
+  const faqs = faqKeys.map((key) => ({
+    question: t(`faq.question${key}`),
+    answer: t(`faq.answer${key}`),
+  }));
 
   return (
     <WebsiteSection variant="default" padding="xl" maxWidth="lg">

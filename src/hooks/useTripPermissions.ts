@@ -17,7 +17,7 @@ interface UseTripPermissionsOptions {
   defaultRole?: CollaboratorRole;
 }
 
-interface UseTripPermissionsReturn {
+export interface UseTripPermissionsReturn {
   /** 用户角色 */
   role: CollaboratorRole | null;
   /** 是否可以编辑 */

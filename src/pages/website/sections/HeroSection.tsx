@@ -86,6 +86,16 @@ export default function HeroSection() {
                 {t('hero.cta2', { defaultValue: '看 TripNARA 如何做决定' })}
               </Link>
             </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="text-base px-8 py-6 border-2 hover:bg-accent transition-all hover:-translate-y-1"
+            >
+              <Link to="/trusted-projects">
+                {t('hero.cta3')}
+              </Link>
+            </Button>
           </div>
         </div>
 

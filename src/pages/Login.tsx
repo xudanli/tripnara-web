@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { authApi } from '@/api/auth';
@@ -46,6 +46,7 @@ function GoogleLoginSection({
 export default function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { loginWithGoogle, loginWithEmail } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +56,15 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [invitationCode, setInvitationCode] = useState('');
+
+  const redirectAfterLogin = () => {
+    const redirect = searchParams.get('redirect');
+    if (redirect && redirect.startsWith('/')) {
+      navigate(redirect, { replace: true });
+      return;
+    }
+    navigate('/dashboard');
+  };
 
   // 倒计时逻辑
   useEffect(() => {
@@ -76,7 +86,7 @@ export default function LoginPage() {
       setError(null);
 
       await loginWithGoogle(authResponse);
-      navigate('/dashboard');
+      redirectAfterLogin();
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败');
     } finally {
@@ -168,9 +178,9 @@ export default function LoginPage() {
       // 显示成功提示
       setSuccess(t('login.success'));
 
-      // 跳转到首页
+      // 跳转到首页或 redirect 目标
       setTimeout(() => {
-        navigate('/dashboard');
+        redirectAfterLogin();
       }, 1000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : t('login.loginFailed');

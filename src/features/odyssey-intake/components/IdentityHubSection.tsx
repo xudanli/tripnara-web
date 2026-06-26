@@ -5,7 +5,6 @@ import {
   IdCard,
   Link2,
   Mail,
-  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -26,12 +25,12 @@ import {
   useSendWorkEmailCode,
   useUploadProfessionBadge,
   useVerifyOdysseyEducation,
-  useVerifyOdysseyZhima,
   useVerifyProfessionBadge,
   useVerifyProfessionOAuth,
   useVerifyWorkEmail,
 } from '../hooks/useOdysseyCredentials';
 import { identityHubFormFromCredentials } from '../lib/identity-hub-form-state';
+import { sanitizeTrustAssetLine } from '@/lib/deprecated-trust';
 
 interface IdentityHubSectionProps {
   completed: boolean;
@@ -53,7 +52,6 @@ export function IdentityHubSection({
   const uploadBadge = useUploadProfessionBadge();
   const verifyBadge = useVerifyProfessionBadge();
   const verifyOAuth = useVerifyProfessionOAuth();
-  const verifyZhima = useVerifyOdysseyZhima();
   const sendEmailCode = useSendWorkEmailCode();
 
   const [chsiCode, setChsiCode] = useState('');
@@ -68,14 +66,12 @@ export function IdentityHubSection({
   const [badgeFile, setBadgeFile] = useState<File | null>(null);
   const [badgeToken, setBadgeToken] = useState<string | null>(null);
   const [oauthToken, setOauthToken] = useState('');
-  const [zhimaScore, setZhimaScore] = useState('780');
 
   useEffect(() => {
     if (!credentials) return;
     const form = identityHubFormFromCredentials(credentials);
     setDegreeLevel(form.degreeLevel);
-    setTierTag(form.tierTag);
-    setZhimaScore(form.zhimaScore);
+    setTierTag(form.tierTag ?? '985_211');
   }, [credentials]);
 
   if (!visible) return null;
@@ -86,7 +82,6 @@ export function IdentityHubSection({
     uploadBadge.isPending ||
     verifyBadge.isPending ||
     verifyOAuth.isPending ||
-    verifyZhima.isPending ||
     sendEmailCode.isPending;
 
   const handleEducation = async () => {
@@ -201,27 +196,15 @@ export function IdentityHubSection({
     await handleOAuth(professionChannel === 'oauth_maimai' ? 'maimai' : 'linkedin');
   };
 
-  const handleZhima = async () => {
-    const score = Number(zhimaScore);
-    if (!Number.isFinite(score) || score < 350 || score > 950) {
-      toast.error('请输入 350–950 之间的芝麻分');
-      return;
-    }
-    try {
-      await verifyZhima.mutateAsync(score);
-      toast.success('芝麻信用已同步');
-    } catch {
-      toast.error('芝麻授权失败');
-    }
-  };
+  const trustAssetPreview = sanitizeTrustAssetLine(credentials?.headline?.trustAssetLine);
 
   return (
     <section className={cn('rounded-2xl border border-border bg-white p-5 shadow-sm', className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">身份背书 · Identity Hub</h3>
+          <h3 className="text-sm font-semibold text-foreground">身份验证 · Identity Hub</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            PRD 3.1.3 · 仅通过学信网 / 企业邮箱 / 第三方 OAuth 授信；禁止自封学历或公司头衔
+            学历 / 职业材料仅用于身份核验与脱敏展示，不参与信用评分或推荐排序。
           </p>
         </div>
         {credentials?.education?.verified && credentials.profession?.verified && (
@@ -241,8 +224,8 @@ export function IdentityHubSection({
       ) : credentials?.headline?.identityHeadline ? (
         <div className="mt-4 space-y-1 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
           <p className="text-foreground">{credentials.headline.identityHeadline}</p>
-          {credentials.headline.trustAssetLine && (
-            <p className="text-xs text-muted-foreground">{credentials.headline.trustAssetLine}</p>
+          {trustAssetPreview && (
+            <p className="text-xs text-muted-foreground">{trustAssetPreview}</p>
           )}
         </div>
       ) : null}
@@ -421,33 +404,7 @@ export function IdentityHubSection({
           </Tabs>
 
           <Button size="sm" className="w-full" onClick={handleProfession} disabled={busy}>
-            {credentials?.profession?.verified ? '更新职业授信' : '激活职业背书'}
-          </Button>
-        </div>
-
-        <div className="space-y-3 rounded-xl border border-border p-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden />
-            芝麻信用
-            {credentials?.zhimaCredit?.verified && (
-              <Badge variant="outline" className="ml-auto text-[10px]">
-                已授权
-              </Badge>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">OAuth 授权（开发占位）</Label>
-            <Input
-              type="number"
-              min={350}
-              max={950}
-              value={zhimaScore}
-              onChange={(e) => setZhimaScore(e.target.value)}
-              className="h-9"
-            />
-          </div>
-          <Button size="sm" variant="outline" className="w-full" onClick={handleZhima} disabled={busy}>
-            同步芝麻分
+            {credentials?.profession?.verified ? '更新职业验证' : '激活职业验证'}
           </Button>
         </div>
       </div>

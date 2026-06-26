@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2, Loader2, Dumbbell, Brain } from 'lucide-react';
+import { User as UserIcon, Database, Link2, AlertCircle, CheckCircle2, Trash2, Loader2, Dumbbell, Brain, Shield } from 'lucide-react';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useIntegrationAuth } from '@/hooks/useIntegrationAuth';
 import { userApi, UserApiError, type User } from '@/api/user';
@@ -45,8 +45,11 @@ import {
 } from '@/components/fitness';
 import { LearningProgressCard } from '@/components/decision';
 import { UserPreferencesPanel } from '@/components/optimization';
+import { AccountGovernancePanel } from '@/components/account-governance';
+import { useAccountCapabilities } from '@/hooks/useAccountCapabilities';
 import { isMemoryConsoleEnabled } from '@/lib/memory-feature';
 import { sanitizeUserPreferences } from '@/lib/legacy-companion-odyssey-cleanup';
+import { DecisionDnaConsentPanel } from '@/components/settings/DecisionDnaConsentPanel';
 import { MEMORY_CONSOLE_UI_DEFAULT_ZH } from '@/contracts/memory-console-ui-state.v1';
 
 // 可选的景点类型
@@ -276,13 +279,14 @@ export default function SettingsPage() {
   // 体能画像相关状态
   const { profile: fitnessProfile, isDefault: isFitnessDefault, isLoading: fitnessLoading } = useFitnessContext();
   const [fitnessQuestionnaireOpen, setFitnessQuestionnaireOpen] = useState(false);
+  const { data: accountCapabilities, isLoading: accountCapabilitiesLoading } = useAccountCapabilities();
 
   // 当URL参数变化时更新Tab
   useEffect(() => {
     const rawTabParam = searchParams.get('tab') || 'preferences';
     const normalizedTab = rawTabParam === 'profile' ? 'account' : rawTabParam;
     // 验证 tab 值是否有效
-    const validTabs = ['account', 'preferences', 'optimization', 'fitness', 'data', 'integrations'];
+    const validTabs = ['account', 'governance', 'preferences', 'optimization', 'fitness', 'data', 'integrations'];
     const finalTab = validTabs.includes(normalizedTab) ? normalizedTab : 'preferences';
     setActiveTab(finalTab);
   }, [searchParams]);
@@ -523,7 +527,7 @@ export default function SettingsPage() {
       <div className="border-b bg-white px-6 py-4">
         <h1 className="text-2xl font-bold">设置</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          账户、偏好、数据、集成
+          账户、身份权限、偏好、数据与集成
         </p>
       </div>
 
@@ -533,6 +537,7 @@ export default function SettingsPage() {
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             <TabsList>
               <TabsTrigger value="account">账户</TabsTrigger>
+              <TabsTrigger value="governance">身份与权限</TabsTrigger>
               <TabsTrigger value="preferences">偏好</TabsTrigger>
               <TabsTrigger value="optimization">优化权重</TabsTrigger>
               <TabsTrigger value="fitness">体能</TabsTrigger>
@@ -639,6 +644,22 @@ export default function SettingsPage() {
               )}
             </TabsContent>
 
+            <TabsContent value="governance" className="space-y-6">
+              <div className="mb-2">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <Shield className="h-5 w-5 text-muted-foreground" />
+                  账号与角色中心
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  订阅、专业认证与发布权限相互独立；付费不能替代认证。
+                </p>
+              </div>
+              <AccountGovernancePanel
+                capabilities={accountCapabilities}
+                isLoading={accountCapabilitiesLoading}
+              />
+            </TabsContent>
+
             {/* 偏好 */}
             <TabsContent value="preferences" className="space-y-6">
               {loading ? (
@@ -716,7 +737,7 @@ export default function SettingsPage() {
                                 </CommandEmpty>
                                 <CommandGroup>
                                   <CommandItem
-                                    value="__none__"
+                                    value="_none__"
                                     onSelect={() => {
                                       setFormData((prev) => ({ ...prev, nationality: undefined }));
                                       setNationalityOpen(false);
@@ -801,7 +822,7 @@ export default function SettingsPage() {
                                 </CommandEmpty>
                                 <CommandGroup>
                                   <CommandItem
-                                    value="__none__"
+                                    value="_none__"
                                     onSelect={() => {
                                       setFormData((prev) => ({ ...prev, residencyCountry: undefined }));
                                       setResidencyOpen(false);
@@ -1191,6 +1212,7 @@ export default function SettingsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <DecisionDnaConsentPanel />
                   {isMemoryConsoleEnabled() ? (
                     <div className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-3">

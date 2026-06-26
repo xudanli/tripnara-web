@@ -7,7 +7,7 @@
 
 import { createContext, useContext, useCallback, useMemo, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useFitnessProfile, useFitnessProfileWithDefault, fitnessKeys } from '@/hooks/useFitnessQuery';
+import { useFitnessProfileWithDefault, fitnessKeys } from '@/hooks/useFitnessQuery';
 import { useAuth } from '@/hooks/useAuth';
 import type { FitnessProfile, FitnessLevel, ConfidenceLevel } from '@/types/fitness';
 

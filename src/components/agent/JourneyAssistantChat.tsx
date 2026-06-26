@@ -57,8 +57,12 @@ import {
   FileText,
   Zap,
   ShoppingBag,
+  Utensils,
+  Coffee,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { GuardianAssistantBlock, GuardianLegacyCitations } from '@/components/guardian';
+import { useAuth } from '@/hooks/useAuth';
 import { JOURNEY_ASSISTANT_CONFIG, type QuickActionItem } from '@/constants/journey-assistant';
 import { getCurrentPosition, NEEDS_LOCATION_PROMPT_PATTERN } from '@/utils/geo';
 import { formatCurrency } from '@/utils/format';
@@ -498,10 +502,14 @@ function MessageBubble({
   message,
   onNavigate,
   onAction,
+  tripId,
+  userId,
 }: { 
   message: JourneyMessage;
   onNavigate: (item: SearchResults['items'][0]) => void;
   onAction: (action: SuggestedAction) => void;
+  tripId: string;
+  userId?: string | null;
 }) {
   const isUser = message.role === 'user';
 
@@ -542,14 +550,32 @@ function MessageBubble({
           />
         )}
 
+        {/* P1/P2 三人格单主角 */}
+        {!isUser && message.guardianPresentation && (
+          <div className="mt-3">
+            <GuardianAssistantBlock
+              presentation={message.guardianPresentation}
+              tripId={tripId}
+              userId={userId}
+              source="presentation"
+            />
+          </div>
+        )}
+
         {/* V2.1: 分段内容 */}
         {!isUser && message.sections && message.sections.length > 0 && (
           <NarrativeSectionsPanel sections={message.sections} />
         )}
 
-        {/* V2.1: 专家引用 */}
-        {!isUser && message.citations && message.citations.length > 0 && (
-          <ExpertCitationsPanel citations={message.citations} />
+        {/* V2.1: 专家引用 — 无 presentation 或 decision_committee 时保留 */}
+        {!isUser && (
+          <GuardianLegacyCitations
+            presentation={message.guardianPresentation}
+            citations={message.citations}
+            renderCitation={(citations) => (
+              <ExpertCitationsPanel citations={citations ?? []} />
+            )}
+          />
         )}
 
         {/* V2.1: 降级提示 */}
@@ -592,7 +618,7 @@ function MessageBubble({
 export default function JourneyAssistantChat({
   tripId,
   userId,
-  onScheduleChange,
+  onScheduleChange: _onScheduleChange,
   className,
   compact = false,
   hideScheduleAndRemindersTabs = false,
@@ -683,7 +709,7 @@ export default function JourneyAssistantChat({
       const days = trip.TripDay || [];
       const allItems = days.flatMap((d) => d.ItineraryItem || []);
       const totalItems = trip.statistics?.totalItems ?? allItems.length;
-      const totalBudget = trip.totalBudget ?? trip.statistics?.totalBudget ?? 0;
+      const totalBudget = trip.totalBudget ?? 0;
       const spentBudget = trip.statistics?.budgetUsed ?? 0;
       const currentDayIdx = days.findIndex((d) => d.date?.slice(0, 10) === todayStr);
       const currentDay = currentDayIdx >= 0 ? currentDayIdx + 1 : 1;
@@ -842,6 +868,8 @@ export default function JourneyAssistantChat({
                       message={msg}
                       onNavigate={handleNavigate}
                       onAction={executeAction}
+                      tripId={tripId}
+                      userId={userId}
                     />
                   ))}
                 </>

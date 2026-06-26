@@ -309,7 +309,7 @@ export function RiskScoreBadge({
   className?: string;
 }) {
   const config = getRiskScoreConfig(score);
-  const meaning = getRiskScoreMeaning(score);
+  const ____meaning = getRiskScoreMeaning(score);
   const RiskIcon = getRiskIcon(getRiskScoreLevel(score));
 
   return (

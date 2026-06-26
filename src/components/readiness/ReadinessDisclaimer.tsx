@@ -1,16 +1,14 @@
 /**
  * ReadinessDisclaimer 组件
- * 
- * 显示准备度检查的免责声明和责任边界
- * 根据 API v2.0.0 规范，必须显示给用户
+ *
+ * 显示准备度检查的免责声明和责任边界（次要信息，视觉降噪）
  */
 
-import { AlertCircle, ExternalLink, CheckCircle2 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReadinessDisclaimer } from '@/api/readiness';
 import { format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
 interface ReadinessDisclaimerProps {
   disclaimer: ReadinessDisclaimer;
@@ -21,66 +19,54 @@ export default function ReadinessDisclaimerComponent({
   disclaimer,
   className,
 }: ReadinessDisclaimerProps) {
+  const { t, i18n } = useTranslation();
+  const isZh = i18n.language.startsWith('zh');
+
   return (
-    <Card className={cn('border-amber-200 bg-amber-50/50', className)}>
-      <CardContent className="p-4 space-y-3">
-        {/* 标题 */}
-        <div className="flex items-start gap-2">
-          <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h4 className="text-sm font-semibold text-amber-900">
-              免责声明
-            </h4>
-            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-              {disclaimer.message}
-            </p>
-          </div>
-        </div>
+    <div
+      className={cn(
+        'rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 space-y-2',
+        className,
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <AlertCircle className="h-4 w-4 text-slate-400 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <p className="text-xs font-medium text-slate-500">
+            {t('dashboard.readiness.page.disclaimer.title', '免责声明')}
+          </p>
+          <p className="text-xs text-slate-500 leading-relaxed">{disclaimer.message}</p>
 
-        {/* 数据来源 */}
-        {disclaimer.dataSources && disclaimer.dataSources.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-amber-900">数据来源：</p>
-            <div className="flex flex-wrap gap-1.5">
-              {disclaimer.dataSources.map((source, index) => (
-                <Badge
-                  key={index}
-                  variant="outline"
-                  className="text-[10px] border-amber-300 text-amber-700 bg-amber-50"
-                >
-                  {source}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 用户必须自行验证的事项 */}
-        {disclaimer.userActionRequired && disclaimer.userActionRequired.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-amber-900">
-              请务必自行验证以下事项：
-            </p>
-            <ul className="space-y-1">
+          {disclaimer.userActionRequired && disclaimer.userActionRequired.length > 0 ? (
+            <ul className="space-y-0.5 pt-0.5">
               {disclaimer.userActionRequired.map((item, index) => (
-                <li key={index} className="flex items-start gap-2 text-xs text-amber-800">
-                  <CheckCircle2 className="h-3 w-3 mt-0.5 flex-shrink-0 text-amber-600" />
-                  <span>{item}</span>
+                <li key={index} className="text-[11px] text-slate-500 leading-snug">
+                  · {item}
                 </li>
               ))}
             </ul>
-          </div>
-        )}
+          ) : null}
+        </div>
+      </div>
 
-        {/* 最后更新时间 */}
-        {disclaimer.lastUpdated && (
-          <div className="pt-2 border-t border-amber-200">
-            <p className="text-[10px] text-amber-700">
-              数据更新时间：{format(new Date(disclaimer.lastUpdated), 'yyyy-MM-dd HH:mm')}
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1 border-t border-slate-100/80">
+        {disclaimer.dataSources && disclaimer.dataSources.length > 0 ? (
+          <p className="text-[11px] text-slate-400">
+            {isZh ? '数据来源：' : 'Sources: '}
+            {disclaimer.dataSources.map((source, index) => (
+              <span key={index}>
+                {index > 0 ? ' · ' : ''}
+                <span className="text-slate-500">{source}</span>
+              </span>
+            ))}
+          </p>
+        ) : null}
+        {disclaimer.lastUpdated ? (
+          <p className="text-[10px] text-slate-400 tabular-nums ml-auto">
+            {format(new Date(disclaimer.lastUpdated), isZh ? 'yyyy-MM-dd HH:mm' : 'MMM d, yyyy HH:mm')}
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }

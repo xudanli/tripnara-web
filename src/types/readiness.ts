@@ -52,6 +52,7 @@ export interface RepairOption {
 
 /** 修复操作类型 */
 export type RepairActionType = 
+  | 'adjust_time'       // 调整行程项时间
   | 'fetch_weather'     // 查询天气预报
   | 'check_road'        // 查询道路状况
   | 'check_hours'       // 确认营业时间

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { matchSquareApi } from '@/api/match-square';
-import type { PostListFilters, RecruitmentApplicationCard, RecruitmentPostCard, TravelIntentStatus } from '@/types/match-square';
+import { deriveMatchSquareAccessFromCapabilities } from '@/lib/account-governance';
+import { useAccountCapabilities } from '@/hooks/useAccountCapabilities';
+import type { PostListFilters, RecruitmentApplicationCard, RecruitmentPostCard, ReviewApplicationAttributionContext, TravelIntentStatus } from '@/types/match-square';
 import { loadMyRecruitmentHub } from '../lib/my-recruitments';
 import { resolvePostDetailWithFallback } from '../lib/resolve-post-detail-fallback';
 import { enrichApplicationsWithApplicantIdentity } from '../lib/enrich-applications-applicant-identity';
@@ -27,9 +29,20 @@ function mergeTravelIntentCache(
 }
 
 export function useMatchSquareAccess() {
+  const { data: capabilities } = useAccountCapabilities();
+
   return useQuery({
-    queryKey: ['match-square', 'access'],
+    queryKey: ['match-square', 'access', capabilities?.userId ?? 'anonymous'],
     queryFn: () => matchSquareApi.getAccess(),
+    select: (apiAccess) => {
+      if (!capabilities) return apiAccess;
+      const governed = deriveMatchSquareAccessFromCapabilities(capabilities);
+      return {
+        ...apiAccess,
+        canPost: governed.canPost,
+        canApply: governed.canApply || apiAccess.canApply,
+      };
+    },
     staleTime: 30_000,
   });
 }
@@ -153,11 +166,17 @@ export function useReviewApplication() {
       postId,
       applicationId,
       action,
+      attributionContext,
     }: {
       postId: string;
       applicationId: string;
       action: 'approve' | 'reject';
-    }) => matchSquareApi.reviewApplication(postId, applicationId, { action }),
+      attributionContext?: ReviewApplicationAttributionContext;
+    }) =>
+      matchSquareApi.reviewApplication(postId, applicationId, {
+        action,
+        ...attributionContext,
+      }),
     onSuccess: (data, variables) => {
       if (data.teamPuzzle) {
         qc.setQueryData<RecruitmentPostCard>(

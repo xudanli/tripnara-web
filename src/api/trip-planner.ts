@@ -592,6 +592,8 @@ export interface PlannerChatResponse {
   // 🆕 三人格守护者系统
   personaInsights?: PersonaInsight[];
   guardianEvaluation?: GuardianEvaluation;
+  /** P2 行中单主角简报（优先于三人 insight 卡片） */
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
   disclaimer?: Disclaimer;
   meta?: PlannerResponseMeta;
   
@@ -707,32 +709,6 @@ export interface UndoResponse {
   /** 行程更新摘要 */
   tripUpdate?: TripUpdateSummary;
 }
-
-// ==================== API 响应包装类型 ====================
-
-/**
- * 成功响应包装
- */
-interface SuccessResponse<T> {
-  success: true;
-  data: T;
-  message?: string;
-}
-
-/**
- * 错误响应
- */
-interface ErrorResponse {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-  };
-}
-
-type ApiResponseWrapper<T> = SuccessResponse<T> | ErrorResponse;
-
-// handleResponse 函数已移除，直接使用 planningAssistantApi 的响应格式
 
 // ==================== API 实现 ====================
 

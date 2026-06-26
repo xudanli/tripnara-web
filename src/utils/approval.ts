@@ -1,6 +1,6 @@
 import type { ApprovalRequest, RiskLevel } from '@/types/approval';
 import { ApprovalStatus } from '@/types/approval';
-import { getRiskScoreConfig, getRiskScoreColorClasses } from '@/lib/risk-score';
+import { getRiskScoreColorClasses } from '@/lib/risk-score';
 
 /**
  * 检查审批请求是否已过期

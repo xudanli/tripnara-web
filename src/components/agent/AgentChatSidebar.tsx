@@ -6,18 +6,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { PanelRightClose, PanelRightOpen, Sparkles, Compass, RefreshCw } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, Sparkles, Trash2 } from 'lucide-react';
 import AgentChat from './AgentChat';
-import JourneyAssistantChat from './JourneyAssistantChat';
 import Logo from '@/components/common/Logo';
 import type { EntryPoint } from '@/api/agent';
-import { useAuth } from '@/hooks/useAuth';
 import PlanStudioContext from '@/contexts/PlanStudioContext';
+import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
 import type { SelectedContext } from '@/contexts/PlanStudioContext';
 import { buildPlanStudioAssistantQuestion } from '@/lib/plan-studio-assistant-question';
 import { syncTripDataAfterAgentMutation } from '@/lib/agent-trip-sync';
 import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
-
 // localStorage key for sidebar state
 const SIDEBAR_STATE_KEY = 'agent-sidebar-expanded';
 
@@ -40,22 +38,24 @@ function getSidebarConfig(entryPoint?: EntryPoint, hasTrip?: boolean) {
   switch (entryPoint) {
     case 'planning_workbench':
       return {
-        title: hasTrip ? '智能体' : '规划助手',
-        subtitle: hasTrip ? '已关联当前行程' : '统一入口 · route_and_run',
-        icon: null, // 使用 Logo 组件
+        title: 'Nara',
+        subtitle: hasTrip ? '行程副驾驶' : '规划助手',
+        icon: null,
         useLogo: true,
         iconBgClass: '',
         iconTextClass: '',
         component: 'planning' as const,
       };
     case 'execute':
+      // 与规划工作台共用 AgentChat（route_and_run），仅 entry_point 区分行中场景
       return {
-        title: '行程助手',
-        subtitle: '旅途中的智能伙伴',
-        icon: Compass,
-        iconBgClass: 'bg-gradient-to-br from-teal-500 to-cyan-600',
-        iconTextClass: 'text-white',
-        component: 'journey' as const,
+        title: 'Nara',
+        subtitle: hasTrip ? '行程副驾驶' : '行中助手',
+        icon: null,
+        useLogo: true,
+        iconBgClass: '',
+        iconTextClass: '',
+        component: 'planning' as const,
       };
     default:
       return {
@@ -80,21 +80,23 @@ export default function AgentChatSidebar({
   onClose,
   layoutExpanded = false,
 }: AgentChatSidebarProps) {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const agentRouteOpts = useAgentRouteQueryOptions();
   const isPlanStudioAgent = entryPoint === 'planning_workbench';
+  const isUnifiedAgentSidebar =
+    entryPoint === 'planning_workbench' || entryPoint === 'execute';
   const [clearMessagesFn, setClearMessagesFn] = useState<(() => void) | null>(null);
 
   // 规划工作台场景：若父级未传 activeTripId，从 URL ?tripId= 读取作为 fallback
   const effectiveTripId =
-    entryPoint === 'planning_workbench' && !activeTripId
+    isUnifiedAgentSidebar && !activeTripId
       ? searchParams.get('tripId')
       : activeTripId;
   
   // 获取 PlanStudio context（可能不在 Provider 内，所以直接用 useContext）
   const planStudioContext = useContext(PlanStudioContext);
+  const { registerAssistantHandlers } = useAssistantSidebar();
   
   // Initialize from localStorage
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -116,12 +118,26 @@ export default function AgentChatSidebar({
   const openAssistant = useCallback(() => {
     setIsExpanded(true);
   }, []);
+
+  const sendMessageRef = useRef<((message: string) => void | Promise<void>) | null>(null);
   
   useEffect(() => {
     if (planStudioContext?.setOnOpenAssistant) {
       planStudioContext.setOnOpenAssistant(openAssistant);
     }
   }, [planStudioContext, openAssistant]);
+
+  useEffect(() => {
+    if (!isUnifiedAgentSidebar) return;
+    registerAssistantHandlers({
+      open: openAssistant,
+      send: (message: string) => {
+        if (sendMessageRef.current) {
+          void sendMessageRef.current(message);
+        }
+      },
+    });
+  }, [isUnifiedAgentSidebar, openAssistant, registerAssistantHandlers]);
 
   /** 自 /dashboard/agent 重定向时自动展开侧栏 */
   useEffect(() => {
@@ -152,8 +168,6 @@ export default function AgentChatSidebar({
     );
   }, [setSearchParams]);
 
-  const sendMessageRef = useRef<((message: string) => void | Promise<void>) | null>(null);
-
   useEffect(() => {
     if (entryPoint !== 'planning_workbench' || !planStudioContext?.setOnAskAssistant) return;
 
@@ -167,11 +181,13 @@ export default function AgentChatSidebar({
     });
   }, [entryPoint, planStudioContext]);
 
-  const handlePlanStudioSystem2Response = useCallback(async () => {
+  const handleUnifiedAgentSystem2Response = useCallback(async () => {
     onSystem2Response?.();
     const tid = sanitizeRouteRunTripId(effectiveTripId);
+    const syncSource =
+      entryPoint === 'execute' ? 'execute-agent' : 'plan-studio-agent';
     try {
-      await syncTripDataAfterAgentMutation(queryClient, tid ?? undefined, 'plan-studio-agent');
+      await syncTripDataAfterAgentMutation(queryClient, tid ?? undefined, syncSource);
     } catch (e) {
       console.error('[AgentChatSidebar] sync after System2 failed', e);
       toast.error('行程数据刷新失败，请稍后手动刷新页面');
@@ -179,7 +195,7 @@ export default function AgentChatSidebar({
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
     }
-  }, [onSystem2Response, queryClient, effectiveTripId]);
+  }, [onSystem2Response, queryClient, effectiveTripId, entryPoint]);
 
   const config = getSidebarConfig(entryPoint, !!effectiveTripId);
   const IconComponent = config.icon;
@@ -189,7 +205,7 @@ export default function AgentChatSidebar({
   const renderAssistant = () => {
     switch (config.component) {
       case 'planning':
-        // 原 /dashboard/agent 全量能力：行程副驾驶 + URL 调试/传感器参数
+        // 规划工作台 + 行中执行页共用：route_and_run 行程副驾驶
         return (
           <AgentChat
             activeTripId={effectiveTripId}
@@ -201,33 +217,12 @@ export default function AgentChatSidebar({
             routeContextType={isPlanStudioAgent ? agentRouteOpts.routeContextType : undefined}
             enableLiveTools={isPlanStudioAgent ? agentRouteOpts.enableLiveTools : undefined}
             intentFlags={isPlanStudioAgent ? agentRouteOpts.intentFlags : undefined}
-            onSystem2Response={handlePlanStudioSystem2Response}
+            onSystem2Response={handleUnifiedAgentSystem2Response}
             className="h-full"
             onSendMessageReady={(send) => {
               sendMessageRef.current = send;
             }}
             onClearReady={(fn) => setClearMessagesFn(() => fn)}
-          />
-        );
-      case 'journey':
-        if (!effectiveTripId || !user) {
-          return (
-            <div className="flex-1 flex items-center justify-center p-6">
-              <div className="text-center">
-                <Compass className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  需要选择一个行程才能使用行程助手
-                </p>
-              </div>
-            </div>
-          );
-        }
-        return (
-          <JourneyAssistantChat
-            tripId={effectiveTripId}
-            userId={user.id}
-            className="h-full"
-            hideScheduleAndRemindersTabs
           />
         );
       default:
@@ -250,7 +245,7 @@ export default function AgentChatSidebar({
   return (
     <aside
       className={cn(
-        'relative z-30 bg-white border-l border-gray-200 flex flex-col h-full flex-shrink-0',
+        'relative z-30 flex flex-col h-full flex-shrink-0 bg-card border-l border-border',
         layoutExpanded
           ? 'w-full min-w-0'
           : expanded
@@ -263,42 +258,40 @@ export default function AgentChatSidebar({
       {/* Header */}
       <div
         className={cn(
-          'h-16 border-b border-gray-200 flex items-center px-3',
+          'h-14 border-b border-border flex items-center px-3 shrink-0',
           expanded ? 'justify-between' : 'justify-center'
         )}
       >
         {expanded ? (
           <>
-            <div className="flex items-center gap-2.5">
-              <div className="relative">
-                <button
-                  onClick={toggleExpanded}
-                  className="cursor-pointer hover:opacity-80 transition-opacity"
-                  title="点击收起/展开助手"
-                >
-                  {useLogo ? (
-                    <Logo variant="icon" size={28} color="currentColor" className="text-slate-800" />
-                  ) : IconComponent ? (
-                    <div className={cn('w-7 h-7 rounded-full flex items-center justify-center', config.iconBgClass)}>
-                      <IconComponent className={cn('w-4 h-4', config.iconTextClass)} />
-                    </div>
-                  ) : (
-                    <Logo variant="icon" size={28} />
-                  )}
-                </button>
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
-              </div>
-              <div className="flex flex-col">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={toggleExpanded}
+                className="cursor-pointer hover:opacity-80 transition-opacity shrink-0"
+                title="点击收起助手"
+              >
+                {useLogo ? (
+                  <Logo variant="icon" size={24} color="currentColor" className="text-foreground" />
+                ) : IconComponent ? (
+                  <div className={cn('w-7 h-7 rounded-full flex items-center justify-center', config.iconBgClass)}>
+                    <IconComponent className={cn('w-4 h-4', config.iconTextClass)} />
+                  </div>
+                ) : (
+                  <Logo variant="icon" size={24} />
+                )}
+              </button>
+              <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base font-semibold text-gray-900">{config.title}</span>
+                  <span className="text-sm font-semibold text-foreground truncate">{config.title}</span>
                   {config.component === 'legacy' && (
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground">{config.subtitle}</span>
+                <span className="text-[11px] text-muted-foreground truncate">{config.subtitle}</span>
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 shrink-0">
               {config.component === 'planning' && isPlanStudioAgent && agentRouteOpts.pageMode === 'debug' ? (
                 <AgentDebugReplaySheet tripIdRaw={effectiveTripId} />
               ) : null}
@@ -307,32 +300,31 @@ export default function AgentChatSidebar({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-[10px] text-gray-500"
+                  className="h-7 px-2 text-[10px] text-muted-foreground"
                   onClick={toggleAgentDebugMode}
                   title={agentRouteOpts.pageMode === 'debug' ? '退出调试模式' : '调试模式'}
                 >
                   {agentRouteOpts.pageMode === 'debug' ? '调试中' : '调试'}
                 </Button>
               ) : null}
-              {/* 清空按钮 - 规划模式下显示，点击清空对话 */}
-              {config.component === 'planning' && (
+              {config.component === 'planning' ? (
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => clearMessagesFn?.()}
                   disabled={!clearMessagesFn}
-                  className="h-8 w-8 text-gray-500 hover:text-gray-700"
-                  title="清空对话并重置服务端会话（DELETE v2 session）"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  title="清空对话"
                 >
-                  <RefreshCw className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
-              )}
+              ) : null}
               {!forceExpanded ? (
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={toggleExpanded}
-                  className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
                   title="收起侧边栏"
                 >
                   <PanelRightClose className="h-4 w-4" />
@@ -343,7 +335,7 @@ export default function AgentChatSidebar({
                     variant="ghost"
                     size="icon"
                     onClick={onClose}
-                    className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
                     title="关闭"
                   >
                     <PanelRightClose className="h-4 w-4" />
@@ -393,8 +385,8 @@ export default function AgentChatSidebar({
           </Button>
           
           {/* Vertical text */}
-          <div className="writing-vertical-rl text-xs text-gray-400 tracking-wider select-none">
-            点击展开 {config.title}
+          <div className="writing-vertical-rl text-[11px] text-muted-foreground tracking-wider select-none">
+            Nara
           </div>
         </div>
       )}

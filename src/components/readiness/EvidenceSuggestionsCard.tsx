@@ -16,10 +16,9 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { AlertCircle, CheckCircle2, AlertTriangle, Clock, Zap, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { gateStatusTokens, cardVariants, typographyTokens } from '@/utils/design-tokens';
+import { gateStatusTokens, cardVariants } from '@/utils/design-tokens';
 import type { EvidenceType } from '@/types/trip';
 
 interface EvidenceSuggestionsCardProps {

@@ -21,7 +21,7 @@ export function TripConstraintPatchesSection({
   deleting,
 }: TripConstraintPatchesSectionProps) {
   const [pendingPatchId, setPendingPatchId] = useState<string | null>(null);
-  const pending = patches.find((p) => p.patch_id === pendingPatchId);
+  const ____pending = patches.find((p) => p.patch_id === pendingPatchId);
 
   return (
     <Card>

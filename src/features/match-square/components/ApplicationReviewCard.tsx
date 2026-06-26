@@ -12,10 +12,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 import type { RecruitmentApplicationCard } from '@/types/match-square';
 import { CompatibilityBadge } from './CompatibilityBadge';
 import { CredentialsHeadlineStrip } from './CredentialsHeadlineStrip';
 import { CaptainTrustProfileSheet } from './CaptainTrustProfileSheet';
+import { RecruitingAttributionSection } from './RecruitingAttributionSection';
 import { useUserVerifiedCredentials } from '../hooks/useUserVerifiedCredentials';
 import { DecisionEngineBriefPanel, showDecisionEngineHint } from './DecisionEngineBriefPanel';
 import {
@@ -30,8 +32,8 @@ import { plazaBanner, plazaCard, plazaReview } from '../lib/plaza-visual';
 
 interface ApplicationReviewCardProps {
   application: RecruitmentApplicationCard;
-  onApprove: () => void;
-  onReject: () => void;
+  onApprove?: (overrides?: { captainPreference?: string }) => void;
+  onReject?: (overrides?: { captainPreference?: string }) => void;
   onAskMore?: () => void;
   isReviewing?: boolean;
   /** 队员详情弹窗内嵌 — 省略与弹窗标题重复的「申请人 · 姓名」 */
@@ -47,6 +49,10 @@ export function ApplicationReviewCard({
   embedded = false,
 }: ApplicationReviewCardProps) {
   const [trustOpen, setTrustOpen] = useState(false);
+  const [captainPreference, setCaptainPreference] = useState('');
+  const reviewOverrides = captainPreference.trim()
+    ? { captainPreference: captainPreference.trim() }
+    : undefined;
   const embeddedCredentials = application.applicantVerifiedCredentials;
   const { data: fetchedCredentials, isLoading: credentialsLoading } = useUserVerifiedCredentials(
     application.applicantUserId,
@@ -203,6 +209,10 @@ export function ApplicationReviewCard({
             <p className={plazaReview.sectionLabel}>队员留言</p>
             <p className={plazaCard.quote}>{application.message}</p>
           </div>
+
+          {application.attribution && (
+            <RecruitingAttributionSection attribution={application.attribution} compact />
+          )}
         </div>
 
         {application.status !== 'pending' ? (
@@ -213,12 +223,24 @@ export function ApplicationReviewCard({
             {application.status === 'approved' ? '已通过' : '已拒绝'}
           </Badge>
         ) : (
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5 space-y-3">
+            <div>
+              <p className={plazaReview.sectionLabel}>审批补充（可选）</p>
+              <Textarea
+                value={captainPreference}
+                onChange={(e) => setCaptainPreference(e.target.value)}
+                placeholder="说明选择或拒绝的原因，有助于归因分析…"
+                rows={2}
+                className="mt-1.5 resize-none text-sm"
+                disabled={isReviewing}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               className="border-[var(--gate-reject-border)] text-[var(--gate-reject-foreground)] hover:bg-[var(--gate-reject)]"
               disabled={isReviewing}
-              onClick={onReject}
+              onClick={() => onReject?.(reviewOverrides)}
             >
               <XCircle className="mr-1.5 h-4 w-4" aria-hidden />
               拒绝申请
@@ -232,11 +254,12 @@ export function ApplicationReviewCard({
             <Button
               className="bg-[var(--gate-allow-foreground)] text-[var(--gate-allow)] hover:opacity-90"
               disabled={isReviewing}
-              onClick={onApprove}
+              onClick={() => onApprove?.(reviewOverrides)}
             >
               <CheckCircle2 className="mr-1.5 h-4 w-4" aria-hidden />
               通过申请
             </Button>
+            </div>
           </div>
         )}
       </div>

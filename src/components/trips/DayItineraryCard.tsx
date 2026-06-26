@@ -10,12 +10,11 @@ import { Button } from '@/components/ui/button';
 import { SuggestionBadge } from '@/components/trips/SuggestionBadge';
 import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
-import { MapPin, AlertTriangle, ArrowRight, Lightbulb, Plus, Luggage, Target, Sparkles, HelpCircle, Wallet, ChevronDown, ChevronUp } from 'lucide-react';
+import { MapPin, AlertTriangle, ArrowRight, Lightbulb, Plus, Target, Sparkles, HelpCircle, Wallet, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TripDay, DayMetricsResponse } from '@/types/trip';
 import type { Suggestion } from '@/types/suggestion';
 import { tripsApi } from '@/api/trips';
-import type { BudgetDetailsResponse } from '@/types/trip';
 import { formatCurrency as formatCurrencyAmount } from '@/utils/format';
 import { EmptyStateCard } from '@/components/ui/empty-state-images';
 
@@ -49,7 +48,7 @@ export default function DayItineraryCard({
   onViewBudget,
 }: DayItineraryCardProps) {
   const [dayBudget, setDayBudget] = useState<{ spent: number; budget: number; currency?: string } | null>(null);
-  const [loadingBudget, setLoadingBudget] = useState(false);
+  const [_loadingBudget, setLoadingBudget] = useState(false);
   const [expanded, setExpanded] = useState(false); // 展开/收起状态
 
   useEffect(() => {

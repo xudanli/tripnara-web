@@ -10,7 +10,7 @@ import { GateStatusBanner } from '@/components/ui/gate-status-banner';
 import { Edit2, Brain } from 'lucide-react';
 import type { DecisionStep, UserMode } from '@/types/decision-draft';
 import { cn } from '@/lib/utils';
-import { normalizeGateStatus, type GateStatus } from '@/lib/gate-status';
+import { type GateStatus } from '@/lib/gate-status';
 
 export interface DecisionNodeProps {
   step: DecisionStep;

@@ -24,6 +24,7 @@ import {
   type DegradationInfo,
 } from '@/api/assistant';
 import { handleApiError } from '@/utils/errorHandler';
+import { extractPlanningAssistantPresentation } from '@/lib/guardian-presentation.util';
 
 /**
  * 消息类型
@@ -48,6 +49,7 @@ export interface PlanningMessage {
   sections?: NarrativeSection[];
   citations?: ExpertCitation[];
   degradation?: DegradationInfo;
+  guardianPresentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
 }
 
 /**
@@ -206,6 +208,7 @@ export function usePlanningAssistant(userId?: string): UsePlanningAssistantRetur
       sections: response.sections,
       citations: response.citations,
       degradation: response.degradation,
+      guardianPresentation: extractPlanningAssistantPresentation(response),
     };
     
     setMessages(prev => [...prev, assistantMessage]);

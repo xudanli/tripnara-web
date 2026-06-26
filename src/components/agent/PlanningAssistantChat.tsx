@@ -25,6 +25,7 @@ import { extractAirbnbSearchParams, hasAccommodationIntent } from '@/utils/airbn
 import { itineraryItemsApi } from '@/api/trips';
 import type { CreateItineraryItemRequest } from '@/types/trip';
 import { tripsApi } from '@/api/trips';
+import { countriesApi } from '@/api/countries';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -64,6 +65,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
+import { GuardianAssistantBlock, GuardianLegacyCitations } from '@/components/guardian';
 
 interface PlanningAssistantChatProps {
   userId?: string;
@@ -87,7 +89,7 @@ const PHASE_CONFIG: Record<PlanningPhase, { label: string; progress: number; ico
 
 /**
  * V2.1: 专家引用组件
- * 展示三人格（Abu/Dr.Dre/Neptune）的专家意见
+ * @deprecated 优先使用 {@link GuardianAssistantBlock}；仅无 presentation 时保留
  */
 function ExpertCitationsPanel({ citations }: { citations: ExpertCitation[] }) {
   const personaConfig: Record<string, { emoji: string; color: string; bgColor: string }> = {
@@ -373,7 +375,7 @@ function PlanCandidateCard({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium">预算估算</span>
               <span className="text-sm font-semibold text-primary">
-                {formatCurrency(plan.estimatedBudget.total, plan.estimatedBudget.currency || 'CNY')}
+                {formatCurrency(plan.estimatedBudget.total, 'CNY')}
               </span>
             </div>
             <div className="grid grid-cols-5 gap-1 text-xs">
@@ -382,7 +384,7 @@ function PlanCandidateCard({
                   <Icon className="w-3 h-3 mx-auto text-muted-foreground" />
                   <div className="text-muted-foreground mt-0.5">{label}</div>
                   <div className="font-medium">
-                    {formatCurrency(plan.estimatedBudget.breakdown[key as keyof typeof plan.estimatedBudget.breakdown] || 0, plan.estimatedBudget.currency || 'CNY')}
+                    {formatCurrency(plan.estimatedBudget.breakdown[key as keyof typeof plan.estimatedBudget.breakdown] || 0, 'CNY')}
                   </div>
                 </div>
               ))}
@@ -445,12 +447,14 @@ function MessageBubble({
   onSelectRecommendation,
   onSelectPlan,
   onAction,
+  userId,
 }: { 
   message: PlanningMessage;
   onSelectOption: (option: string) => void;
   onSelectRecommendation: (id: string) => void;
   onSelectPlan: (id: string) => void;
   onAction: (action: SuggestedAction) => void;
+  userId?: string;
 }) {
   const isUser = message.role === 'user';
 
@@ -528,14 +532,32 @@ function MessageBubble({
           </div>
         )}
 
+        {/* P1/P2 三人格单主角 */}
+        {!isUser && message.guardianPresentation && (
+          <div className="mt-3">
+            <GuardianAssistantBlock
+              presentation={message.guardianPresentation}
+              tripId={message.confirmedTripId}
+              userId={userId}
+              source="presentation"
+            />
+          </div>
+        )}
+
+        {/* V2.1: 专家引用 — 无 presentation 或 decision_committee 时保留 */}
+        {!isUser && (
+          <GuardianLegacyCitations
+            presentation={message.guardianPresentation}
+            citations={message.citations}
+            renderCitation={(citations) => (
+              <ExpertCitationsPanel citations={citations ?? []} />
+            )}
+          />
+        )}
+
         {/* V2.1: 分段内容 */}
         {!isUser && message.sections && message.sections.length > 0 && (
           <NarrativeSectionsPanel sections={message.sections} />
-        )}
-
-        {/* V2.1: 专家引用 */}
-        {!isUser && message.citations && message.citations.length > 0 && (
-          <ExpertCitationsPanel citations={message.citations} />
         )}
 
         {/* V2.1: 降级提示 */}
@@ -657,7 +679,6 @@ export default function PlanningAssistantChat({
     loading,
     error,
     confirmedTripId,
-    currentRecommendations,
     sendMessage,
     selectOption,
     selectRecommendation,
@@ -815,6 +836,7 @@ export default function PlanningAssistantChat({
                 onSelectRecommendation={selectRecommendation}
                 onSelectPlan={selectPlan}
                 onAction={handleAction}
+                userId={userId}
               />
             ))}
 
@@ -849,12 +871,28 @@ export default function PlanningAssistantChat({
                             if (trip.TripDay && trip.TripDay.length > 0) {
                               // 使用第一个日期（实际应该让用户选择）
                               const firstDay = trip.TripDay[0];
-                              
+
                               // 提取价格信息
                               const priceText = listing.structuredDisplayPrice?.primaryLine?.accessibilityLabel || '';
                               const priceMatch = priceText.match(/\$(\d+)/);
-                              const estimatedCost = priceMatch ? parseFloat(priceMatch[1]) * 6.5 : undefined; // 简单汇率转换
-                              
+
+                              // 获取行程目的地的货币策略，使用实时汇率
+                              let estimatedCost: number | undefined;
+                              let currency = 'CNY';
+
+                              if (priceMatch) {
+                                try {
+                                  const currencyStrategy = await countriesApi.getCurrencyStrategy(trip.destination);
+                                  const exchangeRate = currencyStrategy.exchangeRateToCNY || 1;
+                                  estimatedCost = parseFloat(priceMatch[1]) * exchangeRate;
+                                  currency = currencyStrategy.currencyCode || 'CNY';
+                                } catch (error) {
+                                  console.warn('获取货币策略失败，使用默认汇率:', error);
+                                  // 回退到简单汇率转换
+                                  estimatedCost = parseFloat(priceMatch[1]) * 6.5;
+                                }
+                              }
+
                               // 创建行程项（住宿类型）
                               const itemData: CreateItineraryItemRequest = {
                                 tripDayId: firstDay.id,
@@ -864,9 +902,9 @@ export default function PlanningAssistantChat({
                                 note: `Airbnb: ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference}\n链接: ${listing.url}`,
                                 estimatedCost,
                                 costCategory: 'ACCOMMODATION',
-                                currency: 'CNY',
+                                currency,
                               };
-                              
+
                               await itineraryItemsApi.create(itemData);
                               toast.success(`已将 ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference} 添加到行程`);
                             } else {
@@ -921,11 +959,27 @@ export default function PlanningAssistantChat({
                 const trip = await tripsApi.getById(confirmedTripId);
                 if (trip.TripDay && trip.TripDay.length > 0) {
                   const firstDay = trip.TripDay[0];
-                  
+
                   const priceText = listing.structuredDisplayPrice?.primaryLine?.accessibilityLabel || '';
                   const priceMatch = priceText.match(/\$(\d+)/);
-                  const estimatedCost = priceMatch ? parseFloat(priceMatch[1]) * 6.5 : undefined;
-                  
+
+                  // 获取行程目的地的货币策略，使用实时汇率
+                  let estimatedCost: number | undefined;
+                  let currency = 'CNY';
+
+                  if (priceMatch) {
+                    try {
+                      const currencyStrategy = await countriesApi.getCurrencyStrategy(trip.destination);
+                      const exchangeRate = currencyStrategy.exchangeRateToCNY || 1;
+                      estimatedCost = parseFloat(priceMatch[1]) * exchangeRate;
+                      currency = currencyStrategy.currencyCode || 'CNY';
+                    } catch (error) {
+                      console.warn('获取货币策略失败，使用默认汇率:', error);
+                      // 回退到简单汇率转换
+                      estimatedCost = parseFloat(priceMatch[1]) * 6.5;
+                    }
+                  }
+
                   const itemData: CreateItineraryItemRequest = {
                     tripDayId: firstDay.id,
                     type: 'ACTIVITY',
@@ -934,9 +988,9 @@ export default function PlanningAssistantChat({
                     note: `Airbnb: ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference}\n链接: ${listing.url}`,
                     estimatedCost,
                     costCategory: 'ACCOMMODATION',
-                    currency: 'CNY',
+                    currency,
                   };
-                  
+
                   await itineraryItemsApi.create(itemData);
                   toast.success(`已将 ${listing.demandStayListing.description.name.localizedStringWithTranslationPreference} 添加到行程`);
                   setDetailsDialogOpen(false);

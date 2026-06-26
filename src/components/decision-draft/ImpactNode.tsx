@@ -18,7 +18,7 @@ export interface ImpactNodeProps {
 }
 
 export default function ImpactNode({
-  impactId,
+  impactId: _impactId,
   title,
   description,
   affectedParts,

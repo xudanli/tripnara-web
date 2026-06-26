@@ -31,6 +31,16 @@ export default function FinalCTASection() {
             {t('finalCTA.button2', { defaultValue: '看看 TripNARA 如何做决定 →' })}
           </Link>
         </Button>
+        <Button
+          asChild
+          variant="outline"
+          size="lg"
+          className="text-lg px-10 py-6 border-2 hover:bg-background transition-all"
+        >
+          <Link to="/trusted-projects">
+            {t('finalCTA.button3')}
+          </Link>
+        </Button>
       </div>
     </WebsiteSection>
   );

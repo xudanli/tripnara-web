@@ -5,8 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useItineraryCost, formatCost, formatCostCategory } from '@/hooks';
-import { itineraryItemsApi } from '@/api/trips';
+import { useItineraryCost } from '@/hooks';
 import type { ItineraryItemDetail, CostCategory, ItemCostRequest } from '@/types/trip';
 import {
   Dialog,
@@ -154,6 +153,34 @@ export function EditItemCostDialog({
                   <SelectItem value="EUR">EUR (欧元)</SelectItem>
                   <SelectItem value="JPY">JPY (日元)</SelectItem>
                   <SelectItem value="GBP">GBP (英镑)</SelectItem>
+                  <SelectItem value="AUD">AUD (澳元)</SelectItem>
+                  <SelectItem value="CAD">CAD (加元)</SelectItem>
+                  <SelectItem value="CHF">CHF (瑞士法郎)</SelectItem>
+                  <SelectItem value="SEK">SEK (瑞典克朗)</SelectItem>
+                  <SelectItem value="NOK">NOK (挪威克朗)</SelectItem>
+                  <SelectItem value="DKK">DKK (丹麦克朗)</SelectItem>
+                  <SelectItem value="ISK">ISK (冰岛克朗)</SelectItem>
+                  <SelectItem value="KRW">KRW (韩元)</SelectItem>
+                  <SelectItem value="SGD">SGD (新加坡元)</SelectItem>
+                  <SelectItem value="HKD">HKD (港币)</SelectItem>
+                  <SelectItem value="TWD">TWD (台币)</SelectItem>
+                  <SelectItem value="THB">THB (泰铢)</SelectItem>
+                  <SelectItem value="MYR">MYR (马来西亚林吉特)</SelectItem>
+                  <SelectItem value="IDR">IDR (印尼盾)</SelectItem>
+                  <SelectItem value="PHP">PHP (菲律宾比索)</SelectItem>
+                  <SelectItem value="VND">VND (越南盾)</SelectItem>
+                  <SelectItem value="INR">INR (印度卢比)</SelectItem>
+                  <SelectItem value="AED">AED (阿联酋迪拉姆)</SelectItem>
+                  <SelectItem value="SAR">SAR (沙特里亚尔)</SelectItem>
+                  <SelectItem value="ZAR">ZAR (南非兰特)</SelectItem>
+                  <SelectItem value="BRL">BRL (巴西雷亚尔)</SelectItem>
+                  <SelectItem value="MXN">MXN (墨西哥比索)</SelectItem>
+                  <SelectItem value="ARS">ARS (阿根廷比索)</SelectItem>
+                  <SelectItem value="CLP">CLP (智利比索)</SelectItem>
+                  <SelectItem value="COP">COP (哥伦比亚比索)</SelectItem>
+                  <SelectItem value="PEN">PEN (秘鲁索尔)</SelectItem>
+                  <SelectItem value="NZD">NZD (新西兰元)</SelectItem>
+                  <SelectItem value="FJD">FJD (斐济元)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

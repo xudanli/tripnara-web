@@ -66,7 +66,7 @@ export function AddAccommodationToTripDialog({
   open,
   onOpenChange,
   accommodation,
-  tripId,
+  tripId: _tripId,
   tripInfo,
   onSuccess,
 }: AddAccommodationToTripDialogProps) {

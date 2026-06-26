@@ -1,4 +1,4 @@
-import { Star, UserRound, Users } from 'lucide-react';
+import { UserRound, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { ActiveTripCrewMember } from '@/types/active-trip-dashboard';
@@ -21,7 +21,7 @@ export function CrewDnaPanel({ crew, className }: CrewDnaPanelProps) {
         <Users className="h-4 w-4 text-primary" aria-hidden />
         车队 DNA
       </h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">MBTI · 称号 · 历史互评星</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">MBTI · 称号</p>
 
       <ul className="mt-3 space-y-2">
         {crew.map((member) => (
@@ -42,12 +42,6 @@ export function CrewDnaPanel({ crew, className }: CrewDnaPanelProps) {
                 <span className="text-muted-foreground">·</span>
                 <span className="text-xs text-muted-foreground">{member.cardTitle}</span>
               </>
-            )}
-            {member.reputationStars != null && (
-              <span className="ml-auto inline-flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground">
-                <Star className="h-3 w-3" aria-hidden />
-                {member.reputationStars.toFixed(1)}
-              </span>
             )}
           </li>
         ))}

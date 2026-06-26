@@ -18,7 +18,7 @@ export default function Footer() {
               TripNARA
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Route Intelligence System
+              {t('footer.tagline')}
             </p>
           </div>
 
@@ -63,6 +63,12 @@ export default function Footer() {
                 className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
               >
                 {t('nav.about')}
+              </Link>
+              <Link
+                to="/trusted-projects"
+                className="text-muted-foreground no-underline text-sm hover:text-background transition-colors"
+              >
+                {t('footer.trustedProjects')}
               </Link>
               <Button
                 variant="ghost"

@@ -53,7 +53,7 @@ export function VibeIntentComposer({
     teamworkContractModelLabel,
     suggestedPlanningStyle,
     isLiveLlm,
-    isRuleMock,
+    isRuleMock: _isRuleMock,
     isError,
     error,
   } = useVibeLlmParse(value, {

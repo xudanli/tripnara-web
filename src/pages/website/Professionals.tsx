@@ -1,91 +1,86 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PersonSitting, PersonThinking, Compass, Mountains, Route } from '@/components/illustrations/SimpleIllustrations';
+import TrustGovernanceSection from './sections/TrustGovernanceSection';
 
 export default function ProfessionalsPage() {
   const { t } = useTranslation();
-  const [hoveredUser, setHoveredUser] = useState<string | null>(null);
 
   const targetUsers = [
     {
-      key: 'travelConsultant',
-      label: t('professionals.users.travelConsultant'),
-      desc: t('professionals.users.travelConsultantDesc'),
+      key: 'traveler',
+      label: t('professionals.users.traveler'),
+      desc: t('professionals.users.travelerDesc'),
       icon: PersonSitting,
     },
     {
-      key: 'outdoorLeader',
-      label: t('professionals.users.outdoorLeader'),
-      desc: t('professionals.users.outdoorLeaderDesc'),
+      key: 'professional',
+      label: t('professionals.users.professional'),
+      desc: t('professionals.users.professionalDesc'),
       icon: Compass,
     },
     {
-      key: 'photographyTeacher',
-      label: t('professionals.users.photographyTeacher'),
-      desc: t('professionals.users.photographyTeacherDesc'),
-      icon: Mountains,
-    },
-    {
-      key: 'explorationPlanner',
-      label: t('professionals.users.explorationPlanner'),
-      desc: t('professionals.users.explorationPlannerDesc'),
+      key: 'agency',
+      label: t('professionals.users.agency'),
+      desc: t('professionals.users.agencyDesc'),
       icon: Route,
     },
     {
-      key: 'b2bProductManager',
-      label: t('professionals.users.b2bProductManager'),
-      desc: t('professionals.users.b2bProductManagerDesc'),
-      icon: PersonThinking,
+      key: 'organizer',
+      label: t('professionals.users.organizer'),
+      desc: t('professionals.users.organizerDesc'),
+      icon: Mountains,
     },
   ];
 
   const coreValueCards = [
     {
-      key: 'feasibility',
-      title: t('professionals.coreValues.feasibility.title'),
-      subtitle: t('professionals.coreValues.feasibility.subtitle'),
+      key: 'trustGovernance',
+      title: t('professionals.coreValues.trustGovernance.title'),
+      subtitle: t('professionals.coreValues.trustGovernance.subtitle'),
       items: [
-        t('professionals.coreValues.feasibility.riskRating'),
-        t('professionals.coreValues.feasibility.fatigueModel'),
-        t('professionals.coreValues.feasibility.alternativePoints'),
-        t('professionals.coreValues.feasibility.tradeoffAdvice'),
+        t('professionals.coreValues.trustGovernance.verification'),
+        t('professionals.coreValues.trustGovernance.qualification'),
+        t('professionals.coreValues.trustGovernance.projectFit'),
+        t('professionals.coreValues.trustGovernance.reputation'),
       ],
-      icon: Compass,
+      icon: PersonSitting,
     },
     {
-      key: 'compliance',
-      title: t('professionals.coreValues.compliance.title'),
+      key: 'trustedListing',
+      title: t('professionals.coreValues.trustedListing.title'),
+      subtitle: t('professionals.coreValues.trustedListing.subtitle'),
       items: [
-        t('professionals.coreValues.compliance.visa'),
-        t('professionals.coreValues.compliance.permit'),
-        t('professionals.coreValues.compliance.environmental'),
-        t('professionals.coreValues.compliance.drone'),
-        t('professionals.coreValues.compliance.mountain'),
+        t('professionals.coreValues.trustedListing.create'),
+        t('professionals.coreValues.trustedListing.review'),
+        t('professionals.coreValues.trustedListing.publish'),
+        t('professionals.coreValues.trustedListing.manage'),
       ],
       icon: Route,
     },
     {
-      key: 'riskCalculation',
-      title: t('professionals.coreValues.riskCalculation.title'),
-      subtitle: t('professionals.coreValues.riskCalculation.subtitle'),
+      key: 'projectFit',
+      title: t('professionals.coreValues.projectFit.title'),
+      subtitle: t('professionals.coreValues.projectFit.subtitle'),
       assumptions: [
-        t('professionals.coreValues.riskCalculation.weather'),
-        t('professionals.coreValues.riskCalculation.physical'),
-        t('professionals.coreValues.riskCalculation.vehicle'),
-        t('professionals.coreValues.riskCalculation.pace'),
+        t('professionals.coreValues.projectFit.intent'),
+        t('professionals.coreValues.projectFit.capability'),
+        t('professionals.coreValues.projectFit.pace'),
+        t('professionals.coreValues.projectFit.riskTolerance'),
       ],
-      output: t('professionals.coreValues.riskCalculation.output'),
-      icon: Mountains,
+      output: t('professionals.coreValues.projectFit.output'),
+      icon: Compass,
     },
     {
-      key: 'teamCommunication',
-      title: t('professionals.coreValues.teamCommunication.title'),
+      key: 'teamOps',
+      title: t('professionals.coreValues.teamOps.title'),
+      subtitle: t('professionals.coreValues.teamOps.subtitle'),
       items: [
-        t('professionals.coreValues.teamCommunication.collaboration'),
-        t('professionals.coreValues.teamCommunication.transparency'),
-        t('professionals.coreValues.teamCommunication.attribution'),
+        t('professionals.coreValues.teamOps.application'),
+        t('professionals.coreValues.teamOps.appeal'),
+        t('professionals.coreValues.teamOps.execution'),
+        t('professionals.coreValues.teamOps.reputation'),
       ],
-      icon: PersonThinking,
+      icon: Mountains,
     },
   ];
 
@@ -134,6 +129,8 @@ export default function ProfessionalsPage() {
         </p>
       </section>
 
+      <TrustGovernanceSection showRoles={false} />
+
       {/* SECTION 2 · 用户是谁 */}
       <section
         style={{
@@ -146,13 +143,25 @@ export default function ProfessionalsPage() {
             style={{
               fontSize: 'clamp(1.8rem, 4vw, 2.2rem)',
               fontWeight: '700',
-              marginBottom: '3rem',
+              marginBottom: '1rem',
               textAlign: 'center',
               color: '#000',
             }}
           >
             {t('professionals.users.title')}
           </h2>
+          <p
+            style={{
+              fontSize: '1rem',
+              lineHeight: '1.7',
+              color: '#666',
+              textAlign: 'center',
+              maxWidth: '640px',
+              margin: '0 auto 3rem',
+            }}
+          >
+            {t('professionals.users.subtitle')}
+          </p>
 
           <div
             style={{
@@ -175,8 +184,14 @@ export default function ProfessionalsPage() {
                     transition: 'transform 0.2s, box-shadow 0.2s',
                     position: 'relative',
                   }}
-                  onMouseEnter={() => setHoveredUser(user.key)}
-                  onMouseLeave={() => setHoveredUser(null)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
                 >
                   <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
                     <Icon size={60} color="oklch(0.205 0 0)" />
@@ -187,25 +202,21 @@ export default function ProfessionalsPage() {
                       fontWeight: '600',
                       color: '#000',
                       margin: 0,
-                      marginBottom: hoveredUser === user.key ? '0.75rem' : 0,
-                      transition: 'margin-bottom 0.2s',
+                      marginBottom: '0.75rem',
                     }}
                   >
                     {user.label}
                   </p>
-                  {hoveredUser === user.key && (
-                    <p
-                      style={{
-                        fontSize: '0.9rem',
-                        color: '#666',
-                        lineHeight: '1.6',
-                        margin: 0,
-                        animation: 'fadeIn 0.2s ease-in',
-                      }}
-                    >
-                      {user.desc}
-                    </p>
-                  )}
+                  <p
+                    style={{
+                      fontSize: '0.9rem',
+                      color: '#666',
+                      lineHeight: '1.6',
+                      margin: 0,
+                    }}
+                  >
+                    {user.desc}
+                  </p>
                 </div>
               );
             })}
@@ -256,7 +267,7 @@ export default function ProfessionalsPage() {
                 {t('professionals.voice.not.title')}
               </h3>
               <ul className="list-none p-0 m-0">
-                {['mystical', 'sales', 'viral', 'overpromise'].map((key) => (
+                {['mystical', 'sales', 'viral', 'overpromise', 'creditScore', 'plazaRecruitment'].map((key) => (
                   <li
                     key={key}
                     className="py-2 text-base text-muted-foreground flex items-center gap-2"
@@ -272,7 +283,7 @@ export default function ProfessionalsPage() {
                 {t('professionals.voice.is.title')}
               </h3>
               <ul className="list-none p-0 m-0">
-                {['integrity', 'transparency', 'understanding', 'human', 'boundary'].map((key) => (
+                {['integrity', 'transparency', 'understanding', 'human', 'boundary', 'evidenceBased'].map((key) => (
                   <li
                     key={key}
                     className="py-2 text-base text-muted-foreground flex items-center gap-2"
@@ -291,7 +302,7 @@ export default function ProfessionalsPage() {
               gap: '2rem',
             }}
           >
-            {['risk', 'rejection', 'success'].map((key) => (
+            {['risk', 'rejection', 'fit', 'success'].map((key) => (
               <div
                 key={key}
                 style={{
@@ -479,7 +490,7 @@ export default function ProfessionalsPage() {
                           fontWeight: '600',
                         }}
                       >
-                        {t('professionals.coreValues.riskCalculation.assumptions')}:
+                        {t('professionals.coreValues.projectFit.assumptions')}:
                       </p>
                       <div
                         style={{

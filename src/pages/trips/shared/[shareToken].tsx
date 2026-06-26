@@ -20,6 +20,8 @@ import { Calendar, DollarSign, Download, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { toDateOnly } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { TripJsonLdScript } from '@/components/seo/TripJsonLdScript';
+import { normalizeSchemaOrgDiscovery } from '@/lib/schema-org-discovery.util';
 
 export default function SharedTripPage() {
   const { shareToken } = useParams<{ shareToken: string }>();
@@ -111,8 +113,30 @@ export default function SharedTripPage() {
   const trip = sharedTrip.trip;
   const canEdit = sharedTrip.permission === 'EDIT';
 
+  const jsonLdTripInput = {
+    destination: trip.destination,
+    startDate: trip.startDate,
+    endDate: trip.endDate,
+    days: trip.TripDay?.map((day) => ({
+      date: day.date,
+      items: day.ItineraryItem?.map((item) => ({
+        type: item.type,
+        startTime: item.startTime,
+        placeName: item.Place?.nameCN ?? item.Place?.name ?? item.Trail?.nameCN ?? item.Trail?.name,
+      })),
+    })),
+  };
+
+  const schemaOrgFromApi = normalizeSchemaOrgDiscovery(
+    sharedTrip.schemaOrgDiscovery ?? sharedTrip.schema_org_discovery
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <TripJsonLdScript
+        trip={jsonLdTripInput}
+        jsonLdOverride={schemaOrgFromApi?.jsonLd ?? null}
+      />
       <div className="p-6 max-w-6xl mx-auto space-y-6">
         {/* 头部 */}
         <div className="flex items-center gap-4">

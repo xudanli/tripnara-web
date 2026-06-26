@@ -1,6 +1,9 @@
 /**
  * 守护者面板组件
- * 
+ *
+ * @deprecated 请改用 {@link GuardianPresentationPanel}（`src/components/guardian`）。
+ * 本组件为 P0 三人卡片 UI，仅在无 `presentation` 或 `decision_committee` 时保留。
+ *
  * 展示三人格（Abu、DrDre、Neptune）的评估结果
  * - 按优先级排序：安全 > 体力 > 替代方案
  * - 支持展开查看详情

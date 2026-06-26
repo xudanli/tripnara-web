@@ -6,7 +6,9 @@ import { cn } from '@/lib/utils';
 import type { ActiveTripDashboard } from '@/types/active-trip-dashboard';
 import type { CollaborativeTaskView } from '@/types/collaborative-task-flywheel';
 import { collaborativeTasksApi } from '@/api/collaborative-tasks';
+import { decisionDnaApi } from '@/api/decision-dna';
 import { useQueryClient } from '@tanstack/react-query';
+import { triggerDecisionDnaConsentNudge } from '@/lib/decision-dna-consent-nudge';
 import { activeTripQueryKey, decisionReplayQueryKey } from '../hooks/useActiveTripDashboard';
 import { useState } from 'react';
 
@@ -44,6 +46,9 @@ function TaskRow({
     try {
       await collaborativeTasksApi.postEvent(tripId, task.id, { action });
       toast.success(action === 'confirm' ? '任务已确认' : action === 'rollback' ? '已回滚' : '已记录超时');
+      if (action === 'rollback') {
+        void triggerDecisionDnaConsentNudge(() => decisionDnaApi.getConsent());
+      }
       onDone();
     } catch {
       toast.error('任务更新失败');

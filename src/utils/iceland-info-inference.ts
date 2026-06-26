@@ -4,7 +4,7 @@
  * 根据行程数据动态推断冰岛信息源API的调用参数，避免硬编码
  */
 
-import type { TripDetail, ItineraryItem } from '@/types/trip';
+import type { TripDetail } from '@/types/trip';
 import type { GetWeatherParams, GetSafetyParams, GetRoadConditionsParams } from '@/types/iceland-info';
 
 /**
@@ -77,7 +77,7 @@ export function inferHighlandRegion(trip: TripDetail | null): 'centralhighlands'
   }
 
   // 高地区域关键词映射
-  const regionKeywords: Record<string, Array<'centralhighlands' | 'southhighlands' | 'northhighlands'>> = {
+  const regionKeywords: Record<string, string[]> = {
     // 中央高地
     centralhighlands: [
       'landmannalaugar', '兰德曼纳劳卡',

@@ -29,6 +29,8 @@ interface CoverageMiniMapProps {
   onGapClick?: (gap: CoverageGap) => void;
   className?: string;
   height?: number;
+  /** 高亮选中的 POI（路线覆盖 Tab 侧栏联动） */
+  selectedPoiId?: string;
 }
 
 // POI 覆盖状态颜色
@@ -61,6 +63,7 @@ export default function CoverageMiniMap({
   onGapClick,
   className,
   height = 400,
+  selectedPoiId,
 }: CoverageMiniMapProps) {
   const { t } = useTranslation();
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -294,15 +297,16 @@ export default function CoverageMiniMap({
 
     // 添加 POI 标记
     data.pois.forEach((poi, index) => {
+      const isSelected = selectedPoiId === poi.id;
       const el = document.createElement('div');
       el.className = 'coverage-marker';
       el.style.cssText = `
-        width: 28px;
-        height: 28px;
+        width: ${isSelected ? 34 : 28}px;
+        height: ${isSelected ? 34 : 28}px;
         border-radius: 50%;
         background-color: ${POI_COLORS[poi.coverageStatus]};
-        border: 3px solid white;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        border: ${isSelected ? '4px solid #0ea5e9' : '3px solid white'};
+        box-shadow: ${isSelected ? '0 0 0 3px rgba(14,165,233,0.35), 0 2px 8px rgba(0,0,0,0.35)' : '0 2px 6px rgba(0,0,0,0.3)'};
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -310,6 +314,7 @@ export default function CoverageMiniMap({
         font-size: 12px;
         font-weight: bold;
         color: white;
+        transition: width 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
       `;
       el.innerHTML = `${index + 1}`;
 
@@ -401,7 +406,7 @@ export default function CoverageMiniMap({
       markersRef.current.push(marker);
       popupsRef.current.push(popup);
     });
-  }, [data, mapLoaded, t, onPoiClick, onSegmentClick, onGapClick, cleanupMarkers]);
+  }, [data, mapLoaded, t, onPoiClick, onSegmentClick, onGapClick, cleanupMarkers, selectedPoiId]);
 
   // 没有 Token 的提示
   if (!MAPBOX_TOKEN) {
@@ -553,6 +558,12 @@ export default function CoverageMiniMap({
             </div>
           </div>
         )}
+
+        {data?.phaseHint ? (
+          <div className="px-3 py-2 border-t bg-slate-50 text-xs text-muted-foreground leading-snug">
+            {data.phaseHint}
+          </div>
+        ) : null}
 
         {/* 缺口列表 - 仅在有数据且有缺口时显示 */}
         {data?.gaps && data.gaps.length > 0 && (

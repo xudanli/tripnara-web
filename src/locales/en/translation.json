@@ -18,17 +18,18 @@
       "executableSchedule": "Executable Schedule Generation",
       "planB": "Plan B Alternative System",
       "riskDem": "Risk & DEM Risk Assessment",
-      "travelReadiness": "Travel Readiness Pre-Trip Preparation"
+      "travelReadiness": "Trusted Projects & Project Fit"
     }
   },
   "hero": {
     "title": "Your dreams are not just wishful thinking.",
-    "subtitle1": "TripNARA helps you turn \"I want to go\" into a travel route you can truly complete.",
-    "subtitle2": "From route direction and risk assessment to executable schedules, we ensure plans are not only beautiful, but realistic and reliable.",
+    "subtitle1": "TripNARA turns \"I want to go\" into a route you can truly finish — and when you need a team, matches through Trusted Projects and project-fit assessment.",
+    "subtitle2": "Route direction, risk, executable schedules, and four-layer trust governance — one decision logic; no composite credit score.",
     "cta1": "Start Planning My Route",
     "cta2": "See How TripNARA Makes Decisions",
-    "microCopy1": "Inspiration ✓ → Route → Schedule → Executable Checklist",
-    "microCopy2": "Dreams can be calculated into executable plans."
+    "cta3": "Browse Trusted Projects",
+    "microCopy1": "Inspiration → Route → Schedule → Trusted team",
+    "microCopy2": "Dreams become executable plans; trust becomes four verifiable layers."
   },
   "heroFeatures": {
     "card1": {
@@ -44,7 +45,22 @@
       "title": "If circumstances change, it won't fall apart",
       "description": "Closed? Weather? Insufficient energy? The system automatically generates optimal replacement solutions."
     },
-    "bottomCTA": "Turn dreams into routes →"
+    "card4": {
+      "title": "Verifiable teams — not credit-score rankings",
+      "description": "Join through Trusted Projects and tiered project-fit assessment — replaces public plaza recruitment.",
+      "tag": "Four-layer trust · Trusted Projects"
+    },
+    "bottomCTA": "Turn dreams into routes →",
+    "testimonial1": {
+      "quote": "I finally finished a whole route without the plan falling apart mid-trip.",
+      "author": "Ming Z.",
+      "role": "Traveler"
+    },
+    "testimonial2": {
+      "quote": "As a certified Professional Organizer, Trusted Projects + fit assessment makes team formation feel grounded — not stranger credit scores.",
+      "author": "Hua L.",
+      "role": "Professional · Organizer"
+    }
   },
   "problem": {
     "title": "Most travel tools recommend more places.\nWe first ask whether the route itself makes sense.",
@@ -67,18 +83,29 @@
     "validation": "Your plan won't exist without physical world validation."
   },
   "decisionComparison": {
-    "title": "How TripNARA Differs from Regular Travel Apps",
-    "traditional": "Traditional",
+    "title": "How TripNARA redefines travel planning",
+    "traditional": "Traditional travel app",
     "tripnara": "TripNARA",
     "step1": "Should it exist?",
+    "step1Desc": "Start from goals — is this route worth existing?",
     "step2": "Structured route",
+    "step2Desc": "Nodes, pace, and logic form a closed loop",
     "step3": "Risk validation",
-    "step4": "Executable",
-    "description1": "We don't start with \"recommending more places.\" We start with a more fundamental question:",
+    "step3Desc": "Safety and feasibility before execution",
+    "step4": "Executable plan",
+    "step4Desc": "Full itinerary with Plan B built in",
+    "step5": "Trusted team formation",
+    "step5Desc": "Trusted Projects + tiered fit — not plaza recruitment or credit scores",
+    "description1": "We don't start with \"recommend more places.\"",
+    "description2": "We start with a more fundamental question:",
     "question": "Should this route exist at all?",
     "traditionalStep1": "Attraction list",
     "traditionalStep2": "Sort",
-    "traditionalStep3": "Piece together \"itinerary\""
+    "traditionalStep3": "Piece together itinerary",
+    "traditionalStep4": "Plaza recruitment / credit score",
+    "traditionalFocus": "Focus on where to go and traffic-style team matching",
+    "tripnaraFocus": "Focus on whether you should go — and whether the team fit is verifiable",
+    "existBadge": "exist"
   },
   "personas": {
     "title": "Three Partners Helping You Make Better Travel Decisions",
@@ -147,10 +174,32 @@
   "planStudio": {
     "title": "Plan Studio",
     "subtitle": "Make routes \"executable\": From intent to schedule",
+    "decisionStrip": {
+      "idleHeadline": "Describe your needs to the assistant, or fine-tune the schedule below",
+      "compareLabel": "Plan comparison",
+      "scoreLabel": "Trip score",
+      "viewDetails": "View rationale",
+      "recommendedOption": "Recommended",
+      "openEvidence": "Open decision evidence",
+      "collapse": "Collapse",
+      "kernelOverride": "Kernel gate overrode LLM recommendation",
+      "verifyStep": "Feasibility verification",
+      "decisionLogTitle": "Recent decisions",
+      "decisionLogLoading": "Loading decision log…",
+      "cta": {
+        "openAssistant": "Open assistant",
+        "openPlanGate": "Compare plans",
+        "adjustSchedule": "Adjust timing",
+        "openFeasibility": "Adjust plan",
+        "optimize": "Optimize",
+        "viewProgress": "View progress"
+      }
+    },
     "tabs": {
       "intent": "Intent & Constraints",
       "places": "Places",
       "schedule": "Schedule",
+      "coverage": "Route Coverage",
       "workbench": "Plan preview & submit",
       "planGate": "Plan preview & submit",
       "bookings": "Bookings"
@@ -304,15 +353,10 @@
         "all": "All",
         "attraction": "Attraction",
         "restaurant": "Restaurant",
-        "cafe": "Cafe",
-        "bar": "Bar",
         "shopping": "Shopping",
         "hotel": "Hotel",
-        "museum": "Museum",
-        "park": "Park",
-        "transport": "Transport Hub",
         "transitHub": "Transit Hub",
-        "other": "Other"
+        "hospital": "Medical"
       }
     },
     "optimizeTab": {
@@ -638,116 +682,244 @@
     "fatigue": "Fatigue Trend"
   },
   "userStories": {
-    "title": "See How People Use TripNARA",
+    "title": "How real users use TripNARA",
     "story1": {
       "title": "Iceland Ring Road",
-      "subtitle": "First judge feasibility"
+      "subtitle": "Judge feasibility first"
     },
     "story2": {
       "title": "New Zealand Hiking",
-      "subtitle": "Risk management"
+      "subtitle": "Risk & pace"
     },
     "story3": {
-      "title": "European Train",
-      "subtitle": "Structured route"
-    }
+      "title": "European Rail",
+      "subtitle": "Structured connections"
+    },
+    "story4": {
+      "title": "Sichuan Trek · Trusted team",
+      "subtitle": "Project fit + four-layer trust"
+    },
+    "viewAll": "View all stories →"
   },
   "professionalUsers": {
-    "title": "TripNARA is Also Used by These People",
-    "user1": "Travel Consultant",
-    "user2": "Hiking Leader",
-    "user3": "Exploration Photographer",
-    "user4": "Outdoor Guide",
-    "description": "Trustworthy · Professional · Decision-making ability"
+    "title": "Who Uses TripNARA",
+    "user1": "Traveler",
+    "user2": "Professional (certified)",
+    "user3": "Agency",
+    "user4": "Organizer (project role)",
+    "description": "Verification · Qualification · Project Fit · Reputation — four independent layers, no composite credit score"
+  },
+  "websiteTrust": {
+    "title": "Trust & roles: how we decide who can lead",
+    "subtitle": "No composite credit score and no stranger ratings. Verification, qualification, project fit, and reputation are separate and inspectable.",
+    "noCreditScore": "We do not show composite credit scores or integrate third-party credit scores.",
+    "pillarsTitle": "Four trust pillars",
+    "pillars": {
+      "verification": {
+        "title": "Verification",
+        "description": "Phone, email, real name, and age checks. Proves who you are — not whether you are qualified to lead or fit a specific project."
+      },
+      "qualification": {
+        "title": "Qualification",
+        "description": "Professional (individual) and Agency (organization) certification. Background and compliance review determines whether you can publish Trusted Projects."
+      },
+      "projectFit": {
+        "title": "Project Fit",
+        "description": "Four-dimension assessment per Trusted Project (intent, capability, pace, risk tolerance). Results are tiered — not a 0–100 composite score."
+      },
+      "reputation": {
+        "title": "Reputation",
+        "description": "Fact-based counts and records (e.g. completed projects, dispute outcomes). No composite stranger credit score or public leaderboard."
+      }
+    },
+    "rolesTitle": "Account & project roles",
+    "rolesSubtitle": "Subscription unlocks tools; Professional / Agency certification unlocks publishing; Organizer is a project-scoped role, not a membership tier.",
+    "roles": {
+      "traveler": {
+        "title": "Traveler",
+        "description": "Plan private trips and apply to Trusted Projects. After identity verification, browse the market and submit project-fit assessments."
+      },
+      "professional": {
+        "title": "Professional",
+        "description": "Individual guides, consultants, and leaders. After certification, apply for publishing permission and recruit via Trusted Projects."
+      },
+      "agency": {
+        "title": "Agency",
+        "description": "Studios, travel companies, and expedition teams. After agency certification, members publish and manage projects in the organization context."
+      },
+      "organizer": {
+        "title": "Organizer",
+        "description": "Organizer/publisher role for a specific Trusted Project. Granted when you create or take over a project; history is retained after the trip ends."
+      }
+    },
+    "trustedProjects": {
+      "title": "Trusted Projects replace public plaza recruitment",
+      "description": "Team formation happens through Trusted Projects: publishing requires certification and review; members join after project-fit assessment. Public plaza recruitment is discontinued.",
+      "cta": "Browse Trusted Projects →"
+    }
   },
   "faq": {
     "title": "Frequently Asked Questions",
     "question1": "Will TripNARA decide everything for me?",
-    "answer1": "No. We'll give you \"suggestions + evidence + alternatives.\""
+    "answer1": "No. We provide suggestions, evidence, and alternatives — the final call is yours.",
+    "question2": "Does TripNARA have a credit score?",
+    "answer2": "No. We do not show composite credit scores or rank strangers. Verification, Professional / Agency qualification, project-fit assessment, and reputation are four independent layers you can review in account governance.",
+    "question3": "What account roles exist?",
+    "answer3": "Traveler for personal planning and joining projects; Professional and Agency are certifications (review required); Organizer is the role within a specific Trusted Project. Subscription plans unlock tools — they do not replace professional or agency certification.",
+    "question4": "How do I publish a group trip?",
+    "answer4": "Create a listing under Trusted Projects. You need Professional or Agency certification plus publishing permission. Members apply after a project-fit questionnaire — public plaza recruitment is no longer used."
   },
   "finalCTA": {
-    "title": "Turn dreams into routes you can truly complete",
+    "title": "Turn dreams into routes you can finish — and teams you can trust",
     "button1": "Start Planning →",
-    "button2": "See How TripNARA Makes Decisions →"
+    "button2": "See How TripNARA Makes Decisions →",
+    "button3": "Browse Trusted Projects →"
   },
   "tiers": {
     "title": "Product Tiers",
     "explorer": {
-      "name": "Explorer",
-      "description": "For individual travelers"
+      "name": "Free · Traveler",
+      "description": "Personal planning and Trusted Projects"
     },
     "navigator": {
-      "name": "Navigator",
-      "description": "For small teams"
+      "name": "Pro",
+      "description": "Small team collaboration"
     },
     "pathfinder": {
-      "name": "Pathfinder",
-      "description": "For professionals"
+      "name": "Professional Pro",
+      "description": "Full toolkit for teams and agencies (certification separate)"
     }
   },
   "whoUses": {
     "title": "Who Uses TripNARA",
-    "deepTravelers": "Deep Travelers",
-    "expeditionTeams": "Expedition Teams",
-    "insurance": "Insurance & Compliance",
-    "travelDesigners": "High-End Travel Designers"
+    "travelers": "Travelers",
+    "organizers": "Professional · Organizer",
+    "agencies": "Agency",
+    "teams": "Small team co-planning"
   },
   "closing": {
-    "title": "We don't optimize trips.\nWe help you avoid a decision you shouldn't make.",
+    "title": "We don't optimize trips or sell credit scores.\nWe help you avoid decisions you shouldn't make — and form verifiable teams.",
     "cta": "Start Planning"
   },
   "product": {
-    "title": "TripNARA is a Route & Decision System",
+    "title": "TripNARA is a Route, Decision & Trust System",
     "hero": {
-      "subtitle": "We don't recommend more places. Instead, we help you judge whether a route should exist and transform it into a truly executable travel plan.",
+      "line1": "We don't recommend more places.",
+      "line2": "We help you judge whether a route should exist,",
+      "line3": "and when you need a team, match through Trusted Projects and project-fit assessment — not credit scores.",
+      "subtitle": "Route decisions + four-layer trust + Trusted Projects — no composite credit score.",
       "cta1": "Start Planning →",
       "cta2": "View System Principles →"
+    },
+    "modules": {
+      "title": "Core Product Modules",
+      "subtitle": "One decision logic from personal planning through Trusted Project team formation"
     },
     "module1": {
       "title": "RouteDirection™",
       "description": "Route Direction Engine",
       "scene": "Use Cases",
-      "value": "Value"
+      "sceneContent": "Multi-region, multi-day trips with high uncertainty",
+      "value": "Value",
+      "valueContent": "Judge whether the route should exist before structure and schedules"
     },
     "module2": {
       "title": "Executable Schedule Generation",
       "description": "Transform routes into daily executable structures",
       "scene": "Use Cases",
-      "value": "Value"
+      "sceneContent": "Trips needing precise timing and pace control",
+      "value": "Value",
+      "valueContent": "Balance transit, stops, and buffer so each day is completable"
     },
     "module3": {
       "title": "Plan B Alternatives",
       "description": "Automatically generate replacement solutions",
       "scene": "Use Cases",
-      "value": "Value"
+      "sceneContent": "Weather, closures, fatigue, and other disruptions",
+      "value": "Value",
+      "valueContent": "Structured alternatives that preserve route integrity"
     },
     "module4": {
       "title": "Risk & DEM",
       "description": "Terrain-based risk assessment",
       "scene": "Use Cases",
-      "value": "Value"
+      "sceneContent": "Outdoor, high-altitude, and complex terrain routes",
+      "value": "Value",
+      "valueContent": "Real terrain data validates feasibility — not wishful planning"
     },
     "module5": {
-      "title": "Travel Readiness",
-      "description": "Complete pre-trip preparation checklist",
+      "title": "Trusted Projects & Project Fit",
+      "description": "Verifiable team formation and publishing",
       "scene": "Use Cases",
-      "value": "Value"
+      "sceneContent": "Leader recruitment, member applications, Organizer roster review",
+      "value": "Value",
+      "valueContent": "Four-layer trust + tiered fit results — replaces plaza recruitment and credit rankings"
     },
     "workflow": {
-      "title": "Workflow",
-      "step1": "First judge whether the route should exist",
-      "step2": "Automatically generate executable schedules",
-      "step3": "Risk assessment and buffer control",
-      "step4": "Plan B replacement and repair"
+      "title": "End-to-end workflow",
+      "step1": "Judge whether the route should exist",
+      "step1Desc": "Start from goals and constraints — is this route worth existing?",
+      "step2": "Generate executable structure and schedule",
+      "step2Desc": "Nodes, pace, and buffer form a logical loop",
+      "step3": "Risk validation and Plan B",
+      "step3Desc": "Terrain and conditions checked; structured backups prepared",
+      "step4": "Trusted Projects and fit matching",
+      "step4Desc": "Publish or join listings; complete tiered fit assessment and roster review",
+      "step5": "In-trip execution and reputation archival",
+      "step5Desc": "Abu/Dr.Dre/Neptune in-trip guardrails; reputation retained after the trip"
     },
     "reliable": {
       "title": "Why Reliable",
       "firstPrinciples": "First Principles",
-      "dataRigorous": "Data/Logic Rigor",
-      "aiStructure": "AI + Structured Algorithms"
+      "firstPrinciplesDesc": "Start from \"should this route exist?\" — not stacking more attractions",
+      "trustGovernance": "Four-layer trust governance",
+      "trustGovernanceDesc": "Verification, qualification, project fit, and reputation are independent — no composite credit score",
+      "dataRigorous": "Data & evidence",
+      "dataRigorousDesc": "DEM terrain, weather, and decision logs support every judgment",
+      "aiStructure": "AI + structured algorithms",
+      "aiStructureDesc": "AI suggests; structured algorithms and tiered fit keep plans executable and explainable",
+      "expandTitle": "TripNARA restores the core questions of travel and team formation:",
+      "expandPoint1": "Should the route exist? (first principles)",
+      "expandPoint2": "Can it be executed? (structure and pace)",
+      "expandPoint3": "Is it safe and recoverable? (risk and Plan B)",
+      "expandPoint4": "Is the team verifiable? (Trusted Projects + fit — not credit rankings)",
+      "expandButton": "Show details",
+      "collapseButton": "Hide details"
     },
     "cta": {
-      "text": "Start Experience →"
+      "text": "Start Planning →",
+      "trustedProjects": "Browse Trusted Projects →"
+    },
+    "comparison": {
+      "title": "How we differ from ordinary tools",
+      "columnDimension": "Dimension",
+      "columnTraditional": "Typical travel app",
+      "columnTripnara": "TripNARA",
+      "dimension1": "Starting logic",
+      "dimension2": "Structure",
+      "dimension3": "Adaptability",
+      "dimension4": "Risk handling",
+      "dimension5": "Team & trust",
+      "traditional1": "Attraction recommendation lists",
+      "traditional2": "Pin attractions by interest",
+      "traditional3": "None / manual edits",
+      "traditional4": "Manual weather and safety checks",
+      "traditional5": "Plaza recruitment, composite credit scores, stranger ratings",
+      "tripnara1": "Logic for whether a route should exist",
+      "tripnara2": "Pace + buffer balancing algorithms",
+      "tripnara3": "Auto-generated structured Plan B",
+      "tripnara4": "Terrain + conditions + algorithmic assessment",
+      "tripnara5": "Trusted Projects + tiered fit + four-layer trust governance"
+    },
+    "systemDiagram": {
+      "title": "System architecture",
+      "step1": "User input (goals / preferences / team needs)",
+      "step2": "Route feasibility (RouteDirection)",
+      "step3": "Structure generation (pace / time / nodes)",
+      "step4": "Risk assessment (terrain / climate / safety)",
+      "step5": "Plan B alternatives",
+      "step6": "Trust & fit (Trusted Project listing / tiered assessment)",
+      "output": "Output: executable itinerary + verifiable team structure (with backups)"
     },
     "firstPrinciples": {
       "title": "First Principles",
@@ -777,199 +949,296 @@
   "professionals": {
     "hero": {
       "title": "TripNARA PRO",
-      "subtitle": "Route Responsibility Tools for Professional Creators"
+      "subtitle": "Route responsibility tools for professional creators — with four-layer trust and Trusted Projects publishing"
     },
     "users": {
-      "title": "Who Are Our Users?",
-      "travelConsultant": "Travel Consultant",
-      "outdoorLeader": "Outdoor Leader",
-      "photographyTeacher": "Photography & Travel Teacher",
-      "explorationPlanner": "Exploration / Polar Planner",
-      "b2bProductManager": "B2B Travel Product Manager"
+      "title": "Who are our users?",
+      "subtitle": "TripNARA separates account roles from project roles. Subscription unlocks tools; Professional / Agency certification unlocks publishing; Organizer is granted per Trusted Project.",
+      "traveler": "Traveler",
+      "travelerDesc": "Plan private trips, browse Trusted Projects, and submit project-fit assessments after identity verification.",
+      "professional": "Professional",
+      "professionalDesc": "Individual guides, consultants, and leaders. After certification, apply for publishing permission and recruit via Trusted Projects.",
+      "agency": "Agency",
+      "agencyDesc": "Studios, travel companies, and expedition teams. After agency certification, members publish and manage projects in the organization context.",
+      "organizer": "Organizer",
+      "organizerDesc": "Organizer/publisher role for a specific Trusted Project — not a membership tier. History is retained after the trip ends."
     },
     "coreValues": {
-      "feasibility": {
-        "title": "Feasibility Assessment",
-        "subtitle": "Input Route → Output Feasibility Report",
-        "riskRating": "Risk Rating",
-        "fatigueModel": "Fatigue Model",
-        "alternativePoints": "Alternative Points",
-        "tradeoffAdvice": "Trade-off Recommendations"
+      "title": "Core Modules",
+      "subtitle": "Certification → Publish → Fit → Team execution",
+      "trustGovernance": {
+        "title": "Four-layer trust governance",
+        "subtitle": "Reviewed in account governance — independent layers, no composite score",
+        "verification": "Verification: phone, email, real name, age",
+        "qualification": "Qualification: Professional / Agency review",
+        "projectFit": "Project Fit: four-dimension assessment per listing",
+        "reputation": "Reputation: fact-based counts, no credit score synthesis"
       },
-      "compliance": {
-        "title": "Compliance Assistant",
-        "visa": "Visa",
-        "permit": "Permits",
-        "environmental": "Environmental Zones",
-        "drone": "Drone Restrictions",
-        "mountain": "Mountain Climbing Regulations"
+      "trustedListing": {
+        "title": "Trusted Project publishing",
+        "subtitle": "The formal flow that replaces public plaza recruitment",
+        "create": "Create a listing linked to a route template or trip context",
+        "review": "Configure fit rules, deposit, and document requirements",
+        "publish": "Go live after listing review approval",
+        "manage": "Organizer manages applications, roster, and project status"
       },
-      "riskCalculation": {
-        "title": "Risk Calculation",
-        "subtitle": "Scenario Changes:",
-        "assumptions": "Scenario Changes",
-        "weather": "Weather",
-        "physical": "Physical Condition",
-        "vehicle": "Vehicle Status",
-        "pace": "Pace",
-        "output": "Recalculate Feasibility"
+      "projectFit": {
+        "title": "Project Fit assessment",
+        "subtitle": "Structured questionnaire before members join a listing",
+        "assumptions": "Assessment dimensions",
+        "intent": "Participation intent",
+        "capability": "Capability match",
+        "pace": "Pace expectations",
+        "riskTolerance": "Risk tolerance",
+        "output": "Tiered fit result — not a 0–100 composite score"
       },
-      "teamCommunication": {
-        "title": "Team Communication Mode",
-        "collaboration": "Multi-person Collaboration",
-        "transparency": "Transparent Decision-making",
-        "attribution": "Clear Responsibility Attribution"
+      "teamOps": {
+        "title": "Team formation & in-trip ops",
+        "subtitle": "From application review through execution",
+        "application": "Application center: member submissions and Organizer review",
+        "appeal": "Appeals & disputes: fit appeals and reputation disputes",
+        "execution": "Route planning, risk validation, and Plan B in-trip guardrails",
+        "reputation": "Post-trip reputation and record archival"
       }
     },
-    "infrastructure": "You Are Building Industry Infrastructure",
+    "infrastructure": "You are building verifiable leadership infrastructure — not a traffic platform, but a route and trust system",
     "voice": {
       "title": "Brand Voice & Tone Guide",
-      "subtitle": "TripNARA's Voice = Calm, Respectful of Reality, But Always on Humanity's Side",
+      "subtitle": "TripNARA's voice = calm, reality-respecting, verifiable, always on humanity's side",
       "not": {
         "title": "Not",
         "mystical": "Mystical AI",
-        "sales": "Sales Pitch",
-        "viral": "Viral Hype",
-        "overpromise": "Over-promising"
+        "sales": "Sales pitch",
+        "viral": "Viral hype",
+        "overpromise": "Over-promising",
+        "creditScore": "Composite credit scores or stranger rating leaderboards",
+        "plazaRecruitment": "Public plaza-style open recruitment"
       },
       "is": {
         "title": "But",
         "integrity": "Integrity",
         "transparency": "Transparency",
-        "understanding": "Help Users Understand the World",
+        "understanding": "Help users understand the world",
         "human": "Human-centered",
-        "boundary": "With Boundaries"
+        "boundary": "With boundaries",
+        "evidenceBased": "Evidence-based judgment and tiered fit results"
       },
       "examples": {
         "risk": {
-          "title": "When Risks Appear",
+          "title": "When risks appear",
           "text": "This route has significantly higher risk than average under current conditions. We recommend choosing a safer alternative."
         },
         "rejection": {
-          "title": "When We Need to Refuse",
-          "text": "For safety reasons, we cannot recommend this route. This is how we take responsibility for travel."
+          "title": "When we need to refuse",
+          "text": "For safety reasons, we won't recommend this route — and when project fit isn't sufficient, we won't place the wrong person on the team."
+        },
+        "fit": {
+          "title": "When fit is insufficient",
+          "text": "Based on your pace and risk answers, this listing is currently tiered as \"needs alignment.\" Talk with the Organizer first, or choose a better-matched listing."
         },
         "success": {
-          "title": "When Journey Succeeds",
-          "text": "What truly makes the journey successful is your choices and commitment. We are just your partner."
+          "title": "When the journey succeeds",
+          "text": "What truly makes the journey work is your commitment — plus verified team matching. We are your partner, not your score."
         }
       }
     },
     "journey": {
-      "title": "Real User Journey Map",
-      "subtitle": "Your product journey is already very clear",
+      "title": "Professional user journey",
+      "subtitle": "From certification to publishing, team formation, and in-trip execution",
       "discovery": {
-        "title": "Discovery Stage",
-        "description": "User wants to travel but feels uncertain, doesn't want cookie-cutter trips, wants to \"take it seriously\" → Enters TripNARA"
+        "title": "Understand four-layer trust",
+        "description": "Enter TripNARA PRO and learn how verification, qualification, project fit, and reputation work independently — no composite credit score."
       },
       "understanding": {
-        "title": "Understanding Stage",
-        "description": "They discover: Oh, this isn't a travel app, this is—a Route Responsibility System. Trust + Relief"
+        "title": "Certification & publishing permission",
+        "description": "Apply for Professional or Agency certification and publishing permission. Subscription unlocks tools — it does not replace qualification review."
       },
       "profile": {
-        "title": "Build Profile",
-        "description": "Complete 3 questions, generate HumanCapabilityModel"
+        "title": "Complete account governance",
+        "description": "Review four-layer trust status in account governance and submit verification or organization materials as needed."
       },
       "routeDirection": {
-        "title": "RouteDirection Selection",
-        "description": "System provides: Optimal direction, explanation, risk warnings → Rational + Human"
+        "title": "Create a Trusted Project",
+        "description": "Create a listing linked to a route template or existing trip — you become the Organizer for that project."
       },
       "planning": {
-        "title": "Route Building",
-        "description": "User participates, not just consumes. TripNARA is like a partner, not a \"tour guide\""
+        "title": "Configure fit rules",
+        "description": "Set project-fit questionnaire, rule templates, deposit, and document requirements before submitting for review."
       },
       "preparation": {
-        "title": "Execution Preparation",
-        "description": "Risk coverage, budget monitoring, pace balance, backup plans → Psychological security ↑↑↑"
+        "title": "Review, publish & recruit",
+        "description": "After listing approval, go public. Members browse the market, submit fit assessments, and apply to join."
       },
       "execution": {
-        "title": "Travel Execution",
-        "description": "Abu/Dr.Dre/Neptune continuously guard"
+        "title": "Roster review & in-trip execution",
+        "description": "Organizer reviews applications in the application center. Once the team is set, route planning, risk validation, and Abu/Dr.Dre/Neptune in-trip guardrails run together."
       },
       "review": {
-        "title": "Review",
-        "description": "Journey is understood, value is preserved"
+        "title": "Close project & archive reputation",
+        "description": "After the trip, the project archives. Reputation records and Organizer role history are retained for future listings."
       }
     },
     "manifesto": {
       "title": "Brand Manifesto",
-      "line1": "TripNARA doesn't sell travel; we take seriously \"how routes should be walked\"",
-      "line2": "We believe travel is not escaping reality, but facing the world in a more dignified and mature way",
-      "line3": "We only recommend routes that are feasible",
-      "commitment": "This is our promise to the world"
+      "line1": "TripNARA doesn't sell travel — we take seriously how routes should be walked and teams should be formed",
+      "line2": "We believe",
+      "line3": "trust should not be compressed into one score,",
+      "line4": "but split into verifiable, appealable, reviewable chains of responsibility.",
+      "line5": "When the route holds and the team matches, then we recommend.",
+      "commitment": "— This is our promise to professionals and members."
     }
   },
   "pricing": {
-    "title": "Clear, Simple, No Hidden Fees",
-    "heroSubtitle": "Clear, Simple, No Hidden Fees",
+    "title": "Clear, simple, no hidden fees",
+    "heroSubtitle": "Subscription unlocks planning tools. Professional / Agency certification and Trusted Projects publishing are applied for separately — not included in the prices below.",
+    "subscriptionNote": "Plans below are subscriptions. Certification and publishing permissions are independent and applied for in account governance.",
     "free": "Free",
     "pro": "Pro",
-    "professional": "Professional / Team",
+    "professional": "Professional Pro",
     "custom": "Custom",
     "perMonth": "/month",
     "explorer": {
-      "name": "Free",
+      "name": "Free · Traveler",
       "price": "Free",
-      "description": "For individual travelers",
+      "description": "Personal planning and joining Trusted Projects",
       "features": {
-        "basic": "Basic route validation",
-        "dem": "DEM terrain checking",
-        "log": "Decision log access"
+        "basic": "Basic route validation and decision log",
+        "dem": "DEM terrain viewing",
+        "trustedProjects": "Browse Trusted Projects and submit fit assessments",
+        "log": "Identity verification and governance dashboard"
       }
     },
     "navigator": {
       "name": "Pro",
       "price": "$29/month",
-      "description": "For small teams",
+      "description": "For small teams of 2–6 co-planning",
       "features": {
-        "advanced": "Advanced route intelligence",
-        "personas": "Multi-persona system",
-        "routeDirection": "RouteDirection access",
+        "advanced": "Advanced route intelligence and feasibility checks",
+        "personas": "Multi-person capability profiles and pace matching",
+        "routeDirection": "RouteDirection strategy access",
         "support": "Priority support"
       }
     },
     "pathfinder": {
-      "name": "Professional / Team",
+      "name": "Professional Pro",
       "price": "Custom",
-      "description": "For professionals",
+      "description": "Full toolkit for professional teams and agencies",
       "features": {
-        "full": "Full route judgment system",
-        "compliance": "B2B safety & compliance",
-        "integrations": "Custom integrations",
-        "dedicated": "Dedicated support"
+        "full": "Full route decision and collaboration tools",
+        "compliance": "Enterprise safety and compliance configuration",
+        "integrations": "API, permissions, and white-label integrations",
+        "dedicated": "Dedicated advisor support"
       }
+    },
+    "certification": {
+      "title": "Qualification (separate application · not a subscription)",
+      "description": "To publish group listings on Trusted Projects, you need Professional or Agency certification plus publishing permission. Review is free and independent of subscription.",
+      "professionalTitle": "Professional (individual)",
+      "professionalDesc": "Guides, consultants, and individual leaders. Background and compliance review, then apply for publishing permission.",
+      "agencyTitle": "Agency (organization)",
+      "agencyDesc": "Studios, travel companies, and expedition teams. Members collaborate and publish in the organization context.",
+      "cta": "Learn about professionals & certification →"
     },
     "faq": {
       "title": "FAQ",
-      "cancelable": "Is it cancelable?",
-      "teamSupport": "Is there team support?",
-      "dataPrivacy": "Data Privacy",
-      "countrySupport": "Country Support"
+      "cancelable": "Can I cancel my subscription anytime?",
+      "cancelableAnswer": "Yes. Pro and other plans are billed monthly and can be cancelled in account settings. Access continues through the current billing period.",
+      "teamSupport": "Is subscription the same as certification?",
+      "teamSupportAnswer": "No. Subscription unlocks planning tools. Professional / Agency certification determines whether you can publish Trusted Projects. Organizer is a project-scoped role when you create or take over a listing.",
+      "dataPrivacy": "What else is needed to publish a Trusted Project?",
+      "dataPrivacyAnswer": "Beyond Professional or Agency certification, you need publishing permission and listing review. Members join via project-fit assessment — no composite credit score or public ranking.",
+      "countrySupport": "What can the free plan do?",
+      "countrySupportAnswer": "Plan personal routes, browse the Trusted Projects market, submit fit assessments, and review four-layer trust information in account governance."
     },
     "cta": {
       "try": "Start Trial →",
-      "contact": "Contact Us →"
+      "contact": "Contact Us →",
+      "hint": "Not sure which plan fits? We can help with your route needs and certification path."
     }
   },
   "stories": {
-    "title": "Real Travel, Real Decisions",
-    "subtitle": "See how TripNARA accompanies different travelers, turning dreams into executable routes.",
+    "title": "Real travel, real decisions",
+    "subtitle": "Every trip decision has reviewable logic — from route feasibility to trusted team formation.",
+    "subtitle2": "See how they turned \"I want to go\" into routes that finish — and teams that fit.",
+    "allCategories": "All",
+    "trustedProjectsCta": "Browse Trusted Projects →",
     "categories": {
       "hiking": "Hiking",
       "photography": "Photography",
       "roadTrip": "Road Trip",
       "family": "Family",
       "polar": "Polar/Exploration",
-      "europeanRail": "European Rail"
+      "europeanRail": "European Rail",
+      "teamFormation": "Trusted teams"
     },
     "card": {
-      "travelerType": "Traveler Type",
+      "travelerType": "Role",
       "destination": "Destination",
-      "keyDecision": "Key Decision Points",
+      "keyDecision": "Key decision points",
       "risk": "Risk",
       "replacement": "Replacement",
-      "rhythm": "Rhythm",
-      "elevation": "Elevation"
+      "rhythm": "Pace",
+      "elevation": "Elevation",
+      "goal": "Goal",
+      "keywords": "Keywords",
+      "clickToView": "Click to view route details"
+    },
+    "story1": {
+      "title": "Iceland Ring Road",
+      "travelerType": "Traveler",
+      "destination": "Iceland",
+      "goal": "Complete the ring road and reach the blue ice cave in winter conditions",
+      "keywords": "F-Road risk · Weather Plan B · Pace tuning",
+      "tags": {
+        "risk": "F-Road assessment",
+        "replacement": "Weather backup",
+        "rhythm": "Daily pace",
+        "elevation": "Altitude acclimation"
+      }
+    },
+    "story2": {
+      "title": "New Zealand Hiking",
+      "travelerType": "Traveler",
+      "destination": "New Zealand",
+      "goal": "Classic multi-day trek matched to personal fitness pace",
+      "keywords": "Pace matching · Weather swap · Structured route",
+      "tags": {
+        "risk": "Terrain difficulty",
+        "replacement": "Route swap",
+        "rhythm": "Fitness match",
+        "elevation": "Total ascent"
+      }
+    },
+    "story3": {
+      "title": "European Rail Journey",
+      "travelerType": "Traveler",
+      "destination": "Europe",
+      "goal": "Multi-city depth with smooth connections",
+      "keywords": "Connection optimization · Train swap · City rhythm",
+      "tags": {
+        "risk": "Connection risk",
+        "replacement": "Train swap",
+        "rhythm": "City stays",
+        "elevation": "—"
+      }
+    },
+    "story4": {
+      "title": "Sichuan High-Altitude Trek · Trusted Project",
+      "travelerType": "Professional · Organizer",
+      "destination": "Western Sichuan, China",
+      "goal": "Recruit a 6-person group via Trusted Projects — project fit instead of plaza recruitment",
+      "keywords": "Tiered fit · Organizer review · Four-layer trust",
+      "tags": {
+        "risk": "Fit rule config",
+        "replacement": "Appeal & review",
+        "rhythm": "Member pace match",
+        "elevation": "Altitude threshold"
+      }
+    },
+    "testimonial": {
+      "quote": "We thought planning was about where to go and who to travel with. TripNARA showed us what matters is whether the route holds and the team fits — without credit-score rankings.",
+      "author": "Student Z",
+      "role": "Iceland F-Road plan · Trusted Project member"
     },
     "detail": {
       "background": "Travel Background",
@@ -982,16 +1251,25 @@
     }
   },
   "about": {
-    "title": "We care not about 'going to more places', but whether you truly complete a journey.",
+    "title": "We care not just about going to more places, but whether you truly finish a path — and lead a team that belongs on it.",
     "mission": {
       "title": "Mission",
-      "text": "Make travel a better decision-making process"
+      "text": "Make every departure and every team formation a decision worth making."
     },
     "believe": {
       "title": "We Believe",
-      "point1": "...",
-      "point2": "...",
-      "point3": "..."
+      "point1": "Travel is not about visiting more places — it's about walking the right path.",
+      "point1Desc": "A good journey is not stacking attractions; it's completing a process.",
+      "point2": "Routes are not assumed to exist — they must be validated and questioned.",
+      "point2Desc": "The first step is asking: should this route hold?",
+      "point3": "AI is a decision assistant, not a replacement for your judgment.",
+      "point3Desc": "Technology should serve reasoning, not replace it.",
+      "point4": "Direction before detail; structure before fragments.",
+      "point4Desc": "You need a better frame, not more information.",
+      "point5": "Good routes are executable, not idealized.",
+      "point5Desc": "Romance must land in reality to be real.",
+      "point6": "Trust should not be compressed into one score.",
+      "point6Desc": "Verification, qualification, project fit, and reputation stay independent and appealable — through Trusted Projects, not plaza recruitment."
     },
     "team": {
       "title": "Team Introduction",
@@ -1037,10 +1315,10 @@
     "message": "Message",
     "send": "Send Message",
     "recruiting": {
-      "title": "We're not looking for \"employees\", we're looking for decision-makers.",
-      "subtitle": "Join us not to go to more places, but to walk the right path.",
-      "intro": "At TripNARA, we're not in a hurry to publish more routes. We spend more time judging: should this route exist?",
-      "intro2": "So, we're not looking for people who \"can do\", but people who \"should do\".",
+      "title": "We're not looking for \"employees\" — we're looking for decision-makers.",
+      "subtitle": "Join us not to visit more places, but to walk the right path and build verifiable trust.",
+      "intro": "At TripNARA, we're not rushing features or traffic platforms. We ask: should this route exist, and should this team travel together?",
+      "intro2": "We want people who ask \"should we build this?\" — who treat four-layer trust and project fit as product core, not bolt-ons.",
       "intro3": "If you're willing to treat your career as a real path choice, welcome to join us.",
       "apply": {
         "title": "How to Apply",
@@ -1050,7 +1328,7 @@
       },
       "positions": {
         "product": {
-          "tagline": "We don't build products with features, we judge needs with logic.",
+          "tagline": "We don't stack features — we judge needs with logic, including Trusted Projects and trust governance.",
           "expectations": [
             "Familiar with System 1 / System 2 thinking models",
             "Able to handle uncertain inputs and assist in judgment",
@@ -1101,20 +1379,28 @@
       "applyButton": "I Want to Apply",
       "viewFullDesc": "View Full Job Description",
       "closing": {
-        "quote": "🛤️ Some roads don't exist on maps, but you know they exist.",
-        "text": "If you also believe that not all routes are worth existing, we might be missing exactly one person: you."
+        "quote": "🛤️ Some roads aren't on the map, but you know they exist; some teams can't be ranked by credit scores, but you know if they fit.",
+        "text": "If you believe not every route should exist — and not every team should be formed by ranking — we might be missing exactly one person: you."
       }
     }
   },
   "routeIntelligence": {
-    "title": "How Should a Route Be Understood?",
-    "subtitle": "TripNARA's Route Philosophy",
+    "title": "How should a route be understood?",
+    "subtitle": "TripNARA's route philosophy — from personal decisions to trusted teams",
     "corePoints": {
-      "title": "Four Core Principles",
+      "title": "Five core principles",
       "point1": "A route is not a list of attractions",
+      "point1Desc": "It is a structural path linking goals, pace, feasibility, and safety.",
       "point2": "Direction before details",
+      "point2Desc": "If direction is wrong, no amount of detail reaches the goal.",
       "point3": "Executable before romantic",
-      "point4": "Change is the norm"
+      "point3Desc": "Ideas are beautiful; landing them is what makes travel happen.",
+      "point4": "Change is the norm",
+      "point4Desc": "Variables always appear — the system must plan alternatives and slack.",
+      "point5": "Teams need verifiable trust",
+      "point5Desc": "Leading and joining happen through Trusted Projects and tiered fit — no composite credit score or stranger rankings.",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all"
     },
     "methodology": {
       "title": "Methodology Breakdown",
@@ -1124,8 +1410,9 @@
       "executableRhythm": "Executable Rhythm"
     },
     "ai": {
-      "title": "What AI Means to Us",
-      "subtitle": "Not an AI toy, but a decision assistant"
+      "title": "What AI means to us",
+      "subtitle": "Not an AI toy — a decision and trust assistant",
+      "description": "TripNARA is not AI that stacks attraction recommendations. We build structured judgment for whether a route is worth walking and whether members fit a team — with four-layer trust and project fit, not composite credit scores."
     },
     "manifesto": {
       "en": "We decide whether a route should exist.",
@@ -1240,7 +1527,9 @@
     "legal": "Legal",
     "terms": "Terms of Service",
     "privacy": "Privacy Policy",
-    "contact": "Contact Us"
+    "contact": "Contact Us",
+    "tagline": "Route & decision system · four-layer trust · Trusted Projects",
+    "trustedProjects": "Trusted Projects"
   },
   "contactUs": {
     "title": "Contact Us",
@@ -1310,6 +1599,40 @@
       "blockers": "blockers",
       "continueLastTrip": "Continue Last Trip",
       "completeReadiness": "Complete Readiness",
+      "cascade": {
+        "title": "Cascade impact",
+        "triggerSummary": "Trigger: {{trigger}} · {{count}} affected",
+        "previewMode": "Pre-repair analysis",
+        "viewRepairOptions": "View repair options",
+        "discussWithAi": "Discuss with AI",
+        "userConfirmationTitle": "Requires your confirmation",
+        "userConfirmationDisclaimer": "These items require your action — TripNARA does not book on your behalf.",
+        "confidence": "Confidence",
+        "cardTrigger": "Trigger: {{trigger}}",
+        "impactChain": "Impact chain",
+        "nestedUnderBlocker": "May affect",
+        "tabDescription": "Read-only cascade snapshot; triggers score recalc when empty.",
+        "refresh": "Refresh snapshot",
+        "empty": "No cascade snapshot yet. Resolve blockers or refresh score.",
+        "triggerCompute": "Trigger compute",
+        "updatedAt": "Snapshot updated",
+        "mockBanner": "Dev mock data (VITE_READINESS_CASCADE_MOCK=true)"
+      },
+      "coverageDisclosure": {
+        "title": "Data coverage",
+        "checked": "Checked: {{sources}}",
+        "unchecked": "Not checked: {{dims}}"
+      },
+      "repair": {
+        "consensusBlockedTitle": "Guardians have not reached consensus",
+        "consensusBlockedBody": "Repair directions diverge significantly. TripNARA will not auto-apply. Review each stance before proceeding.",
+        "forceProceed": "I understand — show repair options anyway",
+        "applyBlockedReason": "No guardian consensus yet. Review stances before applying."
+      },
+      "guardian": {
+        "title": "Guardian consensus",
+        "userBoundary": "Final trade-offs require your confirmation; TripNARA will not book or rebook on your behalf."
+      },
       "page": {
         "startExecute": "Start Execute",
         "runRepair": "Run Repair",
@@ -1325,6 +1648,7 @@
         "noEvidenceAvailable": "No evidence available",
         "tabs": {
           "readinessBreakdown": "Readiness Breakdown",
+          "cascadeImpact": "Cascade impact",
           "capabilityPacks": "Capability Packs",
           "evidenceChain": "Evidence Chain",
           "coverageMap": "Coverage Map",
@@ -1459,6 +1783,12 @@
           "supply_shortage": "Supply Shortage",
           "road_closure": "Road Closure",
           "weather_risk": "Weather Risk",
+          "COLD": "Cold Exposure",
+          "cold": "Cold Exposure",
+          "HEAT": "Heat Exposure",
+          "heat": "Heat Exposure",
+          "VOLCANIC": "Volcanic & Geothermal",
+          "volcanic": "Volcanic & Geothermal",
           "altitude_sickness": "Altitude Sickness",
           "communication_failure": "Communication Failure",
           "emergency_access": "Emergency Access Issue",
@@ -1479,7 +1809,19 @@
           "emergency": "Emergency Preparedness Readiness"
         },
         "capabilityPackChecklist": "Capability Pack Checklist",
-        "noCapabilityPackChecklist": "No checklist items yet. Add from the Capability Packs tab.",
+        "noCapabilityPackChecklist": "No items yet. Add from the Capability Packs tab into your pre-trip checklist.",
+        "unifiedChecklistTitle": "Pre-trip checklist",
+        "unifiedChecklistDescription": "Tasks from the readiness assessment; items you add from Capability Packs appear below.",
+        "unifiedChecklistEmpty": "No tasks yet",
+        "unifiedChecklistCount": "{{total}} items",
+        "checklistSourceSystem": "Assessment {{count}}",
+        "checklistSourceFromPacks": "From packs {{count}}",
+        "checklistSystemSection": "Assessment",
+        "checklistFromCapabilityPacks": "From capability packs ({{count}})",
+        "goToCapabilityPacks": "Go to Capability Packs →",
+        "checklistSourceCapabilityPack": "Pack",
+        "viewChecklist": "View pre-trip checklist",
+        "addRulesToChecklist": "Add to pre-trip checklist",
         "coverageMap": "Coverage Map",
         "coverageRate": "Coverage",
         "coverageGap": "Coverage Gap",
@@ -1571,13 +1913,37 @@
           "status": {
             "block": "Blockers found, prioritize resolution",
             "warn": "Key preparation items need attention",
+            "warnSafety": "Safety preparation recommended",
+            "warnEvidence": "Itinerary evidence needs attention",
             "pass": "Readiness requirements met"
           },
           "stats": {
+            "title": "Pending items",
+            "safetyHint": "You can keep planning; items below are safety and packing tips",
+            "mustSafety": "Safety prep",
+            "risksLabel": "Risk info",
+            "safetyRemaining": "{{remaining}} left",
+            "safetyAllDone": "All done",
             "blockers": "Blockers({{count}})",
             "must": "Must({{count}})",
             "suggestions": "Suggestions({{count}})",
             "risks": "Risks({{count}})"
+          },
+          "score": {
+            "breakdownTitle": "Score breakdown",
+            "weakestHint": "mainly driven by \"{{label}}\"",
+            "weakestShort": "weakest",
+            "evidence": "Evidence",
+            "schedule": "Schedule",
+            "transport": "Transport",
+            "safety": "Safety",
+            "buffers": "Buffers"
+          },
+          "risks": {
+            "title": "Destination risk reference",
+            "hint": "General destination risks for pre-trip planning — not the same as trip blockers.",
+            "expand": "Show {{count}} more",
+            "collapse": "Show less"
           },
           "actions": {
             "refresh": "Refresh Readiness",
@@ -1693,6 +2059,7 @@
     "trails": "Trails",
     "readiness": "Readiness",
     "insights": "Insights",
+    "participant-projects": "Member Projects",
     "settings": "Settings"
   },
   "welcomeModal": {
@@ -1936,6 +2303,43 @@
         }
       }
     }
+  },
+  "agent": {
+    "physicalGate": {
+      "title": "Reality constraint alert",
+      "pendingCount": "{{count}} pending confirmation",
+      "highRiskCount": "{{count}} high risk",
+      "dedupeNote": "If the answer already covers this, you can read the cards as detail only.",
+      "violationTitle": "Reality constraints not met",
+      "debugValidation": "Validation details (debug)",
+      "preconditions": "Preconditions required",
+      "healingOptions": "Suggested adjustments",
+      "blockedNoHeal": "No automatic adjustment under current constraints — please edit the itinerary manually.",
+      "adoptPreview": "Preview adjustment",
+      "shiftDaysHint": "Shifting {{days}} day(s) usually requires shifting other days by the same amount."
+    },
+    "pendingActions": {
+      "title": "Adjustments awaiting your confirmation",
+      "disclaimer": "Advice only — TripNARA does not book or rebook on your behalf.",
+      "confirm": "Confirm"
+    },
+    "travelOntology": {
+      "title": "Trip status",
+      "pendingCount": "{{count}} pending confirmation",
+      "verbs": "Suggested actions",
+      "flights": "Flights",
+      "hotels": "Stays",
+      "activities": "Activities",
+      "disclaimer": "Summary of how the system understands your trip — you must confirm before any change is applied."
+    },
+    "travelRuntimeGraph": {
+      "title": "Impact propagation",
+      "collapsedSummary": "{{trigger}} affects {{nodes}} nodes · {{edges}} paths",
+      "debugBadge": "Expert / debug",
+      "trigger": "Trigger",
+      "nodes": "Affected nodes ({{count}})",
+      "edges": "Propagation paths ({{count}})",
+      "rawJson": "Raw JSON (debug)"
+    }
   }
 }
-

@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { executionApi, type ReorderResponse } from '@/api/execution';
+import type { ScheduleItem } from '@/types/trip';
 import { toast } from 'sonner';
 import { GripVertical, Clock } from 'lucide-react';
 import { formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';

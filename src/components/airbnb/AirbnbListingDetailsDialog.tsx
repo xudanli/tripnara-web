@@ -16,20 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  MapPin, 
-  Star, 
-  ExternalLink,
-  Home,
-  Users,
-  Calendar,
-  DollarSign,
-  Loader2,
-  X,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { MapPin, Star, ExternalLink, DollarSign, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { airbnbApi } from '@/api/airbnb';
 import type { AirbnbListing, AirbnbListingDetailsParams } from '@/api/airbnb';
@@ -158,7 +145,7 @@ export function AirbnbListingDetailsDialog({
                       </Button>
                       
                       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                        {listingDetails.photos.map((_, idx) => (
+                        {listingDetails.photos.map((_photo: string, idx: number) => (
                           <button
                             key={idx}
                             className={cn(
@@ -214,7 +201,7 @@ export function AirbnbListingDetailsDialog({
                   <div>
                     <h4 className="font-medium mb-3">设施</h4>
                     <div className="flex flex-wrap gap-2">
-                      {listingDetails.amenities.map((amenity, idx) => (
+                      {listingDetails.amenities.map((amenity: string, idx: number) => (
                         <Badge key={idx} variant="secondary">
                           {amenity}
                         </Badge>
@@ -251,7 +238,7 @@ export function AirbnbListingDetailsDialog({
                   <div>
                     <h4 className="font-medium mb-3">评价</h4>
                     <div className="space-y-4">
-                      {listingDetails.reviews.slice(0, 5).map((review, idx) => (
+                      {listingDetails.reviews.slice(0, 5).map((review: { rating?: number; comment?: string; author?: string }, idx: number) => (
                         <div key={idx} className="space-y-1">
                           <div className="flex items-center gap-2">
                             <div className="flex items-center">
@@ -312,12 +299,16 @@ export function AirbnbListingDetailsDialog({
                           localizedStringWithTranslationPreference: listingDetails.name,
                         },
                       },
-                      location: listingDetails.location ? {
-                        coordinate: {
-                          latitude: listingDetails.location.latitude,
-                          longitude: listingDetails.location.longitude,
-                        },
-                      } : undefined,
+                      ...(listingDetails.location
+                        ? {
+                            location: {
+                              coordinate: {
+                                latitude: Number(listingDetails.location.latitude),
+                                longitude: Number(listingDetails.location.longitude),
+                              },
+                            },
+                          }
+                        : {}),
                     },
                     badges: '',
                     structuredContent: {

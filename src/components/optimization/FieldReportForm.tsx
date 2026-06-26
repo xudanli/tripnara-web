@@ -28,22 +28,7 @@ import {
 } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import type { FieldReportRequest, FieldReportType } from '@/types/optimization-v2';
-import {
-  Cloud,
-  Car,
-  AlertTriangle,
-  Activity,
-  MapPin,
-  Wind,
-  Eye,
-  ThermometerSnowflake,
-  Construction,
-  Mountain,
-  HeartPulse,
-  Send,
-  Loader2,
-  CheckCircle,
-} from 'lucide-react';
+import { Cloud, Car, AlertTriangle, Activity, MapPin, Wind, Eye, Construction, Mountain, HeartPulse, Send, Loader2, CheckCircle } from 'lucide-react';
 
 // ==================== 配置 ====================
 

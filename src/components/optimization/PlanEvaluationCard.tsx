@@ -117,6 +117,28 @@ const DIMENSION_CONFIG = {
 
 type DimensionKey = keyof typeof DIMENSION_CONFIG;
 
+/** UI 维度 key -> API breakdown key */
+const DIMENSION_TO_BREAKDOWN_KEY: Record<
+  DimensionKey,
+  keyof NonNullable<EvaluatePlanResponse['breakdown']>
+> = {
+  safetyScore: 'safetyScore',
+  experienceScore: 'experienceScore',
+  philosophyScore: 'philosophyScore',
+  timeSlackScore: 'timeSlackScore',
+  fatigueRiskScore: 'fatigueRiskPenalty',
+  weatherRiskScore: 'weatherRiskPenalty',
+  budgetScore: 'budgetOverrunPenalty',
+  crowdScore: 'pacingVariancePenalty',
+};
+
+function getBreakdownScore(
+  breakdown: EvaluatePlanResponse['breakdown'] | undefined,
+  dimension: DimensionKey
+): number {
+  return breakdown?.[DIMENSION_TO_BREAKDOWN_KEY[dimension]] ?? 0;
+}
+
 // ==================== 子组件 ====================
 
 /** 效用等级 Badge */
@@ -269,8 +291,10 @@ export function PlanEvaluationCard({
   // 准备雷达图数据
   const radarData = React.useMemo(() => {
     return Object.entries(DIMENSION_CONFIG).map(([key, config]) => {
-      const score = evaluation.breakdown?.[key as DimensionKey] ?? 0;
-      const compareScore = compareEvaluation?.breakdown?.[key as DimensionKey];
+      const score = getBreakdownScore(evaluation.breakdown, key as DimensionKey);
+      const compareScore = compareEvaluation?.breakdown
+        ? getBreakdownScore(compareEvaluation.breakdown, key as DimensionKey)
+        : undefined;
       
       return {
         dimension: config.label,
@@ -363,7 +387,7 @@ export function PlanEvaluationCard({
                     strokeLinecap="round"
                     dot={({ cx, cy, payload }) => {
                       const score = payload?.payload?.score ?? payload?.value;
-                      if (score == null) return null;
+                      if (score == null) return <g />;
                       return (
                         <g key={`dot-${payload?.index ?? 0}`}>
                           <circle cx={cx} cy={cy} r={3} fill={RADAR_STYLE.stroke} />
@@ -407,7 +431,7 @@ export function PlanEvaluationCard({
               <DimensionRow
                 key={key}
                 dimension={key as DimensionKey}
-                score={evaluation.breakdown?.[key as DimensionKey] ?? 0}
+                score={getBreakdownScore(evaluation.breakdown, key as DimensionKey)}
                 weight={getWeight(key as DimensionKey)}
                 showWeight={showWeights}
                 compact={compact}

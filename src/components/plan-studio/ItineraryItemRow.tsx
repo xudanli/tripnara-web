@@ -39,9 +39,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import {
+  getItineraryItemTypeDisplay,
+  getItineraryItemTimelineTypeBadge,
+} from '@/lib/itinerary-item-type-display';
 import { formatCurrency } from '@/utils/format';
 import { isAlwaysOpenHours } from '@/utils/opening-hours-schedule-check';
 import { toast } from 'sonner';
+import type { DecisionAuthorityLabel } from '@/lib/domain-influence-mapping';
+import { getCrossDayBadgeLabel, readCrossDayInfo } from '@/lib/itinerary-item-sort';
+import { isItineraryCarRentalDisplay, isItineraryDeparturePointDisplay, isItineraryLandingPointDisplay } from '@/lib/itinerary-special-display';
+import { isCarRentalItineraryItem } from '@/lib/trip-car-rental-status';
+import { PresentedItineraryItemInsight } from '@/components/experience-fulfillment/PresentedItineraryItemInsight';
+import type { PresentedItineraryItem } from '@/types/experience-fulfillment';
 
 interface ItineraryItemRowProps {
   item: ItineraryItem;
@@ -70,37 +80,11 @@ interface ItineraryItemRowProps {
   structureLocked?: boolean;
   /** 菜单「编辑」展示为微调时间 */
   editTimingOnly?: boolean;
+  /** 领域影响力决策权标签 */
+  decisionAuthority?: DecisionAuthorityLabel | null;
+  /** 体验兑现 — 双层灵感卡（来自 itineraryPresentation） */
+  presentation?: PresentedItineraryItem | null;
 }
-
-// 类别图标映射
-const categoryIcons: Record<string, string> = {
-  ATTRACTION: '🏛️',
-  RESTAURANT: '🍽️',
-  CAFE: '☕',
-  BAR: '🍸',
-  SHOPPING: '🛍️',
-  HOTEL: '🏨',
-  MUSEUM: '🏛️',
-  PARK: '🌳',
-  TRANSPORT: '🚉',
-  TRANSIT_HUB: '🚉',
-  OTHER: '📍',
-};
-
-// 类别标签映射
-const categoryLabels: Record<string, string> = {
-  ATTRACTION: '景点',
-  RESTAURANT: '餐厅',
-  CAFE: '咖啡厅',
-  BAR: '酒吧',
-  SHOPPING: '购物',
-  HOTEL: '酒店',
-  MUSEUM: '博物馆',
-  PARK: '公园',
-  TRANSPORT: '交通',
-  TRANSIT_HUB: '交通',
-  OTHER: '其他',
-};
 
 // 预订状态标签映射
 const bookingStatusLabels: Record<BookingStatus, { label: string; color: string; icon: string }> = {
@@ -125,6 +109,8 @@ export default function ItineraryItemRow({
   highlighted,
   structureLocked = false,
   editTimingOnly = false,
+  decisionAuthority,
+  presentation,
 }: ItineraryItemRowProps) {
   const { t } = useTranslation();
   const place = item.Place;
@@ -176,20 +162,21 @@ export default function ItineraryItemRow({
     ? place.nameCN 
     : (place?.nameEN && place.nameEN.trim()) 
       ? place.nameEN 
-      : (item.note?.split('\n')[0]?.trim()) || item.type || '未知地点';
+      : (item.note?.split('\n')[0]?.trim()) || getItineraryItemTypeDisplay(item.type).label || '未知地点';
   const category = (place?.category || item.type || '').toUpperCase();
+  const typeBadge = getItineraryItemTimelineTypeBadge(item);
   // 使用目的地时区显示时间
   const startTime = formatTimeInTimezone(item.startTime);
   const endTime = formatTimeInTimezone(item.endTime);
 
   // ==================== 天气显示逻辑 ====================
   // 室内类型（不显示天气）
-  const INDOOR_CATEGORIES = ['MUSEUM', 'SHOPPING', 'HOTEL'];
+  const INDOOR_CATEGORIES = ['ATTRACTION', 'SHOPPING', 'HOTEL'];
   
   // 判断是否显示天气（户外活动或未明确归类的类型）
   const shouldShowWeather = useMemo(() => {
     // 餐饮类型可能是户外也可能是室内，默认显示
-    if (['RESTAURANT', 'CAFE', 'BAR'].includes(category)) {
+    if (category === 'RESTAURANT') {
       return true; // 显示天气，因为前往途中也需要考虑天气
     }
     // 明确的室内类型不显示
@@ -230,6 +217,17 @@ export default function ItineraryItemRow({
   const actualDuration = (item.startTime && item.endTime) 
     ? Math.round((new Date(item.endTime).getTime() - new Date(item.startTime).getTime()) / (1000 * 60))
     : null;
+
+  const crossDayInfo = readCrossDayInfo(item);
+  const crossDayBadgeLabel = getCrossDayBadgeLabel(item);
+  const isLandingPointDisplay = isItineraryLandingPointDisplay(item);
+  const isDeparturePointDisplay = isItineraryDeparturePointDisplay(item);
+  const isCarRentalDisplay = isItineraryCarRentalDisplay(item);
+  const isCrossDayCheckout =
+    crossDayInfo?.displayMode === 'checkout' || crossDayInfo?.isCheckoutItem === true;
+  const checkoutEndLabel =
+    crossDayInfo?.timeLabels?.end ||
+    (isCarRentalItineraryItem(item) ? '还车' : '退房');
   
   // 预计时长（从 physicalMetadata 获取，作为参考）
   const physicalMetadata = (place as any)?.physicalMetadata || {};
@@ -249,14 +247,27 @@ export default function ItineraryItemRow({
   };
   
   // ✅ 确保 durationDisplay 始终是字符串
-  const durationDisplay = actualDuration 
-    ? formatDurationDisplay(actualDuration)
-    : estimatedDuration 
-      ? `约${estimatedDuration}分钟`
-      : category === 'ATTRACTION' ? '约60-120分钟'
-      : category === 'RESTAURANT' ? '约60-90分钟'
-      : category === 'SHOPPING' ? '约30-60分钟'
-      : '约60分钟';
+  const durationDisplay = (() => {
+    if (isLandingPointDisplay || isDeparturePointDisplay) return null;
+    if (
+      crossDayInfo?.isCrossDay &&
+      isCarRentalItineraryItem(item) &&
+      !isCrossDayCheckout &&
+      actualDuration != null
+    ) {
+      const rentalDays =
+        crossDayInfo.crossDays > 0
+          ? crossDayInfo.crossDays
+          : Math.max(1, Math.round(actualDuration / (24 * 60)));
+      return `租期 ${rentalDays} 天`;
+    }
+    if (actualDuration) return formatDurationDisplay(actualDuration);
+    if (estimatedDuration) return `约${estimatedDuration}分钟`;
+    if (category === 'ATTRACTION') return '约60-120分钟';
+    if (category === 'RESTAURANT') return '约60-90分钟';
+    if (category === 'SHOPPING') return '约30-60分钟';
+    return '约60分钟';
+  })();
 
   // ==================== Abu 视图字段 ====================
   const getAbuFields = () => {
@@ -754,7 +765,7 @@ export default function ItineraryItemRow({
             return (
             <div className="w-full h-full flex items-center justify-center bg-gray-50">
               <div className="text-gray-400 text-2xl text-center px-1">
-                {categoryIcons[category] || '📍'}
+                {typeBadge.emoji}
               </div>
             </div>
             );
@@ -766,31 +777,73 @@ export default function ItineraryItemRow({
           {/* 第一行：时间 + 跨天标签 + 评分 */}
           <div className="flex items-center gap-2 mb-1">
             {/* 根据 crossDayInfo 显示不同的时间格式 */}
-            {item.crossDayInfo?.displayMode === 'checkout' ? (
-              // 退房项：只显示退房时间
+            {isLandingPointDisplay ? (
               <span className="text-sm font-medium text-gray-700">
-                {item.crossDayInfo?.timeLabels?.end || '退房'}: {endTime}
+                落地 {startTime}
+              </span>
+            ) : isDeparturePointDisplay ? (
+              <span className="text-sm font-medium text-gray-700">
+                值机 {startTime}
+              </span>
+            ) : isCarRentalDisplay && isCrossDayCheckout ? (
+              <span className="text-sm font-medium text-gray-700">
+                还车 {endTime}
+              </span>
+            ) : isCarRentalDisplay && crossDayBadgeLabel === '取车' ? (
+              <span className="text-sm font-medium text-gray-700">
+                取车 {startTime}{endTime && ` -${endTime}`}
+              </span>
+            ) : isCrossDayCheckout ? (
+              // 退房/还车项：只显示结束时间
+              <span className="text-sm font-medium text-gray-700">
+                {checkoutEndLabel}: {endTime}
               </span>
             ) : (
-              // 正常项或入住项
+              // 正常项或入住/取车项
               <span className="text-sm font-medium text-gray-700">
                 {startTime}{endTime && ` -${endTime}`}
               </span>
             )}
             
+            {isDeparturePointDisplay && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-violet-50 text-violet-700 border-violet-200"
+              >
+                离境点
+              </Badge>
+            )}
+
+            {isCarRentalDisplay && !crossDayBadgeLabel && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-800 border-amber-200"
+              >
+                租车
+              </Badge>
+            )}
+
+            {isLandingPointDisplay && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-sky-50 text-sky-700 border-sky-200"
+              >
+                落地点
+              </Badge>
+            )}
+            
             {/* 跨天标签 */}
-            {item.crossDayInfo?.isCrossDay && (
+            {crossDayBadgeLabel && (
               <Badge 
                 variant="outline" 
                 className={cn(
                   "text-[10px] px-1.5 py-0",
-                  item.crossDayInfo?.displayMode === 'checkout' 
+                  crossDayBadgeLabel === '退房' || crossDayBadgeLabel === '还车'
                     ? "bg-orange-50 text-orange-600 border-orange-200" 
                     : "bg-blue-50 text-blue-600 border-blue-200"
                 )}
               >
-                {item.crossDayInfo?.displayMode === 'checkout' ? '退房' : 
-                 item.crossDayInfo?.displayMode === 'checkin' ? '入住' : '跨天'}
+                {crossDayBadgeLabel}
               </Badge>
             )}
             
@@ -832,6 +885,8 @@ export default function ItineraryItemRow({
             </div>
           </div>
 
+          {presentation ? <PresentedItineraryItemInsight presentation={presentation} /> : null}
+
           {/* 第二行：地址 */}
           {placeDetails?.address && (
             <div className="flex items-start gap-1 text-xs text-muted-foreground mb-2">
@@ -843,7 +898,7 @@ export default function ItineraryItemRow({
           {/* 第三行：类别 + 营业状态 + 开放时间 + 价格 */}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <Badge variant="outline" className="text-xs">
-              {categoryIcons[category] || '📍'} {categoryLabels[category] || category}
+              {typeBadge.emoji} {typeBadge.label}
             </Badge>
             
             {/* 营业状态警告（临时关闭/永久关闭） */}
@@ -939,13 +994,19 @@ export default function ItineraryItemRow({
             )}
           </div>
 
+          {decisionAuthority ? (
+            <ItineraryDecisionAuthorityRow authority={decisionAuthority} />
+          ) : null}
+
           {/* 信息 chips */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* 全局：预计时长 */}
+            {/* 全局：预计时长（落地点不展示停留时长） */}
+            {durationDisplay ? (
             <Badge variant="outline" className="text-xs">
               <Clock className="h-3 w-3 mr-1" />
               {durationDisplay}
             </Badge>
+            ) : null}
 
             {/* Abu 视图：开放状态 + 风险badge + 来源 */}
             {abuFields && (
@@ -1129,7 +1190,7 @@ export default function ItineraryItemRow({
                       <DropdownMenuItem
                         onSelect={() => {
                           if (getPlaceCoordinates) {
-                            onSearchNearby(item, 'CAFE');
+                            onSearchNearby(item, 'RESTAURANT');
                           }
                         }}
                         disabled={!getPlaceCoordinates}
@@ -1141,7 +1202,7 @@ export default function ItineraryItemRow({
                       <DropdownMenuItem
                         onSelect={() => {
                           if (getPlaceCoordinates) {
-                            onSearchNearby(item, 'TRANSPORT');
+                            onSearchNearby(item, 'TRANSIT_HUB');
                           }
                         }}
                         disabled={!getPlaceCoordinates}
@@ -1323,8 +1384,12 @@ export default function ItineraryItemRow({
             <div className="flex items-center gap-2 text-sm">
               <Clock className="w-4 h-4 text-muted-foreground" />
               <span>
-                {startTime}{endTime && ` - ${endTime}`}
-                {durationDisplay && ` · ${durationDisplay}`}
+                {isLandingPointDisplay
+                  ? `落地 ${startTime}`
+                  : isDeparturePointDisplay
+                    ? `值机 ${startTime}`
+                    : `${startTime}${endTime ? ` - ${endTime}` : ''}`}
+                {durationDisplay ? ` · ${durationDisplay}` : ''}
               </span>
             </div>
 

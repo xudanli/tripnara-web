@@ -7,13 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-  ChevronDown,
-  ChevronUp,
-  Filter,
-  X,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import type { GapDisplayPreferences, GapType } from '@/api/trip-planner';
 import { GAP_TYPE_OPTIONS } from '@/utils/gap-utils';
 
@@ -47,7 +41,7 @@ export function GapDisplayControl({
   };
 
   const selectedCount = preferences.filterTypes?.length || 0;
-  const allSelected = selectedCount === GAP_TYPE_OPTIONS.length;
+  const ____allSelected = selectedCount === GAP_TYPE_OPTIONS.length;
 
   return (
     <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg border">

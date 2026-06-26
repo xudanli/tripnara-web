@@ -119,6 +119,14 @@ export function useAutoFetchEvidence(
         forceRefresh: false, // 不强制刷新，使用缓存
       });
 
+      if ('taskId' in result) {
+        console.log('[useAutoFetchEvidence] 证据获取任务已提交:', result.taskId);
+        hasFetchedRef.current = true;
+        sessionStorage.setItem(cacheKey, 'true');
+        await checkStatus();
+        return;
+      }
+
       console.log('[useAutoFetchEvidence] 证据数据获取完成:', {
         totalPlaces: result.totalPlaces,
         successCount: result.successCount,

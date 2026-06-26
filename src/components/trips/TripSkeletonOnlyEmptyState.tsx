@@ -59,7 +59,7 @@ export function TripSkeletonOnlyEmptyState({
         </Button>
         {recruitmentPostId && (
           <Button variant="outline" asChild>
-            <Link to={`/dashboard/tripnara/plaza/${recruitmentPostId}`}>返回招募详情</Link>
+            <Link to={`/dashboard/trusted-projects/${recruitmentPostId}`}>返回可信项目</Link>
           </Button>
         )}
         <Button variant="ghost" asChild>

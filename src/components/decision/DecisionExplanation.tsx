@@ -13,19 +13,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import {
-  Shield,
-  Star,
-  Clock,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Info,
-  ChevronRight,
-  Lightbulb,
-} from 'lucide-react';
+import { Shield, Star, Clock, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Info, ChevronRight, Lightbulb } from 'lucide-react';
 import type { DetailedExplanation, KeyFactor } from '@/types/decision-engine';
 
 interface DecisionExplanationProps {
@@ -62,7 +50,7 @@ function getFactorIcon(factor: KeyFactor['name'] | string, icon?: string): React
 }
 
 function KeyFactorCard({ factor }: { factor: DetailedExplanation['keyFactors'][0] }) {
-  const importance = parseFloat(factor.importance.replace('%', ''));
+  const ____importance = parseFloat(factor.importance.replace('%', ''));
   const value = parseFloat(factor.value);
   
   return (

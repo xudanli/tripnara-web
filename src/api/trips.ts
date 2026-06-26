@@ -180,6 +180,7 @@ import type {
   RegenerateTripResponse,
   EvidenceListResponse,
   EvidenceType,
+  PlanningReadiness,
   AttentionQueueResponse,
   AttentionSeverity,
   AttentionItemType,
@@ -212,6 +213,11 @@ export interface TripInsightFinding {
   actionPrompt?: string | null;  // 点击后发送给 AI 的提示词
 }
 
+import type {
+  CascadeCausalPreAnalysisSummary,
+  CascadeUiHint,
+} from '@/types/readiness-cascade';
+
 /**
  * 行程准备度摘要
  */
@@ -220,6 +226,9 @@ export interface TripInsightReadiness {
   blockers: number;
   warnings: number;
   suggestions: number;
+  cascadeUiHints?: CascadeUiHint[];
+  causalPreAnalysis?: CascadeCausalPreAnalysisSummary;
+  guardianNegotiation?: import('@/types/readiness-guardian-negotiation').GuardianNegotiationResult;
 }
 
 /**
@@ -363,6 +372,51 @@ export const tripsApi = {
   },
 
   /**
+   * Trips NL v3：自然语言创建 Draft Trip（draft-first）
+   * POST /trips/from-natural-language/v3
+   *
+   * v3 将“创建 Trip”与“补齐规划信息 / 生成方案”拆开：首次理解用户输入后即可返回 DRAFT trip，
+   * 后续由规划初始化接口推进到 PLANNING。前端沿用同一套响应适配逻辑。
+   */
+  createFromNLv3: async (
+    data: CreateTripFromNLRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<CreateTripFromNLResponse> => {
+    const response = await apiClient.post<ApiResponseWrapper<CreateTripFromNLResponse>>(
+      '/trips/from-natural-language/v3',
+      data,
+      {
+        timeout: 300000,
+        signal: options?.signal,
+      }
+    );
+    const result = handleResponse(response);
+    const payload = result ?? {};
+
+    const blocks = Array.isArray(payload.plannerResponseBlocks) ? payload.plannerResponseBlocks : [];
+    const questionsRaw = Array.isArray(payload.clarificationQuestions) ? payload.clarificationQuestions : [];
+    const plannerTrimmed =
+      typeof payload.plannerReply === 'string' && payload.plannerReply.trim() !== ''
+        ? payload.plannerReply.trim()
+        : undefined;
+
+    const safeResult = {
+      ...payload,
+      plannerResponseBlocks: blocks,
+      clarificationQuestions: questionsRaw,
+      partialParams: payload.partialParams ?? {},
+      ...(plannerTrimmed !== undefined ? { plannerReply: plannerTrimmed } : {}),
+    };
+
+    if (questionsRaw.length > 0 && typeof questionsRaw[0] === 'object') {
+      const { normalizeClarificationQuestions } = await import('@/utils/nl-conversation-adapter');
+      safeResult.clarificationQuestions = normalizeClarificationQuestions(questionsRaw as any[]);
+    }
+
+    return safeResult as CreateTripFromNLResponse;
+  },
+
+  /**
    * 获取对话上下文
    * GET /trips/nl-conversation/:sessionId
    */
@@ -425,6 +479,46 @@ export const tripsApi = {
       data,
       {
         timeout: 300000, // 300 秒超时
+      }
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * v3 Draft Trip：初始化规划阶段
+   * POST /trips/:id/initialize-planning
+   */
+  initializeTripPlanning: async (
+    tripId: string,
+    data?: {
+      destinationCountryCode?: string;
+      startDate?: string;
+      endDate?: string;
+      totalBudget?: number;
+      currency?: string;
+      pace?: string;
+      travelers?: Array<Record<string, any>>;
+    }
+  ): Promise<{
+    initialized: boolean;
+    trip?: TripDetail;
+    missingFields?: string[];
+    planningReadiness?: PlanningReadiness;
+    generationQueued?: boolean;
+    message?: string;
+  }> => {
+    const response = await apiClient.post<ApiResponseWrapper<{
+      initialized: boolean;
+      trip?: TripDetail;
+      missingFields?: string[];
+      planningReadiness?: PlanningReadiness;
+      generationQueued?: boolean;
+      message?: string;
+    }>>(
+      `/trips/${tripId}/initialize-planning`,
+      data ?? {},
+      {
+        timeout: 300000,
       }
     );
     return handleResponse(response);
@@ -1232,6 +1326,10 @@ export const tripsApi = {
       evidenceTypes: EvidenceType[];
       affectedPois: number[];
     }>;
+    readinessPhase?: 'planning' | 'pre_departure' | 'in_trip' | 'past';
+    daysUntilStart?: number;
+    phaseHint?: string;
+    deferredEvidenceCount?: number;
   }> => {
     const response = await apiClient.get<ApiResponseWrapper<{
       completenessScore: number;
@@ -1249,6 +1347,10 @@ export const tripsApi = {
         evidenceTypes: EvidenceType[];
         affectedPois: number[];
       }>;
+      readinessPhase?: 'planning' | 'pre_departure' | 'in_trip' | 'past';
+      daysUntilStart?: number;
+      phaseHint?: string;
+      deferredEvidenceCount?: number;
     }>>(
       `/trips/${tripId}/evidence/completeness`
     );

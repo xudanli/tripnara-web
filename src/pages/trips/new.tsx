@@ -16,6 +16,7 @@ import TripPlanningWaitDialog from '@/components/trips/TripPlanningWaitDialog';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import ConsentDialog from '@/components/trips/ConsentDialog';
 import NLChatInterface from '@/components/trips/NLChatInterface';
+import QuickPlanFlow from '@/components/trips/QuickPlanFlow';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +28,27 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ArrowLeft, Plus, X, Globe, CreditCard, TrendingUp, Check, ChevronsUpDown, MapPin, ChevronDown, Settings2, AlertTriangle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Plus,
+  X,
+  Globe,
+  CreditCard,
+  TrendingUp,
+  Check,
+  ChevronsUpDown,
+  MapPin,
+  ChevronDown,
+  Settings2,
+  AlertTriangle,
+  CalendarDays,
+  ListChecks,
+  MessageSquare,
+  Route,
+  Sparkles,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { cn, toDateOnly } from '@/lib/utils';
 import { buildEmbeddedHikingMetadata, buildHikingAuditMetadata } from '@/lib/trip-hiking';
 import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
@@ -48,14 +69,16 @@ export default function NewTripPage() {
   
   // 从 URL 参数读取模式，默认为 'form'
   const modeFromUrl = searchParams.get('mode');
-  const [activeTab, setActiveTab] = useState<'form' | 'nl'>(
-    modeFromUrl === 'nl' ? 'nl' : 'form'
+  const [activeTab, setActiveTab] = useState<'form' | 'nl' | 'quick'>(
+    modeFromUrl === 'nl' ? 'nl' : modeFromUrl === 'quick' ? 'quick' : 'form'
   );
   
   // 当 URL 参数变化时，更新 activeTab
   useEffect(() => {
     if (modeFromUrl === 'nl') {
       setActiveTab('nl');
+    } else if (modeFromUrl === 'quick') {
+      setActiveTab('quick');
     } else if (modeFromUrl === 'form' || !modeFromUrl) {
       setActiveTab('form');
     }
@@ -722,14 +745,21 @@ export default function NewTripPage() {
       avoidPlaces: avoidPlaces.length > 0 ? avoidPlaces : undefined,
       metadata: hikingMetadata,
     };
+    const pacingConfig = (submitData as CreateTripRequest & {
+      pacingConfig?: {
+        travelMode?: string;
+        level?: string;
+        maxDailyActivities?: number;
+      };
+    }).pacingConfig;
 
     try {
       const created = await tripsApi.create(submitData);
       tripsApi.supplementIntentAfterCreate(created.id, {
-        pacingConfig: submitData.pacingConfig ? {
-          travelMode: submitData.pacingConfig.travelMode,
-          level: submitData.pacingConfig.level,
-          maxDailyActivities: submitData.pacingConfig.maxDailyActivities,
+        pacingConfig: pacingConfig ? {
+          travelMode: pacingConfig.travelMode,
+          level: pacingConfig.level,
+          maxDailyActivities: pacingConfig.maxDailyActivities,
         } : undefined,
       }).catch(() => {});
       // 创建成功后显示提示并跳转到行程列表（优先展示接口返回的 message）
@@ -758,10 +788,10 @@ export default function NewTripPage() {
           try {
             const created = await tripsApi.create(submitData);
             tripsApi.supplementIntentAfterCreate(created.id, {
-              pacingConfig: submitData.pacingConfig ? {
-                travelMode: submitData.pacingConfig.travelMode,
-                level: submitData.pacingConfig.level,
-                maxDailyActivities: submitData.pacingConfig.maxDailyActivities,
+              pacingConfig: pacingConfig ? {
+                travelMode: pacingConfig.travelMode,
+                level: pacingConfig.level,
+                maxDailyActivities: pacingConfig.maxDailyActivities,
               } : undefined,
             }).catch(() => {});
             toast.success('行程创建成功', {
@@ -877,8 +907,36 @@ export default function NewTripPage() {
     }
   };
 
+  const selectedCountryName =
+    selectedCountryInfo?.countryName ||
+    countries.find((country) => country.isoCode === selectedCountry)?.nameCN ||
+    selectedCountry ||
+    '未选择';
+
+  const tripDays =
+    formData.startDate && formData.endDate
+      ? Math.max(
+          1,
+          Math.ceil(
+            (new Date(formData.endDate).getTime() - new Date(formData.startDate).getTime()) /
+              (1000 * 60 * 60 * 24)
+          ) + 1
+        )
+      : null;
+
+  const travelerCount = formData.travelers.length;
+  const budgetPerTraveler =
+    formData.totalBudget > 0 && travelerCount > 0
+      ? Math.round(formData.totalBudget / travelerCount)
+      : null;
+
+  const selectedCityLabels = selectedCities.map(getCityDisplayName);
+  const selectedPreferenceCount = formData.preferences?.length || 0;
+  const advancedRuleCount = mustPlaces.length + avoidPlaces.length + (includeEmbeddedHiking ? 1 : 0);
+
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="min-h-[calc(100vh-64px)] bg-slate-50/70">
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       {/* 等待规划完成弹窗 */}
       {waitingTripId && (
         <TripPlanningWaitDialog
@@ -891,12 +949,36 @@ export default function NewTripPage() {
           }}
         />
       )}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 rounded-lg border bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="flex min-w-0 items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard/trips')}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold">创建新行程</h1>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+              新行程
+            </Badge>
+            <span className="text-sm text-muted-foreground">表单、快速规划或对话，任选一种方式开始</span>
+          </div>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+            创建新行程
+          </h1>
+        </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 rounded-lg border bg-slate-50 p-2 text-center text-xs text-slate-600 sm:w-[360px]">
+          <div className="rounded-md bg-white px-2 py-2">
+            <div className="font-semibold text-slate-950">{selectedCountryName}</div>
+            <div>目的地</div>
+          </div>
+          <div className="rounded-md bg-white px-2 py-2">
+            <div className="font-semibold text-slate-950">{tripDays ? `${tripDays} 天` : '待定'}</div>
+            <div>天数</div>
+          </div>
+          <div className="rounded-md bg-white px-2 py-2">
+            <div className="font-semibold text-slate-950">{travelerCount} 人</div>
+            <div>同行者</div>
+          </div>
         </div>
       </div>
 
@@ -920,15 +1002,38 @@ export default function NewTripPage() {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'form' | 'nl')}>
-        <TabsContent value="form">
-          <Card>
-            <CardHeader>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'form' | 'nl' | 'quick')} className="space-y-5">
+        <TabsList className="grid h-auto w-full grid-cols-3 rounded-lg border bg-white p-1 shadow-sm md:w-[680px]">
+          <TabsTrigger value="form" className="gap-2 py-2.5">
+            <ListChecks className="h-4 w-4" />
+            表单创建
+          </TabsTrigger>
+          <TabsTrigger value="quick" className="gap-2 py-2.5">
+            <Sparkles className="h-4 w-4" />
+            快速规划
+          </TabsTrigger>
+          <TabsTrigger value="nl" className="gap-2 py-2.5">
+            <MessageSquare className="h-4 w-4" />
+            对话创建
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="form" className="mt-0">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="overflow-hidden border-slate-200 shadow-sm">
+            <CardHeader className="border-b bg-white">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-slate-900 p-2 text-white">
+                  <Route className="h-4 w-4" />
+                </div>
+                <div>
               <CardTitle>行程信息</CardTitle>
-              <CardDescription>填写行程的基本信息</CardDescription>
+              <CardDescription>先把关键约束填清楚，后续规划工作台会继续细化路线和活动</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleFormSubmit} className="space-y-6">
+              <form onSubmit={handleFormSubmit} className="space-y-8 py-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-4">
                     <Label htmlFor="destination">目的地（选择国家后选择城市）</Label>
@@ -1725,11 +1830,11 @@ export default function NewTripPage() {
                   </CollapsibleContent>
                 </Collapsible>
 
-              <div className="flex justify-end gap-4">
+              <div className="sticky bottom-0 -mx-6 flex flex-col-reverse gap-3 border-t bg-white/95 px-6 py-4 backdrop-blur sm:flex-row sm:justify-end">
                 <Button type="button" variant="outline" onClick={() => navigate('/dashboard/trips')}>
                   取消
                 </Button>
-                  <Button type="submit" disabled={loading}>
+                  <Button type="submit" disabled={loading} className="min-w-[132px]">
                     {loading ? (
                       <>
                         <Spinner className="w-4 h-4 mr-2" />
@@ -1738,18 +1843,127 @@ export default function NewTripPage() {
                     ) : (
                       '创建行程'
                     )}
-                    {loading && <Spinner className="w-4 h-4 mr-2" />}
-                  创建行程
                 </Button>
               </div>
               </form>
           </CardContent>
         </Card>
+          <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+            <Card className="border-slate-200 bg-white shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-slate-700" />
+                  <CardTitle className="text-base">创建摘要</CardTitle>
+                </div>
+                <CardDescription>提交前快速检查核心信息</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border bg-slate-50 p-3">
+                    <MapPin className="mb-2 h-4 w-4 text-slate-500" />
+                    <div className="text-xs text-muted-foreground">目的地</div>
+                    <div className="mt-1 truncate text-sm font-medium">{selectedCountryName}</div>
+                  </div>
+                  <div className="rounded-lg border bg-slate-50 p-3">
+                    <CalendarDays className="mb-2 h-4 w-4 text-slate-500" />
+                    <div className="text-xs text-muted-foreground">时间</div>
+                    <div className="mt-1 text-sm font-medium">{tripDays ? `${tripDays} 天` : '待填写'}</div>
+                  </div>
+                  <div className="rounded-lg border bg-slate-50 p-3">
+                    <Users className="mb-2 h-4 w-4 text-slate-500" />
+                    <div className="text-xs text-muted-foreground">人数</div>
+                    <div className="mt-1 text-sm font-medium">{travelerCount} 人</div>
+                  </div>
+                  <div className="rounded-lg border bg-slate-50 p-3">
+                    <Wallet className="mb-2 h-4 w-4 text-slate-500" />
+                    <div className="text-xs text-muted-foreground">预算</div>
+                    <div className="mt-1 text-sm font-medium">
+                      {formData.totalBudget > 0 ? `¥${formData.totalBudget.toLocaleString()}` : '待填写'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-lg border p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">城市</span>
+                    <span className="font-medium">{selectedCityLabels.length || '未选'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">偏好</span>
+                    <span className="font-medium">{selectedPreferenceCount || '未选'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">约束</span>
+                    <span className="font-medium">{advancedRuleCount || '无'}</span>
+                  </div>
+                  {budgetPerTraveler ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">人均预算</span>
+                      <span className="font-medium">¥{budgetPerTraveler.toLocaleString()}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {selectedCityLabels.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedCityLabels.slice(0, 6).map((city) => (
+                      <Badge key={city} variant="secondary" className="max-w-full truncate">
+                        {city}
+                      </Badge>
+                    ))}
+                    {selectedCityLabels.length > 6 ? (
+                      <Badge variant="outline">+{selectedCityLabels.length - 6}</Badge>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed bg-slate-50 p-3 text-xs text-muted-foreground">
+                    选择国家后可以继续选择城市；不选城市也可以先创建国家级行程。
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {selectedCountryInfo ? (
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">目的地档案</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">支付</span>
+                    <Badge variant="outline">{PAYMENT_TYPE_LABELS[selectedCountryInfo.paymentType]}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">货币</span>
+                    <span className="font-medium">{selectedCountryInfo.currencyCode}</span>
+                  </div>
+                  {selectedCountryInfo.exchangeRateToCNY ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">汇率</span>
+                      <span className="font-medium">
+                        1 {selectedCountryInfo.currencyCode} ≈ {selectedCountryInfo.exchangeRateToCNY.toFixed(4)} CNY
+                      </span>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+          </aside>
+          </div>
       </TabsContent>
+
+        <TabsContent value="quick">
+          <QuickPlanFlow
+            onTripCreated={(tripId) => {
+              console.log('[NewTripPage] 快速规划行程创建成功:', tripId);
+              navigate(`/dashboard/plan-studio?tripId=${tripId}`, { state: { from: 'create' } });
+            }}
+          />
+        </TabsContent>
 
         <TabsContent value="nl">
           {/* 对话式自然语言创建行程 */}
-          <NLChatInterface 
+          <NLChatInterface
             onTripCreated={(tripId) => {
               console.log('[NewTripPage] 行程创建成功:', tripId);
               navigate(`/dashboard/plan-studio?tripId=${tripId}`);
@@ -1804,8 +2018,7 @@ export default function NewTripPage() {
       requiredPermissions={consentInfo?.requiredPermissions}
       warning={consentInfo?.warning}
     />
+      </div>
   </div>
 );
 }
-
-

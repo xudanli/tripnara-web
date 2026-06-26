@@ -1,11 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  integrationsApi,
-  type IntegrationService,
-  type IntegrationAuth,
-  type AuthStatus,
-  IntegrationApiError,
-} from '@/api/integrations';
+import { integrationsApi, type IntegrationService, type IntegrationAuth, IntegrationApiError } from '@/api/integrations';
 import { useAuth } from './useAuth';
 
 /**

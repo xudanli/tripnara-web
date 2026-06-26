@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Route,
   Clock,
+  Lightbulb,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/format';
 import Logo from '@/components/common/Logo';
@@ -420,6 +421,69 @@ function ItineraryOverviewBlock({ itinerary, className }: { itinerary: PlannerRe
 }
 
 /**
+ * 为什么推荐块（体验兑现系统 why_recommended）
+ */
+function WhyRecommendedBlock({ block, className }: { block: PlannerResponseBlock; className?: string }) {
+  const bullets = Array.isArray(block.bullets) ? block.bullets : [];
+  if (!bullets.length && !block.overallSummary) return null;
+
+  const changingFactors = block.dimensions?.changingFactors;
+  const factorList = Array.isArray(changingFactors)
+    ? changingFactors
+    : typeof changingFactors === 'string'
+      ? [changingFactors]
+      : [];
+
+  return (
+    <Card className={cn('w-full border border-blue-100 bg-blue-50/30 mb-3', className)}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Lightbulb className="w-4 h-4 text-blue-600" />
+          {block.title ?? '为什么推荐这样安排'}
+        </CardTitle>
+        {(block.overallLabel || block.overallSummary) && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {block.overallLabel && (
+              <Badge variant="outline" className="text-xs border-blue-200 bg-white text-blue-800">
+                {block.overallLabel}
+              </Badge>
+            )}
+            {block.overallSummary && (
+              <p className="text-xs text-muted-foreground">{block.overallSummary}</p>
+            )}
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        {bullets.length > 0 && (
+          <ul className="space-y-1.5">
+            {bullets.map((line, i) => (
+              <li key={i} className="text-sm flex items-start gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {block.dimensions && (
+          <div className="space-y-1.5 text-xs text-muted-foreground border-t pt-2">
+            {block.dimensions.routeFeasibility && (
+              <p>{block.dimensions.routeFeasibility}</p>
+            )}
+            {block.dimensions.experienceMatch && (
+              <p>{block.dimensions.experienceMatch}</p>
+            )}
+            {factorList.map((f, i) => (
+              <p key={i}>{f}</p>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * 问题卡片占位符（实际渲染由父组件处理）
  */
 function QuestionCardPlaceholder(_props: { questionId?: string; className?: string }) {
@@ -485,6 +549,9 @@ export function ResponseBlockRenderer({ block, allBlocks, className }: ResponseB
       return (
         <ItineraryOverviewBlock itinerary={block.itinerary} className={className} />
       );
+
+    case 'why_recommended':
+      return <WhyRecommendedBlock block={block} className={className} />;
       
     default:
       return null;

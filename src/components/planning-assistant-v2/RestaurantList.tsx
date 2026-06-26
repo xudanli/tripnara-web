@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Utensils, Star, MapPin, Phone, Globe, ChevronDown } from 'lucide-react';
+import { Utensils, Star, Phone, Globe, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Restaurant } from '@/api/planning-assistant-v2';
 

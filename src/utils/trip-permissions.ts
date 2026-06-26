@@ -27,7 +27,7 @@ export function canEditEvidence(userRole: CollaboratorRole | undefined | null): 
  * 
  * 所有角色都可以查看证据
  */
-export function canViewEvidence(userRole: CollaboratorRole | undefined | null): boolean {
+export function canViewEvidence(_userRole: CollaboratorRole | undefined | null): boolean {
   return true; // 所有角色都可以查看
 }
 

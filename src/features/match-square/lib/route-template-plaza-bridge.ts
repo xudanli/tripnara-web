@@ -77,7 +77,7 @@ export function parseRouteTemplatePlazaSearchParams(
 export function resolveCatalogEntryFromTemplate(
   template: Pick<
     RouteTemplate,
-    'nameCN' | 'nameEN' | 'durationDays' | 'metadata' | 'routeDirection'
+    'id' | 'nameCN' | 'nameEN' | 'durationDays' | 'metadata' | 'routeDirection'
   >
 ): RouteTemplateCatalogEntry | null {
   const metaId =
@@ -111,7 +111,37 @@ export function resolveCatalogEntryFromTemplate(
     if (!best || score > best.score) best = { entry, score };
   }
 
-  return best && best.score >= 2 ? best.entry : null;
+  if (best && best.score >= 2) return best.entry;
+
+  const titleZh =
+    template.nameCN ||
+    template.nameEN ||
+    template.routeDirection?.nameCN ||
+    template.routeDirection?.nameEN ||
+    `路线模板 #${template.id}`;
+  const routeDirectionName =
+    template.routeDirection?.nameCN ||
+    template.routeDirection?.nameEN ||
+    titleZh;
+  const routeDirectionKey =
+    (template.routeDirection?.id != null ? `route_direction_${template.routeDirection.id}` : null) ||
+    `ROUTE_TEMPLATE_${template.id}`;
+  const keywordText = `${titleZh} ${routeDirectionName} ${(template.routeDirection?.tags ?? []).join(' ')}`;
+  const heavyPattern = /高地|F路|徒步|野营|荒野|重装|涉水|Highland|Trek|Wilderness/i;
+
+  return {
+    catalogId: `route_template_${template.id}`,
+    titleZh,
+    scriptId: heavyPattern.test(keywordText) ? 'chuanxi_heavy_trek' : 'light_trek_dyl_retreat',
+    routeDirectionKey,
+    routeDirectionName,
+    durationDays: template.durationDays,
+    intentKeywords: [
+      titleZh,
+      routeDirectionName,
+      ...(template.routeDirection?.tags ?? []),
+    ].filter(Boolean),
+  };
 }
 
 export function buildItinerarySummaryFromDayPlans(dayPlans: DayPlan[] | undefined): string {
@@ -201,7 +231,7 @@ export function buildRouteTemplateRecruitmentUrl(input: {
   if (input.routeDirectionName) q.set('routeDirectionName', input.routeDirectionName);
   if (input.vibeSeed) q.set('vibeSeed', input.vibeSeed);
   if (input.confirmTemplate) q.set('confirmTemplate', '1');
-  return `/dashboard/tripnara/plaza/new?${q.toString()}`;
+  return `/dashboard/trusted-projects/new?${q.toString()}`;
 }
 
 export function buildRecruitmentInitialFromRouteTemplate(input: {

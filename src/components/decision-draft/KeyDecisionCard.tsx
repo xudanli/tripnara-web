@@ -6,7 +6,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { GateStatusBanner } from '@/components/ui/gate-status-banner';
-import { normalizeGateStatus, type GateStatus } from '@/lib/gate-status';
+import { normalizeGateStatus } from '@/lib/gate-status';
 import { cn } from '@/lib/utils';
 import { Car, Hotel, MapPin, Calendar, DollarSign, type LucideIcon } from 'lucide-react';
 import type { DecisionStep } from '@/types/decision-draft';

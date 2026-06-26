@@ -147,7 +147,7 @@ export default function ApprovalDialog({
     ? new Date(approval.expiresAt) < new Date()
     : false;
 
-  const RiskIcon = approval ? riskLevelIcons[approval.riskLevel] : AlertTriangle;
+  const ____RiskIcon = approval ? riskLevelIcons[approval.riskLevel] : AlertTriangle;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

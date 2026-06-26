@@ -5,7 +5,7 @@ import { PersonSitting, Route } from '@/components/illustrations/SimpleIllustrat
 import { Badge } from '@/components/ui/badge';
 
 // 封面插画组件
-function StoryCoverIllustration({ type, className = '' }: { type: 'iceland' | 'newzealand' | 'europe'; className?: string }) {
+function StoryCoverIllustration({ type, className = '' }: { type: 'iceland' | 'newzealand' | 'europe' | 'team'; className?: string }) {
   const viewBox = '0 0 200 200';
 
   if (type === 'iceland') {
@@ -68,6 +68,19 @@ function StoryCoverIllustration({ type, className = '' }: { type: 'iceland' | 'n
   }
 
   // 欧洲：火车 + 城市轮廓
+  if (type === 'team') {
+    return (
+      <svg width="100%" height="100%" viewBox={viewBox} fill="none" className={className}>
+        <circle cx="70" cy="90" r="18" stroke="#333" strokeWidth="2" fill="#f8f9fa" />
+        <circle cx="110" cy="80" r="16" stroke="#333" strokeWidth="2" fill="#fefce8" />
+        <circle cx="130" cy="110" r="14" stroke="#333" strokeWidth="2" fill="#f8f9fa" />
+        <circle cx="90" cy="120" r="12" stroke="#333" strokeWidth="2" fill="#fefce8" />
+        <path d="M 70 108 L 90 120 L 110 96 L 130 110" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 4" />
+        <path d="M 40 160 L 160 160" stroke="#666" strokeWidth="2" opacity="0.3" />
+      </svg>
+    );
+  }
+
   return (
     <svg width="100%" height="100%" viewBox={viewBox} fill="none" className={className}>
       <rect x="20" y="140" width="160" height="8" rx="4" fill="#666" opacity="0.3" />
@@ -94,71 +107,32 @@ export default function StoriesPage() {
     { key: 'family', label: t('stories.categories.family') },
     { key: 'polar', label: t('stories.categories.polar') },
     { key: 'europeanRail', label: t('stories.categories.europeanRail') },
+    { key: 'teamFormation', label: t('stories.categories.teamFormation') },
   ];
 
-  // Stories with enhanced details
-  const stories = [
-    {
-      id: 1,
-      title: '冰岛环岛',
-      travelerType: '深度旅行者',
-      destination: '冰岛',
-      category: 'roadTrip',
-      coverType: 'iceland' as const,
-      goal: t('stories.story1.goal', {
-        defaultValue: '完整一圈冰岛公路，在风雪中看到蓝冰洞',
-      }),
-      keywords: t('stories.story1.keywords', {
-        defaultValue: 'F-Road 风险评估｜天气备选方案｜节奏优化',
-      }),
-      tags: {
-        risk: 'F-road 风险评估',
-        replacement: '天气备选方案',
-        rhythm: '每日节奏优化',
-        elevation: '海拔适应',
-      },
-    },
-    {
-      id: 2,
-      title: '新西兰徒步',
-      travelerType: '户外爱好者',
-      destination: '新西兰',
-      category: 'hiking',
-      coverType: 'newzealand' as const,
-      goal: t('stories.story2.goal', {
-        defaultValue: '挑战新西兰经典徒步路线，匹配个人体力节奏',
-      }),
-      keywords: t('stories.story2.keywords', {
-        defaultValue: '体力节奏匹配｜天气替换机制｜线路结构化生成',
-      }),
-      tags: {
-        risk: '地形难度评估',
-        replacement: '路线替换',
-        rhythm: '体力匹配',
-        elevation: '累积爬升',
-      },
-    },
-    {
-      id: 3,
-      title: '欧洲火车之旅',
-      travelerType: '城市探索者',
-      destination: '欧洲',
-      category: 'europeanRail',
-      coverType: 'europe' as const,
-      goal: t('stories.story3.goal', {
-        defaultValue: '欧洲多城市深度探索，确保行程衔接顺畅',
-      }),
-      keywords: t('stories.story3.keywords', {
-        defaultValue: '行程衔接优化｜班次替换方案｜城市停留节奏',
-      }),
-      tags: {
-        risk: '行程衔接风险',
-        replacement: '班次替换',
-        rhythm: '城市停留节奏',
-        elevation: '-',
-      },
-    },
+  const storyConfigs = [
+    { id: 1, category: 'roadTrip', coverType: 'iceland' as const },
+    { id: 2, category: 'hiking', coverType: 'newzealand' as const },
+    { id: 3, category: 'europeanRail', coverType: 'europe' as const },
+    { id: 4, category: 'teamFormation', coverType: 'team' as const },
   ];
+
+  const stories = storyConfigs.map(({ id, category, coverType }) => ({
+    id,
+    category,
+    coverType,
+    title: t(`stories.story${id}.title`),
+    travelerType: t(`stories.story${id}.travelerType`),
+    destination: t(`stories.story${id}.destination`),
+    goal: t(`stories.story${id}.goal`),
+    keywords: t(`stories.story${id}.keywords`),
+    tags: {
+      risk: t(`stories.story${id}.tags.risk`),
+      replacement: t(`stories.story${id}.tags.replacement`),
+      rhythm: t(`stories.story${id}.tags.rhythm`),
+      elevation: t(`stories.story${id}.tags.elevation`),
+    },
+  }));
 
   const filteredStories = selectedCategory
     ? stories.filter((story) => story.category === selectedCategory)
@@ -248,7 +222,7 @@ export default function StoriesPage() {
                 transition: 'all 0.2s',
               }}
             >
-              全部
+              {t('stories.allCategories')}
             </button>
             {categories.map((category) => (
               <button
@@ -550,6 +524,24 @@ export default function StoriesPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* SECTION 5 · CTA */}
+      <section style={{ padding: '4rem 2rem', textAlign: 'center', backgroundColor: '#fff' }}>
+        <Link
+          to="/trusted-projects"
+          style={{
+            display: 'inline-block',
+            padding: '1rem 2rem',
+            border: '2px solid #000',
+            borderRadius: '8px',
+            color: '#000',
+            textDecoration: 'none',
+            fontWeight: '600',
+          }}
+        >
+          {t('stories.trustedProjectsCta')}
+        </Link>
       </section>
     </div>
   );

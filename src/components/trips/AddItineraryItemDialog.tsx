@@ -54,19 +54,18 @@ import {
   Utensils, 
   Coffee, 
   Car, 
-  Search,
   Star,
   Clock,
   Plus,
   Check,
   ChevronsUpDown,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
-import { useItineraryValidation, getDefaultCostCategory, formatCostCategory } from '@/hooks';
+import { useItineraryValidation } from '@/hooks';
 import { AlertTriangle, Info, AlertCircle, DollarSign } from 'lucide-react';
 import type { CostCategory } from '@/types/trip';
+import { ITINERARY_ITEM_TYPE_OPTIONS } from '@/lib/itinerary-item-type-display';
 
 // ==================== 类型定义 ====================
 
@@ -79,53 +78,13 @@ interface AddItineraryItemDialogProps {
   onSuccess: () => void;
 }
 
-interface ItemTypeOption {
-  value: ItineraryItemType;
-  label: string;
-  icon: typeof MapPin;
-  description: string;
-}
-
-// ==================== 配置 ====================
-
-const ITEM_TYPE_OPTIONS: ItemTypeOption[] = [
-  {
-    value: 'ACTIVITY',
-    label: '景点/活动',
-    icon: MapPin,
-    description: '参观景点、体验活动',
-  },
-  {
-    value: 'MEAL_ANCHOR',
-    label: '固定用餐',
-    icon: Utensils,
-    description: '预约餐厅、重要用餐',
-  },
-  {
-    value: 'MEAL_FLOATING',
-    label: '灵活用餐',
-    icon: Coffee,
-    description: '随机用餐、小吃',
-  },
-  {
-    value: 'REST',
-    label: '休息',
-    icon: Coffee,
-    description: '酒店休息、自由时间',
-  },
-  {
-    value: 'TRANSIT',
-    label: '交通',
-    icon: Car,
-    description: '火车、飞机、巴士等',
-  },
-];
+const ITEM_TYPE_OPTIONS = ITINERARY_ITEM_TYPE_OPTIONS;
 
 // ==================== 组件 ====================
 
 export function AddItineraryItemDialog({
   tripDay,
-  tripId,
+  tripId: _tripId,
   countryCode,
   open,
   onOpenChange,
@@ -156,6 +115,16 @@ export function AddItineraryItemDialog({
   // 提交状态
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 校验相关状态
+  const [validationResult, setValidationResult] = useState<{
+    errors: any[];
+    warnings: any[];
+    infos: any[];
+    travelInfo?: any;
+  } | null>(null);
+  const [forceCreate, setForceCreate] = useState(false);
+  const { validate, validating } = useItineraryValidation();
 
   const debouncedQuery = useDebounce(searchQuery, 300);
 
@@ -190,9 +159,9 @@ export function AddItineraryItemDialog({
     const searchPlaces = async () => {
       setSearching(true);
       try {
-        const results = await placesApi.search({
-          query: debouncedQuery,
-          country: countryCode,
+        const results = await placesApi.searchPlaces({
+          q: debouncedQuery,
+          countryCode,
           limit: 10,
         });
         setSearchResults(results);
@@ -383,7 +352,7 @@ export function AddItineraryItemDialog({
             添加行程项
           </DialogTitle>
           <DialogDescription>
-            添加到 {formatDayDate(tripDay.date)} - 第{tripDay.dayNumber}天
+            添加到 {formatDayDate(tripDay.date)}
           </DialogDescription>
         </DialogHeader>
 
@@ -489,7 +458,8 @@ export function AddItineraryItemDialog({
                                   )}
                                   <p className="text-xs text-muted-foreground truncate">
                                     {place.category}
-                                    {place.typicalDuration && ` · 约${Math.round(place.typicalDuration / 60)}分钟`}
+                                    {place.physicalMetadata?.estimated_duration_min != null &&
+                                      ` · 约${Math.round(place.physicalMetadata.estimated_duration_min)}分钟`}
                                   </p>
                                 </div>
                                 {selectedPlace?.id === place.id && (
@@ -665,7 +635,7 @@ export function AddItineraryItemDialog({
                       <p className="text-sm font-medium text-red-800">{formatValidationMessage(err.message, err.details)}</p>
                       {err.suggestions && err.suggestions.length > 0 && (
                         <div className="mt-2 space-y-1">
-                          {err.suggestions.map((suggestion, sIdx) => (
+                          {err.suggestions.map((suggestion: { description?: string }, sIdx: number) => (
                             <p key={sIdx} className="text-xs text-red-700">
                               💡 {suggestion.description}
                             </p>
@@ -690,7 +660,7 @@ export function AddItineraryItemDialog({
                       <p className="text-sm font-medium text-yellow-800">{formatValidationMessage(warning.message, warning.details)}</p>
                       {warning.suggestions && warning.suggestions.length > 0 && (
                         <div className="mt-2 space-y-1">
-                          {warning.suggestions.map((suggestion, sIdx) => (
+                          {warning.suggestions.map((suggestion: { description?: string }, sIdx: number) => (
                             <p key={sIdx} className="text-xs text-yellow-700">
                               💡 {suggestion.description}
                             </p>

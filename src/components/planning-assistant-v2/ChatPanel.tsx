@@ -49,7 +49,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export function ChatPanel({ sessionId, userId, clearMessages, onClearReady, context, destination, tripInfo, tripId, onAddToTripSuccess, hideExecutionOrchestration = true, className }: ChatPanelProps) {
+export function ChatPanel({ sessionId, userId, clearMessages: _clearMessages, onClearReady, context, destination, tripInfo, tripId, onAddToTripSuccess, hideExecutionOrchestration = true, className }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [isListening, setIsListening] = useState(false);

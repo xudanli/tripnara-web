@@ -30,6 +30,17 @@ import { formatRouteRunAsyncProgressLabel } from '@/lib/route-run-async';
 import { isTaskLeaseRecovering } from '@/lib/task-lease-ui';
 import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
 import { invokeRouteAndRun } from '@/lib/executeRouteAndRun';
+import { pickProcessFairnessFromPayload } from '@/lib/normalize-process-fairness';
+import { pickDecisionProfilingFromPayload } from '@/lib/normalize-decision-profiling';
+import {
+  isProcessFairnessActivated,
+  navigateToStructuredNegotiation,
+  demoteRouteRunAnswerForProcessFairnessBubble,
+} from '@/lib/process-fairness-navigation';
+import { DecisionProfilingRouteRunCta } from '@/components/decision-profiling';
+import { ProcessFairnessRouteRunCard } from '@/components/domain-influence';
+import type { DecisionProfilingPayload } from '@/types/trip-decision-profiling';
+import type { ProcessFairnessPayload } from '@/types/process-fairness';
 import { usePlanningTaskStore } from '@/store/planningTaskStore';
 import {
   looksLikeCarRentalSearchRequest,
@@ -86,7 +97,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Send, Bot, User, ChevronRight, CheckCircle2, XCircle, Loader2, MapPin, Utensils, Search, Calendar, RotateCw, Compass, Target, Lightbulb, ClipboardCheck, Clock, Route, AlertTriangle, Check, Info, type LucideIcon } from 'lucide-react';
+import { Send, Bot, User, ChevronRight, CheckCircle2, XCircle, Loader2, MapPin, Utensils, Search, Calendar, RotateCw, Compass, Target, Lightbulb, ClipboardCheck, Clock, Route, AlertTriangle, Check, Info, GitBranch, Handshake, type LucideIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -136,6 +147,39 @@ import { extractPoiSuppressAnswerProse, type AgentPoiDayBlock } from '@/lib/agen
 import { parseConsultationDashboard } from '@/lib/consultation-dashboard';
 import type { ConsultationDashboardPayload } from '@/types/consultation-dashboard';
 import { ConsultationDashboard } from '@/components/agent/ConsultationDashboard';
+import CascadeImpactPanel from '@/components/readiness/CascadeImpactPanel';
+import GuardianNegotiationPanel from '@/components/readiness/GuardianNegotiationPanel';
+import CoverageDisclosureFootnote from '@/components/readiness/CoverageDisclosureFootnote';
+import { pickCoverageDisclosureFromExplain } from '@/lib/coverage-disclosure.util';
+import type { CoverageDisclosure } from '@/types/coverage-disclosure';
+import { pickCascadeUiHintsFromExplain, pickCascadeAffectedFromExplain } from '@/lib/readiness-cascade.util';
+import type { CascadeAffectedItem, CascadeUiHint } from '@/types/readiness-cascade';
+import {
+  hasProactiveNarrationContent,
+  pickProactiveNarrationFromRouteRun,
+  type ProactiveNarrationBundle,
+} from '@/lib/route-run-proactive-narration.util';
+import TravelRuntimeGraphPanel from '@/components/agent/TravelRuntimeGraphPanel';
+import TravelOntologyStatePanel from '@/components/agent/TravelOntologyStatePanel';
+import ProactiveNarrationPanel from '@/components/agent/ProactiveNarrationPanel';
+import {
+  hasTravelOntologyStateContent,
+  pickTravelOntologyStateFromPayload,
+} from '@/lib/travel-ontology-state.util';
+import type { TravelOntologyState } from '@/types/travel-ontology-state';
+import {
+  hasTravelRuntimeGraphContent,
+  pickTravelRuntimeGraphFromRouteRun,
+  resolveTravelRuntimeGraphForDev,
+} from '@/lib/travel-runtime-graph.util';
+import type { TravelRuntimeGraph } from '@/types/travel-runtime-graph';
+import SchemaOrgDiscoveryPanel from '@/components/agent/SchemaOrgDiscoveryPanel';
+import {
+  hasSchemaOrgDiscoveryContent,
+  pickSchemaOrgDiscoveryFromRouteRun,
+  resolveSchemaOrgDiscoveryForDev,
+} from '@/lib/schema-org-discovery.util';
+import type { SchemaOrgDiscoveryPayload } from '@/types/schema-org-discovery';
 import { buildLiveSensorAuditHint } from '@/lib/live-sensor-audit-hint';
 import { PoiCardsByDayPanel } from '@/components/agent/PoiCardsByDayPanel';
 import {
@@ -451,6 +495,7 @@ const getFindingIcon = (iconName: string): LucideIcon => {
     case 'route': return Route;
     case 'check': return CheckCircle2;
     case 'alert': return AlertTriangle;
+    case 'git-branch': return GitBranch;
     default: return Lightbulb;
   }
 };
@@ -487,7 +532,14 @@ const getFindingStyles = (type: TripInsightFinding['type']) => {
 type WelcomeOpts = {
   /** 已绑定有效 trip_id（如 /agent?tripId=UUID）：不应再用「从零规划」冷启动文案 */
   hasBoundTrip?: boolean;
+  /** 规划工作台侧栏紧凑模式：精简欢迎区与快捷操作 */
+  compact?: boolean;
 };
+
+/** 规划工作台与行中执行页共用 AgentChat（route_and_run） */
+function isUnifiedTripAgentEntry(entryPoint: EntryPoint | undefined): boolean {
+  return entryPoint === 'planning_workbench' || entryPoint === 'execute';
+}
 
 /**
  * 根据入口点获取开场白配置
@@ -498,9 +550,11 @@ const getWelcomeConfig = (
   opts?: WelcomeOpts
 ): WelcomeConfig => {
   const hasBoundTrip = opts?.hasBoundTrip === true;
+  const compact = opts?.compact === true;
 
   switch (entryPoint) {
     case 'planning_workbench':
+    case 'execute':
       // 如果有行程洞察信息，展示上下文感知的开场白
       if (tripInsight && tripInsight.tripSummary.days > 0) {
         const { tripSummary, findings } = tripInsight;
@@ -510,7 +564,7 @@ const getWelcomeConfig = (
         
         // 优先添加有 actionPrompt 的 findings
         findings.forEach((finding) => {
-          if (finding.actionLabel && finding.actionPrompt && dynamicIntents.length < 3) {
+          if (finding.actionLabel && finding.actionPrompt && dynamicIntents.length < (compact ? 2 : 3)) {
             dynamicIntents.push({
               icon: getFindingIcon(finding.icon),
               label: finding.actionLabel,
@@ -520,18 +574,45 @@ const getWelcomeConfig = (
         });
         
         // 补充默认按钮
-        if (dynamicIntents.length < 4) {
+        if (dynamicIntents.length < (compact ? 3 : 4)) {
           dynamicIntents.push({ icon: Search, label: '全面分析', prompt: '帮我全面分析当前行程，看看还有什么问题或可以优化的地方' });
         }
-        if (dynamicIntents.length < 4) {
+        if (!compact && dynamicIntents.length < 4) {
           dynamicIntents.push({ icon: Target, label: '推荐景点', prompt: '根据我的行程，推荐一些适合加入的景点' });
+        }
+        if (compact && dynamicIntents.length < 3) {
+          dynamicIntents.push({
+            icon: Handshake,
+            label: '团队协商',
+            prompt: '住宿选公寓还是木屋？帮团队结构化讨论一下',
+          });
         }
         
         return {
           icon: Compass,
-          title: '规划助手 Nara 🧭',
-          subtitle: '专注让行程变得「可执行」',
-          greeting: (
+          title: compact ? 'Nara' : '规划助手 Nara',
+          subtitle: compact ? '已关联当前行程' : '专注让行程变得「可执行」',
+          greeting: compact ? (
+            <div className="space-y-2 text-left">
+              <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm">
+                  <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span className="font-medium text-foreground truncate">{tripSummary.destination}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{tripSummary.days} 天</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  已安排 {tripSummary.placesCount} 个地点
+                </p>
+              </div>
+              {findings.length > 0 ? (
+                <p className="text-xs text-muted-foreground px-0.5">
+                  发现 {findings.length} 条可处理事项，可直接点下方快捷语句。
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground px-0.5">行程状态良好，有什么想调整的？</p>
+              )}
+            </div>
+          ) : (
             <div className="space-y-3">
               {/* 行程摘要卡片 */}
               <div className="bg-primary/5 rounded-lg p-3 text-left">
@@ -587,7 +668,7 @@ const getWelcomeConfig = (
               )}
             </div>
           ),
-          quickIntents: dynamicIntents,
+          quickIntents: dynamicIntents.slice(0, compact ? 3 : dynamicIntents.length),
           example: undefined,
         };
       }
@@ -595,9 +676,11 @@ const getWelcomeConfig = (
       // 没有行程信息时的默认开场白
       return {
         icon: Compass,
-        title: '规划助手 Nara 🧭',
-        subtitle: '专注让行程变得「可执行」',
-        greeting: (
+        title: compact ? 'Nara' : '规划助手 Nara',
+        subtitle: compact ? '规划助手' : '专注让行程变得「可执行」',
+        greeting: compact ? (
+          <p className="text-sm text-muted-foreground">说说想怎么改行程、查攻略，或发起团队协商。</p>
+        ) : (
           <>
             我可以帮你：
             <ul className="mt-2 space-y-1 text-left list-disc list-inside">
@@ -607,13 +690,19 @@ const getWelcomeConfig = (
             </ul>
           </>
         ),
-        quickIntents: [
-          { icon: MapPin, label: '优化路线', prompt: '帮我优化当前行程的路线顺序，减少绕路' },
-          { icon: ClipboardCheck, label: '检查准备度', prompt: '检查当前行程的准备度，有哪些风险或待办事项？' },
-          { icon: Target, label: '推荐景点', prompt: '根据我的偏好，推荐一些适合加入行程的景点' },
-          { icon: Lightbulb, label: '分析可行性', prompt: '分析当前行程的整体可行性，有什么需要改进的吗？' },
-        ],
-        example: '帮我把第二天的行程优化一下，感觉有点赶',
+        quickIntents: (compact
+          ? [
+              { icon: MapPin, label: '优化路线', prompt: '帮我优化当前行程的路线顺序，减少绕路' },
+              { icon: Handshake, label: '团队协商', prompt: '住宿选公寓还是木屋？帮团队结构化讨论一下' },
+              { icon: ClipboardCheck, label: '检查准备度', prompt: '检查当前行程的准备度，有哪些风险或待办事项？' },
+            ]
+          : [
+              { icon: MapPin, label: '优化路线', prompt: '帮我优化当前行程的路线顺序，减少绕路' },
+              { icon: ClipboardCheck, label: '检查准备度', prompt: '检查当前行程的准备度，有哪些风险或待办事项？' },
+              { icon: Target, label: '推荐景点', prompt: '根据我的偏好，推荐一些适合加入行程的景点' },
+              { icon: Lightbulb, label: '分析可行性', prompt: '分析当前行程的整体可行性，有什么需要改进的吗？' },
+            ]),
+        example: compact ? undefined : '帮我把第二天的行程优化一下，感觉有点赶',
       };
 
     case 'trip_detail_page':
@@ -887,6 +976,20 @@ interface Message {
   unifiedMapLayer?: UnifiedMapLayerPayload;
   /** payload / explain.flawed_draft_v1 — SUCCESS 但未完全 VERIFIED */
   flawedDraft?: FlawedDraftDescriptorV1;
+  /** explain.cascade_ui_hints：级联影响卡片（与 readiness 同形） */
+  cascadeUiHints?: CascadeUiHint[];
+  /** explain.causal_pre_analysis / dependency_impact.impact.affected[] */
+  cascadeAffectedItems?: CascadeAffectedItem[];
+  /** narration.tips / research_ui_hints 主动提示层 */
+  proactiveNarration?: ProactiveNarrationBundle;
+  /** explain.coverage_disclosure — L4 数据边界脚注 */
+  coverageDisclosure?: CoverageDisclosure;
+  /** payload.travelOntologyState — L1 行程状态摘要 */
+  travelOntologyState?: TravelOntologyState;
+  /** explain.travel_runtime_graph — 影响传播图（默认折叠） */
+  travelRuntimeGraph?: TravelRuntimeGraph;
+  /** payload.schema_org_discovery — SEO / 结构化导出 */
+  schemaOrgDiscovery?: SchemaOrgDiscoveryPayload;
   /** ui_display.emotional_context — 情绪上下文投影 */
   emotionalContext?: EmotionalContextClient;
   /** ui_display.voice_payload — 暖心 TTS 口语全文 */
@@ -895,6 +998,10 @@ interface Message {
   accommodationHealth?: AccommodationHealthPayload;
   /** ui_display.shared_milestone_cards — 跨 trip 共同回忆 */
   sharedMilestoneCards?: SharedMilestoneUiCard[];
+  /** payload.decision_profiling：成员加入后 Agent 触发行前调查 CTA */
+  decisionProfiling?: DecisionProfilingPayload;
+  /** payload.process_fairness：Plan Studio 结构化协商主卡片 */
+  processFairness?: ProcessFairnessPayload;
 }
 
 /**
@@ -907,7 +1014,7 @@ function defaultUserIntentModeForEntry(
   entryPoint: EntryPoint | undefined,
   hasBoundTrip: boolean
 ): UserExplicitIntentMode {
-  if (entryPoint === 'planning_workbench') return 'planning';
+  if (entryPoint === 'planning_workbench' || entryPoint === 'execute') return 'planning';
   if (hasBoundTrip) return 'auto';
   return 'generic_qa';
 }
@@ -944,20 +1051,21 @@ type RouteAndRunSendOptions = {
 };
 
 /** 映射 props.enableLiveTools → options.enable_live_tools */
+const DEFAULT_ROUTE_RUN_LIVE_TOOLS = ['weather', 'flight', 'hotel', 'car_rental'] as const;
+
 function buildEnableLiveToolsOption(
   v: boolean | string[] | undefined
-): boolean | string[] | undefined {
+): string[] | undefined {
   if (v === undefined || v === false) return undefined;
   if (Array.isArray(v)) return v.length > 0 ? v : undefined;
-  return v === true ? true : undefined;
+  return v === true ? [...DEFAULT_ROUTE_RUN_LIVE_TOOLS] : undefined;
 }
 
 function mergeCarRentalIntoEnableLiveTools(
-  base: boolean | string[] | undefined,
+  base: string[] | undefined,
   addCarRental: boolean
-): boolean | string[] | undefined {
+): string[] | undefined {
   if (!addCarRental) return base;
-  if (base === true) return true;
   const list = Array.isArray(base) ? [...base] : [];
   if (!list.some((x) => String(x).toLowerCase() === 'car_rental')) {
     list.push('car_rental');
@@ -966,11 +1074,10 @@ function mergeCarRentalIntoEnableLiveTools(
 }
 
 function mergeFlightIntoEnableLiveTools(
-  base: boolean | string[] | undefined,
+  base: string[] | undefined,
   addFlight: boolean
-): boolean | string[] | undefined {
+): string[] | undefined {
   if (!addFlight) return base;
-  if (base === true) return true;
   const list = Array.isArray(base) ? [...base] : [];
   if (!list.some((x) => String(x).toLowerCase() === 'flight')) {
     list.push('flight');
@@ -1031,6 +1138,13 @@ function userExplicitFromRouteRunIntentMode(m: RouteRunIntentModeOption): UserEx
     default:
       return 'auto';
   }
+}
+
+function resolveRouteRunMessageMode(response: RouteAndRunResponse): 'fast' | 'slow' {
+  const resolved = response.observability?.thinking_mode_resolved;
+  if (resolved === 'fast') return 'fast';
+  if (resolved === 'balanced' || resolved === 'deep') return 'slow';
+  return response.route.ui_hint.mode;
 }
 
 /**
@@ -1865,6 +1979,7 @@ function MessageBubble({
     hasAccommodationHealthUi(message.accommodationHealth) ||
     hasSharedMilestoneCardsUi(message.sharedMilestoneCards) ||
     isAnchoringEmotionalContext(message.emotionalContext) ||
+    Boolean(message.processFairness) ||
     (Array.isArray(message.accommodations) && message.accommodations.length > 0) ||
     (!isConsultationSurface && Array.isArray(message.hotels) && message.hotels.length > 0);
   const hideAssistantAnswerProseForAdjust =
@@ -2153,12 +2268,14 @@ function MessageBubble({
             {showAnswerSummaryOnly ? (
               <p
                 className={cn(
-                  'text-sm text-foreground/95 leading-snug line-clamp-3 mb-1 border-l-2 border-primary/25 pl-2.5',
+                  message.processFairness
+                    ? 'text-sm text-muted-foreground leading-snug mb-2 border-l-2 border-border/60 pl-2.5'
+                    : 'text-sm text-foreground/95 leading-snug line-clamp-3 mb-1 border-l-2 border-primary/25 pl-2.5',
                   ASSISTANT_BUBBLE_TEXT
                 )}
                 title={mdBody.length > 160 ? mdBody : undefined}
               >
-                {mdBody}
+                {message.processFairness ? truncateAnswerTextForBubble(mdBody) : mdBody}
               </p>
             ) : showTruncatedTripAnswer ? (
               <p
@@ -2189,6 +2306,11 @@ function MessageBubble({
                   );
                 })()}
               </>
+            ) : null}
+            {!isUser &&
+            !isError &&
+            message.processFairness ? (
+              <ProcessFairnessRouteRunCard payload={message.processFairness} className="mt-2" />
             ) : null}
             {showConsultationRichDashboard ? (
               <ConsultationDashboard
@@ -2258,6 +2380,60 @@ function MessageBubble({
             showPlanningDashboard &&
             message.robustnessDashboard ? (
               <RobustnessDashboardPanel rollout={message.robustnessDashboard} className="mt-2" />
+            ) : null}
+            {!isUser && message.cascadeUiHints && message.cascadeUiHints.length > 0 ? (
+              <CascadeImpactPanel
+                hints={message.cascadeUiHints}
+                affectedItems={message.cascadeAffectedItems}
+                compact
+                className="mt-2"
+                showCardActions={false}
+              />
+            ) : null}
+            {!isUser && message.coverageDisclosure ? (
+              <CoverageDisclosureFootnote
+                disclosure={message.coverageDisclosure}
+                className="mt-2"
+              />
+            ) : null}
+            {!isUser &&
+            message.travelOntologyState &&
+            hasTravelOntologyStateContent(message.travelOntologyState) ? (
+              <TravelOntologyStatePanel
+                state={message.travelOntologyState}
+                defaultCollapsed
+                className="mt-2"
+              />
+            ) : null}
+            {!isUser &&
+            message.travelRuntimeGraph &&
+            hasTravelRuntimeGraphContent(message.travelRuntimeGraph) ? (
+              <TravelRuntimeGraphPanel
+                graph={message.travelRuntimeGraph}
+                compact
+                className="mt-2"
+                defaultCollapsed={!debugUiDefaults}
+                debugMode={debugUiDefaults}
+              />
+            ) : null}
+            {!isUser &&
+            message.proactiveNarration &&
+            hasProactiveNarrationContent(message.proactiveNarration) ? (
+              <ProactiveNarrationPanel
+                bundle={message.proactiveNarration}
+                compact
+                className="mt-2"
+              />
+            ) : null}
+            {!isUser &&
+            debugUiDefaults &&
+            message.schemaOrgDiscovery &&
+            hasSchemaOrgDiscoveryContent(message.schemaOrgDiscovery) ? (
+              <SchemaOrgDiscoveryPanel
+                discovery={message.schemaOrgDiscovery}
+                compact
+                className="mt-2"
+              />
             ) : null}
             {!isConsultationSurface &&
             showPlanningDashboard &&
@@ -2567,6 +2743,7 @@ function MessageBubble({
               mdBody.includes('建议型修复') ||
               mdBody.includes('【物理门')
             }
+            showDebugFields={debugUiDefaults}
           />
         ) : null}
 
@@ -2674,6 +2851,16 @@ function MessageBubble({
             onRouteRunMessage={onSuggestedRouteRun}
             disabled={!!clarificationSubmitDisabled || !!chatSending}
             className="mt-3"
+          />
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        message.decisionProfiling?.triggered ? (
+          <DecisionProfilingRouteRunCta
+            payload={message.decisionProfiling}
+            disabled={!!clarificationSubmitDisabled || !!chatSending}
           />
         ) : null}
 
@@ -3191,7 +3378,9 @@ export default function AgentChat({
         return;
       }
       const shouldLoad =
-        entryPoint === 'planning_workbench' || attachActiveTripSummaryContext === true;
+        entryPoint === 'planning_workbench' ||
+        entryPoint === 'execute' ||
+        attachActiveTripSummaryContext === true;
       if (!shouldLoad) {
         setTripInsight(null);
         return;
@@ -3331,13 +3520,16 @@ export default function AgentChat({
   };
 
   const inputPlaceholder = useMemo(() => {
+    if (compactAgentChrome) {
+      return '说说想改什么、查攻略，或发起团队协商…';
+    }
     if (userIntentMode === 'data_lookup') return '事实类、攻略检索…（强制检索档 DATA_LOOKUP）';
     if (userIntentMode === 'generic_qa') return '闲聊、总结、泛问答…（GENERIC_QA，非强制检索）';
     if (userIntentMode === 'planning') return '说明想怎么改行程、交通或约束…（显式规划）';
     return activeTripId
       ? '可咨询攻略，也可直接说想怎么改行程…'
       : '你想去哪儿？我来帮你一起规划 🙂';
-  }, [userIntentMode, activeTripId]);
+  }, [compactAgentChrome, userIntentMode, activeTripId]);
 
   const buildEmergencyConstraints = (): Record<string, any> | undefined => {
     const preferred_modes = parseCsv(preferredModesText);
@@ -3679,7 +3871,7 @@ export default function AgentChat({
 
       const useActiveTripSummaryContext = Boolean(
         tripForIntentResolution &&
-          (attachActiveTripSummaryContext || entryPoint === 'planning_workbench')
+          (attachActiveTripSummaryContext || isUnifiedTripAgentEntry(entryPoint))
       );
 
       const conversation_context = buildRouteAndRunConversationContext({
@@ -3744,6 +3936,12 @@ export default function AgentChat({
           sendOptions?.routeRunTripIdOverride !== undefined);
 
       const applyDraftPayload = sendOptions?.applyItineraryAdjustDraft;
+      const shouldUseClaudeOrchestration =
+        mergedEnableLiveTools != null ||
+        intent_mode === 'TRIP_PLANNING' ||
+        Boolean(applyDraftPayload);
+      const shouldUseStateMachineOrchestration =
+        intent_mode === 'TRIP_PLANNING' || Boolean(applyDraftPayload);
 
       const request: RouteAndRunRequest = {
         request_id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -3777,8 +3975,18 @@ export default function AgentChat({
           ...(mergedEnableLiveTools != null
             ? {
                 enable_live_tools: mergedEnableLiveTools,
-                /** 与传感器链对齐；航班/天气等由服务端注入凭证，前端只传 options */
+              }
+            : {}),
+          ...(shouldUseClaudeOrchestration
+            ? {
+                /** 与规划/传感器链对齐；航班/天气等由服务端注入凭证，前端只传 options */
                 use_claude_orchestration: true,
+              }
+            : {}),
+          ...(shouldUseStateMachineOrchestration
+            ? {
+                /** 规划/改稿须稳定进入深规划状态机，避免被后端环境默认值落到 LEGACY。 */
+                use_state_machine_orchestration: true,
               }
             : {}),
           ...(needsRouteRunMaxSeconds
@@ -3905,6 +4113,7 @@ export default function AgentChat({
 
       // 处理 NEED_CONSENT 状态（需要浏览器授权）
       if (response.result.status === 'NEED_CONSENT') {
+        const mode = resolveRouteRunMessageMode(response);
         // 移除思考中的消息
         setMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
@@ -3917,7 +4126,7 @@ export default function AgentChat({
               timestamp: new Date(),
               status: 'awaiting_consent',
               routeType: response.route.route,
-              mode: response.route.ui_hint.mode,
+              mode,
             },
           ];
         });
@@ -3932,6 +4141,7 @@ export default function AgentChat({
       // 处理协商（Decision OS v1.0）
       const negotiation = response.result.payload?.negotiation_payload;
       if (negotiation?.status === 'PENDING_USER_DECISION') {
+        const mode = resolveRouteRunMessageMode(response);
         setNegotiationPayload(negotiation);
         setNegotiationDialogOpen(true);
         setNegotiationAuditRequestId(request.request_id);
@@ -3967,7 +4177,7 @@ export default function AgentChat({
               timestamp: new Date(),
               status: 'awaiting_confirmation',
               routeType: response.route.route,
-              mode: response.route.ui_hint.mode,
+              mode,
             },
           ];
         });
@@ -3978,6 +4188,7 @@ export default function AgentChat({
 
       // 检查是否需要审批（NEED_CONFIRMATION）
       if (needsApproval(response)) {
+        const mode = resolveRouteRunMessageMode(response);
         const approvalId = extractApprovalId(response);
         if (!approvalId) {
           console.error('审批 ID 不存在，但需要审批');
@@ -3996,7 +4207,7 @@ export default function AgentChat({
               timestamp: new Date(),
               status: 'awaiting_confirmation',
               routeType: response.route.route,
-              mode: response.route.ui_hint.mode,
+              mode,
             },
           ];
         });
@@ -4017,7 +4228,7 @@ export default function AgentChat({
         rawDecisionLog.map((entry: any) => normalizeToNewFormat(entry, response.request_id))
       );
       
-      const mode = response.route.ui_hint.mode;
+      const mode = resolveRouteRunMessageMode(response);
 
       // 更新当前模式
       setCurrentMode(mode);
@@ -4311,6 +4522,17 @@ export default function AgentChat({
         uiSurface,
         status: response.result.status,
       });
+      const routeRunCascadeUiHints = pickCascadeUiHintsFromExplain(response.explain);
+      const routeRunCascadeAffected = pickCascadeAffectedFromExplain(response.explain);
+      const routeRunCoverageDisclosure = pickCoverageDisclosureFromExplain(response.explain);
+      const routeRunTravelOntologyState = pickTravelOntologyStateFromPayload(payloadRecord);
+      const routeRunProactiveNarration = pickProactiveNarrationFromRouteRun(response);
+      const routeRunTravelRuntimeGraph = resolveTravelRuntimeGraphForDev(
+        pickTravelRuntimeGraphFromRouteRun(response)
+      );
+      const routeRunSchemaOrgDiscovery = resolveSchemaOrgDiscoveryForDev(
+        pickSchemaOrgDiscoveryFromRouteRun(response)
+      );
       const itineraryAdjust = parseItineraryAdjustPayload(payloadRecord);
       const routeRunDecisionCockpit =
         itineraryAdjust.decisionCockpitUiSuppressed
@@ -4380,6 +4602,42 @@ export default function AgentChat({
         }
       }
 
+      let decisionProfilingForMessage: DecisionProfilingPayload | undefined;
+      const decisionProfiling = pickDecisionProfilingFromPayload(payloadRecord);
+      if (decisionProfiling?.triggered && response.result.status === 'OK') {
+        if (decisionProfiling.agentIntroZh && !messageContent.includes(decisionProfiling.agentIntroZh)) {
+          messageContent =
+            decisionProfiling.agentIntroZh + (messageContent.trim() ? `\n\n${messageContent}` : '');
+        }
+        decisionProfilingForMessage = decisionProfiling;
+      }
+
+      let processFairnessForMessage: ProcessFairnessPayload | undefined;
+      const processFairness = pickProcessFairnessFromPayload(payloadRecord);
+      if (
+        !decisionProfiling?.triggered &&
+        response.result.status === 'OK' &&
+        isProcessFairnessActivated(processFairness)
+      ) {
+        if (entryPoint === 'planning_workbench') {
+          const demoted = demoteRouteRunAnswerForProcessFairnessBubble({
+            messageContent,
+            messageContentHtml,
+          });
+          messageContent = demoted.content;
+          messageContentHtml = demoted.contentHtml;
+          poiSuppressAnswerProse = true;
+          processFairnessForMessage = processFairness!;
+          navigateToStructuredNegotiation(navigate, processFairness!);
+        } else {
+          if (processFairness!.agentIntroZh && !messageContent.includes(processFairness!.agentIntroZh)) {
+            messageContent =
+              processFairness!.agentIntroZh + (messageContent.trim() ? `\n\n${messageContent}` : '');
+          }
+          navigateToStructuredNegotiation(navigate, processFairness!);
+        }
+      }
+
       // 移除思考中的消息，添加实际回复
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
@@ -4411,6 +4669,26 @@ export default function AgentChat({
             ...(routeRunNoPoiPlanningFlag ? { routeRunNoPoiPlanningFlag: true } : {}),
             ...(routeRunExplainOptimization && !itineraryAdjust.intake
               ? { routeRunExplainOptimization }
+              : {}),
+            ...(routeRunCascadeUiHints.length > 0 ? { cascadeUiHints: routeRunCascadeUiHints } : {}),
+            ...(routeRunCascadeAffected.length > 0
+              ? { cascadeAffectedItems: routeRunCascadeAffected }
+              : {}),
+            ...(routeRunCoverageDisclosure
+              ? { coverageDisclosure: routeRunCoverageDisclosure }
+              : {}),
+            ...(routeRunTravelOntologyState &&
+            hasTravelOntologyStateContent(routeRunTravelOntologyState)
+              ? { travelOntologyState: routeRunTravelOntologyState }
+              : {}),
+            ...(hasProactiveNarrationContent(routeRunProactiveNarration)
+              ? { proactiveNarration: routeRunProactiveNarration }
+              : {}),
+            ...(routeRunTravelRuntimeGraph && hasTravelRuntimeGraphContent(routeRunTravelRuntimeGraph)
+              ? { travelRuntimeGraph: routeRunTravelRuntimeGraph }
+              : {}),
+            ...(routeRunSchemaOrgDiscovery && hasSchemaOrgDiscoveryContent(routeRunSchemaOrgDiscovery)
+              ? { schemaOrgDiscovery: routeRunSchemaOrgDiscovery }
               : {}),
             ...(routeRunDecisionCockpit ? { routeRunDecisionCockpit } : {}),
             evidenceBundle,
@@ -4483,6 +4761,8 @@ export default function AgentChat({
             ...(sharedMilestoneCards.length > 0 ? { sharedMilestoneCards } : {}),
             ...(flightInventorySnapshot ? { flightInventorySnapshot } : {}),
             ...(suggestedOperations ? { suggestedOperations } : {}),
+            ...(decisionProfilingForMessage ? { decisionProfiling: decisionProfilingForMessage } : {}),
+            ...(processFairnessForMessage ? { processFairness: processFairnessForMessage } : {}),
             ...(actionExecutionPayload ? { actionExecution: actionExecutionPayload } : {}),
             ...(actionExecutionPreview ? { actionExecutionPreview } : {}),
             ...(actionExecutionPending !== undefined
@@ -4990,15 +5270,18 @@ export default function AgentChat({
           {messages.length === 0 ? (
             (() => {
               // 规划工作台场景：加载中显示骨架屏
-              if (entryPoint === 'planning_workbench' && tripInsightLoading) {
+              if (isUnifiedTripAgentEntry(entryPoint) && tripInsightLoading) {
                 return (
-                  <div className="py-8 px-4">
-                    <div className="text-center mb-6">
-                      <Compass className="w-14 h-14 mx-auto mb-4 text-primary/60" />
-                      <p className="text-lg font-semibold mb-3 text-foreground">规划助手 Nara 🧭</p>
-                      <p className="text-xs text-muted-foreground mb-4">正在分析你的行程...</p>
-                      <div className="flex justify-center">
-                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <div className={cn('px-2', compactAgentChrome ? 'py-6' : 'py-8')}>
+                    <div className="text-center">
+                      {!compactAgentChrome ? (
+                        <Compass className="w-14 h-14 mx-auto mb-4 text-primary/60" />
+                      ) : null}
+                      <p className={cn('font-medium text-foreground', compactAgentChrome ? 'text-sm' : 'text-lg mb-3')}>
+                        {compactAgentChrome ? '正在读取行程…' : '规划助手 Nara'}
+                      </p>
+                      <div className="flex justify-center mt-3">
+                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                       </div>
                     </div>
                   </div>
@@ -5007,31 +5290,40 @@ export default function AgentChat({
               
               const welcomeConfig = getWelcomeConfig(entryPoint, tripInsight, {
                 hasBoundTrip: Boolean(sanitizedTripId),
+                compact: compactAgentChrome,
               });
               const WelcomeIcon = welcomeConfig.icon;
               return (
-                <div className="py-6 px-4">
-                  <div className="text-center mb-5">
-                    <WelcomeIcon className="w-12 h-12 mx-auto mb-3 text-primary/60" />
-                    <p className="text-base font-semibold mb-1 text-foreground">{welcomeConfig.title}</p>
-                    <p className="text-xs text-muted-foreground mb-3">{welcomeConfig.subtitle}</p>
-                    <div className="text-sm text-muted-foreground">
+                <div className={cn('px-2', compactAgentChrome ? 'py-4' : 'py-6 px-4')}>
+                  <div className={cn('mb-4', compactAgentChrome ? 'text-left' : 'text-center mb-5')}>
+                    {!compactAgentChrome ? (
+                      <WelcomeIcon className="w-12 h-12 mx-auto mb-3 text-primary/60" />
+                    ) : null}
+                    {!compactAgentChrome ? (
+                      <>
+                        <p className="text-base font-semibold mb-1 text-foreground">{welcomeConfig.title}</p>
+                        <p className="text-xs text-muted-foreground mb-3">{welcomeConfig.subtitle}</p>
+                      </>
+                    ) : null}
+                    <div className={cn('text-sm text-muted-foreground', !compactAgentChrome && 'text-center')}>
                       {welcomeConfig.greeting}
                     </div>
                   </div>
                   
                   {/* 意图按钮 */}
-                  <div className="mb-4">
-                    <p className="text-xs text-muted-foreground text-center mb-3">
-                      {entryPoint === 'planning_workbench' && tripInsight 
-                        ? '想让我帮你处理哪个问题？' 
-                        : entryPoint === 'planning_workbench' 
-                          ? '告诉我你现在想做什么：' 
-                          : sanitizedTripId
-                            ? '可选快捷语句：'
-                            : '你可以试试这样说：'}
-                    </p>
-                    <div className="flex flex-wrap gap-2 justify-center">
+                  <div className="mb-3">
+                    {!compactAgentChrome ? (
+                      <p className="text-xs text-muted-foreground text-center mb-3">
+                        {isUnifiedTripAgentEntry(entryPoint) && tripInsight
+                          ? '想让我帮你处理哪个问题？'
+                          : isUnifiedTripAgentEntry(entryPoint)
+                            ? '告诉我你现在想做什么：' 
+                            : sanitizedTripId
+                              ? '可选快捷语句：'
+                              : '你可以试试这样说：'}
+                      </p>
+                    ) : null}
+                    <div className={cn('flex flex-wrap gap-2', compactAgentChrome ? '' : 'justify-center')}>
                       {welcomeConfig.quickIntents.map((intent, index) => {
                         const IntentIcon = intent.icon;
                         return (
@@ -5042,8 +5334,9 @@ export default function AgentChat({
                             className="rounded-full text-xs h-8 px-3"
                             onClick={() => {
                               if (
-                                entryPoint === 'planning_workbench' &&
-                                looksLikeHotelSearchRequest(intent.prompt)
+                                isUnifiedTripAgentEntry(entryPoint) &&
+                                (looksLikeHotelSearchRequest(intent.prompt) ||
+                                  compactAgentChrome)
                               ) {
                                 void handleSend(intent.prompt);
                               } else {
@@ -5059,13 +5352,59 @@ export default function AgentChat({
                     </div>
                   </div>
 
-                  {welcomeConfig.example && (
+                  {welcomeConfig.example && !compactAgentChrome ? (
                     <div className="text-center text-sm text-muted-foreground">
                       <p className="mb-1">
                         比如：<span className="text-primary font-medium">{welcomeConfig.example}</span>
                       </p>
                     </div>
-                  )}
+                  ) : null}
+
+                  {!compactAgentChrome && tripInsight?.readiness?.guardianNegotiation ? (
+                    <div className="mt-4 text-left">
+                      <GuardianNegotiationPanel
+                        negotiation={tripInsight.readiness.guardianNegotiation}
+                        compact
+                      />
+                    </div>
+                  ) : null}
+
+                  {!compactAgentChrome &&
+                  tripInsight?.readiness?.cascadeUiHints &&
+                  tripInsight.readiness.cascadeUiHints.length > 0 ? (
+                    <div className="mt-5 text-left">
+                      <CascadeImpactPanel
+                        hints={tripInsight.readiness.cascadeUiHints}
+                        causalPreAnalysis={tripInsight.readiness.causalPreAnalysis}
+                        compact
+                        showCardActions={false}
+                      />
+                    </div>
+                  ) : null}
+
+                  {!compactAgentChrome && tripInsight?.findings?.some((f) => f.icon === 'git-branch') ? (
+                    <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                      {tripInsight.findings
+                        .filter((f) => f.icon === 'git-branch' && f.actionLabel)
+                        .map((finding, idx) => (
+                          <Button
+                            key={`${finding.title}-${idx}`}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full text-xs h-8 px-3"
+                            onClick={() => {
+                              document
+                                .getElementById('cascade-impact-panel')
+                                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }}
+                          >
+                            <GitBranch className="w-3 h-3 mr-1.5" />
+                            {finding.actionLabel}
+                          </Button>
+                        ))}
+                    </div>
+                  ) : null}
                 </div>
               );
             })()
@@ -5242,13 +5581,13 @@ export default function AgentChat({
       </ScrollArea>
 
       {/* 输入区域 */}
-      <div className="flex-shrink-0 border-t p-4">
+      <div className="flex-shrink-0 border-t border-border bg-card/50 px-3 py-3">
         <div className={AGENT_PANEL_CONTENT_MAX_CLASS}>
         {(isAwaitingConfirmation || negotiationConflictBlocking) && (
-          <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md text-xs text-yellow-800">
+          <div className="mb-2 rounded-md border border-gate-confirm-border bg-gate-confirm/15 px-2.5 py-2 text-xs text-gate-confirm-foreground">
             {negotiationConflictBlocking
-              ? '⚠️ 协商版本冲突：请先处理弹窗中的协商，或点击遮罩上的「我知道了」后再重新发起。'
-              : '⚠️ 需要你确认一下，再继续行动～'}
+              ? '协商版本冲突：请先处理弹窗中的协商后再继续。'
+              : '需要你确认一下，再继续行动。'}
           </div>
         )}
         {(activeTripId && !compactAgentChrome) || showAgentDebugTools ? (
@@ -5316,7 +5655,7 @@ export default function AgentChat({
         ) : null}
         <div
           className={cn(
-            'flex items-center rounded-md border border-input bg-background shadow-sm transition-colors',
+            'flex items-center rounded-lg border border-input bg-background shadow-sm transition-colors',
             'focus-within:ring-1 focus-within:ring-ring',
             (loading || isAwaitingConfirmation || negotiationConflictBlocking) && 'opacity-60'
           )}
@@ -5670,7 +6009,7 @@ export default function AgentChat({
                     normalizeToNewFormat(entry, retryResponse.request_id)
                   )
                 );
-                const mode = retryResponse.route.ui_hint.mode;
+                const mode = resolveRouteRunMessageMode(retryResponse);
                 
                 setCurrentMode(mode);
                 
@@ -5901,6 +6240,17 @@ export default function AgentChat({
                   retryResponse,
                   { uiSurface: retryUiSurface, status: retryResponse.result.status }
                 );
+                const retryRouteRunCascadeUiHints = pickCascadeUiHintsFromExplain(retryResponse.explain);
+                const retryRouteRunCascadeAffected = pickCascadeAffectedFromExplain(retryResponse.explain);
+                const retryRouteRunCoverageDisclosure = pickCoverageDisclosureFromExplain(retryResponse.explain);
+                const retryRouteRunTravelOntologyState = pickTravelOntologyStateFromPayload(retryPayloadRecord);
+                const retryRouteRunProactiveNarration = pickProactiveNarrationFromRouteRun(retryResponse);
+                const retryRouteRunTravelRuntimeGraph = resolveTravelRuntimeGraphForDev(
+                  pickTravelRuntimeGraphFromRouteRun(retryResponse)
+                );
+                const retryRouteRunSchemaOrgDiscovery = resolveSchemaOrgDiscoveryForDev(
+                  pickSchemaOrgDiscoveryFromRouteRun(retryResponse)
+                );
                 const retryItineraryAdjust = parseItineraryAdjustPayload(retryPayloadRecord);
                 const retryRouteRunDecisionCockpit =
                   retryItineraryAdjust.decisionCockpitUiSuppressed
@@ -6017,6 +6367,30 @@ export default function AgentChat({
                       ...(retryRouteRunNoPoiPlanningFlag ? { routeRunNoPoiPlanningFlag: true } : {}),
                       ...(retryRouteRunExplainOptimization && !retryItineraryAdjust.intake
                         ? { routeRunExplainOptimization: retryRouteRunExplainOptimization }
+                        : {}),
+                      ...(retryRouteRunCascadeUiHints.length > 0
+                        ? { cascadeUiHints: retryRouteRunCascadeUiHints }
+                        : {}),
+                      ...(retryRouteRunCascadeAffected.length > 0
+                        ? { cascadeAffectedItems: retryRouteRunCascadeAffected }
+                        : {}),
+                      ...(retryRouteRunCoverageDisclosure
+                        ? { coverageDisclosure: retryRouteRunCoverageDisclosure }
+                        : {}),
+                      ...(retryRouteRunTravelOntologyState &&
+                      hasTravelOntologyStateContent(retryRouteRunTravelOntologyState)
+                        ? { travelOntologyState: retryRouteRunTravelOntologyState }
+                        : {}),
+                      ...(hasProactiveNarrationContent(retryRouteRunProactiveNarration)
+                        ? { proactiveNarration: retryRouteRunProactiveNarration }
+                        : {}),
+                      ...(retryRouteRunTravelRuntimeGraph &&
+                      hasTravelRuntimeGraphContent(retryRouteRunTravelRuntimeGraph)
+                        ? { travelRuntimeGraph: retryRouteRunTravelRuntimeGraph }
+                        : {}),
+                      ...(retryRouteRunSchemaOrgDiscovery &&
+                      hasSchemaOrgDiscoveryContent(retryRouteRunSchemaOrgDiscovery)
+                        ? { schemaOrgDiscovery: retryRouteRunSchemaOrgDiscovery }
                         : {}),
                       ...(retryRouteRunDecisionCockpit
                         ? { routeRunDecisionCockpit: retryRouteRunDecisionCockpit }

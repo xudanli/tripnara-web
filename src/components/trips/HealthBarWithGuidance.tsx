@@ -30,7 +30,7 @@ export default function HealthBarWithGuidance({
   cost, 
   className,
   onMetricClick,
-  onNavigateToPlanStudio,
+  onNavigateToPlanStudio: _onNavigateToPlanStudio,
   onNavigateToBudget,
   onExpandToPlanDetails,
   tripStatus = 'PLANNING',
@@ -192,7 +192,7 @@ export default function HealthBarWithGuidance({
     }
   };
 
-  const metricCards = getMetricCards();
+  const ____metricCards = getMetricCards();
 
   // 行程评分等级（用户视角）
   const getScoreLevel = () => {

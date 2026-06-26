@@ -6,6 +6,7 @@
  */
 
 import apiClient from './client';
+import { normalizeTeamNegotiationResponse } from '@/lib/normalize-team-negotiation';
 import type {
   // 计划优化
   EvaluatePlanRequest,
@@ -29,6 +30,7 @@ import type {
   CreateTeamRequest,
   Team,
   TeamMember,
+  UpdateTeamMemberRequest,
   TeamNegotiationResponse,
   TeamWeightsResponse,
   TeamConstraintsResponse,
@@ -262,10 +264,14 @@ export const teamApi = {
   /**
    * 更新成员信息
    */
-  async updateMember(teamId: string, userId: string, updates: Partial<TeamMember>): Promise<Team> {
+  async updateMember(teamId: string, userId: string, updates: UpdateTeamMemberRequest): Promise<Team> {
+    const body = Object.fromEntries(
+      Object.entries(updates).filter(([, value]) => value !== undefined)
+    ) as UpdateTeamMemberRequest;
+
     const { data } = await apiClient.patch<Team>(
       `${API_BASE}/team/${teamId}/members/${userId}`,
-      updates
+      body
     );
     return data;
   },
@@ -306,11 +312,11 @@ export const teamApi = {
       world: JSON.parse(JSON.stringify(worldToSend)),
     };
 
-    const { data } = await apiClient.post<TeamNegotiationResponse>(
+    const { data } = await apiClient.post<unknown>(
       `${API_BASE}/team/${teamId}/negotiate`,
       body
     );
-    return data;
+    return normalizeTeamNegotiationResponse(data);
   },
 
   /**

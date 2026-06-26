@@ -46,12 +46,12 @@ export function PlanningAssistantSidebar({
   userId,
   tripId,
   className,
-  onTripUpdate,
+  onTripUpdate: _onTripUpdate,
   onClearReady,
 }: PlanningAssistantSidebarProps) {
   const [countryCode, setCountryCode] = useState<string | null>(null);
   const [tripInfo, setTripInfo] = useState<TripDetail | null>(null);
-  const [isLoadingTrip, setIsLoadingTrip] = useState(false);
+  const [_isLoadingTrip, setIsLoadingTrip] = useState(false);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
 
   // 用户偏好：用于住宿搜索语言映射（userCountryCode: CN→zh、JP→ja 等）

@@ -15,7 +15,10 @@ import { PlazaCommandBar } from '../components/PlazaCommandBar';
 import { PlazaFiltersBar } from '../components/PlazaFilters';
 import { PlazaSkeleton } from '../components/PlazaSkeleton';
 import { PermissionGateBanner } from '../components/PermissionGateBanner';
-import { PendingReputationBanner } from '../components/PendingReputationBanner';
+import {
+  ACCOUNT_GOVERNANCE_SETTINGS_PATH,
+  TRUSTED_PROJECT_CREATE_PATH,
+} from '@/lib/trusted-projects-routes';
 import { ApplyToRecruitmentDialog } from '../components/ApplyToRecruitmentDialog';
 import { RecruitmentDetailDialog } from '../components/RecruitmentDetailDialog';
 import { useMatchSquareAccess, useMatchSquarePlaza, useMyApplications, useMyPosts } from '../hooks/useMatchSquare';
@@ -47,7 +50,7 @@ export default function MatchSquarePlazaPage() {
   };
 
   const { data: myApplications } = useMyApplications(gate.canApply);
-  const { data: myPostsData } = useMyPosts(true);
+  const { data: myPostsData } = useMyPosts(gate.canPost);
 
   const ownPostIds = useMemo(
     () => new Set((myPostsData?.items ?? []).map((post) => post.id)),
@@ -86,7 +89,6 @@ export default function MatchSquarePlazaPage() {
       </div>
 
       <div className={plazaLayout.content}>
-        <PendingReputationBanner />
         <ApplicationDecisionInboxBanner />
         <TeamFormationInboxBanner />
         <OliveBranchInboxBanner />
@@ -103,16 +105,16 @@ export default function MatchSquarePlazaPage() {
                 <Button
                   size="sm"
                   className="h-7 px-2.5 text-xs"
-                  onClick={() => navigate('/dashboard/tripnara/plaza/new')}
+                  onClick={() => navigate(TRUSTED_PROJECT_CREATE_PATH)}
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
-                  发起招募
+                  发布可信项目
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" asChild>
-                  <Link to="/dashboard/tripnara/odyssey">
+                  <Link to={ACCOUNT_GOVERNANCE_SETTINGS_PATH}>
                     <Plus className="mr-1 h-3.5 w-3.5" />
-                    发起招募
+                    发布可信项目
                   </Link>
                 </Button>
               )}

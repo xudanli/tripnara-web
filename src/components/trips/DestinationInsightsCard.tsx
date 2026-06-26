@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { useRag } from '@/hooks';
 import type { DestinationInsights } from '@/api/rag';
-import { Lightbulb, MapPin, Route, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
+import { Lightbulb, MapPin, Route, RefreshCw, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DestinationInsightsCardProps {

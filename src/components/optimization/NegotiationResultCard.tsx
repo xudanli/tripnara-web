@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { NegotiationResponse, NegotiationDecision } from '@/types/optimization-v2';
+import type { GuardianPersonaPresentation } from '@/types/guardian-presentation';
 import {
   Shield,
   Activity,
@@ -48,6 +49,14 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { GuardianChooseModal } from '@/components/guardian/GuardianChooseModal';
+import { GuardianPresentationPanel } from '@/components/guardian/GuardianPresentationPanel';
+import {
+  canShowGuardianChoose,
+  extractChooseOptions,
+  resolveNegotiationHardBlocked,
+} from '@/lib/guardian-presentation.util';
+import { useGuardianHumanChoice } from '@/hooks/useGuardianHumanChoice';
 
 // ==================== 配置 ====================
 
@@ -472,10 +481,16 @@ export interface NegotiationResultCardProps {
   compact?: boolean;
   /** 是否显示详情 */
   showDetails?: boolean;
+  /** 是否展示三人 utility 分数（默认 false，符合 P1 单主角规范） */
+  showUtilityScores?: boolean;
   /** 标题 */
   title?: string;
   /** 自定义类名 */
   className?: string;
+  /** 登录用户 ID（用于 CHOOSE 写回 feedback） */
+  userId?: string | null;
+  /** CHOOSE 确认回调（写回成功后触发；未传则仅写回 feedback） */
+  onHumanChoice?: (selectedIndex: number, selectedText: string) => void;
 }
 
 export function NegotiationResultCard({
@@ -483,16 +498,55 @@ export function NegotiationResultCard({
   tripId,
   compact = false,
   showDetails = true,
+  showUtilityScores = false,
   title = '协商结论',
   className,
+  userId,
+  onHumanChoice,
 }: NegotiationResultCardProps) {
   const navigate = useNavigate();
+  const [chooseOpen, setChooseOpen] = React.useState(false);
+  const [postChoosePresentation, setPostChoosePresentation] =
+    React.useState<GuardianPersonaPresentation | null>(null);
   const decisionConfig = DECISION_CONFIG[result.decision] || DECISION_CONFIG.NEEDS_HUMAN;
+  const criticalConcerns = result.evaluationSummary?.criticalConcerns ?? [];
+  const [humanPoints, setHumanPoints] = React.useState(() =>
+    extractChooseOptions({ negotiation: result }),
+  );
+
+  React.useEffect(() => {
+    setHumanPoints(extractChooseOptions({ negotiation: result }));
+    setPostChoosePresentation(null);
+  }, [result]);
+
+  const hardBlocked = resolveNegotiationHardBlocked(result);
+  const showChoose = canShowGuardianChoose({
+    decision: result.decision,
+    hardConstraintBlocked: hardBlocked,
+    chooseOptions: humanPoints,
+  });
+
+  const { submitChoice, isSubmitting: isChooseSubmitting } = useGuardianHumanChoice({
+    userId,
+    tripId,
+    source: 'negotiation',
+    decisionPoints: humanPoints,
+    onSuccess: onHumanChoice,
+    onPresentation: (next) => {
+      setPostChoosePresentation(next);
+      const refreshed = extractChooseOptions({ presentation: next, negotiation: result });
+      setHumanPoints(refreshed.length > 0 ? refreshed : humanPoints);
+    },
+  });
 
   const handleGoToEdit = () => {
     if (tripId) {
       navigate(`/dashboard/plan-studio?tripId=${tripId}`);
     }
+  };
+
+  const handleChooseConfirm = (idx: number, text: string) => {
+    void submitChoice(idx, text, humanPoints);
   };
 
   return (
@@ -514,6 +568,54 @@ export function NegotiationResultCard({
       </CardHeader>
 
       <CardContent className={cn(compact ? 'p-2.5 pt-0' : 'pt-4')}>
+        {postChoosePresentation ? (
+          <div className="mb-3">
+            <GuardianPresentationPanel presentation={postChoosePresentation} />
+          </div>
+        ) : null}
+        {criticalConcerns.length > 0 ? (
+          <div
+            className={cn(
+              'mb-3 rounded-lg border px-3 py-2 text-sm',
+              hardBlocked
+                ? 'border-red-200 bg-red-50 text-red-900'
+                : 'border-amber-200 bg-amber-50 text-amber-950',
+            )}
+          >
+            <p className="font-medium flex items-center gap-1.5 mb-1">
+              <Shield className="h-4 w-4 shrink-0" />
+              {hardBlocked ? 'Abu 硬风险摘要' : '关键关注点'}
+            </p>
+            <ul className="space-y-1 text-xs sm:text-sm">
+              {criticalConcerns.map((c, i) => (
+                <li key={i}>• {c}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {showChoose ? (
+          <div className={cn('mb-3', compact ? 'space-y-2' : 'space-y-3')}>
+            <Button
+              size="sm"
+              variant="default"
+              disabled={isChooseSubmitting}
+              onClick={() => setChooseOpen(true)}
+            >
+              <HelpCircle className="h-3.5 w-3.5 mr-1.5" />
+              做出价值取舍
+            </Button>
+            <GuardianChooseModal
+              open={chooseOpen}
+              onOpenChange={setChooseOpen}
+              points={humanPoints}
+              title="价值协商 — 需要您选择"
+              description="以下为软约束取舍，不会覆盖 Abu 已判定的硬风险。"
+              onConfirm={handleChooseConfirm}
+            />
+          </div>
+        ) : null}
+
         {/* 共识度和投票 */}
         <div className={cn('grid sm:grid-cols-2', compact ? 'gap-2 mb-2' : 'gap-4 mb-4')}>
           <ConsensusIndicator level={result.consensusLevel} compact={compact} />
@@ -528,7 +630,7 @@ export function NegotiationResultCard({
 
         <Separator className={compact ? 'my-2' : 'my-4'} />
 
-        {/* 评估维度（安全守护者 64 · 节奏 44 · 修复 67） */}
+        {showUtilityScores ? (
         <div className={compact ? 'mb-2' : 'mb-4'}>
           <p className={cn('font-medium', compact ? 'text-sm mb-2' : 'text-sm mb-3')}>评估维度</p>
           <div className={cn('grid sm:grid-cols-3', compact ? 'gap-2' : 'gap-2')}>
@@ -549,6 +651,7 @@ export function NegotiationResultCard({
             />
           </div>
         </div>
+        ) : null}
 
         {/* 详情展开 */}
         {showDetails && (() => {

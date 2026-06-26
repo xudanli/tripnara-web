@@ -32,7 +32,7 @@ export function StructuredContentTypewriter({
 }: StructuredContentTypewriterProps) {
   const [displayedBlocks, setDisplayedBlocks] = useState<PlannerResponseBlock[]>([]);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
-  const [currentText, setCurrentText] = useState('');
+  const [_currentText, setCurrentText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   
   // 🐛 使用 useRef 存储 onComplete 回调，避免依赖项变化导致重复触发

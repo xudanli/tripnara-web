@@ -6,36 +6,13 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { 
-  type AcclimatizationState, 
-  type AMSSensitivity,
-  type HumanCapabilityModel
-} from '@/types/fitness';
-import { 
-  Mountain, 
-  TrendingUp, 
-  Calendar, 
-  AlertTriangle, 
-  HelpCircle,
-  Info,
-  AlertOctagon,
-  Heart
-} from 'lucide-react';
+import { type AcclimatizationState, type AMSSensitivity } from '@/types/fitness';
+import { Mountain, TrendingUp, Calendar, HelpCircle, Info, AlertOctagon, Heart } from 'lucide-react';
 
 interface AcclimatizationCardProps {
   /** 高海拔适应状态 */
@@ -102,7 +79,7 @@ function getEfficiencyLevel(efficiency: number, isZh: boolean): { label: string;
 
 /** 计算建议的下一步海拔增益 */
 function calculateRecommendedAscent(
-  currentAltitude: number,
+  _currentAltitude: number,
   sensitivity: AMSSensitivity,
   rateModifier: number = 1.0
 ): number {

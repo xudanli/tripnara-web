@@ -13,6 +13,8 @@ interface RepairOptionCardProps {
   isSelected?: boolean;
   /** 货币单位（如 "CNY", "USD"） */
   currency?: string;
+  applyDisabled?: boolean;
+  applyDisabledReason?: string;
   onSelect: (optionId: string) => void;
   onApply: (optionId: string) => void;
   onPreview: (optionId: string) => void;
@@ -29,6 +31,8 @@ export default function RepairOptionCard({
   option,
   isSelected = false,
   currency = 'CNY',
+  applyDisabled = false,
+  applyDisabledReason,
   onSelect,
   onApply,
   onPreview,
@@ -178,10 +182,15 @@ export default function RepairOptionCard({
 
           {/* 操作按钮 */}
           {isSelected && (
-            <div className="flex gap-2 pt-2 border-t">
+            <div className="flex flex-col gap-2 pt-2 border-t">
+              {applyDisabled && applyDisabledReason ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-200">{applyDisabledReason}</p>
+              ) : null}
+              <div className="flex gap-2">
               <Button
                 size="sm"
                 className="flex-1"
+                disabled={applyDisabled}
                 onClick={(e) => {
                   e.stopPropagation();
                   onApply(option.id);
@@ -199,6 +208,7 @@ export default function RepairOptionCard({
               >
                 {t('dashboard.readiness.page.preview', { defaultValue: '预览' })}
               </Button>
+              </div>
             </div>
           )}
         </div>

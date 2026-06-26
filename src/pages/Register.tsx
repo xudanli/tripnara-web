@@ -7,18 +7,29 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import LoginIllustration from '@/components/auth/LoginIllustration';
+import { RegisterIntentStep } from '@/components/auth/RegisterIntentStep';
 import Logo from '@/components/common/Logo';
+import {
+  clearRegistrationIntent,
+  postRegistrationPath,
+  readRegistrationIntent,
+  saveRegistrationIntent,
+  type RegistrationIntent,
+} from '@/lib/registration-intent';
 
-type RegisterStep = 'email' | 'code' | 'register';
+type RegisterStep = 'intent' | 'email' | 'code';
 
 export default function RegisterPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { loginWithEmail } = useAuth();
-  const [step, setStep] = useState<RegisterStep>('email');
+  const [step, setStep] = useState<RegisterStep>('intent');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [registrationIntent, setRegistrationIntent] = useState<RegistrationIntent | null>(
+    () => readRegistrationIntent()
+  );
   
   // 表单数据
   const [email, setEmail] = useState('');
@@ -104,7 +115,8 @@ export default function RegisterPage() {
       const result = await authApi.registerWithEmail(
         email,
         code,
-        displayName || undefined
+        displayName || undefined,
+        readRegistrationIntent() ?? undefined
       );
       
       // 调试日志
@@ -121,10 +133,13 @@ export default function RegisterPage() {
       
       // 显示成功提示
       setSuccess(t('register.success'));
-      
-      // 跳转到首页
+
+      const intent = readRegistrationIntent();
+      const destination = postRegistrationPath(intent);
+      clearRegistrationIntent();
+
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate(destination);
       }, 1000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : t('register.registerFailed');
@@ -148,6 +163,13 @@ export default function RegisterPage() {
   const handleResendCode = async () => {
     if (countdown > 0) return;
     await handleSendCode();
+  };
+
+  const handleIntentContinue = () => {
+    if (!registrationIntent) return;
+    saveRegistrationIntent(registrationIntent);
+    setStep('email');
+    setError(null);
   };
 
   return (
@@ -179,6 +201,15 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* Step 0: Registration intent */}
+          {step === 'intent' && (
+            <RegisterIntentStep
+              selected={registrationIntent}
+              onSelect={setRegistrationIntent}
+              onContinue={handleIntentContinue}
+            />
+          )}
+
           {/* Step 1: Email Input and Send Code */}
           {step === 'email' && (
             <form onSubmit={handleSendCode} className="space-y-4">
@@ -203,6 +234,14 @@ export default function RegisterPage() {
                 disabled={loading}
               >
                 {loading ? t('register.sending') : t('register.sendCode')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => setStep('intent')}
+              >
+                返回上一步
               </Button>
             </form>
           )}

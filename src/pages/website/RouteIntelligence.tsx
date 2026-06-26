@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PersonThinking, Route, Compass, Mountains } from '@/components/illustrations/SimpleIllustrations';
+import TrustGovernanceSection from './sections/TrustGovernanceSection';
 
 export default function RouteIntelligencePage() {
   const { t } = useTranslation();
-  const [expandedPoints, setExpandedPoints] = useState<boolean[]>([false, false, false, false]);
+  const [expandedPoints, setExpandedPoints] = useState<boolean[]>([false, false, false, false, false]);
   const [expandAll, setExpandAll] = useState(false);
 
   const corePoints = [
@@ -24,6 +25,10 @@ export default function RouteIntelligencePage() {
       title: t('routeIntelligence.corePoints.point4'),
       desc: t('routeIntelligence.corePoints.point4Desc'),
     },
+    {
+      title: t('routeIntelligence.corePoints.point5'),
+      desc: t('routeIntelligence.corePoints.point5Desc'),
+    },
   ];
 
   const togglePoint = (idx: number) => {
@@ -35,7 +40,7 @@ export default function RouteIntelligencePage() {
   const handleExpandAll = () => {
     const newState = !expandAll;
     setExpandAll(newState);
-    setExpandedPoints([newState, newState, newState, newState]);
+    setExpandedPoints([newState, newState, newState, newState, newState]);
   };
 
   return (
@@ -74,7 +79,9 @@ export default function RouteIntelligencePage() {
         </p>
       </section>
 
-      {/* SECTION 2 · 四个核心观点 */}
+      <TrustGovernanceSection showRoles={false} />
+
+      {/* SECTION 2 · 核心观点 */}
       <section
         style={{
           padding: '6rem 2rem',

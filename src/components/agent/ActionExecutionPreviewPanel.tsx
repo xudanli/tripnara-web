@@ -23,6 +23,9 @@ import {
   agentStructuredContentMaxClass,
   useAgentSidebarContentFullWidth,
 } from '@/hooks/use-agent-sidebar-content-width';
+import { useTranslation } from 'react-i18next';
+import PendingActionChips from '@/components/agent/PendingActionChips';
+import { normalizePendingActions } from '@/lib/pending-action.util';
 import { AlertTriangle, ChevronRight, Wrench } from 'lucide-react';
 
 export type AdoptHealingPreviewHandler = (params: {
@@ -32,6 +35,12 @@ export type AdoptHealingPreviewHandler = (params: {
   healed_action_input: Record<string, unknown>;
   orchestrationResult?: OrchestrationResult | null;
 }) => void | Promise<void>;
+
+import {
+  formatActionPreviewStatus,
+  formatActionPreviewTitle,
+  formatInterruptMode,
+} from '@/lib/physical-gate-display.util';
 
 const KIND_LABELS: Record<string, string> = {
   TEMPORAL_SHIFT: '整体平移时间',
@@ -63,6 +72,7 @@ export function ActionExecutionPreviewPanel({
   adoptBusyKey,
   onAdoptHealingPreview,
   suppressAnswerDuplicationNote,
+  showDebugFields = false,
 }: {
   preview: ActionExecutionPreviewPayload;
   /** payload.actionExecution.pendingActions */
@@ -74,17 +84,29 @@ export function ActionExecutionPreviewPanel({
   onAdoptHealingPreview?: AdoptHealingPreviewHandler;
   /** answer_text 已含「物理门」段落时提示去重 */
   suppressAnswerDuplicationNote?: boolean;
+  showDebugFields?: boolean;
 }) {
+  const { t, i18n } = useTranslation();
+  const isZh = i18n.language.startsWith('zh');
   const previews = preview.action_previews ?? [];
+  const pendingChips = useMemo(() => normalizePendingActions(pendingActions), [pendingActions]);
 
   const headerCounts = useMemo(() => {
     const hi = preview.high_risk_count;
     const rq = preview.requires_confirmation_count;
     const parts: string[] = [];
-    if (typeof rq === 'number') parts.push(`待确认 ${rq}`);
-    if (typeof hi === 'number') parts.push(`高风险 ${hi}`);
+    if (typeof rq === 'number') {
+      parts.push(
+        t('agent.physicalGate.pendingCount', { defaultValue: '待确认 {{count}}', count: rq })
+      );
+    }
+    if (typeof hi === 'number') {
+      parts.push(
+        t('agent.physicalGate.highRiskCount', { defaultValue: '高风险 {{count}}', count: hi })
+      );
+    }
     return parts.join(' · ');
-  }, [preview.high_risk_count, preview.requires_confirmation_count]);
+  }, [preview.high_risk_count, preview.requires_confirmation_count, t]);
 
   const assistantFullWidth = useAgentSidebarContentFullWidth();
   const contentMaxClass = agentStructuredContentMaxClass(assistantFullWidth);
@@ -95,7 +117,9 @@ export function ActionExecutionPreviewPanel({
     <div className={cn('mt-3 space-y-3', contentMaxClass)}>
       <div className="rounded-lg border border-border/90 bg-card px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-semibold text-foreground">物理执行预览</span>
+          <span className="font-semibold text-foreground">
+            {t('agent.physicalGate.title', { defaultValue: '现实约束预警' })}
+          </span>
           <Badge variant="outline" className="text-[10px] font-normal">
             {preview.status ?? '—'}
           </Badge>
@@ -109,17 +133,9 @@ export function ActionExecutionPreviewPanel({
           <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{preview.message}</p>
         ) : null}
         {headerCounts ? <p className="mt-1 text-[10px] text-muted-foreground">{headerCounts}</p> : null}
-        {Array.isArray(pendingActions) && pendingActions.length > 0 ? (
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            编排待执行动作（摘要）：{pendingActions.length} 条
-          </p>
-        ) : null}
-        {suppressAnswerDuplicationNote ? (
-          <p className="mt-2 text-[10px] text-amber-900/90 dark:text-amber-100/90 rounded bg-amber-50/80 dark:bg-amber-950/30 px-2 py-1 border border-amber-200/70">
-            正文若已有「【物理门 · 建议型修复】」段落，可与下列卡片去重展示——概要保留在 answer_text，详情在卡片内展开。
-          </p>
-        ) : null}
       </div>
+
+      {pendingChips.length > 0 ? <PendingActionChips actions={pendingChips} /> : null}
 
       {previews.map((ap) => (
         <ActionPreviewSection
@@ -130,8 +146,18 @@ export function ActionExecutionPreviewPanel({
           orchestrationResult={orchestrationResult}
           adoptBusyKey={adoptBusyKey}
           onAdoptHealingPreview={onAdoptHealingPreview}
+          showDebugFields={showDebugFields}
+          isZh={isZh}
         />
       ))}
+
+      {suppressAnswerDuplicationNote ? (
+        <p className="text-[10px] text-amber-900/90 dark:text-amber-100/90 rounded bg-amber-50/80 dark:bg-amber-950/30 px-2 py-1 border border-amber-200/70">
+          {t('agent.physicalGate.dedupeNote', {
+            defaultValue: '若正文已含同类预警，可与下列卡片去重阅读。',
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -143,6 +169,8 @@ function ActionPreviewSection({
   orchestrationResult,
   adoptBusyKey,
   onAdoptHealingPreview,
+  showDebugFields,
+  isZh,
 }: {
   ap: ActionPreviewAssessmentDto;
   tripId?: string | null;
@@ -150,25 +178,34 @@ function ActionPreviewSection({
   orchestrationResult?: OrchestrationResult | null;
   adoptBusyKey?: string | null;
   onAdoptHealingPreview?: AdoptHealingPreviewHandler;
+  showDebugFields?: boolean;
+  isZh: boolean;
 }) {
+  const { t } = useTranslation();
   const blocked = ap.status === 'blocked';
   const suggestMode = ap.physical_validator_interrupt_mode === 'INTERRUPT_WITH_SUGGESTION';
   const violations = ap.physical_validation?.violations;
+  const actionTitle = formatActionPreviewTitle(ap.action_id, isZh);
+  const statusLabel = formatActionPreviewStatus(ap.status, isZh);
+  const interruptLabel = formatInterruptMode(ap.physical_validator_interrupt_mode, isZh);
 
   return (
     <div className="rounded-lg border border-border/80 bg-muted/15 overflow-hidden">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border/60 bg-muted/30">
-        <span className="font-mono text-[11px]">{ap.action_id}</span>
+        <span className="text-xs font-medium text-foreground">{actionTitle}</span>
         <Badge
           variant={blocked ? 'destructive' : 'secondary'}
           className="text-[10px] font-normal"
         >
-          {ap.status}
+          {statusLabel}
         </Badge>
-        {ap.physical_validator_interrupt_mode ? (
-          <Badge variant="outline" className="text-[10px] font-normal max-w-[240px] truncate" title={ap.physical_validator_interrupt_mode}>
-            {ap.physical_validator_interrupt_mode}
+        {interruptLabel ? (
+          <Badge variant="outline" className="text-[10px] font-normal max-w-[240px] truncate">
+            {interruptLabel}
           </Badge>
+        ) : null}
+        {showDebugFields ? (
+          <span className="font-mono text-[10px] text-muted-foreground">{ap.action_id}</span>
         ) : null}
       </div>
 
@@ -176,7 +213,9 @@ function ActionPreviewSection({
         {blocked && violations && violations.length > 0 ? (
           <Alert variant="destructive" className="py-2">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle className="text-xs">违规 / 阻断</AlertTitle>
+            <AlertTitle className="text-xs">
+              {t('agent.physicalGate.violationTitle', { defaultValue: '现实约束未满足' })}
+            </AlertTitle>
             <AlertDescription className="text-xs space-y-1">
               {violations.map((v, i) => (
                 <div key={i}>{violationText(v)}</div>
@@ -185,11 +224,11 @@ function ActionPreviewSection({
           </Alert>
         ) : null}
 
-        {ap.physical_validation ? (
+        {showDebugFields && ap.physical_validation ? (
           <Collapsible className="rounded-md border border-border/70 bg-background/50">
             <CollapsibleTrigger asChild>
               <Button type="button" variant="ghost" size="sm" className="w-full justify-between h-8 px-2 text-[11px]">
-                physical_validation（排障）
+                {t('agent.physicalGate.debugValidation', { defaultValue: '校验详情（调试）' })}
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" />
               </Button>
             </CollapsibleTrigger>
@@ -203,11 +242,15 @@ function ActionPreviewSection({
 
         {ap.preconditions && ap.preconditions.length > 0 ? (
           <div className="text-xs space-y-1">
-            <span className="font-medium text-foreground">前置条件</span>
+            <span className="font-medium text-foreground">
+              {t('agent.physicalGate.preconditions', { defaultValue: '需满足的前置条件' })}
+            </span>
             <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
               {ap.preconditions.map((p, i) => (
                 <li key={i}>
-                  {p.code ? <code className="mr-1 rounded bg-muted px-1">{p.code}</code> : null}
+                  {showDebugFields && p.code ? (
+                    <code className="mr-1 rounded bg-muted px-1">{p.code}</code>
+                  ) : null}
                   {p.message ?? ''}
                 </li>
               ))}
@@ -219,7 +262,7 @@ function ActionPreviewSection({
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
               <Wrench className="h-3.5 w-3.5" />
-              系统建议修复
+              {t('agent.physicalGate.healingOptions', { defaultValue: '建议调整方案' })}
             </div>
             {ap.suggested_healing_options.map((opt) => (
               <HealingOptionCard
@@ -231,11 +274,16 @@ function ActionPreviewSection({
                 orchestrationResult={orchestrationResult}
                 adoptBusyKey={adoptBusyKey}
                 onAdopt={onAdoptHealingPreview}
+                showDebugFields={showDebugFields}
               />
             ))}
           </div>
         ) : blocked && !suggestMode ? (
-          <p className="text-xs text-muted-foreground">当前为阻断模式，无自动修复建议。</p>
+          <p className="text-xs text-muted-foreground">
+            {t('agent.physicalGate.blockedNoHeal', {
+              defaultValue: '当前约束下无法自动给出调整方案，请手动修改行程。',
+            })}
+          </p>
         ) : null}
       </div>
     </div>
@@ -250,6 +298,7 @@ function HealingOptionCard({
   orchestrationResult,
   adoptBusyKey,
   onAdopt,
+  showDebugFields = false,
 }: {
   opt: SuggestedHealingOptionItemDto;
   actionId: string;
@@ -258,7 +307,9 @@ function HealingOptionCard({
   orchestrationResult?: OrchestrationResult | null;
   adoptBusyKey?: string | null;
   onAdopt?: AdoptHealingPreviewHandler;
+  showDebugFields?: boolean;
 }) {
+  const { t } = useTranslation();
   const kindLabel = opt.kind ? KIND_LABELS[opt.kind] ?? opt.kind : '';
   const ts = opt.temporal_shift;
   const busy = adoptBusyKey === `${messageId}:${opt.option_id}`;
@@ -282,19 +333,20 @@ function HealingOptionCard({
         {(ts?.rationale || ts?.condition_text) ? (
           <p className="text-muted-foreground leading-relaxed">{ts?.rationale ?? ts?.condition_text}</p>
         ) : null}
-        {(ts?.shift_days != null || ts?.suggested_enter_at || ts?.enter_at) ? (
+        {(ts?.shift_days != null || ts?.suggested_enter_at || ts?.enter_at) && showDebugFields ? (
           <ul className="text-[11px] text-muted-foreground space-y-0.5 font-mono">
             {ts?.shift_days != null ? <li>shift_days: {ts.shift_days}</li> : null}
             {(ts?.suggested_enter_at || ts?.enter_at) ? (
-              <li>
-                enter_at: {String(ts.suggested_enter_at ?? ts.enter_at)}
-              </li>
+              <li>enter_at: {String(ts.suggested_enter_at ?? ts.enter_at)}</li>
             ) : null}
           </ul>
         ) : null}
         {typeof ts?.shift_days === 'number' ? (
           <p className="text-[10px] text-amber-900/85 dark:text-amber-100/85 border-t border-amber-200/60 pt-2">
-            若整体平移 <strong>{ts.shift_days}</strong> 天，行程内其它日期通常需同步平移相同天数（与后端 shift_days 一致）。
+            {t('agent.physicalGate.shiftDaysHint', {
+              defaultValue: '若整体平移 {{days}} 天，行程内其它日期通常需同步平移相同天数。',
+              days: ts.shift_days,
+            })}
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -313,9 +365,9 @@ function HealingOptionCard({
               })
             }
           >
-            {busy ? '预览中…' : '采纳并重新预览'}
+            {busy ? '预览中…' : t('agent.physicalGate.adoptPreview', { defaultValue: '预览调整效果' })}
           </Button>
-          {opt.healing_one_click_action_id ? (
+          {showDebugFields && opt.healing_one_click_action_id ? (
             <Badge variant="outline" className="text-[9px] font-normal">
               {opt.healing_one_click_action_id}
             </Badge>

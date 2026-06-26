@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Search, Filter, LayoutGrid, Network, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { DecisionStep, GateStatus } from '@/types/decision-draft';
-import { normalizeGateStatus } from '@/lib/gate-status';
+import type { GateStatus } from '@/types/decision-draft';
 
 export type LayoutType = 'grid' | 'hierarchical' | 'force';
 

@@ -3,18 +3,7 @@
  * 用于前端开发和测试
  */
 
-import type {
-  DecisionDraft,
-  DecisionStep,
-  EvidenceRef,
-  DecisionLogEntry,
-  DecisionDraftMetadata,
-  TocExplanation,
-  ExpertExplanation,
-  ImpactPreviewResult,
-  DecisionReplay,
-  DecisionDraftVersion,
-} from '@/types/decision-draft';
+import type { DecisionDraft, DecisionStep, EvidenceRef, TocExplanation, ExpertExplanation, ImpactPreviewResult, DecisionReplay, DecisionDraftVersion } from '@/types/decision-draft';
 import { normalizeGateStatus } from '@/lib/gate-status';
 
 /**
@@ -47,7 +36,7 @@ function createMockDecisionStep(index: number, type: string): DecisionStep {
     'approved',
   ];
   const status = statuses[index % statuses.length];
-  const gateStatus = normalizeGateStatus(status);
+  const ____gateStatus = normalizeGateStatus(status);
 
   return {
     id: `step-${index}`,
@@ -125,7 +114,7 @@ export function createMockDecisionDraft(draftId: string, planId: string): Decisi
 /**
  * 生成 Mock 决策解释（ToC模式）
  */
-export function createMockTocExplanation(draftId: string): TocExplanation {
+export function createMockTocExplanation(_draftId: string): TocExplanation {
   return {
     title: '决策解释',
     summary: '系统基于您的需求和约束条件，生成了以下关键决策。每个决策都经过三人格评估，确保安全、节奏和结构的平衡。',
@@ -173,7 +162,7 @@ export function createMockExpertExplanation(draftId: string, stepId?: string): E
 /**
  * 生成 Mock 影响预览结果
  */
-export function createMockImpactPreview(stepId: string): ImpactPreviewResult {
+export function createMockImpactPreview(_stepId: string): ImpactPreviewResult {
   return {
     affected_steps: ['step-1', 'step-2', 'step-3'],
     affected_evidence: ['evidence-1', 'evidence-2'],
@@ -188,7 +177,7 @@ export function createMockImpactPreview(stepId: string): ImpactPreviewResult {
 export function createMockReplay(draftId: string): DecisionReplay {
   const draft = createMockDecisionDraft(draftId, 'plan-123');
   return {
-    timeline: draft.decision_steps.map((step, index) => ({
+    timeline: draft.decision_steps.map((step, _index) => ({
       timestamp: step.created_at,
       step: 'PLAN_GEN' as const,
       decision_step: step,

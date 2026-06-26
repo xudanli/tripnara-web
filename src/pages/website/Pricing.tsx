@@ -12,6 +12,7 @@ export default function PricingPage() {
       features: [
         t('pricing.explorer.features.basic'),
         t('pricing.explorer.features.dem'),
+        t('pricing.explorer.features.trustedProjects'),
         t('pricing.explorer.features.log'),
       ],
       icon: Glasses,
@@ -42,12 +43,11 @@ export default function PricingPage() {
     },
   ];
 
-  const faqs = [
-    { question: t('pricing.faq.cancelable'), answer: '...' },
-    { question: t('pricing.faq.teamSupport'), answer: '...' },
-    { question: t('pricing.faq.dataPrivacy'), answer: '...' },
-    { question: t('pricing.faq.countrySupport'), answer: '...' },
-  ];
+  const faqKeys = ['cancelable', 'teamSupport', 'dataPrivacy', 'countrySupport'] as const;
+  const faqs = faqKeys.map((key) => ({
+    question: t(`pricing.faq.${key}`),
+    answer: t(`pricing.faq.${key}Answer`),
+  }));
 
   return (
     <div style={{ backgroundColor: '#fff' }}>
@@ -91,11 +91,22 @@ export default function PricingPage() {
       {/* SECTION 2 · 方案卡片 */}
       <section
         style={{
-          padding: '6rem 2rem',
+          padding: '0 2rem 6rem',
           backgroundColor: '#f8f9fa',
         }}
       >
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <p
+            style={{
+              textAlign: 'center',
+              fontSize: '0.95rem',
+              color: '#666',
+              marginBottom: '2.5rem',
+              lineHeight: '1.7',
+            }}
+          >
+            {t('pricing.subscriptionNote')}
+          </p>
           <div
             style={{
               display: 'grid',
@@ -193,6 +204,97 @@ export default function PricingPage() {
               );
             })}
           </div>
+
+          {/* 资质认证说明 */}
+          <div
+            style={{
+              marginTop: '3rem',
+              padding: '2.5rem',
+              backgroundColor: '#fff',
+              border: '2px solid #000',
+              borderRadius: '12px',
+            }}
+          >
+            <h2
+              style={{
+                fontSize: '1.5rem',
+                fontWeight: '700',
+                marginBottom: '1rem',
+                color: '#000',
+                textAlign: 'center',
+              }}
+            >
+              {t('pricing.certification.title')}
+            </h2>
+            <p
+              style={{
+                color: '#666',
+                lineHeight: '1.7',
+                textAlign: 'center',
+                maxWidth: '720px',
+                margin: '0 auto 2rem',
+                fontSize: '0.95rem',
+              }}
+            >
+              {t('pricing.certification.description')}
+            </p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                gap: '1.5rem',
+                marginBottom: '2rem',
+              }}
+            >
+              <div
+                style={{
+                  padding: '1.5rem',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '8px',
+                  backgroundColor: '#f8f9fa',
+                }}
+              >
+                <h3 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.5rem', color: '#000' }}>
+                  {t('pricing.certification.professionalTitle')}
+                </h3>
+                <p style={{ fontSize: '0.9rem', color: '#666', lineHeight: '1.6', margin: 0 }}>
+                  {t('pricing.certification.professionalDesc')}
+                </p>
+              </div>
+              <div
+                style={{
+                  padding: '1.5rem',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '8px',
+                  backgroundColor: '#f8f9fa',
+                }}
+              >
+                <h3 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.5rem', color: '#000' }}>
+                  {t('pricing.certification.agencyTitle')}
+                </h3>
+                <p style={{ fontSize: '0.9rem', color: '#666', lineHeight: '1.6', margin: 0 }}>
+                  {t('pricing.certification.agencyDesc')}
+                </p>
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <Link
+                to="/professionals"
+                style={{
+                  display: 'inline-block',
+                  padding: '0.75rem 1.5rem',
+                  border: '2px solid #000',
+                  borderRadius: '8px',
+                  color: '#000',
+                  textDecoration: 'none',
+                  fontWeight: '600',
+                  fontSize: '0.95rem',
+                }}
+              >
+                {t('pricing.certification.cta')}
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -243,7 +345,7 @@ export default function PricingPage() {
                 >
                   {faq.question}
                 </h3>
-                <p style={{ color: '#666', lineHeight: '1.7' }}>{faq.answer}</p>
+                <p style={{ color: '#666', lineHeight: '1.7', margin: 0 }}>{faq.answer}</p>
               </div>
             ))}
           </div>

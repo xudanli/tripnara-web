@@ -10,7 +10,6 @@ import type {
   ZhimaCreditCredential,
   ZhimaCreditTier,
 } from '@/types/match-square';
-import { parseTrustAssetSegments } from './parse-trust-asset-line';
 
 const ZHIMA_TIER_LABELS: Record<ZhimaCreditTier, string> = {
   excellent: '极佳',
@@ -91,8 +90,9 @@ function readEducation(raw: unknown): EducationCredential | null {
     return null;
   }
 
-  let tierTags = Array.isArray(r.tierTags ?? r.tier_tags)
-    ? (r.tierTags ?? r.tier_tags).filter(
+  const tierTagsRaw = r.tierTags ?? r.tier_tags;
+  let tierTags = Array.isArray(tierTagsRaw)
+    ? tierTagsRaw.filter(
         (x): x is EducationTierTag =>
           x === '985_211' ||
           x === 'qs_top50' ||
@@ -157,8 +157,9 @@ function readProfession(raw: unknown): ProfessionCredential | null {
     typeof industryClusterRaw === 'string' ? industryTagToCluster(industryClusterRaw) : null;
   if (!cluster) return null;
 
-  const displayTags = Array.isArray(r.displayTags ?? r.display_tags)
-    ? (r.displayTags ?? r.display_tags).filter((x): x is string => typeof x === 'string')
+  const displayTagsRaw = r.displayTags ?? r.display_tags;
+  const displayTags = Array.isArray(displayTagsRaw)
+    ? displayTagsRaw.filter((x): x is string => typeof x === 'string')
     : [];
   const roleTitle =
     readString(r.roleTitle ?? r.role_title) ||
@@ -303,11 +304,10 @@ function buildIdentityHeadline(
 }
 
 function buildTrustAssetLine(
-  zhima?: ZhimaCreditCredential | null,
+  _zhima?: ZhimaCreditCredential | null,
   teamworkCapsule?: string | null
 ): string {
-  const parts = [zhima?.displayLabel, teamworkCapsule].filter(Boolean);
-  return parts.join(' · ');
+  return teamworkCapsule?.trim() ?? '';
 }
 
 export type NormalizeVerifiedCredentialsContext = {
@@ -497,33 +497,16 @@ export type TrustEndorsementView = {
   hasContent: boolean;
 };
 
-/** 抽屉「履约背书」— 合并 dossier / zhimaCredit / trustAssetLine / Reputation OS */
+/** @deprecated 芝麻信用 / 陌生人互评展示已冻结 — 返回空视图 */
 export function resolveTrustEndorsement(
-  credentials: VerifiedCredentials,
-  reputationStarsOverride?: number | null
+  _credentials: VerifiedCredentials,
+  _reputationStarsOverride?: number | null
 ): TrustEndorsementView {
-  const dossier = credentials.dossier;
-  const zhimaDisplayLine =
-    dossier?.zhimaCreditLine ??
-    credentials.zhimaCredit?.displayLabel ??
-    parseTrustAssetSegments(credentials.headline?.trustAssetLine ?? '').find((segment) =>
-      /芝麻|信用/.test(segment)
-    ) ??
-    null;
-
-  const tierFromParen = zhimaDisplayLine?.match(/\(([^)]+)\)/)?.[1]?.trim() ?? null;
-  const zhimaTierLabel =
-    tierFromParen ??
-    (credentials.zhimaCredit?.tier ? ZHIMA_TIER_LABELS[credentials.zhimaCredit.tier] : null);
-
-  const reputationStars =
-    reputationStarsOverride ?? dossier?.reputationStars ?? null;
-
   return {
-    zhimaDisplayLine,
-    zhimaTierLabel,
-    reputationStars,
-    hasContent: Boolean(zhimaDisplayLine || zhimaTierLabel || reputationStars != null),
+    zhimaDisplayLine: null,
+    zhimaTierLabel: null,
+    reputationStars: null,
+    hasContent: false,
   };
 }
 
@@ -555,11 +538,16 @@ export function enrichVerifiedCredentialsDossier(
 }
 
 /** 队长本人帖 — 用最新 credentials/me 覆盖 Card 内嵌快照 */
-export function applyViewerCredentialsToOwnPost(
-  post: { captainUserId: string; verifiedCredentials?: VerifiedCredentials | null; captainVerifiedCredentials?: VerifiedCredentials | null; isCaptain?: boolean },
+export function applyViewerCredentialsToOwnPost<T extends {
+  captainUserId: string;
+  verifiedCredentials?: VerifiedCredentials | null;
+  captainVerifiedCredentials?: VerifiedCredentials | null;
+  isCaptain?: boolean;
+}>(
+  post: T,
   viewerCredentials: VerifiedCredentials | null | undefined,
   isOwnPost: boolean
-): typeof post {
+): T {
   if (!isOwnPost || !viewerCredentials) return post;
   if (!viewerCredentials.education?.verified && !viewerCredentials.profession?.verified) return post;
   return {
@@ -569,23 +557,18 @@ export function applyViewerCredentialsToOwnPost(
   };
 }
 
-/** 广场列表可见性（后端 recommendationHidden + 客户端芝麻兜底） */
+/** 广场列表可见性（仅后端 recommendationHidden；芝麻信用客户端过滤已移除） */
 export function isPostVisibleInPlaza(post: {
   recommendationHidden?: boolean;
   verifiedCredentials?: VerifiedCredentials | null;
   captainVerifiedCredentials?: VerifiedCredentials | null;
 }): boolean {
   if (post.recommendationHidden === true) return false;
-  const vc = post.verifiedCredentials ?? post.captainVerifiedCredentials;
-  const score = vc?.zhimaCredit?.score;
-  if (vc?.zhimaCredit?.verified && score != null && score < 550) return false;
   return true;
 }
 
-/** @deprecated 使用 isPostVisibleInPlaza */
-export function passesTrustHardGate(credentials?: VerifiedCredentials | null): boolean {
-  const score = credentials?.zhimaCredit?.score;
-  if (credentials?.zhimaCredit?.verified && score != null && score < 550) return false;
+/** @deprecated 芝麻信用 Hard Gate 已下线 — 始终通过 */
+export function passesTrustHardGate(_credentials?: VerifiedCredentials | null): boolean {
   return true;
 }
 

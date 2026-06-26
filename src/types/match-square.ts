@@ -328,6 +328,8 @@ export type RecruitmentPostCard = {
   tripInstantiationResult?: TripInstantiationResult | null;
   /** §3.15 队长强制成团（Sovereign Force Lock） */
   sovereignLock?: SovereignForceLockRecord | null;
+  /** Recruiting Runtime · 招募结果评估（行程完成后） */
+  outcome?: RecruitingOutcome | null;
 };
 
 /** 车队拼图单格 — 兼容 team_deficit_pomdp_v1 API 与客户端兜底 */
@@ -638,7 +640,108 @@ export type SubmitApplicationRequest = {
   physicalSurvivalQuizAnswers?: Record<string, string>;
 };
 
-export type ReviewApplicationRequest = {
+/** Recruiting Runtime · 决策归因 */
+export type RecruitingAttributionCauseType =
+  | 'USER_ACTION'
+  | 'CONSTRAINT'
+  | 'GOVERNANCE'
+  | 'SYSTEM';
+
+export type RecruitingPrimaryReason =
+  | 'COMPATIBILITY_MATCH'
+  | 'SKILL_REQUIREMENT'
+  | 'SCHEDULE_ALIGNMENT'
+  | 'BUDGET_ALIGNMENT'
+  | 'PERSONA_FIT'
+  | 'CAPTAIN_PREFERENCE'
+  | 'SLOT_REQUIREMENT'
+  | 'TEAM_BALANCE'
+  | 'EXTERNAL_FACTOR'
+  | 'GOVERNANCE'
+  | 'REPUTATION_SCORE'
+  | 'PAST_COLLABORATION';
+
+export type RecruitingAttributionConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type RecruitingAttributionMetadata = {
+  ruleId?: string;
+  alternativeReasons?: string[];
+  compatibilityScore?: number;
+  skillMatchScore?: number;
+  scheduleMatchScore?: number;
+  budgetMatchScore?: number;
+};
+
+export type RecruitingAttribution = {
+  causeType: RecruitingAttributionCauseType;
+  primaryReason: RecruitingPrimaryReason;
+  reasonCodes: string[];
+  signalScores: Record<string, number>;
+  confidence: RecruitingAttributionConfidence;
+  metadata?: RecruitingAttributionMetadata;
+};
+
+/** Recruiting Runtime · 招募结果评估 */
+export type RecruitingOutcomeSuccessLevel =
+  | 'EXCELLENT'
+  | 'GOOD'
+  | 'ACCEPTABLE'
+  | 'POOR'
+  | 'FAILED';
+
+export type RecruitingOutcomeMetrics = {
+  timeToFill: number;
+  applicationCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  conversionRate: number;
+  matchSuccessRate: number;
+  teamPerformance: number;
+  attritionRate: number;
+};
+
+export type RecruitingOutcomeFactor = {
+  type: string;
+  impact: number;
+  description: string;
+  details?: Record<string, unknown>;
+};
+
+export type RecruitingOutcome = {
+  id: string;
+  postId: string;
+  tripId?: string;
+  successLevel: RecruitingOutcomeSuccessLevel;
+  metrics: RecruitingOutcomeMetrics;
+  factors: RecruitingOutcomeFactor[];
+  recommendations: string[];
+  computedAt: string;
+  dataQuality: number;
+  confidence: number;
+};
+
+/** PATCH 审批时可选归因上下文 */
+export type ReviewApplicationAttributionContext = {
+  compatibilityScore?: number;
+  mbtiCompatibility?: 'high' | 'medium' | 'low';
+  requiredSkills?: string[];
+  applicantSkills?: string[];
+  scheduleConflict?: boolean;
+  timeAvailability?: 'excellent' | 'good' | 'poor';
+  budgetFit?: 'perfect' | 'acceptable' | 'poor';
+  captainPreference?: string;
+  slotRequirement?: string;
+  teamBalance?: {
+    genderBalance?: number;
+    ageBalance?: number;
+    roleBalance?: number;
+  };
+  reputationScore?: number;
+  pastCollaboration?: boolean;
+  governanceFlags?: string[];
+};
+
+export type ReviewApplicationRequest = ReviewApplicationAttributionContext & {
   action: ApplicationReviewAction;
 };
 
@@ -708,4 +811,6 @@ export type RecruitmentApplicationCard = {
   decisionBrief?: import('@/types/collaborative-task-flywheel').PreMatchDecisionBrief | null;
   /** §7.0.3 · 体能拟合报告（审批卡片） */
   physicalFitnessReport?: PhysicalFitnessReport | null;
+  /** Recruiting Runtime · 审批决策归因 */
+  attribution?: RecruitingAttribution | null;
 };

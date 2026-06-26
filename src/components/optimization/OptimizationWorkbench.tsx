@@ -8,13 +8,11 @@ import * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-import { PlanEvaluationCard } from './PlanEvaluationCard';
 import { PlanComparisonView } from './PlanComparisonView';
 import { RiskAssessmentCard } from './RiskAssessmentCard';
 import { NegotiationResultCard } from './NegotiationResultCard';
@@ -45,6 +43,8 @@ import type {
   NegotiationResponse,
 } from '@/types/optimization-v2';
 import { DEFAULT_WEIGHTS } from '@/types/optimization-v2';
+import { submitGuardianHumanChoice } from '@/lib/guardian-choose-submit';
+import { useAuth } from '@/hooks/useAuth';
 
 import {
   Zap,
@@ -202,6 +202,7 @@ export function OptimizationWorkbench({
   onPlanSelected,
   className,
 }: OptimizationWorkbenchProps) {
+  const { user } = useAuth();
   // ==================== 状态 ====================
   const [state, setState] = React.useState<WorkbenchState>({
     phase: 'idle',
@@ -359,15 +360,37 @@ export function OptimizationWorkbench({
   ]);
   
   // ==================== 处理用户决策 ====================
-  const handleJudgmentConfirm = React.useCallback((decisions: Record<string, string>) => {
-    console.log('User decisions:', decisions);
+  const handleJudgmentConfirm = React.useCallback(async (decisions: Record<string, string>) => {
     setJudgmentDialogOpen(false);
-    
+
+    if (user?.id && tripId && state.optimized?.userJudgmentPoints?.length) {
+      const points = state.optimized.userJudgmentPoints;
+      const firstPoint = points[0];
+      const selectedText = decisions[firstPoint.id] ?? firstPoint.recommendation;
+      const selectedIndex = Math.max(
+        0,
+        firstPoint.options.findIndex((o) => o === selectedText),
+      );
+      try {
+        await submitGuardianHumanChoice({
+          userId: user.id,
+          tripId,
+          source: 'optimize_judgment',
+          selectedIndex,
+          selectedText,
+          decisionPoints: points.map((p) => p.question),
+        });
+        toast.success('已记录优化决策选择');
+      } catch (err) {
+        console.error('[OptimizationWorkbench] judgment submit failed', err);
+      }
+    }
+
     if (state.optimized?.plan) {
       onOptimized?.(state.optimized.plan);
       onPlanSelected?.('optimized');
     }
-  }, [state.optimized, onOptimized, onPlanSelected]);
+  }, [state.optimized, onOptimized, onPlanSelected, tripId, user?.id]);
   
   // ==================== 选择方案 ====================
   const handleSelectPlan = React.useCallback((selection: 'A' | 'B') => {
@@ -555,6 +578,7 @@ export function OptimizationWorkbench({
               <NegotiationResultCard
                 result={state.negotiation}
                 tripId={tripId}
+                userId={user?.id}
               />
             )}
             

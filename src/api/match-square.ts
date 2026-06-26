@@ -10,7 +10,7 @@ import {
   getMatchSquareApiMode,
   withMatchSquareFallback,
 } from '@/features/match-square/lib/match-square-api-mode';
-import { normalizeApplyPreview, normalizeApplicationCard, normalizeApplicationsList, normalizeCaptainRadar, normalizeFilterOptions, normalizeMyPostListResponse, normalizePostDetail, normalizePostListResponse, normalizeReviewApplicationResponse, normalizeTravelIntent, normalizeUserCredentialsResponse } from '@/features/match-square/lib/normalize-api-response';
+import { normalizeApplyPreview, normalizeApplicationCard, normalizeApplicationsList, normalizeCaptainRadar, normalizeFilterOptions, normalizeMatchSquareAccess, normalizeMyPostListResponse, normalizePostDetail, normalizePostListResponse, normalizeReviewApplicationResponse, normalizeTravelIntent, normalizeUserCredentialsResponse } from '@/features/match-square/lib/normalize-api-response';
 import { serializeSubmitApplicationRequest } from '@/features/match-square/lib/serialize-submit-application';
 import { normalizeSpawnTrekTripPreview, normalizeSpawnTrekTripResult } from '@/features/match-square/lib/trekking-orchestration/normalize-spawn-trek-trip';
 import {
@@ -36,21 +36,15 @@ import type {
   RecruitmentPostCard,
   RespondOliveBranchRequest,
   ReviewApplicationRequest,
-  ReviewApplicationResult,
   SendOliveBranchRequest,
   SubmitApplicationRequest,
   TravelIntentStatus,
   UpsertTravelIntentRequest,
   UpdatePostStatusRequest,
-  VerifiedCredentials,
 } from '@/types/match-square';
-import type { SpawnTrekTripPreview, SpawnTrekTripRequest, SpawnTrekTripResult } from '@/types/spawn-trek-trip';
-import type { InstantiateTripRequest, TripInstantiationPreview, TripInstantiationResult } from '@/types/trip-instantiation';
-import type {
-  SovereignForceLockCommitResult,
-  SovereignForceLockPreview,
-  SovereignForceLockRequest,
-} from '@/types/sovereign-force-lock';
+import type { SpawnTrekTripRequest } from '@/types/spawn-trek-trip';
+import type { InstantiateTripRequest } from '@/types/trip-instantiation';
+import type { SovereignForceLockRequest } from '@/types/sovereign-force-lock';
 import {
   captainRadarMockStore,
   travelIntentMockStore,
@@ -105,10 +99,10 @@ export const matchSquareApi = {
     withMatchSquareFallback(
       () =>
         live(async () => {
-          const response = await apiClient.get<SuccessResponse<MatchSquareAccess>>(
+          const response = await apiClient.get<SuccessResponse<MatchSquareAccess | unknown>>(
             `${BASE_PATH}/access`
           );
-          return unwrap(response.data);
+          return normalizeMatchSquareAccess(unwrap(response.data));
         }, '获取广场权限失败'),
       () => matchSquareMockStore.getAccess()
     ),

@@ -25,10 +25,7 @@ export function credentialsNeedRemoteFetch(
     const hasProfession =
       (credentials.dossier?.professionTags?.length ?? 0) > 0 ||
       Boolean(credentials.profession?.verified);
-    const hasZhima = Boolean(
-      credentials.zhimaCredit?.verified || credentials.dossier?.zhimaCreditLine
-    );
-    if (hasEducation || hasProfession || hasZhima) return false;
+    if (hasEducation || hasProfession) return false;
   }
 
   if (!credentials.headline?.identityHeadline) return true;
@@ -39,11 +36,8 @@ export function credentialsNeedRemoteFetch(
   const hasProfession =
     (credentials.dossier?.professionTags?.length ?? 0) > 0 ||
     Boolean(credentials.profession?.verified);
-  const hasZhima = Boolean(
-    credentials.zhimaCredit?.verified || credentials.dossier?.zhimaCreditLine
-  );
 
-  return !(hasEducation || hasProfession || hasZhima);
+  return !(hasEducation || hasProfession);
 }
 
 function credentialRichness(credentials?: VerifiedCredentials | null): number {
@@ -53,8 +47,6 @@ function credentialRichness(credentials?: VerifiedCredentials | null): number {
   score += (credentials.dossier?.professionTags?.length ?? 0) * 2;
   if (credentials.education?.verified) score += 2;
   if (credentials.profession?.verified) score += 2;
-  if (credentials.zhimaCredit?.verified) score += 1;
-  if (credentials.dossier?.zhimaCreditLine) score += 1;
   return score;
 }
 

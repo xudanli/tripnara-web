@@ -25,7 +25,7 @@ export default function ConflictDetectionCard({
   className,
 }: ConflictDetectionCardProps) {
   const [showFeedback, setShowFeedback] = useState<number | null>(null);
-  const [selectedOptions, setSelectedOptions] = useState<Record<number, string>>({});
+  const [_selectedOptions, setSelectedOptions] = useState<Record<number, string>>({});
 
   if (conflicts.length === 0) return null;
 

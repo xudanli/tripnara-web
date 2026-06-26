@@ -120,8 +120,10 @@ export interface CheckConstraintsResponse {
 // ==================== 多方案生成类型 ====================
 
 export interface GenerateMultiplePlansRequest {
+  tripId?: string;
   state: any;
   constraints: ConstraintDSL;
+  count?: number;
 }
 
 export interface PlanVariantTradeoff {

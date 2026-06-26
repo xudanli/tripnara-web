@@ -92,7 +92,7 @@ export interface ExecutionState {
   currentDay: number;
   currentDate: string;
   reminders: Reminder[];
-  pendingChanges: any[];
+  pendingChanges: ExecutionNeptuneChangePayload[];
   activeFallbacks: any[];
   lastUpdated: string;
 }
@@ -115,11 +115,17 @@ export interface ChangeResult {
   changeType: string;
   success: boolean;
   message?: string;
+  originalPlan?: ExecutionNeptuneChangePayload['originalPlan'];
+  adjustedPlan?: ExecutionNeptuneChangePayload['adjustedPlan'];
+  impact?: ExecutionNeptuneChangePayload['impact'];
+  alternatives?: ExecutionNeptuneChangePayload['alternatives'];
+  recommendations?: string[];
+  requiresConfirmation?: boolean;
   updatedSchedule?: {
     date: string;
     schedule: {
       items: Array<{
-        placeId: number;
+        placeId: number | string;
         placeName: string;
         startTime: string;
         endTime: string;
@@ -158,6 +164,44 @@ export interface FallbackPlan {
   id: string;
   triggerReason: string;
   solutions: FallbackSolution[];
+  /** changeResult / pendingChanges 扩展字段 */
+  changeId?: string;
+  changeType?: string;
+  originalPlan?: ExecutionNeptuneChangePayload['originalPlan'];
+  adjustedPlan?: ExecutionNeptuneChangePayload['adjustedPlan'];
+  impactDetail?: ExecutionNeptuneChangePayload['impact'];
+  recommendations?: string[];
+}
+
+/** Neptune 变更载荷（与 pendingChanges / changeResult 对齐） */
+export interface ExecutionNeptuneChangePayload {
+  changeId?: string;
+  changeType?: string;
+  originalPlan?: {
+    itemId?: string;
+    scheduledStart?: string;
+    scheduledEnd?: string;
+    description?: string;
+  };
+  adjustedPlan?: {
+    itemId?: string;
+    newStart?: string;
+    newEnd?: string;
+    description?: string;
+  };
+  impact?: {
+    schedule?: string;
+    budget?: string;
+    experience?: string;
+    risk?: string;
+  };
+  alternatives?: Array<{
+    option?: string;
+    description?: string;
+    impact?: string;
+  }>;
+  recommendations?: string[];
+  requiresConfirmation?: boolean;
 }
 
 /**

@@ -90,7 +90,7 @@ export function extractResponseData(response: ChatResponse): {
   recommendations?: any[];
   plans?: any[];
 } {
-  const target = response.routing?.target;
+  const ____target = response.routing?.target;
 
   return {
     hotels: response.hotels,

@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef, useCallback, useMemo, useContext, createContext, type ReactNode } from 'react';
 /**
  * 规划工作台上下文
  * 
@@ -7,7 +8,6 @@
  * - 状态同步：行程变更实时通知助手
  */
 
-import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect, ReactNode } from 'react';
 import type { ItineraryAdjustDraftPreview } from '@/lib/itinerary-adjust-response';
 
 export type { ItineraryAdjustDraftPreview };

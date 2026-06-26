@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { VerifiedCredentials } from '@/types/match-square';
 import { parseTrustAssetSegments } from '../lib/parse-trust-asset-line';
+import { filterDeprecatedTrustSegments } from '@/lib/deprecated-trust';
 import { credentialsDisplayName, formatCaptainIdentityHeadline } from '../lib/verified-credentials';
 
 interface CredentialsHeadlineStripProps {
@@ -36,7 +37,9 @@ export function CredentialsHeadlineStrip({
   const showAvatar = variant === 'detail' && Boolean(onOpenTrustProfile);
   const initials = (displayName || identityHeadline).slice(0, 1).toUpperCase();
   const avatarUrl = credentials.dossier?.avatarUrl;
-  const trustSegments = trustAssetLine ? parseTrustAssetSegments(trustAssetLine) : [];
+  const trustSegments = filterDeprecatedTrustSegments(
+    trustAssetLine ? parseTrustAssetSegments(trustAssetLine) : []
+  );
   const isDetail = variant === 'detail';
   const trustInline = trustSegments.join(' · ');
   const interactive = isDetail && Boolean(onOpenTrustProfile);

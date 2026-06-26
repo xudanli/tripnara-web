@@ -3,15 +3,7 @@ import { cognitiveScoresToRadar } from './scoring';
 import { computePremiumCognitiveScores } from './premium-stress-scoring';
 import { mbtiTypeToAxisPercentages } from './mbti-from-type';
 import { resolveQuadrant } from './mbti-resolver';
-import type {
-  MbtiType,
-  OdysseyAnswerChoice,
-  OdysseyCognitiveScores,
-  OdysseyQuestionId,
-  PremiumStressAnswerChoice,
-  PremiumStressQuestionId,
-  ResolvedTravelPersona,
-} from '@/types/odyssey-travel-persona';
+import type { MbtiType, OdysseyAnswerChoice, OdysseyCognitiveScores, OdysseyQuestionId, PremiumStressAnswerChoice, ResolvedTravelPersona } from '@/types/odyssey-travel-persona';
 import { computeCognitiveScores } from './scoring';
 import { resolveMbtiAxes, resolveMbtiType } from './mbti-resolver';
 

@@ -25,7 +25,7 @@ function normalizeLockStatus(v: unknown): BookingCheckoutLockStatus {
   return 'QUOTE_ONLY';
 }
 
-function normalizeBundleLine(v: unknown, index: number): BookingCheckoutBundleLine | null {
+function normalizeBundleLine(v: unknown, _index: number): BookingCheckoutBundleLine | null {
   if (!isRecord(v)) return null;
   const label = pickStr(v.label_zh) ?? pickStr(v.labelZh);
   if (!label) return null;

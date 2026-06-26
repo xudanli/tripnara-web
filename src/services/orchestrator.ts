@@ -180,18 +180,21 @@ class PlanStudioOrchestrator {
       if (!isSuccess && decisionLog.length > 0) {
         // 查找最后一个失败的决策步骤（兼容新旧两种格式）
         const lastFailedStep = decisionLog
-          .filter(step => {
+          .filter((step): step is Record<string, unknown> => typeof step === 'object' && step !== null)
+          .filter((step) => {
             // 检查是否是旧格式 DecisionLogItem
-            if ('reason_code' in step && step.reason_code) {
+            const reasonCode = step.reason_code;
+            if (typeof reasonCode === 'string') {
               return (
-                step.reason_code.includes('FAILED') || 
-                step.reason_code.includes('ERROR') ||
-                step.reason_code.includes('CONSTRAINT')
+                reasonCode.includes('FAILED') ||
+                reasonCode.includes('ERROR') ||
+                reasonCode.includes('CONSTRAINT')
               );
             }
             // 新格式 DecisionLogEntry 从 outputs_summary 中查找错误信息
-            if ('outputs_summary' in step && step.outputs_summary) {
-              const summary = step.outputs_summary.toLowerCase();
+            const outputsSummary = step.outputs_summary;
+            if (typeof outputsSummary === 'string') {
+              const summary = outputsSummary.toLowerCase();
               return summary.includes('failed') || summary.includes('error') || summary.includes('constraint');
             }
             return false;
@@ -199,9 +202,9 @@ class PlanStudioOrchestrator {
           .pop();
         
         // 处理旧格式的 facts
-        if (lastFailedStep && 'facts' in lastFailedStep && lastFailedStep.facts) {
+        if (lastFailedStep && lastFailedStep.facts && typeof lastFailedStep.facts === 'object') {
           // 尝试从 facts 中提取错误详情
-          const errorDetails = Object.entries(lastFailedStep.facts)
+          const errorDetails = Object.entries(lastFailedStep.facts as Record<string, unknown>)
             .filter(([key]) => key.toLowerCase().includes('error') || key.toLowerCase().includes('reason'))
             .map(([, value]) => String(value))
             .join('; ');
@@ -211,7 +214,7 @@ class PlanStudioOrchestrator {
           }
         }
         // 处理新格式的 outputs_summary
-        else if (lastFailedStep && 'outputs_summary' in lastFailedStep && lastFailedStep.outputs_summary) {
+        else if (lastFailedStep && typeof lastFailedStep.outputs_summary === 'string') {
           detailedError = lastFailedStep.outputs_summary;
         }
       }

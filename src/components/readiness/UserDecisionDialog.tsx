@@ -39,16 +39,16 @@ export default function UserDecisionDialog({
   findingItem,
   onAnswered,
 }: UserDecisionDialogProps) {
-  const { t, i18n } = useTranslation();
+  const { t: _t, i18n } = useTranslation();
   const isZh = i18n.language === 'zh' || i18n.language.startsWith('zh');
   
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [_loadingQuestions, setLoadingQuestions] = useState(false);
   const [questionsFromApi, setQuestionsFromApi] = useState<Array<UserQuestion & { parsed: boolean }> | null>(null);
-  const [questionGroups, setQuestionGroups] = useState<Array<{ id: string; title: string; questionIds: string[] }>>([]);
-  const [progress, setProgress] = useState<{ answered: number; total: number } | null>(null);
+  const [_questionGroups, setQuestionGroups] = useState<Array<{ id: string; title: string; questionIds: string[] }>>([]);
+  const [_progress, setProgress] = useState<{ answered: number; total: number } | null>(null);
 
   /**
    * 🆕 获取问题文本（支持国际化）
