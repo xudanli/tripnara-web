@@ -5,6 +5,10 @@ import { executionApi } from '@/api/execution';
 import { placesApi } from '@/api/places';
 import type { TripDetail, TripState, ScheduleResponse } from '@/types/trip';
 import type { Reminder, FallbackPlan } from '@/api/execution';
+import {
+  mapNeptuneChangeToFallbackPlan,
+  resolveExecutionNeptunePlan,
+} from '@/lib/execution-neptune-map';
 import type { PlaceEvidenceResponse } from '@/api/places';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  ShieldCheck,
 } from 'lucide-react';
 import { EmptyExecuteIllustration } from '@/components/illustrations';
 import { format, isValid } from 'date-fns';
@@ -58,6 +63,38 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
+import ReadinessSummaryCard from '@/components/readiness/ReadinessSummaryCard';
+import { InTripAnchorBar, InTripTodayPanel, InTripEnvironmentAlertsPanel, InTripEnvironmentEventSheet, InTripCausalInsightCard, InTripMoneyDashboardPanel, InTripMoneyRecordDialog, InTripMoneyRebalancePanel, InTripMoodCheckDialog, InTripPulseInterventionsPanel, InTripTeamThermometerPanel, InTripSplitPanel, InTripSplitSessionSheet, InTripExperiencePulsePanel, InTripExperiencePulseDialog, InTripExperienceWeightPanel, InTripPostTripSummaryPanel, InTripPendingInbox, IN_TRIP_PENDING_ICONS, InTripTodayReadinessSheet } from '@/components/in-trip';
+import { ExecutionAdvisoryCard, ExecutionAdvisorySheet } from '@/components/execution-advisory';
+import {
+  InTripRecoveryLoopBanner,
+  InTripRecoveryLoopSheet,
+} from '@/components/trip-loop';
+import { isTripLoopInTripEnabled } from '@/lib/trip-loop-feature';
+import type { MoneyRecordMember } from '@/components/in-trip';
+import { StructuredNegotiationPanel } from '@/components/domain-influence';
+import { getInTripModuleVisibility } from '@/lib/in-trip-page-config';
+import { resolveInTripExecutionBadge } from '@/lib/in-trip-execution-status';
+import { isTripInTravelPhase, sumPendingCards } from '@/lib/in-trip-execution';
+import { getTripReadinessPhaseFromTrip } from '@/lib/trip-readiness-phase.util';
+import { useInTripToday } from '@/hooks/useInTripToday';
+import { useInTripTodayReadinessDetail } from '@/hooks/useInTripTodayReadiness';
+import { useTripExecutionAdvisory } from '@/hooks/useTripExecutionAdvisory';
+import { useInTripHandoff } from '@/hooks/useInTripHandoff';
+import { useInTripEnvironmentEvents } from '@/hooks/useInTripEnvironmentEvents';
+import { useInTripMoneyDashboard } from '@/hooks/useInTripMoneyDashboard';
+import { useInTripMoneyRebalance } from '@/hooks/useInTripMoneyRebalance';
+import { useInTripPulseThermometer, useInTripPulseInterventions, useInTripPulseMyState } from '@/hooks/useInTripPulse';
+import { useInTripSplitSessions } from '@/hooks/useInTripSplit';
+import {
+  useInTripExperiencePending,
+  useInTripExperienceWeights,
+  useInTripPostTripSummary,
+} from '@/hooks/useInTripExperience';
+import { useAuth } from '@/hooks/useAuth';
+import { tripBudgetApi } from '@/api/trip-budget';
+import type { ExperiencePulseTrigger } from '@/types/in-trip-experience';
 
 // ⚠️ 改进：提取常量配置，减少硬编码
 const EXECUTE_CONFIG = {
@@ -119,11 +156,345 @@ export default function ExecutePage() {
   const [showExecuteTour, setShowExecuteTour] = useState(false);
   const [realtimeCollapsibleOpen, setRealtimeCollapsibleOpen] = useState(false);
   const [lowPriorityRemindersOpen, setLowPriorityRemindersOpen] = useState(false);
+  const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
+  const [selectedEnvEventId, setSelectedEnvEventId] = useState<string | null>(null);
+  const [envEventSheetOpen, setEnvEventSheetOpen] = useState(false);
+  const [moneyRecordOpen, setMoneyRecordOpen] = useState(false);
+  const [moneyMembers, setMoneyMembers] = useState<MoneyRecordMember[]>([]);
+  const [rebalanceExpanded, setRebalanceExpanded] = useState(false);
+  const [moodCheckOpen, setMoodCheckOpen] = useState(false);
+  const [selectedSplitSessionId, setSelectedSplitSessionId] = useState<string | null>(null);
+  const [splitSheetOpen, setSplitSheetOpen] = useState(false);
+  const [interventionsExpanded, setInterventionsExpanded] = useState(false);
+  const [experienceExpanded, setExperienceExpanded] = useState(false);
+  const [experiencePulseOpen, setExperiencePulseOpen] = useState(false);
+  const [selectedExperienceTrigger, setSelectedExperienceTrigger] = useState<
+    ExperiencePulseTrigger | null
+  >(null);
+  const [weightsExpanded, setWeightsExpanded] = useState(false);
+  const [negotiationSheetOpen, setNegotiationSheetOpen] = useState(false);
+  const [secondaryModulesOpen, setSecondaryModulesOpen] = useState(false);
+  const [todayReadinessSheetOpen, setTodayReadinessSheetOpen] = useState(false);
+  const [executionAdvisorySheetOpen, setExecutionAdvisorySheetOpen] = useState(false);
+  const [inTripRecoverySheetOpen, setInTripRecoverySheetOpen] = useState(false);
+  const [causalInsightRefreshKey, setCausalInsightRefreshKey] = useState(0);
+
+  const { user } = useAuth();
+
+  const isTripCompleted = trip?.status === 'COMPLETED';
 
   const { data: realtimeState, refetch: refetchRealtime, isFetching: realtimeFetching } = useRealtimeState(tripId ?? undefined);
   const { data: predictedState } = usePredictedState(tripId ?? undefined, 24);
   const submitFieldReportMutation = useSubmitFieldReport();
-  const { width: assistantSidebarWidth } = useAssistantSidebar();
+  const { width: assistantSidebarWidth, sendAssistantMessage } = useAssistantSidebar();
+
+  const inTravelPhase = isTripInTravelPhase(trip?.status);
+  const {
+    data: inTripToday,
+    loading: inTripTodayLoading,
+    error: inTripTodayError,
+    disabled: inTripDisabled,
+    reload: reloadInTripToday,
+  } = useInTripToday(tripId, inTravelPhase);
+
+  const readinessPhase = getTripReadinessPhaseFromTrip(trip);
+  const showInTripTodayReadiness = inTravelPhase || readinessPhase === 'in_trip';
+
+  const {
+    data: todayReadinessDetail,
+    loading: todayReadinessDetailLoading,
+    error: todayReadinessDetailError,
+    notFound: todayReadinessNotFound,
+    reload: reloadTodayReadinessDetail,
+  } = useInTripTodayReadinessDetail(tripId, showInTripTodayReadiness && todayReadinessSheetOpen);
+
+  const {
+    data: executionAdvisory,
+    loading: executionAdvisoryLoading,
+    reload: reloadExecutionAdvisory,
+  } = useTripExecutionAdvisory(tripId, {
+    enabled: inTravelPhase,
+    tripState,
+    pollIntervalMs: EXECUTE_CONFIG.POLLING_INTERVAL.VISIBLE,
+  });
+  const {
+    snapshot: anchorSnapshot,
+    snapshotLoading: anchorLoading,
+  } = useInTripHandoff(tripId, { autoVerify: false, autoSnapshot: inTravelPhase });
+  const {
+    events: environmentEvents,
+    loading: environmentEventsLoading,
+    error: environmentEventsError,
+    reload: reloadEnvironmentEvents,
+  } = useInTripEnvironmentEvents(tripId, inTravelPhase);
+  const {
+    data: moneyDashboard,
+    loading: moneyDashboardLoading,
+    error: moneyDashboardError,
+    disabled: moneyDisabled,
+    reload: reloadMoneyDashboard,
+  } = useInTripMoneyDashboard(tripId, inTravelPhase);
+  const {
+    suggestions: rebalanceSuggestions,
+    loading: rebalanceLoading,
+    error: rebalanceError,
+    respondingId: rebalanceRespondingId,
+    reload: reloadRebalance,
+    respond: respondRebalance,
+  } = useInTripMoneyRebalance(tripId, inTravelPhase);
+  const {
+    data: teamThermometer,
+    loading: thermometerLoading,
+    reload: reloadThermometer,
+  } = useInTripPulseThermometer(tripId, inTravelPhase);
+  const {
+    state: myPulseState,
+    reload: reloadMyState,
+  } = useInTripPulseMyState(tripId, inTravelPhase);
+  const {
+    interventions: pulseInterventions,
+    loading: interventionsLoading,
+    error: interventionsError,
+    ackingId: interventionAckingId,
+    reload: reloadInterventions,
+    ack: ackIntervention,
+  } = useInTripPulseInterventions(tripId, inTravelPhase);
+  const {
+    sessions: splitSessions,
+    activeSession: activeSplitSession,
+    proposedSessions: proposedSplitSessions,
+    loading: splitLoading,
+    proposing: splitProposing,
+    executingId: splitExecutingId,
+    reload: reloadSplitSessions,
+    propose: proposeSplit,
+    execute: executeSplit,
+  } = useInTripSplitSessions(tripId, inTravelPhase);
+  const {
+    triggers: experienceTriggers,
+    loading: experiencePendingLoading,
+    error: experiencePendingError,
+    disabled: experienceDisabled,
+    reload: reloadExperiencePending,
+    submit: submitExperiencePulse,
+  } = useInTripExperiencePending(tripId, inTravelPhase);
+  const {
+    data: experienceWeights,
+    loading: experienceWeightsLoading,
+    error: experienceWeightsError,
+    unreadCount: experienceWeightsUnread,
+    markingRead: experienceWeightsMarkingRead,
+    reload: reloadExperienceWeights,
+    markRead: markExperienceWeightsRead,
+  } = useInTripExperienceWeights(tripId, inTravelPhase);
+  const {
+    data: postTripSummary,
+    loading: postTripSummaryLoading,
+    error: postTripSummaryError,
+  } = useInTripPostTripSummary(tripId, isTripCompleted);
+
+  const memberNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    moneyMembers.forEach((m) => {
+      map[m.userId] = m.displayName;
+    });
+    return map;
+  }, [moneyMembers]);
+
+  const moduleVisibility = useMemo(() => getInTripModuleVisibility(trip), [trip]);
+
+  const pendingTotal = useMemo(() => {
+    if (!inTripToday?.pendingCards) return 0;
+    return sumPendingCards(inTripToday.pendingCards);
+  }, [inTripToday?.pendingCards]);
+
+  const executionBadge = useMemo(
+    () =>
+      resolveInTripExecutionBadge(tripState, {
+        vulnerabilitySeverity: inTripToday?.vulnerability?.severity,
+        pendingTotal,
+      }),
+    [tripState, inTripToday?.vulnerability?.severity, pendingTotal],
+  );
+
+  const handleAskAi = () => {
+    const dayHint = inTripToday ? `第 ${inTripToday.dayNumber} 天` : '今天';
+    const destination = trip?.destination || '当前行程';
+    sendAssistantMessage(
+      `我正在行中执行「${destination}」${dayHint}，请根据当前行程和下一步安排给我建议。`,
+    );
+  };
+
+  const openEnvironmentEvent = (eventId: string) => {
+    if (isTripLoopInTripEnabled() && inTravelPhase) {
+      setSelectedEnvEventId(eventId);
+      setInTripRecoverySheetOpen(true);
+      return;
+    }
+    setSelectedEnvEventId(eventId);
+    setEnvEventSheetOpen(true);
+  };
+
+  const handleEnvironmentResolved = () => {
+    reloadEnvironmentEvents();
+    void reloadInTripToday();
+    setCausalInsightRefreshKey((k) => k + 1);
+  };
+
+  const handleMoneyRecorded = () => {
+    void reloadMoneyDashboard();
+    void reloadInTripToday();
+    if (rebalanceExpanded) void reloadRebalance();
+    else setRebalanceExpanded(true);
+  };
+
+  const openMoneyRecord = () => setMoneyRecordOpen(true);
+
+  const handlePulseUpdated = () => {
+    void reloadInTripToday();
+    void reloadThermometer();
+    void reloadMyState();
+    void reloadInterventions();
+  };
+
+  const handleExperienceUpdated = () => {
+    void reloadInTripToday();
+    void reloadExperiencePending();
+    void reloadExperienceWeights();
+  };
+
+  const openExperiencePulse = (trigger: ExperiencePulseTrigger) => {
+    setSelectedExperienceTrigger(trigger);
+    setExperiencePulseOpen(true);
+  };
+
+  const openFirstExperiencePulse = () => {
+    setExperienceExpanded(true);
+    const first = [...experienceTriggers].sort((a, b) => a.priority - b.priority)[0];
+    if (first) openExperiencePulse(first);
+  };
+
+  const openSplitSession = (sessionId: string) => {
+    setSelectedSplitSessionId(sessionId);
+    setSplitSheetOpen(true);
+  };
+
+  const handleSplitExecute = async (sessionId: string) => {
+    try {
+      await executeSplit(sessionId);
+      toast.success('分组探索已开始');
+      openSplitSession(sessionId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '启动失败');
+    }
+  };
+
+  const applyNeptuneUiOutput = (uiOutput?: {
+    fallbackPlan?: FallbackPlan;
+    changeResult?: import('@/api/execution').ChangeResult;
+  }) => {
+    const plan = resolveExecutionNeptunePlan(uiOutput);
+    if (plan) setFallbackPlan(plan);
+    return plan;
+  };
+
+  const applyUpdatedScheduleFromChange = (
+    updatedSchedule?: {
+      date: string;
+      schedule: { items: Array<{
+        placeId: number | string;
+        placeName: string;
+        startTime: string;
+        endTime: string;
+      }> };
+    },
+  ) => {
+    if (!updatedSchedule) return;
+    setTodaySchedule({
+      date: updatedSchedule.date,
+      schedule: {
+        items: updatedSchedule.schedule.items.map((item) => ({
+          placeId: Number(item.placeId),
+          placeName: item.placeName,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          type: 'ACTIVITY' as const,
+        })),
+      },
+      persisted: false,
+    });
+  };
+
+  useEffect(() => {
+    if ((moneyDashboard?.pendingRebalanceCount ?? 0) > 0) {
+      setRebalanceExpanded(true);
+    }
+  }, [moneyDashboard?.pendingRebalanceCount]);
+
+  useEffect(() => {
+    if ((inTripToday?.pendingCards.interventions ?? 0) > 0) {
+      setInterventionsExpanded(true);
+    }
+  }, [inTripToday?.pendingCards.interventions]);
+
+  useEffect(() => {
+    if ((inTripToday?.pendingCards.experiencePulses ?? 0) > 0) {
+      setExperienceExpanded(true);
+    }
+  }, [inTripToday?.pendingCards.experiencePulses]);
+
+  useEffect(() => {
+    if (experienceWeightsUnread > 0) {
+      setWeightsExpanded(true);
+    }
+  }, [experienceWeightsUnread]);
+
+  useEffect(() => {
+    if (pendingTotal > 0) {
+      setSecondaryModulesOpen(true);
+    }
+  }, [pendingTotal]);
+
+  useEffect(() => {
+    if (!tripId || !inTravelPhase) {
+      setMoneyMembers([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await tripBudgetApi.getProfile(tripId);
+        const walletMembers = profile.wallet?.members ?? [];
+        if (walletMembers.length > 0) {
+          if (!cancelled) {
+            setMoneyMembers(
+              walletMembers.map((m) => ({
+                userId: m.userId,
+                displayName: m.displayName || m.userId,
+              })),
+            );
+          }
+          return;
+        }
+        const collaborators = await tripsApi.getCollaborators(tripId);
+        if (!cancelled) {
+          setMoneyMembers(
+            collaborators.map((c) => ({
+              userId: c.userId,
+              displayName: c.displayName || c.email || c.userId,
+            })),
+          );
+        }
+      } catch {
+        if (!cancelled && user?.id) {
+          setMoneyMembers([{ userId: user.id, displayName: user.displayName || '我' }]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId, inTravelPhase, user?.id, user?.displayName]);
 
   // ⚠️ 重要：所有 useMemo 必须在任何条件返回之前调用
   // 获取天气位置：优先使用用户当前位置，其次使用行程项坐标，最后使用目的地国家默认坐标
@@ -457,6 +828,23 @@ export default function ExecutePage() {
     } finally {
       setLoading(false);
     }
+    void loadExecutionState();
+  };
+
+  const loadExecutionState = async () => {
+    if (!tripId) return;
+    try {
+      const result = await executionApi.execute({ tripId, action: 'get_status' });
+      const pending = result.executionState?.pendingChanges ?? [];
+      if (pending.length > 0) {
+        const plan = mapNeptuneChangeToFallbackPlan(pending[0]);
+        if (plan) setFallbackPlan(plan);
+      }
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn('[Execute Page] get_status failed:', err);
+      }
+    }
   };
 
   const loadTripState = async () => {
@@ -483,6 +871,14 @@ export default function ExecutePage() {
       // 只在控制台记录错误
     }
   };
+
+  useEffect(() => {
+    const handler = () => {
+      if (tripId) void loadData();
+    };
+    window.addEventListener('plan-studio:schedule-refresh', handler);
+    return () => window.removeEventListener('plan-studio:schedule-refresh', handler);
+  }, [tripId]);
 
   const loadReminders = async () => {
     if (!tripId) return;
@@ -562,23 +958,8 @@ export default function ExecutePage() {
             },
           },
         });
-        // 如果返回了更新后的时间线，更新状态
-        if (result.uiOutput?.changeResult?.updatedSchedule) {
-          const updatedSchedule = result.uiOutput.changeResult.updatedSchedule;
-          setTodaySchedule({
-            date: updatedSchedule.date,
-            schedule: {
-              items: updatedSchedule.schedule.items.map(item => ({
-                placeId: item.placeId,
-                placeName: item.placeName,
-                startTime: item.startTime,
-                endTime: item.endTime,
-                type: 'ACTIVITY' as const, // 默认类型
-              })),
-            },
-            persisted: false,
-          });
-        }
+        applyUpdatedScheduleFromChange(result.uiOutput?.changeResult?.updatedSchedule);
+        applyNeptuneUiOutput(result.uiOutput);
         // 重新加载数据
         await loadData();
         await loadReminders();
@@ -596,23 +977,8 @@ export default function ExecutePage() {
             },
           },
         });
-        // 如果返回了更新后的时间线，更新状态
-        if (result.uiOutput?.changeResult?.updatedSchedule) {
-          const updatedSchedule = result.uiOutput.changeResult.updatedSchedule;
-          setTodaySchedule({
-            date: updatedSchedule.date,
-            schedule: {
-              items: updatedSchedule.schedule.items.map(item => ({
-                placeId: item.placeId,
-                placeName: item.placeName,
-                startTime: item.startTime,
-                endTime: item.endTime,
-                type: 'ACTIVITY' as const, // 默认类型
-              })),
-            },
-            persisted: false,
-          });
-        }
+        applyUpdatedScheduleFromChange(result.uiOutput?.changeResult?.updatedSchedule);
+        applyNeptuneUiOutput(result.uiOutput);
         await loadData();
         await loadReminders();
       } else if (action === 'replace') {
@@ -626,10 +992,7 @@ export default function ExecutePage() {
             originalPlan: tripState,
           },
         });
-        // ⚠️ 新增：保存修复方案数据
-        if (result.uiOutput?.fallbackPlan) {
-          setFallbackPlan(result.uiOutput.fallbackPlan);
-        }
+        applyNeptuneUiOutput(result.uiOutput);
         setShowRepairSheet(true);
       } else if (action === 'reorder') {
         // ⚠️ 新增：重新排序功能
@@ -780,8 +1143,36 @@ export default function ExecutePage() {
   // ⚠️ 新增：应用修复方案
   const handleApplySolution = async (solutionId: string) => {
     if (!tripId) return;
+
+    const selectedSolution = fallbackPlan?.solutions.find((s) => s.id === solutionId);
     
     try {
+      const isNeptuneAlt =
+        solutionId.includes('::alt::') || solutionId.endsWith('::adjusted');
+
+      if (isNeptuneAlt && fallbackPlan?.changeId) {
+        const result = await executionApi.execute({
+          tripId,
+          action: 'handle_change',
+          changeParams: {
+            changeType: (fallbackPlan.changeType as import('@/api/execution').ChangeType) ?? 'schedule_change',
+            changeDetails: {
+              reason: `用户确认方案：${selectedSolution?.title ?? solutionId}`,
+              itemId: fallbackPlan.originalPlan?.itemId ?? fallbackPlan.changeId,
+            },
+          },
+        });
+        applyUpdatedScheduleFromChange(result.uiOutput?.changeResult?.updatedSchedule);
+        if (result.uiOutput?.changeResult?.success) {
+          await loadData();
+          await loadReminders();
+          setShowRepairSheet(false);
+          setFallbackPlan(null);
+          toast.success(result.uiOutput.changeResult.message ?? '变更已应用');
+          return;
+        }
+      }
+
       const result = await executionApi.applyFallback({
         tripId,
         solutionId,
@@ -873,7 +1264,70 @@ export default function ExecutePage() {
   // 从 tripState 获取下一步信息
   const nextStop = tripState?.nextStop;
   const currentDay = trip?.TripDay?.find(d => d.id === tripState?.currentDayId);
-  const status = tripState?.currentItemId ? 'On track' : 'Needs repair';
+
+  const pendingInboxItems = inTravelPhase && inTripToday
+    ? [
+        moduleVisibility.environment && inTripToday.pendingCards.environmentAlerts > 0
+          ? {
+              id: 'environment',
+              label: '环境预警',
+              count: inTripToday.pendingCards.environmentAlerts,
+              icon: IN_TRIP_PENDING_ICONS.environment,
+              onClick: () => {
+                setSecondaryModulesOpen(true);
+                const first = environmentEvents[0];
+                if (first) openEnvironmentEvent(first.id);
+              },
+            }
+          : null,
+        moduleVisibility.pulse && inTripToday.pendingCards.interventions > 0
+          ? {
+              id: 'interventions',
+              label: '团队干预',
+              count: inTripToday.pendingCards.interventions,
+              icon: IN_TRIP_PENDING_ICONS.interventions,
+              onClick: () => {
+                setSecondaryModulesOpen(true);
+                setInterventionsExpanded(true);
+              },
+            }
+          : null,
+        moduleVisibility.experience && inTripToday.pendingCards.experiencePulses > 0
+          ? {
+              id: 'experience',
+              label: '体验脉冲',
+              count: inTripToday.pendingCards.experiencePulses,
+              icon: IN_TRIP_PENDING_ICONS.experience,
+              onClick: openFirstExperiencePulse,
+            }
+          : null,
+        moduleVisibility.money && inTripToday.pendingCards.rebalanceSuggestions > 0
+          ? {
+              id: 'rebalance',
+              label: '预算再平衡',
+              count: inTripToday.pendingCards.rebalanceSuggestions,
+              icon: IN_TRIP_PENDING_ICONS.rebalance,
+              onClick: () => {
+                setSecondaryModulesOpen(true);
+                setRebalanceExpanded(true);
+              },
+            }
+          : null,
+        moduleVisibility.split && proposedSplitSessions.length > 0
+          ? {
+              id: 'split',
+              label: '分组探索',
+              count: proposedSplitSessions.length,
+              icon: IN_TRIP_PENDING_ICONS.split,
+              onClick: () => {
+                setSecondaryModulesOpen(true);
+                const first = proposedSplitSessions[0];
+                if (first) openSplitSession(first.id);
+              },
+            }
+          : null,
+      ].filter((item): item is NonNullable<typeof item> => item != null)
+    : [];
 
   // 辅助函数：格式化地点名称（中英文）
   const formatPlaceName = (placeName: string, place?: { nameCN?: string; nameEN?: string | null }): string => {
@@ -921,11 +1375,45 @@ export default function ExecutePage() {
             )}
             <span>{format(new Date(), 'HH:mm')}</span>
           </div>
-          <Badge variant={status === 'On track' ? 'default' : 'destructive'} className="shrink-0">
-            {status === 'On track' ? 'On Track' : 'Needs Repair'}
+          <Badge
+            variant={executionBadge.variant}
+            className="shrink-0"
+            title={
+              executionBadge.abuVerdict || executionBadge.gateStatus
+                ? `Gate: ${executionBadge.gateStatus ?? '—'} · Abu: ${executionBadge.abuVerdict ?? '—'}`
+                : undefined
+            }
+          >
+            {executionBadge.label}
           </Badge>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (showInTripTodayReadiness) {
+                setExecutionAdvisorySheetOpen(true);
+                void reloadExecutionAdvisory();
+              } else {
+                setReadinessDrawerOpen(true);
+              }
+            }}
+            className="h-8"
+          >
+            <ShieldCheck className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">
+              {showInTripTodayReadiness ? '实时状态' : '准备度'}
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/dashboard/readiness?tripId=${tripId}`)}
+            className="h-8 hidden md:inline-flex"
+          >
+            {showInTripTodayReadiness ? '整趟准备度' : '详细检查'}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -935,6 +1423,18 @@ export default function ExecutePage() {
             <ClipboardList className="h-4 w-4 sm:mr-1" />
             <span className="hidden sm:inline">实地报告</span>
           </Button>
+          {fallbackPlan && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowRepairSheet(true)}
+              className="h-8 border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+            >
+              <AlertCircle className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Neptune 待确认</span>
+              <span className="sm:hidden">Neptune</span>
+            </Button>
+          )}
           {weatherLocation && (
             <WeatherCard
               location={weatherLocation.location}
@@ -947,65 +1447,25 @@ export default function ExecutePage() {
         </div>
       </div>
 
+      <InTripAnchorBar
+        snapshot={anchorSnapshot}
+        loading={anchorLoading && inTravelPhase}
+        onTeamFrictionClick={() => setNegotiationSheetOpen(true)}
+      />
+
+      {tripId && inTravelPhase && isTripLoopInTripEnabled() ? (
+        <div className="px-6 pt-4 max-w-7xl mx-auto w-full">
+          <InTripRecoveryLoopBanner
+            tripId={tripId}
+            onOpen={() => setInTripRecoverySheetOpen(true)}
+          />
+        </div>
+      ) : null}
+
       {/* 主内容区 */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-12 gap-6 max-w-7xl mx-auto">
-          {/* 可折叠区：实时状态 + 24h 预测（默认收起，降低认知负荷） */}
-          {tripId && (realtimeState || predictedState) && (
-            <Collapsible open={realtimeCollapsibleOpen} onOpenChange={setRealtimeCollapsibleOpen} className="col-span-12">
-              <Card className="overflow-hidden">
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="text-sm font-medium">实时状态 · 24h 预测</span>
-                    <div className="flex items-center gap-2">
-                      {predictedState && (
-                        <Badge variant="outline" className="text-xs">
-                          可行 {Math.round(predictedState.feasibility.probability * 100)}%
-                        </Badge>
-                      )}
-                      {realtimeCollapsibleOpen ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="border-t px-4 py-3 space-y-2">
-                    {realtimeState && (
-                      <RealtimeStatusBanner
-                        state={realtimeState}
-                        connected
-                        onRefresh={() => refetchRealtime()}
-                        refreshing={realtimeFetching}
-                        compact
-                      />
-                    )}
-                    {predictedState && (
-                      <Card className="p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">未来 24h 预测</span>
-                          <Badge variant="outline">
-                            可行概率 {Math.round(predictedState.feasibility.probability * 100)}%
-                          </Badge>
-                        </div>
-                        {predictedState.feasibility.riskFactors.length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            风险因素: {predictedState.feasibility.riskFactors.join(', ')}
-                          </p>
-                        )}
-                      </Card>
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-          )}
-          {/* B. 主区：行程时间线 + 下一步快捷操作（8/12） */}
+          {/* B. 主区：行程时间线 + 下一步（优先展示） */}
           <div className="col-span-12 lg:col-span-8 space-y-6">
             <ExecuteItineraryTimeline
               trip={trip}
@@ -1101,8 +1561,23 @@ export default function ExecutePage() {
             )}
           </div>
 
-          {/* C. 右侧：提醒（4/12）- 仅展示 urgent/high，其余折叠 */}
+          {/* C. 右侧：今日就绪 / 提醒（4/12） */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
+            {tripId && showInTripTodayReadiness ? (
+              <ExecutionAdvisoryCard
+                advisory={executionAdvisory}
+                loading={executionAdvisoryLoading || inTripTodayLoading}
+                onOpenDetail={() => {
+                  setExecutionAdvisorySheetOpen(true);
+                  void reloadExecutionAdvisory();
+                }}
+              />
+            ) : tripId ? (
+              <ReadinessSummaryCard
+                tripId={tripId}
+                onOpenDrawer={() => setReadinessDrawerOpen(true)}
+              />
+            ) : null}
             {Array.isArray(reminders) && reminders.length > 0 && (() => {
               const priorityColors: Record<string, string> = {
                 urgent: 'bg-red-100 border-red-300 text-red-800',
@@ -1161,6 +1636,229 @@ export default function ExecutePage() {
               );
             })()}
           </div>
+
+          {inTravelPhase && moduleVisibility.today && (
+            <InTripTodayPanel
+              tripId={tripId!}
+              data={inTripToday}
+              loading={inTripTodayLoading}
+              error={inTripTodayError}
+              disabled={inTripDisabled}
+              onAskAi={handleAskAi}
+              onEnvironmentAlertsClick={() => {
+                setSecondaryModulesOpen(true);
+                const first = environmentEvents[0];
+                if (first) openEnvironmentEvent(first.id);
+              }}
+              onRecordExpense={openMoneyRecord}
+              onMoodCheck={() => setMoodCheckOpen(true)}
+              onInterventionsClick={() => {
+                setSecondaryModulesOpen(true);
+                setInterventionsExpanded(true);
+              }}
+              onExperiencePulsesClick={openFirstExperiencePulse}
+            />
+          )}
+
+          {inTravelPhase && pendingInboxItems.length > 0 && (
+            <InTripPendingInbox items={pendingInboxItems} total={pendingTotal} />
+          )}
+
+          {isTripCompleted && (
+            <InTripPostTripSummaryPanel
+              className="col-span-12"
+              data={postTripSummary}
+              loading={postTripSummaryLoading}
+              error={postTripSummaryError}
+              memberNameById={memberNameById}
+            />
+          )}
+
+          {inTravelPhase && (
+            <Collapsible
+              open={secondaryModulesOpen}
+              onOpenChange={setSecondaryModulesOpen}
+              className="col-span-12"
+            >
+              <Card className="overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-sm font-medium">更多行中工具</span>
+                    <div className="flex items-center gap-2">
+                      {pendingTotal > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {pendingTotal} 待处理
+                        </Badge>
+                      )}
+                      {secondaryModulesOpen ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="border-t p-4 grid grid-cols-12 gap-6">
+                    {moduleVisibility.experience &&
+                      (experienceExpanded || experienceTriggers.length > 0) && (
+                      <InTripExperiencePulsePanel
+                        triggers={experienceTriggers}
+                        loading={experiencePendingLoading}
+                        error={experiencePendingError}
+                        disabled={experienceDisabled}
+                        onSelectTrigger={openExperiencePulse}
+                      />
+                    )}
+                    {moduleVisibility.experience &&
+                      (weightsExpanded || experienceWeightsUnread > 0 || experienceWeights?.current) && (
+                      <InTripExperienceWeightPanel
+                        data={experienceWeights}
+                        loading={experienceWeightsLoading}
+                        error={experienceWeightsError}
+                        unreadCount={experienceWeightsUnread}
+                        markingRead={experienceWeightsMarkingRead}
+                        onMarkRead={markExperienceWeightsRead}
+                      />
+                    )}
+                    {moduleVisibility.money && (
+                      <InTripMoneyDashboardPanel
+                        data={moneyDashboard}
+                        loading={moneyDashboardLoading}
+                        error={moneyDashboardError}
+                        disabled={moneyDisabled}
+                        onRecordExpense={openMoneyRecord}
+                        onViewRebalance={() => setRebalanceExpanded(true)}
+                      />
+                    )}
+                    {moduleVisibility.money && (rebalanceExpanded || rebalanceSuggestions.length > 0) && (
+                      <InTripMoneyRebalancePanel
+                        suggestions={rebalanceSuggestions}
+                        loading={rebalanceLoading}
+                        error={rebalanceError}
+                        respondingId={rebalanceRespondingId}
+                        currency={moneyDashboard?.currency}
+                        onRespond={async (id, response) => {
+                          await respondRebalance(id, response);
+                          void reloadMoneyDashboard();
+                          void reloadInTripToday();
+                        }}
+                      />
+                    )}
+                    {moduleVisibility.pulse && (
+                      <InTripTeamThermometerPanel
+                        thermometer={teamThermometer}
+                        myState={myPulseState}
+                        loading={thermometerLoading}
+                      />
+                    )}
+                    {moduleVisibility.pulse && (interventionsExpanded || pulseInterventions.length > 0) && (
+                      <InTripPulseInterventionsPanel
+                        interventions={pulseInterventions}
+                        loading={interventionsLoading}
+                        error={interventionsError}
+                        ackingId={interventionAckingId}
+                        onAck={async (id, action) => {
+                          await ackIntervention(id, action);
+                          handlePulseUpdated();
+                        }}
+                      />
+                    )}
+                    {moduleVisibility.split && (
+                      <InTripSplitPanel
+                        sessions={splitSessions}
+                        activeSession={activeSplitSession}
+                        proposedSessions={proposedSplitSessions}
+                        loading={splitLoading}
+                        proposing={splitProposing}
+                        executingId={splitExecutingId}
+                        onPropose={proposeSplit}
+                        onSelectSession={openSplitSession}
+                        onExecute={handleSplitExecute}
+                      />
+                    )}
+                    {moduleVisibility.environment && tripId && (
+                      <InTripCausalInsightCard
+                        tripId={tripId}
+                        refreshKey={causalInsightRefreshKey}
+                        showPlanningHint={isIceland}
+                        className="col-span-12"
+                      />
+                    )}
+                    {moduleVisibility.environment && (
+                      <InTripEnvironmentAlertsPanel
+                        events={environmentEvents}
+                        loading={environmentEventsLoading}
+                        error={environmentEventsError}
+                        onSelectEvent={openEnvironmentEvent}
+                      />
+                    )}
+                    {moduleVisibility.realtime && tripId && (realtimeState || predictedState) && (
+                      <Collapsible
+                        open={realtimeCollapsibleOpen}
+                        onOpenChange={setRealtimeCollapsibleOpen}
+                        className="col-span-12"
+                      >
+                        <Card className="overflow-hidden">
+                          <CollapsibleTrigger asChild>
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                            >
+                              <span className="text-sm font-medium">实时状态 · 24h 预测</span>
+                              <div className="flex items-center gap-2">
+                                {predictedState && (
+                                  <Badge variant="outline" className="text-xs">
+                                    可行 {Math.round(predictedState.feasibility.probability * 100)}%
+                                  </Badge>
+                                )}
+                                {realtimeCollapsibleOpen ? (
+                                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </div>
+                            </button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="border-t px-4 py-3 space-y-2">
+                              {realtimeState && (
+                                <RealtimeStatusBanner
+                                  state={realtimeState}
+                                  connected
+                                  onRefresh={() => refetchRealtime()}
+                                  refreshing={realtimeFetching}
+                                  compact
+                                />
+                              )}
+                              {predictedState && (
+                                <Card className="p-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">未来 24h 预测</span>
+                                    <Badge variant="outline">
+                                      可行概率 {Math.round(predictedState.feasibility.probability * 100)}%
+                                    </Badge>
+                                  </div>
+                                  {predictedState.feasibility.riskFactors.length > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      风险因素: {predictedState.feasibility.riskFactors.join(', ')}
+                                    </p>
+                                  )}
+                                </Card>
+                              )}
+                            </div>
+                          </CollapsibleContent>
+                        </Card>
+                      </Collapsible>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          )}
         </div>
 
         {/* D. 固定动作栏（底部/右下浮层）- 右侧有行程助手时自动左移避免遮挡 */}
@@ -1212,7 +1910,7 @@ export default function ExecutePage() {
                   ) : (
                     <SkipForward className="h-3 w-3" />
                   )}
-                  Skip
+                  跳过
                 </Button>
                 <Button
                   variant="outline"
@@ -1226,7 +1924,7 @@ export default function ExecutePage() {
                   ) : (
                     <RotateCcw className="h-3 w-3" />
                   )}
-                  Replace
+                  替换
                 </Button>
                 <Button
                   variant="outline"
@@ -1241,7 +1939,7 @@ export default function ExecutePage() {
                       处理中...
                     </>
                   ) : (
-                    'Reorder today'
+                    '重排今日行程'
                   )}
                 </Button>
               </div>
@@ -1264,6 +1962,53 @@ export default function ExecutePage() {
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-4">
+            {/* 原计划 vs 调整方案 */}
+            {fallbackPlan?.originalPlan && fallbackPlan?.adjustedPlan && (
+              <Card className="border-slate-200">
+                <CardContent className="pt-6 space-y-3 text-sm">
+                  <div>
+                    <span className="font-medium text-muted-foreground">原计划：</span>
+                    <p className="mt-1">{fallbackPlan.originalPlan.description}</p>
+                    {fallbackPlan.originalPlan.scheduledStart && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {fallbackPlan.originalPlan.scheduledStart} – {fallbackPlan.originalPlan.scheduledEnd}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">调整后：</span>
+                    <p className="mt-1">{fallbackPlan.adjustedPlan.description}</p>
+                    {fallbackPlan.adjustedPlan.newStart && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {fallbackPlan.adjustedPlan.newStart} – {fallbackPlan.adjustedPlan.newEnd}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 影响评估 */}
+            {fallbackPlan?.impactDetail && (
+              <Card className="border-blue-200 bg-blue-50/40">
+                <CardContent className="pt-6 space-y-2 text-sm">
+                  <div className="font-medium text-blue-900 mb-2">影响评估</div>
+                  {fallbackPlan.impactDetail.schedule && (
+                    <p><span className="font-medium">行程：</span>{fallbackPlan.impactDetail.schedule}</p>
+                  )}
+                  {fallbackPlan.impactDetail.budget && (
+                    <p><span className="font-medium">预算：</span>{fallbackPlan.impactDetail.budget}</p>
+                  )}
+                  {fallbackPlan.impactDetail.experience && (
+                    <p><span className="font-medium">体验：</span>{fallbackPlan.impactDetail.experience}</p>
+                  )}
+                  {fallbackPlan.impactDetail.risk && (
+                    <p><span className="font-medium">风险：</span>{fallbackPlan.impactDetail.risk}</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* 问题描述 */}
             {fallbackPlan?.triggerReason && (
               <Card className="border-yellow-200 bg-yellow-50">
@@ -1319,7 +2064,7 @@ export default function ExecutePage() {
                         className="w-full"
                         onClick={() => handlePreviewSolution(solution.id)}
                       >
-                        Preview
+                        预览
                       </Button>
                     </CardContent>
                   </Card>
@@ -1327,9 +2072,21 @@ export default function ExecutePage() {
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                <LogoLoading size={40} className="mb-2" />
-                <p>正在生成修复方案...</p>
+                <p>暂无修复方案，请稍后重试或联系技术支持</p>
               </div>
+            )}
+
+            {fallbackPlan?.recommendations && fallbackPlan.recommendations.length > 0 && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="pt-6">
+                  <div className="font-medium mb-2">Neptune 建议</div>
+                  <ul className="text-sm space-y-1.5 text-muted-foreground list-disc pl-4">
+                    {fallbackPlan.recommendations.map((rec, i) => (
+                      <li key={i}>{rec}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
             )}
 
             {/* Apply 按钮 */}
@@ -1344,7 +2101,7 @@ export default function ExecutePage() {
                 </Button>
                 {selectedSolutionId ? (
                   <Button onClick={() => handleApplySolution(selectedSolutionId)}>
-                    Apply Changes
+                    应用变更
                   </Button>
                 ) : (
                   <Button 
@@ -1358,7 +2115,7 @@ export default function ExecutePage() {
                       }
                     }}
                   >
-                    Apply Changes
+                    应用推荐方案
                   </Button>
                 )}
               </div>
@@ -1461,7 +2218,146 @@ export default function ExecutePage() {
           />
         </DialogContent>
       </Dialog>
+
+      <ReadinessDrawer
+        open={readinessDrawerOpen}
+        onClose={() => setReadinessDrawerOpen(false)}
+        tripId={tripId}
+        onOpenTasksTab={() => {
+          setReadinessDrawerOpen(false);
+          if (tripId) {
+            navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=tasks`);
+          }
+        }}
+      />
+
+      {tripId && executionAdvisory && (
+        <ExecutionAdvisorySheet
+          open={executionAdvisorySheetOpen}
+          onOpenChange={setExecutionAdvisorySheetOpen}
+          advisory={executionAdvisory}
+          onApplyRecommendation={(id) => {
+            toast.info(`将应用方案：${id}`);
+            setExecutionAdvisorySheetOpen(false);
+          }}
+          onKeepPlan={() => {
+            toast.success('已选择保持原计划');
+            setExecutionAdvisorySheetOpen(false);
+          }}
+        />
+      )}
+
+      {tripId && (
+        <InTripTodayReadinessSheet
+          open={todayReadinessSheetOpen}
+          onOpenChange={setTodayReadinessSheetOpen}
+          data={todayReadinessDetail}
+          loading={todayReadinessDetailLoading}
+          error={todayReadinessDetailError}
+          notFound={todayReadinessNotFound}
+          onOpenFullReadiness={() => {
+            setTodayReadinessSheetOpen(false);
+            navigate(`/dashboard/readiness?tripId=${tripId}`);
+          }}
+        />
+      )}
+
+      {tripId && (
+        <Sheet open={negotiationSheetOpen} onOpenChange={setNegotiationSheetOpen}>
+          <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>团队轻量协商</SheetTitle>
+              <SheetDescription>
+                在行中处理团队摩擦与偏好分歧，无需跳转规划工作台
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-4">
+              <StructuredNegotiationPanel tripId={tripId} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
+
+      {tripId && (
+        <InTripMoneyRecordDialog
+          tripId={tripId}
+          open={moneyRecordOpen}
+          onOpenChange={setMoneyRecordOpen}
+          members={moneyMembers}
+          currentUserId={user?.id}
+          defaultCurrency={moneyDashboard?.currency ?? trip?.budgetConfig?.currency ?? 'CNY'}
+          onRecorded={handleMoneyRecorded}
+        />
+      )}
+
+      {tripId && isTripLoopInTripEnabled() && (
+        <InTripRecoveryLoopSheet
+          tripId={tripId}
+          open={inTripRecoverySheetOpen}
+          onOpenChange={(open) => {
+            setInTripRecoverySheetOpen(open);
+            if (!open) setSelectedEnvEventId(null);
+          }}
+          environmentEventId={selectedEnvEventId}
+          onApplied={() => {
+            handleEnvironmentResolved();
+            void reloadExecutionAdvisory();
+          }}
+        />
+      )}
+
+      {tripId && (
+        <InTripEnvironmentEventSheet
+          tripId={tripId}
+          eventId={selectedEnvEventId}
+          open={envEventSheetOpen}
+          onOpenChange={(open) => {
+            setEnvEventSheetOpen(open);
+            if (!open) setSelectedEnvEventId(null);
+          }}
+          onResolved={handleEnvironmentResolved}
+        />
+      )}
+
+      {tripId && (
+        <InTripMoodCheckDialog
+          tripId={tripId}
+          open={moodCheckOpen}
+          onOpenChange={setMoodCheckOpen}
+          onSubmitted={handlePulseUpdated}
+        />
+      )}
+
+      {tripId && (
+        <InTripExperiencePulseDialog
+          tripId={tripId}
+          trigger={selectedExperienceTrigger}
+          open={experiencePulseOpen}
+          onOpenChange={setExperiencePulseOpen}
+          onSubmit={async (body) => {
+            await submitExperiencePulse(body);
+            handleExperienceUpdated();
+          }}
+        />
+      )}
+
+      {tripId && (
+        <InTripSplitSessionSheet
+          tripId={tripId}
+          sessionId={selectedSplitSessionId}
+          open={splitSheetOpen}
+          onOpenChange={(open) => {
+            setSplitSheetOpen(open);
+            if (!open) setSelectedSplitSessionId(null);
+          }}
+          currentUserId={user?.id}
+          memberNameById={memberNameById}
+          onUpdated={() => {
+            void reloadSplitSessions();
+            void reloadInTripToday();
+          }}
+        />
+      )}
     </div>
   );
 }
-

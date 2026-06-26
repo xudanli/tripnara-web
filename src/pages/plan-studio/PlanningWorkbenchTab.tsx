@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
 import { formatCurrency } from '@/utils/format';
 import { RefreshCw, GitCompare, CheckCircle2, Settings2, FileText, ChevronDown, Clock, MapPin, ExternalLink, Calendar, Eye, Mountain, TrendingUp, AlertTriangle, Activity, Sparkles, Cloud, Shield, Route, HelpCircle, ChevronUp, Zap, Users, BarChart3 } from 'lucide-react';
 // V2 优化组件
@@ -30,7 +29,9 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { planningWorkbenchApi, mergeWorkbenchConfirmations } from '@/api/planning-workbench';
+import { planningWorkbenchApi, mergeWorkbenchConfirmations, pickWorkbenchOptionComparison } from '@/api/planning-workbench';
+import { publishPlanStudioComparison } from '@/store/planStudioCompareStore';
+import { pickPlanStateKernelDebug } from '@/lib/planning-workbench-kernel-debug';
 import type {
   ExecutePlanningWorkbenchResponse,
   ConsolidatedDecisionStatus,
@@ -47,9 +48,17 @@ import type { GetElevationProfileResponse, Coordinate } from '@/api/dem';
 import type { TripDetail, PlanBudgetEvaluationResponse } from '@/types/trip';
 import { toast } from 'sonner';
 import { useContextApi, useIcelandInfo, useIsIcelandTrip } from '@/hooks';
+import { useAuth } from '@/hooks/useAuth';
 import { inferIcelandInfoParams } from '@/utils/iceland-info-inference';
 import type { ContextPackage } from '@/api/context';
 import PersonaCard from '@/components/planning-workbench/PersonaCard';
+import { GuardianAssistantBlock } from '@/components/guardian';
+import { CausalInsightPanel } from '@/components/causal';
+import { shouldShowPersonaInsightCards } from '@/lib/guardian-presentation.util';
+import { shouldSkipLlmGuardianEval } from '@/lib/causal-observation.util';
+import { saveCausalRuntimeFromWorkbench } from '@/lib/causal-runtime-session';
+import { WorkbenchOptionComparisonPanel } from '@/components/planning-workbench/WorkbenchOptionComparisonPanel';
+import { WorkbenchKernelDebugPanel } from '@/components/planning-workbench/WorkbenchKernelDebugPanel';
 import BudgetProgress from '@/components/planning-workbench/BudgetProgress';
 import BudgetBreakdownChart from '@/components/planning-workbench/BudgetBreakdownChart';
 import DecisionTimeline, { type DecisionLogEntry } from '@/components/planning-workbench/DecisionTimeline';
@@ -79,6 +88,8 @@ import {
 import { format } from 'date-fns';
 import { DecisionCardsGrid } from '@/components/decision-draft';
 import PlanStudioContext from '@/contexts/PlanStudioContext';
+import { SilentVoteDialog } from '@/components/silent-vote';
+import { useCreateSilentVote } from '@/hooks/useSilentVotes';
 
 function jsonPreview(obj: unknown, maxChars = 24000): string {
   try {
@@ -104,7 +115,7 @@ interface PlanningWorkbenchTabProps {
 
 export default function PlanningWorkbenchTab({
   tripId,
-  embedMode = false,
+  embedMode: _embedMode = false,
   autoGenerateOnOpen = false,
   onPlanCommitted,
 }: PlanningWorkbenchTabProps) {
@@ -117,6 +128,8 @@ export default function PlanningWorkbenchTab({
   // 获取货币单位
   const currency = trip?.budgetConfig?.currency || 'CNY';
   
+  const { user } = useAuth();
+
   // Context API Hook
   const {
     buildContextWithCompress,
@@ -127,6 +140,9 @@ export default function PlanningWorkbenchTab({
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [silentVoteDialogOpen, setSilentVoteDialogOpen] = useState(false);
+  const [activeSilentVoteId, setActiveSilentVoteId] = useState<string | null>(null);
+  const { creating: creatingSilentVote, createFromCompare } = useCreateSilentVote(tripId);
   const [committing, setCommitting] = useState(false);
   const [allConfirmationsChecked, setAllConfirmationsChecked] = useState(false);
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
@@ -145,8 +161,6 @@ export default function PlanningWorkbenchTab({
   const [showGuide, setShowGuide] = useState(false);
   const planStudioContext = useContext(PlanStudioContext);
   
-  // 🆕 加载进度状态
-  const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStage, setLoadingStage] = useState<string>('');
 
   useEffect(() => {
@@ -340,10 +354,12 @@ export default function PlanningWorkbenchTab({
       const contextPkg = await buildContextWithCompress(
         {
           tripId,
+          userId: user?.id,
           phase,
           agent,
           userQuery,
           tokenBudget: 3600, // 默认 Token 预算
+          includePrivate: true,
           requiredTopics: ['VISA', 'ROAD_RULES', 'SAFETY'], // 规划阶段需要的主题
           useCache: true, // 启用缓存
         },
@@ -382,20 +398,9 @@ export default function PlanningWorkbenchTab({
 
     setLoading(true);
     setError(null);
-    
-    // 🆕 初始化加载进度
-    setLoadingProgress(0);
-    setLoadingStage('准备中...');
+    setLoadingStage('准备中…');
 
     try {
-      // 🆕 模拟进度更新（实际应该从后端获取）
-      const progressInterval = setInterval(() => {
-        setLoadingProgress((prev) => {
-          if (prev >= 90) return prev;
-          return prev + Math.random() * 10;
-        });
-      }, 500);
-
       // 🆕 构建用户查询文本（根据操作类型）
       const userQueryMap: Record<UserAction, string> = {
         generate: `帮我规划${trip.destination || ''}的${trip.TripDay?.length || 0}天行程`,
@@ -405,14 +410,12 @@ export default function PlanningWorkbenchTab({
       };
       const userQuery = userQueryMap[userAction] || '执行规划操作';
 
-      setLoadingStage('构建上下文...');
-      setLoadingProgress(20);
+      setLoadingStage('构建上下文…');
 
       // 🆕 构建 Context Package（可选，如果后端支持可以传递）
       const contextPkg = await buildContextPackage(userQuery);
-      
-      setLoadingProgress(40);
-      setLoadingStage('执行规划操作...');
+
+      setLoadingStage('执行规划操作…');
       
       // 如果构建成功，可以在这里记录或传递给后端
       if (contextPkg) {
@@ -432,11 +435,14 @@ export default function PlanningWorkbenchTab({
         userAction,
       });
 
-      clearInterval(progressInterval);
-      setLoadingProgress(100);
       setLoadingStage('完成');
 
       setResult(response);
+      if (tripId) {
+        saveCausalRuntimeFromWorkbench(tripId, response);
+        const comparison = pickWorkbenchOptionComparison([response]);
+        if (comparison) publishPlanStudioComparison(tripId, comparison);
+      }
       toast.success(`规划工作台${getActionLabel(userAction)}成功`);
       
       // 如果生成了新方案，自动加载预算评估结果
@@ -444,19 +450,14 @@ export default function PlanningWorkbenchTab({
         loadBudgetEvaluation(response.planState.plan_id);
       }
       
-      // 延迟重置进度
-      setTimeout(() => {
-        setLoadingProgress(0);
-        setLoadingStage('');
-      }, 500);
-      
+      setTimeout(() => setLoadingStage(''), 500);
+
       return response;
     } catch (err: any) {
       console.error(`Planning workbench ${userAction} failed:`, err);
       const errorMessage = err.message || `${getActionLabel(userAction)}失败，请稍后重试`;
       setError(errorMessage);
       toast.error(errorMessage);
-      setLoadingProgress(0);
       setLoadingStage('');
       throw err;
     } finally {
@@ -606,6 +607,10 @@ export default function PlanningWorkbenchTab({
         uiOutput: p.uiOutput,
       }));
       setComparingPlans(plansForDisplay);
+      if (tripId) {
+        const comparison = pickWorkbenchOptionComparison(plansForDisplay);
+        if (comparison) publishPlanStudioComparison(tripId, comparison);
+      }
       
       toast.success(`成功对比 ${validPlanIds.length} 个方案`);
     } catch (err: any) {
@@ -813,20 +818,17 @@ export default function PlanningWorkbenchTab({
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <PlannerThinkingLoading
-                  compact
-                  size={44}
-                  label={loadingStage || undefined}
-                  className="min-w-0 flex-1 px-0 py-0"
-                  textClassName="text-sm font-medium text-foreground"
-                />
-                <Badge variant="outline" className="shrink-0">
-                  {Math.round(loadingProgress)}%
-                </Badge>
-              </div>
+              <PlannerThinkingLoading
+                compact
+                size={44}
+                label={loadingStage || undefined}
+                className="min-w-0 px-0 py-0"
+                textClassName="text-sm font-medium text-foreground"
+              />
               <p className="text-xs text-muted-foreground">请稍候，这可能需要一些时间</p>
-              <Progress value={loadingProgress} className="h-2" />
+              <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div className="absolute inset-y-0 w-1/3 animate-pulse rounded-full bg-primary/50" />
+              </div>
               
               {/* 🆕 骨架屏预览 */}
               <div className="space-y-4 pt-4 border-t">
@@ -1321,7 +1323,35 @@ export default function PlanningWorkbenchTab({
             )}
           </div>
 
-          {/* 🆕 三人格评估 - 横向卡片布局 */}
+          {/* 三人格评估 — P1 单主角；P0–P5 kernel 权威时只渲染因果投影 */}
+          {result.uiOutput.causalPersonaProjection ? (
+            <CausalInsightPanel projection={result.uiOutput.causalPersonaProjection} />
+          ) : null}
+          {result.uiOutput.presentation ? (
+            <GuardianAssistantBlock
+              presentation={result.uiOutput.presentation}
+              tripId={tripId}
+              userId={user?.id}
+              source="presentation"
+              choosePoints={
+                result.uiOutput.presentation.actions.user === 'CHOOSE'
+                  ? result.uiOutput.consolidatedDecision?.nextSteps
+                  : undefined
+              }
+              onPresentationChange={(next) => {
+                setResult((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        uiOutput: { ...prev.uiOutput, presentation: next },
+                      }
+                    : prev,
+                );
+              }}
+            />
+          ) : null}
+          {shouldShowPersonaInsightCards(result.uiOutput.presentation) &&
+          !shouldSkipLlmGuardianEval(result.uiOutput.causalPersonaProjection) ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <PersonaCard persona={result.uiOutput.personas.abu} />
             <PersonaCard persona={result.uiOutput.personas.drdre} />
@@ -1360,6 +1390,7 @@ export default function PlanningWorkbenchTab({
               }}
             />
           </div>
+          ) : null}
 
           {/* 骨架 / 对比 / 健康度 / world：默认折叠，避免主路径渲染大对象 */}
           {result &&
@@ -1373,6 +1404,9 @@ export default function PlanningWorkbenchTab({
               if (!hasAdvanced) return null;
               const h = result.uiOutput.health;
               const sk = result.uiOutput.skeletonOptions;
+              const kernelDebug = import.meta.env.DEV
+                ? pickPlanStateKernelDebug(result.planState.metadata as Record<string, unknown>)
+                : undefined;
               return (
                 <Collapsible open={advancedWorkbenchOpen} onOpenChange={setAdvancedWorkbenchOpen}>
                   <Card className="border-dashed bg-muted/20">
@@ -1424,10 +1458,19 @@ export default function PlanningWorkbenchTab({
                         )}
                         {result.uiOutput.comparison && (
                           <div>
-                            <p className="text-xs font-semibold text-muted-foreground mb-2">多方案对比（JSON）</p>
-                            <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
-                              {jsonPreview(result.uiOutput.comparison)}
-                            </pre>
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">多方案对比</p>
+                            <WorkbenchOptionComparisonPanel
+                              comparison={result.uiOutput.comparison}
+                              showAudit={import.meta.env.DEV}
+                            />
+                          </div>
+                        )}
+                        {kernelDebug && (
+                          <div>
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">
+                              Kernel Bridge（调试）
+                            </p>
+                            <WorkbenchKernelDebugPanel debug={kernelDebug} />
                           </div>
                         )}
                         {result.planState.world && (
@@ -1440,7 +1483,8 @@ export default function PlanningWorkbenchTab({
                             </pre>
                           </div>
                         )}
-                        {result.planState.metadata &&
+                        {import.meta.env.DEV &&
+                          result.planState.metadata &&
                           Object.keys(result.planState.metadata).length > 0 && (
                             <div>
                               <p className="text-xs font-semibold text-muted-foreground mb-2">planState.metadata</p>
@@ -1924,24 +1968,65 @@ export default function PlanningWorkbenchTab({
               </Button>
             )}
             {compareResult && comparingPlans.length > 0 && (
-              <Button
-                onClick={async () => {
-                  // 应用选中的方案
-                  const selectedPlan = comparingPlans.find(p => selectedPlanIds.includes(p.planState.plan_id));
-                  if (selectedPlan) {
-                    setResult(selectedPlan);
-                    setCompareDialogOpen(false);
-                    setCompareResult(null);
-                    toast.success('已切换到选中的方案');
-                  }
-                }}
-              >
-                应用选中方案
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={creatingSilentVote || selectedPlanIds.length < 2}
+                  onClick={async () => {
+                    try {
+                      const vote = await createFromCompare({
+                        planIds: selectedPlanIds,
+                        title: '路线方案选择',
+                        question: '请匿名选择更倾向的方案',
+                        autoOpen: true,
+                      });
+                      setCompareDialogOpen(false);
+                      setActiveSilentVoteId(vote.id);
+                      setSilentVoteDialogOpen(true);
+                    } catch {
+                      // toast handled in hook
+                    }
+                  }}
+                >
+                  {creatingSilentVote ? (
+                    <>
+                      <Spinner className="mr-2 h-4 w-4" />
+                      发起投票…
+                    </>
+                  ) : (
+                    <>
+                      <Users className="mr-2 h-4 w-4" />
+                      发起匿名投票
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={async () => {
+                    // 应用选中的方案
+                    const selectedPlan = comparingPlans.find(p => selectedPlanIds.includes(p.planState.plan_id));
+                    if (selectedPlan) {
+                      setResult(selectedPlan);
+                      setCompareDialogOpen(false);
+                      setCompareResult(null);
+                      toast.success('已切换到选中的方案');
+                    }
+                  }}
+                >
+                  应用选中方案
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SilentVoteDialog
+        tripId={tripId}
+        voteId={activeSilentVoteId}
+        open={silentVoteDialogOpen}
+        onOpenChange={setSilentVoteDialogOpen}
+      />
 
       {/* 证据抽屉 - 决策日志 */}
       <EvidenceDrawer
@@ -2139,6 +2224,7 @@ function V2OptimizeSection(props: {
   const negotiationMutation = useNegotiation();
   const riskMutation = useRiskAssessment();
   const { profile: fitnessProfile } = useFitnessContext();
+  const { user } = useAuth();
 
   // 使用转换工具构建 plan / world
   const planDraft = useMemo(
@@ -2260,6 +2346,7 @@ function V2OptimizeSection(props: {
               <NegotiationResultCard
                 result={negotiationMutation.data}
                 tripId={tripId}
+                userId={user?.id}
                 compact
               />
             )}
@@ -3469,6 +3556,11 @@ function PlanComparisonView({
 }) {
   if (plans.length === 0) return null;
 
+  const optionComparison = pickWorkbenchOptionComparison(plans);
+  const kernelDebug = import.meta.env.DEV
+    ? pickPlanStateKernelDebug(plans[0]?.planState.metadata as Record<string, unknown>)
+    : undefined;
+
   // 对比指标
   const comparisonMetrics = plans.map((plan) => {
     const planItems = extractPlanItems(plan.planState);
@@ -3491,6 +3583,23 @@ function PlanComparisonView({
 
   return (
     <div className="space-y-6">
+      {optionComparison && (
+        <div>
+          <h4 className="text-sm font-semibold mb-3">方案评分与门控</h4>
+          <WorkbenchOptionComparisonPanel
+            comparison={optionComparison}
+            showAudit={import.meta.env.DEV}
+          />
+        </div>
+      )}
+
+      {kernelDebug && (
+        <div>
+          <h4 className="text-sm font-semibold mb-3">Kernel Bridge（调试）</h4>
+          <WorkbenchKernelDebugPanel debug={kernelDebug} />
+        </div>
+      )}
+
       {/* 对比表格 */}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">

@@ -25,9 +25,16 @@ import type {
   OpsRealityByTripData,
   OpsRealityReplayCompareData,
   DecisionEngineHealthData,
+  CausalOutcomeRequest,
+  CausalOutcomeResponseData,
 } from '@/types/decision-engine';
 import type { AdjustPacingRequest, AdjustPacingResponse } from '@/types/strategy';
 import type { ReplaceNodesRequest, ReplaceNodesResponse } from '@/types/strategy';
+import {
+  enrichRecordRealityOutcomeRequest,
+  extractTripWorldStateFromGeneratePlanRequest,
+  saveCausalRuntimeSession,
+} from '@/lib/causal-runtime-session';
 
 const BASE_PATH = '/decision-engine/v1';
 
@@ -75,6 +82,22 @@ export async function generatePlan(
   return handleResponse(response);
 }
 
+/** generate-plan + 自动写入因果会话缓存（推荐 C 端调用） */
+export async function generatePlanWithCausalCache(
+  data: GeneratePlanRequest
+): Promise<GeneratePlanResponseData> {
+  const result = await generatePlan(data);
+  const tripId = typeof data.tripId === 'string' ? data.tripId : undefined;
+  if (tripId && result.lastDecisionCausalityId) {
+    saveCausalRuntimeSession(
+      tripId,
+      extractTripWorldStateFromGeneratePlanRequest(data),
+      result,
+    );
+  }
+  return result;
+}
+
 /** 天气/闭馆等变化时最小改动修复计划 */
 export async function repairPlan(
   data: RepairPlanRequest
@@ -85,6 +108,22 @@ export async function repairPlan(
     { timeout: 60000 }
   );
   return handleResponse(response);
+}
+
+/** repair-plan + 自动写入因果会话缓存 */
+export async function repairPlanWithCausalCache(
+  data: RepairPlanRequest
+): Promise<RepairPlanResponseData> {
+  const result = await repairPlan(data);
+  const tripId = typeof data.tripId === 'string' ? data.tripId : undefined;
+  if (tripId && result.lastDecisionCausalityId) {
+    saveCausalRuntimeSession(
+      tripId,
+      extractTripWorldStateFromGeneratePlanRequest(data),
+      result,
+    );
+  }
+  return result;
 }
 
 /** Abu 策略校验物理安全 */
@@ -179,9 +218,7 @@ export async function getOperationalPolicy(): Promise<OpsOperationalPolicyConfig
   return handleResponse(response);
 }
 
-/**
- * P-OPS-2：回填 ops reality outcome（首次）
- */
+/** 回填 ops reality outcome（首次；P5 可自动触发因果闭环） */
 export async function postOpsRealityOutcome(
   snapshotId: string,
   body: RecordRealityOutcomeRequest,
@@ -194,6 +231,32 @@ export async function postOpsRealityOutcome(
     headers ? { headers } : undefined
   );
   return handleResponse(response);
+}
+
+/** P5：显式因果反事实闭环 */
+export async function postCausalOutcome(
+  body: CausalOutcomeRequest
+): Promise<CausalOutcomeResponseData> {
+  const response = await apiClient.post<DecisionEngineApiResponse<CausalOutcomeResponseData>>(
+    `${BASE_PATH}/causal-outcome`,
+    body,
+    { timeout: 60000 }
+  );
+  return handleResponse(response);
+}
+
+/** OPS outcome + 自动补齐 session 缓存的 state / causality_id */
+export async function postOpsRealityOutcomeWithCausalContext(
+  snapshotId: string,
+  body: RecordRealityOutcomeRequest,
+  traceHeaders?: OpsRealityOutcomeTraceHeaders
+): Promise<RecordRealityOutcomeResult> {
+  const tripId = body.tripId ?? body.trip_run_id;
+  const enriched =
+    tripId && (!body.state || !body.causality_id)
+      ? enrichRecordRealityOutcomeRequest(body, tripId)
+      : body;
+  return postOpsRealityOutcome(snapshotId, enriched, traceHeaders);
 }
 
 /** 按 trip 列最近快照（默认最多 20 条，无分页参数） */
@@ -219,7 +282,9 @@ export async function getOpsRealityReplayCompare(
  */
 export const decisionEngineApi = {
   generatePlan,
+  generatePlanWithCausalCache,
   repairPlan,
+  repairPlanWithCausalCache,
   validateSafety,
   checkConstraints,
   generateMultiplePlans,
@@ -229,6 +294,8 @@ export const decisionEngineApi = {
   health,
   getOperationalPolicy,
   postOpsRealityOutcome,
+  postOpsRealityOutcomeWithCausalContext,
+  postCausalOutcome,
   getOpsRealityByTrip,
   getOpsRealityReplayCompare,
 };

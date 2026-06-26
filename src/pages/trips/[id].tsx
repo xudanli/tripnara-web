@@ -17,6 +17,10 @@ import type {
 } from '@/types/trip';
 import type { Suggestion } from '@/types/suggestion';
 import { AssistantCenter } from '@/components/trips/AssistantCenter';
+import {
+  TripExperienceIntentPanel,
+  shouldShowTripExperienceIntentPanel,
+} from '@/components/experience-fulfillment';
 import DayItineraryCard from '@/components/trips/DayItineraryCard';
 import { AdjustTimeDialog } from '@/components/trips/AdjustTimeDialog';
 import { SuggestionPreviewDialog } from '@/components/trips/SuggestionPreviewDialog';
@@ -82,6 +86,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { InTripHandoffChecklist, InTripPostTripSummaryPanel } from '@/components/in-trip';
+import { useInTripHandoff } from '@/hooks/useInTripHandoff';
+import { useInTripPostTripSummary } from '@/hooks/useInTripExperience';
+import { buildEnterTravelingPayload } from '@/lib/in-trip-execution';
 import { ArrowLeft, Calendar, Edit, Share2, Users, MapPin, MoreVertical, Trash2, TrendingUp, RefreshCw, History, Play, Compass, BarChart3, Eye, Info, AlertTriangle, Wallet, Mountain, Shield } from 'lucide-react';
 import { CollaborativeTaskFlywheelPanel } from '@/features/match-square/components/CollaborativeTaskFlywheelPanel';
 import TripBudgetPage from './budget';
@@ -101,7 +109,6 @@ import { CreateItineraryItemDialog } from '@/components/trips/CreateItineraryIte
 import { ReplaceItineraryItemDialog } from '@/components/trips/ReplaceItineraryItemDialog';
 import { itineraryItemsApi } from '@/api/trips';
 import { cn } from '@/lib/utils';
-import ComplianceRulesCard from '@/components/trips/ComplianceRulesCard';
 import type { DecisionLogEntry, ReplaceItineraryItemResponse } from '@/types/trip';
 import { EvidenceRefsReadable } from '@/lib/evidence-refs-readability';
 import {
@@ -112,35 +119,22 @@ import {
   extractTripDecisionReadinessTechnicalEvidenceRefs,
 } from '@/lib/ontology-decision-display';
 import { zhCN } from 'date-fns/locale';
-import { tripDetailToRoutePlanDraft } from '@/utils/plan-converters';
-import { buildWorldModelContext } from '@/utils/world-context-builder';
 import { useFitnessContext } from '@/contexts/FitnessContext';
 import { getPersonaColorClasses } from '@/lib/persona-colors';
 import { PersonaAvatar } from '@/components/common/PersonaAvatar';
+import { GuardianTimelineBadges } from '@/components/guardian';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
 import { WeatherCard, WeatherAlertBanner } from '@/components/weather/WeatherCard';
 import { formatCurrency } from '@/utils/format';
 // V2 优化组件
-import { FeedbackForm, TeamManagementPanel, CreateTeamDialog, TeamNegotiationResultCard, InviteMemberDialog } from '@/components/optimization';
-import { MatchSquareRosterPanel } from '@/features/match-square/components/MatchSquareRosterPanel';
-import { useMatchSquareTeamBridge } from '@/features/match-square/hooks/useMatchSquareTeamBridge';
-import { 
-  useSubmitFeedback,
-  useCreateTeam,
-  useTeam,
-  useAddTeamMember,
-  useRemoveTeamMember,
-  useUpdateTeamMember,
-  useTeamNegotiation,
-  useTeamConstraints,
-  useTeamWeights,
-} from '@/hooks/useOptimizationV2';
-import type { TeamMember, TeamNegotiationResponse } from '@/types/optimization-v2';
+import { FeedbackForm } from '@/components/optimization';
+import { useSubmitFeedback } from '@/hooks/useOptimizationV2';
 import { DEFAULT_WEIGHTS } from '@/types/optimization-v2';
-import { Skeleton } from '@/components/ui/skeleton';
 // 决策引擎组件
 import { DecisionFeedbackForm } from '@/components/decision';
 import { useAuth } from '@/hooks/useAuth';
+import { isSelfEvolutionEnabled } from '@/lib/self-evolution-feature';
+import { TripSelfEvolutionSection } from '@/features/self-evolution';
 import {
   Dialog,
   DialogContent,
@@ -149,384 +143,7 @@ import {
 } from '@/components/ui/dialog';
 import { MessageSquare } from 'lucide-react';
 import { TripRobustnessTabPanel } from '@/components/agent/TripRobustnessTabPanel';
-
-// 团队标签页组件
-function TeamTabContent({
-  tripId,
-  trip,
-  onTripRefetch,
-  onGoToPlanStudio,
-}: {
-  tripId: string;
-  trip: TripDetail;
-  onTripRefetch?: () => void | Promise<void>;
-  /** 打开规划工作台（用于「去改行程」） */
-  onGoToPlanStudio?: () => void;
-}) {
-  const { user } = useAuth();
-  const [localTeamId, setLocalTeamId] = useState<string | null>(null);
-  const [createTeamDialogOpen, setCreateTeamDialogOpen] = useState(false);
-  const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const [teamNegotiationResult, setTeamNegotiationResult] = useState<TeamNegotiationResponse | null>(null);
-
-  const tripMetadata = (trip as { metadata?: Record<string, unknown> })?.metadata;
-  const teamIdFromTrip = (trip as { metadata?: { teamId?: string } })?.metadata?.teamId;
-  const effectiveTeamId = localTeamId ?? teamIdFromTrip;
-
-  const persistTeamId = useCallback(
-    async (teamId: string) => {
-      setLocalTeamId(teamId);
-      try {
-        localStorage.setItem(`trip_team_id:${tripId}`, teamId);
-        await tripsApi.update(tripId, {
-          metadata: { ...(tripMetadata || {}), teamId },
-        });
-        await onTripRefetch?.();
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : '团队已创建，但写入行程失败';
-        toast.error(message);
-      }
-    },
-    [tripId, tripMetadata, onTripRefetch]
-  );
-
-  const {
-    isMatchSquareTrip,
-    roster: matchSquareRoster,
-    rosterLoading: matchSquareRosterLoading,
-    isImporting: matchSquareImporting,
-    importError: matchSquareImportError,
-    retryImport: retryMatchSquareImport,
-  } = useMatchSquareTeamBridge({
-    tripId,
-    trip,
-    effectiveTeamId,
-    onTeamImported: persistTeamId,
-  });
-
-  // 从 localStorage 恢复团队 ID
-  useEffect(() => {
-    if (teamIdFromTrip) {
-      setLocalTeamId(null);
-      return;
-    }
-    try {
-      const stored = localStorage.getItem(`trip_team_id:${tripId}`);
-      setLocalTeamId(stored || null);
-    } catch {
-      setLocalTeamId(null);
-    }
-  }, [tripId, teamIdFromTrip]);
-
-  // Hooks
-  const createTeamMutation = useCreateTeam();
-  const { data: team, isLoading: teamLoading } = useTeam(effectiveTeamId);
-  const addMemberMutation = useAddTeamMember(effectiveTeamId ?? '');
-  const removeMemberMutation = useRemoveTeamMember(effectiveTeamId ?? '');
-  const updateMemberMutation = useUpdateTeamMember(effectiveTeamId ?? '');
-  const teamNegotiationMutation = useTeamNegotiation(effectiveTeamId ?? '');
-  const { data: teamConstraints } = useTeamConstraints(effectiveTeamId);
-  const { data: teamWeights } = useTeamWeights(effectiveTeamId);
-
-  // 计划数据（团队协商需要）
-  const { profile: fitnessProfile } = useFitnessContext();
-  const planDraft = useMemo(() => tripDetailToRoutePlanDraft(trip), [trip]);
-  const worldContext = useMemo(
-    () => buildWorldModelContext(trip, { fitnessProfile }),
-    [trip, fitnessProfile]
-  );
-
-  // 添加成员
-  const handleAddMember = async (member: Omit<TeamMember, 'userId' | 'personalWeights'>) => {
-    if (!effectiveTeamId) return;
-    try {
-      const fullMember: TeamMember = {
-        ...member,
-        userId: `user_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-        personalWeights: DEFAULT_WEIGHTS,
-      };
-      await addMemberMutation.mutateAsync(fullMember);
-      toast.success(`已添加成员 ${member.displayName}`);
-    } catch (error: any) {
-      toast.error(error?.message || '添加成员失败');
-    }
-  };
-
-  // 编辑成员
-  const handleEditMember = async (member: TeamMember) => {
-    if (!effectiveTeamId) return;
-    try {
-      await updateMemberMutation.mutateAsync({
-        userId: member.userId,
-        updates: {
-          displayName: member.displayName,
-          role: member.role,
-          fitnessLevel: member.fitnessLevel,
-          experienceLevel: member.experienceLevel,
-          decisionWeight: member.decisionWeight,
-        },
-      });
-      toast.success(`已更新成员 ${member.displayName}`);
-    } catch (error: any) {
-      toast.error(error?.message || '更新成员失败');
-    }
-  };
-
-  // 移除成员
-  const handleRemoveMember = async (userId: string) => {
-    if (!effectiveTeamId) return;
-    try {
-      await removeMemberMutation.mutateAsync(userId);
-      toast.success('已移除成员');
-    } catch (error: any) {
-      toast.error(error?.message || '移除成员失败');
-    }
-  };
-
-  // 团队协商
-  const handleTeamNegotiate = async () => {
-    if (!effectiveTeamId) return;
-    const memberCount = team?.members?.length ?? 0;
-    const hasPlan = (trip.TripDay ?? []).some(day => (day.ItineraryItem?.length ?? 0) > 0);
-    if (memberCount < 1) {
-      toast.error('请先添加至少 1 名成员');
-      return;
-    }
-    if (!hasPlan) {
-      toast.error('请先在总览或规划工作台生成行程');
-      return;
-    }
-    try {
-      const result = await teamNegotiationMutation.mutateAsync({
-        plan: planDraft,
-        world: worldContext,
-        tripId,
-      });
-      setTeamNegotiationResult(result);
-      toast.success('团队协商完成');
-    } catch {
-      toast.error('团队协商失败');
-    }
-  };
-
-  const isLoading = teamLoading || addMemberMutation.isPending || removeMemberMutation.isPending || updateMemberMutation.isPending;
-
-  // 发起协商前置校验（设计文档 Phase 2）
-  const memberCount = team?.members?.length ?? 0;
-  const hasPlan = (trip.TripDay ?? []).some(day => (day.ItineraryItem?.length ?? 0) > 0);
-  const canNegotiate = memberCount >= 1 && hasPlan;
-  const negotiateDisabledReason = !memberCount
-    ? '请先添加至少 1 名成员'
-    : !hasPlan
-      ? '请先在总览或规划工作台生成行程'
-      : null;
-
-  return (
-    <div className="p-6 space-y-6">
-      {!effectiveTeamId ? (
-        isMatchSquareTrip ? (
-          <MatchSquareRosterPanel
-            roster={matchSquareRoster}
-            rosterLoading={matchSquareRosterLoading}
-            isImporting={matchSquareImporting}
-            importError={matchSquareImportError}
-            onRetryImport={retryMatchSquareImport}
-            onManualCreate={() => setCreateTeamDialogOpen(true)}
-          />
-        ) : (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
-                  <Users className="w-8 h-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">创建行程团队</h3>
-                  <p className="text-muted-foreground text-sm mt-1 max-w-md mx-auto">
-                    创建后可邀请同行者，共同设定偏好并协商行程
-                  </p>
-                </div>
-                <Button
-                  size="lg"
-                  onClick={() => setCreateTeamDialogOpen(true)}
-                  disabled={!user?.id}
-                  className="gap-2"
-                >
-                  <Users className="w-4 h-4" />
-                  创建团队
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )
-      ) : (
-        // 已关联团队：按 L1-L4 排布（设计文档 Phase 1）
-        <div className="space-y-6">
-          {/* L1 状态区 */}
-          <div className="flex items-center justify-between rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">{team?.name ?? '团队'}</h3>
-                <p className="text-sm text-muted-foreground">{memberCount} 成员</p>
-              </div>
-              {teamNegotiationResult && (
-                <div className="flex items-center gap-2 ml-4 pl-4 border-l">
-                  <Badge variant={
-                    teamNegotiationResult.decision === 'APPROVE' ? 'default' :
-                    teamNegotiationResult.decision === 'REJECT' ? 'destructive' :
-                    'secondary'
-                  }>
-                    {teamNegotiationResult.decision === 'APPROVE' ? '通过' :
-                     teamNegotiationResult.decision === 'REJECT' ? '拒绝' :
-                     teamNegotiationResult.decision === 'APPROVE_WITH_CONDITIONS' ? '有条件通过' :
-                     '需人工决策'}
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    共识度 {Math.round(teamNegotiationResult.consensusLevel * 100)}%
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* L2 行动区：空成员时引导添加 */}
-          {memberCount === 0 && (
-            <Card className="border-dashed border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-              <CardContent className="py-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-amber-800 dark:text-amber-200">添加第一位成员</p>
-                    <p className="text-sm text-muted-foreground mt-0.5">添加成员后可发起团队协商，汇总偏好达成共识</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="shrink-0"
-                    onClick={() => setAddMemberDialogOpen(true)}
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    添加成员
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* L2 行动区 + L3 协商结果 */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">团队协商</CardTitle>
-                  <CardDescription className="text-sm">
-                    基于所有成员偏好，生成团队共识方案
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => setInviteDialogOpen(true)}
-                  >
-                    <Users className="w-4 h-4" />
-                    邀请成员
-                  </Button>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex">
-                          <Button
-                            onClick={handleTeamNegotiate}
-                            disabled={!canNegotiate || teamNegotiationMutation.isPending}
-                            className="gap-2"
-                          >
-                            <Users className="w-4 h-4" />
-                            {teamNegotiationMutation.isPending ? '协商中...' : '发起协商'}
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {negotiateDisabledReason ?? '基于成员偏好生成团队共识方案'}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </div>
-            </CardHeader>
-            {teamNegotiationResult && (
-              <CardContent className="pt-0">
-                <TeamNegotiationResultCard
-                  result={teamNegotiationResult}
-                  tripId={tripId}
-                  onGoToPlan={onGoToPlanStudio}
-                  embedded
-                />
-              </CardContent>
-            )}
-          </Card>
-
-          {/* 成员管理 */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">团队成员</CardTitle>
-              <CardDescription className="text-sm">
-                管理团队成员及其个人偏好
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                </div>
-              ) : (
-                <TeamManagementPanel
-                  team={team}
-                  constraints={teamConstraints}
-                  weights={teamWeights}
-                  onAddMember={handleAddMember}
-                  onRemoveMember={handleRemoveMember}
-                  onEditMember={handleEditMember}
-                  readonly={!effectiveTeamId}
-                  loading={isLoading}
-                  openAddMember={addMemberDialogOpen}
-                  onOpenAddMemberChange={setAddMemberDialogOpen}
-                  isEditMemberPending={updateMemberMutation.isPending}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* 邀请成员对话框 */}
-      <InviteMemberDialog
-        open={inviteDialogOpen}
-        onOpenChange={setInviteDialogOpen}
-        teamId={effectiveTeamId ?? ''}
-        tripId={tripId}
-        onAddMember={() => setAddMemberDialogOpen(true)}
-      />
-
-      {/* 创建团队对话框 */}
-      <CreateTeamDialog
-        open={createTeamDialogOpen}
-        onOpenChange={setCreateTeamDialogOpen}
-        onSubmit={async (req) => {
-          const newTeam = await createTeamMutation.mutateAsync(req);
-          await persistTeamId(newTeam.teamId);
-        }}
-        currentUserId={user?.id ?? ''}
-        currentUserDisplayName={user?.displayName ?? user?.email ?? '我'}
-        isSubmitting={createTeamMutation.isPending}
-      />
-    </div>
-  );
-}
+import TeamTabContent from '@/components/trips/TeamTabContent';
 
 // 决策记录标签页组件
 function DecisionLogTab({ tripId }: { tripId: string }) {
@@ -641,6 +258,7 @@ function DecisionLogTab({ tripId }: { tripId: string }) {
                           {format(new Date(log.date), 'yyyy年M月d日 HH:mm', { locale: zhCN })}
                         </span>
                       </div>
+                      <GuardianTimelineBadges metadata={log.metadata} className="mb-1" />
                       {outputsSummary && outputsSummary !== log.description ? (
                         <div className="text-xs text-muted-foreground mt-1 border-l-2 border-primary/25 pl-2">
                           {outputsSummary}
@@ -726,8 +344,8 @@ export default function TripDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { t } = useTranslation();
+  const [searchParams, _setSearchParams] = useSearchParams();
+  const { t: _t } = useTranslation();
   const { user } = useAuth();
   const submitFeedbackMutation = useSubmitFeedback();
   
@@ -766,13 +384,34 @@ export default function TripDetailPage() {
   const [pendingStatus, setPendingStatus] = useState<'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | null>(null);
   const [statusConfirmText, setStatusConfirmText] = useState(''); // ✅ 状态修改确认输入
   const [statusConfirmCode, setStatusConfirmCode] = useState<string>(''); // ✅ 随机验证码
-  const [country, setCountry] = useState<Country | null>(null);
+  const {
+    verify: handoffVerify,
+    verifyLoading: handoffVerifyLoading,
+    verifyError: handoffVerifyError,
+    reloadVerify: reloadHandoffVerify,
+  } = useInTripHandoff(id, { autoVerify: false, autoSnapshot: false });
+  const isTripCompleted = trip?.status === 'COMPLETED';
+  const {
+    data: postTripSummary,
+    loading: postTripSummaryLoading,
+    error: postTripSummaryError,
+  } = useInTripPostTripSummary(id, isTripCompleted);
+
+  useEffect(() => {
+    if (!statusChangeDialogOpen || pendingStatus !== 'IN_PROGRESS' || trip?.status !== 'PLANNING') {
+      return;
+    }
+    reloadHandoffVerify();
+  }, [statusChangeDialogOpen, pendingStatus, trip?.status, reloadHandoffVerify]);
+
+  const [_country, setCountry] = useState<Country | null>(null);
   const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
   const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewSuggestion, setPreviewSuggestion] = useState<Suggestion | null>(null);
   const [previewActionId, setPreviewActionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('overview'); // ✅ Tab 状态控制
+  const [outcomeAutoPrompt, setOutcomeAutoPrompt] = useState(false);
   const [metricExplanationDialogOpen, setMetricExplanationDialogOpen] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<'schedule' | 'budget' | 'pace' | 'feasibility' | null>(null);
   const [autoOptimizeDialogOpen, setAutoOptimizeDialogOpen] = useState(false);
@@ -1216,8 +855,6 @@ export default function TripDetailPage() {
     setCurrency('CNY');
   };
 
-
-
   // const handleCollect = async () => {
   //   if (!id || actionLoading) return;
   //   try {
@@ -1268,7 +905,6 @@ export default function TripDetailPage() {
       console.error('Failed to load trip state:', err);
     }
   };
-
 
   // 检查是否是"未发现问题"类型的建议
   const isNoIssueSuggestion = (suggestion: Suggestion): boolean => {
@@ -1411,7 +1047,6 @@ export default function TripDetailPage() {
     }
   };
 
-
   // 加载行程指标（用于健康度计算）
   const loadTripMetrics = async (tripId?: string) => {
     // 🆕 支持传入tripId参数，避免依赖trip state
@@ -1523,7 +1158,6 @@ export default function TripDetailPage() {
       toast.error(err.message || '更新行程项失败');
     }
   };
-
 
   const handleCreateItemSuccess = () => {
     loadTrip(); // 重新加载行程
@@ -1784,20 +1418,28 @@ export default function TripDetailPage() {
     }
     
     try {
-      // 通过更新API修改状态（后端已支持 status 字段）
-      await tripsApi.update(id, { status: pendingStatus });
+      if (pendingStatus === 'IN_PROGRESS') {
+        const travelingPayload = buildEnterTravelingPayload(
+          trip.metadata as Record<string, unknown> | undefined,
+        );
+        await tripsApi.update(id, travelingPayload);
+      } else {
+        await tripsApi.update(id, { status: pendingStatus });
+      }
       toast.success(`行程状态已更新为：${getTripStatusLabel(pendingStatus as any)}`);
       setStatusChangeDialogOpen(false);
       setPendingStatus(null);
       setStatusConfirmText('');
       
-      // ✅ 根据新状态自动切换到合适的 Tab
+      // ✅ 进入行中：跳转独立执行页（非详情 Tab）
       if (pendingStatus === 'IN_PROGRESS') {
-        // 规划中 → 进行中：切换到"执行"tab
-        setActiveTab('execute');
+        navigate(`/dashboard/execute?tripId=${id}`);
       } else if (pendingStatus === 'COMPLETED') {
         // 进行中 → 已完成：切换到"复盘"tab
         setActiveTab('insights');
+        if (isSelfEvolutionEnabled()) {
+          setOutcomeAutoPrompt(true);
+        }
       } else if (pendingStatus === 'PLANNING') {
         // 改回规划中：回到总览
         setActiveTab('overview');
@@ -2298,7 +1940,7 @@ export default function TripDetailPage() {
           }
         }}
       >
-        <AlertDialogContent className="max-w-2xl">
+        <AlertDialogContent className="max-w-2xl max-h-[min(85vh,720px)] flex flex-col gap-0 overflow-hidden p-0">
           {pendingStatus && (() => {
             const transitionInfo = getStatusTransitionAction(trip.status, pendingStatus);
             const isIrreversible = pendingStatus === 'COMPLETED' || pendingStatus === 'CANCELLED' || 
@@ -2312,17 +1954,22 @@ export default function TripDetailPage() {
               statusConfirmCode,
               confirmInfo.alternatives
             );
-            const isButtonDisabled = !validation.valid || !isConfirmValid;
+            const needsHandoffGate =
+              trip.status === 'PLANNING' && pendingStatus === 'IN_PROGRESS';
+            const handoffBlocksConfirm =
+              needsHandoffGate &&
+              (handoffVerifyLoading || handoffVerifyError != null || handoffVerify?.ready === false);
+            const isButtonDisabled = !validation.valid || !isConfirmValid || handoffBlocksConfirm;
 
             return (
               <>
-                <AlertDialogHeader>
+                <AlertDialogHeader className="px-6 pt-6 pb-3 shrink-0">
                   <AlertDialogTitle>{titleInfo.title}</AlertDialogTitle>
                   <AlertDialogDescription>
                     {titleInfo.description}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <div className="space-y-4">
+                <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-4">
                   {/* 影响说明 */}
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                     <div className="flex items-start gap-3">
@@ -2351,6 +1998,16 @@ export default function TripDetailPage() {
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {needsHandoffGate && validation.valid && (
+                    <InTripHandoffChecklist
+                      tripId={trip.id}
+                      verify={handoffVerify}
+                      loading={handoffVerifyLoading}
+                      error={handoffVerifyError}
+                      onRefresh={reloadHandoffVerify}
+                    />
                   )}
 
                   {/* 二次确认输入（仅不可逆操作） */}
@@ -2388,7 +2045,7 @@ export default function TripDetailPage() {
                     </div>
                   )}
                 </div>
-                <AlertDialogFooter>
+                <AlertDialogFooter className="shrink-0 border-t px-6 py-4 bg-background">
                   <AlertDialogCancel>取消</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={confirmStatusChange}
@@ -2639,6 +2296,9 @@ export default function TripDetailPage() {
 
               {/* 右（4/12）：预算概览 + 助手中心 */}
               <div className="lg:col-span-12 xl:col-span-4 space-y-3 sm:space-y-4">
+                {shouldShowTripExperienceIntentPanel(trip.metadata) && (
+                  <TripExperienceIntentPanel metadata={trip.metadata} defaultOpen />
+                )}
                 {showEmbeddedUi && id ? (
                   <EmbeddedHikingSegmentsPanel
                     tripId={id}
@@ -2687,7 +2347,6 @@ export default function TripDetailPage() {
                     }}
                   />
                 )}
-
 
                 {/* 助手中心 - 已取消状态下隐藏 */}
                 {trip?.status !== 'CANCELLED' && (
@@ -2782,7 +2441,6 @@ export default function TripDetailPage() {
                 </div>
                 )}
 
-
                     </div>
                       </div>
           </TabsContent>
@@ -2860,7 +2518,7 @@ export default function TripDetailPage() {
           {id && trip && isPrimaryHikingTrip(trip) && (
             <TabsContent value="hiking" className="mt-0 space-y-4 p-3 sm:p-4">
               <HikingAuditCard tripId={id} />
-              <HikingTrailPlanSummaryCard tripId={id} />
+              <HikingTrailPlanSummaryCard tripId={id} trip={trip} />
               <Card>
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
                   <p className="text-sm text-muted-foreground">
@@ -2924,6 +2582,13 @@ export default function TripDetailPage() {
           {/* Insights Tab */}
           <TabsContent value="insights" className="mt-0">
             <div className="p-6 space-y-6">
+            {id && (
+              <InTripPostTripSummaryPanel
+                data={postTripSummary}
+                loading={postTripSummaryLoading}
+                error={postTripSummaryError}
+              />
+            )}
             <Card>
               <CardHeader>
                   <CardTitle>复盘报告</CardTitle>
@@ -2977,6 +2642,14 @@ export default function TripDetailPage() {
                   </Button>
               </CardContent>
             </Card>
+
+            {isSelfEvolutionEnabled() && trip && user?.id && (
+              <TripSelfEvolutionSection
+                trip={trip}
+                userId={user.id}
+                autoPrompt={outcomeAutoPrompt}
+              />
+            )}
 
             {/* 决策反馈 - 帮助系统学习用户偏好 */}
             {id && (

@@ -2,6 +2,8 @@
  * 徒步行程 — 决策引擎 generate-plan 请求构建（Phase 2.5）
  */
 
+import { decisionEngineApi } from '@/api/decision-engine';
+import type { GeneratePlanResponseData } from '@/types/decision-engine';
 import type { GeneratePlanRequest } from '@/types/decision-engine';
 import type { TripDetail } from '@/types/trip';
 import type { FitnessProfile } from '@/types/fitness';
@@ -124,6 +126,19 @@ export function buildGeneratePlanRequestForHiking(
       ...(embedded ? { hikingProfile: 'embedded' as const } : {}),
     },
   };
+}
+
+/** 徒步 generate-plan + 因果 session 缓存 + hiking log */
+export async function runHikingGeneratePlanWithCausalCache(
+  trip: TripDetail,
+  options?: { fitnessProfile?: FitnessProfile | null },
+): Promise<GeneratePlanResponseData> {
+  const request = buildGeneratePlanRequestForHiking(trip, options);
+  const result = await decisionEngineApi.generatePlanWithCausalCache(request);
+  if (result.log && typeof result.log === 'object') {
+    saveHikingGenerateLog(trip.id, result.log as Record<string, unknown>);
+  }
+  return result;
 }
 
 const LOG_STORAGE_PREFIX = 'tripnara_hiking_generate_log_';

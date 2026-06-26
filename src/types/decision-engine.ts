@@ -3,7 +3,17 @@
  * 基于 API 文档 v1 规范
  */
 
+import type { CausalRuntimeEcho, TripWorldState } from '@/types/causal-travel-runtime';
 import type { HardTrekTrailPlan } from '@/types/hiking';
+
+export type {
+  CausalObservationV1,
+  CausalRuntimeEcho,
+  CausalOutcomeRequest,
+  CausalOutcomeResponseData,
+  OpsRealityOutcomeCausalExtension,
+  TripWorldState,
+} from '@/types/causal-travel-runtime';
 
 // ==================== 通用类型 ====================
 
@@ -366,12 +376,14 @@ export interface RecordRealityOutcomeRequest {
   source?: string;
   trip_run_id?: string;
   execution_trace_id?: string;
+  /** P5：与 generate-plan 同会话的 TripWorldState（客户端缓存回填） */
+  state?: TripWorldState;
+  /** 与预测 tick join */
+  causality_id?: string;
+  tripId?: string;
 }
 
-export interface RecordRealityOutcomeResult {
-  success: boolean;
-  snapshotId: string;
-}
+export type RecordRealityOutcomeResult = OpsRealityOutcomeCausalExtension;
 
 export interface OpsRealitySnapshotListItem {
   id: string;
@@ -402,16 +414,16 @@ export interface DecisionEngineHealthData {
 
 // ==================== 决策引擎核心请求/响应（camelCase；与 /decision-engine/v1 对齐）====================
 
-export type GeneratePlanRequest = Record<string, unknown>;
+export type GeneratePlanRequest = TripWorldState & Record<string, unknown>;
 
-export interface GeneratePlanResponseData {
+export interface GeneratePlanResponseData extends CausalRuntimeEcho {
   plan?: unknown;
   log?: DecisionEnginePlanLog;
 }
 
-export type RepairPlanRequest = Record<string, unknown>;
+export type RepairPlanRequest = TripWorldState & Record<string, unknown>;
 
-export interface RepairPlanResponseData {
+export interface RepairPlanResponseData extends CausalRuntimeEcho {
   plan?: unknown;
   log?: DecisionEnginePlanLog;
 }

@@ -208,9 +208,43 @@ export type WorkbenchHealthBand = 'healthy' | 'warning' | 'critical';
 
 export interface OptionComparisonEntry {
   optionId: string;
-  /** 各维度 0–100 分 */
+  /** 各维度 0–100 分；后端不再因 Kernel 门控改写 */
   scores?: Record<string, number>;
+  /** 可能含 [Kernel Gate: ... dominant_cid=...] */
   summary?: string;
+}
+
+export type KernelGateStatus =
+  | 'ALLOW'
+  | 'NEED_CONFIRM'
+  | 'REJECT'
+  | (string & {});
+
+export interface KernelGateL3Evidence {
+  cid: string;
+  detail: string;
+  slack?: number;
+  limit?: number;
+}
+
+export interface KernelGateOptionDelta {
+  optionId: string;
+  gateStatus: KernelGateStatus;
+  violationCount: number;
+  violationTypes: string[];
+  dominantCid?: string;
+  l3Evidence?: KernelGateL3Evidence[];
+  guardiansAllowed?: boolean;
+  expectedUtility?: number;
+}
+
+export interface KernelGateEval {
+  optionDeltas?: KernelGateOptionDelta[];
+  recommendedByGate?: string;
+  recommendedDominantCid?: string;
+  divergesFromLlmRecommendation?: boolean;
+  llmRecommendedOptionId?: string;
+  decisionOsAudit?: Record<string, unknown>;
 }
 
 export interface OptionComparison {
@@ -219,7 +253,14 @@ export interface OptionComparison {
     optionId: string;
     reason: string;
   };
+  kernelGateEval?: KernelGateEval;
 }
+
+export type {
+  PlanStateKernelBridge,
+  PlanStateKernelCompareGateMismatch,
+  PlanStateKernelDebug,
+} from '@/lib/planning-workbench-kernel-debug';
 
 export interface SkeletonPoi {
   name?: string;
@@ -268,6 +309,10 @@ export interface PlanSkeletonSet {
  */
 export interface PersonaShellOutput {
   personas: PersonasOutput;
+  /** P1/P2 单主角表达层（默认可直接渲染，勿默认三人独白） */
+  presentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
+  /** P0–P5 因果人格投影（kernel 切片；抽屉展示因果链 + 证据） */
+  causalPersonaProjection?: import('@/types/causal-travel-runtime').CausalPersonaProjection;
   consolidatedDecision: ConsolidatedDecision;
   timestamp: string;
 }
@@ -277,6 +322,10 @@ export interface PersonaShellOutput {
  */
 export interface UIOutput {
   personas: PersonasOutput;
+  /** P1/P2 单主角表达层（来自 PersonaShellOutput 或 uiOutput 直出） */
+  presentation?: import('@/types/guardian-presentation').GuardianPersonaPresentation;
+  /** P0–P5 因果投影（顶层别名；与 personas.causalPersonaProjection 相同） */
+  causalPersonaProjection?: import('@/types/causal-travel-runtime').CausalPersonaProjection;
   consolidatedDecision: ConsolidatedDecision;
   timestamp: string;
   /** 方案骨架（偏大，可懒加载 / 调试） */
@@ -511,19 +560,60 @@ const FALLBACK_CONSOLIDATED_DECISION: ConsolidatedDecision = {
   nextSteps: [],
 };
 
+function readGuardianPresentation(
+  record: Record<string, unknown> | null | undefined,
+): import('@/types/guardian-presentation').GuardianPersonaPresentation | undefined {
+  if (!record) return undefined;
+  const raw = record.presentation ?? record.guardianPresentation;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.headline !== 'string' || typeof o.narrative !== 'string') {
+    return undefined;
+  }
+  return raw as import('@/types/guardian-presentation').GuardianPersonaPresentation;
+}
+
+function readCausalPersonaProjection(
+  record: Record<string, unknown> | null | undefined,
+): import('@/types/causal-travel-runtime').CausalPersonaProjection | undefined {
+  if (!record) return undefined;
+  const raw = record.causalPersonaProjection;
+  if (!raw || typeof raw !== 'object') return undefined;
+  return raw as import('@/types/causal-travel-runtime').CausalPersonaProjection;
+}
+
+/** 从 execute/compare 原始 uiOutput 提取因果投影（兼容 shell 嵌套与顶层别名） */
+export function pickCausalPersonaProjection(
+  raw: unknown,
+): import('@/types/causal-travel-runtime').CausalPersonaProjection | undefined {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const personasField = r.personas;
+  if (isPersonaShellOutput(personasField)) {
+    return (
+      readCausalPersonaProjection(personasField as unknown as Record<string, unknown>) ??
+      readCausalPersonaProjection(r)
+    );
+  }
+  return (
+    readCausalPersonaProjection(personasField as Record<string, unknown> | undefined) ??
+    readCausalPersonaProjection(r)
+  );
+}
+
 function isPersonaShellOutput(value: unknown): value is PersonaShellOutput {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   const inner = v.personas;
+  const hasPresentation = Boolean(readGuardianPresentation(v));
+  const hasConsolidated =
+    v.consolidatedDecision !== undefined &&
+    typeof v.consolidatedDecision === 'object';
+  if (hasPresentation && hasConsolidated) return true;
   if (!inner || typeof inner !== 'object') return false;
   const innerObj = inner as Record<string, unknown>;
   const hasTriplet =
     'abu' in innerObj || 'drdre' in innerObj || 'neptune' in innerObj;
-  return (
-    hasTriplet &&
-    v.consolidatedDecision !== undefined &&
-    typeof v.consolidatedDecision === 'object'
-  );
+  return hasTriplet && hasConsolidated;
 }
 
 /**
@@ -536,6 +626,12 @@ export function normalizeWorkbenchUiOutput(raw: unknown): UIOutput {
   let personas: PersonasOutput;
   let consolidatedDecision: ConsolidatedDecision;
   let timestamp: string;
+  let presentation:
+    | import('@/types/guardian-presentation').GuardianPersonaPresentation
+    | undefined;
+  let causalPersonaProjection:
+    | import('@/types/causal-travel-runtime').CausalPersonaProjection
+    | undefined;
 
   if (isPersonaShellOutput(personasField)) {
     const shell = personasField;
@@ -546,6 +642,12 @@ export function normalizeWorkbenchUiOutput(raw: unknown): UIOutput {
       typeof shell.timestamp === 'string' && shell.timestamp.length > 0
         ? shell.timestamp
         : new Date().toISOString();
+    presentation = readGuardianPresentation(
+      shell as unknown as Record<string, unknown>,
+    );
+    causalPersonaProjection =
+      readCausalPersonaProjection(shell as unknown as Record<string, unknown>) ??
+      readCausalPersonaProjection(r);
   } else {
     personas =
       (personasField as PersonasOutput | undefined) ?? {
@@ -560,20 +662,193 @@ export function normalizeWorkbenchUiOutput(raw: unknown): UIOutput {
       typeof r.timestamp === 'string' && r.timestamp.length > 0
         ? r.timestamp
         : new Date().toISOString();
+    presentation =
+      readGuardianPresentation(
+        personasField as Record<string, unknown> | undefined,
+      ) ?? readGuardianPresentation(r);
+    causalPersonaProjection =
+      readCausalPersonaProjection(personasField as Record<string, unknown> | undefined) ??
+      readCausalPersonaProjection(r);
   }
 
   return {
     personas,
+    presentation,
+    causalPersonaProjection,
     consolidatedDecision,
     timestamp,
     skeletonOptions: r.skeletonOptions as PlanSkeletonSet | undefined,
-    comparison: r.comparison as OptionComparison | undefined,
+    comparison: normalizeOptionComparison(r.comparison),
     health: r.health as UIOutput['health'],
     confirmations: Array.isArray(r.confirmations)
       ? (r.confirmations as unknown[]).filter((x): x is string => typeof x === 'string')
       : undefined,
   };
 }
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function normalizeKernelGateEval(raw: unknown): KernelGateEval | undefined {
+  const o = asRecord(raw);
+  if (!o) return undefined;
+
+  const deltasRaw = o.optionDeltas ?? o.option_deltas;
+  const optionDeltas = Array.isArray(deltasRaw)
+    ? deltasRaw
+        .map((item) => {
+          const d = asRecord(item);
+          if (!d) return null;
+          const optionId = d.optionId ?? d.option_id;
+          const gateStatus = d.gateStatus ?? d.gate_status;
+          if (typeof optionId !== 'string' || typeof gateStatus !== 'string') return null;
+
+          const l3Raw = d.l3Evidence ?? d.l3_evidence;
+          const l3Evidence = Array.isArray(l3Raw)
+            ? l3Raw
+                .map((ev) => {
+                  const e = asRecord(ev);
+                  if (!e) return null;
+                  const cid = e.cid;
+                  const detail = e.detail;
+                  if (typeof cid !== 'string' || typeof detail !== 'string') return null;
+                  return {
+                    cid,
+                    detail,
+                    ...(typeof e.slack === 'number' ? { slack: e.slack } : {}),
+                    ...(typeof e.limit === 'number' ? { limit: e.limit } : {}),
+                  } satisfies KernelGateL3Evidence;
+                })
+                .filter((x): x is KernelGateL3Evidence => x != null)
+            : undefined;
+
+          return {
+            optionId,
+            gateStatus: gateStatus as KernelGateStatus,
+            violationCount: Number(d.violationCount ?? d.violation_count ?? 0),
+            violationTypes: Array.isArray(d.violationTypes ?? d.violation_types)
+              ? (d.violationTypes ?? d.violation_types).filter(
+                  (x: unknown): x is string => typeof x === 'string',
+                )
+              : [],
+            ...(typeof d.dominantCid === 'string' || typeof d.dominant_cid === 'string'
+              ? { dominantCid: String(d.dominantCid ?? d.dominant_cid) }
+              : {}),
+            ...(l3Evidence?.length ? { l3Evidence } : {}),
+            ...(typeof d.guardiansAllowed === 'boolean' || typeof d.guardians_allowed === 'boolean'
+              ? { guardiansAllowed: Boolean(d.guardiansAllowed ?? d.guardians_allowed) }
+              : {}),
+            ...(typeof d.expectedUtility === 'number' || typeof d.expected_utility === 'number'
+              ? { expectedUtility: Number(d.expectedUtility ?? d.expected_utility) }
+              : {}),
+          } satisfies KernelGateOptionDelta;
+        })
+        .filter((x): x is KernelGateOptionDelta => x != null)
+    : undefined;
+
+  const evalOut: KernelGateEval = {};
+  if (optionDeltas?.length) evalOut.optionDeltas = optionDeltas;
+
+  const recommendedByGate = o.recommendedByGate ?? o.recommended_by_gate;
+  if (typeof recommendedByGate === 'string') evalOut.recommendedByGate = recommendedByGate;
+
+  const recommendedDominantCid = o.recommendedDominantCid ?? o.recommended_dominant_cid;
+  if (typeof recommendedDominantCid === 'string') {
+    evalOut.recommendedDominantCid = recommendedDominantCid;
+  }
+
+  if (typeof o.divergesFromLlmRecommendation === 'boolean') {
+    evalOut.divergesFromLlmRecommendation = o.divergesFromLlmRecommendation;
+  } else if (typeof o.diverges_from_llm_recommendation === 'boolean') {
+    evalOut.divergesFromLlmRecommendation = o.diverges_from_llm_recommendation;
+  }
+
+  const llmRecommendedOptionId = o.llmRecommendedOptionId ?? o.llm_recommended_option_id;
+  if (typeof llmRecommendedOptionId === 'string') {
+    evalOut.llmRecommendedOptionId = llmRecommendedOptionId;
+  }
+
+  const decisionOsAudit = o.decisionOsAudit ?? o.decision_os_audit;
+  if (decisionOsAudit && typeof decisionOsAudit === 'object') {
+    evalOut.decisionOsAudit = decisionOsAudit as Record<string, unknown>;
+  }
+
+  return Object.keys(evalOut).length > 0 ? evalOut : undefined;
+}
+
+export function normalizeOptionComparison(raw: unknown): OptionComparison | undefined {
+  const o = asRecord(raw);
+  if (!o) return undefined;
+
+  const optionsRaw = o.options;
+  const options = Array.isArray(optionsRaw)
+    ? optionsRaw
+        .map((item) => {
+          const entry = asRecord(item);
+          if (!entry) return null;
+          const optionId = entry.optionId ?? entry.option_id;
+          if (typeof optionId !== 'string') return null;
+          const scoresRaw = asRecord(entry.scores);
+          const scores = scoresRaw
+            ? Object.fromEntries(
+                Object.entries(scoresRaw)
+                  .map(([k, v]) => [k, Number(v)])
+                  .filter(([, v]) => Number.isFinite(v)),
+              )
+            : undefined;
+          const summary = entry.summary;
+          return {
+            optionId,
+            ...(scores && Object.keys(scores).length ? { scores } : {}),
+            ...(typeof summary === 'string' ? { summary } : {}),
+          } satisfies OptionComparisonEntry;
+        })
+        .filter((x): x is OptionComparisonEntry => x != null)
+    : undefined;
+
+  const recRaw = asRecord(o.recommendation);
+  const recommendation =
+    recRaw &&
+    typeof (recRaw.optionId ?? recRaw.option_id) === 'string' &&
+    typeof recRaw.reason === 'string'
+      ? {
+          optionId: String(recRaw.optionId ?? recRaw.option_id),
+          reason: recRaw.reason,
+        }
+      : undefined;
+
+  const kernelGateEval = normalizeKernelGateEval(o.kernelGateEval ?? o.kernel_gate_eval);
+
+  const out: OptionComparison = {};
+  if (options?.length) out.options = options;
+  if (recommendation) out.recommendation = recommendation;
+  if (kernelGateEval) out.kernelGateEval = kernelGateEval;
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** 从 uiOutput 或 planState.metadata 提取多方案对比（compare / generate 共用） */
+export function pickWorkbenchOptionComparison(
+  sources: Array<{ uiOutput?: UIOutput; planState?: PlanState }>,
+): OptionComparison | undefined {
+  for (const s of sources) {
+    const cmp = s.uiOutput?.comparison;
+    if (cmp && (cmp.options?.length || cmp.recommendation || cmp.kernelGateEval)) {
+      return cmp;
+    }
+  }
+  for (const s of sources) {
+    const meta = asRecord(s.planState?.metadata);
+    if (!meta) continue;
+    const cmp = normalizeOptionComparison(meta.comparison);
+    if (cmp) return cmp;
+  }
+  return undefined;
+}
+
+export type { PlanStateKernelDebug } from '@/lib/planning-workbench-kernel-debug';
+export { pickPlanStateKernelDebug } from '@/lib/planning-workbench-kernel-debug';
 
 export function normalizeExecutePlanningWorkbenchResponse(
   res: ExecutePlanningWorkbenchResponse
