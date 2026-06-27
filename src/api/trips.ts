@@ -63,6 +63,13 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
   return response.data.data;
 }
 
+function isEndpointNotFound(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  if (code === 'NOT_FOUND' || code === 'ENDPOINT_NOT_FOUND') return true;
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 404 || status === 501;
+}
+
 function tryUnwrapRequiresConfirmation(payload: any): (Error & {
   code?: string;
   warnings?: any[];
@@ -198,6 +205,16 @@ import type {
   ApplySuggestionRequest,
   ApplySuggestionResponse,
 } from '@/types/suggestion';
+import type { PlanningConflictsResponse } from '@/types/planning-conflicts';
+import type {
+  ConfirmConstraintsRequest,
+  ConfirmConstraintsResponse,
+  ConstraintsSummaryResponse,
+} from '@/types/planning-constraints';
+import type {
+  TripReservationEvidence,
+  TripReservationEvidenceCreateRequest,
+} from '@/types/trip-reservation-evidence';
 
 // ==================== 行程洞察类型定义 ====================
 
@@ -1442,6 +1459,75 @@ export const tripsApi = {
       `/trips/${id}/conflicts`,
       { params }
     );
+    return handleResponse(response);
+  },
+
+  /**
+   * P0-1 M2：规划冲突 BFF 聚合
+   * GET /trips/:id/planning-conflicts
+   */
+  getPlanningConflicts: async (
+    id: string,
+    options?: { includeConstraintsSummary?: boolean },
+  ): Promise<PlanningConflictsResponse> => {
+    const response = await apiClient.get<ApiResponseWrapper<PlanningConflictsResponse>>(
+      `/trips/${id}/planning-conflicts`,
+      {
+        params: options?.includeConstraintsSummary ? { includeConstraintsSummary: 1 } : undefined,
+      },
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * ② 固化约束 BFF 摘要
+   * GET /trips/:id/constraints-summary（兼容 constraintsSummary / constraints/summary）
+   */
+  getConstraintsSummary: async (tripId: string): Promise<ConstraintsSummaryResponse> => {
+    const paths = [
+      `/trips/${tripId}/constraints-summary`,
+      `/trips/${tripId}/constraintsSummary`,
+      `/trips/${tripId}/constraints/summary`,
+    ];
+    let lastError: unknown;
+    for (const path of paths) {
+      try {
+        const response = await apiClient.get<ApiResponseWrapper<ConstraintsSummaryResponse>>(path);
+        return handleResponse(response);
+      } catch (error) {
+        lastError = error;
+        if (!isEndpointNotFound(error)) throw error;
+      }
+    }
+    throw lastError;
+  },
+
+  /**
+   * 确认行程约束无误
+   * PATCH /trips/:id/constraints/confirm
+   */
+  confirmConstraints: async (
+    tripId: string,
+    body: ConfirmConstraintsRequest,
+  ): Promise<ConfirmConstraintsResponse> => {
+    const response = await apiClient.patch<ApiResponseWrapper<ConfirmConstraintsResponse>>(
+      `/trips/${tripId}/constraints/confirm`,
+      body,
+    );
+    return handleResponse(response);
+  },
+
+  /**
+   * 保存 POI 预约凭证（S3 主路径）
+   * POST /trips/:tripId/reservation-evidence
+   */
+  saveReservationEvidence: async (
+    tripId: string,
+    body: TripReservationEvidenceCreateRequest,
+  ): Promise<{ tripId: string; evidence?: TripReservationEvidence }> => {
+    const response = await apiClient.post<
+      ApiResponseWrapper<{ tripId: string; evidence?: TripReservationEvidence }>
+    >(`/trips/${tripId}/reservation-evidence`, body);
     return handleResponse(response);
   },
 

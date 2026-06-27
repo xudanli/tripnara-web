@@ -76,6 +76,7 @@ import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
 import { TripGeneratingPlaceholder } from '@/components/trips/TripGeneratingPlaceholder';
 import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import { PlanningBanner } from '@/components/planning/PlanningBanner';
 import { NarrativeThemeSection } from '@/components/narrative/NarrativeThemeSection';
 import { TripExperienceIntentPanel, shouldShowTripExperienceIntentPanel } from '@/components/experience-fulfillment';
@@ -101,10 +102,19 @@ import {
   pipelineStageActionLabel,
 } from '@/lib/plan-studio-pipeline-navigation';
 import { DecisionStrip } from '@/components/plan-studio/DecisionStrip';
+import { PlanningConstraintsCard } from '@/components/plan-studio/PlanningConstraintsCard';
+import PlanningConflictsPanel from '@/components/plan-studio/PlanningConflictsPanel';
+import { PlanningInboxBadge } from '@/components/plan-studio/PlanningInboxBadge';
+import { PlanningBudgetConstraintsDialog } from '@/components/plan-studio/PlanningBudgetConstraintsDialog';
 import { useDecisionStripModel } from '@/hooks/useDecisionStripModel';
+import { useDecisionStripPlanningReadiness } from '@/hooks/useDecisionStripPlanningReadiness';
+import { usePlanningConflicts } from '@/hooks/usePlanningConflicts';
+import { useConstraintsSummary } from '@/hooks/useConstraintsSummary';
+import { parseConstraintDeepLink } from '@/lib/planning-constraints.util';
 import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
 import { useDrawerOptional } from '@/components/layout/DashboardLayout';
 import type { DecisionStripCtaType } from '@/lib/decision-strip-model';
+import type { ConstraintPendingItem } from '@/types/planning-constraints';
 import { trackDecisionStripEvidenceOpen } from '@/utils/plan-studio-decision-strip-analytics';
 
 /** 工作台标题副文案：与侧栏行程列表展示逻辑对齐 */
@@ -146,7 +156,6 @@ function PlanStudioPageContent() {
     resolvePlanStudioTab(searchParams.get('tab')),
   );
   const planStudio = usePlanStudio();
-  const decisionStrip = useDecisionStripModel(tripId);
   const { openAssistant, sendAssistantMessage } = useAssistantSidebar();
   const drawer = useDrawerOptional();
   const planGateUrlHandledRef = useRef(false);
@@ -155,6 +164,7 @@ function PlanStudioPageContent() {
   
   // 意图与约束弹窗
   const [showIntentDialog, setShowIntentDialog] = useState(false);
+  const [showBudgetDialog, setShowBudgetDialog] = useState(false);
   // personaMode 已移除 - 三人格由系统自动调用，不再需要用户切换视图
   
   const [loading, setLoading] = useState(true);
@@ -187,6 +197,23 @@ function PlanStudioPageContent() {
     isEmbeddedHikingEnabled() &&
     embeddedHiking.embedded &&
     isEmbeddedHikingTrip(currentTrip);
+
+  const planningConflicts = usePlanningConflicts(tripId && tripExists ? tripId : null);
+  const constraintsSummary = useConstraintsSummary(
+    tripId && tripExists ? tripId : null,
+    currentTrip,
+    { embeddedSummary: planningConflicts.constraintsSummary },
+  );
+  const planningReadiness = useDecisionStripPlanningReadiness(
+    tripId && tripExists ? tripId : null,
+    currentTrip,
+    planningConflicts,
+    { deferConstraintTopicsToCard: true },
+  );
+  const decisionStrip = useDecisionStripModel(tripId, {
+    planningReadiness,
+    planningInboxCount: planningConflicts.inbox.inboxCount,
+  });
 
   // 对话框状态
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -291,6 +318,18 @@ function PlanStudioPageContent() {
       case 'open_plan_gate':
         planStudio.openPlanGate();
         break;
+      case 'open_budget':
+        handleTabChange('budget');
+        break;
+      case 'open_conflicts':
+        handleTabChange('conflicts');
+        break;
+      case 'open_team':
+        handleTabChange('team');
+        break;
+      case 'confirm_regret':
+        if (tripId) navigate(buildFeasibilityPagePath(tripId));
+        break;
       case 'adjust_schedule':
         handleTabChange('schedule');
         break;
@@ -312,6 +351,43 @@ function PlanStudioPageContent() {
     trackDecisionStripEvidenceOpen({ tripId, source: 'drawer' });
     drawer.setDrawerTab('decision');
     drawer.setDrawerOpen(true);
+  };
+
+  const handleConstraintPendingEdit = (item: ConstraintPendingItem) => {
+    const nav = item.deepLink ? parseConstraintDeepLink(item.deepLink) : item;
+    const editTab = nav.editTab ?? item.editTab;
+
+    if (item.key === 'budget' || nav.openBudgetDialog || item.openBudgetDialog) {
+      setShowBudgetDialog(true);
+      return;
+    }
+    if (editTab === 'conflicts') {
+      handleTabChange('conflicts');
+      return;
+    }
+    if (nav.openEditTrip || item.openEditTrip) {
+      setEditDialogOpen(true);
+      return;
+    }
+    if (editTab) {
+      handleTabChange(editTab);
+      return;
+    }
+    if (nav.openIntent || item.openIntent) {
+      setShowIntentDialog(true);
+    }
+  };
+
+  const handleConfirmConstraints = () => {
+    if (!user?.id) {
+      toast.error('请先登录后再确认约束');
+      return;
+    }
+    void constraintsSummary.confirmConstraints(user.id).then(() => {
+      if (tripId) {
+        tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
+      }
+    });
   };
 
   useEffect(() => {
@@ -970,6 +1046,22 @@ function PlanStudioPageContent() {
 
       {tripId && tripExists && (
         <div className="px-6 space-y-3 pb-2">
+          <PlanningConstraintsCard
+            summary={constraintsSummary.summary}
+            loading={constraintsSummary.loading}
+            loadSettled={constraintsSummary.loadSettled}
+            error={constraintsSummary.error}
+            onRetry={() => void constraintsSummary.reload()}
+            confirming={constraintsSummary.confirming}
+            destinationLabel={
+              currentTrip ? getCountryName(currentTrip.destination) : undefined
+            }
+            trip={currentTrip}
+            onEditPending={handleConstraintPendingEdit}
+            onConfirm={handleConfirmConstraints}
+            onOpenConflicts={() => handleTabChange('conflicts')}
+            planningInboxCount={planningConflicts.inbox.inboxCount}
+          />
           <DecisionStrip
             tripId={tripId}
             model={decisionStrip}
@@ -1035,6 +1127,12 @@ function PlanStudioPageContent() {
             <div className="border-b bg-white px-6">
               <TabsList className="justify-start">
                 <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
+                <TabsTrigger value="conflicts" className="gap-1.5">
+                  规划待办
+                  {!planningConflicts.loading ? (
+                    <PlanningInboxBadge count={planningConflicts.inbox.inboxCount} />
+                  ) : null}
+                </TabsTrigger>
                 {showSelfDriveCoverageTab ? (
                   <TabsTrigger value="coverage">{t('planStudio.tabs.coverage')}</TabsTrigger>
                 ) : null}
@@ -1069,6 +1167,16 @@ function PlanStudioPageContent() {
                       </div>
                     </div>
                   )}
+                </TabsContent>
+                <TabsContent value="conflicts" className="mt-0">
+                  {tripId && activeTab === 'conflicts' ? (
+                    <PlanningConflictsPanel
+                      tripId={tripId}
+                      trip={currentTrip}
+                      conflicts={planningConflicts}
+                      onNavigateToSchedule={handleNavigateToScheduleFromFeasibility}
+                    />
+                  ) : null}
                 </TabsContent>
                 {showSelfDriveCoverageTab && tripId ? (
                   <TabsContent value="coverage" className="mt-0">
@@ -1177,6 +1285,18 @@ function PlanStudioPageContent() {
           tripId={tripId}
           open={collaboratorsDialogOpen}
           onOpenChange={setCollaboratorsDialogOpen}
+        />
+      )}
+
+      {tripId && (
+        <PlanningBudgetConstraintsDialog
+          open={showBudgetDialog}
+          onOpenChange={setShowBudgetDialog}
+          tripId={tripId}
+          onSaved={() => {
+            void constraintsSummary.reload();
+            if (tripId) tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
+          }}
         />
       )}
 

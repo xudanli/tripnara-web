@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  mapPlanningReadinessToStripCta,
+  type PlanningReadinessPresentation,
+} from '@/lib/decision-strip-planning-readiness';import {
+  mapPlanningReadinessToStripCta,
+  type PlanningReadinessPresentation,
+} from '@/lib/decision-strip-planning-readiness';
 import { planningWorkbenchApi, pickWorkbenchOptionComparison } from '@/api/planning-workbench';
 import {
   buildDecisionStripCompareSummary,
@@ -52,6 +60,9 @@ export interface DecisionStripModel {
   loopValidation: DecisionStripLoopValidationView | null;
   loopUi: TripLoopUiView | null;
   orchestrationRunning: boolean;
+  planningReadiness: PlanningReadinessPresentation | null;
+  /** 规划待办收件箱计数（与 tab=conflicts 角标同步） */
+  planningInboxCount: number;
   reload: () => void;
   reloadLoopValidation: () => void;
 }
@@ -71,7 +82,15 @@ async function fetchWorkbenchComparison(tripId: string) {
   }
 }
 
-export function useDecisionStripModel(tripId: string | null | undefined): DecisionStripModel {
+export function useDecisionStripModel(
+  tripId: string | null | undefined,
+  options?: {
+    planningReadiness?: PlanningReadinessPresentation | null;
+    planningInboxCount?: number;
+  },
+): DecisionStripModel {
+  const planningReadiness = options?.planningReadiness ?? null;
+  const planningInboxCount = options?.planningInboxCount ?? 0;
   const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
   const explainOptimization = useWorldModelGuardsStore((s) => s.explainOptimization);
   const lastRequestId = useWorldModelGuardsStore((s) => s.lastRequestId);
@@ -252,6 +271,19 @@ export function useDecisionStripModel(tripId: string | null | undefined): Decisi
       });
     }
 
+    if (
+      !isRunning &&
+      !isError &&
+      !compareSummary &&
+      planningReadiness?.active &&
+      !(loopValidation?.active && loopValidation.phase === 'awaiting_approval')
+    ) {
+      headline = planningReadiness.headline;
+      subline = planningReadiness.subline ?? subline;
+      state = planningReadiness.tone === 'blocked' ? 'blocked' : state === 'idle' ? 'conclusion' : state;
+      primaryCta = mapPlanningReadinessToStripCta(planningReadiness.primaryCta);
+    }
+
     const hasHeadline = Boolean(headline);
     const hidePlanningBanner = shouldHidePlanningBannerForStrip({
       stripState: state,
@@ -281,6 +313,8 @@ export function useDecisionStripModel(tripId: string | null | undefined): Decisi
       loopValidation,
       loopUi: readinessLoop.ui,
       orchestrationRunning: isRunning,
+      planningReadiness,
+      planningInboxCount,
       reload,
       reloadLoopValidation: readinessLoop.restore,
     };
@@ -301,5 +335,7 @@ export function useDecisionStripModel(tripId: string | null | undefined): Decisi
     readinessLoop.running,
     readinessLoop.applying,
     readinessLoop.restore,
+    planningReadiness,
+    planningInboxCount,
   ]);
 }

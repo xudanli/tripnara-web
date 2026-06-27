@@ -13,7 +13,7 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.BACKEND_HOST 
   ? `http://${process.env.BACKEND_HOST}:${process.env.BACKEND_PORT || 3000}/api`
-  : 'http://localhost:3000/api';
+  : 'http://10.107.233.141:3000/api';
 
 interface TestResult {
   testName: string;

@@ -9,7 +9,7 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://10.107.233.141:3000/api';
 const TEST_TRIP_ID = 'test-123';
 
 // 测试数据

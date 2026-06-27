@@ -8,14 +8,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { ScheduleTabSkeleton } from '@/components/plan-studio/ScheduleTabSkeleton';
 import { EmptyStateCard } from '@/components/ui/empty-state-images';
 import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Info, ClipboardCheck, Zap, Copy, CheckCircle2, XCircle, Lightbulb } from 'lucide-react';
-import { PersonaAvatar } from '@/components/common/PersonaAvatar';
-import { TripPersonaHealthPanel } from '@/components/plan-studio/TripPersonaHealthPanel';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
-import { invokeRouteAndRun } from '@/lib/executeRouteAndRun';
-import type { RouteAndRunRequest } from '@/api/agent';
 import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { tripPlannerApi } from '@/api/trip-planner';
-import type { TripDetail, ScheduleResponse, ScheduleItem, ItineraryItemDetail, ItineraryItem, ReplaceItineraryItemResponse, DayMetricsResponse, PlanStudioConflict, DayTravelInfoResponse, PersonaAlert, UpdateItineraryItemRequest } from '@/types/trip';
+import { IntentTravelMode, type TripDetail, type ScheduleResponse, type ScheduleItem, type ItineraryItemDetail, type ItineraryItem, type ReplaceItineraryItemResponse, type DayMetricsResponse, type PlanStudioConflict, type DayTravelInfoResponse, type UpdateItineraryItemRequest, type AssessmentTravelMode } from '@/types/trip';
 import {
   analyzeInterDayTravelTiming,
   mergeCrossDayIntoDaySummary,
@@ -42,7 +38,6 @@ import {
   recalculateTripDayTravelInfoMap,
   travelSegmentHasData,
 } from '@/lib/itinerary-travel-info';
-import type { Suggestion, SuggestionStats } from '@/types/suggestion';
 import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
 import { INTENT_TRAVEL_MODE_MAP } from '@/constants/itinerary-optimization';
 import type { PlaceCategory } from '@/types/places-routes';
@@ -98,7 +93,6 @@ import { TravelSegmentIndicator, TravelSummary, CrossDayTravelLeadIn, DayOneArri
 import { DayAccommodationNotice } from '@/components/plan-studio/DayAccommodationNotice';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { usePlaceImages } from '@/hooks/usePlaceImages';
-import { useAuth } from '@/hooks/useAuth';
 import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudioContext';
 import { ItineraryAdjustScheduleDayPreview } from '@/components/plan-studio/ItineraryAdjustScheduleDayPreview';
 import { scheduleDayMatchesItineraryAdjustDraftPreview } from '@/lib/itinerary-adjust-response';
@@ -138,7 +132,6 @@ interface ScheduleTabProps {
 
 export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: ScheduleTabProps) {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const { breakdown: domainBreakdown, loading: domainBreakdownLoading, reload: reloadDomainBreakdown } =
     useDomainWorkbenchBreakdown(tripId);
   const [domainClaimDialogOpen, setDomainClaimDialogOpen] = useState(false);
@@ -274,10 +267,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
   const [dayTravelInfoMap, setDayTravelInfoMap] = useState<Map<string, DayTravelInfoResponse>>(new Map());
   const [conflicts, setConflicts] = useState<PlanStudioConflict[]>([]);
-  const [personaAlerts, setPersonaAlerts] = useState<PersonaAlert[]>([]);
-  const [suggestionStats, setSuggestionStats] = useState<SuggestionStats | null>(null);
-  const [personaSuggestions, setPersonaSuggestions] = useState<Suggestion[]>([]);
-  const [personaSuggestionsLoading, setPersonaSuggestionsLoading] = useState(false);
   
   // 安全使用 DrawerContext（若不在 DashboardLayout 中则使用空函数，避免报错）
   const drawerContext = useContext(DrawerContext);
@@ -334,58 +323,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
       return null;
     },
     [trip, itineraryItemsMap],
-  );
-
-  const navigateToHealthSuggestion = useCallback(
-    (suggestion: Suggestion) => {
-      const dayIndex = findDayIndexForScope(suggestion.scope, suggestion.scopeId);
-      if (dayIndex != null) scrollToScheduleDay(dayIndex);
-      if (suggestion.scope === 'item' && suggestion.scopeId) {
-        setHighlightItineraryItemIds([suggestion.scopeId]);
-        setHighlightItemId(suggestion.scopeId);
-      }
-    },
-    [findDayIndexForScope, scrollToScheduleDay, setHighlightItineraryItemIds, setHighlightItemId],
-  );
-
-  const navigateToHealthAlert = useCallback(
-    (alert: PersonaAlert) => {
-      const meta = alert.metadata as { dayId?: string; itemId?: string; scopeId?: string } | undefined;
-      const itemId = meta?.itemId ?? meta?.scopeId;
-      const dayId = meta?.dayId;
-      if (itemId) {
-        const dayIndex = findDayIndexForScope('item', itemId);
-        if (dayIndex != null) scrollToScheduleDay(dayIndex);
-        setHighlightItineraryItemIds([itemId]);
-        setHighlightItemId(itemId);
-        return;
-      }
-      if (dayId) {
-        const dayIndex = findDayIndexForScope('day', dayId);
-        if (dayIndex != null) scrollToScheduleDay(dayIndex);
-      }
-    },
-    [findDayIndexForScope, scrollToScheduleDay, setHighlightItineraryItemIds, setHighlightItemId],
-  );
-
-  const navigateToHealthConflict = useCallback(
-    (conflict: PlanStudioConflict) => {
-      const dayDate = conflict.affectedDays[0];
-      if (dayDate && trip?.TripDay) {
-        const norm = dayDate.includes('T') ? dayDate.split('T')[0] : dayDate;
-        const dayIndex = trip.TripDay.findIndex((d) => {
-          const dNorm = d.date.includes('T') ? d.date.split('T')[0] : d.date;
-          return d.date === dayDate || dNorm === norm;
-        });
-        if (dayIndex >= 0) scrollToScheduleDay(dayIndex);
-      }
-      const itemIds = conflict.affectedItemIds?.filter(Boolean) ?? [];
-      if (itemIds.length > 0) {
-        setHighlightItineraryItemIds(itemIds);
-        setHighlightItemId(itemIds[itemIds.length - 1]);
-      }
-    },
-    [trip, scrollToScheduleDay, setHighlightItineraryItemIds, setHighlightItemId],
   );
 
   const [editingItem, setEditingItem] = useState<ItineraryItem | null>(null);
@@ -455,11 +392,9 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
   const [assessmentDialogOpen, setAssessmentDialogOpen] = useState(false);
   const [assessmentResult, setAssessmentResult] = useState<import('@/types/trip').AssessTripResponse | null>(null);
   const [loadingAssessment, setLoadingAssessment] = useState(false);
-  const [assessmentTravelMode, setAssessmentTravelMode] = useState<import('@/types/trip').AssessmentTravelMode>(
-    // @ts-expect-error - 使用字符串初始化枚举值
-    'PUBLIC_TRANSIT'
+  const [assessmentTravelModeUsed, setAssessmentTravelModeUsed] = useState<AssessmentTravelMode | null>(
+    null,
   );
-  const [savingTravelMode, setSavingTravelMode] = useState(false);
 
   // 收集所有地点信息用于批量加载图片（使用 useMemo 避免每次渲染都创建新数组）
   // 使用稳定的依赖：基于 place IDs 的字符串，而不是整个 Map 对象
@@ -789,28 +724,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
       const conflictsData = await tripsApi.getConflicts(tripId);
       setConflicts(conflictsData.conflicts);
       
-      // 加载三人格提醒和建议统计（用于健康度卡片）
-      try {
-        setPersonaSuggestionsLoading(true);
-        const [alerts, stats, suggestionsRes] = await Promise.all([
-          tripsApi.getPersonaAlerts(tripId),
-          tripsApi.getSuggestionStats(tripId),
-          tripsApi.getSuggestions(tripId, { limit: 80 }),
-        ]);
-        setPersonaAlerts(alerts);
-        setSuggestionStats(stats);
-        setPersonaSuggestions(
-          suggestionsRes.items.filter(
-            (item) => item.status !== 'dismissed' && item.status !== 'applied',
-          ),
-        );
-      } catch (alertErr) {
-        console.error('Failed to load persona alerts:', alertErr);
-        // 静默失败，健康度卡片将显示默认状态
-      } finally {
-        setPersonaSuggestionsLoading(false);
-      }
-      
       // 加载所有日期的指标（使用传入的 tripData 或当前的 trip state）
       const currentTrip = tripData || trip;
       if (currentTrip && currentTrip.TripDay && currentTrip.TripDay.length > 0) {
@@ -842,52 +755,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
       console.error('Failed to load metrics and conflicts:', err);
       // 如果接口未实现，静默失败，不显示数据
     }
-  };
-
-  const refreshPersonaHealth = async () => {
-    setPersonaSuggestionsLoading(true);
-    try {
-      const [alerts, stats, suggestionsRes] = await Promise.all([
-        tripsApi.getPersonaAlerts(tripId),
-        tripsApi.getSuggestionStats(tripId),
-        tripsApi.getSuggestions(tripId, { limit: 80 }),
-      ]);
-      setPersonaAlerts(alerts);
-      setSuggestionStats(stats);
-      setPersonaSuggestions(
-        suggestionsRes.items.filter(
-          (item) => item.status !== 'dismissed' && item.status !== 'applied',
-        ),
-      );
-    } finally {
-      setPersonaSuggestionsLoading(false);
-    }
-  };
-
-  const runGuardianHealthAssessment = async () => {
-    if (!user?.id) return;
-    const request: RouteAndRunRequest = {
-      request_id: `req-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-      user_id: user.id,
-      trip_id: tripId,
-      tripId,
-      message:
-        '请从 Abu、Dr.Dre、Neptune 三人格角度评估当前行程合理性，重点检查安全、节奏、完整性，只给出风险、阻塞和优化建议，不要自动修改行程。',
-      conversation_context: {
-        context_type: 'active_trip_summary',
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai',
-        recent_messages: ['用户点击了行程健康度卡片的「评估合理性」'],
-      },
-      options: {
-        entry_point: 'planning_workbench',
-        intent_mode: 'TRIP_PLANNING',
-        use_claude_orchestration: true,
-        enable_guardians_debate_llm: true,
-        max_seconds: 75,
-      },
-    };
-
-    await invokeRouteAndRun(request, { forceAsync: true });
   };
 
   // 加载每天的交通信息
@@ -1234,55 +1101,41 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     }
   };
 
-  // 触发行程合理性评估
-  const handleAssessTrip = async (travelMode?: import('@/types/trip').AssessmentTravelMode) => {
+  const resolveAssessmentTravelMode = useCallback(async (): Promise<AssessmentTravelMode> => {
+    try {
+      const intent = await tripsApi.getIntent(tripId);
+      const rawMode = intent.pacingConfig?.travelMode;
+      if (rawMode && Object.values(IntentTravelMode).includes(rawMode)) {
+        return rawMode;
+      }
+    } catch (err) {
+      console.warn('[ScheduleTab] getIntent for assess failed, using trip fallback:', err);
+    }
+
+    const tripMode = trip?.pacingConfig?.travelMode;
+    if (tripMode && Object.values(IntentTravelMode).includes(tripMode)) {
+      return tripMode;
+    }
+
+    return IntentTravelMode.PUBLIC_TRANSIT;
+  }, [trip, tripId]);
+
+  // 触发行程合理性评估（出行方式从 intent 读取；不并行 Guardian）
+  const handleAssessTrip = async () => {
     setLoadingAssessment(true);
     setAssessmentDialogOpen(true);
-    
+
     try {
-      const [assessmentSettled, guardianSettled] = await Promise.allSettled([
-        tripsApi.assessTrip(tripId, {
-          travelMode: travelMode || assessmentTravelMode,
-        }),
-        runGuardianHealthAssessment(),
-      ]);
-
-      if (assessmentSettled.status === 'fulfilled') {
-        setAssessmentResult(assessmentSettled.value);
-      } else {
-        throw assessmentSettled.reason;
-      }
-
-      if (guardianSettled.status === 'rejected') {
-        console.warn('三人格行程健康度评估未完成:', guardianSettled.reason);
-        toast.warning('每日合理性评估已完成，三人格健康度同步失败，可稍后重试');
-      } else {
-        await refreshPersonaHealth();
-      }
+      const travelMode = await resolveAssessmentTravelMode();
+      setAssessmentTravelModeUsed(travelMode);
+      const result = await tripsApi.assessTrip(tripId, { travelMode });
+      setAssessmentResult(result);
     } catch (err: any) {
       console.error('行程评估失败:', err);
       toast.error(err.message || '评估失败，请稍后重试');
       setAssessmentDialogOpen(false);
     } finally {
       setLoadingAssessment(false);
-    }
-  };
-
-  // 保存出行方式到行程意图
-  const handleSaveTravelMode = async (mode: import('@/types/trip').AssessmentTravelMode) => {
-    setSavingTravelMode(true);
-    try {
-      await tripsApi.updateIntent(tripId, {
-        pacingConfig: {
-          travelMode: mode as import('@/types/trip').IntentTravelMode,
-        },
-      });
-      toast.success('出行方式已保存');
-    } catch (err: any) {
-      console.error('保存出行方式失败:', err);
-      toast.error(err.message || '保存失败');
-    } finally {
-      setSavingTravelMode(false);
     }
   };
 
@@ -1888,6 +1741,44 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
               : undefined
           }
         >
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+          <p className="text-sm font-medium text-foreground">日程时间轴</p>
+          <div className="flex items-center gap-2">
+            {planStudioContext?.openPlanGate ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() =>
+                  planStudioContext.openPlanGate({
+                    autoGenerate: planStudioContext.hasUnsavedScheduleChanges,
+                  })
+                }
+              >
+                方案预览
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => void handleAssessTrip()}
+              disabled={loadingAssessment}
+            >
+              {loadingAssessment ? (
+                <>
+                  <Spinner className="w-3 h-3 mr-1" />
+                  评估中...
+                </>
+              ) : (
+                <>
+                  <ClipboardCheck className="w-3 h-3 mr-1" />
+                  日程结构评估
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
         {trip && trip.TripDay && Array.isArray(trip.TripDay) ? trip.TripDay.map((day, idx) => {
           const schedule = schedules.get(day.date);
           const items = schedule?.schedule?.items || [];
@@ -2627,7 +2518,7 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
         </SegmentEditorDegradedShell>
       </div>
 
-      {/* 右（4/12）：领域分解 + 行程健康度 */}
+      {/* 右（4/12）：领域分解 + 快捷操作 */}
       <div className="col-span-12 lg:col-span-4 space-y-6">
         <TripDomainBreakdownCard
           tripId={tripId}
@@ -2635,71 +2526,45 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
           loading={domainBreakdownLoading}
           onClaimDomain={() => setDomainClaimDialogOpen(true)}
         />
-        {/* 行程健康度摘要卡片 */}
-        <Card data-tour="schedule-health">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-base flex items-center gap-2">
-                <PersonaAvatar persona="ABU" size={24} />
-                行程健康度
-              </CardTitle>
-              <div className="flex items-center gap-2">
-              {planStudioContext?.openPlanGate ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() =>
-                    planStudioContext.openPlanGate({
-                      autoGenerate: planStudioContext.hasUnsavedScheduleChanges,
-                    })
-                  }
-                >
-                  方案预览
-                </Button>
-              ) : null}
+        {autoResolvableConflicts.length > 0 ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">时间轴冲突</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {autoResolvableConflicts.length} 项可自动解决；更多待办请查看「规划待办」Tab。
+              </p>
               <Button
-                variant="outline"
+                className="w-full"
                 size="sm"
-                className="h-7 text-xs"
-                onClick={() => handleAssessTrip()}
-                disabled={loadingAssessment}
+                onClick={() => void handleOpenResolveConflicts()}
+                disabled={loadingResolvePreview}
               >
-                {loadingAssessment ? (
+                {loadingResolvePreview ? (
                   <>
-                    <Spinner className="w-3 h-3 mr-1" />
-                    评估中...
+                    <Spinner className="w-4 h-4 mr-2" />
+                    加载预览…
                   </>
                 ) : (
-                  <>
-                    <ClipboardCheck className="w-3 h-3 mr-1" />
-                    评估合理性
-                  </>
+                  '一键解决可自动冲突'
                 )}
               </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <TripPersonaHealthPanel
-              personaAlerts={personaAlerts}
-              suggestionStats={suggestionStats}
-              suggestions={personaSuggestions}
-              scheduleConflicts={visibleConflicts}
-              tripDays={trip?.TripDay}
-              itineraryItemsMap={itineraryItemsMap}
-              autoResolvableConflictCount={autoResolvableConflicts.length}
-              suggestionsLoading={personaSuggestionsLoading}
-              onNavigateToSuggestion={navigateToHealthSuggestion}
-              onNavigateToAlert={navigateToHealthAlert}
-              onNavigateToConflict={navigateToHealthConflict}
-              onOpenResolveConflicts={handleOpenResolveConflicts}
-            />
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              切换 Tab 查看各维度问题；点击条目定位到左侧日程。
-            </p>
-          </CardContent>
-        </Card>
+              <Button
+                variant="outline"
+                className="w-full"
+                size="sm"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('plan-studio:switch-tab', { detail: { tab: 'conflicts' } }),
+                  );
+                }}
+              >
+                打开规划待办
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* 行程路线优化入口 - 双入口：智能优化(规划Tab) + 经典配置 */}
         <Card className="border-dashed">
@@ -3225,7 +3090,10 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
         onOpenChange={(open) => {
           if (!loadingAssessment) {
             setAssessmentDialogOpen(open);
-            if (!open) setAssessmentResult(null);
+            if (!open) {
+              setAssessmentResult(null);
+              setAssessmentTravelModeUsed(null);
+            }
           }
         }}
         loading={loadingAssessment}
@@ -3233,17 +3101,26 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
         getGradeStyle={getGradeStyle}
         getStatusStyle={getStatusStyle}
         getDayTypeLabel={getDayTypeLabel}
-        travelMode={assessmentTravelMode}
-        onTravelModeChange={setAssessmentTravelMode}
+        travelModeLabel={
+          assessmentTravelModeUsed ? formatAssessmentTravelModeLabel(assessmentTravelModeUsed) : null
+        }
         onReassess={handleAssessTrip}
-        onSaveTravelMode={handleSaveTravelMode}
-        savingTravelMode={savingTravelMode}
       />
     </>
   );
 }
 
 // 行程评估对话框组件 V2
+const ASSESSMENT_TRAVEL_MODE_LABELS: Record<AssessmentTravelMode, string> = {
+  [IntentTravelMode.PUBLIC_TRANSIT]: '🚇 公共交通',
+  [IntentTravelMode.DRIVING]: '🚗 自驾',
+  [IntentTravelMode.MIXED]: '🔄 混合',
+};
+
+function formatAssessmentTravelModeLabel(mode: AssessmentTravelMode): string {
+  return ASSESSMENT_TRAVEL_MODE_LABELS[mode] ?? mode;
+}
+
 function AssessmentDialog({
   open,
   onOpenChange,
@@ -3252,11 +3129,8 @@ function AssessmentDialog({
   getGradeStyle,
   getStatusStyle,
   getDayTypeLabel,
-  travelMode,
-  onTravelModeChange,
+  travelModeLabel,
   onReassess,
-  onSaveTravelMode,
-  savingTravelMode,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -3265,11 +3139,8 @@ function AssessmentDialog({
   getGradeStyle: (grade: string) => { bg: string; text: string; label: string };
   getStatusStyle: (status: string) => { bg: string; text: string; icon: string; label: string };
   getDayTypeLabel: (dayType: string) => string;
-  travelMode: import('@/types/trip').AssessmentTravelMode;
-  onTravelModeChange: (mode: import('@/types/trip').AssessmentTravelMode) => void;
-  onReassess: (mode?: import('@/types/trip').AssessmentTravelMode) => void;
-  onSaveTravelMode: (mode: import('@/types/trip').AssessmentTravelMode) => void;
-  savingTravelMode: boolean;
+  travelModeLabel: string | null;
+  onReassess: () => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -3280,7 +3151,7 @@ function AssessmentDialog({
             行程合理性评估
           </DialogTitle>
           <DialogDescription>
-            基于七大维度评估每日行程的合理性
+            基于七大维度评估每日行程的合理性；出行方式读取自行程意图，请在「意图与约束」中修改。
           </DialogDescription>
         </DialogHeader>
         
@@ -3292,40 +3163,18 @@ function AssessmentDialog({
             </div>
           ) : result ? (
             <div className="space-y-6">
-              {/* 出行方式选择 */}
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">出行方式</span>
-                  <Select
-                    value={travelMode}
-                    onValueChange={(value) => {
-                      onTravelModeChange(value as import('@/types/trip').AssessmentTravelMode);
-                    }}
-                  >
-                    <SelectTrigger className="w-[130px] h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PUBLIC_TRANSIT">🚇 公共交通</SelectItem>
-                      <SelectItem value="DRIVING">🚗 自驾</SelectItem>
-                      <SelectItem value="MIXED">🔄 混合</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => onSaveTravelMode(travelMode)}
-                    disabled={loading || savingTravelMode}
-                  >
-                    {savingTravelMode ? '保存中...' : '保存为默认'}
-                  </Button>
-                </div>
+              <div className="flex items-center justify-between gap-2 p-3 bg-muted/40 rounded-lg text-sm">
+                <span className="text-muted-foreground">
+                  按当前出行方式评估：
+                  <span className="text-foreground font-medium ml-1">
+                    {travelModeLabel ?? '—'}
+                  </span>
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => onReassess(travelMode)}
+                  className="h-7 text-xs shrink-0"
+                  onClick={onReassess}
                   disabled={loading}
                 >
                   重新评估

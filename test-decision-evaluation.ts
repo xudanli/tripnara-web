@@ -17,7 +17,7 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.API_BASE_URL || 'http://10.107.233.141:3000/api';
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN || ''; // 从环境变量或 sessionStorage 获取
 
 // 颜色输出工具

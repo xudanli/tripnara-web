@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # S1 混合出行 API 冒烟（UC-API-01～05 + round-trip）
-# Usage: BACKEND=http://10.108.254.61:3000 ./scripts/s1-embedded-hiking-smoke.sh
+# Usage: BACKEND=http://10.107.233.141:3000 ./scripts/s1-embedded-hiking-smoke.sh
 
 set -euo pipefail
 
-API_BASE="${BACKEND:-http://10.108.254.61:3000}/api"
+API_BASE="${BACKEND:-http://10.107.233.141:3000}/api"
 TEST_USER="${TEST_USER:-test-user-embedded-s1}"
 HDR=(-H "Content-Type: application/json" -H "X-Test-User-Id: ${TEST_USER}")
 if [[ -n "${ACCESS_TOKEN:-}" ]]; then

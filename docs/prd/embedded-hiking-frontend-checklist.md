@@ -40,7 +40,7 @@ ACCESS_TOKEN='<jwt>' ./scripts/s1-embedded-hiking-smoke.sh
 
 | 步骤 | 自动化（2026-05-20） | 备注 |
 |------|----------------------|------|
-| 1 创建 | ⬜ 需 JWT | 后端 `10.108.254.61:3000` |
+| 1 创建 | ⬜ 需 JWT | 后端 `10.107.233.141:3000` |
 | 2 加片段 | ⬜ | 已修 legacy 回退未写 metadata（`[id].tsx` onCreated） |
 | 3 Readiness | ⬜ 手测 | |
 | 4 Plan Studio | ⬜ 手测 | |

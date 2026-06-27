@@ -19,7 +19,11 @@ export type DecisionStripCtaType =
   | 'open_plan_gate'
   | 'adjust_schedule'
   | 'open_feasibility'
-  | 'optimize';
+  | 'optimize'
+  | 'open_budget'
+  | 'open_conflicts'
+  | 'confirm_regret'
+  | 'open_team';
 
 export interface DecisionStripCompareSummary {
   recommendedOptionId: string;
@@ -47,7 +51,11 @@ export type DecisionStripCtaLabelKey =
   | 'adjustSchedule'
   | 'openFeasibility'
   | 'optimize'
-  | 'viewProgress';
+  | 'viewProgress'
+  | 'openBudget'
+  | 'openConflicts'
+  | 'confirmRegret'
+  | 'openTeam';
 
 export const DECISION_STRIP_CTA_LABEL_KEY: Record<DecisionStripCtaType, DecisionStripCtaLabelKey> = {
   open_assistant: 'openAssistant',
@@ -55,6 +63,10 @@ export const DECISION_STRIP_CTA_LABEL_KEY: Record<DecisionStripCtaType, Decision
   adjust_schedule: 'adjustSchedule',
   open_feasibility: 'openFeasibility',
   optimize: 'optimize',
+  open_budget: 'openBudget',
+  open_conflicts: 'openConflicts',
+  confirm_regret: 'confirmRegret',
+  open_team: 'openTeam',
 };
 
 const PERSONA_PRIORITY: PersonaAlert['persona'][] = ['ABU', 'DR_DRE', 'NEPTUNE'];
