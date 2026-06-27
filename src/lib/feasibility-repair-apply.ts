@@ -1,7 +1,9 @@
 import { applyRepair } from '@/api/feasibility-repair';
 import { itineraryItemsApi } from '@/api/trips';
 import { isPlanClassAction } from '@/lib/feasibility-repair-plan-class';
+import { shouldOpenReservationEvidenceModal } from '@/lib/poi-access-reservation-evidence.util';
 import type { FeasibilityIssueDto, FeasibilityRepairOptionDto } from '@/types/trip-feasibility-report';
+import { isAxiosError } from 'axios';
 
 export {
   filterFeasibilityRepairOptionsForTrip,
@@ -30,6 +32,45 @@ export function resolveRevalidateScope(
   return { issueId: issue.id };
 }
 
+function readRepairErrorCode(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const record = data as Record<string, unknown>;
+  const err = record.error;
+  if (err && typeof err === 'object') {
+    const nested = err as Record<string, unknown>;
+    if (typeof nested.errorCode === 'string') return nested.errorCode;
+    if (typeof nested.code === 'string') return nested.code;
+  }
+  if (typeof record.errorCode === 'string') return record.errorCode;
+  if (typeof record.code === 'string') return record.code;
+  return undefined;
+}
+
+function readRepairErrorMessage(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const record = data as Record<string, unknown>;
+  if (typeof record.message === 'string') return record.message;
+  if (Array.isArray(record.message)) return record.message.map(String).join(' ');
+  return undefined;
+}
+
+/** apply-repair / preview-repair 409 SCHEDULE_CONFLICT 等 → 用户可读文案 */
+export function formatFeasibilityRepairApplyError(err: unknown): string {
+  if (isAxiosError(err) && err.response?.status === 409) {
+    const code = readRepairErrorCode(err.response.data);
+    const message = readRepairErrorMessage(err.response.data);
+    if (code === 'SCHEDULE_CONFLICT') {
+      return (
+        message?.trim() ||
+        '加缓冲后与当日其他行程时间冲突，请改选其他方案或到时间轴手动调整'
+      );
+    }
+    if (message?.trim()) return message.trim();
+  }
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  return '应用修复失败';
+}
+
 async function applyAdjustTimePayload(option: FeasibilityRepairOptionDto): Promise<void> {
   const payload = option.payload;
   if (!payload?.itemId || !payload.suggestedValue) {
@@ -51,6 +92,10 @@ export async function applyFeasibilityRepairOption(
   option: FeasibilityRepairOptionDto,
   options?: { forceDecisionRepair?: boolean },
 ): Promise<void> {
+  if (shouldOpenReservationEvidenceModal(option, issue)) {
+    throw new Error('请先上传预约凭证（确认号），不要直接应用该修复项');
+  }
+
   try {
     const res = await applyRepair(tripId, issue.id, {
       optionId: option.id,
