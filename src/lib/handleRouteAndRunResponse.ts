@@ -1,7 +1,10 @@
 import type { ResultStatus, RouteAndRunResponse, UIStatus } from '@/api/agent';
 import { isClarifyResponse } from '@/lib/route-run-clarification';
 import { normalizeAgentTaskPollPath } from '@/lib/route-run-task-path';
+import { syncRelaxationSuggestionsFromRouteRun } from '@/lib/sync-relaxation-suggestions-store';
 import { applyRouteAndRunToStore } from '@/lib/world-model-guards';
+import { applyRouteRunConfirmationToStore } from '@/lib/route-run-confirmation';
+import { applyRouteRunNegotiationToStore } from '@/lib/route-run-negotiation';
 
 export { isClarifyResponse } from '@/lib/route-run-clarification';
 
@@ -62,12 +65,21 @@ export function handleRouteAndRunResponse(body: RouteAndRunResponseBody, h: Rout
     return;
   }
 
-  if (payload?.negotiation_payload?.status === 'PENDING_USER_DECISION' && h.onNegotiation) {
-    h.onNegotiation(body);
+  if (payload?.negotiation_payload?.status === 'PENDING_USER_DECISION') {
+    applyRouteRunNegotiationToStore(body);
+    if (h.onNegotiation) {
+      h.onNegotiation(body);
+      return;
+    }
+    h.onSuccess(body);
     return;
   }
 
   if (isClarifyResponse(body) || status === 'NEED_CONFIRMATION') {
+    syncRelaxationSuggestionsFromRouteRun(body);
+    if (status === 'NEED_CONFIRMATION') {
+      applyRouteRunConfirmationToStore(body);
+    }
     h.onClarification(payload, body);
     return;
   }

@@ -62,6 +62,22 @@ export function loopValidationNeedsFollowUp(ui: TripLoopUiView): boolean {
   );
 }
 
+/**
+ * 是否应展示「验证进行中」动效（run/apply 或后端 phase=validating 且进度未完成）。
+ * 仅 restore 到的 stale validating（无进行中的 run）不应无限转圈。
+ */
+export function isLoopValidationInFlight(
+  ui: TripLoopUiView | null | undefined,
+  running: boolean,
+  applying: boolean,
+): boolean {
+  if (running || applying) return true;
+  if (ui?.phase !== 'validating') return false;
+  const { totalChecks, completedChecks } = ui.progress;
+  if (totalChecks <= 0) return false;
+  return completedChecks < totalChecks;
+}
+
 function buildSnapshotSubline(snapshot: ReadinessSnapshot): string {
   const parts: string[] = [`可执行性 ${snapshot.readinessScore}`];
   if (snapshot.mustHandleCount > 0) {

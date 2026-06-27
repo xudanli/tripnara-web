@@ -60,9 +60,11 @@ export default function TeamMembersList({
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-base">成员</CardTitle>
+              <CardTitle className="text-base">一起出行的人</CardTitle>
               <CardDescription className="text-sm">
-                {members.length > 0 ? `${members.length} 位同行者` : '邀请同行者一起规划'}
+                {members.length > 0
+                  ? `${members.length} 位 · 会用于对齐节奏与预算偏好`
+                  : '添加同行者后，规划时会考虑每个人的偏好'}
               </CardDescription>
             </div>
             {!readonly ? (
@@ -75,7 +77,7 @@ export default function TeamMembersList({
                     onClick={onOpenDecisionRules}
                   >
                     <Scale className="h-3.5 w-3.5 mr-1" />
-                    决策规则
+                    谁来做决定
                   </Button>
                 ) : null}
                 {onInvite ? (
@@ -95,7 +97,7 @@ export default function TeamMembersList({
             </div>
           ) : members.length === 0 ? (
             <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
-              还没有成员，邀请同行者一起规划
+              还没有同行者，点击上方「添加成员」或「邀请」
             </div>
           ) : (
             members.map((member) => (
@@ -119,7 +121,7 @@ export default function TeamMembersList({
           {!readonly && onAddMember ? (
             <Button variant="outline" className="w-full mt-2" onClick={() => setAddOpen(true)}>
               <UserPlus className="h-4 w-4 mr-2" />
-              添加成员
+              添加同行者
             </Button>
           ) : null}
         </CardContent>

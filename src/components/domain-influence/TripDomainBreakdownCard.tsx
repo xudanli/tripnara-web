@@ -1,9 +1,15 @@
-import { ChevronRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { formatDomainAssigneeSummary } from '@/lib/domain-influence-mapping';
 import type { DecisionAuthorityLabel } from '@/lib/domain-influence-mapping';
@@ -37,6 +43,16 @@ export function TripDomainBreakdownCard({
   const fetched = useDomainWorkbenchBreakdown(breakdownProp === undefined ? tripId : null);
   const breakdown = breakdownProp !== undefined ? breakdownProp : fetched.breakdown;
   const loading = loadingProp ?? (breakdownProp === undefined ? fetched.loading : false);
+  const [open, setOpen] = useState(true);
+  const collapsedInitRef = useRef(false);
+
+  useEffect(() => {
+    if (!breakdown || collapsedInitRef.current) return;
+    collapsedInitRef.current = true;
+    const completionPercent = Math.round(breakdown.completionRate * 100);
+    const allUnclaimed = breakdown.domains.every((d) => d.unclaimed && d.weights.length === 0);
+    if (completionPercent === 0 && allUnclaimed) setOpen(false);
+  }, [breakdown]);
 
   if (loading && !breakdown) {
     return (
@@ -51,6 +67,9 @@ export function TripDomainBreakdownCard({
   if (!breakdown || breakdown.domains.length === 0) return null;
 
   const completionPercent = Math.round(breakdown.completionRate * 100);
+  const allUnclaimed = breakdown.domains.every((d) => d.unclaimed && d.weights.length === 0);
+  const defaultCollapsed = completionPercent === 0 && allUnclaimed;
+  const unclaimedCount = breakdown.domains.filter((d) => d.unclaimed).length;
 
   /** 已认领优先，其次高/中交叉（侧栏只展示与决策相关的领域，避免 8 行撑满屏） */
   const visibleDomains = [...breakdown.domains].sort((a, b) => {
@@ -70,46 +89,76 @@ export function TripDomainBreakdownCard({
   const overflowDomains = visibleDomains.filter((d) => !primaryDomains.includes(d));
 
   return (
-    <Card className={cn(domainPanelShell, className)} data-tour="domain-breakdown">
-      <CardHeader className="border-b border-border/80 px-4 py-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <CardTitle className="text-sm font-semibold tracking-tight">行程领域分解</CardTitle>
-          </div>
-          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
-            {completionPercent}%
-          </span>
-        </div>
-        <Progress value={completionPercent} className="h-0.5 bg-muted" />
-      </CardHeader>
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card className={cn(domainPanelShell, className)} data-tour="domain-breakdown">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-[inherit]"
+          >
+            <CardHeader className="border-b border-border/80 px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <CardTitle className="text-sm font-semibold tracking-tight">行程领域分解</CardTitle>
+                  {defaultCollapsed ? (
+                    <Badge variant="outline" className="h-5 text-[10px] font-normal text-muted-foreground">
+                      团队规划
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {completionPercent}%
+                  </span>
+                  {open ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+              {open ? <Progress value={completionPercent} className="h-0.5 bg-muted" /> : null}
+              {!open && defaultCollapsed ? (
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {unclaimedCount > 0
+                    ? `${unclaimedCount} 个领域待认领 · 多人协作时再展开`
+                    : '展开查看各领域负责人'}
+                </p>
+              ) : null}
+            </CardHeader>
+          </button>
+        </CollapsibleTrigger>
 
-      <CardContent className="p-0">
-        <ul className="max-h-[min(280px,40vh)] overflow-y-auto overscroll-contain divide-y divide-border/60">
-          {primaryDomains.map((domain) => (
-            <DomainBreakdownRow key={domain.domain} domain={domain} />
-          ))}
-          {overflowDomains.map((domain) => (
-            <DomainBreakdownRow key={domain.domain} domain={domain} compact />
-          ))}
-        </ul>
+        <CollapsibleContent>
+          <CardContent className="p-0">
+            <ul className="max-h-[min(280px,40vh)] overflow-y-auto overscroll-contain divide-y divide-border/60">
+              {primaryDomains.map((domain) => (
+                <DomainBreakdownRow key={domain.domain} domain={domain} />
+              ))}
+              {overflowDomains.map((domain) => (
+                <DomainBreakdownRow key={domain.domain} domain={domain} compact />
+              ))}
+            </ul>
 
-        {onClaimDomain ? (
-          <div className="border-t border-border/80 px-4 py-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 w-full justify-between px-0 text-xs text-muted-foreground hover:text-foreground"
-              onClick={onClaimDomain}
-            >
-              认领领域
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+            {onClaimDomain ? (
+              <div className="border-t border-border/80 px-4 py-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-full justify-between px-0 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={onClaimDomain}
+                >
+                  认领领域
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : null}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
 

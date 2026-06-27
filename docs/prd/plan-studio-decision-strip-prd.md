@@ -7,6 +7,10 @@
 **受众**：设计、前端、后端、测试  
 **关联文档**：
 - `docs/tripnara-interaction-philosophy-prd.md` — 单决策 / AI 主导 / 渐进揭示
+- `docs/prd/plan-studio-decision-strip-prd-v0.2-supplement.md` — 约束-方案矩阵增补（v0.2）
+- `docs/design/REQ-2026-UIX-01-design-team-response.md` — 界面形态研究报告设计评审
+- `docs/design/plan-studio-interaction-boundary.md` — 对话 vs 结构化边界
+- `docs/api/relaxation-suggestions-bff-contract.md` — relaxation_suggestions BFF v1（已落地）
 - `docs/api/decision-api-audit-matrix.md` — 决策接口收敛与真源
 - `docs/api/user-frontend-integration.md` — C 端 BFF 边界
 - `docs/api/route-and-run-ui-integration.md` — `explain` 字段渲染

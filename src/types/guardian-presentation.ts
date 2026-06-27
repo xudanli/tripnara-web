@@ -40,6 +40,12 @@ export interface GuardianSupportingLine {
   text: string;
 }
 
+/** workbench CHOOSE：humanDecisionPoints[0].options */
+export interface GuardianHumanDecisionPoint {
+  text?: string;
+  options?: string[];
+}
+
 export interface PersonaStructuredStatus {
   abu?: { existence: string; action?: GuardianAction };
   dre?: { cost: string; action?: GuardianAction };
@@ -61,6 +67,10 @@ export interface GuardianPersonaPresentation {
   structuredStatus: PersonaStructuredStatus;
   /** 后端结构化硬约束门控（优先于 scenario 推断） */
   hardConstraintBlocked?: boolean;
+  /** CHOOSE 扁平选项（优先） */
+  humanDecisionPointsFlat?: string[];
+  /** CHOOSE 结构化选项（次选：取 [0].options） */
+  humanDecisionPoints?: GuardianHumanDecisionPoint[];
 }
 
 /** decision-log metadata P2 扩展 */

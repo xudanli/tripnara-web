@@ -4,9 +4,7 @@ import { SegmentEditorDegradedShell } from '@/components/planning/SegmentEditorD
 import type { OrchestrationResult } from '@/api/agent';
 import type { ItineraryDayItemsBlock } from '@/lib/agent-itinerary-item-display';
 import type { AgentPoiDayBlock } from '@/lib/agent-poi-payload';
-import { getSegmentEditorDegradation } from '@/lib/world-model-guards';
-import type { SafetySurfacePayloadV1 } from '@/lib/safety-surface-payload';
-import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
+import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
 import { cn } from '@/lib/utils';
 import { Lock } from 'lucide-react';
 
@@ -24,8 +22,7 @@ type DegradedItineraryPreviewProps = {
  * Agent 气泡内行程预览：订阅 store 中的 topology lock，只读降级展示。
  */
 export function DegradedItineraryPreview(props: DegradedItineraryPreviewProps) {
-  const guards = useWorldModelGuardsStore((s) => s.worldModelGuards);
-  const degradation = getSegmentEditorDegradation(guards);
+  const { degradation } = useWorldModelGuards();
 
   const inner =
     props.variant === 'timeline' ? (
@@ -61,7 +58,7 @@ function ReadOnlyItineraryListOverlay({
   degradation,
   children,
 }: {
-  degradation: ReturnType<typeof getSegmentEditorDegradation>;
+  degradation: ReturnType<typeof useWorldModelGuards>['degradation'];
   children: ReactNode;
 }) {
   return (

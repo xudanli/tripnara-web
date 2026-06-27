@@ -64,6 +64,12 @@ interface ImportMetaEnv {
   readonly VITE_MATCH_SQUARE_MOCK?: string;
   /** Vibe LLM parse：1=规则引擎 · 0=后端 LLM · 未设置=跟随 VITE_MATCH_SQUARE_MOCK */
   readonly VITE_VIBE_LLM_MOCK?: string;
+  /** Sentry DSN；未配置则不初始化 SDK */
+  readonly VITE_SENTRY_DSN?: string;
+  /** Sentry 环境名（默认 import.meta.env.MODE） */
+  readonly VITE_SENTRY_ENVIRONMENT?: string;
+  /** 设为 0 禁用 Sentry；DEV 下需设为 1 才会实际上报 */
+  readonly VITE_SENTRY_ENABLED?: string;
 }
 
 interface ImportMeta {

@@ -72,6 +72,8 @@ export interface TripLoopIssueCard {
   triggerKind?: string;
   environmentEventId?: string;
   planId?: string;
+  /** M3：与 persona-alerts 同源的完整 alert（含 presentation + deepLink） */
+  personaAlert?: import('@/types/trip').PersonaAlert;
 }
 
 export interface TripLoopPrimaryAction {
@@ -91,6 +93,8 @@ export interface TripLoopUiView {
     label: string;
   };
   checklist: TripLoopChecklistItem[];
+  /** M3：与 GET persona-alerts 同源 */
+  personaAlerts?: import('@/types/trip').PersonaAlert[];
   issueCards: TripLoopIssueCard[];
   primaryAction?: TripLoopPrimaryAction;
   snapshot?: {

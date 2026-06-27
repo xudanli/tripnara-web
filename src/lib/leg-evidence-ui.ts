@@ -66,19 +66,34 @@ function pickRawLegEvidenceCards(payload: Record<string, unknown> | undefined): 
   return narration?.leg_evidence_cards;
 }
 
-/** 展示层优先：result.payload.ui_display.leg_evidence_cards；次选 narration.leg_evidence_cards */
 export function pickLegEvidenceCardsFromRouteRun(response: RouteAndRunResponse): LegEvidenceCard[] {
-  if (response.result?.status !== 'OK') return [];
+  return pickLegEvidenceBundleFromRouteRun(response).cards;
+}
+
+export interface LegEvidenceBundle {
+  cards: LegEvidenceCard[];
+  headlineZh?: string;
+}
+
+export function pickLegEvidenceBundleFromRouteRun(response: RouteAndRunResponse): LegEvidenceBundle {
+  if (response.result?.status !== 'OK') return { cards: [] };
 
   const payload = response.result?.payload as Record<string, unknown> | undefined;
   const raw = pickRawLegEvidenceCards(payload);
-  if (raw == null) return [];
+  if (raw == null) return { cards: [] };
 
   if (isLegEvidenceCardsPayload(raw)) {
-    return normalizeLegEvidenceCards(raw.cards);
+    const headline =
+      typeof raw.headline_zh === 'string' && raw.headline_zh.trim()
+        ? raw.headline_zh.trim()
+        : undefined;
+    return {
+      cards: normalizeLegEvidenceCards(raw.cards),
+      headlineZh: headline,
+    };
   }
 
-  return normalizeLegEvidenceCards(raw);
+  return { cards: normalizeLegEvidenceCards(raw) };
 }
 
 export function hasLegEvidenceCardsUi(cards: LegEvidenceCard[] | null | undefined): boolean {

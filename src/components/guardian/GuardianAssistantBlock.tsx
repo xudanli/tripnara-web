@@ -21,6 +21,8 @@ export interface GuardianAssistantBlockProps {
   onPresentationChange?: (presentation: GuardianPersonaPresentation) => void;
   onChooseSuccess?: (selectedIndex: number, selectedText: string) => void;
   onNextAction?: (action: import('@/types/guardian-choose').GuardianChooseNextAction) => void;
+  /** CHOOSE 成功后自动重新 execute(generate) */
+  onRegenerate?: () => void | Promise<void>;
 }
 
 /**
@@ -39,36 +41,25 @@ export function GuardianAssistantBlock({
   onPresentationChange,
   onChooseSuccess,
   onNextAction,
+  onRegenerate,
 }: GuardianAssistantBlockProps) {
   const [activePresentation, setActivePresentation] = useState(presentation);
-  const [nextStepsFallback, setNextStepsFallback] = useState<string[] | undefined>(
-    choosePoints,
-  );
 
   useEffect(() => {
     setActivePresentation(presentation);
-    setNextStepsFallback(choosePoints);
-  }, [presentation, choosePoints]);
+  }, [presentation]);
 
   const chooseOptions = useMemo(
     () =>
       extractChooseOptions({
         presentation: activePresentation,
-        consolidatedDecision: nextStepsFallback?.length
-          ? { nextSteps: nextStepsFallback }
-          : undefined,
+        humanDecisionPointsFlat: choosePoints,
       }),
-    [activePresentation, nextStepsFallback],
+    [activePresentation, choosePoints],
   );
 
   const handlePresentation = (next: GuardianPersonaPresentation) => {
     setActivePresentation(next);
-    const refreshed = extractChooseOptions({ presentation: next });
-    if (refreshed.length > 0) {
-      setNextStepsFallback(refreshed);
-    } else {
-      setNextStepsFallback(undefined);
-    }
     onPresentationChange?.(next);
   };
 
@@ -85,6 +76,17 @@ export function GuardianAssistantBlock({
     onPresentation: handlePresentation,
     onSuccess: onChooseSuccess,
     onNextAction,
+    onChooseResult: (chooseResult) => {
+      if (chooseResult.nextAction === 'BLOCKED') return;
+      if (
+        !chooseResult.nextAction ||
+        chooseResult.nextAction === 'CONTINUE_PLANNING' ||
+        chooseResult.nextAction === 'RE_RUN_NEGOTIATION' ||
+        chooseResult.nextAction === 'APPLY_REPAIR'
+      ) {
+        void onRegenerate?.();
+      }
+    },
   });
 
   return (

@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  mapPlanningReadinessToStripCta,
-  type PlanningReadinessPresentation,
-} from '@/lib/decision-strip-planning-readiness';import {
   mapPlanningReadinessToStripCta,
   type PlanningReadinessPresentation,
 } from '@/lib/decision-strip-planning-readiness';
 import { planningWorkbenchApi, pickWorkbenchOptionComparison } from '@/api/planning-workbench';
 import {
   buildDecisionStripCompareSummary,
-  pickTopPersonaAlert,
+  resolveDecisionStripPersonaLine,
   resolveDecisionStripPresentation,
   resolveDecisionStripPrimaryCta,
+  resolveDecisionStripNeedConfirmationPresentation,
+  resolveDecisionStripNegotiationPresentation,
   resolveDecisionStripScore,
   shouldHidePlanningBannerForStrip,
   type DecisionStripCompareSummary,
@@ -26,6 +24,9 @@ import {
   type DecisionStripLoopValidationView,
 } from '@/lib/decision-strip-loop-validation';
 import { resolvePlanningBannerText } from '@/lib/world-model-guards';
+import { pickDecisionCockpitStripSummary } from '@/lib/decision-cockpit';
+import { pickRouteRunConfirmationFromResponse } from '@/lib/route-run-confirmation';
+import { pickRouteRunNegotiationFromResponse } from '@/lib/route-run-negotiation';
 import {
   pickComparisonFromRouteRun,
   pickOptimizeSuggestedOperation,
@@ -36,6 +37,7 @@ import { usePlanStudioCompareStore } from '@/store/planStudioCompareStore';
 import { usePlanningTaskStore } from '@/store/planningTaskStore';
 import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
 import { tripsApi } from '@/api/trips';
+import { resolveTripPersonaAlerts } from '@/lib/resolve-trip-persona-alerts';
 import type { PersonaAlert } from '@/types/trip';
 import type { TripLoopUiView } from '@/types/trip-loop';
 
@@ -61,7 +63,7 @@ export interface DecisionStripModel {
   loopUi: TripLoopUiView | null;
   orchestrationRunning: boolean;
   planningReadiness: PlanningReadinessPresentation | null;
-  /** 规划待办收件箱计数（与 tab=conflicts 角标同步） */
+  /** 规划待办收件箱计数（与可执行证明入口角标同步） */
   planningInboxCount: number;
   reload: () => void;
   reloadLoopValidation: () => void;
@@ -93,7 +95,10 @@ export function useDecisionStripModel(
   const planningInboxCount = options?.planningInboxCount ?? 0;
   const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
   const explainOptimization = useWorldModelGuardsStore((s) => s.explainOptimization);
+  const decisionCockpit = useWorldModelGuardsStore((s) => s.decisionCockpit);
   const lastRequestId = useWorldModelGuardsStore((s) => s.lastRequestId);
+  const routeRunConfirmation = useWorldModelGuardsStore((s) => s.routeRunConfirmation);
+  const routeRunNegotiation = useWorldModelGuardsStore((s) => s.routeRunNegotiation);
   const taskStatus = usePlanningTaskStore((s) => s.status);
   const taskMessage = usePlanningTaskStore((s) => s.message);
   const taskPhase = usePlanningTaskStore((s) => s.currentPhase);
@@ -130,21 +135,24 @@ export function useDecisionStripModel(
     setLoading(true);
 
     void (async () => {
-      const storeCmp = usePlanStudioCompareStore.getState().getComparison(tripId);
-      const [alerts, comparison] = await Promise.all([
-        tripsApi.getPersonaAlerts(tripId).catch(() => [] as PersonaAlert[]),
-        storeCmp ? Promise.resolve(storeCmp) : fetchWorkbenchComparison(tripId),
-      ]);
+      try {
+        const storeCmp = usePlanStudioCompareStore.getState().getComparison(tripId);
+        const [alerts, comparison] = await Promise.all([
+          tripsApi.getPersonaAlerts(tripId, { phase: 'planning' }).catch(() => [] as PersonaAlert[]),
+          storeCmp ? Promise.resolve(storeCmp) : fetchWorkbenchComparison(tripId),
+        ]);
 
-      if (cancelled) return;
-      setPersonaAlerts(alerts);
-      if (comparison) {
-        setRemoteComparison(comparison);
-        usePlanStudioCompareStore.getState().setComparison(tripId, comparison);
-      } else {
-        setRemoteComparison(undefined);
+        if (cancelled) return;
+        setPersonaAlerts(alerts);
+        if (comparison) {
+          setRemoteComparison(comparison);
+          usePlanStudioCompareStore.getState().setComparison(tripId, comparison);
+        } else {
+          setRemoteComparison(undefined);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     })();
 
     return () => {
@@ -187,7 +195,19 @@ export function useDecisionStripModel(
     }
   }, [tripId, taskResult]);
 
+  const confirmationFromTask = useMemo(
+    () => (taskResult ? pickRouteRunConfirmationFromResponse(taskResult) : null),
+    [taskResult],
+  );
+
+  const negotiationFromTask = useMemo(
+    () => (taskResult ? pickRouteRunNegotiationFromResponse(taskResult) : null),
+    [taskResult],
+  );
+
   return useMemo(() => {
+    const effectiveConfirmation = routeRunConfirmation ?? confirmationFromTask;
+    const effectiveNegotiation = routeRunNegotiation ?? negotiationFromTask;
     const isRunning = taskStatus === 'PROCESSING';
     const isError = taskStatus === 'FAILED';
 
@@ -197,9 +217,18 @@ export function useDecisionStripModel(
       loopApplying: readinessLoop.applying,
     });
 
+    const resolvedPersonaAlerts = resolveTripPersonaAlerts(
+      personaAlerts,
+      readinessLoop.ui?.personaAlerts,
+    );
+
     const comparison = remoteComparison ?? cachedComparison;
     const compareSummary = buildDecisionStripCompareSummary(comparison);
-    const personaLine = pickTopPersonaAlert(personaAlerts);
+    const personaResolution = resolveDecisionStripPersonaLine(resolvedPersonaAlerts);
+    const personaLine = personaResolution.line;
+    const personaMode = personaResolution.mode;
+    const personaLeadHeadline = personaResolution.leadHeadline;
+    const decisionCockpitSummary = pickDecisionCockpitStripSummary(decisionCockpit);
     const scoreFromOptimization = resolveDecisionStripScore(explainOptimization);
     const fallbackAnswer = taskResult?.answer_text;
 
@@ -223,6 +252,14 @@ export function useDecisionStripModel(
         worldModelGuards?.segment_editor_mode === 'readonly' ||
         Boolean(resolvePlanningBannerText(worldModelGuards)?.includes('不可')),
       optimizeSuggested,
+      needConfirmation: effectiveConfirmation,
+      needNegotiation: effectiveNegotiation
+        ? {
+            negotiationSessionId: effectiveNegotiation.payload.negotiation_session_id,
+            impact: effectiveNegotiation.payload.impact,
+            reason: effectiveNegotiation.payload.reason,
+          }
+        : null,
     });
     let score: number | null = scoreFromOptimization;
 
@@ -268,7 +305,78 @@ export function useDecisionStripModel(
         compareSummary,
         hasBlockGuard,
         optimizeSuggested,
+        needConfirmation: effectiveConfirmation,
+        needNegotiation: effectiveNegotiation
+          ? {
+              negotiationSessionId: effectiveNegotiation.payload.negotiation_session_id,
+              impact: effectiveNegotiation.payload.impact,
+              reason: effectiveNegotiation.payload.reason,
+            }
+          : null,
       });
+    }
+
+    if (
+      !isRunning &&
+      !isError &&
+      effectiveConfirmation &&
+      !compareSummary
+    ) {
+      const confirmationPresentation = resolveDecisionStripNeedConfirmationPresentation(
+        effectiveConfirmation,
+      );
+      headline = confirmationPresentation.headline;
+      subline = confirmationPresentation.subline;
+      state = confirmationPresentation.state;
+      primaryCta = { type: 'confirm_continue' };
+    }
+
+    if (
+      !isRunning &&
+      !isError &&
+      effectiveNegotiation &&
+      !compareSummary &&
+      !effectiveConfirmation
+    ) {
+      const negotiationPresentation = resolveDecisionStripNegotiationPresentation({
+        impact: effectiveNegotiation.payload.impact,
+        reason: effectiveNegotiation.payload.reason,
+        recommendationSummary: effectiveNegotiation.payload.recommendation_summary,
+      });
+      headline = negotiationPresentation.headline;
+      subline = negotiationPresentation.subline;
+      state = negotiationPresentation.state;
+      primaryCta = { type: 'open_negotiation' };
+    }
+
+    if (
+      !isRunning &&
+      !isError &&
+      personaMode === 'single_lead' &&
+      personaLeadHeadline &&
+      !compareSummary &&
+      !effectiveConfirmation &&
+      !effectiveNegotiation
+    ) {
+      headline = personaLeadHeadline;
+      if (personaLine?.text && personaLine.text.trim() !== personaLeadHeadline.trim()) {
+        subline = personaLine.text;
+      } else if (personaLine?.personaLabel) {
+        subline = `${personaLine.personaLabel} · 单主角评估`;
+      }
+      if (state === 'idle') state = 'conclusion';
+    }
+
+    if (
+      !isRunning &&
+      !isError &&
+      !compareSummary &&
+      !effectiveConfirmation &&
+      !effectiveNegotiation &&
+      decisionCockpitSummary &&
+      !subline?.trim()
+    ) {
+      subline = decisionCockpitSummary.headline;
     }
 
     if (
@@ -276,7 +384,9 @@ export function useDecisionStripModel(
       !isError &&
       !compareSummary &&
       planningReadiness?.active &&
-      !(loopValidation?.active && loopValidation.phase === 'awaiting_approval')
+      !(loopValidation?.active && loopValidation.phase === 'awaiting_approval') &&
+      !effectiveConfirmation &&
+      !effectiveNegotiation
     ) {
       headline = planningReadiness.headline;
       subline = planningReadiness.subline ?? subline;
@@ -299,6 +409,9 @@ export function useDecisionStripModel(
       subline,
       compareSummary,
       personaLine,
+      personaMode,
+      personaLeadHeadline,
+      decisionCockpitSummary,
       score,
       primaryCta,
       optimizeMessage: optimizeSuggested?.message,
@@ -309,7 +422,7 @@ export function useDecisionStripModel(
       taskPhase,
       taskProgress,
       lastRequestId,
-      personaAlerts,
+      personaAlerts: resolvedPersonaAlerts,
       loopValidation,
       loopUi: readinessLoop.ui,
       orchestrationRunning: isRunning,
@@ -326,6 +439,11 @@ export function useDecisionStripModel(
     explainOptimization,
     taskResult,
     worldModelGuards,
+    decisionCockpit,
+    routeRunConfirmation,
+    confirmationFromTask,
+    routeRunNegotiation,
+    negotiationFromTask,
     taskMessage,
     taskPhase,
     taskProgress,

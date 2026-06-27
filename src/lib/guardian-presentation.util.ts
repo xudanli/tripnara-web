@@ -225,10 +225,38 @@ export function isTeamNegotiationHardBlocked(
 }
 
 /**
+ * 从 presentation 读取 CHOOSE 选项（workbench execute enrich 契约）。
+ * humanDecisionPointsFlat → humanDecisionPoints[0].options（≥2 条，后端已过滤占位符）
+ * 不读 consolidatedDecision.nextSteps / supportingLines
+ */
+export function extractPresentationChooseOptions(
+  presentation: GuardianPersonaPresentation | null | undefined,
+): string[] {
+  if (!presentation || presentation.actions.user !== 'CHOOSE') return [];
+
+  const flat = presentation.humanDecisionPointsFlat;
+  if (Array.isArray(flat) && flat.length > 0) {
+    return [...new Set(flat.map((s) => s.trim()).filter(Boolean))];
+  }
+
+  const nested = presentation.humanDecisionPoints?.[0]?.options;
+  if (Array.isArray(nested) && nested.length > 0) {
+    return [...new Set(nested.map((s) => s.trim()).filter(Boolean))];
+  }
+
+  return [];
+}
+
+/**
  * CHOOSE 选项列表（全场景统一优先级）。
- * humanDecisionPoints → humanDecisionPointsFlat → nextSteps → supportingLines
+ * presentation(CHOOSE) → humanDecisionPoints → humanDecisionPointsFlat → negotiation/team → nextSteps → supportingLines
  */
 export function extractChooseOptions(ctx: GuardianChooseContext): string[] {
+  if (ctx.presentation?.actions.user === 'CHOOSE') {
+    const fromPresentation = extractPresentationChooseOptions(ctx.presentation);
+    if (fromPresentation.length > 0) return fromPresentation;
+  }
+
   const fromNegotiation = ctx.negotiation?.humanDecisionPoints;
   const fromTeam = ctx.teamNegotiation?.humanDecisionPointsFlat;
   const fromNextSteps = ctx.consolidatedDecision?.nextSteps;

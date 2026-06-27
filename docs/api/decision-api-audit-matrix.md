@@ -121,7 +121,7 @@ flowchart TB
 |------|------|----------|---------|----------|
 | GET | `/trips/:id/decision-log` | `tripsApi.getDecisionLog` | **保留** | `EvidenceDrawer.tsx`, `trips/[id].tsx`, `DecisionLogSection.tsx`, Strip M2 |
 | GET | `/trips/:id/pipeline-status` | `tripsApi.getPipelineStatus` | **保留** | `plan-studio/index.tsx`, `PipelineSection.tsx` |
-| GET | `/trips/:id/persona-alerts` | `tripsApi.getPersonaAlerts` | **保留** | ScheduleTab, 三人格告警 |
+| GET | `/trips/:id/persona-alerts` | `tripsApi.getPersonaAlerts` | **保留** | ScheduleTab, 三人格告警；C 端投影契约见 [`persona-alerts-bff-contract.md`](./persona-alerts-bff-contract.md) |
 
 **审核问题 B1**：`decision-log` 条目 schema 是否与 `explain.decision_log[]` **同构**？若否，需 BFF 投影层。
 

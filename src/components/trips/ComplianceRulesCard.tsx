@@ -1,6 +1,6 @@
 /**
  * 合规规则卡片组件
- * 
+ *
  * 显示行程的签证和交通合规信息
  */
 
@@ -9,10 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useRag } from '@/hooks';
 import type { ExtractComplianceRulesResponse } from '@/api/rag';
 import { Shield, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { subscribePlanStudioConstraintsChanged } from '@/lib/plan-studio-constraints-events';
+import { isRagDecisionContextError, mapRagUserMessage } from '@/lib/rag-error-map';
 import {
   Collapsible,
   CollapsibleContent,
@@ -21,16 +24,22 @@ import {
 
 interface ComplianceRulesCardProps {
   tripId: string;
+  /** execute uiOutput.decisionContext.planId，供 RAG 决策上下文 */
+  planId?: string | null;
   countryCodes: string[];
   ruleTypes?: ('VISA' | 'TRANSPORT' | 'ENTRY' | 'EXIT')[];
   className?: string;
+  /** 决策上下文缺失时引导用户完善约束 */
+  onOpenConstraints?: () => void;
 }
 
 export default function ComplianceRulesCard({
   tripId,
+  planId,
   countryCodes,
   ruleTypes,
   className,
+  onOpenConstraints,
 }: ComplianceRulesCardProps) {
   const { extractComplianceRules, loading, error } = useRag();
   const [rules, setRules] = useState<ExtractComplianceRulesResponse | null>(null);
@@ -40,15 +49,23 @@ export default function ComplianceRulesCard({
     loadComplianceRules();
   }, [tripId, countryCodes.join(',')]);
 
+  useEffect(() => {
+    return subscribePlanStudioConstraintsChanged((detail) => {
+      if (detail.tripId === tripId) {
+        void loadComplianceRules();
+      }
+    });
+  }, [tripId]);
+
   const loadComplianceRules = async () => {
     const result = await extractComplianceRules({
       tripId,
+      ...(planId ? { planId } : {}),
       countryCodes,
       ruleTypes,
     });
     if (result) {
       setRules(result);
-      // 默认展开所有分类
       const categories = new Set(result.checklist.map((c) => c.category));
       setExpandedCategories(categories);
     }
@@ -66,12 +83,18 @@ export default function ComplianceRulesCard({
     });
   };
 
+  const showDecisionContextHint =
+    !!error &&
+    (isRagDecisionContextError(undefined, error) ||
+      error.includes('决策上下文') ||
+      error.includes('decision_context'));
+
   if (loading && !rules) {
     return (
       <Card className={className}>
-        <CardContent className="py-8">
+        <CardContent className="py-6">
           <div className="flex items-center justify-center">
-            <Spinner className="w-6 h-6" />
+            <Spinner className="w-5 h-5" />
             <span className="ml-2 text-sm text-muted-foreground">加载合规规则...</span>
           </div>
         </CardContent>
@@ -81,11 +104,36 @@ export default function ComplianceRulesCard({
 
   if (error && !rules) {
     return (
-      <Card className={className}>
-        <CardContent className="py-8">
-          <div className="flex items-center justify-center text-destructive">
-            <AlertTriangle className="w-5 h-5 mr-2" />
-            <span className="text-sm">加载失败: {error}</span>
+      <Card className={cn('border-dashed', className)}>
+        <CardHeader className="p-3 sm:p-4 pb-2">
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm sm:text-base font-semibold">合规规则清单</CardTitle>
+          </div>
+          <CardDescription className="text-xs mt-0.5">
+            参考信息，不影响方案预览与提交
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-3 sm:p-4 pt-0 space-y-3">
+          <Alert className="border-amber-200 bg-amber-50/60">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-sm text-amber-900">
+              {mapRagUserMessage(
+                error.includes('rag_') ? error : undefined,
+                error,
+              )}
+            </AlertDescription>
+          </Alert>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={loadComplianceRules} disabled={loading}>
+              <RefreshCw className={cn('w-3.5 h-3.5 mr-1.5', loading && 'animate-spin')} />
+              重试
+            </Button>
+            {showDecisionContextHint && onOpenConstraints && (
+              <Button variant="secondary" size="sm" onClick={onOpenConstraints}>
+                去完善约束
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -119,7 +167,6 @@ export default function ComplianceRulesCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="p-3 sm:p-4 pt-2 space-y-3">
-        {/* 摘要 */}
         <div className="grid grid-cols-2 gap-3">
           <div className="p-2.5 bg-muted/50 rounded-lg">
             <div className="text-lg font-bold">{rules.summary.totalRules}</div>
@@ -131,7 +178,6 @@ export default function ComplianceRulesCard({
           </div>
         </div>
 
-        {/* 合规清单 */}
         {rules.checklist && rules.checklist.length > 0 && (
           <div className="space-y-2.5">
             <h4 className="text-xs font-semibold">合规清单</h4>
@@ -193,7 +239,6 @@ export default function ComplianceRulesCard({
           </div>
         )}
 
-        {/* 国家代码 */}
         <div className="pt-2.5 border-t">
           <div className="flex flex-wrap gap-1.5">
             <span className="text-xs text-muted-foreground">涉及国家:</span>

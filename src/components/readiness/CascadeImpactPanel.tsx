@@ -49,12 +49,12 @@ export default function CascadeImpactPanel({
   const isZh = i18n.language.startsWith('zh');
 
   const sortedHints = sortCascadeUiHints(hints);
-  if (sortedHints.length === 0) return null;
-
   const resolvedAffected =
     affectedItems && affectedItems.length > 0
       ? affectedItems
       : getCascadeAffectedFromPreAnalysis(causalPreAnalysis);
+
+  if (sortedHints.length === 0 && resolvedAffected.length === 0) return null;
 
   const summary = summarizeCascadeImpact(sortedHints, causalPreAnalysis ?? undefined);
   const triggerLabel = formatCascadeTriggerLabel(summary.triggerFactType, isZh);
@@ -70,13 +70,22 @@ export default function CascadeImpactPanel({
               <span className="text-xs font-normal text-muted-foreground">· {modeLabel}</span>
             ) : null}
           </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            {t('dashboard.readiness.cascade.triggerSummary', {
-              defaultValue: '触发：{{trigger}} · {{count}} 项受影响',
-              trigger: triggerLabel,
-              count: summary.affectedCount,
-            })}
-          </p>
+          {sortedHints.length > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t('dashboard.readiness.cascade.triggerSummary', {
+                defaultValue: '触发：{{trigger}} · {{count}} 项受影响',
+                trigger: triggerLabel,
+                count: summary.affectedCount,
+              })}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {t('dashboard.readiness.cascade.dependencyOnly', {
+                defaultValue: '依赖分析 · {{count}} 项受影响',
+                count: resolvedAffected.length,
+              })}
+            </p>
+          )}
         </div>
       </CardHeader>
       <CardContent className={cn('space-y-2', compact && 'pt-0')}>
@@ -95,6 +104,18 @@ export default function CascadeImpactPanel({
             onDiscussWithAi={onDiscussWithAi}
           />
         ))}
+        {sortedHints.length === 0 && resolvedAffected.length > 0 ? (
+          <ul className="space-y-1.5 text-xs text-muted-foreground">
+            {resolvedAffected.slice(0, 6).map((item, index) => (
+              <li key={item.entityRef?.id ?? `affected-${index}`}>
+                {item.entityRef?.label ?? item.message}
+                {item.impactAlgebra?.netImpactMinutes != null
+                  ? ` · 约 ${Math.round(item.impactAlgebra.netImpactMinutes)} 分钟`
+                  : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </CardContent>
     </Card>
   );

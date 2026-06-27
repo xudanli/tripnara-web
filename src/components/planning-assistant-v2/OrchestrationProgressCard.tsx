@@ -18,6 +18,7 @@ import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { looksLikeAnswerHtml, sanitizeRouteRunAnswerHtmlForDisplay } from '@/lib/route-run-answer-text-display';
 import { translateOrchestrationStepForUser } from '@/lib/agent-display-zh';
+import { getGateStatusClasses, normalizeGateStatus } from '@/lib/gate-status';
 import {
   resolveRouteRunGuardianGateView,
   type RouteRunExplainGuardianMirror,
@@ -66,6 +67,10 @@ const PERSONA_HEADLINE: Record<string, string> = {
   DR_DRE: 'Dr.Dre · 疲劳 / 节奏',
   NEPTUNE: 'Neptune · 替换与结构',
 };
+
+function guardianVerdictBadgeClass(verdict: string): string {
+  return getGateStatusClasses(normalizeGateStatus(verdict));
+}
 
 function iconForEvidenceTag(tag: string): LucideIcon {
   const t = tag.toLowerCase();
@@ -322,7 +327,13 @@ export function OrchestrationProgressCard({
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-medium text-foreground text-[11px]">{personaLabel}</span>
                               {row.verdict ? (
-                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono">
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    'text-[10px] h-5 px-1.5',
+                                    guardianVerdictBadgeClass(row.verdict),
+                                  )}
+                                >
                                   {row.verdict}
                                 </Badge>
                               ) : null}

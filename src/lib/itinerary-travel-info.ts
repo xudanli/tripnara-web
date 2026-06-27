@@ -1,4 +1,5 @@
 import { itineraryItemsApi } from '@/api/trips';
+import { isAggregateReadEndpointUnavailable } from '@/lib/schedule-timeline-apply';
 import {
   INTENT_TRAVEL_MODE_MAP,
   TRIP_TRAVEL_MODE_MAP,
@@ -97,13 +98,50 @@ export async function fetchDayTravelInfo(
   dayId: string,
 ): Promise<DayTravelInfoResponse | null> {
   try {
-    return await itineraryItemsApi.getDayTravelInfo(tripId, dayId);
+    return await itineraryItemsApi.getDayTravelInfo(tripId, dayId, { mode: 'cached' });
   } catch {
     return null;
   }
 }
 
-/** 加载整趟行程各天 travel-info；多天时先触发全行程重算以补齐跨天段 */
+/**
+ * P1：批量只读 DB 交通缓存（GET …/trip/:tripId/travel-info），不 POST calculate-all-travel。
+ */
+export async function loadTripDayTravelInfoMapCached(
+  tripId: string,
+  trip: TripDetail,
+  dates?: string[],
+): Promise<Map<string, DayTravelInfoResponse>> {
+  const map = new Map<string, DayTravelInfoResponse>();
+  try {
+    const batch = await itineraryItemsApi.getTripTravelInfo(
+      tripId,
+      dates?.length ? { dates } : undefined,
+    );
+    for (const day of batch.days) {
+      if (day.segments?.length) {
+        storeDayTravelInfo(map, day.date, day);
+      }
+    }
+    return map;
+  } catch (err) {
+    if (isAggregateReadEndpointUnavailable(err)) {
+      for (const day of trip.TripDay ?? []) {
+        const travelInfo = await fetchDayTravelInfo(tripId, day.id);
+        if (travelInfo?.segments?.length) {
+          storeDayTravelInfo(map, day.date, travelInfo);
+        }
+      }
+      return map;
+    }
+    throw err;
+  }
+}
+
+/**
+ * @deprecated 首屏请用 timeline + loadTripDayTravelInfoMapCached；仅在需全量重算时显式 POST。
+ * 加载整趟行程各天 travel-info（会先 POST calculate-all-travel）。
+ */
 export async function loadTripDayTravelInfoMap(
   tripId: string,
   trip: TripDetail,

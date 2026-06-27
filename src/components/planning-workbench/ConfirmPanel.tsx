@@ -10,7 +10,7 @@
  * - 用户签收式交互
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertTriangle, Shield, AlertCircle } from 'lucide-react';
@@ -71,6 +71,11 @@ export default function ConfirmPanel({
 
   const allConfirmed = checkedItems.size === confirmations.length && confirmations.length > 0;
 
+  useEffect(() => {
+    setCheckedItems(new Set());
+    onConfirmChange?.(false);
+  }, [confirmations.join('\u0000'), riskExplanation]);
+
   // 根据决策状态选择图标和颜色
   const getStatusConfig = () => {
     switch (decisionStatus) {
@@ -81,7 +86,7 @@ export default function ConfirmPanel({
           bgColor: 'bg-gate-confirm',
           borderColor: 'border-gate-confirm-border',
           title: '需要确认',
-          description: '请仔细阅读以下确认点，确保您理解并接受相关风险',
+          description: '请阅读风险说明，并在签收确认中勾选全部项',
         };
       case 'SUGGEST_REPLACE':
         return {
@@ -130,17 +135,20 @@ export default function ConfirmPanel({
         </div>
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
-        {/* 风险解释 */}
+        {/* 风险说明 */}
         {riskExplanation && (
-          <div className="p-3 bg-muted rounded-lg border">
-            <p className="text-sm text-foreground leading-relaxed">{riskExplanation}</p>
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-foreground">风险说明</h4>
+            <div className="p-3 bg-muted rounded-lg border">
+              <p className="text-sm text-foreground leading-relaxed">{riskExplanation}</p>
+            </div>
           </div>
         )}
 
-        {/* 确认点清单 */}
+        {/* 签收确认 */}
         {confirmations.length > 0 && (
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-foreground">确认点清单</h4>
+            <h4 className="text-sm font-semibold text-foreground">签收确认</h4>
             <div className="space-y-3">
               {confirmations.map((confirmation, index) => {
                 const isChecked = checkedItems.has(index);
@@ -172,6 +180,11 @@ export default function ConfirmPanel({
             </div>
             
             {/* 确认状态提示 */}
+            {!allConfirmed && confirmations.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                勾选全部签收项后，可点击顶部「确认风险并提交」写入时间轴。
+              </p>
+            )}
             {allConfirmed && (
               <div className="p-3 bg-gate-allow/10 border border-gate-allow-border rounded-lg">
                 <div className="flex items-center gap-2">

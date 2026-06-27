@@ -16,9 +16,20 @@ import { formatCurrency } from '@/utils/format';
 import {
   formatConstraintDateRange,
   formatConstraintTravelMode,
+  formatConstraintTravelersLabel,
 } from '@/lib/planning-constraints.util';
-import type { ConstraintPendingItem, PlanningConstraintsSummary } from '@/types/planning-constraints';
+import type {
+  ConstraintPendingKey,
+  PlanningConstraintsSummary,
+} from '@/types/planning-constraints';
 import type { TripDetail } from '@/types/trip';
+import { useConstraintFlexibility } from '@/hooks/useConstraintFlexibility';
+import {
+  constraintFlexibilityLabel,
+  type ConstraintFlexKey,
+  type ConstraintFlexibilityLevel,
+} from '@/lib/constraint-flexibility.util';
+import { formatConstraintImpactLabel } from '@/lib/constraint-matrix-impact.util';
 import {
   PlanningDetailsPanel,
   PlanningExpandToggle,
@@ -39,12 +50,22 @@ export interface PlanningConstraintsCardProps {
   confirming?: boolean;
   destinationLabel?: string;
   trip?: TripDetail | null;
-  onEditPending: (item: ConstraintPendingItem) => void;
+  onEditConstraint: (key: ConstraintPendingKey) => void;
   onConfirm?: () => void;
   onOpenConflicts?: () => void;
+  /** 冲突态：滚动至松弛建议条（PRD §16.2） */
+  onScrollToRelaxation?: () => void;
   planningInboxCount?: number;
+  /** 有规划待办时默认收起，主 CTA 交给 Decision Strip */
+  deferToPlanningInbox?: boolean;
+  /** 用于本地持久化约束硬/软/可协商标注（M2） */
+  tripId?: string | null;
   compact?: boolean;
   embedded?: boolean;
+  /** 与方案矩阵并排时的左列（桌面 ≥1024px） */
+  layoutColumn?: 'start';
+  /** 矩阵 diff 计数：约束 → 影响方案数（M2） */
+  constraintImpactByKey?: Partial<Record<ConstraintFlexKey, number>>;
   className?: string;
 }
 
@@ -61,8 +82,14 @@ function resolvePaceLabel(trip: TripDetail | null | undefined) {
   return { label: '标准', emoji: '⚖️' };
 }
 
-function statusBadge(status: PlanningConstraintsSummary['budget']['status']) {
+function statusBadge(
+  status: PlanningConstraintsSummary['budget']['status'],
+  onConflictClick?: () => void,
+) {
   const base = 'h-4 px-1.5 text-[9px] font-medium';
+  const conflictInteractive = onConflictClick
+    ? 'cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+    : '';
   switch (status) {
     case 'confirmed':
       return (
@@ -78,7 +105,31 @@ function statusBadge(status: PlanningConstraintsSummary['budget']['status']) {
       );
     case 'misaligned':
       return (
-        <Badge variant="outline" className={cn(base, 'border-amber-300 text-amber-800')}>
+        <Badge
+          variant="outline"
+          role={onConflictClick ? 'button' : undefined}
+          tabIndex={onConflictClick ? 0 : undefined}
+          className={cn(base, 'border-amber-300 text-amber-800', conflictInteractive)}
+          onClick={
+            onConflictClick
+              ? (event) => {
+                  event.stopPropagation();
+                  onConflictClick();
+                }
+              : undefined
+          }
+          onKeyDown={
+            onConflictClick
+              ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onConflictClick();
+                  }
+                }
+              : undefined
+          }
+        >
           待对齐
         </Badge>
       );
@@ -91,20 +142,53 @@ function statusBadge(status: PlanningConstraintsSummary['budget']['status']) {
   }
 }
 
+function flexibilityBadgeClass(level: ConstraintFlexibilityLevel) {
+  const base = 'h-4 px-1.5 text-[9px] font-medium cursor-pointer hover:opacity-80';
+  switch (level) {
+    case 'soft':
+      return cn(base, 'border-sky-300 text-sky-800 dark:text-sky-200');
+    case 'negotiable':
+      return cn(base, 'border-gate-suggest-border text-gate-suggest-foreground');
+    default:
+      return cn(base, 'text-muted-foreground');
+  }
+}
+
 interface ConstraintCellProps {
   icon: typeof CalendarRange;
   label: string;
   value: string;
   status: PlanningConstraintsSummary['budget']['status'];
   onEdit: () => void;
+  flexKey?: ConstraintFlexKey;
+  flexibilityLevel?: ConstraintFlexibilityLevel;
+  onCycleFlexibility?: () => void;
+  stacked?: boolean;
+  impactCount?: number;
+  onConflictClick?: () => void;
 }
 
-function ConstraintCell({ icon: Icon, label, value, status, onEdit }: ConstraintCellProps) {
+function ConstraintCell({
+  icon: Icon,
+  label,
+  value,
+  status,
+  onEdit,
+  flexKey,
+  flexibilityLevel = 'hard',
+  onCycleFlexibility,
+  stacked = false,
+  impactCount,
+  onConflictClick,
+}: ConstraintCellProps) {
   const isPending = status !== 'confirmed';
 
   return (
     <div
-      className="group flex min-w-[10.5rem] max-w-full flex-1 cursor-pointer items-center gap-1.5 rounded-md py-0.5 hover:bg-muted/40"
+      className={cn(
+        'group flex cursor-pointer items-center gap-1.5 rounded-md py-0.5 hover:bg-muted/40',
+        stacked ? 'min-w-0 w-full max-w-full flex-1' : 'min-w-[10.5rem] max-w-full flex-1',
+      )}
       role="button"
       tabIndex={0}
       onClick={onEdit}
@@ -124,7 +208,38 @@ function ConstraintCell({ icon: Icon, label, value, status, onEdit }: Constraint
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
-        {statusBadge(status)}
+        {impactCount != null && impactCount > 0 ? (
+          <Badge
+            variant="outline"
+            className="h-4 px-1.5 text-[9px] font-normal text-muted-foreground"
+            title="该约束在方案矩阵中存在差值"
+          >
+            {formatConstraintImpactLabel(impactCount)}
+          </Badge>
+        ) : null}
+        {flexKey && onCycleFlexibility ? (
+          <Badge
+            variant="outline"
+            className={flexibilityBadgeClass(flexibilityLevel)}
+            title="点击切换：硬 / 软 / 可协商"
+            onClick={(event) => {
+              event.stopPropagation();
+              onCycleFlexibility();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                onCycleFlexibility();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            {constraintFlexibilityLabel(flexibilityLevel)}
+          </Badge>
+        ) : null}
+        {statusBadge(status, status === 'misaligned' ? onConflictClick : undefined)}
         {isPending ? (
           <Button
             type="button"
@@ -167,18 +282,29 @@ export function PlanningConstraintsCard({
   confirming,
   destinationLabel,
   trip,
-  onEditPending,
+  onEditConstraint,
   onConfirm,
   onOpenConflicts,
+  onScrollToRelaxation,
   planningInboxCount = 0,
+  deferToPlanningInbox = false,
+  tripId = null,
   compact = false,
   embedded = false,
+  layoutColumn,
+  constraintImpactByKey,
   className,
 }: PlanningConstraintsCardProps) {
+  const isSideColumn = layoutColumn === 'start';
   const [expanded, setExpanded] = useState(!compact);
+  const { levels: flexibilityLevels, cycleFlexibility } = useConstraintFlexibility(tripId);
   const pace = useMemo(() => resolvePaceLabel(trip), [trip]);
 
   useEffect(() => {
+    if (deferToPlanningInbox && planningInboxCount > 0 && !summary?.needsReconfirm) {
+      setExpanded(false);
+      return;
+    }
     if (summary?.needsReconfirm) setExpanded(true);
     else if (
       !embedded &&
@@ -189,15 +315,29 @@ export function PlanningConstraintsCard({
       setExpanded(false);
     } else if (summary?.isUserConfirmed && !compact) setExpanded(false);
     else if (summary && summary.pendingCount > 0) setExpanded(true);
-  }, [summary?.isUserConfirmed, summary?.needsReconfirm, summary?.pendingCount, compact, embedded]);
+  }, [
+    summary?.isUserConfirmed,
+    summary?.needsReconfirm,
+    summary?.pendingCount,
+    compact,
+    embedded,
+    deferToPlanningInbox,
+    planningInboxCount,
+  ]);
 
   const headline = useMemo(() => {
     if (!summary) return '加载约束…';
     if (summary.needsReconfirm) return '约束已变更，待重新确认';
     if (summary.isUserConfirmed) return '四项约束已对齐';
     if (summary.allReady) return '约束已齐全，待您确认';
+    if (planningInboxCount > 0 && summary.pendingCount > 0) {
+      return `${summary.pendingCount} 项基础约束 · 共 ${planningInboxCount} 项待办`;
+    }
+    if (planningInboxCount > 0 && summary.pendingCount === 0) {
+      return `基础约束已齐 · ${planningInboxCount} 项日程待办`;
+    }
     return `${summary.pendingCount} 项约束待处理`;
-  }, [summary]);
+  }, [summary, planningInboxCount]);
 
   const compactChips = useMemo(() => {
     if (!summary) return null;
@@ -247,12 +387,7 @@ export function PlanningConstraintsCard({
       ? formatCurrency(summary.budget.total, summary.budget.currency)
       : '未设置总预算';
 
-  const travelersValue =
-    summary.travelers.count > 0
-      ? summary.travelers.memberCount > 0
-        ? `${summary.travelers.count} 人（团队 ${summary.travelers.memberCount} 人）`
-        : `${summary.travelers.count} 人`
-      : '未设置';
+  const travelersValue = formatConstraintTravelersLabel(summary.travelers);
 
   const transportValue = formatConstraintTravelMode(summary.transport.travelMode);
   const dateValue = formatConstraintDateRange(
@@ -261,28 +396,15 @@ export function PlanningConstraintsCard({
     summary.timeRange.dayCount,
   );
 
-  const handleEdit = (key: ConstraintPendingItem['key']) => {
-    const item = summary.pendingItems.find((p) => p.key === key);
-    if (item) {
-      onEditPending(item);
-      return;
-    }
-    onEditPending({
-      key,
-      status: 'missing',
-      label: key,
-      editTab: key === 'travelers' ? 'team' : undefined,
-      openBudgetDialog: key === 'budget',
-      openIntent: key === 'transport' || key === 'travelers',
-      openEditTrip: key === 'time_range',
-    });
+  const handleEdit = (key: ConstraintPendingKey) => {
+    onEditConstraint(key);
   };
 
   const statusIcon = summary.needsReconfirm ? AlertCircle : CheckCircle2;
 
   return (
-    <PlanningHeaderSection accent={accent} className={className}>
-      <PlanningHeaderRow>
+    <PlanningHeaderSection accent={accent} className={cn(isSideColumn && 'h-full', className)}>
+      <PlanningHeaderRow className={cn(isSideColumn && 'px-3 py-2')}>
         <PlanningHeaderIcon
           icon={summary.isUserConfirmed || summary.needsReconfirm ? statusIcon : Clock3}
           accent={accent}
@@ -293,7 +415,7 @@ export function PlanningConstraintsCard({
               {summary.pendingCount}
             </Badge>
           ) : null}
-          {showCompactInline && compactChips ? (
+          {showCompactInline && compactChips && !isSideColumn ? (
             <div className="hidden min-w-0 flex-1 items-center gap-1 overflow-hidden md:flex">
               {compactChips.dateRange !== '日期待补全' ? (
                 <PlanningMetaChip icon={CalendarRange}>{compactChips.dateRange}</PlanningMetaChip>
@@ -338,13 +460,24 @@ export function PlanningConstraintsCard({
             您曾确认过行程约束，但之后有修改。请核对下方四项后再次确认。
           </p>
         ) : null}
-        <div className="flex flex-wrap items-center justify-start gap-x-3 gap-y-1">
+        <div
+          className={cn(
+            'flex items-center justify-start gap-x-3 gap-y-1',
+            isSideColumn ? 'flex-col items-stretch gap-1.5' : 'flex-wrap',
+          )}
+        >
           <ConstraintCell
             icon={CalendarRange}
             label="时间范围"
             value={dateValue}
             status={summary.timeRange.status}
             onEdit={() => handleEdit('time_range')}
+            flexKey="time_range"
+            flexibilityLevel={flexibilityLevels.time_range ?? 'hard'}
+            onCycleFlexibility={() => cycleFlexibility('time_range')}
+            stacked={isSideColumn}
+            impactCount={constraintImpactByKey?.time_range}
+            onConflictClick={onScrollToRelaxation}
           />
           <ConstraintCell
             icon={Wallet}
@@ -352,6 +485,12 @@ export function PlanningConstraintsCard({
             value={budgetValue}
             status={summary.budget.status}
             onEdit={() => handleEdit('budget')}
+            flexKey="budget"
+            flexibilityLevel={flexibilityLevels.budget ?? 'hard'}
+            onCycleFlexibility={() => cycleFlexibility('budget')}
+            stacked={isSideColumn}
+            impactCount={constraintImpactByKey?.budget}
+            onConflictClick={onScrollToRelaxation}
           />
           <ConstraintCell
             icon={Users}
@@ -359,6 +498,12 @@ export function PlanningConstraintsCard({
             value={travelersValue}
             status={summary.travelers.status}
             onEdit={() => handleEdit('travelers')}
+            flexKey="travelers"
+            flexibilityLevel={flexibilityLevels.travelers ?? 'hard'}
+            onCycleFlexibility={() => cycleFlexibility('travelers')}
+            stacked={isSideColumn}
+            impactCount={constraintImpactByKey?.travelers}
+            onConflictClick={onScrollToRelaxation}
           />
           <ConstraintCell
             icon={Car}
@@ -366,19 +511,43 @@ export function PlanningConstraintsCard({
             value={transportValue}
             status={summary.transport.status}
             onEdit={() => handleEdit('transport')}
+            flexKey="transport"
+            flexibilityLevel={flexibilityLevels.transport ?? 'hard'}
+            onCycleFlexibility={() => cycleFlexibility('transport')}
+            stacked={isSideColumn}
+            impactCount={constraintImpactByKey?.transport}
+            onConflictClick={onScrollToRelaxation}
           />
         </div>
         {showInboxLink ? (
           <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border/60 bg-muted/20 px-2.5 py-2">
-            <p className="text-[11px] text-muted-foreground">日程与可执行性相关待办</p>
-            <Button
-              type="button"
-              variant="link"
-              className="h-auto p-0 text-[11px] font-medium"
-              onClick={onOpenConflicts}
-            >
-              查看 {planningInboxCount} 项规划待办 →
-            </Button>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {onScrollToRelaxation
+                ? '约束或日程冲突待处理，可先查看下方松弛建议'
+                : '日程与可执行性待办（与上方基础约束分开统计）'}
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              {onScrollToRelaxation ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-[11px] font-medium"
+                  onClick={onScrollToRelaxation}
+                >
+                  查看松弛建议 →
+                </Button>
+              ) : null}
+              {onOpenConflicts ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-[11px] font-medium"
+                  onClick={onOpenConflicts}
+                >
+                  打开可执行证明 →
+                </Button>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </PlanningDetailsPanel>

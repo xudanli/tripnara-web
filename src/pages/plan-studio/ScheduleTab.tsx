@@ -1,15 +1,14 @@
 import { useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { ScheduleTabSkeleton } from '@/components/plan-studio/ScheduleTabSkeleton';
 import { EmptyStateCard } from '@/components/ui/empty-state-images';
-import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Info, ClipboardCheck, Zap, Copy, CheckCircle2, XCircle, Lightbulb } from 'lucide-react';
+import { AlertTriangle, MapPin, GripVertical, MoreVertical, Plus, Info, ClipboardCheck, Copy, CheckCircle2, XCircle, Lightbulb } from 'lucide-react';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
-import { itineraryOptimizationApi } from '@/api/itinerary-optimization';
 import { tripPlannerApi } from '@/api/trip-planner';
 import { IntentTravelMode, type TripDetail, type ScheduleResponse, type ScheduleItem, type ItineraryItemDetail, type ItineraryItem, type ReplaceItineraryItemResponse, type DayMetricsResponse, type PlanStudioConflict, type DayTravelInfoResponse, type UpdateItineraryItemRequest, type AssessmentTravelMode } from '@/types/trip';
 import {
@@ -22,15 +21,22 @@ import {
   isArrivalHubItem,
 } from '@/lib/day-one-arrival';
 import {
-  resolveAffectedDayDates,
-  resolveTravelRecalcDayIds,
-} from '@/lib/schedule-itinerary-refresh';
-import { filterPlanStudioConflicts } from '@/lib/plan-studio-conflict-filters';
+  applyScheduleTimelineToMaps,
+  buildTripDetailFromTimeline,
+  countCalendarDaysBetween,
+  isScheduleTimelineUnavailable,
+  mergeScheduleTimelineIntoMaps,
+  mergeTripDaysFromTimeline,
+  resolveTimelineWindowParams,
+  shouldUseTimelineWindowedLoad,
+  SCHEDULE_TIMELINE_PAGE_SIZE,
+  timelineIncludes,
+} from '@/lib/schedule-timeline-apply';
 import { analyzeDayAccommodationCoverage } from '@/lib/day-accommodation-coverage';
 import { extractHmFromWindow } from '@/lib/itinerary-item-card-format';
 import { sortItineraryItemsForDisplay, getOvernightStayDisplayItem, getFirstDayActivityItem, isOvernightStayDisplayItem, filterCheckoutDayTimelineItems, getOvernightItemsForPriorDayTimeline, getCheckoutMorningTravelPair, getCarRentalReturnItemsForDayTimeline } from '@/lib/itinerary-item-sort';
 import {
-  loadTripDayTravelInfoMap,
+  loadTripDayTravelInfoMapCached,
   findInterDayTravelSegment,
   findOvernightCheckinTravelSegment,
   adjustDayTravelSummaryExcludingOvernightCheckin,
@@ -38,8 +44,6 @@ import {
   recalculateTripDayTravelInfoMap,
   travelSegmentHasData,
 } from '@/lib/itinerary-travel-info';
-import type { OptimizeRouteRequest } from '@/types/itinerary-optimization';
-import { INTENT_TRAVEL_MODE_MAP } from '@/constants/itinerary-optimization';
 import type { PlaceCategory } from '@/types/places-routes';
 import { format } from 'date-fns';
 import { DateTime } from 'luxon';
@@ -97,13 +101,14 @@ import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudio
 import { ItineraryAdjustScheduleDayPreview } from '@/components/plan-studio/ItineraryAdjustScheduleDayPreview';
 import { scheduleDayMatchesItineraryAdjustDraftPreview } from '@/lib/itinerary-adjust-response';
 import {
+  buildLockedItineraryItemIdSet,
   canEditSlotTiming,
-  canRunRouteRecalculation,
-  getSegmentEditorDegradation,
+  guardItineraryItemStructuralEditOrToast,
+  guardRouteRecalculationOrToast,
   guardStructuralEditOrToast,
 } from '@/lib/world-model-guards';
 import { SegmentEditorDegradedShell } from '@/components/planning/SegmentEditorDegradedShell';
-import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
+import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
 import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
 import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
 import { isEmbeddedHikingTrip } from '@/lib/trip-hiking';
@@ -117,20 +122,35 @@ import {
   matchPresentedItineraryItem,
 } from '@/lib/itinerary-presentation-match.util';
 import { loadLevelClasses, loadLevelLabel } from '@/lib/experience-fulfillment-display.util';
+import {
+  resolveAffectedDayDates,
+  resolveTravelRecalcDayIds,
+} from '@/lib/schedule-itinerary-refresh';
 
 import type { DayWishImpact } from '@/types/trip-wishes';
 import { useDomainWorkbenchBreakdown } from '@/hooks/useTripDomainInfluence';
 import { resolveDecisionAuthority } from '@/lib/domain-influence-mapping';
 import { TripDomainBreakdownCard } from '@/components/domain-influence/TripDomainBreakdownCard';
+import { ScheduleGuardianDigestCard } from '@/components/plan-studio/ScheduleGuardianDigestCard';
+import { ScheduleRouteRunEvidenceSection } from '@/components/plan-studio/ScheduleRouteRunEvidenceSection';
 import { DomainInfluenceClaimWorkbenchDialog } from '@/components/domain-influence/DomainInfluenceClaimWorkbenchDialog';
 
 interface ScheduleTabProps {
   tripId: string;
+  /** 父级已拉取的行程详情，避免时间轴首屏重复 getById */
+  initialTrip?: TripDetail | null;
   refreshKey?: number; // 用于触发刷新
   wishImpactByDay?: DayWishImpact[];
+  personaAlerts?: import('@/types/trip').PersonaAlert[];
 }
 
-export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: ScheduleTabProps) {
+export default function ScheduleTab({
+  tripId,
+  initialTrip,
+  refreshKey,
+  wishImpactByDay,
+  personaAlerts,
+}: ScheduleTabProps) {
   const { t } = useTranslation();
   const { breakdown: domainBreakdown, loading: domainBreakdownLoading, reload: reloadDomainBreakdown } =
     useDomainWorkbenchBreakdown(tripId);
@@ -140,12 +160,8 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
       resolveDecisionAuthority(domainBreakdown, item.Place?.category || item.type),
     [domainBreakdown],
   );
-  const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
-  const freezeRouteSelection = worldModelGuards?.freeze_route_selection === true;
-  const segmentDegradation = useMemo(
-    () => getSegmentEditorDegradation(worldModelGuards),
-    [worldModelGuards]
-  );
+  const { worldModelGuards, lockedSegmentIds, degradation: segmentDegradation } =
+    useWorldModelGuards();
   const scheduleTimelineRef = useRef<HTMLDivElement>(null);
 
   const scrollToScheduleDay = useCallback((dayIndex: number) => {
@@ -210,6 +226,26 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
   const [loading, setLoading] = useState(true);
   /** 首次加载完成后，refreshKey 触发的刷新不再切回全屏骨架屏 */
   const hasLoadedScheduleOnceRef = useRef(false);
+  const seededTripRef = useRef<TripDetail | null | undefined>(initialTrip);
+  const scheduleTimelineEtagRef = useRef<string | null>(null);
+  const scheduleTimelineQueryRef = useRef<{
+    include: string;
+    from?: number;
+    limit?: number;
+    travelInfoMode: 'cached' | 'none';
+  } | null>(null);
+  const timelineWindowedRef = useRef(false);
+  const loadingMoreTimelineRef = useRef(false);
+  const timelineLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [timelineLoadedThrough, setTimelineLoadedThrough] = useState(0);
+
+  useEffect(() => {
+    seededTripRef.current = initialTrip ?? null;
+    scheduleTimelineEtagRef.current = null;
+    scheduleTimelineQueryRef.current = null;
+    timelineWindowedRef.current = false;
+    setTimelineLoadedThrough(0);
+  }, [tripId, initialTrip]);
   
   // 🆕 检测未保存的时间轴改动
   // 🚀 性能优化：使用 useRef 存储 schedules 和 context，避免无限循环
@@ -266,7 +302,18 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
   const [itineraryItemsMap, setItineraryItemsMap] = useState<Map<string, ItineraryItemDetail[]>>(new Map());
   const [dayMetricsMap, setDayMetricsMap] = useState<Map<string, DayMetricsResponse>>(new Map());
   const [dayTravelInfoMap, setDayTravelInfoMap] = useState<Map<string, DayTravelInfoResponse>>(new Map());
-  const [conflicts, setConflicts] = useState<PlanStudioConflict[]>([]);
+  const itineraryItemsMapRef = useRef(itineraryItemsMap);
+  const dayMetricsMapRef = useRef(dayMetricsMap);
+  const dayTravelInfoMapRef = useRef(dayTravelInfoMap);
+  useEffect(() => {
+    itineraryItemsMapRef.current = itineraryItemsMap;
+  }, [itineraryItemsMap]);
+  useEffect(() => {
+    dayMetricsMapRef.current = dayMetricsMap;
+  }, [dayMetricsMap]);
+  useEffect(() => {
+    dayTravelInfoMapRef.current = dayTravelInfoMap;
+  }, [dayTravelInfoMap]);
   
   // 安全使用 DrawerContext（若不在 DashboardLayout 中则使用空函数，避免报错）
   const drawerContext = useContext(DrawerContext);
@@ -355,8 +402,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     tripDayId: string;
     placeName: string;
   } | null>(null);
-  const [optimizing, setOptimizing] = useState(false);
-  const [addingBuffers, setAddingBuffers] = useState(false);
 
   // 添加行程项对话框状态
   const [addItemDialogOpen, setAddItemDialogOpen] = useState(false);
@@ -378,15 +423,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     affectedItems: Array<{ id: string; placeName: string; dayDate: string; dayIndex: number }>;
   } | null>(null);
   const [removingDuplicate, setRemovingDuplicate] = useState(false);
-
-  // 一键解决冲突对话框状态
-  const [resolveConflictsDialogOpen, setResolveConflictsDialogOpen] = useState(false);
-  const [resolveConflictsPreview, setResolveConflictsPreview] = useState<{
-    autoResolvable: Array<{ conflictId: string; description: string; strategy: string }>;
-    needManual: Array<{ conflictId: string; description: string; reason: string }>;
-  } | null>(null);
-  const [loadingResolvePreview, setLoadingResolvePreview] = useState(false);
-  const [executingResolve, setExecutingResolve] = useState(false);
 
   // 行程合理性评估状态
   const [assessmentDialogOpen, setAssessmentDialogOpen] = useState(false);
@@ -440,6 +476,47 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     
     return places;
   }, [placeIdsKey]); // 使用稳定的 placeIdsKey 作为依赖
+
+  const findItineraryItemContext = useCallback(
+    (itemId: string, dayDate?: string) => {
+      let items: ItineraryItemDetail[] = [];
+      if (dayDate) {
+        const normalized = dayDate.split('T')[0];
+        items =
+          itineraryItemsMap.get(dayDate) ??
+          itineraryItemsMap.get(normalized) ??
+          [];
+      } else {
+        for (const list of itineraryItemsMap.values()) {
+          if (list.some((entry) => entry.id === itemId)) {
+            items = list;
+            break;
+          }
+        }
+      }
+      const idx = items.findIndex((entry) => entry.id === itemId);
+      if (idx < 0) return null;
+      return {
+        item: items[idx],
+        prevItemId: idx > 0 ? items[idx - 1].id : undefined,
+      };
+    },
+    [itineraryItemsMap],
+  );
+
+  const guardItemStructureEdit = useCallback(
+    (itemId: string, dayDate?: string) => {
+      const ctx = findItineraryItemContext(itemId, dayDate);
+      if (!ctx) return guardStructuralEditOrToast(worldModelGuards);
+      return guardItineraryItemStructuralEditOrToast(
+        worldModelGuards,
+        lockedSegmentIds,
+        ctx.item,
+        ctx.prevItemId,
+      );
+    },
+    [worldModelGuards, lockedSegmentIds, findItineraryItemContext],
+  );
 
   // 批量加载地点图片
   const { images: placeImagesMap } = usePlaceImages(allPlaces, {
@@ -541,134 +618,221 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
         setLoading(true);
         setItineraryItemsMap(new Map());
       }
-      
-      const data = await tripsApi.getById(tripId);
-      console.log('[ScheduleTab] 加载的行程数据:', {
-        tripId: data.id,
-        destination: data.destination,
-        // destination 应该是国家代码如 "IS"（冰岛）、"JP"（日本）
-      });
-      setTrip(data);
-      
-      // 加载所有日期的 Schedule 和 ItineraryItem
-      // 🚀 性能优化：并行加载所有天的数据，而不是串行
-      if (data.TripDay && data.TripDay.length > 0) {
+
+      const convertItems = convertItineraryItemsToScheduleItems;
+      const needsTravelRecalc = Boolean(opts?.recalculateTravelDayIds?.length);
+      /** Handoff 首屏：items + schedule + metrics；交通由 travelInfoMode=cached 或 P1 batch 补全 */
+      const timelineInclude = 'items,schedule,metrics';
+
+      const applyLegacyDayLoads = async (tripData: TripDetail) => {
         const scheduleMap = new Map<string, ScheduleResponse>();
-        
-        // 🚀 并行加载所有天的行程项和时间表
         const itemsMap = new Map<string, ItineraryItemDetail[]>();
-        
-        const dayLoadPromises = data.TripDay.map(async (day) => {
+
+        const dayLoadPromises = tripData.TripDay!.map(async (day) => {
           let dayItems: ItineraryItemDetail[] | null = null;
           let scheduleResponse: ScheduleResponse | null = null;
-          
-          // 🚀 并行加载行程项和时间表（每个天内部也并行）
+
           const [itemsResult, scheduleResult] = await Promise.allSettled([
-            // 加载行程项
             itineraryItemsApi.getAll(day.id, true).catch((err) => {
               console.error(`Failed to load items for day ${day.date}:`, err);
               return null;
             }),
-            // 加载时间表
             tripsApi.getSchedule(tripId, day.date).catch((err) => {
               console.error(`Failed to load schedule for ${day.date}:`, err);
               return null;
             }),
           ]);
-          
-          // 处理行程项结果
+
           if (itemsResult.status === 'fulfilled' && itemsResult.value) {
             dayItems = itemsResult.value;
           } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
             dayItems = day.ItineraryItem as ItineraryItemDetail[];
           }
-          
-          // 处理时间表结果
+
           if (scheduleResult.status === 'fulfilled' && scheduleResult.value) {
             scheduleResponse = scheduleResult.value;
           }
-          
-          // 处理行程项数据
+
           if (dayItems && dayItems.length > 0) {
-            // 🔍 调试：检查所有行程项，特别是酒店相关的
-            const hotelItems = dayItems.filter(item => 
-              item.Place?.category === 'HOTEL' || item.type === 'ACTIVITY' && item.Place?.category === 'HOTEL'
-            );
-            const checkoutItems = dayItems.filter(item => 
-              item.crossDayInfo?.displayMode === 'checkout' || item.crossDayInfo?.isCheckoutItem
-            );
-            const checkinItems = dayItems.filter(item => 
-              item.crossDayInfo?.displayMode === 'checkin'
-            );
-            
-            console.log(`[ScheduleTab] Day ${day.date} 行程项统计:`, {
-              total: dayItems.length,
-              hotelItems: hotelItems.length,
-              checkinItems: checkinItems.length,
-              checkoutItems: checkoutItems.length,
-            });
-            
-            // displaySortIndex 优先（0=退房置顶）；否则退房置顶 + 时间轴
-            const sortedItems = sortItineraryItemsForDisplay(dayItems);
-            itemsMap.set(day.date, sortedItems);
+            itemsMap.set(day.date, sortItineraryItemsForDisplay(dayItems));
           } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-            // 回退：使用 trip 数据中的 ItineraryItem
-            const items = day.ItineraryItem as ItineraryItemDetail[];
-            itemsMap.set(day.date, items);
+            itemsMap.set(day.date, day.ItineraryItem as ItineraryItemDetail[]);
           }
-          
-          // 处理时间表数据
-          if (scheduleResponse && scheduleResponse.schedule && scheduleResponse.schedule.items && scheduleResponse.schedule.items.length > 0) {
-            // Schedule 有数据，直接使用
+
+          if (
+            scheduleResponse?.schedule?.items &&
+            scheduleResponse.schedule.items.length > 0
+          ) {
             scheduleMap.set(day.date, scheduleResponse);
+          } else if (dayItems && dayItems.length > 0) {
+            const scheduleItems = convertItems(dayItems);
+            scheduleMap.set(day.date, {
+              date: day.date,
+              schedule: scheduleItems.length > 0 ? { items: scheduleItems } : null,
+              persisted: false,
+            });
+          } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
+            const scheduleItems = convertItems(day.ItineraryItem as ItineraryItemDetail[]);
+            scheduleMap.set(day.date, {
+              date: day.date,
+              schedule: scheduleItems.length > 0 ? { items: scheduleItems } : null,
+              persisted: false,
+            });
           } else {
-            // Schedule 为空，使用 trip 数据中的 ItineraryItem
-            if (dayItems && dayItems.length > 0) {
-              const scheduleItems = convertItineraryItemsToScheduleItems(dayItems);
-              scheduleMap.set(day.date, {
-                date: day.date,
-                schedule: scheduleItems.length > 0 ? {
-                  items: scheduleItems,
-                } : null,
-                persisted: false,
-              });
-            } else if (day.ItineraryItem && day.ItineraryItem.length > 0) {
-              const scheduleItems = convertItineraryItemsToScheduleItems(day.ItineraryItem as ItineraryItemDetail[]);
-              scheduleMap.set(day.date, {
-                date: day.date,
-                schedule: scheduleItems.length > 0 ? {
-                  items: scheduleItems,
-                } : null,
-                persisted: false,
-              });
-            } else {
-              scheduleMap.set(day.date, {
-                date: day.date,
-                schedule: null,
-                persisted: false,
-              });
-            }
+            scheduleMap.set(day.date, {
+              date: day.date,
+              schedule: null,
+              persisted: false,
+            });
           }
         });
-        
-        // 🚀 等待所有天的数据加载完成
+
         await Promise.all(dayLoadPromises);
-        
-        // 批量更新状态（减少重新渲染次数）
         setItineraryItemsMap(new Map(itemsMap));
         setSchedules(scheduleMap);
-        
-        // 🆕 检测未保存的时间轴改动（移除这里的直接调用，由 useEffect 统一处理）
-        // 注意：这里不再直接调用 setHasUnsavedScheduleChanges，避免重复更新
-        
-        // 加载每日指标和冲突（传入 trip 数据，避免异步 state 问题）
+      };
+
+      let data: TripDetail;
+      let usedTimeline = false;
+      const seededTrip = seededTripRef.current;
+
+      const estimateDayCount =
+        (seededTrip?.TripDay?.length ?? 0) ||
+        (seededTrip?.startDate && seededTrip?.endDate
+          ? countCalendarDaysBetween(seededTrip.startDate, seededTrip.endDate)
+          : 0);
+      const windowParams =
+        silent && scheduleTimelineQueryRef.current
+          ? {
+              from: scheduleTimelineQueryRef.current.from,
+              limit: scheduleTimelineQueryRef.current.limit,
+            }
+          : resolveTimelineWindowParams(estimateDayCount);
+      const travelInfoMode = needsTravelRecalc ? 'none' : 'cached';
+
+      if (!silent) {
+        scheduleTimelineQueryRef.current = {
+          include: timelineInclude,
+          ...windowParams,
+          travelInfoMode,
+        };
+      }
+
+      try {
+        const timelineResult = await tripsApi.getScheduleTimeline(tripId, {
+          include: timelineInclude,
+          travelInfoMode,
+          ...windowParams,
+          ifNoneMatch:
+            silent && !needsTravelRecalc
+              ? scheduleTimelineEtagRef.current ?? undefined
+              : undefined,
+        });
+
+        if (timelineResult.status === 'not_modified') {
+          if (timelineResult.etag) {
+            scheduleTimelineEtagRef.current = timelineResult.etag;
+          }
+          return;
+        }
+
+        const timeline = timelineResult.data;
+        if (timelineResult.etag) {
+          scheduleTimelineEtagRef.current = timelineResult.etag;
+        }
+
+        data = buildTripDetailFromTimeline(timeline, seededTrip ?? undefined);
+        if (seededTrip) {
+          seededTripRef.current = null;
+        }
+
+        if (!data.TripDay?.length) {
+          setTrip(data);
+          return;
+        }
+
+        setTrip(data);
+
+        const applied = applyScheduleTimelineToMaps(
+          timeline,
+          convertItems,
+          data.TripDay,
+        );
+        setItineraryItemsMap(new Map(applied.itemsMap));
+        setSchedules(applied.scheduleMap);
+
+        if (timelineIncludes(timelineInclude, 'metrics') && applied.metricsMap.size > 0) {
+          setDayMetricsMap(applied.metricsMap);
+        } else {
+          try {
+            const metricsData = await tripsApi.getMetrics(tripId);
+            const metricsMap = new Map<string, DayMetricsResponse>();
+            metricsData.days?.forEach((day) => metricsMap.set(day.date, day));
+            setDayMetricsMap(metricsMap);
+          } catch (metricsErr) {
+            console.error('Failed to load day metrics:', metricsErr);
+          }
+        }
+
+        if (needsTravelRecalc) {
+          if (guardRouteRecalculationOrToast(worldModelGuards)) {
+            const patch = await recalculateTripDayTravelInfoMap(
+              tripId,
+              data,
+              opts!.recalculateTravelDayIds!,
+            );
+            const affectedDates = data.TripDay!
+              .filter((d) => opts!.recalculateTravelDayIds!.includes(d.id))
+              .map((d) => d.date);
+            setDayTravelInfoMap((prev) => mergeDayTravelInfoMaps(prev, patch, affectedDates));
+          }
+        } else {
+          let travelMap = applied.travelInfoMap;
+          if (travelMap.size === 0) {
+            travelMap = await loadTripDayTravelInfoMapCached(tripId, data);
+          }
+          if (travelMap.size > 0) {
+            setDayTravelInfoMap(travelMap);
+          }
+        }
+
+        const totalDays = data.TripDay?.length ?? 0;
+        const windowed = shouldUseTimelineWindowedLoad(totalDays);
+        timelineWindowedRef.current = windowed;
+        setTimelineLoadedThrough(windowed ? timeline.days.length : totalDays);
+
+        usedTimeline = true;
+      } catch (timelineErr) {
+        if (!isScheduleTimelineUnavailable(timelineErr)) {
+          throw timelineErr;
+        }
+        console.warn(
+          '[ScheduleTab] schedule-timeline unavailable, falling back to legacy day loads',
+          timelineErr,
+        );
+      }
+
+      if (!usedTimeline) {
+        if (seededTrip?.id === tripId) {
+          data = seededTrip;
+          seededTripRef.current = null;
+        } else {
+          data = await tripsApi.getById(tripId);
+        }
+        setTrip(data);
+
+        if (!data.TripDay?.length) {
+          return;
+        }
+
+        await applyLegacyDayLoads(data);
         await loadMetricsAndConflicts(data.id, data, opts?.recalculateTravelDayIds);
       }
     } catch (err) {
       console.error('Failed to load trip:', err);
       toast.error('加载行程失败，请稍后重试');
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
       hasLoadedScheduleOnceRef.current = true;
     }
   }, [tripId]); // 🚀 移除 planStudioContext 依赖，避免无限循环
@@ -720,10 +884,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     recalculateTravelDayIds?: string[],
   ) => {
     try {
-      // 加载冲突列表
-      const conflictsData = await tripsApi.getConflicts(tripId);
-      setConflicts(conflictsData.conflicts);
-      
       // 加载所有日期的指标（使用传入的 tripData 或当前的 trip state）
       const currentTrip = tripData || trip;
       if (currentTrip && currentTrip.TripDay && currentTrip.TripDay.length > 0) {
@@ -738,21 +898,23 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
         setDayMetricsMap(metricsMap);
         
         if (recalculateTravelDayIds?.length && currentTrip) {
-          const patch = await recalculateTripDayTravelInfoMap(
-            tripId,
-            currentTrip,
-            recalculateTravelDayIds,
-          );
-          const affectedDates = currentTrip.TripDay
-            .filter((d) => recalculateTravelDayIds.includes(d.id))
-            .map((d) => d.date);
-          setDayTravelInfoMap((prev) => mergeDayTravelInfoMaps(prev, patch, affectedDates));
+          if (guardRouteRecalculationOrToast(worldModelGuards)) {
+            const patch = await recalculateTripDayTravelInfoMap(
+              tripId,
+              currentTrip,
+              recalculateTravelDayIds,
+            );
+            const affectedDates = currentTrip.TripDay
+              .filter((d) => recalculateTravelDayIds.includes(d.id))
+              .map((d) => d.date);
+            setDayTravelInfoMap((prev) => mergeDayTravelInfoMaps(prev, patch, affectedDates));
+          }
         } else {
           await loadDayTravelInfo(tripId, currentTrip);
         }
       }
     } catch (err) {
-      console.error('Failed to load metrics and conflicts:', err);
+      console.error('Failed to load day metrics:', err);
       // 如果接口未实现，静默失败，不显示数据
     }
   };
@@ -760,12 +922,112 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
   // 加载每天的交通信息
   const loadDayTravelInfo = async (tripId: string, tripData: TripDetail) => {
     try {
-      const travelInfoMap = await loadTripDayTravelInfoMap(tripId, tripData);
+      const travelInfoMap = await loadTripDayTravelInfoMapCached(tripId, tripData);
       setDayTravelInfoMap(travelInfoMap);
     } catch (err) {
       console.error('Failed to load day travel info:', err);
     }
   };
+
+  const loadMoreTimelineDays = useCallback(async () => {
+    if (loadingMoreTimelineRef.current || !timelineWindowedRef.current) return;
+    const tripData = trip;
+    if (!tripData?.TripDay?.length) return;
+    if (timelineLoadedThrough >= tripData.TripDay.length) return;
+
+    loadingMoreTimelineRef.current = true;
+    try {
+      const convertItems = (items: ItineraryItemDetail[]): ScheduleItem[] =>
+        sortItineraryItemsForDisplay(items.filter((item) => item.startTime && item.endTime))
+          .map((item) => ({
+            startTime: formatTime(item.startTime),
+            endTime: formatTime(item.endTime),
+            placeId: item.placeId || 0,
+            placeName:
+              item.Place?.nameCN?.trim() ||
+              item.Place?.nameEN?.trim() ||
+              '未知地点',
+            type: item.type,
+            metadata: { itemId: item.id },
+          }))
+          .filter((item) => item.startTime && item.endTime);
+
+      const result = await tripsApi.getScheduleTimeline(tripId, {
+        include: 'items,schedule,metrics',
+        travelInfoMode: 'cached',
+        from: timelineLoadedThrough,
+        limit: SCHEDULE_TIMELINE_PAGE_SIZE,
+      });
+      if (result.status === 'not_modified') return;
+
+      const timeline = result.data;
+      if (result.etag) {
+        scheduleTimelineEtagRef.current = result.etag;
+      }
+
+      setTrip((prev) => (prev ? mergeTripDaysFromTimeline(prev, timeline.days) : prev));
+
+      const merged = mergeScheduleTimelineIntoMaps(
+        {
+          itemsMap: itineraryItemsMapRef.current,
+          scheduleMap: schedulesRef.current,
+          metricsMap: dayMetricsMapRef.current,
+          travelInfoMap: dayTravelInfoMapRef.current,
+        },
+        timeline,
+        convertItems,
+        tripData.TripDay,
+      );
+      setItineraryItemsMap(new Map(merged.itemsMap));
+      setSchedules(merged.scheduleMap);
+      setDayMetricsMap(merged.metricsMap);
+
+      if (merged.travelInfoMap.size > 0) {
+        setDayTravelInfoMap(merged.travelInfoMap);
+      } else {
+        const patch = await loadTripDayTravelInfoMapCached(
+          tripId,
+          tripData,
+          timeline.days.map((d) => d.date),
+        );
+        if (patch.size > 0) {
+          setDayTravelInfoMap((prev) =>
+            mergeDayTravelInfoMaps(
+              prev,
+              patch,
+              timeline.days.map((d) => d.date),
+            ),
+          );
+        }
+      }
+
+      setTimelineLoadedThrough((prev) =>
+        Math.min(prev + timeline.days.length, tripData.TripDay!.length),
+      );
+    } catch (err) {
+      console.error('[ScheduleTab] loadMoreTimelineDays failed:', err);
+    } finally {
+      loadingMoreTimelineRef.current = false;
+    }
+  }, [trip, tripId, timelineLoadedThrough]);
+
+  useEffect(() => {
+    const el = timelineLoadMoreSentinelRef.current;
+    if (!el || !trip?.TripDay?.length) return;
+    if (!shouldUseTimelineWindowedLoad(trip.TripDay.length)) return;
+    if (timelineLoadedThrough >= trip.TripDay.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMoreTimelineDays();
+        }
+      },
+      { rootMargin: '240px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [trip?.TripDay?.length, timelineLoadedThrough, loadMoreTimelineDays]);
 
   // 注册建议应用回调 - 处理 NARA 推荐的地点添加到行程
   const setOnApplySuggestion = planStudioContext?.setOnApplySuggestion;
@@ -1021,86 +1283,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     }
   };
 
-  // 可自动解决的冲突类型
-  const AUTO_RESOLVABLE_TYPES = ['TIME_CONFLICT', 'TRANSPORT_INSUFFICIENT', 'BUFFER_INSUFFICIENT', 'DUPLICATE_ITEM', 'CLOSURE_RISK'];
-
-  const visibleConflicts = useMemo(
-    () => filterPlanStudioConflicts(conflicts, itineraryItemsMap),
-    [conflicts, itineraryItemsMap],
-  );
-  
-  // 计算可自动解决的冲突数量
-  const autoResolvableConflicts = useMemo(() => {
-    return visibleConflicts.filter((c) => AUTO_RESOLVABLE_TYPES.includes(c.type));
-  }, [visibleConflicts]);
-
-  // 打开一键解决冲突预览
-  const handleOpenResolveConflicts = async () => {
-    if (autoResolvableConflicts.length === 0) {
-      toast.info('当前没有可自动解决的冲突');
-      return;
-    }
-    
-    setLoadingResolvePreview(true);
-    setResolveConflictsDialogOpen(true);
-    
-    try {
-      // 调用预览接口
-      const result = await tripsApi.resolveConflicts(tripId, { dryRun: true });
-      
-      const autoResolvable = result.results
-        .filter(r => r.resolved)
-        .map(r => ({
-          conflictId: r.conflictId,
-          description: r.description,
-          strategy: r.strategy,
-        }));
-      
-      const needManual = result.results
-        .filter(r => !r.resolved)
-        .map(r => ({
-          conflictId: r.conflictId,
-          description: r.description,
-          reason: r.failureReason || '需要手动处理',
-        }));
-      
-      setResolveConflictsPreview({ autoResolvable, needManual });
-    } catch (err: any) {
-      console.error('获取冲突解决预览失败:', err);
-      toast.error(err.message || '获取预览失败');
-      setResolveConflictsDialogOpen(false);
-    } finally {
-      setLoadingResolvePreview(false);
-    }
-  };
-
-  // 执行一键解决冲突
-  const handleExecuteResolveConflicts = async () => {
-    setExecutingResolve(true);
-    
-    try {
-      const result = await tripsApi.resolveConflicts(tripId, { dryRun: false });
-      
-      if (result.resolvedCount > 0) {
-        toast.success(`已解决 ${result.resolvedCount} 个冲突`, {
-          description: result.skippedCount > 0 ? `${result.skippedCount} 个冲突需要手动处理` : undefined,
-        });
-      } else if (result.skippedCount > 0) {
-        toast.info(`${result.skippedCount} 个冲突需要手动处理`);
-      }
-      
-      // 关闭对话框并刷新数据
-      setResolveConflictsDialogOpen(false);
-      setResolveConflictsPreview(null);
-      await loadTrip({ silent: true });
-    } catch (err: any) {
-      console.error('一键解决冲突失败:', err);
-      toast.error(err.message || '解决冲突失败');
-    } finally {
-      setExecutingResolve(false);
-    }
-  };
-
   const resolveAssessmentTravelMode = useCallback(async (): Promise<AssessmentTravelMode> => {
     try {
       const intent = await tripsApi.getIntent(tripId);
@@ -1191,15 +1373,15 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     }
   };
 
-  const handleDeleteItem = (itemId: string, tripDayId: string, placeName: string) => {
-    if (!guardStructuralEditOrToast(worldModelGuards)) return;
+  const handleDeleteItem = (itemId: string, tripDayId: string, placeName: string, dayDate?: string) => {
+    if (!guardItemStructureEdit(itemId, dayDate)) return;
     setDeletingItem({ id: itemId, tripDayId, placeName });
     setDeleteDialogOpen(true);
   };
 
   const confirmDeleteItem = async () => {
     if (!deletingItem) return;
-    if (!guardStructuralEditOrToast(worldModelGuards)) return;
+    if (!guardItemStructureEdit(deletingItem.id)) return;
 
     const itemToDelete = deletingItem;
     
@@ -1241,14 +1423,19 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     }
   };
 
-  const handleReplaceItem = (itemId: string, tripDayId: string, placeName: string) => {
-    if (!guardStructuralEditOrToast(worldModelGuards)) return;
+  const handleReplaceItem = (
+    itemId: string,
+    tripDayId: string,
+    placeName: string,
+    dayDate?: string,
+  ) => {
+    if (!guardItemStructureEdit(itemId, dayDate)) return;
     setReplacingItem({ id: itemId, tripDayId, placeName });
     setReplaceDialogOpen(true);
   };
 
   const handleSearchNearby = (item: ItineraryItem, category?: PlaceCategory) => {
-    if (!guardStructuralEditOrToast(worldModelGuards)) return;
+    if (!guardItemStructureEdit(item.id)) return;
 
     const day = trip?.TripDay?.find(d =>
       d.ItineraryItem?.some(i => i.id === item.id)
@@ -1412,8 +1599,8 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     }
   };
 
-  const handleMoveItem = async (itemId: string, currentDayId: string) => {
-    if (!guardStructuralEditOrToast(worldModelGuards)) return;
+  const handleMoveItem = async (itemId: string, currentDayId: string, dayDate?: string) => {
+    if (!guardItemStructureEdit(itemId, dayDate)) return;
     try {
       const item = await itineraryItemsApi.getById(itemId);
       setMovingItem({ id: itemId, currentDayId });
@@ -1478,227 +1665,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
     await handleDeleteItem(itemId, tripDayId, placeName);
   };
 
-  const handleRunOptimize = async () => {
-    if (!trip || !trip.TripDay || trip.TripDay.length === 0) {
-      toast.error('暂无行程数据');
-      return;
-    }
-    if (!canRunRouteRecalculation(worldModelGuards)) {
-      toast.info(
-        worldModelGuards?.banner_message_zh ?? '路线选择已冻结，请仅微调各站时间'
-      );
-      return;
-    }
-
-    try {
-      setOptimizing(true);
-
-      // 收集所有地点的 ID
-      const placeIds: number[] = [];
-      for (const day of trip.TripDay) {
-        if (day.ItineraryItem) {
-          for (const item of day.ItineraryItem) {
-            if (item.placeId && !placeIds.includes(item.placeId)) {
-              placeIds.push(item.placeId);
-            }
-          }
-        }
-      }
-
-      if (placeIds.length === 0) {
-        toast.error('没有可优化的地点');
-        return;
-      }
-
-      // 获取第一个日期作为配置基础
-      const firstDay = trip.TripDay[0];
-      const startDate = new Date(firstDay.date);
-      const endDate = new Date(trip.endDate);
-
-      // 从行程设置推导优化配置（与行程设置联动）
-      const travelers = trip.pacingConfig?.travelers ?? [];
-      const hasChildren = travelers.some((t) => t.type === 'CHILD');
-      const hasElderly = travelers.some((t) => t.type === 'ELDERLY');
-      let defaultTravelMode: 'TRANSIT' | 'WALKING' | 'DRIVING' | undefined;
-      try {
-        const intent = await tripsApi.getIntent(tripId);
-        const rawMode = intent.pacingConfig?.travelMode;
-        defaultTravelMode = rawMode ? INTENT_TRAVEL_MODE_MAP[String(rawMode)] : undefined;
-      } catch {
-        defaultTravelMode = undefined;
-      }
-      const transportPreferences = hasElderly ? { lessWalking: true } : undefined;
-
-      // 构建优化请求
-      const request: OptimizeRouteRequest = {
-        placeIds,
-        config: {
-          date: firstDay.date,
-          startTime: new Date(startDate.setHours(9, 0, 0, 0)).toISOString(),
-          endTime: new Date(endDate.setHours(18, 0, 0, 0)).toISOString(),
-          pacingFactor: 1.0, // 标准节奏
-          hasChildren,
-          hasElderly,
-          defaultTravelMode,
-          transportPreferences,
-        },
-        tripId,
-        dayId: firstDay.id,
-      };
-
-      // 调用优化接口
-      const optimizeResult = await itineraryOptimizationApi.optimize(request);
-      
-      // 验证优化结果
-      if (!optimizeResult || !optimizeResult.schedule || optimizeResult.schedule.length === 0) {
-        toast.error('优化结果为空，无法应用');
-        return;
-      }
-      
-      // 应用优化结果到行程
-      try {
-        // 构建优化结果数据
-        const route = optimizeResult.schedule.map(item => {
-          const node = optimizeResult.nodes?.[item.nodeIndex];
-          if (!node) {
-            console.warn('Node not found for index:', item.nodeIndex);
-            return null;
-          }
-          return {
-            placeId: node.id || 0, // PlaceNode 使用 id 字段
-            startTime: item.startTime,
-            endTime: item.endTime,
-            type: 'ACTIVITY',
-          };
-        }).filter(item => item !== null) as Array<{
-          placeId: number;
-          startTime: string;
-          endTime: string;
-          type: string;
-        }>;
-        
-        // 验证 route 数据
-        if (route.length === 0) {
-          toast.error('优化结果中没有有效的行程项');
-          return;
-        }
-        
-        const applyResult = await tripsApi.applyOptimization(tripId, {
-          result: {
-            route,
-            nodes: optimizeResult.nodes || [],
-            schedule: optimizeResult.schedule,
-            happinessScore: optimizeResult.happinessScore,
-            scoreBreakdown: optimizeResult.scoreBreakdown,
-          },
-          options: {
-            replaceExisting: true,
-            preserveManualEdits: true,
-            dryRun: false,
-          },
-        });
-        
-        // 检查响应是否有效
-        if (!applyResult) {
-          throw new Error('应用优化结果失败：响应为空');
-        }
-        
-        if (applyResult.success) {
-          const skipped = applyResult.skipped;
-          // 从行程数据构建 placeId -> 中文名 映射（优先中文）
-          const placeIdToNameCN = new Map<number, string>();
-          for (const day of trip.TripDay ?? []) {
-            for (const it of day.ItineraryItem ?? []) {
-              if (it.placeId && it.Place && (it.Place.nameCN || it.Place.nameEN)) {
-                placeIdToNameCN.set(it.placeId, (it.Place.nameCN && it.Place.nameCN.trim()) ? it.Place.nameCN : (it.Place.nameEN || ''));
-              }
-            }
-          }
-          const placeNames = (optimizeResult.schedule ?? [])
-            .map((item) => {
-              const node = optimizeResult.nodes?.[item.nodeIndex];
-              if (!node) return '';
-              const fromTrip = placeIdToNameCN.get(node.id);
-              return fromTrip || node.nameCN || node.nameEN || node.name;
-            })
-            .filter(Boolean);
-          const orderSummary = placeNames.length > 0
-            ? placeNames.slice(0, 5).join(' → ') + (placeNames.length > 5 ? ` 等${placeNames.length}处` : '')
-            : '';
-          const scoreStr = optimizeResult.happinessScore != null
-            ? `快乐值 ${optimizeResult.happinessScore.toFixed(0)} 分`
-            : '';
-          const summary = optimizeResult.conflictSummary;
-          const conflictStr = summary
-            ? `冲突 ${summary.before} → ${summary.after}（解决 ${summary.resolved}${summary.hasNew ? '，有新冲突' : ''}）`
-            : '';
-          const descParts: string[] = [];
-          if (orderSummary) descParts.push(`新顺序：${orderSummary}`);
-          if (scoreStr) descParts.push(scoreStr);
-          if (conflictStr) descParts.push(conflictStr);
-          if (skipped && skipped.length > 0) {
-            descParts.push(`以下地点因不营业等原因未加入：${skipped.map((s) => s.reason).join('；')}`);
-          }
-          toast.success(
-            `优化完成！已按路线顺序重新排列 ${applyResult.appliedItems || 0} 个行程项`,
-            {
-              description: descParts.join(' · '),
-              duration: 10000,
-            }
-          );
-        } else {
-          toast.warning('优化完成，但应用结果时出错：响应格式不正确');
-        }
-      } catch (applyErr: any) {
-        console.error('Failed to apply optimization:', applyErr);
-        // 如果应用失败，仍然显示优化结果
-        toast.warning('优化完成，但应用结果时出错：' + (applyErr.message || '未知错误'));
-      }
-      
-      // 重新加载行程数据
-      await loadTrip();
-    } catch (err: any) {
-      console.error('Failed to optimize:', err);
-      toast.error(err.message || '优化失败');
-    } finally {
-      setOptimizing(false);
-    }
-  };
-
-  const handleAutoAddBuffers = async () => {
-    if (!trip) {
-      toast.error('暂无行程数据');
-      return;
-    }
-
-    try {
-      setAddingBuffers(true);
-
-      // 调用行程调整接口，自动添加缓冲
-      await tripsApi.adjust(tripId, {
-        modifications: [
-          {
-            type: 'ADD_BUFFERS',
-            options: {
-              bufferDuration: 30, // 默认30分钟缓冲
-              applyToAllDays: true, // 应用到所有日期
-            },
-          },
-        ],
-      });
-
-      toast.success('已自动添加缓冲时间');
-      
-      // 重新加载行程数据
-      await loadTrip();
-    } catch (err: any) {
-      console.error('Failed to add buffers:', err);
-      toast.error(err.message || '添加缓冲失败');
-    } finally {
-      setAddingBuffers(false);
-    }
-  };
-
   if (loading) {
     return <ScheduleTabSkeleton dayCount={2} />;
   }
@@ -1758,28 +1724,57 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                 方案预览
               </Button>
             ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => void handleAssessTrip()}
-              disabled={loadingAssessment}
-            >
-              {loadingAssessment ? (
-                <>
-                  <Spinner className="w-3 h-3 mr-1" />
-                  评估中...
-                </>
-              ) : (
-                <>
-                  <ClipboardCheck className="w-3 h-3 mr-1" />
-                  日程结构评估
-                </>
-              )}
-            </Button>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => void handleAssessTrip()}
+                    disabled={loadingAssessment}
+                  >
+                    {loadingAssessment ? (
+                      <>
+                        <Spinner className="w-3 h-3 mr-1" />
+                        评估中...
+                      </>
+                    ) : (
+                      <>
+                        <ClipboardCheck className="w-3 h-3 mr-1" />
+                        日程结构评估
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[16rem] text-center leading-relaxed">
+                  检查日程是否可行，不会自动改动你的安排
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
         {trip && trip.TripDay && Array.isArray(trip.TripDay) ? trip.TripDay.map((day, idx) => {
+          const isWindowedTrip = shouldUseTimelineWindowedLoad(trip.TripDay!.length);
+          if (isWindowedTrip && idx >= timelineLoadedThrough) {
+            return (
+              <Card
+                key={`timeline-pending-${day.date}`}
+                data-schedule-day-index={idx}
+                className="border-dashed"
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-medium text-muted-foreground">
+                    第 {idx + 1} 天
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex justify-center py-10">
+                  <Spinner className="h-5 w-5 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            );
+          }
+
           const schedule = schedules.get(day.date);
           const items = schedule?.schedule?.items || [];
           
@@ -2083,6 +2078,7 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                         itineraryItemsMap.get(day.date) || itineraryItemsMap.get(normalizedDate) || [];
                       const travelInfo = dayTravelInfoMap.get(normalizedDate) || dayTravelInfoMap.get(day.date);
                       const visibleItems = timelineDisplayItems;
+                      const lockedItemIds = buildLockedItineraryItemIdSet(lockedSegmentIds, dayItems);
 
                       const renderItineraryRow = (
                         item: ItineraryItemDetail,
@@ -2140,6 +2136,9 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                             prevItem.id === checkoutMorningPair.overnightItem.id
                           );
 
+                        const itemStructureLocked =
+                          segmentDegradation.structureReadOnly || lockedItemIds.has(item.id);
+
                         return (
                           <div key={rowKey ?? item.id}>
                             {showInlineTravelSegment && (
@@ -2165,7 +2164,7 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                               }
                               defaultWeatherLocation={defaultWeatherLocation}
                               highlighted={highlightItineraryItemIds.includes(item.id)}
-                              structureLocked={segmentDegradation.structureReadOnly}
+                              structureLocked={itemStructureLocked}
                               editTimingOnly={
                                 segmentDegradation.isTopologyLocked && segmentDegradation.timingEditable
                               }
@@ -2177,27 +2176,29 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                                   : undefined
                               }
                               onDelete={
-                                segmentDegradation.structureReadOnly
+                                itemStructureLocked
                                   ? undefined
                                   : (rowItem) =>
                                       handleDeleteItem(
                                         rowItem.id,
                                         day.id,
                                         rowItem.Place?.nameCN || rowItem.Place?.nameEN || '',
+                                        day.date,
                                       )
                               }
                               onReplace={
-                                segmentDegradation.structureReadOnly
+                                itemStructureLocked
                                   ? undefined
                                   : (rowItem) =>
                                       handleReplaceItem(
                                         rowItem.id,
                                         day.id,
                                         rowItem.Place?.nameCN || rowItem.Place?.nameEN || '',
+                                        day.date,
                                       )
                               }
                               onSearchNearby={
-                                segmentDegradation.structureReadOnly ? undefined : handleSearchNearby
+                                itemStructureLocked ? undefined : handleSearchNearby
                               }
                               onApplyPatch={(_item) => {
                                 toast.info(t('planStudio.scheduleTab.applyPatchNotImplemented'));
@@ -2296,6 +2297,9 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                           if (item.metadata && item.metadata.itemId) {
                             const fullItem = dayItems.find(i => i.id === item.metadata!.itemId);
                             if (fullItem) {
+                              const fullItemStructureLocked =
+                                segmentDegradation.structureReadOnly ||
+                                lockedItemIds.has(fullItem.id);
                               return (
                                 <ItineraryItemRow
                                   key={fullItem.id}
@@ -2307,7 +2311,7 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                                   placeImages={fullItem.Place?.id ? placeImagesMap.get(fullItem.Place.id) : undefined}
                                   defaultWeatherLocation={defaultWeatherLocation}
                                   highlighted={highlightItineraryItemIds.includes(fullItem.id)}
-                                  structureLocked={segmentDegradation.structureReadOnly}
+                                  structureLocked={fullItemStructureLocked}
                                   editTimingOnly={
                                     segmentDegradation.isTopologyLocked && segmentDegradation.timingEditable
                                   }
@@ -2319,27 +2323,29 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                                       : undefined
                                   }
                                   onDelete={
-                                    segmentDegradation.structureReadOnly
+                                    fullItemStructureLocked
                                       ? undefined
                                       : (item) =>
                                           handleDeleteItem(
                                             item.id,
                                             day.id,
-                                            item.Place?.nameCN || item.Place?.nameEN || ''
+                                            item.Place?.nameCN || item.Place?.nameEN || '',
+                                            day.date,
                                           )
                                   }
                                   onReplace={
-                                    segmentDegradation.structureReadOnly
+                                    fullItemStructureLocked
                                       ? undefined
                                       : (item) =>
                                           handleReplaceItem(
                                             item.id,
                                             day.id,
-                                            item.Place?.nameCN || item.Place?.nameEN || ''
+                                            item.Place?.nameCN || item.Place?.nameEN || '',
+                                            day.date,
                                           )
                                   }
                                   onSearchNearby={
-                                    segmentDegradation.structureReadOnly ? undefined : handleSearchNearby
+                                    fullItemStructureLocked ? undefined : handleSearchNearby
                                   }
                                   onAskNara={planStudioActions ? (item, question) => {
                                     // 计算当天统计
@@ -2439,7 +2445,7 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
                                         e.stopPropagation();
                                         const day = trip?.TripDay?.find(d => schedules.get(d.date)?.schedule?.items?.some(i => i.metadata?.itemId === item.metadata!.itemId));
                                         if (day) {
-                                          handleMoveItem(item.metadata!.itemId, day.id);
+                                          handleMoveItem(item.metadata!.itemId, day.id, day.date);
                                         }
                                       }}
                                     >
@@ -2515,128 +2521,24 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
             </Card>
           );
         }) : null}
+        {trip?.TripDay &&
+        shouldUseTimelineWindowedLoad(trip.TripDay.length) &&
+        timelineLoadedThrough < trip.TripDay.length ? (
+          <div ref={timelineLoadMoreSentinelRef} className="h-px w-full" aria-hidden />
+        ) : null}
         </SegmentEditorDegradedShell>
       </div>
 
-      {/* 右（4/12）：领域分解 + 快捷操作 */}
+      {/* 右（4/12）：守护者提醒 + 领域分解 */}
       <div className="col-span-12 lg:col-span-4 space-y-6">
+        <ScheduleGuardianDigestCard tripId={tripId} personaAlerts={personaAlerts} />
+        <ScheduleRouteRunEvidenceSection className="space-y-4" />
         <TripDomainBreakdownCard
           tripId={tripId}
           breakdown={domainBreakdown}
           loading={domainBreakdownLoading}
           onClaimDomain={() => setDomainClaimDialogOpen(true)}
         />
-        {autoResolvableConflicts.length > 0 ? (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">时间轴冲突</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                {autoResolvableConflicts.length} 项可自动解决；更多待办请查看「规划待办」Tab。
-              </p>
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => void handleOpenResolveConflicts()}
-                disabled={loadingResolvePreview}
-              >
-                {loadingResolvePreview ? (
-                  <>
-                    <Spinner className="w-4 h-4 mr-2" />
-                    加载预览…
-                  </>
-                ) : (
-                  '一键解决可自动冲突'
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                size="sm"
-                onClick={() => {
-                  window.dispatchEvent(
-                    new CustomEvent('plan-studio:switch-tab', { detail: { tab: 'conflicts' } }),
-                  );
-                }}
-              >
-                打开规划待办
-              </Button>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* 行程路线优化入口 - 双入口：智能优化(规划Tab) + 经典配置 */}
-        <Card className="border-dashed">
-          <CardContent className="pt-4 pb-4 space-y-2">
-            <Link to={`/dashboard/trips/${tripId}?tab=planning`} className="block">
-              <div className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer">
-                <div className="flex items-center gap-2 text-sm">
-                  <Zap className="h-4 w-4 text-amber-500" />
-                  <span className="font-medium">智能优化</span>
-                  <span className="text-muted-foreground text-xs">AI 驱动的全方位优化</span>
-                </div>
-                <Badge variant="secondary" className="text-xs">推荐</Badge>
-              </div>
-            </Link>
-            <Link to={`/dashboard/trips/optimize?tripId=${tripId}`} className="block">
-              <div className="flex items-center gap-2 text-sm p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium text-muted-foreground">经典配置</span>
-                <span className="text-muted-foreground text-xs">手动选择地点、交通方式</span>
-              </div>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* CTA - 仅在有冲突时显示 */}
-        {visibleConflicts.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              根据距离、交通时间与节奏重新排列当日行程顺序，减少往返、降低疲劳
-            </p>
-            <Button 
-              className="w-full" 
-              data-tour="schedule-optimize" 
-              onClick={handleRunOptimize}
-              disabled={optimizing || !canRunRouteRecalculation(worldModelGuards)}
-              title={
-                freezeRouteSelection
-                  ? worldModelGuards?.banner_message_zh ?? '路线已锁定，仅可微调时间'
-                  : undefined
-              }
-            >
-              {optimizing ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  {t('planStudio.scheduleTab.optimizing')}
-                </>
-              ) : (
-                t('planStudio.scheduleTab.runOptimize')
-              )}
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full" 
-              onClick={handleAutoAddBuffers}
-              disabled={addingBuffers}
-            >
-              {addingBuffers ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  {t('planStudio.scheduleTab.addingBuffers')}
-                </>
-              ) : (
-                t('planStudio.scheduleTab.autoAddBuffers')
-              )}
-            </Button>
-            <Link to={`/dashboard/trips/${tripId}?tab=planning`}>
-              <Button variant="ghost" className="w-full text-sm" size="sm">
-                智能优化（高级选项）
-              </Button>
-            </Link>
-          </div>
-        )}
       </div>
     </div>
       {/* 编辑对话框 */}
@@ -2953,124 +2855,6 @@ export default function ScheduleTab({ tripId, refreshKey, wishImpactByDay }: Sch
               disabled={removingDuplicate}
             >
               保留全部
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 一键解决冲突预览对话框 */}
-      <Dialog open={resolveConflictsDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          setResolveConflictsDialogOpen(false);
-          setResolveConflictsPreview(null);
-        }
-      }}>
-        <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-amber-500" />
-              一键解决冲突
-            </DialogTitle>
-            <DialogDescription>
-              预览将要执行的操作，确认后将自动解决可处理的冲突
-            </DialogDescription>
-          </DialogHeader>
-
-          {loadingResolvePreview ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-3">
-              <Spinner className="w-6 h-6" />
-              <span className="text-sm text-muted-foreground">正在分析冲突...</span>
-            </div>
-          ) : resolveConflictsPreview ? (
-            <div className="space-y-4 py-2">
-              {/* 可自动解决的冲突 */}
-              {resolveConflictsPreview.autoResolvable.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-green-700">
-                    <ClipboardCheck className="h-4 w-4" />
-                    将自动解决 {resolveConflictsPreview.autoResolvable.length} 个冲突：
-                  </div>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {resolveConflictsPreview.autoResolvable.map((item) => (
-                      <div
-                        key={item.conflictId}
-                        className="flex items-start gap-2 p-2 bg-green-50 border border-green-200 rounded text-xs"
-                      >
-                        <span className="text-green-600 mt-0.5">✓</span>
-                        <div className="flex-1">
-                          <div className="text-gray-800">{item.description}</div>
-                          <div className="text-gray-500 mt-0.5">策略：{item.strategy}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 需手动处理的冲突 */}
-              {resolveConflictsPreview.needManual.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
-                    <AlertTriangle className="h-4 w-4" />
-                    以下 {resolveConflictsPreview.needManual.length} 个冲突需要手动处理：
-                  </div>
-                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                    {resolveConflictsPreview.needManual.map((item) => (
-                      <div
-                        key={item.conflictId}
-                        className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs"
-                      >
-                        <span className="text-amber-600 mt-0.5">⚠</span>
-                        <div className="flex-1">
-                          <div className="text-gray-800">{item.description}</div>
-                          <div className="text-gray-500 mt-0.5">{item.reason}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 无可解决冲突 */}
-              {resolveConflictsPreview.autoResolvable.length === 0 && (
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
-                  <Info className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm text-gray-600">当前所有冲突都需要手动处理</p>
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setResolveConflictsDialogOpen(false);
-                setResolveConflictsPreview(null);
-              }}
-              disabled={executingResolve}
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleExecuteResolveConflicts}
-              disabled={executingResolve || loadingResolvePreview || !resolveConflictsPreview?.autoResolvable.length}
-            >
-              {executingResolve ? (
-                <>
-                  <Spinner className="w-4 h-4 mr-2" />
-                  执行中...
-                </>
-              ) : (
-                <>
-                  确认执行
-                  {resolveConflictsPreview?.autoResolvable.length ? (
-                    <Badge variant="secondary" className="ml-1.5">
-                      {resolveConflictsPreview.autoResolvable.length}
-                    </Badge>
-                  ) : null}
-                </>
-              )}
             </Button>
           </DialogFooter>
         </DialogContent>

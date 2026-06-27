@@ -17,8 +17,13 @@ import {
 } from '@/api/readiness';
 import type { ItineraryItem, ItineraryItemDetail, TripDetail } from '@/types/trip';
 import { resolveItineraryItemForCoveragePoi } from '@/lib/coverage-poi-matching.util';
+import {
+  guardStructuralEditOrToast,
+} from '@/lib/world-model-guards';
+import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
 import { getTimezoneByCountry } from '@/utils/timezone';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type InspectorSelection =
   | { kind: 'poi'; poi: CoverageMapPoi; item: ItineraryItemDetail | null }
@@ -52,6 +57,31 @@ export default function CoverageMapExplorer({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [replacingItem, setReplacingItem] = useState<{ id: string; placeName?: string } | null>(null);
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+  const { worldModelGuards, canEditTiming, canEditStructure } = useWorldModelGuards();
+
+  const handleOpenEditItem = useCallback(
+    (item: ItineraryItemDetail) => {
+      if (!canEditTiming) {
+        toast.error(worldModelGuards?.banner_message_zh ?? '当前阶段不可编辑行程时间');
+        return;
+      }
+      setEditingItem(item);
+      setEditDialogOpen(true);
+    },
+    [worldModelGuards, canEditTiming],
+  );
+
+  const handleOpenReplaceItem = useCallback(
+    (item: ItineraryItemDetail, placeName?: string) => {
+      if (!canEditStructure) {
+        guardStructuralEditOrToast(worldModelGuards);
+        return;
+      }
+      setReplacingItem({ id: item.id, placeName });
+      setReplaceDialogOpen(true);
+    },
+    [worldModelGuards, canEditStructure],
+  );
 
   const loadCoverageMap = useCallback(async () => {
     setLoading(true);
@@ -194,19 +224,13 @@ export default function CoverageMapExplorer({
             <div className="col-span-12 lg:col-span-4">
               <CoveragePoiInspector
                 selection={selection}
-                onEditItem={(item) => {
-                  setEditingItem(item);
-                  setEditDialogOpen(true);
-                }}
+                onEditItem={handleOpenEditItem}
                 onReplaceItem={(item) => {
                   const placeName =
                     item.Place?.nameCN?.trim() ||
                     item.Place?.nameEN?.trim() ||
-                    selection?.kind === 'poi'
-                      ? selection.poi.name
-                      : undefined;
-                  setReplacingItem({ id: item.id, placeName });
-                  setReplaceDialogOpen(true);
+                    (selection?.kind === 'poi' ? selection.poi.name : undefined);
+                  handleOpenReplaceItem(item, placeName);
                 }}
                 onJumpToScheduleDay={onJumpToScheduleDay}
               />

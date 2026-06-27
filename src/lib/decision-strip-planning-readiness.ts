@@ -114,8 +114,8 @@ export function resolvePlanningReadinessPresentation(input: {
     headline = '团队节奏待对齐';
     primaryCta = { type: 'open_team', label: '对齐团队节奏' };
   } else {
-    headline = `${inbox.inboxCount} 项规划待办`;
-    primaryCta = { type: 'open_conflicts', label: '打开规划待办' };
+    headline = `出发前还有 ${inbox.inboxCount} 项待办`;
+    primaryCta = { type: 'open_conflicts', label: '打开可执行证明' };
   }
 
   const sublineParts = chips.filter((chip) => !headline.includes(chip.replace(/^\d+\s项/, '').trim()));

@@ -267,3 +267,54 @@ export function hasDecisionCockpitUi(cockpit: DecisionCockpitDto | null | undefi
 export function integrityBadgeLabelZh(key: string): string {
   return INTEGRITY_BADGE_LABELS[key] ?? key;
 }
+
+export interface DecisionCockpitStripSummary {
+  headline: string;
+  subline?: string;
+}
+
+/** Decision Strip 摘要：integrity badge / trace / risk 投影 */
+export function pickDecisionCockpitStripSummary(
+  cockpit: DecisionCockpitDto | null | undefined,
+): DecisionCockpitStripSummary | null {
+  if (!cockpit || !hasDecisionCockpitUi(cockpit)) return null;
+
+  const warnBadge = cockpit.integrity_badges?.find((badge) => {
+    const status = (badge.status ?? '').toLowerCase();
+    return status === 'warn' || status === 'warning' || status === 'fail' || status === 'failed';
+  });
+  if (warnBadge?.summary_zh?.trim()) {
+    return {
+      headline: warnBadge.summary_zh.trim(),
+      subline: warnBadge.label_zh?.trim(),
+    };
+  }
+
+  const trace = cockpit.decision_trace_rows?.find(
+    (row) => row.summary_zh?.trim() || row.verdict?.trim(),
+  );
+  if (trace?.summary_zh?.trim()) {
+    return {
+      headline: trace.summary_zh.trim(),
+      subline: trace.verdict?.trim() || trace.phase?.trim(),
+    };
+  }
+
+  const risk = cockpit.risk_factors?.find((factor) => factor.label_zh?.trim());
+  if (risk?.label_zh?.trim()) {
+    return {
+      headline: risk.label_zh.trim(),
+      subline: risk.detail_zh?.trim(),
+    };
+  }
+
+  const passBadge = cockpit.integrity_badges?.find((badge) => badge.summary_zh?.trim());
+  if (passBadge?.summary_zh?.trim()) {
+    return {
+      headline: passBadge.summary_zh.trim(),
+      subline: passBadge.label_zh?.trim(),
+    };
+  }
+
+  return null;
+}

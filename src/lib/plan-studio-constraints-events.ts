@@ -1,6 +1,32 @@
-import type { PlanStudioConstraintsChangeSource } from '@/types/planning-constraints';
+import type {
+  ConstraintPendingItem,
+  ConstraintPendingKey,
+  PlanStudioConstraintsChangeSource,
+} from '@/types/planning-constraints';
 
 export const PLAN_STUDIO_CONSTRAINTS_CHANGED = 'plan-studio:constraints-changed';
+
+export const PLAN_STUDIO_OPEN_CONSTRAINT_EDITOR = 'plan-studio:open-constraint-editor';
+
+export interface PlanStudioOpenConstraintEditorDetail {
+  tripId?: string;
+  key?: ConstraintPendingKey;
+  item?: ConstraintPendingItem;
+  /** 从方案预览抽屉跳转时关闭 Plan Gate */
+  closePlanGate?: boolean;
+  /** 约束保存/确认后提示重新打开方案预览并生成 */
+  resumePlanGate?: boolean;
+}
+
+export function dispatchOpenConstraintEditor(
+  detail: PlanStudioOpenConstraintEditorDetail = {},
+): void {
+  window.dispatchEvent(
+    new CustomEvent<PlanStudioOpenConstraintEditorDetail>(PLAN_STUDIO_OPEN_CONSTRAINT_EDITOR, {
+      detail,
+    }),
+  );
+}
 
 export interface PlanStudioConstraintsChangedDetail {
   tripId: string;

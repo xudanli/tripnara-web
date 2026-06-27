@@ -17,6 +17,15 @@ import type {
   WorldModelGuards,
 } from '@/types/world-model-guards';
 import { pickDecisionCockpitFromRouteRun } from '@/lib/decision-cockpit';
+import { pickLegEvidenceBundleFromRouteRun } from '@/lib/leg-evidence-ui';
+import { pickPoiPitfallBundleFromRouteRun } from '@/lib/poi-pitfall-ui';
+import {
+  pickCascadeAffectedFromExplain,
+  pickCascadeUiHintsFromExplain,
+} from '@/lib/readiness-cascade.util';
+import { pickRobustnessDashboardFromRouteRun } from '@/lib/robustness-dashboard';
+import { clearRouteRunConfirmationFromStore } from '@/lib/route-run-confirmation';
+import { reportSegmentLockMismatch } from '@/utils/world-model-observability';
 import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
 import { toast } from 'sonner';
 
@@ -425,12 +434,241 @@ export function canRunRouteRecalculation(
   return !guards?.freeze_route_selection;
 }
 
-export function assertStructuralEditAllowed(guards: WorldModelGuards | null | undefined): void {
-  if (!canEditSegmentStructure(guards)) {
-    throw new UserFacingError(
-      guards?.banner_message_zh ?? '当前阶段不可修改路线结构'
-    );
+type SegmentLockItemRef = {
+  id: string;
+  metadata?: Record<string, unknown> | null;
+};
+
+const SEGMENT_LOCK_META_FIELDS = [
+  'segment_id',
+  'segmentId',
+  'route_segment_id',
+  'routeSegmentId',
+  'leg_id',
+  'legId',
+  'travel_segment_id',
+  'travelSegmentId',
+  'edge_id',
+  'edgeId',
+] as const;
+
+const SEGMENT_LOCK_COMPOSITE_SEPARATORS = [':', '_', '->'] as const;
+
+/** 去掉后端 `leg:` 前缀后再做 composite 拆分 */
+export function normalizeSegmentLockId(segmentId: string): string {
+  const trimmed = segmentId.trim();
+  return trimmed.startsWith('leg:') ? trimmed.slice(4) : trimmed;
+}
+
+/** 从 route_and_run itinerary / timeline 投影中提取 item 引用 */
+export function collectItineraryItemRefsFromItinerary(itinerary: unknown): SegmentLockItemRef[] {
+  const refs: SegmentLockItemRef[] = [];
+  const seen = new Set<string>();
+
+  const pushItem = (raw: unknown) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+    const item = raw as Record<string, unknown>;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const metadata =
+      item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? (item.metadata as Record<string, unknown>)
+        : item.meta && typeof item.meta === 'object' && !Array.isArray(item.meta)
+          ? (item.meta as Record<string, unknown>)
+          : undefined;
+    refs.push({ id, metadata: metadata ?? null });
+  };
+
+  const walkDays = (days: unknown) => {
+    if (!Array.isArray(days)) return;
+    for (const day of days) {
+      if (!day || typeof day !== 'object') continue;
+      const items = (day as Record<string, unknown>).items;
+      if (Array.isArray(items)) items.forEach(pushItem);
+    }
+  };
+
+  if (Array.isArray(itinerary)) {
+    for (const entry of itinerary) {
+      if (!entry || typeof entry !== 'object') continue;
+      const record = entry as Record<string, unknown>;
+      if (Array.isArray(record.items)) {
+        record.items.forEach(pushItem);
+        continue;
+      }
+      pushItem(entry);
+    }
+    return refs;
   }
+
+  if (!itinerary || typeof itinerary !== 'object') return refs;
+  const root = itinerary as Record<string, unknown>;
+  walkDays(root.days);
+  walkDays(root.timeline);
+  if (Array.isArray(root.items)) root.items.forEach(pushItem);
+  return refs;
+}
+
+/** DEV 诊断：哪些 locked_segment_ids 无法映射到当前 itinerary item */
+export function findUnmatchedSegmentLockIds(
+  lockedSegmentIds: Set<string>,
+  items: SegmentLockItemRef[],
+): string[] {
+  if (lockedSegmentIds.size === 0) return [];
+
+  const unmatched: string[] = [];
+  for (const rawSegId of lockedSegmentIds) {
+    const segId = rawSegId.trim();
+    if (!segId) continue;
+
+    if (items.some((item) => item.id === segId)) continue;
+
+    const normalized = normalizeSegmentLockId(segId);
+    let matchedComposite = false;
+    for (const sep of SEGMENT_LOCK_COMPOSITE_SEPARATORS) {
+      if (!normalized.includes(sep)) continue;
+      const parts = normalized.split(sep).filter(Boolean);
+      if (parts.some((part) => items.some((item) => item.id === part))) {
+        matchedComposite = true;
+        break;
+      }
+    }
+    if (matchedComposite) continue;
+
+    if (
+      items.some((item, index) =>
+        isItemStructureLocked(new Set([segId]), item, index > 0 ? items[index - 1]?.id : undefined),
+      )
+    ) {
+      continue;
+    }
+
+    unmatched.push(segId);
+  }
+
+  return unmatched;
+}
+
+function auditSegmentLockCoverage(
+  lockedSegmentIds: Set<string>,
+  itinerary: unknown,
+  context?: { requestId?: string; tripId?: string | null },
+): void {
+  if (lockedSegmentIds.size === 0) return;
+  const items = collectItineraryItemRefsFromItinerary(itinerary);
+  if (items.length === 0) return;
+  const unmatched = findUnmatchedSegmentLockIds(lockedSegmentIds, items);
+  reportSegmentLockMismatch({
+    requestId: context?.requestId,
+    tripId: context?.tripId,
+    unmatched,
+    lockedCount: lockedSegmentIds.size,
+    itemCount: items.length,
+  });
+}
+
+/** 解析 item / 相邻段可能对应的 locked_segment_ids 键 */
+export function collectSegmentLockKeys(
+  item: SegmentLockItemRef,
+  prevItemId?: string | null,
+): string[] {
+  const keys = new Set<string>([item.id]);
+  const meta = item.metadata;
+  if (meta && typeof meta === 'object') {
+    for (const field of SEGMENT_LOCK_META_FIELDS) {
+      const value = meta[field];
+      if (typeof value === 'string' && value.trim()) keys.add(value.trim());
+    }
+    const fromItemId = meta.from_item_id ?? meta.fromItemId;
+    const toItemId = meta.to_item_id ?? meta.toItemId;
+    if (typeof fromItemId === 'string' && fromItemId.trim() && typeof toItemId === 'string' && toItemId.trim()) {
+      keys.add(`${fromItemId.trim()}:${toItemId.trim()}`);
+      keys.add(`${fromItemId.trim()}_${toItemId.trim()}`);
+      keys.add(`${fromItemId.trim()}->${toItemId.trim()}`);
+      keys.add(`leg:${fromItemId.trim()}:${toItemId.trim()}`);
+    }
+  }
+  if (prevItemId) {
+    keys.add(`${prevItemId}:${item.id}`);
+    keys.add(`${prevItemId}_${item.id}`);
+    keys.add(`${prevItemId}->${item.id}`);
+    keys.add(`leg:${prevItemId}:${item.id}`);
+  }
+  return [...keys];
+}
+
+/** 单个行程项是否命中 locked_segment_ids（全局 mode=full 时仍可能按段锁） */
+export function isItemStructureLocked(
+  lockedSegmentIds: Set<string>,
+  item: SegmentLockItemRef,
+  prevItemId?: string | null,
+): boolean {
+  if (lockedSegmentIds.size === 0) return false;
+  return collectSegmentLockKeys(item, prevItemId).some((key) => lockedSegmentIds.has(key));
+}
+
+/** 由 locked_segment_ids 展开为需禁用结构编辑的 item id 集合 */
+export function buildLockedItineraryItemIdSet(
+  lockedSegmentIds: Set<string>,
+  items: SegmentLockItemRef[],
+): Set<string> {
+  const locked = new Set<string>();
+  if (lockedSegmentIds.size === 0 || items.length === 0) return locked;
+
+  for (const item of items) {
+    if (lockedSegmentIds.has(item.id)) locked.add(item.id);
+  }
+
+  for (const rawSegId of lockedSegmentIds) {
+    const segId = normalizeSegmentLockId(rawSegId);
+    for (const sep of SEGMENT_LOCK_COMPOSITE_SEPARATORS) {
+      if (!segId.includes(sep)) continue;
+      const parts = segId.split(sep).filter(Boolean);
+      for (const part of parts) {
+        if (items.some((item) => item.id === part)) locked.add(part);
+      }
+    }
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const prevId = i > 0 ? items[i - 1].id : undefined;
+    if (isItemStructureLocked(lockedSegmentIds, item, prevId)) {
+      locked.add(item.id);
+      if (prevId) locked.add(prevId);
+    }
+  }
+
+  return locked;
+}
+
+export function guardRouteRecalculationOrToast(
+  guards: WorldModelGuards | null | undefined,
+): boolean {
+  if (canRunRouteRecalculation(guards)) return true;
+  toast.error(
+    guards?.banner_message_zh ?? '路线选择已冻结，暂不可重新优化或重算路段',
+  );
+  return false;
+}
+
+/** 结构编辑门控：全局 mode + 按段 locked_segment_ids */
+export function guardItineraryItemStructuralEditOrToast(
+  guards: WorldModelGuards | null | undefined,
+  lockedSegmentIds: Set<string>,
+  item: SegmentLockItemRef,
+  prevItemId?: string | null,
+): boolean {
+  if (!canEditSegmentStructure(guards)) {
+    toast.error(guards?.banner_message_zh ?? '当前阶段不可修改路线结构');
+    return false;
+  }
+  if (isItemStructureLocked(lockedSegmentIds, item, prevItemId)) {
+    toast.error(guards?.banner_message_zh ?? '该路段已锁定，不可修改');
+    return false;
+  }
+  return true;
 }
 
 /** 拦截结构编辑并 toast；返回 true 表示允许继续 */
@@ -448,6 +686,12 @@ export function resolvePlanningBannerText(
   const degradation = getSegmentEditorDegradation(guards);
   if (degradation.slotTimingGuidanceZh) return degradation.slotTimingGuidanceZh;
   if (guards?.banner_message_zh) return guards.banner_message_zh;
+  if (guards?.physical_reality_incomplete) {
+    return '物理数据为草稿，优化已降级';
+  }
+  if (guards?.freeze_route_selection) {
+    return '路线选择已冻结，暂不可重新优化或重算路段';
+  }
 
   const mode = resolveEffectiveSegmentEditorMode(guards);
   if (mode === 'readonly') {
@@ -459,21 +703,50 @@ export function resolvePlanningBannerText(
   return null;
 }
 
+function isDecisionCockpitUiSuppressed(res: RouteAndRunResponse): boolean {
+  const payload = res.result?.payload as Record<string, unknown> | undefined;
+  if (!payload) return false;
+  return (
+    payload.decision_cockpit_ui_suppressed === true ||
+    payload.decisionCockpitUiSuppressed === true ||
+    payload.itinerary_adjust_intake === true ||
+    payload.itineraryAdjustIntake === true
+  );
+}
+
 export function applyRouteAndRunToStore(res: RouteAndRunResponse, tripId?: string | null): void {
   applyDsoVersionFromRouteRun(res, tripId);
 
   const guards = pickWorldModelGuardsFromRouteRun(res);
   const effectiveMode = resolveEffectiveSegmentEditorMode(guards);
+  const cockpitSuppressed = isDecisionCockpitUiSuppressed(res);
+  const legEvidence = pickLegEvidenceBundleFromRouteRun(res);
+  const poiPitfall = pickPoiPitfallBundleFromRouteRun(res);
+  const itinerary = pickItineraryFromRouteRun(res);
+  const lockedSegmentIds = new Set(guards?.locked_segment_ids ?? []);
+  clearRouteRunConfirmationFromStore();
   useWorldModelGuardsStore.getState().setFromRouteRun({
     worldModelGuards: guards ?? null,
     segmentEditorMode: effectiveMode,
     isRouteTopologyLocked: isRouteTopologyLocked(guards),
-    lockedSegmentIds: new Set(guards?.locked_segment_ids ?? []),
-    itinerary: pickItineraryFromRouteRun(res),
+    lockedSegmentIds,
+    itinerary,
     explainOptimization: pickExplainOptimizationFromRouteRun(res),
     optimizationMethod: pickOptimizationMethodFromRouteRun(res),
-    decisionCockpit: pickDecisionCockpitFromRouteRun(res),
+    decisionCockpit: cockpitSuppressed ? undefined : pickDecisionCockpitFromRouteRun(res),
+    cascadeUiHints: pickCascadeUiHintsFromExplain(res.explain),
+    cascadeAffectedItems: pickCascadeAffectedFromExplain(res.explain),
+    legEvidenceCards: legEvidence.cards,
+    legEvidenceHeadlineZh: legEvidence.headlineZh,
+    poiPitfallCards: poiPitfall.cards,
+    poiPitfallHeadlineZh: poiPitfall.headlineZh,
+    robustnessDashboard: pickRobustnessDashboardFromRouteRun(res) ?? undefined,
     requestId: res.request_id,
+  });
+
+  auditSegmentLockCoverage(lockedSegmentIds, itinerary, {
+    requestId: res.request_id,
+    tripId,
   });
 
   if (guards?.recommended_plan_rejected && res.request_id !== lastRecommendedPlanRejectedRequestId) {

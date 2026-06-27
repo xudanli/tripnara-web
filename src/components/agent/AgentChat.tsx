@@ -25,7 +25,14 @@ import {
   type RouteRunSimplifiedExplanation,
   type RouteRunAsyncTaskStatusResponse,
 } from '@/api/agent';
-import { resolveRouteAndRunDisplayStatus, shouldShowRouteRunThinking } from '@/lib/handleRouteAndRunResponse';
+import {
+  resolveRouteAndRunDisplayStatus,
+  shouldShowRouteRunThinking,
+} from '@/lib/handleRouteAndRunResponse';
+import {
+  shouldPreferRelaxationSuggestionsUi,
+  syncRelaxationSuggestionsFromRouteRun,
+} from '@/lib/sync-relaxation-suggestions-store';
 import { formatRouteRunAsyncProgressLabel } from '@/lib/route-run-async';
 import { isTaskLeaseRecovering } from '@/lib/task-lease-ui';
 import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
@@ -233,6 +240,7 @@ import type { NegotiationPayload } from '@/api/agent';
 import IronShieldEvidenceCards from '@/components/agent/IronShieldEvidenceCards';
 import { RouteRunContractLayers } from '@/components/agent/RouteRunContractLayers';
 import { AgentRouteRunClarificationCard } from '@/components/agent/AgentRouteRunClarificationCard';
+import { AgentRelaxationSuggestionsCard } from '@/components/agent/AgentRelaxationSuggestionsCard';
 import { pickRouteRunSurface, type RouteRunUISurface } from '@/lib/clarification-surface';
 import {
   resolveRouteRunViewMode,
@@ -265,12 +273,20 @@ import {
 } from '@/lib/delivery-artifacts-ui';
 import {
   hasLegEvidenceCardsUi,
-  pickLegEvidenceCardsFromRouteRun,
+  pickLegEvidenceBundleFromRouteRun,
 } from '@/lib/leg-evidence-ui';
 import {
   hasPoiPitfallCardsUi,
-  pickPoiPitfallCardsFromRouteRun,
+  pickPoiPitfallBundleFromRouteRun,
 } from '@/lib/poi-pitfall-ui';
+import {
+  applyRouteRunConfirmationToStore,
+  clearRouteRunConfirmationFromStore,
+} from '@/lib/route-run-confirmation';
+import {
+  applyRouteRunNegotiationToStore,
+  clearRouteRunNegotiationFromStore,
+} from '@/lib/route-run-negotiation';
 import {
   hasBookingCartUi,
   pickBookingCartFromRouteRun,
@@ -841,6 +857,8 @@ interface Message {
   reasoningState?: AgentReasoningState;
   /** NEED_MORE_INFO：`payload.clarificationQuestions` 结构化澄清卡片 */
   clarificationQuestions?: ClarificationQuestion[];
+  /** NEED_MORE_INFO：BFF relaxation_suggestions[]（优先于 clarificationQuestions 机器 options） */
+  relaxationSuggestionsBundle?: import('@/types/relaxation-suggestions').RelaxationSuggestionsBundle;
   /** clarification_meta.suppress_chat_prose：气泡仅短句，长文在 question_html */
   clarificationSuppressChatProse?: boolean;
   /** 澄清 / 可执行性 / 正文：与 pickRouteRunSurface 对齐 */
@@ -964,8 +982,10 @@ interface Message {
   deliveryArtifacts?: DeliveryArtifactsPayload;
   /** ui_display.leg_evidence_cards — NARRATE 路段证据 */
   legEvidenceCards?: LegEvidenceCard[];
+  legEvidenceHeadlineZh?: string;
   /** ui_display.poi_pitfall_cards — POI 避坑 */
   poiPitfallCards?: PoiPitfallCard[];
+  poiPitfallHeadlineZh?: string;
   /** ui_display.booking_cart — MCP 预订清单 */
   bookingCart?: BookingCartPayload;
   /** ui_display.booking_priority_list — 抢票倒计时 / 官方预约 */
@@ -1821,6 +1841,7 @@ function MessageBubble({
   onTripDataRefresh,
   onSuggestedRouteRun,
   chatSending,
+  onDiscussCascadeWithAi,
   onAdoptHealingPreview,
   adoptHealingBusyKey,
   tripTimezone,
@@ -1854,6 +1875,8 @@ function MessageBubble({
   ) => void;
   /** 主对话正在发送，禁用快捷按钮 */
   chatSending?: boolean;
+  /** 级联影响卡片「与 AI 讨论」 */
+  onDiscussCascadeWithAi?: (hint: CascadeUiHint) => void;
   /** 物理预览：采纳 healed_action_input 后 POST /agent/actions/preview */
   onAdoptHealingPreview?: AdoptHealingPreviewHandler;
   adoptHealingBusyKey?: string | null;
@@ -1887,6 +1910,11 @@ function MessageBubble({
   const isTimeout = messageContent.includes('超时') || messageContent.includes('TIMEOUT');
 
   const hasClarifyQuestions = (message.clarificationQuestions?.length ?? 0) > 0;
+  const hasRelaxationBundle = shouldPreferRelaxationSuggestionsUi(message.relaxationSuggestionsBundle);
+  const showRelaxationCard =
+    hasRelaxationBundle &&
+    Boolean(message.relaxationSuggestionsBundle) &&
+    Boolean(onSendClarification);
 
   const mdBody = assistantBodyAfterStructuredOutcome(message);
   const answerHtmlBody =
@@ -1919,14 +1947,17 @@ function MessageBubble({
   const showClarificationCard =
     routeRunViewMode === 'clarification' &&
     hasClarifyQuestions &&
-    Boolean(onSendClarification);
+    Boolean(onSendClarification) &&
+    !showRelaxationCard;
 
   const hidePlanningChrome =
     showClarificationCard ||
+    showRelaxationCard ||
     (Boolean(message.interactionKind) && shouldHidePlanningChrome(message.interactionKind!));
   /** 可执行性 / narration / 三人格：仅 planning 面；澄清卡场景不展示；咨询面仅调试 */
   const showRouteRunContractLayers =
     !showClarificationCard &&
+    !showRelaxationCard &&
     (showPlanningDashboard && !isConsultationSurface
       ? true
       : isConsultationSurface && debugUiDefaults === true);
@@ -2387,7 +2418,8 @@ function MessageBubble({
                 affectedItems={message.cascadeAffectedItems}
                 compact
                 className="mt-2"
-                showCardActions={false}
+                showCardActions={Boolean(onDiscussCascadeWithAi)}
+                onDiscussWithAi={onDiscussCascadeWithAi}
               />
             ) : null}
             {!isUser && message.coverageDisclosure ? (
@@ -2648,7 +2680,11 @@ function MessageBubble({
         showPlanningDashboard &&
         hasLegEvidenceCardsUi(message.legEvidenceCards) &&
         message.legEvidenceCards ? (
-          <LegEvidenceCardsPanel cards={message.legEvidenceCards} className="mt-2" />
+          <LegEvidenceCardsPanel
+            cards={message.legEvidenceCards}
+            headlineZh={message.legEvidenceHeadlineZh}
+            className="mt-2"
+          />
         ) : null}
 
         {!isUser &&
@@ -2658,7 +2694,11 @@ function MessageBubble({
         showPlanningDashboard &&
         hasPoiPitfallCardsUi(message.poiPitfallCards) &&
         message.poiPitfallCards ? (
-          <PoiPitfallCardsPanel cards={message.poiPitfallCards} className="mt-2" />
+          <PoiPitfallCardsPanel
+            cards={message.poiPitfallCards}
+            headlineZh={message.poiPitfallHeadlineZh}
+            className="mt-2"
+          />
         ) : null}
 
         {!isUser &&
@@ -2954,6 +2994,20 @@ function MessageBubble({
               </div>
             </div>
           </div>
+        ) : null}
+
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        showRelaxationCard &&
+        message.relaxationSuggestionsBundle ? (
+          <AgentRelaxationSuggestionsCard
+            bundle={message.relaxationSuggestionsBundle}
+            disabled={clarificationSubmitDisabled || chatSending}
+            onSubmit={(payload) => {
+              void onSendClarification!(payload);
+            }}
+          />
         ) : null}
 
         {!isUser &&
@@ -4145,6 +4199,7 @@ export default function AgentChat({
         setNegotiationPayload(negotiation);
         setNegotiationDialogOpen(true);
         setNegotiationAuditRequestId(request.request_id);
+        applyRouteRunNegotiationToStore(response);
 
         // best-effort：记录协商打开（NEW -> OPENED）
         try {
@@ -4214,6 +4269,7 @@ export default function AgentChat({
 
         // 显示审批对话框
         setPendingApprovalId(approvalId);
+        applyRouteRunConfirmationToStore(response);
         setApprovalDialogOpen(true);
         return;
       }
@@ -4245,6 +4301,10 @@ export default function AgentChat({
 
       const clarificationQuestions = normalizeRouteRunClarificationQuestions(
         response.result.payload?.clarificationQuestions
+      );
+      const relaxationSuggestionsBundle = syncRelaxationSuggestionsFromRouteRun(
+        response,
+        sanitizedTripId ?? undefined,
       );
       const primaryQuestionHtml =
         clarificationQuestions.length > 0
@@ -4453,8 +4513,10 @@ export default function AgentChat({
       const partyNegotiation = pickPartyNegotiationFromRouteRun(response);
       const dualTrackItinerary = pickDualTrackItineraryFromRouteRun(response);
       const deliveryArtifacts = pickDeliveryArtifactsFromRouteRun(response);
-      const legEvidenceCards = pickLegEvidenceCardsFromRouteRun(response);
-      const poiPitfallCards = pickPoiPitfallCardsFromRouteRun(response);
+      const legEvidenceBundle = pickLegEvidenceBundleFromRouteRun(response);
+      const poiPitfallBundle = pickPoiPitfallBundleFromRouteRun(response);
+      const legEvidenceCards = legEvidenceBundle.cards;
+      const poiPitfallCards = poiPitfallBundle.cards;
       const bookingCart = pickBookingCartFromRouteRun(response);
       const bookingPriorityList = pickBookingPriorityListFromRouteRun(response);
       const openWorldDiscovery = pickOpenWorldDiscoveryFromRouteRun(response);
@@ -4699,7 +4761,11 @@ export default function AgentChat({
             alternatives:
               !itineraryAdjust.intake && alternatives.length > 0 ? alternatives : undefined,
             clarificationQuestions:
-              clarificationQuestions.length > 0 ? clarificationQuestions : undefined,
+              !shouldPreferRelaxationSuggestionsUi(relaxationSuggestionsBundle) &&
+              clarificationQuestions.length > 0
+                ? clarificationQuestions
+                : undefined,
+            relaxationSuggestionsBundle: relaxationSuggestionsBundle ?? undefined,
             routeRunSurface,
             routeRunViewMode,
             reasoningState,
@@ -4748,8 +4814,18 @@ export default function AgentChat({
             ...(partyNegotiation ? { partyNegotiation } : {}),
             ...(dualTrackItinerary ? { dualTrackItinerary } : {}),
             ...(deliveryArtifacts ? { deliveryArtifacts } : {}),
-            ...(legEvidenceCards.length > 0 ? { legEvidenceCards } : {}),
-            ...(poiPitfallCards.length > 0 ? { poiPitfallCards } : {}),
+            ...(legEvidenceCards.length > 0
+              ? {
+                  legEvidenceCards,
+                  ...(legEvidenceBundle.headlineZh ? { legEvidenceHeadlineZh: legEvidenceBundle.headlineZh } : {}),
+                }
+              : {}),
+            ...(poiPitfallCards.length > 0
+              ? {
+                  poiPitfallCards,
+                  ...(poiPitfallBundle.headlineZh ? { poiPitfallHeadlineZh: poiPitfallBundle.headlineZh } : {}),
+                }
+              : {}),
             ...(bookingCart ? { bookingCart } : {}),
             ...(bookingPriorityList ? { bookingPriorityList } : {}),
             ...(openWorldDiscovery ? { openWorldDiscovery } : {}),
@@ -4898,6 +4974,20 @@ export default function AgentChat({
   };
 
   handleSendRef.current = handleSend;
+
+  const handleDiscussCascadeWithAi = useCallback(
+    (hint: CascadeUiHint) => {
+      const hintMessage = hint.message?.trim();
+      void handleSend(
+        hintMessage
+          ? `关于级联影响：${hintMessage}。请说明推荐的修复方式，以及会影响哪些天。`
+          : '请说明当前级联影响推荐的修复方式，以及会影响哪些天。',
+        undefined,
+        { forceIntentMode: 'planning' },
+      );
+    },
+    [handleSend],
+  );
 
   useEffect(() => {
     onSendMessageReady?.((message) => {
@@ -5377,7 +5467,8 @@ export default function AgentChat({
                         hints={tripInsight.readiness.cascadeUiHints}
                         causalPreAnalysis={tripInsight.readiness.causalPreAnalysis}
                         compact
-                        showCardActions={false}
+                        showCardActions
+                        onDiscussWithAi={handleDiscussCascadeWithAi}
                       />
                     </div>
                   ) : null}
@@ -5509,6 +5600,7 @@ export default function AgentChat({
                     else if (tt.includes('DATA_LOOKUP') || tt.includes('LOOKUP')) forced = 'data_lookup';
                     void handleSend(msg, undefined, { forceIntentMode: forced });
                   }}
+                  onDiscussCascadeWithAi={handleDiscussCascadeWithAi}
                 />
               );
             })
@@ -5739,6 +5831,7 @@ export default function AgentChat({
         }}
         onConfirmed={() => {
           setNegotiationConflictBlocking(false);
+          clearRouteRunNegotiationFromStore();
           // best-effort：记录确认
           if (negotiationPayload && negotiationAuditRequestId) {
             void agentApi
@@ -5760,6 +5853,7 @@ export default function AgentChat({
         }}
         onDiscard={() => {
           setNegotiationConflictBlocking(false);
+          clearRouteRunNegotiationFromStore();
           // best-effort：记录放弃
           if (negotiationPayload && negotiationAuditRequestId) {
             void agentApi
@@ -6019,6 +6113,10 @@ export default function AgentChat({
                     : undefined;
                 const retryClarificationQuestions = normalizeRouteRunClarificationQuestions(
                   retryResponse.result.payload?.clarificationQuestions
+                );
+                const retryRelaxationBundle = syncRelaxationSuggestionsFromRouteRun(
+                  retryResponse,
+                  sanitizedTripId ?? undefined,
                 );
                 const retryPrimaryQuestionHtml =
                   retryClarificationQuestions.length > 0
@@ -6296,9 +6394,11 @@ export default function AgentChat({
                       decisionLog: retryDecisionLog.length > 0 ? retryDecisionLog : undefined,
                       mode,
                       clarificationQuestions:
+                        !shouldPreferRelaxationSuggestionsUi(retryRelaxationBundle) &&
                         retryClarificationQuestions.length > 0
                           ? retryClarificationQuestions
                           : undefined,
+                      relaxationSuggestionsBundle: retryRelaxationBundle ?? undefined,
                       ...(retryClarificationSuppressChatProse
                         ? { clarificationSuppressChatProse: true as const }
                         : {}),
@@ -6504,6 +6604,7 @@ export default function AgentChat({
             }
             setApprovalDialogOpen(false);
             setPendingApprovalId(null);
+            clearRouteRunConfirmationFromStore();
           }}
         />
       )}

@@ -4,6 +4,7 @@ import type { TripDetail } from '@/types/trip';
 import {
   buildPlanningConstraintsSummary,
   enrichConstraintsSummaryFromLocal,
+  formatConstraintTravelersLabel,
   inferTravelModeFromTransportHint,
   isTransportModeAligned,
   mapConstraintsSummaryFromBff,
@@ -118,13 +119,14 @@ describe('planning-constraints.util', () => {
         { key: 'budget', status: 'missing', label: '设置总预算', deepLink: 'tab=budget' },
       ],
     });
-    expect(mapped.pendingItems[0].openBudgetDialog).toBe(true);
+    expect(parseConstraintDeepLink(mapped.pendingItems[0].deepLink ?? '')).toEqual({ key: 'budget' });
   });
 
-  it('parseConstraintDeepLink handles openIntent and openBudget', () => {
-    expect(parseConstraintDeepLink('openIntent=1')).toEqual({ openIntent: true });
-    expect(parseConstraintDeepLink('openBudget=1')).toEqual({ openBudgetDialog: true });
-    expect(parseConstraintDeepLink('tab=budget')).toEqual({ openBudgetDialog: true });
+  it('parseConstraintDeepLink maps legacy query params to constraint keys', () => {
+    expect(parseConstraintDeepLink('openIntent=1')).toEqual({ key: 'transport' });
+    expect(parseConstraintDeepLink('openBudget=1')).toEqual({ key: 'budget' });
+    expect(parseConstraintDeepLink('tab=budget')).toEqual({ key: 'budget' });
+    expect(parseConstraintDeepLink('tab=team')).toEqual({ key: 'travelers' });
   });
 
   it('normalizeConstraintFieldStatus maps aligned to confirmed', () => {
@@ -238,5 +240,14 @@ describe('planning-constraints.util', () => {
     expect(summary.isUserConfirmed).toBe(false);
     expect(summary.needsReconfirm).toBe(true);
     expect(summary.allReady).toBe(true);
+  });
+
+  it('formats travelers without false team label', () => {
+    expect(
+      formatConstraintTravelersLabel({ count: 2, memberCount: 2, status: 'confirmed' }),
+    ).toBe('2 人');
+    expect(
+      formatConstraintTravelersLabel({ count: 2, memberCount: 3, status: 'misaligned' }),
+    ).toBe('2 人 · 协作者 3 人（需对齐）');
   });
 });

@@ -3,6 +3,10 @@
 **日期：2026-01-30**  
 **参与角色：人机交互设计专家、产品经理、视觉设计师**
 
+> **2026-06-27 修订说明**：「方案 A：对话优先架构」已由混合架构取代。官方立场见  
+> [`docs/design/plan-studio-interaction-boundary.md`](./design/plan-studio-interaction-boundary.md) —  
+> 对话 = 意图入口 + 松弛协商；结构化界面 = 约束 + 方案矩阵 + 日程编辑。
+
 ---
 
 ## 📋 当前问题诊断

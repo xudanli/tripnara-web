@@ -3,6 +3,10 @@ import { CONFIG } from '@/constants/config';
 import { setLastAgentRequestId } from '@/lib/agent-request-context';
 import { mapDecisionEngineUserMessage } from '@/lib/decision-engine-error-map';
 import {
+  parsePlanningWorkbenchError,
+  planningWorkbenchErrorToUserMessage,
+} from '@/lib/planning-workbench-error-map';
+import {
   computeBusyRetryDelayMs,
   handleStalePlanVersionConflict,
   parseTripOrchestrationConflictBody,
@@ -456,8 +460,20 @@ apiClient.interceptors.response.use(
 
     // 处理其他错误
     if (error.response) {
-      // 后端错误格式: { statusCode, message, error }
-      error.message = resolveHttpErrorUserMessage(error.response.data);
+      const requestUrl = originalRequest.url || '';
+      if (
+        requestUrl.includes('/planning-workbench/') &&
+        error.response.status === 400
+      ) {
+        const parsed = parsePlanningWorkbenchError(error);
+        error.message = planningWorkbenchErrorToUserMessage(error);
+        if (parsed.code) {
+          (error as TripnaraHttpError).code = parsed.code;
+        }
+      } else {
+        // 后端错误格式: { statusCode, message, error }
+        error.message = resolveHttpErrorUserMessage(error.response.data);
+      }
     } else if (error.request) {
       // 请求已发送但没有收到响应
       if (error.code === 'ECONNABORTED') {

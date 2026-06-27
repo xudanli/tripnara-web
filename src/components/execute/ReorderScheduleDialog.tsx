@@ -19,6 +19,8 @@ import type { ScheduleItem } from '@/types/trip';
 import { toast } from 'sonner';
 import { GripVertical, Clock } from 'lucide-react';
 import { formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';
+import { guardStructuralEditOrToast } from '@/lib/world-model-guards';
+import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
 import { cn } from '@/lib/utils';
 
 interface ReorderScheduleDialogProps {
@@ -45,6 +47,15 @@ export function ReorderScheduleDialog({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { worldModelGuards, canEditStructure } = useWorldModelGuards();
+  const structureLocked = !canEditStructure;
+
+  useEffect(() => {
+    if (open && structureLocked) {
+      toast.error(worldModelGuards?.banner_message_zh ?? '当前阶段不可修改路线结构');
+      onOpenChange(false);
+    }
+  }, [open, structureLocked, onOpenChange, worldModelGuards?.banner_message_zh]);
 
   useEffect(() => {
     if (open) {
@@ -55,6 +66,7 @@ export function ReorderScheduleDialog({
   }, [open, items]);
 
   const handleDragStart = (index: number) => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
     setDraggedIndex(index);
   };
 
@@ -77,6 +89,7 @@ export function ReorderScheduleDialog({
   };
 
   const handleMoveUp = (index: number) => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
     if (index > 0) {
       const newItems = [...reorderedItems];
       [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
@@ -85,6 +98,7 @@ export function ReorderScheduleDialog({
   };
 
   const handleMoveDown = (index: number) => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
     if (index < reorderedItems.length - 1) {
       const newItems = [...reorderedItems];
       [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
@@ -93,6 +107,7 @@ export function ReorderScheduleDialog({
   };
 
   const handleSubmit = async () => {
+    if (!guardStructuralEditOrToast(worldModelGuards)) return;
     // 检查顺序是否改变
     const orderChanged = reorderedItems.some((item, index) => {
       const originalItem = items[index];

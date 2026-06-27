@@ -30,6 +30,8 @@ import {
   type RouteNarrative,
 } from '@/api/rag';
 import { handleApiError } from '@/utils/errorHandler';
+import { mapRagUserMessage } from '@/lib/rag-error-map';
+import { isTripnaraHttpError } from '@/types/http-error';
 
 /**
  * Hook 返回类型
@@ -255,7 +257,8 @@ export function useRag(): UseRagReturn {
         const rules = await ragApi.extractComplianceRules(request);
         return rules;
       } catch (err) {
-        const errorMessage = handleApiError(err);
+        const code = isTripnaraHttpError(err) ? err.code : undefined;
+        const errorMessage = mapRagUserMessage(code, handleApiError(err));
         setError(errorMessage);
         return null;
       } finally {

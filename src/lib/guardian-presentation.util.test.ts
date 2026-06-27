@@ -9,6 +9,7 @@ import {
   collectTeamNegotiationCriticalConcerns,
   shouldShowPersonaInsightCards,
   extractChooseOptions,
+  extractPresentationChooseOptions,
   canShowGuardianChoose,
   resolveGuardianChoosePoints,
 } from '@/lib/guardian-presentation.util';
@@ -183,6 +184,24 @@ describe('extractChooseOptions', () => {
         humanDecisionPointsFlat: ['团队选项 1', '团队选项 2'],
       }),
     ).toEqual(['团队选项 1', '团队选项 2']);
+  });
+
+  it('reads presentation humanDecisionPointsFlat before nextSteps', () => {
+    expect(
+      extractPresentationChooseOptions({
+        actions: { user: 'CHOOSE' },
+        humanDecisionPointsFlat: ['A', 'B'],
+      } as import('@/types/guardian-presentation').GuardianPersonaPresentation),
+    ).toEqual(['A', 'B']);
+    expect(
+      extractChooseOptions({
+        presentation: {
+          actions: { user: 'CHOOSE' },
+          humanDecisionPointsFlat: ['A', 'B'],
+        } as import('@/types/guardian-presentation').GuardianPersonaPresentation,
+        consolidatedDecision: { nextSteps: ['不应读取'] },
+      }),
+    ).toEqual(['A', 'B']);
   });
 });
 

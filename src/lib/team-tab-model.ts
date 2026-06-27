@@ -14,19 +14,19 @@ export const GOVERNANCE_MODE_META: Record<
   { label: string; icon: string; description: string }
 > = {
   leader: {
-    label: '领队模式',
+    label: '领队说了算',
     icon: '👑',
-    description: '由领队做最终决策',
+    description: '重要决定由领队拍板，适合家庭或有明确负责人',
   },
   weighted: {
-    label: '权重模式',
+    label: '按贡献加权',
     icon: '⚖️',
-    description: '按成员贡献加权投票',
+    description: '每人有发言权，经验丰富的人权重更高',
   },
   consensus: {
-    label: '一致模式',
+    label: '商量着来',
     icon: '🤝',
-    description: '重要事项需全员一致',
+    description: '重要事项需大家意见一致',
   },
 };
 
@@ -176,7 +176,8 @@ export function conflictsFromNegotiation(
 }
 
 export function memberRoleLabel(member: TeamMember, isCreator?: boolean): string {
-  if (isCreator || member.role === 'LEADER') return '创建者';
+  if (member.userId.startsWith('guest_')) return '待补充';
+  if (isCreator || member.role === 'LEADER') return isCreator ? '我 · 领队' : '领队';
   if (member.role === 'OBSERVER') return '观察者';
   return '成员';
 }

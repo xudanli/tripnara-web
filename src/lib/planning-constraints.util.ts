@@ -64,6 +64,16 @@ export function resolveTravelerCount(trip?: TripDetail | null): number {
   return 0;
 }
 
+/** 约束卡片 · 出行人数展示（memberCount 为协作者数，勿称「团队」以免与 Team Tab 混淆） */
+export function formatConstraintTravelersLabel(travelers: ConstraintTravelers): string {
+  const { count, memberCount, status } = travelers;
+  if (count <= 0) return '未设置';
+  if (status === 'misaligned' && memberCount > 0) {
+    return `${count} 人 · 协作者 ${memberCount} 人（需对齐）`;
+  }
+  return `${count} 人`;
+}
+
 function resolveTimeRange(trip?: TripDetail | null): ConstraintTimeRange {
   const startDate = trip?.startDate ?? null;
   const endDate = trip?.endDate ?? null;
@@ -206,7 +216,6 @@ function buildPendingItems(input: {
       key: 'time_range',
       status: 'missing',
       label: '补全出发与返程日期',
-      openEditTrip: true,
     });
   }
 
@@ -215,14 +224,12 @@ function buildPendingItems(input: {
       key: 'budget',
       status: 'missing',
       label: '设置总预算',
-      openBudgetDialog: true,
     });
   } else if (input.budget.status === 'need_confirm') {
     items.push({
       key: 'budget',
       status: 'need_confirm',
       label: '确认总预算',
-      openBudgetDialog: true,
     });
   }
 
@@ -231,14 +238,12 @@ function buildPendingItems(input: {
       key: 'travelers',
       status: 'missing',
       label: '填写出行人数',
-      editTab: 'team',
     });
   } else if (input.travelers.status === 'misaligned') {
     items.push({
       key: 'travelers',
       status: 'misaligned',
       label: '人数与团队成员不一致',
-      editTab: 'team',
     });
   }
 
@@ -247,14 +252,12 @@ function buildPendingItems(input: {
       key: 'transport',
       status: 'missing',
       label: '选择基础交通方式',
-      openIntent: true,
     });
   } else if (input.transport.status === 'misaligned') {
     items.push({
       key: 'transport',
       status: 'misaligned',
       label: '交通方式与时间轴不一致',
-      openIntent: true,
     });
   }
 
@@ -402,23 +405,25 @@ export function normalizeConstraintBudgetStatus(
   }
 }
 
-/** 解析 BFF pendingItems.deepLink → FE 导航字段 */
-export function parseConstraintDeepLink(deepLink: string): Pick<
-  ConstraintPendingItem,
-  'editTab' | 'openIntent' | 'openEditTrip' | 'openBudgetDialog'
-> {
+/** 解析 BFF pendingItems.deepLink → 约束编辑 key 或 Tab */
+export function parseConstraintDeepLink(deepLink: string): {
+  key?: ConstraintPendingKey;
+  editTab?: string;
+} {
   const params = new URLSearchParams(deepLink.includes('=') ? deepLink : `tab=${deepLink}`);
   const tab = params.get('tab');
   if (params.get('openIntent') === '1' || params.get('openIntent') === 'true') {
-    return { openIntent: true };
+    return { key: 'transport' };
   }
   if (params.get('openBudget') === '1' || params.get('openBudget') === 'true') {
-    return { openBudgetDialog: true };
+    return { key: 'budget' };
   }
   if (params.get('openEditTrip') === '1' || params.get('openEditTrip') === 'true') {
-    return { openEditTrip: true };
+    return { key: 'time_range' };
   }
-  if (tab === 'budget') return { openBudgetDialog: true };
+  if (tab === 'budget') return { key: 'budget' };
+  if (tab === 'team') return { key: 'travelers' };
+  if (tab === 'transport' || tab === 'intent') return { key: 'transport' };
   if (tab) return { editTab: tab };
   return {};
 }

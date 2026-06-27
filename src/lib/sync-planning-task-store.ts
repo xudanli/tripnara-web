@@ -1,5 +1,8 @@
 import type { RouteAndRunResponse, RouteRunAsyncTaskStatusResponse } from '@/api/agent';
+import { syncRelaxationSuggestionsFromRouteRun } from '@/lib/sync-relaxation-suggestions-store';
 import { applyRouteAndRunToStore } from '@/lib/world-model-guards';
+import { applyRouteRunConfirmationToStore } from '@/lib/route-run-confirmation';
+import { applyRouteRunNegotiationToStore } from '@/lib/route-run-negotiation';
 import type { PlanningTaskStatus } from '@/store/planningTaskStore';
 import { usePlanningTaskStore } from '@/store/planningTaskStore';
 
@@ -20,6 +23,13 @@ export function syncPlanningTaskFromPollSnapshot(snap: RouteRunAsyncTaskStatusRe
 
   if (snap.status === 'SUCCESS' && resultData?.result?.status === 'OK') {
     applyRouteAndRunToStore(resultData);
+  } else if (snap.status === 'SUCCESS' && resultData?.result?.status === 'NEED_CONFIRMATION') {
+    applyRouteRunConfirmationToStore(resultData);
+  } else if (
+    snap.status === 'SUCCESS' &&
+    resultData?.result?.payload?.negotiation_payload?.status === 'PENDING_USER_DECISION'
+  ) {
+    applyRouteRunNegotiationToStore(resultData);
   }
 
   usePlanningTaskStore.getState().setTask({
@@ -31,6 +41,10 @@ export function syncPlanningTaskFromPollSnapshot(snap: RouteRunAsyncTaskStatusRe
     resultData,
     taskLease: snap.task_lease_v1 ?? null,
   });
+
+  if (resultData) {
+    syncRelaxationSuggestionsFromRouteRun(resultData);
+  }
 }
 
 export function markPlanningTaskProcessing(taskId: string, pollPath: string): void {

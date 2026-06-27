@@ -107,7 +107,7 @@ export function useConstraintsSummary(
       return;
     }
     if (!trip) {
-      setLoading(true);
+      setLoading(false);
       setLoadSettled(false);
       return;
     }

@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { usePanelRef } from 'react-resizable-panels';
 import {
   ResizableHandle,
   ResizablePanel,
@@ -22,7 +23,8 @@ export interface AssistantResizableWorkspaceProps {
 }
 
 /**
- * 主内容 + 右侧智能体：展开时可拖拽调宽（300–800px），收起时为固定窄条。
+ * 主内容 + 右侧智能体：始终使用同一 ResizablePanelGroup，避免展开/收起时 remount 主内容区。
+ * 展开时可拖拽调宽（300–800px），收起时折叠为固定窄条（56px）。
  */
 export function AssistantResizableWorkspace({
   main,
@@ -32,18 +34,20 @@ export function AssistantResizableWorkspace({
   renderAssistantSidebar,
   className,
 }: AssistantResizableWorkspaceProps) {
-  if (!sidebarExpanded) {
-    return (
-      <div className={cn('flex flex-1 h-full min-w-0', className)}>
-        <div className="flex-1 min-w-0 h-full overflow-hidden">{main}</div>
-        {renderAssistantSidebar(false)}
-      </div>
-    );
-  }
+  const assistantPanelRef = usePanelRef();
+
+  useEffect(() => {
+    const panel = assistantPanelRef.current;
+    if (!panel) return;
+    if (sidebarExpanded) {
+      panel.expand();
+    } else {
+      panel.collapse();
+    }
+  }, [sidebarExpanded, assistantPanelRef]);
 
   return (
     <ResizablePanelGroup
-      key="assistant-resizable-expanded"
       orientation="horizontal"
       className={cn('flex-1 h-full min-w-0', className)}
     >
@@ -51,14 +55,25 @@ export function AssistantResizableWorkspace({
         <div className="h-full min-w-0 overflow-hidden">{main}</div>
       </ResizablePanel>
 
-      <ResizableHandle withHandle aria-label="调整智能体面板宽度" />
+      {sidebarExpanded ? (
+        <ResizableHandle withHandle aria-label="调整智能体面板宽度" />
+      ) : null}
 
       <ResizablePanel
         id="workspace-assistant"
-        defaultSize={assistantWidth}
+        panelRef={assistantPanelRef}
+        collapsible
+        collapsedSize={AGENT_SIDEBAR_WIDTH.COLLAPSED}
+        defaultSize={
+          sidebarExpanded ? assistantWidth : AGENT_SIDEBAR_WIDTH.COLLAPSED
+        }
         minSize={AGENT_SIDEBAR_WIDTH.MIN}
         maxSize={AGENT_SIDEBAR_WIDTH.MAX}
-        onResize={(panelSize) => onAssistantResize(panelSize)}
+        onResize={(panelSize) => {
+          if (sidebarExpanded) {
+            onAssistantResize(panelSize);
+          }
+        }}
         className="min-w-0 flex flex-col"
       >
         {renderAssistantSidebar(true)}

@@ -3,7 +3,11 @@ import type {
   DecisionStripState,
 } from '@/lib/decision-strip-model';
 import type { TripLoopUiPhase, TripLoopUiView } from '@/types/trip-loop';
-import { sanitizePlanValidationCopy, resolveLoopValidationPresentation } from '@/lib/trip-loop-display';
+import {
+  isLoopValidationInFlight,
+  sanitizePlanValidationCopy,
+  resolveLoopValidationPresentation,
+} from '@/lib/trip-loop-display';
 
 export type DecisionStripVerifyStepStatus = 'pending' | 'active' | 'done' | 'failed';
 
@@ -66,34 +70,41 @@ export function resolveDecisionStripLoopValidation(input: {
   const subline = (raw: string | null | undefined) => sanitizePlanValidationCopy(raw);
 
   switch (ui.phase) {
-    case 'validating':
+    case 'validating': {
+      const inFlight = isLoopValidationInFlight(ui, loopRunning, loopApplying);
       return {
         active: true,
         phase: 'validating',
-        verifyStepStatus: 'active',
-        headline: ui.headline,
-        subline: subline(ui.subheadline) ?? ui.progress.label ?? null,
-        progressPct: progressPct(ui),
+        verifyStepStatus: inFlight ? 'active' : 'pending',
+        headline: inFlight
+          ? ui.headline
+          : ui.headline || '上次验证未完成',
+        subline: inFlight
+          ? subline(ui.subheadline) ?? ui.progress.label ?? null
+          : subline(ui.subheadline) ?? '请重新运行方案验证',
+        progressPct: inFlight ? progressPct(ui) : null,
         progressLabel: ui.progress.label,
-        state: 'running',
+        state: inFlight ? 'running' : 'idle',
         primaryCta: {
           type: 'open_feasibility',
-          labelOverride: '查看验证进度',
+          labelOverride: inFlight ? '查看验证进度' : '重新检查',
         },
         readinessScore: null,
         issueCount: ui.issueCards.length,
       };
+    }
 
     case 'issues_found':
       return {
         active: true,
         phase: 'issues_found',
-        verifyStepStatus: 'active',
+        verifyStepStatus: 'done',
         headline: ui.headline,
         subline: subline(ui.subheadline) ?? ui.progress.label ?? null,
         progressPct: progressPct(ui),
         progressLabel: ui.progress.label,
         state: 'blocked',
+        verifyTone: 'caution',
         primaryCta: {
           type: 'open_feasibility',
           labelOverride: ui.primaryAction?.label ?? '查看问题',
@@ -106,7 +117,7 @@ export function resolveDecisionStripLoopValidation(input: {
       return {
         active: true,
         phase: 'awaiting_approval',
-        verifyStepStatus: 'active',
+        verifyStepStatus: 'pending',
         headline: ui.headline,
         subline: subline(ui.subheadline),
         progressPct: progressPct(ui),

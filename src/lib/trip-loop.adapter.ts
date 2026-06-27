@@ -1,4 +1,5 @@
 import type { ApplyRepairResponse } from '@/types/feasibility-repair';
+import { normalizePersonaAlert, normalizePersonaAlerts } from '@/lib/persona-alert.adapter';
 import type {
   InTripLoopUiView,
   InTripRecoveryLatestDto,
@@ -92,6 +93,7 @@ function normalizeIssueCard(raw: unknown): TripLoopIssueCard | null {
     triggerKind: asString(r.triggerKind ?? r.trigger_kind),
     environmentEventId: asString(r.environmentEventId ?? r.environment_event_id),
     planId: asString(r.planId ?? r.plan_id),
+    personaAlert: normalizePersonaAlert(r.personaAlert ?? r.persona_alert) ?? undefined,
   };
 }
 
@@ -134,6 +136,7 @@ export function normalizeTripLoopUi(
     checklist: (Array.isArray(r.checklist) ? r.checklist : [])
       .map(normalizeChecklistItem)
       .filter((x): x is TripLoopChecklistItem => x != null),
+    personaAlerts: normalizePersonaAlerts(r.personaAlerts ?? r.persona_alerts),
     issueCards: (Array.isArray(r.issueCards ?? r.issue_cards) ? (r.issueCards ?? r.issue_cards) : [])
       .map(normalizeIssueCard)
       .filter((x): x is TripLoopIssueCard => x != null),

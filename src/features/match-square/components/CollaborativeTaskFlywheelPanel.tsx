@@ -155,7 +155,7 @@ export function CollaborativeTaskFlywheelPanel({
       aria-label="协同任务飞轮"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold text-foreground">协同任务 · Task Flywheel</h3>
+        <h3 className="font-semibold text-foreground">待确认的协作事项</h3>
         <Badge variant="outline" className="text-[10px] font-normal tabular-nums">
           {tasks.length} 条
         </Badge>

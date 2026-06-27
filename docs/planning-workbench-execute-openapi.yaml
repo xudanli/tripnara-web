@@ -1,0 +1,353 @@
+# Planning Workbench Execute — 契约（与 planning-workbench-execute-api.md 同步）
+# POST /api/planning-workbench/execute
+# 实际 HTTP：{ success: true, data: { planState, uiOutput } }；400 为校验失败
+openapi: 3.0.3
+info:
+  title: Planning Workbench Execute Contract
+  version: 2026-06-27
+  description: |
+    决策文案三层：summary（风险事实）/ confirmations[]（用户签收）/ nextSteps[]（操作指引）。
+    CHOOSE 选项仅在 presentation.humanDecisionPointsFlat[]。
+    详见 docs/planning-workbench-execute-api.md
+paths:
+  /planning-workbench/execute:
+    post:
+      summary: 规划工作台主入口（generate / compare / commit / adjust）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutePlanningWorkbenchRequest'
+            example:
+              tripId: trip_abc
+              userAction: generate
+              context:
+                destination: { country: IS, city: Iceland }
+                days: 10
+                travelMode: mixed
+                constraints:
+                  budget: { total: 30000, currency: CNY }
+              metadata:
+                contextPackageId: ctx_pkg_123
+                scheduleRevision: 12
+                constraintSnapshotId: constraints_v3
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanningWorkbenchHttpSuccess'
+              example:
+                success: true
+                data:
+                  planState:
+                    plan_id: plan_xyz
+                    plan_version: 1
+                    status: NEED_CONFIRM
+                  uiOutput:
+                    consolidatedDecision:
+                      status: NEED_CONFIRM
+                      summary: 高地 F 路 10 月封闭概率较高…
+                      nextSteps: ['请在上方的决策点中选择一项后继续']
+                    presentation:
+                      actions: { user: CHOOSE }
+                      humanDecisionPointsFlat: ['紧凑 — 环岛精华', '均衡 — 经典路线']
+                    decisionContext:
+                      tripId: trip_abc
+                      planId: plan_xyz
+                      planVersion: 1
+                      gateStatus: NEED_CONFIRM
+                      scheduleRevision: 12
+                      contextPackageId: ctx_pkg_123
+                    budgetPreview:
+                      totalEstimate: 28000
+                      currency: CNY
+                      vsLimit: 0.93
+                      evaluated: true
+                      band: warning
+                    timestamp: '2026-06-27T12:00:00.000Z'
+        '400':
+          description: 请求校验失败
+
+components:
+  schemas:
+    PlanningWorkbenchHttpSuccess:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/ExecutePlanningWorkbenchResponse'
+
+    ExecutePlanningWorkbenchRequest:
+      type: object
+      required: [context]
+      properties:
+        context:
+          $ref: '#/components/schemas/PlanningContext'
+        tripId:
+          type: string
+        existingPlanState:
+          type: object
+          description: commit 必传上一轮 planState；其他 action 用于增量更新
+        userAction:
+          type: string
+          enum: [generate, compare, commit, adjust]
+        selectedOptionId:
+          type: string
+          description: commit 多方案且用户 CHOOSE 非推荐项时必传；否则可省略
+        paceFeedback:
+          type: string
+          enum: [too_tired, too_rushed, too_relaxed]
+          description: adjust 必填
+        skeletonOptions:
+          $ref: '#/components/schemas/PlanSkeletonSet'
+        metadata:
+          $ref: '#/components/schemas/ExecutePlanningWorkbenchMetadata'
+
+    ExecutePlanningWorkbenchMetadata:
+      type: object
+      description: 透传至 uiOutput.decisionContext
+      properties:
+        contextPackageId:
+          type: string
+        scheduleRevision:
+          type: integer
+          description: 时间轴 revision，用于感知未 generate 的改动
+        constraintSnapshotId:
+          type: string
+        userId:
+          type: string
+
+    PlanningContext:
+      type: object
+      required: [destination, days]
+      properties:
+        destination:
+          type: object
+          properties:
+            country: { type: string }
+            city: { type: string }
+            region: { type: string }
+        days:
+          type: integer
+        travelMode:
+          type: string
+          enum: [self_drive, public_transit, walking, mixed]
+        mustDo:
+          type: array
+          items: { type: string }
+        mustAvoid:
+          type: array
+          items: { type: string }
+        constraints:
+          type: object
+
+    ExecutePlanningWorkbenchResponse:
+      type: object
+      required: [planState, uiOutput]
+      properties:
+        planState:
+          $ref: '#/components/schemas/PlanState'
+        uiOutput:
+          $ref: '#/components/schemas/UIOutput'
+
+    PlanState:
+      type: object
+      required: [plan_id, plan_version, status]
+      properties:
+        plan_id:
+          type: string
+        plan_version:
+          type: integer
+        status:
+          type: string
+          enum: [DRAFT, PROPOSED, NEED_CONFIRM, LOCKED]
+        itinerary:
+          $ref: '#/components/schemas/PlanItinerary'
+        gate:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [ALLOW, NEED_CONFIRM, SUGGEST_REPLACE, REJECT]
+            reason:
+              type: string
+            requiredUserConfirmations:
+              type: array
+              items: { type: string }
+        budget:
+          type: object
+          description: breakdown 供 enrich 生成 budgetPreview
+        pace:
+          type: object
+        mobility:
+          type: object
+        metadata:
+          type: object
+
+    PlanItinerary:
+      type: object
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanItinerarySegment'
+
+    PlanItinerarySegment:
+      type: object
+      required: [segmentId, dayIndex]
+      properties:
+        segmentId:
+          type: string
+        dayIndex:
+          type: integer
+          description: 0-based
+        distanceKm:
+          type: number
+        metadata:
+          $ref: '#/components/schemas/PlanItinerarySegmentMetadata'
+
+    PlanItinerarySegmentMetadata:
+      type: object
+      description: |
+        execute enrich 写入；name = fromName → toName。
+        stops 由 attractions → restaurants → accommodation 合并写入。
+      properties:
+        name:
+          type: string
+          example: 雷克雅未克 → 维克
+        fromName:
+          type: string
+        toName:
+          type: string
+        stops:
+          type: array
+          items: { type: string }
+          description: 当日停留点预览（前端优先于 trips/:id 二次拉取）
+          example: [蓝湖, 塞尔福斯, 维克]
+        primaryPoiTitle:
+          type: string
+          description: 当日主 POI 标题
+        attractions:
+          type: array
+          items: { type: string }
+        restaurants:
+          type: array
+          items: { type: string }
+        accommodation:
+          oneOf:
+            - type: string
+            - type: array
+              items: { type: string }
+
+    UIOutput:
+      type: object
+      required: [consolidatedDecision, personas, timestamp]
+      properties:
+        consolidatedDecision:
+          $ref: '#/components/schemas/ConsolidatedDecision'
+          description: 顶层与 personas.consolidatedDecision 同步
+        confirmations:
+          type: array
+          items: { type: string }
+          description: |
+            层2 用户签收。NEED_CONFIRM 时必填 ≥1 条中文可读句。
+            禁止流程元指令、debug、CHOOSE 选项文案、与 summary 重复。
+        presentation:
+          $ref: '#/components/schemas/GuardianPersonaPresentation'
+        personas:
+          type: object
+        decisionContext:
+          $ref: '#/components/schemas/WorkbenchDecisionContext'
+        budgetPreview:
+          $ref: '#/components/schemas/WorkbenchBudgetPreview'
+        health:
+          type: object
+          properties:
+            budget: { type: string, enum: [healthy, warning, critical] }
+            pace: { type: string, enum: [healthy, warning, critical] }
+            feasibility: { type: string, enum: [healthy, warning, critical] }
+        timestamp:
+          type: string
+          format: date-time
+          description: 与 personas.timestamp 同步
+
+    ConsolidatedDecision:
+      type: object
+      required: [status, summary, nextSteps]
+      properties:
+        status:
+          type: string
+          enum: [ALLOW, NEED_CONFIRM, SUGGEST_REPLACE, REJECT]
+          description: SUGGEST_REPLACE 当 planState.gate.status === SUGGEST_REPLACE
+        summary:
+          type: string
+          description: 层1 风险事实，只读展示，不含操作指令
+        nextSteps:
+          type: array
+          items: { type: string }
+          description: 层3 操作指引，不可含 CHOOSE 选项或勾选类元指令
+
+    WorkbenchDecisionContext:
+      type: object
+      description: trip/plan/gate + 请求 metadata 回显，供 RAG / 合规下游
+      properties:
+        tripId: { type: string }
+        planId: { type: string }
+        planVersion: { type: integer }
+        gateStatus: { type: string }
+        contextPackageId: { type: string }
+        scheduleRevision: { type: integer }
+        constraintSnapshotId: { type: string }
+
+    WorkbenchBudgetPreview:
+      type: object
+      properties:
+        totalEstimate: { type: number }
+        currency: { type: string }
+        vsLimit:
+          type: number
+          description: 0–1，占预算上限比例
+        evaluated:
+          type: boolean
+          description: false 时前端 lazy load budget/evaluate；true 时可用 preview 展示
+        band:
+          type: string
+          enum: [healthy, warning, critical]
+        message:
+          type: string
+
+    GuardianPersonaPresentation:
+      type: object
+      properties:
+        actions:
+          type: object
+          properties:
+            user:
+              type: string
+              enum: [CHOOSE]
+              description: ALLOW/硬阻断后应清除
+        hardConstraintBlocked:
+          type: boolean
+        humanDecisionPointsFlat:
+          type: array
+          minItems: 2
+          items: { type: string }
+          description: CHOOSE 真实选项（≥2），禁止 meta 文案
+        humanDecisionPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              options:
+                type: array
+                minItems: 2
+                items: { type: string }
+
+    PlanSkeletonSet:
+      type: object

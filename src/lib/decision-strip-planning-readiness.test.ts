@@ -18,7 +18,7 @@ function item(partial: Partial<PlanningConflictItem>): PlanningConflictItem {
 describe('resolvePlanningReadinessPresentation', () => {
   const emptyGate = { blocked: false, reasons: [] };
 
-  it('exposes inboxCount aligned with conflicts tab badge', () => {
+  it('routes inbox backlog to executable proof CTA', () => {
     const items = [
       item({ id: 'must-1', priority: 'must_handle' }),
       item({ id: 'suggest-1', priority: 'suggest_adjust', category: 'transport' }),
@@ -35,8 +35,8 @@ describe('resolvePlanningReadinessPresentation', () => {
         totalCount: 3,
       },
     });
-    expect(presentation?.inboxCount).toBe(2);
     expect(presentation?.primaryCta.type).toBe('open_conflicts');
+    expect(presentation?.primaryCta.label).toBe('打开可执行证明');
   });
 
   it('prioritizes gate blocked over inbox headline', () => {
@@ -54,7 +54,6 @@ describe('resolvePlanningReadinessPresentation', () => {
         totalCount: 3,
       },
     });
-    expect(presentation?.inboxCount).toBe(3);
     expect(presentation?.primaryCta.type).toBe('open_conflicts');
     expect(presentation?.headline).toContain('准入');
   });

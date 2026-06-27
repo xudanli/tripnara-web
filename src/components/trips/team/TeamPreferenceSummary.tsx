@@ -27,10 +27,10 @@ export default function TeamPreferenceSummary({
           <div>
             <CardTitle className="text-base flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-muted-foreground" />
-              团队偏好汇总
+              团队整体偏好
             </CardTitle>
             <CardDescription className="text-sm">
-              系统根据成员偏好自动计算，无需手动调权重
+              综合大家的设置，看整体更偏悠闲还是紧凑（只读参考）
             </CardDescription>
           </div>
           <Button variant="ghost" size="sm" className="shrink-0 h-8 px-2" onClick={() => setOpen((v) => !v)}>
@@ -55,7 +55,7 @@ export default function TeamPreferenceSummary({
       ) : (
         <CardContent className="pt-0 pb-4">
           <p className="text-xs text-muted-foreground">
-            展开查看节奏、预算、体验等维度的团队综合倾向
+            展开查看节奏、预算、安全等维度的综合倾向
           </p>
         </CardContent>
       )}

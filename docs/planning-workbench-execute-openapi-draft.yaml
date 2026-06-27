@@ -1,0 +1,274 @@
+# 已 superseded — 请使用 docs/planning-workbench-execute-api.md + planning-workbench-execute-openapi.yaml
+# Planning Workbench Execute — OpenAPI 草案（Jira / 后端 enrich 对齐）
+# POST /api/planning-workbench/execute
+openapi: 3.0.3
+info:
+  title: Planning Workbench Execute Contract
+  version: 2026-06-27-draft
+paths:
+  /planning-workbench/execute:
+    post:
+      summary: 规划工作台主入口（generate / compare / commit / adjust）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutePlanningWorkbenchRequest'
+            example:
+              tripId: trip_abc
+              userAction: generate
+              context:
+                destination: { country: IS, city: Iceland }
+                days: 10
+                travelMode: mixed
+                constraints:
+                  budget: { total: 30000, currency: CNY }
+              metadata:
+                contextPackageId: ctx_pkg_123
+                scheduleRevision: 12
+                constraintSnapshotId: constraints_v3
+      responses:
+        '200':
+          description: 方案 + UI 输出
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutePlanningWorkbenchResponse'
+
+components:
+  schemas:
+    ExecutePlanningWorkbenchRequest:
+      type: object
+      required: [context]
+      properties:
+        context:
+          $ref: '#/components/schemas/PlanningContext'
+        tripId:
+          type: string
+        existingPlanState:
+          type: object
+          description: 增量更新时的上一轮 PlanState
+        userAction:
+          type: string
+          enum: [generate, compare, commit, adjust]
+        selectedOptionId:
+          type: string
+        skeletonOptions:
+          $ref: '#/components/schemas/PlanSkeletonSet'
+        metadata:
+          $ref: '#/components/schemas/ExecutePlanningWorkbenchMetadata'
+
+    ExecutePlanningWorkbenchMetadata:
+      type: object
+      properties:
+        contextPackageId:
+          type: string
+          description: 前端 Context Package id（可选）
+        scheduleRevision:
+          type: integer
+          description: 时间轴 revision，用于感知未 generate 的改动
+        constraintSnapshotId:
+          type: string
+          description: Plan Studio 约束快照 id
+        userId:
+          type: string
+
+    PlanningContext:
+      type: object
+      required: [destination, days]
+      properties:
+        destination:
+          type: object
+          properties:
+            country: { type: string }
+            city: { type: string }
+            region: { type: string }
+        days:
+          type: integer
+        travelMode:
+          type: string
+          enum: [self_drive, public_transit, walking, mixed]
+        mustDo:
+          type: array
+          items: { type: string }
+        mustAvoid:
+          type: array
+          items: { type: string }
+        constraints:
+          type: object
+
+    ExecutePlanningWorkbenchResponse:
+      type: object
+      required: [planState, uiOutput]
+      properties:
+        planState:
+          $ref: '#/components/schemas/PlanState'
+        uiOutput:
+          $ref: '#/components/schemas/UIOutput'
+
+    PlanState:
+      type: object
+      required: [plan_id, plan_version, status]
+      properties:
+        plan_id:
+          type: string
+        plan_version:
+          type: integer
+        status:
+          type: string
+          enum: [DRAFT, PROPOSED, NEED_CONFIRM, LOCKED]
+        itinerary:
+          $ref: '#/components/schemas/PlanItinerary'
+        gate:
+          type: object
+          properties:
+            requiredUserConfirmations:
+              type: array
+              items: { type: string }
+        budget:
+          type: object
+        pace:
+          type: object
+        mobility:
+          type: object
+        metadata:
+          type: object
+
+    PlanItinerary:
+      type: object
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanItinerarySegment'
+
+    PlanItinerarySegment:
+      type: object
+      required: [segmentId, dayIndex]
+      properties:
+        segmentId:
+          type: string
+        dayIndex:
+          type: integer
+          description: 0-based
+        distanceKm:
+          type: number
+        metadata:
+          $ref: '#/components/schemas/PlanItinerarySegmentMetadata'
+
+    PlanItinerarySegmentMetadata:
+      type: object
+      description: execute enrich 层写入；禁止仅返回「第 N 天→第 M 天」占位
+      properties:
+        name:
+          type: string
+          example: 雷克雅未克 → 维克
+        fromName:
+          type: string
+        toName:
+          type: string
+        stops:
+          type: array
+          items: { type: string }
+          description: 当日停留点预览（前端优先于 trips/:id 二次拉取）
+          example: [蓝湖, 塞尔福斯, 维克]
+
+    UIOutput:
+      type: object
+      required: [consolidatedDecision, personas, timestamp]
+      properties:
+        consolidatedDecision:
+          $ref: '#/components/schemas/ConsolidatedDecision'
+        confirmations:
+          type: array
+          items: { type: string }
+          description: NEED_CONFIRM 时 humanize 确认点（≥1）
+        presentation:
+          $ref: '#/components/schemas/GuardianPersonaPresentation'
+        personas:
+          type: object
+        decisionContext:
+          $ref: '#/components/schemas/WorkbenchDecisionContext'
+        budgetPreview:
+          $ref: '#/components/schemas/WorkbenchBudgetPreview'
+        health:
+          type: object
+          properties:
+            budget: { type: string, enum: [healthy, warning, critical] }
+            pace: { type: string, enum: [healthy, warning, critical] }
+            feasibility: { type: string, enum: [healthy, warning, critical] }
+        timestamp:
+          type: string
+          format: date-time
+
+    ConsolidatedDecision:
+      type: object
+      required: [status, summary, nextSteps]
+      properties:
+        status:
+          type: string
+          enum: [ALLOW, NEED_CONFIRM, SUGGEST_REPLACE, REJECT]
+        summary:
+          type: string
+          description: 可读风险摘要，避免仅「Abu 发现风险」
+        nextSteps:
+          type: array
+          items: { type: string }
+          description: 流程指引，不可作为 CHOOSE 选项
+
+    WorkbenchDecisionContext:
+      type: object
+      description: RAG / 合规下游关联
+      properties:
+        tripId: { type: string }
+        planId: { type: string }
+        planVersion: { type: integer }
+        gateStatus: { type: string }
+
+    WorkbenchBudgetPreview:
+      type: object
+      properties:
+        totalEstimate: { type: number }
+        currency: { type: string }
+        vsLimit:
+          type: number
+          description: 0–1，占预算上限比例
+        evaluated:
+          type: boolean
+          description: false 时前端仍 lazy load budget/evaluate
+        band:
+          type: string
+          enum: [healthy, warning, critical]
+        message:
+          type: string
+
+    GuardianPersonaPresentation:
+      type: object
+      properties:
+        actions:
+          type: object
+          properties:
+            user:
+              type: string
+              enum: [CHOOSE]
+              description: ALLOW/硬阻断后应清除
+        hardConstraintBlocked:
+          type: boolean
+        humanDecisionPointsFlat:
+          type: array
+          minItems: 2
+          items: { type: string }
+          description: CHOOSE 真实选项（≥2），禁止 meta 文案
+        humanDecisionPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              options:
+                type: array
+                minItems: 2
+                items: { type: string }
+
+    PlanSkeletonSet:
+      type: object

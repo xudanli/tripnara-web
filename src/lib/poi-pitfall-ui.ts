@@ -82,17 +82,33 @@ function pickRawPoiPitfallCards(payload: Record<string, unknown> | undefined): u
 
 /** ui_display.poi_pitfall_cards 优先；次选 narration.poi_pitfall_cards */
 export function pickPoiPitfallCardsFromRouteRun(response: RouteAndRunResponse): PoiPitfallCard[] {
-  if (response.result?.status !== 'OK') return [];
+  return pickPoiPitfallBundleFromRouteRun(response).cards;
+}
+
+export interface PoiPitfallBundle {
+  cards: PoiPitfallCard[];
+  headlineZh?: string;
+}
+
+export function pickPoiPitfallBundleFromRouteRun(response: RouteAndRunResponse): PoiPitfallBundle {
+  if (response.result?.status !== 'OK') return { cards: [] };
 
   const payload = response.result?.payload as Record<string, unknown> | undefined;
   const raw = pickRawPoiPitfallCards(payload);
-  if (raw == null) return [];
+  if (raw == null) return { cards: [] };
 
   if (isPoiPitfallCardsPayload(raw)) {
-    return normalizePoiPitfallCards(raw.cards);
+    const headline =
+      typeof raw.headline_zh === 'string' && raw.headline_zh.trim()
+        ? raw.headline_zh.trim()
+        : undefined;
+    return {
+      cards: normalizePoiPitfallCards(raw.cards),
+      headlineZh: headline,
+    };
   }
 
-  return normalizePoiPitfallCards(raw);
+  return { cards: normalizePoiPitfallCards(raw) };
 }
 
 export function hasPoiPitfallCardsUi(cards: PoiPitfallCard[] | null | undefined): boolean {

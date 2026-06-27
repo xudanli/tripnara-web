@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { isLoopValidationInFlight } from '@/lib/trip-loop-display';
 import type { TripLoopUiView } from '@/types/trip-loop';
 import { LoopChecklistStrip } from './LoopChecklistStrip';
 import { LoopIssueCardView } from './LoopIssueCard';
@@ -88,7 +89,10 @@ export function ReadinessRepairLoopPanel({
 
   return (
     <div className={cn('space-y-4', className)}>
-      <LoopProgressHeader ui={ui} loading={running || ui.phase === 'validating'} />
+      <LoopProgressHeader
+        ui={ui}
+        loading={isLoopValidationInFlight(ui, running, Boolean(applying))}
+      />
 
       {error ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">

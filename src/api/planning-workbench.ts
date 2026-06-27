@@ -1,4 +1,10 @@
 import apiClient from './client';
+import {
+  formatPlanningWorkbenchErrorForDisplay,
+  mapPlanningWorkbenchUserMessage,
+  parsePlanningWorkbenchError,
+  planningWorkbenchErrorToUserMessage,
+} from '@/lib/planning-workbench-error-map';
 
 // ==================== 类型定义 ====================
 
@@ -84,20 +90,36 @@ export interface PlanningContext {
  */
 export type UserAction = 'generate' | 'compare' | 'commit' | 'adjust';
 
+export type PaceFeedback = 'too_tired' | 'too_rushed' | 'too_relaxed';
+
 /**
  * 执行规划工作台请求
  */
 export interface ExecutePlanningWorkbenchRequest {
   context: PlanningContext;
-  tripId?: string;           // 行程 ID（可选，用于关联现有行程）
-  existingPlanState?: any;   // 现有 PlanState（可选，用于增量更新）
+  tripId?: string;           // 行程 ID（commit 必填）
+  /** commit 必传：上一轮 generate/compare 返回的 planState */
+  existingPlanState?: any;
   userAction?: UserAction;   // 用户操作
-  /** commit：选中的骨架方案 id */
+  /** commit：多方案且用户 CHOOSE 选了非推荐项时必传；单方案可传唯一 optionId */
   selectedOptionId?: string;
+  /** adjust：节奏反馈（后端 400 MISSING_PACE_FEEDBACK 若缺失） */
+  paceFeedback?: PaceFeedback;
+  /** commit：用户勾选的 confirmations 审计 */
+  confirmedItems?: string[];
   /** compare / commit（服务端未缓存方案集时） */
   skeletonOptions?: PlanSkeletonSet;
   /** 内部扩展（tripRunId、userId、异步进度等），一般无需传 */
-  metadata?: Record<string, unknown>;
+  metadata?: ExecutePlanningWorkbenchMetadata;
+}
+
+/** execute 请求 metadata（约束快照 / 时间轴版本 / Context Package） */
+export interface ExecutePlanningWorkbenchMetadata {
+  contextPackageId?: string;
+  scheduleRevision?: number;
+  constraintSnapshotId?: string;
+  userId?: string;
+  [key: string]: unknown;
 }
 
 /**
@@ -192,15 +214,60 @@ export interface PersonasOutput {
 /**
  * 综合决策状态
  */
-export type ConsolidatedDecisionStatus = 'ALLOW' | 'NEED_CONFIRM' | 'REJECT';
+export type ConsolidatedDecisionStatus =
+  | 'ALLOW'
+  | 'NEED_CONFIRM'
+  | 'SUGGEST_REPLACE'
+  | 'REJECT';
 
 /**
  * 综合决策
  */
 export interface ConsolidatedDecision {
-  status: ConsolidatedDecisionStatus;
+  status: ConsolidatedDecisionStatus | (string & {});
   summary: string;
   nextSteps: string[];
+}
+
+/** execute enrich：RAG / 合规等下游关联（含请求 metadata 回显） */
+export interface WorkbenchDecisionContext {
+  tripId?: string;
+  planId?: string;
+  planVersion?: number;
+  gateStatus?: string;
+  contextPackageId?: string;
+  scheduleRevision?: number;
+  constraintSnapshotId?: string;
+}
+
+/** execute enrich：预算摘要（完整 evaluate 前可展示） */
+export interface WorkbenchBudgetPreview {
+  totalEstimate?: number;
+  currency?: string;
+  vsLimit?: number;
+  evaluated?: boolean;
+  band?: WorkbenchHealthBand;
+  message?: string;
+}
+
+/** segment.metadata（execute enrich；stops 可由 attractions → restaurants → accommodation 合并） */
+export interface PlanItinerarySegmentMetadata {
+  name?: string;
+  fromName?: string;
+  toName?: string;
+  stops?: string[];
+  primaryPoiTitle?: string;
+  attractions?: string[];
+  restaurants?: string[];
+  accommodation?: string | string[];
+}
+
+export interface PlanItinerarySegment {
+  segmentId?: string;
+  dayIndex?: number;
+  distanceKm?: number;
+  metadata?: PlanItinerarySegmentMetadata;
+  [key: string]: unknown;
 }
 
 /** 健康度档位（内部能力输出，可放高级页） */
@@ -340,6 +407,10 @@ export interface UIOutput {
   };
   /** 流程级待确认项 */
   confirmations?: string[];
+  /** RAG / 合规关联上下文（generate 后写入） */
+  decisionContext?: WorkbenchDecisionContext;
+  /** 预算摘要（evaluated=false 时可引导 lazy evaluate） */
+  budgetPreview?: WorkbenchBudgetPreview;
 }
 
 /**
@@ -369,6 +440,26 @@ export interface PlanState {
 export interface ExecutePlanningWorkbenchResponse {
   planState: PlanState;
   uiOutput: UIOutput;
+}
+
+export type ExecuteAsyncTaskStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface ExecuteAsyncTaskResponse {
+  taskId: string;
+  status: ExecuteAsyncTaskStatus;
+  result?: ExecutePlanningWorkbenchResponse;
+  error?: string | { code?: string; message?: string };
+  progress?: {
+    total?: number;
+    processed?: number;
+    current?: string;
+    estimatedRemainingTime?: number;
+  };
 }
 
 /**
@@ -683,7 +774,58 @@ export function normalizeWorkbenchUiOutput(raw: unknown): UIOutput {
     confirmations: Array.isArray(r.confirmations)
       ? (r.confirmations as unknown[]).filter((x): x is string => typeof x === 'string')
       : undefined,
+    decisionContext: normalizeWorkbenchDecisionContext(r.decisionContext ?? r.decision_context),
+    budgetPreview: normalizeWorkbenchBudgetPreview(r.budgetPreview ?? r.budget_preview),
   };
+}
+
+function normalizeWorkbenchBudgetPreview(raw: unknown): WorkbenchBudgetPreview | undefined {
+  const o = asRecord(raw);
+  if (!o) return undefined;
+  const totalEstimate = o.totalEstimate ?? o.total_estimate;
+  const vsLimit = o.vsLimit ?? o.vs_limit;
+  const currency = o.currency;
+  const evaluated = o.evaluated;
+  const band = o.band;
+  const message = o.message;
+  if (
+    totalEstimate == null &&
+    vsLimit == null &&
+    typeof message !== 'string' &&
+    evaluated == null
+  ) {
+    return undefined;
+  }
+  return {
+    ...(typeof totalEstimate === 'number' ? { totalEstimate } : {}),
+    ...(typeof currency === 'string' ? { currency } : {}),
+    ...(typeof vsLimit === 'number' ? { vsLimit } : {}),
+    ...(typeof evaluated === 'boolean' ? { evaluated } : {}),
+    ...(typeof band === 'string' ? { band: band as WorkbenchHealthBand } : {}),
+    ...(typeof message === 'string' ? { message } : {}),
+  };
+}
+
+function normalizeWorkbenchDecisionContext(raw: unknown): WorkbenchDecisionContext | undefined {
+  const o = asRecord(raw);
+  if (!o) return undefined;
+  const tripId = o.tripId ?? o.trip_id;
+  const planId = o.planId ?? o.plan_id;
+  const planVersion = o.planVersion ?? o.plan_version;
+  const gateStatus = o.gateStatus ?? o.gate_status;
+  const contextPackageId = o.contextPackageId ?? o.context_package_id;
+  const scheduleRevision = o.scheduleRevision ?? o.schedule_revision;
+  const constraintSnapshotId = o.constraintSnapshotId ?? o.constraint_snapshot_id;
+  const result: WorkbenchDecisionContext = {
+    ...(typeof tripId === 'string' ? { tripId } : {}),
+    ...(typeof planId === 'string' ? { planId } : {}),
+    ...(typeof planVersion === 'number' ? { planVersion } : {}),
+    ...(typeof gateStatus === 'string' ? { gateStatus } : {}),
+    ...(typeof contextPackageId === 'string' ? { contextPackageId } : {}),
+    ...(typeof scheduleRevision === 'number' ? { scheduleRevision } : {}),
+    ...(typeof constraintSnapshotId === 'string' ? { constraintSnapshotId } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -859,7 +1001,7 @@ export function normalizeExecutePlanningWorkbenchResponse(
   };
 }
 
-/** 合并流程级、门控与人格侧的待确认文案（去重保序） */
+/** 合并 uiOutput.confirmations（后端 humanize）与人格侧确认项（去重保序） */
 export function mergeWorkbenchConfirmations(
   result: Pick<ExecutePlanningWorkbenchResponse, 'planState' | 'uiOutput'>
 ): string[] {
@@ -1084,23 +1226,40 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
 
   if (!response.data.success) {
     const errorData = (response.data as ErrorResponse).error;
-    const errorMessage = 
-      errorData?.message || 
-      errorData?.code || 
-      '请求失败';
     const errorCode = errorData?.code || 'UNKNOWN_ERROR';
-    
+    const errorMessage = mapPlanningWorkbenchUserMessage(
+      errorCode,
+      errorData?.message,
+    );
+
     console.error('[Planning Workbench API] API 返回错误:', {
       code: errorCode,
       message: errorMessage,
       fullError: errorData,
       fullResponse: response.data,
     });
-    
-    throw new Error(errorMessage);
+
+    const err = new Error(errorMessage) as Error & { code?: string };
+    err.code = errorCode;
+    throw err;
   }
 
   return response.data.data;
+}
+
+function rethrowPlanningWorkbenchError(error: unknown): never {
+  const parsed = parsePlanningWorkbenchError(error);
+  const err = new Error(planningWorkbenchErrorToUserMessage(error)) as Error & {
+    code?: string;
+    status?: number;
+  };
+  if (parsed.code) err.code = parsed.code;
+  if (parsed.status) err.status = parsed.status;
+  throw err;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ==================== API 实现 ====================
@@ -1156,32 +1315,105 @@ export const planningWorkbenchApi = {
       });
 
       return normalized;
-    } catch (error: any) {
-      console.error('[Planning Workbench API] execute 请求失败:', {
-        error,
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        request: {
-          context: data.context,
-          tripId: data.tripId,
-          userAction: data.userAction,
-        },
-      });
-
-      // 确保 Axios 错误消息能够正确传播
-      if (error.message) {
-        throw error;
-      }
-      // 如果没有消息，创建一个友好的错误消息
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('请求超时，规划工作台处理时间较长，请稍后重试');
-      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
-        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
-      } else {
-        throw new Error(error.message || '规划工作台请求失败，请稍后重试');
-      }
+    } catch (error: unknown) {
+      console.error('[Planning Workbench API] execute 请求失败:', error);
+      rethrowPlanningWorkbenchError(error);
     }
+  },
+
+  /**
+   * 异步执行规划工作台
+   * POST /api/planning-workbench/execute-async
+   */
+  executeAsync: async (
+    data: ExecutePlanningWorkbenchRequest,
+  ): Promise<{ taskId: string }> => {
+    try {
+      const response = await apiClient.post<
+        ApiResponseWrapper<{ taskId: string }> | { taskId?: string; data?: { taskId?: string } }
+      >('/planning-workbench/execute-async', data, { timeout: 30000 });
+
+      const body = response.data;
+      if (body && typeof body === 'object') {
+        if ('success' in body && body.success && body.data?.taskId) {
+          return { taskId: body.data.taskId };
+        }
+        if ('taskId' in body && body.taskId) {
+          return { taskId: body.taskId };
+        }
+        if ('data' in body && body.data?.taskId) {
+          return { taskId: body.data.taskId };
+        }
+      }
+      throw new Error('未收到异步任务 ID');
+    } catch (error: unknown) {
+      console.error('[Planning Workbench API] executeAsync 请求失败:', error);
+      rethrowPlanningWorkbenchError(error);
+    }
+  },
+
+  /**
+   * 查询 execute 异步任务状态
+   * GET /api/planning-workbench/tasks/:taskId/status
+   */
+  getExecuteTaskStatus: async (taskId: string): Promise<ExecuteAsyncTaskResponse> => {
+    try {
+      const response = await apiClient.get<
+        ApiResponseWrapper<ExecuteAsyncTaskResponse> | ExecuteAsyncTaskResponse
+      >(`/planning-workbench/tasks/${taskId}/status`, { timeout: 15000 });
+
+      const body = response.data;
+      if (body && typeof body === 'object' && 'success' in body && body.success) {
+        return body.data;
+      }
+      return body as ExecuteAsyncTaskResponse;
+    } catch (error: unknown) {
+      rethrowPlanningWorkbenchError(error);
+    }
+  },
+
+  /**
+   * 轮询 execute 异步任务直至完成（初始 1s，最大 5s，默认超时 120s）
+   */
+  pollExecuteTask: async (
+    taskId: string,
+    opts?: {
+      timeoutMs?: number;
+      onStatus?: (status: ExecuteAsyncTaskResponse) => void;
+    },
+  ): Promise<ExecutePlanningWorkbenchResponse> => {
+    const timeoutMs = opts?.timeoutMs ?? 120_000;
+    const started = Date.now();
+    let delayMs = 1000;
+
+    while (Date.now() - started < timeoutMs) {
+      const status = await planningWorkbenchApi.getExecuteTaskStatus(taskId);
+      opts?.onStatus?.(status);
+
+      if (status.status === 'COMPLETED' && status.result) {
+        return normalizeExecutePlanningWorkbenchResponse(status.result);
+      }
+
+      if (status.status === 'FAILED' || status.status === 'CANCELLED') {
+        const errMsg =
+          typeof status.error === 'string'
+            ? status.error
+            : formatPlanningWorkbenchErrorForDisplay({
+                code: status.error?.code,
+                message: mapPlanningWorkbenchUserMessage(
+                  status.error?.code,
+                  status.error?.message,
+                ),
+                status: 400,
+              });
+        throw new Error(errMsg || '规划任务失败');
+      }
+
+      await sleep(delayMs);
+      delayMs = Math.min(Math.round(delayMs * 1.5), 5000);
+    }
+
+    throw new Error('规划任务超时，请稍后重试');
   },
 
   /**

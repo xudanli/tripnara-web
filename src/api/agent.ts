@@ -1215,8 +1215,11 @@ export interface RouteAndRunResponse {
         booking_cart?: import('@/types/booking-cart').BookingCartPayload;
         /** Phase-4c：抢票倒计时 / 官方预约 / 日历提醒 */
         booking_priority_list?: import('@/types/booking-priority-list').BookingPriorityListPayload;
-        /** 开放世界稀疏 stub 核实任务（enrichClientUiDisplay） */
-        open_world_discovery?: import('@/types/open-world-discovery').OpenWorldDiscoveryPayload;
+      /** 开放世界稀疏 stub 核实任务（enrichClientUiDisplay） */
+      open_world_discovery?: import('@/types/open-world-discovery').OpenWorldDiscoveryPayload;
+      /** BFF 松弛建议镜像（与 payload.relaxation_suggestions 同形） */
+      relaxation_suggestions?: import('@/types/relaxation-suggestions').RelaxationSuggestionV1[];
+      relaxation_suggestions_context?: import('@/types/relaxation-suggestions').RelaxationSuggestionsContextV1;
         /** Phase-4d：多图层行程地图（POI / 住宿 / 租车） */
         unified_map_layer?: import('@/types/unified-map-layer').UnifiedMapLayerPayload;
         /** 情绪上下文投影（服务端为准） */
@@ -1240,6 +1243,9 @@ export interface RouteAndRunResponse {
       /** suppress_chat_prose=true 时气泡仅展示短 answer_html/text，长文走 question_html */
       clarification_meta?: { suppress_chat_prose?: boolean; suppressChatProse?: boolean };
       clarificationQuestions?: ClarificationQuestion[];  // 结构化澄清问题（Phase 1）
+      /** NEED_MORE_INFO：BFF 松弛建议（优先于 clarificationQuestions.options 机器 label） */
+      relaxation_suggestions?: import('@/types/relaxation-suggestions').RelaxationSuggestionV1[];
+      relaxation_suggestions_context?: import('@/types/relaxation-suggestions').RelaxationSuggestionsContextV1;
       missingServices?: string[];
       solutions?: string[];
       errorType?: ErrorType;

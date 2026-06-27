@@ -29,16 +29,15 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { planningWorkbenchApi, mergeWorkbenchConfirmations, pickWorkbenchOptionComparison } from '@/api/planning-workbench';
-import { publishPlanStudioComparison } from '@/store/planStudioCompareStore';
+import { planningWorkbenchApi, pickWorkbenchOptionComparison } from '@/api/planning-workbench';
+import { publishPlanStudioComparison, usePlanStudioCompareStore } from '@/store/planStudioCompareStore';
 import { pickPlanStateKernelDebug } from '@/lib/planning-workbench-kernel-debug';
 import type {
   ExecutePlanningWorkbenchResponse,
   ConsolidatedDecisionStatus,
   UserAction,
-  CommitPlanResponse,
+  PaceFeedback,
   ComparePlansResponse,
-  AdjustPlanResponse,
   TripPlansResponse,
   PlanDifference,
 } from '@/api/planning-workbench';
@@ -46,7 +45,14 @@ import { tripsApi } from '@/api/trips';
 import { demApi } from '@/api/dem';
 import type { GetElevationProfileResponse, Coordinate } from '@/api/dem';
 import type { TripDetail, PlanBudgetEvaluationResponse } from '@/types/trip';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
+import { isPlanningWorkbenchAsyncUnavailable, planningWorkbenchErrorToUserMessage } from '@/lib/planning-workbench-error-map';
+import {
+  resolveExecuteScheduleRevision,
+  resolveTripScheduleRevision,
+} from '@/lib/schedule-timeline-apply';
 import { useContextApi, useIcelandInfo, useIsIcelandTrip } from '@/hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { inferIcelandInfoParams } from '@/utils/iceland-info-inference';
@@ -56,7 +62,7 @@ import { GuardianAssistantBlock } from '@/components/guardian';
 import { CausalInsightPanel } from '@/components/causal';
 import { shouldShowPersonaInsightCards } from '@/lib/guardian-presentation.util';
 import { shouldSkipLlmGuardianEval } from '@/lib/causal-observation.util';
-import { saveCausalRuntimeFromWorkbench } from '@/lib/causal-runtime-session';
+import { saveCausalRuntimeFromWorkbench, loadCausalRuntimeSession } from '@/lib/causal-runtime-session';
 import { WorkbenchOptionComparisonPanel } from '@/components/planning-workbench/WorkbenchOptionComparisonPanel';
 import { WorkbenchKernelDebugPanel } from '@/components/planning-workbench/WorkbenchKernelDebugPanel';
 import BudgetProgress from '@/components/planning-workbench/BudgetProgress';
@@ -77,9 +83,10 @@ import {
 } from '@/lib/persona-icons';
 import { PersonaAvatar } from '@/components/common/PersonaAvatar';
 import ConfirmPanel from '@/components/planning-workbench/ConfirmPanel';
+import PlanGateChoosePanel from '@/components/planning-workbench/PlanGateChoosePanel';
 import {
   Dialog,
-  DialogContent,
+  SheetLayerDialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -88,6 +95,24 @@ import {
 import { format } from 'date-fns';
 import { DecisionCardsGrid } from '@/components/decision-draft';
 import PlanStudioContext from '@/contexts/PlanStudioContext';
+import { dispatchOpenConstraintEditor } from '@/lib/plan-studio-constraints-events';
+import {
+  extractPlanItems,
+  extractWorkbenchChooseOptions,
+  formatPlanSegmentLabel,
+  formatWorkbenchBudgetPreviewLine,
+  getSegmentPreviewStops,
+  getTripDayPoiNames,
+  getWorkbenchGuidance,
+  humanizeWorkbenchDisplayText,
+  isWorkbenchChooseActive,
+  resolveEffectiveWorkbenchGate,
+  resolveWorkbenchConfirmationItems,
+  resolveWorkbenchCommitSelectedOptionId,
+  resolveWorkbenchRiskExplanation,
+  resolveWorkbenchSubmitBlocked,
+  mapWorkbenchChooseToOptionId,
+} from '@/lib/planning-workbench-ux.util';
 import { SilentVoteDialog } from '@/components/silent-vote';
 import { useCreateSilentVote } from '@/hooks/useSilentVotes';
 
@@ -105,6 +130,8 @@ function jsonPreview(obj: unknown, maxChars = 24000): string {
 
 interface PlanningWorkbenchTabProps {
   tripId: string;
+  /** 父页已加载的行程，避免抽屉内重复等待 */
+  initialTrip?: TripDetail | null;
   /** 嵌入方案抽屉（原决策评估 Tab） */
   embedMode?: boolean;
   /** 打开时自动触发 execute(generate) */
@@ -115,18 +142,24 @@ interface PlanningWorkbenchTabProps {
 
 export default function PlanningWorkbenchTab({
   tripId,
-  embedMode: _embedMode = false,
+  initialTrip = null,
+  embedMode = false,
   autoGenerateOnOpen = false,
   onPlanCommitted,
 }: PlanningWorkbenchTabProps) {
   const [loading, setLoading] = useState(false);
-  const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [trip, setTrip] = useState<TripDetail | null>(initialTrip);
+  const [tripLoading, setTripLoading] = useState(!initialTrip);
+  const [tripLoadError, setTripLoadError] = useState<string | null>(null);
   const [result, setResult] = useState<ExecutePlanningWorkbenchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [advancedWorkbenchOpen, setAdvancedWorkbenchOpen] = useState(false);
+  const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
   
   // 获取货币单位
-  const currency = trip?.budgetConfig?.currency || 'CNY';
+  const currency =
+    (trip as TripDetail & { budgetConfig?: { currency?: string } })?.budgetConfig?.currency ||
+    'CNY';
   
   const { user } = useAuth();
 
@@ -139,6 +172,8 @@ export default function PlanningWorkbenchTab({
   } = useContextApi();
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
+  const [paceFeedback, setPaceFeedback] = useState<PaceFeedback | null>(null);
+  const [userSelectedOptionId, setUserSelectedOptionId] = useState<string | null>(null);
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [silentVoteDialogOpen, setSilentVoteDialogOpen] = useState(false);
   const [activeSilentVoteId, setActiveSilentVoteId] = useState<string | null>(null);
@@ -167,6 +202,23 @@ export default function PlanningWorkbenchTab({
     loadTrip();
   }, [tripId]);
 
+  useEffect(() => {
+    if (initialTrip?.id === tripId) {
+      setTrip(initialTrip);
+      setTripLoading(false);
+      setTripLoadError(null);
+    }
+  }, [initialTrip, tripId]);
+
+  useEffect(() => {
+    if (!tripId) return;
+    const onScheduleRefresh = () => {
+      void loadTrip();
+    };
+    window.addEventListener('plan-studio:schedule-refresh', onScheduleRefresh);
+    return () => window.removeEventListener('plan-studio:schedule-refresh', onScheduleRefresh);
+  }, [tripId]);
+
   const autoGenerateStartedRef = useRef(false);
   useEffect(() => {
     if (!autoGenerateOnOpen || !trip || autoGenerateStartedRef.current) return;
@@ -190,6 +242,11 @@ export default function PlanningWorkbenchTab({
 
   // 🆕 冰岛信息源集成
   const isIceland = useIsIcelandTrip(trip?.destination);
+
+  const causalRuntimeSession = useMemo(
+    () => (tripId ? loadCausalRuntimeSession(tripId) : null),
+    [tripId, result],
+  );
   
   // 🆕 动态推断冰岛信息源查询参数（避免硬编码）
   const icelandInfoParams = inferIcelandInfoParams(trip);
@@ -299,12 +356,20 @@ export default function PlanningWorkbenchTab({
 
   const loadTrip = async () => {
     if (!tripId) return;
+    setTripLoadError(null);
+    const needsLoadingIndicator = !trip;
+    if (needsLoadingIndicator) setTripLoading(true);
     try {
       const data = await tripsApi.getById(tripId);
       setTrip(data);
     } catch (err) {
       console.error('Failed to load trip:', err);
-      toast.error('加载行程信息失败');
+      setTripLoadError('加载行程信息失败，请重试');
+      if (needsLoadingIndicator) {
+        toast.error('加载行程信息失败');
+      }
+    } finally {
+      if (needsLoadingIndicator) setTripLoading(false);
     }
   };
 
@@ -387,7 +452,44 @@ export default function PlanningWorkbenchTab({
   };
 
   // 执行规划工作台操作的通用函数
-  const executeWorkbenchAction = async (userAction: UserAction, existingPlanState?: any) => {
+  type ExecuteWorkbenchExtras = {
+    paceFeedback?: PaceFeedback;
+    confirmedItems?: string[];
+    selectedOptionId?: string;
+    preferAsync?: boolean;
+    silentToast?: boolean;
+    manageLoading?: boolean;
+  };
+
+  const resolveScheduleRevisionForExecute = async (): Promise<number | undefined> => {
+    let revision = resolveExecuteScheduleRevision(trip, initialTrip);
+    if (typeof revision === 'number' || !tripId) return revision;
+
+    try {
+      const fresh = await tripsApi.getById(tripId);
+      revision = resolveTripScheduleRevision(fresh);
+      if (typeof revision === 'number') {
+        setTrip((prev) =>
+          prev
+            ? {
+                ...prev,
+                revision: fresh.revision ?? prev.revision,
+                metadata: { ...prev.metadata, revision: fresh.metadata?.revision ?? prev.metadata?.revision },
+              }
+            : fresh,
+        );
+      }
+    } catch (err) {
+      console.warn('[Planning Workbench] Failed to refresh scheduleRevision:', err);
+    }
+    return revision;
+  };
+
+  const runExecute = async (
+    userAction: UserAction,
+    existingPlanState?: any,
+    extras?: ExecuteWorkbenchExtras,
+  ): Promise<ExecutePlanningWorkbenchResponse | undefined> => {
     if (!trip) {
       toast.error('请先加载行程信息');
       return;
@@ -396,12 +498,14 @@ export default function PlanningWorkbenchTab({
     const context = buildPlanningContext();
     if (!context) return;
 
-    setLoading(true);
-    setError(null);
-    setLoadingStage('准备中…');
+    const manageLoading = extras?.manageLoading !== false;
+    if (manageLoading) {
+      setLoading(true);
+      setError(null);
+      setLoadingStage('准备中…');
+    }
 
     try {
-      // 🆕 构建用户查询文本（根据操作类型）
       const userQueryMap: Record<UserAction, string> = {
         generate: `帮我规划${trip.destination || ''}的${trip.TripDay?.length || 0}天行程`,
         compare: '对比当前方案与其他方案',
@@ -410,32 +514,67 @@ export default function PlanningWorkbenchTab({
       };
       const userQuery = userQueryMap[userAction] || '执行规划操作';
 
-      setLoadingStage('构建上下文…');
-
-      // 🆕 构建 Context Package（可选，如果后端支持可以传递）
+      if (manageLoading) setLoadingStage('构建上下文…');
       const contextPkg = await buildContextPackage(userQuery);
 
-      setLoadingStage('执行规划操作…');
-      
-      // 如果构建成功，可以在这里记录或传递给后端
-      if (contextPkg) {
-        console.log('[Planning Workbench] 使用 Context Package:', {
-          id: contextPkg.id,
-          blocksCount: contextPkg.blocks.length,
-          totalTokens: contextPkg.totalTokens,
-        });
-        // TODO: 如果后端 API 支持，可以将 contextPkg.id 或 blocks 传递给后端
-        // 例如：contextPackageId: contextPkg.id
+      if (manageLoading) {
+        setLoadingStage(userAction === 'generate' ? '提交生成任务…' : '执行规划操作…');
       }
 
-      const response = await planningWorkbenchApi.execute({
+      const planStateForRequest =
+        userAction === 'commit'
+          ? existingPlanState ?? result?.planState
+          : existingPlanState || result?.planState;
+
+      if (userAction === 'commit' && !planStateForRequest?.plan_id) {
+        toast.error('缺少 planState，请先重新生成方案后再提交');
+        return;
+      }
+
+      const scheduleRevision =
+        userAction === 'generate' || userAction === 'commit'
+          ? await resolveScheduleRevisionForExecute()
+          : resolveExecuteScheduleRevision(trip, initialTrip);
+
+      const payload = {
         context,
         tripId,
-        existingPlanState: existingPlanState || result?.planState,
+        existingPlanState: planStateForRequest,
         userAction,
-      });
+        ...(extras?.paceFeedback ? { paceFeedback: extras.paceFeedback } : {}),
+        ...(extras?.confirmedItems?.length ? { confirmedItems: extras.confirmedItems } : {}),
+        ...(extras?.selectedOptionId ? { selectedOptionId: extras.selectedOptionId } : {}),
+        metadata: {
+          ...(contextPkg?.id ? { contextPackageId: contextPkg.id } : {}),
+          ...(typeof scheduleRevision === 'number' ? { scheduleRevision } : {}),
+          ...(user?.id ? { userId: user.id } : {}),
+        },
+      };
 
-      setLoadingStage('完成');
+      const useAsync = extras?.preferAsync !== false && userAction === 'generate';
+      let response: ExecutePlanningWorkbenchResponse;
+
+      if (useAsync) {
+        try {
+          const { taskId } = await planningWorkbenchApi.executeAsync(payload);
+          response = await planningWorkbenchApi.pollExecuteTask(taskId, {
+            onStatus: (task) => {
+              if (!manageLoading) return;
+              setLoadingStage(
+                task.status === 'RUNNING' ? '生成中…' : '等待调度…',
+              );
+            },
+          });
+        } catch (asyncErr) {
+          if (!isPlanningWorkbenchAsyncUnavailable(asyncErr)) throw asyncErr;
+          if (manageLoading) setLoadingStage('执行规划操作…');
+          response = await planningWorkbenchApi.execute(payload);
+        }
+      } else {
+        response = await planningWorkbenchApi.execute(payload);
+      }
+
+      if (manageLoading) setLoadingStage('完成');
 
       setResult(response);
       if (tripId) {
@@ -443,27 +582,47 @@ export default function PlanningWorkbenchTab({
         const comparison = pickWorkbenchOptionComparison([response]);
         if (comparison) publishPlanStudioComparison(tripId, comparison);
       }
-      toast.success(`规划工作台${getActionLabel(userAction)}成功`);
-      
-      // 如果生成了新方案，自动加载预算评估结果
-      if (userAction === 'generate' && response.planState?.plan_id) {
+
+      if (!extras?.silentToast) {
+        toast.success(`规划工作台${getActionLabel(userAction)}成功`);
+      }
+
+      if (
+        userAction === 'generate' &&
+        response.planState?.plan_id &&
+        response.uiOutput.budgetPreview?.evaluated !== true
+      ) {
         loadBudgetEvaluation(response.planState.plan_id);
       }
-      
-      setTimeout(() => setLoadingStage(''), 500);
+
+      if (manageLoading) {
+        setTimeout(() => setLoadingStage(''), 500);
+      }
 
       return response;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = planningWorkbenchErrorToUserMessage(err);
       console.error(`Planning workbench ${userAction} failed:`, err);
-      const errorMessage = err.message || `${getActionLabel(userAction)}失败，请稍后重试`;
-      setError(errorMessage);
-      toast.error(errorMessage);
-      setLoadingStage('');
+      if (manageLoading) {
+        setError(errorMessage);
+        setLoadingStage('');
+      }
+      if (!extras?.silentToast) {
+        toast.error(errorMessage);
+      }
       throw err;
     } finally {
-      setLoading(false);
+      if (manageLoading) {
+        setLoading(false);
+      }
     }
   };
+
+  const executeWorkbenchAction = async (
+    userAction: UserAction,
+    existingPlanState?: any,
+    extras?: ExecuteWorkbenchExtras,
+  ) => runExecute(userAction, existingPlanState, extras);
 
   // 获取操作标签
   const getActionLabel = (action: UserAction): string => {
@@ -479,6 +638,22 @@ export default function PlanningWorkbenchTab({
   // 生成方案
   const handleGenerate = async () => {
     await executeWorkbenchAction('generate');
+  };
+
+  const handleRegenerateAfterChoose = async () => {
+    toast.message('已根据您的选择重新评估方案…');
+    await handleGenerate();
+  };
+
+  const handleWorkbenchChooseSuccess = (selectedIndex: number, selectedText: string) => {
+    if (!result) return;
+    const optionId = mapWorkbenchChooseToOptionId(result, selectedIndex, selectedText);
+    if (optionId) {
+      setUserSelectedOptionId(optionId);
+      if (tripId) {
+        usePlanStudioCompareStore.getState().setSelectedOption(tripId, optionId);
+      }
+    }
   };
 
   // 加载可用方案列表
@@ -657,98 +832,67 @@ export default function PlanningWorkbenchTab({
     setCommitDialogOpen(true);
   };
 
-  // 确认提交方案
+  // 确认提交方案（execute commit + confirmedItems 审计）
   const handleConfirmCommit = async () => {
     if (!result?.planState || !tripId) return;
 
     setCommitting(true);
     try {
-      // 使用专门的 commit 接口
-      const commitResult: CommitPlanResponse = await planningWorkbenchApi.commitPlan(
-        result.planState.plan_id,
-        {
-          tripId,
-          // 可以添加选项，例如部分提交
-          // options: {
-          //   partialCommit: false,
-          //   commitDays: undefined,
-          // },
-        }
+      const storeSelected = usePlanStudioCompareStore.getState().getSelectedOption(tripId);
+      const selectedOptionId = resolveWorkbenchCommitSelectedOptionId(
+        result,
+        userSelectedOptionId ?? storeSelected,
       );
+
+      await runExecute('commit', result.planState, {
+        confirmedItems:
+          workbenchConfirmations.length > 0 ? workbenchConfirmations : undefined,
+        selectedOptionId,
+        silentToast: true,
+        manageLoading: false,
+      });
 
       setCommitDialogOpen(false);
-      toast.success(
-        `方案已提交到行程！新增 ${commitResult.changes.added} 项，修改 ${commitResult.changes.modified} 项，删除 ${commitResult.changes.removed} 项`
-      );
-      
-      // 刷新行程数据
+      toast.success('方案已提交到行程');
       await loadTrip();
-      
-      // 🆕 清空当前结果，让标签消失，用户可以重新生成
       setResult(null);
-
       planStudioContext?.notifyPlanCommitted();
       onPlanCommitted?.();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Commit plan failed:', err);
-      const errorMessage = err.message || '提交方案失败，请稍后重试';
-      toast.error(errorMessage);
+      toast.error(planningWorkbenchErrorToUserMessage(err));
     } finally {
       setCommitting(false);
     }
   };
 
-  // 调整方案
+  // 调整方案（execute adjust + paceFeedback）
   const handleAdjust = async () => {
     if (!result?.planState) {
       toast.error('请先生成方案后再调整');
       return;
     }
+    setPaceFeedback(null);
     setAdjustDialogOpen(true);
   };
 
-  // 确认调整方案
   const handleConfirmAdjust = async () => {
     if (!result?.planState) return;
+    if (!paceFeedback) {
+      toast.error('请选择节奏反馈后再调整');
+      return;
+    }
 
-    setLoading(true);
+    setAdjustDialogOpen(false);
     try {
-      // 使用专门的 adjust 接口
-      // 这里可以根据实际需求添加具体的调整项
-      // 目前使用一个简单的预算调整示例
-      const adjustResult: AdjustPlanResponse = await planningWorkbenchApi.adjustPlan(
-        result.planState.plan_id,
-        {
-          adjustments: [
-            // 示例：可以根据用户输入添加具体的调整项
-            // {
-            //   type: 'modify_budget',
-            //   data: { total: 10000 }
-            // }
-          ],
-          regenerate: true, // 重新生成方案
-        }
-      );
-
-      // 将调整结果转换为 ExecutePlanningWorkbenchResponse 格式
-      const newResult: ExecutePlanningWorkbenchResponse = {
-        planState: adjustResult.planState,
-        uiOutput: adjustResult.uiOutput,
-      };
-      
-      setResult(newResult);
-      setAdjustDialogOpen(false);
-      toast.success(`方案调整成功！生成了 ${adjustResult.changes.length} 项变更`);
-    } catch (err: any) {
-      console.error('Adjust plan failed:', err);
-      const errorMessage = err.message || '调整方案失败，请稍后重试';
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
+      await executeWorkbenchAction('adjust', result.planState, { paceFeedback });
+      setPaceFeedback(null);
+    } catch {
+      /* toast 已在 runExecute 中展示 */
     }
   };
 
-  const getConsolidatedDecisionStyle = (status: ConsolidatedDecisionStatus) => {
+  const getConsolidatedDecisionStyle = (status: ConsolidatedDecisionStatus | string) => {
     // 标准化状态（支持旧状态映射）
     const normalizedStatus = normalizeGateStatus(status);
     
@@ -762,6 +906,65 @@ export default function PlanningWorkbenchTab({
       label,
       className,
     };
+  };
+
+  // 🆕 检查是否有未提交的方案或未保存的时间轴改动
+  const hasUncommittedPlan = !!result;
+  const hasUnsavedScheduleChanges = planStudioContext?.hasUnsavedScheduleChanges || false;
+  
+  // 显示标签的条件：有未提交的方案 或 有时间轴数据改动未提交生成方案
+  const shouldShowBadge = hasUncommittedPlan || hasUnsavedScheduleChanges;
+
+  const workbenchConfirmations = result
+    ? resolveWorkbenchConfirmationItems(result)
+    : [];
+  const workbenchRiskExplanation = result
+    ? resolveWorkbenchRiskExplanation(result)
+    : undefined;
+  const effectiveGateStatus = useMemo(
+    () => resolveEffectiveWorkbenchGate(result),
+    [result]
+  );
+  const planItemCount = useMemo(
+    () => (result?.planState ? extractPlanItems(result.planState).length : 0),
+    [result?.planState]
+  );
+  const workbenchChooseOptions = useMemo(
+    () => extractWorkbenchChooseOptions(result),
+    [result],
+  );
+  const showGuardianChooseBlock = isWorkbenchChooseActive(result);
+  const submitGate = useMemo(
+    () =>
+      resolveWorkbenchSubmitBlocked(result, {
+        confirmationCount: workbenchConfirmations.length,
+        allConfirmationsChecked,
+      }),
+    [result, workbenchConfirmations.length, allConfirmationsChecked],
+  );
+  const submitBlockedByGate = submitGate.blocked;
+  const submitBlockedByChoose = submitGate.reason === 'choose_pending';
+  const needsInlineConfirmation =
+    effectiveGateStatus === 'NEED_CONFIRM' &&
+    (workbenchConfirmations.length > 0 || Boolean(workbenchRiskExplanation));
+  const workbenchGuidance = useMemo(
+    () =>
+      getWorkbenchGuidance(result, {
+        submitBlockedByGate:
+          effectiveGateStatus === 'NEED_CONFIRM' && !allConfirmationsChecked,
+        planItemCount,
+        choosePending: submitBlockedByChoose,
+      }),
+    [result, effectiveGateStatus, workbenchConfirmations.length, allConfirmationsChecked, planItemCount, submitBlockedByChoose]
+  );
+
+  useEffect(() => {
+    setAllConfirmationsChecked(false);
+    setUserSelectedOptionId(null);
+  }, [result?.planState?.plan_id]);
+
+  const handleOpenConstraintsFromWorkbench = () => {
+    dispatchOpenConstraintEditor({ tripId, closePlanGate: true, resumePlanGate: true });
   };
 
   // 🆕 快捷键支持
@@ -782,7 +985,7 @@ export default function PlanningWorkbenchTab({
       // Ctrl/Cmd + Enter: 提交方案
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && result) {
         e.preventDefault();
-        if (result.uiOutput.consolidatedDecision?.status !== 'REJECT') {
+        if (effectiveGateStatus !== 'REJECT' && !submitBlockedByGate) {
           handleCommit();
         }
       }
@@ -790,25 +993,20 @@ export default function PlanningWorkbenchTab({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [loading, trip, result]);
-
-  // 🆕 检查是否有未提交的方案或未保存的时间轴改动
-  const hasUncommittedPlan = !!result;
-  const hasUnsavedScheduleChanges = planStudioContext?.hasUnsavedScheduleChanges || false;
-  
-  // 显示标签的条件：有未提交的方案 或 有时间轴数据改动未提交生成方案
-  const shouldShowBadge = hasUncommittedPlan || hasUnsavedScheduleChanges;
+  }, [loading, trip, result, submitBlockedByGate, effectiveGateStatus]);
 
   return (
     <div className="space-y-6">
-      {/* 🆕 未提交方案/未保存改动提示标签 */}
-      {shouldShowBadge && (
+      {/* 未提交方案/未保存改动提示标签（抽屉模式用下方状态条代替） */}
+      {shouldShowBadge && !(embedMode && result) && (
         <div className="flex items-center justify-center">
           <Badge 
             variant="outline" 
             className="bg-gray-50 text-gray-700 border-gray-200 px-3 py-1.5 rounded-full text-sm font-normal shadow-sm"
           >
-            {hasUnsavedScheduleChanges && !hasUncommittedPlan ? '有方案未提交' : '有方案未提交'}
+            {hasUnsavedScheduleChanges && !hasUncommittedPlan
+              ? '时间轴有改动，请重新生成方案'
+              : '有方案未提交到时间轴'}
           </Badge>
         </div>
       )}
@@ -904,202 +1102,28 @@ export default function PlanningWorkbenchTab({
             )}
             <Button
               onClick={handleGenerate}
-              disabled={loading || !trip}
+              disabled={loading || tripLoading || !trip}
               size="lg"
               className="min-w-[240px] h-12 text-base shadow-lg hover:shadow-xl transition-shadow"
             >
-              <RefreshCw className={cn('w-5 h-5 mr-2', loading && 'animate-spin')} />
-              {loading ? '生成中...' : '生成方案'}
+              <RefreshCw className={cn('w-5 h-5 mr-2', (loading || tripLoading) && 'animate-spin')} />
+              {tripLoading ? '加载行程中…' : loading ? '生成中...' : '生成方案'}
             </Button>
-            {!trip && (
+            {tripLoadError ? (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs text-destructive">{tripLoadError}</p>
+                <Button variant="outline" size="sm" onClick={() => void loadTrip()}>
+                  重试加载
+                </Button>
+              </div>
+            ) : null}
+            {!trip && !tripLoading && !tripLoadError ? (
               <p className="text-xs text-muted-foreground">
                 请先加载行程信息
               </p>
-            )}
+            ) : null}
           </div>
         </div>
-      )}
-
-      {/* 🆕 合规规则卡片 - 仅在生成方案后显示 */}
-      {result && trip && trip.destination && (
-        <ComplianceRulesCard
-          tripId={tripId}
-          countryCodes={(() => {
-            const parts = trip.destination?.split(',') || [];
-            const countryCode = parts[0]?.trim().toUpperCase();
-            return countryCode ? [countryCode] : [];
-          })()}
-          ruleTypes={['VISA', 'TRANSPORT', 'ENTRY']}
-        />
-      )}
-
-      {/* 🆕 冰岛官方信息源（仅冰岛行程）- 仅在生成方案后显示 */}
-      {result && isIceland && trip && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">冰岛官方信息源</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const params = inferIcelandInfoParams(trip);
-                  icelandInfo.fetchAll(params);
-                }}
-                disabled={
-                  icelandInfo.weather.loading ||
-                  icelandInfo.safety.loading ||
-                  icelandInfo.roadConditions.loading
-                }
-                className="h-8 text-xs"
-              >
-                {(icelandInfo.weather.loading ||
-                  icelandInfo.safety.loading ||
-                  icelandInfo.roadConditions.loading) ? (
-                  <>
-                    <Spinner className="mr-2 h-3 w-3" />
-                    刷新中...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-3 w-3" />
-                    刷新
-                  </>
-                )}
-              </Button>
-            </div>
-            <CardDescription className="text-xs">
-              实时获取冰岛官方天气、安全和路况信息
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* 天气信息 */}
-            {icelandInfo.weather.loading && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner className="h-4 w-4" />
-                <span>加载天气数据...</span>
-              </div>
-            )}
-            {icelandInfo.weather.error && (
-              <div className="text-sm text-red-500">
-                天气数据加载失败: {icelandInfo.weather.error}
-              </div>
-            )}
-            {icelandInfo.weather.data && (
-              <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg">
-                <Cloud className="h-4 w-4 text-blue-600 mt-0.5" />
-                <div className="flex-1">
-                  <div className="text-xs font-semibold text-gray-700 mb-1">高地天气预报</div>
-                  <div className="text-xs text-gray-600">
-                    {icelandInfo.weather.data.station.name}: {Math.round(icelandInfo.weather.data.current.temperature)}°C
-                    {icelandInfo.weather.data.current.windSpeedKmh && (
-                      <span className="ml-2">
-                        ，风速 {Math.round(icelandInfo.weather.data.current.windSpeedKmh)} km/h
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 安全警报 */}
-            {icelandInfo.safety.loading && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner className="h-4 w-4" />
-                <span>加载安全信息...</span>
-              </div>
-            )}
-            {icelandInfo.safety.error && (
-              <div className="text-sm text-red-500">
-                安全信息加载失败: {icelandInfo.safety.error}
-              </div>
-            )}
-            {icelandInfo.safety.data && icelandInfo.safety.data.alerts.length > 0 && (
-              <div className="flex items-start gap-2 p-2 bg-yellow-50 rounded-lg">
-                <Shield className="h-4 w-4 text-yellow-600 mt-0.5" />
-                <div className="flex-1">
-                  <div className="text-xs font-semibold text-gray-700 mb-1">安全警报</div>
-                  <div className="space-y-1">
-                    {icelandInfo.safety.data.alerts.slice(0, 3).map((alert) => (
-                      <div key={alert.id} className="text-xs flex items-center gap-1">
-                        <Badge
-                          variant={
-                            alert.severity === 'critical' || alert.severity === 'high'
-                              ? 'destructive'
-                              : 'secondary'
-                          }
-                          className="text-xs"
-                        >
-                          {alert.severity === 'critical'
-                            ? '严重'
-                            : alert.severity === 'high'
-                            ? '高'
-                            : alert.severity === 'medium'
-                            ? '中'
-                            : '低'}
-                        </Badge>
-                        <span className="text-gray-700">{alert.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* F路路况 */}
-            {icelandInfo.roadConditions.loading && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Spinner className="h-4 w-4" />
-                <span>加载路况信息...</span>
-              </div>
-            )}
-            {icelandInfo.roadConditions.error && (
-              <div className="text-sm text-red-500">
-                路况信息加载失败: {icelandInfo.roadConditions.error}
-              </div>
-            )}
-            {icelandInfo.roadConditions.data &&
-              icelandInfo.roadConditions.data.fRoads.length > 0 && (
-                <div className="flex items-start gap-2 p-2 bg-orange-50 rounded-lg">
-                  <Route className="h-4 w-4 text-orange-600 mt-0.5" />
-                  <div className="flex-1">
-                    <div className="text-xs font-semibold text-gray-700 mb-1">F路路况</div>
-                    <div className="space-y-1">
-                      {icelandInfo.roadConditions.data.fRoads.slice(0, 3).map((road) => (
-                        <div key={road.id} className="text-xs flex items-center gap-1">
-                          <Badge
-                            variant={
-                              road.status === 'closed'
-                                ? 'destructive'
-                                : road.status === 'caution'
-                                ? 'secondary'
-                                : 'default'
-                            }
-                            className="text-xs"
-                          >
-                            {road.fRoadNumber}
-                          </Badge>
-                          <span
-                            className={cn(
-                              'text-gray-700',
-                              road.status === 'closed' && 'text-red-600',
-                              road.status === 'caution' && 'text-yellow-600'
-                            )}
-                          >
-                            {road.status === 'closed'
-                              ? '封闭'
-                              : road.status === 'caution'
-                              ? '谨慎'
-                              : '开放'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-          </CardContent>
-        </Card>
       )}
 
       {/* 🆕 统一操作区域 - 固定在顶部（移动端优化） */}
@@ -1111,10 +1135,12 @@ export default function PlanningWorkbenchTab({
                 <Badge variant="outline" className="font-mono text-xs">
                   方案 v{result.planState.plan_version}
                 </Badge>
+                {!embedMode && (
                 <span className="text-xs text-muted-foreground font-mono hidden sm:inline">
                   {result.planState.plan_id.substring(0, 8)}...
                 </span>
-                {result.uiOutput?.timestamp && (
+                )}
+                {!embedMode && result.uiOutput?.timestamp && (
                   <span className="text-xs text-muted-foreground hidden md:inline">
                     | {(() => {
                       try {
@@ -1151,13 +1177,28 @@ export default function PlanningWorkbenchTab({
                   <span className="hidden sm:inline">调整方案</span>
                   <span className="sm:hidden">调整</span>
                 </Button>
-                {result.uiOutput.consolidatedDecision?.status !== 'REJECT' && (
+                {effectiveGateStatus !== 'REJECT' && (
                   <Button
                     onClick={handleCommit}
-                    variant="default"
+                    variant={
+                      needsInlineConfirmation || effectiveGateStatus === 'NEED_CONFIRM'
+                        ? 'outline'
+                        : 'default'
+                    }
                     size="sm"
-                    disabled={loading || committing}
-                    className="flex-1 sm:flex-initial"
+                    disabled={loading || committing || submitBlockedByGate}
+                    className={cn(
+                      'flex-1 sm:flex-initial',
+                      (needsInlineConfirmation || effectiveGateStatus === 'NEED_CONFIRM') &&
+                        'border-amber-500 text-amber-900 hover:bg-amber-50'
+                    )}
+                    title={
+                      submitBlockedByGate
+                        ? needsInlineConfirmation
+                          ? '请先在下方勾选全部确认点'
+                          : '存在硬违规，暂无法提交'
+                        : undefined
+                    }
                   >
                     {committing ? (
                       <>
@@ -1168,15 +1209,19 @@ export default function PlanningWorkbenchTab({
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4 mr-2" />
-                        <span className="hidden sm:inline">提交方案</span>
-                        <span className="sm:hidden">提交</span>
+                        <span className="hidden sm:inline">
+                          {needsInlineConfirmation ? '确认风险并提交' : '提交方案'}
+                        </span>
+                        <span className="sm:hidden">
+                          {needsInlineConfirmation ? '确认提交' : '提交'}
+                        </span>
                       </>
                     )}
                   </Button>
                 )}
               </div>
             </div>
-            {/* 🆕 快捷键提示（桌面端） */}
+            {!embedMode && (
             <div className="hidden sm:flex items-center gap-4 mt-2 text-xs text-muted-foreground">
               <span>快捷键：</span>
               <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl+G</kbd>
@@ -1186,7 +1231,112 @@ export default function PlanningWorkbenchTab({
               <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl+Enter</kbd>
               <span>提交</span>
             </div>
+            )}
           </div>
+        </div>
+      )}
+
+      {result && !(embedMode && workbenchGuidance) && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">方案已生成</span>
+          {effectiveGateStatus && (
+            <>
+              <span aria-hidden>·</span>
+              <Badge variant="outline" className={cn('text-xs px-2 py-0', getGateStatusClasses(effectiveGateStatus))}>
+                {getGateStatusLabel(effectiveGateStatus)}
+              </Badge>
+            </>
+          )}
+          {shouldShowBadge && (
+            <>
+              <span aria-hidden>·</span>
+              <span>未提交到时间轴</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {result && workbenchGuidance && (
+        <Alert
+          className={cn(
+            workbenchGuidance.tone === 'success' && 'border-green-200 bg-green-50/60',
+            workbenchGuidance.tone === 'warning' && 'border-amber-200 bg-amber-50/60',
+            workbenchGuidance.tone === 'danger' && 'border-red-200 bg-red-50/60',
+            workbenchGuidance.tone === 'info' && 'border-blue-200 bg-blue-50/60'
+          )}
+        >
+          <AlertTitle className="text-sm font-semibold">{workbenchGuidance.title}</AlertTitle>
+          <AlertDescription className="mt-1 space-y-3">
+            <p className="text-sm leading-relaxed">{workbenchGuidance.description}</p>
+            <div className="flex flex-wrap gap-2">
+              {workbenchGuidance.primaryAction === 'adjust' && (
+                <Button size="sm" variant="default" onClick={handleAdjust} disabled={loading}>
+                  <Settings2 className="w-4 h-4 mr-2" />
+                  调整方案
+                </Button>
+              )}
+              {workbenchGuidance.secondaryAction === 'constraints' && (
+                <Button size="sm" variant="outline" onClick={handleOpenConstraintsFromWorkbench}>
+                  去完善约束
+                </Button>
+              )}
+              {workbenchGuidance.primaryAction === 'constraints' && (
+                <Button size="sm" variant="secondary" onClick={handleOpenConstraintsFromWorkbench}>
+                  去完善约束
+                </Button>
+              )}
+              {workbenchGuidance.primaryAction === 'confirm' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    document.getElementById('plan-gate-confirm-panel')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'nearest',
+                    });
+                  }}
+                >
+                  查看确认项
+                </Button>
+              )}
+              {workbenchGuidance.primaryAction === 'submit' &&
+                effectiveGateStatus !== 'REJECT' && (
+                  <Button
+                    size="sm"
+                    onClick={handleCommit}
+                    disabled={loading || committing || submitBlockedByGate}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    提交到时间轴
+                  </Button>
+                )}
+              {workbenchGuidance.primaryAction === 'choose' && !embedMode && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    document.getElementById('plan-gate-choose-block')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'nearest',
+                    });
+                  }}
+                >
+                  查看取舍选项
+                </Button>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {result && needsInlineConfirmation && (
+        <div id="plan-gate-confirm-panel">
+          <ConfirmPanel
+            confirmations={workbenchConfirmations}
+            riskExplanation={workbenchRiskExplanation}
+            decisionStatus="NEED_CONFIRM"
+            onConfirmChange={setAllConfirmationsChecked}
+          />
         </div>
       )}
 
@@ -1229,20 +1379,20 @@ export default function PlanningWorkbenchTab({
       {/* 结果展示 - 重新设计的布局 */}
       {result && (
         <div className="space-y-6">
-          {/* 🆕 第一层：决策结果区 - 综合决策和方案概览并排 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 综合决策卡片 */}
-            {result.uiOutput.consolidatedDecision && (() => {
+          {/* 决策结果区：抽屉模式有指引条时隐藏综合决策卡片，避免重复 */}
+          <div className={cn('grid grid-cols-1 gap-6', !embedMode && 'lg:grid-cols-2')}>
+            {result.uiOutput.consolidatedDecision && !(embedMode && workbenchGuidance) && (() => {
               const status = result.uiOutput.consolidatedDecision.status;
-              const statusStyle = getConsolidatedDecisionStyle(status);
-              const normalizedStatus = normalizeGateStatus(status);
+              const normalizedStatus = effectiveGateStatus ?? normalizeGateStatus(status);
+              const statusStyle = getConsolidatedDecisionStyle(normalizedStatus);
               const isAllow = normalizedStatus === 'ALLOW';
               const isNeedConfirm = normalizedStatus === 'NEED_CONFIRM';
               const isReject = normalizedStatus === 'REJECT';
               
               return (
                 <Card className={cn(
-                  'border-4 shadow-xl relative overflow-hidden',
+                  embedMode ? 'border shadow-sm' : 'border-4 shadow-xl',
+                  'relative overflow-hidden',
                   isAllow && 'border-green-500 bg-green-50/30',
                   isNeedConfirm && 'border-amber-500 bg-amber-50/30',
                   isReject && 'border-red-500 bg-red-50/30'
@@ -1274,7 +1424,8 @@ export default function PlanningWorkbenchTab({
                   </CardHeader>
                   <CardContent className="space-y-3 relative z-10">
                     <p className="text-sm text-foreground leading-relaxed font-medium">
-                      {result.uiOutput.consolidatedDecision.summary}
+                      {humanizeWorkbenchDisplayText(result.uiOutput.consolidatedDecision.summary) ||
+                        result.uiOutput.consolidatedDecision.summary}
                     </p>
                     {result.uiOutput.consolidatedDecision.nextSteps &&
                       result.uiOutput.consolidatedDecision.nextSteps.length > 0 && (
@@ -1319,15 +1470,41 @@ export default function PlanningWorkbenchTab({
                 planState={result.planState} 
                 trip={trip}
                 currency={currency}
+                budgetPreview={result.uiOutput.budgetPreview}
               />
             )}
           </div>
 
-          {/* 三人格评估 — P1 单主角；P0–P5 kernel 权威时只渲染因果投影 */}
-          {result.uiOutput.causalPersonaProjection ? (
-            <CausalInsightPanel projection={result.uiOutput.causalPersonaProjection} />
+          {/* 三人格评估 — 抽屉模式仅保留 CHOOSE 交互，避免与综合决策重复 */}
+          {result.uiOutput.causalPersonaProjection && !embedMode ? (
+            <CausalInsightPanel
+              projection={result.uiOutput.causalPersonaProjection}
+              counterfactual={causalRuntimeSession?.lastCounterfactualReport}
+              iceland={causalRuntimeSession?.echo?.icelandSelfDriveCausalAssessment}
+              calibration={causalRuntimeSession?.echo?.icelandCausalCalibration}
+            />
           ) : null}
-          {result.uiOutput.presentation ? (
+          {embedMode && showGuardianChooseBlock && result.uiOutput.presentation ? (
+            <PlanGateChoosePanel
+              presentation={result.uiOutput.presentation}
+              tripId={tripId}
+              userId={user?.id}
+              onPresentationChange={(next) => {
+                setResult((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        uiOutput: { ...prev.uiOutput, presentation: next },
+                      }
+                    : prev,
+                );
+              }}
+              onRegenerate={handleRegenerateAfterChoose}
+              onChooseSuccess={handleWorkbenchChooseSuccess}
+            />
+          ) : null}
+          {result.uiOutput.presentation && !embedMode && showGuardianChooseBlock ? (
+            <div id="plan-gate-choose-block">
             <GuardianAssistantBlock
               presentation={result.uiOutput.presentation}
               tripId={tripId}
@@ -1335,7 +1512,7 @@ export default function PlanningWorkbenchTab({
               source="presentation"
               choosePoints={
                 result.uiOutput.presentation.actions.user === 'CHOOSE'
-                  ? result.uiOutput.consolidatedDecision?.nextSteps
+                  ? workbenchChooseOptions
                   : undefined
               }
               onPresentationChange={(next) => {
@@ -1348,9 +1525,13 @@ export default function PlanningWorkbenchTab({
                     : prev,
                 );
               }}
+              onRegenerate={handleRegenerateAfterChoose}
+              onChooseSuccess={handleWorkbenchChooseSuccess}
             />
+            </div>
           ) : null}
-          {shouldShowPersonaInsightCards(result.uiOutput.presentation) &&
+          {!embedMode &&
+          shouldShowPersonaInsightCards(result.uiOutput.presentation) &&
           !shouldSkipLlmGuardianEval(result.uiOutput.causalPersonaProjection) ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <PersonaCard persona={result.uiOutput.personas.abu} />
@@ -1393,7 +1574,8 @@ export default function PlanningWorkbenchTab({
           ) : null}
 
           {/* 骨架 / 对比 / 健康度 / world：默认折叠，避免主路径渲染大对象 */}
-          {result &&
+          {!embedMode &&
+          result &&
             (() => {
               const hasAdvanced =
                 !!result.uiOutput.skeletonOptions ||
@@ -1500,156 +1682,252 @@ export default function PlanningWorkbenchTab({
               );
             })()}
 
-          {/* 🆕 详细信息区 - 标签页化 */}
-          <div id="plan-details-section">
-            <Tabs defaultValue="preview" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="preview">方案预览</TabsTrigger>
-                <TabsTrigger value="terrain">地形分析</TabsTrigger>
-                <TabsTrigger value="budget">预算评估</TabsTrigger>
-                <TabsTrigger value="technical">技术信息</TabsTrigger>
-              </TabsList>
-              
-              {/* 方案预览标签页 */}
-              <TabsContent value="preview" className="mt-4">
-                {result.planState?.itinerary && (
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Eye className="w-5 h-5" />
-                          方案预览
-                        </CardTitle>
-                        <Badge variant="outline">版本 {result.planState.plan_version}</Badge>
+          {/* 详细信息区：抽屉模式默认折叠，减少首屏噪音 */}
+          {embedMode ? (
+            <Collapsible open={planDetailsOpen} onOpenChange={setPlanDetailsOpen}>
+              <Card className="border-dashed">
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-muted/40 transition-colors py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm font-medium">行程安排与预算</CardTitle>
+                        <CardDescription className="text-xs mt-1">
+                          展开查看每日路线、预算评估等详情
+                        </CardDescription>
                       </div>
-                      <CardDescription>
-                        查看方案包含的行程项和可执行性验证
+                      <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform', planDetailsOpen && 'rotate-180')} />
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <PlanDetailsTabs
+                      result={result}
+                      trip={trip}
+                      tripId={tripId}
+                      embedMode={embedMode}
+                      budgetEvaluation={budgetEvaluation}
+                      loadBudgetEvaluation={loadBudgetEvaluation}
+                      loadBudgetDecisionLog={loadBudgetDecisionLog}
+                      setBudgetLogDialogOpen={setBudgetLogDialogOpen}
+                      budgetDecisionLog={budgetDecisionLog}
+                      currency={currency}
+                    />
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          ) : (
+            <PlanDetailsTabs
+              result={result}
+              trip={trip}
+              tripId={tripId}
+              embedMode={embedMode}
+              budgetEvaluation={budgetEvaluation}
+              loadBudgetEvaluation={loadBudgetEvaluation}
+              loadBudgetDecisionLog={loadBudgetDecisionLog}
+              setBudgetLogDialogOpen={setBudgetLogDialogOpen}
+              budgetDecisionLog={budgetDecisionLog}
+              currency={currency}
+            />
+          )}
+
+          <Collapsible defaultOpen={false}>
+            <Card className="border-dashed">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/40 transition-colors py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-medium">参考信息</CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        合规规则与目的地实时信息（不影响提交）
                       </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <PlanPreviewContent 
-                        planState={result.planState} 
-                        trip={trip}
-                        currentTrip={trip}
-                        budgetEvaluation={budgetEvaluation}
-                        tripId={tripId}
-                        onLoadBudgetEvaluation={loadBudgetEvaluation}
-                        onLoadBudgetDecisionLog={loadBudgetDecisionLog}
-                        onOpenBudgetLogDialog={() => {
-                          if (budgetEvaluation?.planId) {
-                            loadBudgetDecisionLog(budgetEvaluation.planId);
-                            setBudgetLogDialogOpen(true);
-                          }
-                        }}
-                        budgetDecisionLog={budgetDecisionLog}
-                        currency={currency}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-              
-              {/* 地形分析标签页 */}
-              <TabsContent value="terrain" className="mt-4">
-                {result.planState && (
-                  <DEMTerrainAndFatigueView planState={result.planState} trip={trip} />
-                )}
-              </TabsContent>
-              
-              {/* 预算评估标签页 */}
-              <TabsContent value="budget" className="mt-4">
-                {budgetEvaluation && result.planState && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">预算评估</CardTitle>
-                      <CardDescription>
-                        预算合理性评估结果
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <PlanPreviewContent 
-                        planState={result.planState} 
-                        trip={trip}
-                        currentTrip={trip}
-                        budgetEvaluation={budgetEvaluation}
-                        tripId={tripId}
-                        onLoadBudgetEvaluation={loadBudgetEvaluation}
-                        onLoadBudgetDecisionLog={loadBudgetDecisionLog}
-                        onOpenBudgetLogDialog={() => {
-                          if (budgetEvaluation?.planId) {
-                            loadBudgetDecisionLog(budgetEvaluation.planId);
-                            setBudgetLogDialogOpen(true);
-                          }
-                        }}
-                        budgetDecisionLog={budgetDecisionLog}
-                        currency={currency}
-                      />
-                    </CardContent>
-                  </Card>
-                )}
-                {!budgetEvaluation && (
-                  <Card>
-                    <CardContent className="py-8 text-center text-muted-foreground">
-                      <p className="text-sm">预算评估结果不存在</p>
-                      <p className="text-xs mt-1">方案可能尚未进行预算评估</p>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-              
-              {/* 技术信息标签页 */}
-              <TabsContent value="technical" className="mt-4">
-                {result.planState && (
-                  <Collapsible defaultOpen={true}>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-4 pt-0">
+                  {trip && trip.destination && (
+                    <ComplianceRulesCard
+                      tripId={tripId}
+                      planId={result?.uiOutput.decisionContext?.planId ?? result?.planState.plan_id}
+                      countryCodes={(() => {
+                        const parts = trip.destination?.split(',') || [];
+                        const countryCode = parts[0]?.trim().toUpperCase();
+                        return countryCode ? [countryCode] : [];
+                      })()}
+                      ruleTypes={['VISA', 'TRANSPORT', 'ENTRY']}
+                      onOpenConstraints={handleOpenConstraintsFromWorkbench}
+                    />
+                  )}
+                  {isIceland && trip && (
                     <Card>
-                      <CollapsibleTrigger asChild>
-                        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-medium">规划状态</CardTitle>
-                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base">冰岛官方信息源</CardTitle>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const params = inferIcelandInfoParams(trip);
+                              icelandInfo.fetchAll(params);
+                            }}
+                            disabled={
+                              icelandInfo.weather.loading ||
+                              icelandInfo.safety.loading ||
+                              icelandInfo.roadConditions.loading
+                            }
+                            className="h-8 text-xs"
+                          >
+                            {(icelandInfo.weather.loading ||
+                              icelandInfo.safety.loading ||
+                              icelandInfo.roadConditions.loading) ? (
+                              <>
+                                <Spinner className="mr-2 h-3 w-3" />
+                                刷新中...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="mr-2 h-3 w-3" />
+                                刷新
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <CardDescription className="text-xs">
+                          实时获取冰岛官方天气、安全和路况信息
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {icelandInfo.weather.loading && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Spinner className="h-4 w-4" />
+                            <span>加载天气数据...</span>
                           </div>
-                        </CardHeader>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <CardContent>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">规划 ID</p>
-                              <p className="font-medium mt-1 font-mono text-xs">{result.planState.plan_id}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">版本</p>
-                              <p className="font-medium mt-1">{result.planState.plan_version}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">状态</p>
-                              <Badge variant="outline" className="mt-1">
-                                {result.planState.status}
-                              </Badge>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">时间戳</p>
-                              <p className="font-medium mt-1 text-xs">
-                                {(() => {
-                                  const timestamp = result.uiOutput?.timestamp;
-                                  if (!timestamp) { return '-'; }
-                                  try {
-                                    const date = new Date(timestamp);
-                                    if (isNaN(date.getTime())) { return '-'; }
-                                    return date.toLocaleString('zh-CN');
-                                  } catch { return '-'; }
-                                })()}
-                              </p>
+                        )}
+                        {icelandInfo.weather.error && (
+                          <div className="text-sm text-red-500">
+                            天气数据加载失败: {icelandInfo.weather.error}
+                          </div>
+                        )}
+                        {icelandInfo.weather.data && (
+                          <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg">
+                            <Cloud className="h-4 w-4 text-blue-600 mt-0.5" />
+                            <div className="flex-1">
+                              <div className="text-xs font-semibold text-gray-700 mb-1">高地天气预报</div>
+                              <div className="text-xs text-gray-600">
+                                {icelandInfo.weather.data.station.name}: {Math.round(icelandInfo.weather.data.current.temperature)}°C
+                                {icelandInfo.weather.data.current.windSpeedKmh && (
+                                  <span className="ml-2">
+                                    ，风速 {Math.round(icelandInfo.weather.data.current.windSpeedKmh)} km/h
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </CardContent>
-                      </CollapsibleContent>
+                        )}
+                        {icelandInfo.safety.loading && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Spinner className="h-4 w-4" />
+                            <span>加载安全信息...</span>
+                          </div>
+                        )}
+                        {icelandInfo.safety.error && (
+                          <div className="text-sm text-red-500">
+                            安全信息加载失败: {icelandInfo.safety.error}
+                          </div>
+                        )}
+                        {icelandInfo.safety.data && icelandInfo.safety.data.alerts.length > 0 && (
+                          <div className="flex items-start gap-2 p-2 bg-yellow-50 rounded-lg">
+                            <Shield className="h-4 w-4 text-yellow-600 mt-0.5" />
+                            <div className="flex-1">
+                              <div className="text-xs font-semibold text-gray-700 mb-1">安全警报</div>
+                              <div className="space-y-1">
+                                {icelandInfo.safety.data.alerts.slice(0, 3).map((alert) => (
+                                  <div key={alert.id} className="text-xs flex items-center gap-1">
+                                    <Badge
+                                      variant={
+                                        alert.severity === 'critical' || alert.severity === 'high'
+                                          ? 'destructive'
+                                          : 'secondary'
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {alert.severity === 'critical'
+                                        ? '严重'
+                                        : alert.severity === 'high'
+                                        ? '高'
+                                        : alert.severity === 'medium'
+                                        ? '中'
+                                        : '低'}
+                                    </Badge>
+                                    <span className="text-gray-700">{alert.title}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {icelandInfo.roadConditions.loading && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Spinner className="h-4 w-4" />
+                            <span>加载路况信息...</span>
+                          </div>
+                        )}
+                        {icelandInfo.roadConditions.error && (
+                          <div className="text-sm text-red-500">
+                            路况信息加载失败: {icelandInfo.roadConditions.error}
+                          </div>
+                        )}
+                        {icelandInfo.roadConditions.data &&
+                          icelandInfo.roadConditions.data.fRoads.length > 0 && (
+                            <div className="flex items-start gap-2 p-2 bg-orange-50 rounded-lg">
+                              <Route className="h-4 w-4 text-orange-600 mt-0.5" />
+                              <div className="flex-1">
+                                <div className="text-xs font-semibold text-gray-700 mb-1">F路路况</div>
+                                <div className="space-y-1">
+                                  {icelandInfo.roadConditions.data.fRoads.slice(0, 3).map((road) => (
+                                    <div key={road.id} className="text-xs flex items-center gap-1">
+                                      <Badge
+                                        variant={
+                                          road.status === 'closed'
+                                            ? 'destructive'
+                                            : road.status === 'caution'
+                                            ? 'secondary'
+                                            : 'default'
+                                        }
+                                        className="text-xs"
+                                      >
+                                        {road.fRoadNumber}
+                                      </Badge>
+                                      <span
+                                        className={cn(
+                                          'text-gray-700',
+                                          road.status === 'closed' && 'text-red-600',
+                                          road.status === 'caution' && 'text-yellow-600'
+                                        )}
+                                      >
+                                        {road.status === 'closed'
+                                          ? '封闭'
+                                          : road.status === 'caution'
+                                          ? '谨慎'
+                                          : '开放'}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                      </CardContent>
                     </Card>
-                  </Collapsible>
-                )}
-              </TabsContent>
-            </Tabs>
-          </div>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
         </div>
       )}
@@ -1657,7 +1935,7 @@ export default function PlanningWorkbenchTab({
 
       {/* 提交方案对话框 */}
       <Dialog open={commitDialogOpen} onOpenChange={setCommitDialogOpen}>
-        <DialogContent>
+        <SheetLayerDialogContent>
           <DialogHeader>
             <DialogTitle>提交方案</DialogTitle>
             <DialogDescription>
@@ -1666,53 +1944,71 @@ export default function PlanningWorkbenchTab({
           </DialogHeader>
           {result && (
             <div className="space-y-4 py-4">
-              <div className="text-sm">
-                <p className="font-medium">方案信息：</p>
-                <p className="text-muted-foreground">规划 ID: {result.planState.plan_id}</p>
-                <p className="text-muted-foreground">版本: {result.planState.plan_version}</p>
-                <p className="text-muted-foreground">状态: {result.planState.status}</p>
-              </div>
+              {embedMode && workbenchGuidance ? (
+                <p className="text-sm leading-relaxed">{workbenchGuidance.description}</p>
+              ) : (
+                <div className="text-sm">
+                  <p className="font-medium">方案信息：</p>
+                  <p className="text-muted-foreground">规划 ID: {result.planState.plan_id}</p>
+                  <p className="text-muted-foreground">版本: {result.planState.plan_version}</p>
+                  <p className="text-muted-foreground">状态: {result.planState.status}</p>
+                </div>
+              )}
               
-              {/* 根据决策状态显示不同的确认流程 */}
-              {result.uiOutput.consolidatedDecision && (
+              {result.uiOutput.consolidatedDecision && !embedMode && (
                 <>
                   <div className="text-sm">
                     <p className="font-medium">综合决策：</p>
                     <p className="text-muted-foreground">
-                      {result.uiOutput.consolidatedDecision.summary}
+                      {workbenchRiskExplanation ||
+                        humanizeWorkbenchDisplayText(result.uiOutput.consolidatedDecision.summary) ||
+                        result.uiOutput.consolidatedDecision.summary}
                     </p>
                   </div>
                   
-                  {/* NEED_CONFIRM 状态：显示确认点清单 */}
-                  {normalizeGateStatus(result.uiOutput.consolidatedDecision.status) === 'NEED_CONFIRM' && (
-                    <ConfirmPanel
-                      confirmations={mergeWorkbenchConfirmations(result)}
-                      riskExplanation={result.uiOutput.consolidatedDecision.summary}
-                      decisionStatus="NEED_CONFIRM"
-                      onConfirmChange={setAllConfirmationsChecked}
-                    />
+                  {/* NEED_CONFIRM 状态：确认点已在主界面展示 */}
+                  {needsInlineConfirmation && !allConfirmationsChecked && (
+                    <Alert className="border-amber-200 bg-amber-50/60">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-sm text-amber-900">
+                        请先在「确认点清单」中勾选全部确认项后再提交。
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {needsInlineConfirmation && allConfirmationsChecked && (
+                    <p className="text-sm text-green-700">已完成风险确认，可以继续提交。</p>
                   )}
                   
                   {/* SUGGEST_REPLACE 状态：显示建议替换提示 */}
                   {normalizeGateStatus(result.uiOutput.consolidatedDecision.status) === 'SUGGEST_REPLACE' && (
                     <ConfirmPanel
                       confirmations={[]}
-                      riskExplanation={result.uiOutput.consolidatedDecision.summary}
+                      riskExplanation={workbenchRiskExplanation}
                       decisionStatus="SUGGEST_REPLACE"
                       onConfirmChange={setAllConfirmationsChecked}
                     />
                   )}
                   
                   {/* REJECT 状态：显示拒绝提示 */}
-                  {normalizeGateStatus(result.uiOutput.consolidatedDecision.status) === 'REJECT' && (
+                  {effectiveGateStatus === 'REJECT' && (
                     <ConfirmPanel
                       confirmations={[]}
-                      riskExplanation={result.uiOutput.consolidatedDecision.summary}
+                      riskExplanation={
+                        workbenchGuidance?.description || workbenchRiskExplanation
+                      }
                       decisionStatus="REJECT"
                       onConfirmChange={setAllConfirmationsChecked}
                     />
                   )}
                 </>
+              )}
+              {embedMode && needsInlineConfirmation && !allConfirmationsChecked && (
+                <Alert className="border-amber-200 bg-amber-50/60">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-sm text-amber-900">
+                    请返回主界面，在确认点清单中勾选全部项后再提交。
+                  </AlertDescription>
+                </Alert>
               )}
             </div>
           )}
@@ -1731,10 +2027,7 @@ export default function PlanningWorkbenchTab({
               onClick={handleConfirmCommit} 
               disabled={
                 committing || 
-                (result?.uiOutput.consolidatedDecision && 
-                 normalizeGateStatus(result.uiOutput.consolidatedDecision.status) === 'NEED_CONFIRM' &&
-                 mergeWorkbenchConfirmations(result).length > 0 &&
-                 !allConfirmationsChecked)
+                submitBlockedByGate
               }
             >
               {committing ? (
@@ -1747,12 +2040,12 @@ export default function PlanningWorkbenchTab({
               )}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </SheetLayerDialogContent>
       </Dialog>
 
       {/* 调整方案对话框 */}
       <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>
-        <DialogContent>
+        <SheetLayerDialogContent>
           <DialogHeader>
             <DialogTitle>调整方案</DialogTitle>
             <DialogDescription>
@@ -1760,26 +2053,53 @@ export default function PlanningWorkbenchTab({
             </DialogDescription>
           </DialogHeader>
           {result && (
-            <div className="space-y-2 py-4">
+            <div className="space-y-4 py-4">
               <div className="text-sm">
                 <p className="font-medium">当前方案：</p>
                 <p className="text-muted-foreground">规划 ID: {result.planState.plan_id}</p>
                 <p className="text-muted-foreground">版本: {result.planState.plan_version}</p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                调整功能将基于当前方案进行优化，系统会自动重新评估并生成新方案。
-              </p>
+              <div className="space-y-3">
+                <p className="text-sm font-medium">节奏反馈（必选）</p>
+                <RadioGroup
+                  value={paceFeedback ?? ''}
+                  onValueChange={(value) => setPaceFeedback(value as PaceFeedback)}
+                  className="space-y-2"
+                >
+                  <div className="flex items-start gap-2 rounded-lg border p-3">
+                    <RadioGroupItem value="too_rushed" id="pace-too-rushed" className="mt-0.5" />
+                    <Label htmlFor="pace-too-rushed" className="cursor-pointer leading-relaxed">
+                      节奏太赶 — 希望放慢、减少单日强度
+                    </Label>
+                  </div>
+                  <div className="flex items-start gap-2 rounded-lg border p-3">
+                    <RadioGroupItem value="too_tired" id="pace-too-tired" className="mt-0.5" />
+                    <Label htmlFor="pace-too-tired" className="cursor-pointer leading-relaxed">
+                      节奏太累 — 希望更紧凑、提高单日利用率
+                    </Label>
+                  </div>
+                  <div className="flex items-start gap-2 rounded-lg border p-3">
+                    <RadioGroupItem value="too_relaxed" id="pace-too-relaxed" className="mt-0.5" />
+                    <Label htmlFor="pace-too-relaxed" className="cursor-pointer leading-relaxed">
+                      整体偏松 — 希望微调节奏与停留分配
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
           )}
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setAdjustDialogOpen(false)}
+              onClick={() => {
+                setAdjustDialogOpen(false);
+                setPaceFeedback(null);
+              }}
               disabled={loading}
             >
               取消
             </Button>
-            <Button onClick={handleConfirmAdjust} disabled={loading}>
+            <Button onClick={handleConfirmAdjust} disabled={loading || !paceFeedback}>
               {loading ? (
                 <>
                   <Spinner className="w-4 h-4 mr-2" />
@@ -1790,12 +2110,12 @@ export default function PlanningWorkbenchTab({
               )}
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </SheetLayerDialogContent>
       </Dialog>
 
       {/* 对比方案对话框 */}
       <Dialog open={compareDialogOpen} onOpenChange={setCompareDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <SheetLayerDialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GitCompare className="w-5 h-5" />
@@ -2018,7 +2338,7 @@ export default function PlanningWorkbenchTab({
               </>
             )}
           </DialogFooter>
-        </DialogContent>
+        </SheetLayerDialogContent>
       </Dialog>
 
       <SilentVoteDialog
@@ -2038,7 +2358,7 @@ export default function PlanningWorkbenchTab({
 
       {/* 预算决策日志对话框 - 使用时间线组件 */}
       <Dialog open={budgetLogDialogOpen} onOpenChange={setBudgetLogDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <SheetLayerDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>预算决策日志</DialogTitle>
             <DialogDescription>
@@ -2115,12 +2435,12 @@ export default function PlanningWorkbenchTab({
               关闭
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </SheetLayerDialogContent>
       </Dialog>
 
       {/* 🆕 首次使用引导对话框 */}
       <Dialog open={showGuide} onOpenChange={setShowGuide}>
-        <DialogContent className="max-w-md">
+        <SheetLayerDialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>欢迎使用方案预览与提交</DialogTitle>
             <DialogDescription>
@@ -2201,13 +2521,194 @@ export default function PlanningWorkbenchTab({
               开始使用
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </SheetLayerDialogContent>
       </Dialog>
 
-      {/* V2 优化评估区域 */}
-      {trip && result && (
+      {/* V2 优化评估区域（完整页调试；抽屉模式隐藏） */}
+      {!embedMode && trip && result && (
         <V2OptimizeSection tripId={tripId} trip={trip} result={result} />
       )}
+    </div>
+  );
+}
+
+function PlanDetailsTabs({
+  result,
+  trip,
+  tripId,
+  embedMode,
+  budgetEvaluation,
+  loadBudgetEvaluation,
+  loadBudgetDecisionLog,
+  setBudgetLogDialogOpen,
+  budgetDecisionLog,
+  currency,
+}: {
+  result: ExecutePlanningWorkbenchResponse;
+  trip: TripDetail | null;
+  tripId: string;
+  embedMode: boolean;
+  budgetEvaluation: PlanBudgetEvaluationResponse | null;
+  loadBudgetEvaluation: (planId: string) => void;
+  loadBudgetDecisionLog: (planId: string) => void;
+  setBudgetLogDialogOpen: (open: boolean) => void;
+  budgetDecisionLog: import('@/types/trip').BudgetDecisionLogResponse | null;
+  currency: string;
+}) {
+  return (
+    <div id="plan-details-section">
+      <Tabs defaultValue="preview" className="w-full">
+        <TabsList className={cn('grid w-full', embedMode ? 'grid-cols-2' : 'grid-cols-4')}>
+          <TabsTrigger value="preview">行程安排</TabsTrigger>
+          {!embedMode && <TabsTrigger value="terrain">地形分析</TabsTrigger>}
+          <TabsTrigger value="budget">预算评估</TabsTrigger>
+          {!embedMode && <TabsTrigger value="technical">技术信息</TabsTrigger>}
+        </TabsList>
+
+        <TabsContent value="preview" className="mt-4">
+          {result.planState && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Eye className="w-5 h-5" />
+                    行程安排
+                  </CardTitle>
+                  <Badge variant="outline">版本 {result.planState.plan_version}</Badge>
+                </div>
+                <CardDescription>方案中的每日路线与停留点概览</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PlanPreviewContent
+                  planState={result.planState}
+                  trip={trip}
+                  currentTrip={trip}
+                  embedMode={embedMode}
+                  budgetEvaluation={budgetEvaluation}
+                  tripId={tripId}
+                  onLoadBudgetEvaluation={loadBudgetEvaluation}
+                  onLoadBudgetDecisionLog={loadBudgetDecisionLog}
+                  onOpenBudgetLogDialog={() => {
+                    if (budgetEvaluation?.planId) {
+                      loadBudgetDecisionLog(budgetEvaluation.planId);
+                      setBudgetLogDialogOpen(true);
+                    }
+                  }}
+                  budgetDecisionLog={budgetDecisionLog}
+                  currency={currency}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {!embedMode && (
+          <TabsContent value="terrain" className="mt-4">
+            {result.planState && (
+              <DEMTerrainAndFatigueView planState={result.planState} trip={trip} />
+            )}
+          </TabsContent>
+        )}
+
+        <TabsContent value="budget" className="mt-4">
+          {budgetEvaluation && result.planState ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">预算评估</CardTitle>
+                <CardDescription>预算合理性评估结果</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PlanPreviewContent
+                  planState={result.planState}
+                  trip={trip}
+                  currentTrip={trip}
+                  embedMode={embedMode}
+                  budgetEvaluation={budgetEvaluation}
+                  tripId={tripId}
+                  onLoadBudgetEvaluation={loadBudgetEvaluation}
+                  onLoadBudgetDecisionLog={loadBudgetDecisionLog}
+                  onOpenBudgetLogDialog={() => {
+                    if (budgetEvaluation?.planId) {
+                      loadBudgetDecisionLog(budgetEvaluation.planId);
+                      setBudgetLogDialogOpen(true);
+                    }
+                  }}
+                  budgetDecisionLog={budgetDecisionLog}
+                  currency={currency}
+                />
+              </CardContent>
+            </Card>
+          ) : result.uiOutput.budgetPreview &&
+            formatWorkbenchBudgetPreviewLine(result.uiOutput.budgetPreview, currency) ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">预算摘要</CardTitle>
+                <CardDescription>来自方案生成结果，完整评估加载中或尚未生成</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm font-medium">
+                  {formatWorkbenchBudgetPreviewLine(result.uiOutput.budgetPreview, currency)}
+                </p>
+                {result.planState.plan_id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadBudgetEvaluation(result.planState.plan_id)}
+                  >
+                    加载完整预算评估
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <p className="text-sm">暂无预算评估结果</p>
+                <p className="text-xs mt-1">提交或调整方案后可能生成预算评估</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {!embedMode && (
+          <TabsContent value="technical" className="mt-4">
+            {result.planState && (
+              <Collapsible defaultOpen={false}>
+                <Card>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-medium">规划状态</CardTitle>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">规划 ID</p>
+                          <p className="font-medium mt-1 font-mono text-xs">{result.planState.plan_id}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">版本</p>
+                          <p className="font-medium mt-1">{result.planState.plan_version}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">状态</p>
+                          <Badge variant="outline" className="mt-1">
+                            {result.planState.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            )}
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }
@@ -2377,6 +2878,7 @@ function PlanPreviewContent(props: {
   planState: any; 
   trip: TripDetail | null;
   currentTrip: TripDetail | null;
+  embedMode?: boolean;
   budgetEvaluation?: PlanBudgetEvaluationResponse | null;
   tripId: string;
   onLoadBudgetEvaluation?: (planId: string) => void;
@@ -2389,6 +2891,7 @@ function PlanPreviewContent(props: {
     planState,
     trip,
     currentTrip,
+    embedMode = false,
     budgetEvaluation,
     tripId,
     onLoadBudgetEvaluation,
@@ -2437,55 +2940,106 @@ function PlanPreviewContent(props: {
       loadDraftId();
     }
   }, [planState]);
-  // 解析方案数据
-  const itinerary = planState.itinerary;
+  const planItems = extractPlanItems(planState);
+  const isSegmentPlan = planItems.some(
+    (item) => item && typeof item === 'object' && 'segmentId' in (item as object),
+  );
   
-  // 如果没有行程数据，显示提示
-  if (!itinerary || (typeof itinerary === 'object' && Object.keys(itinerary).length === 0)) {
+  if (planItems.length === 0) {
     return (
       <div className="py-8 text-center text-muted-foreground">
         <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p className="text-sm">方案数据加载中或暂无行程项</p>
-        <p className="text-xs mt-1">方案提交后将显示详细的行程安排</p>
-      </div>
-    );
-  }
-
-  // 尝试解析行程数据（根据实际数据结构调整）
-  let planItems: any[] = [];
-  
-  if (Array.isArray(itinerary)) {
-    planItems = itinerary;
-  } else if (itinerary.items && Array.isArray(itinerary.items)) {
-    planItems = itinerary.items;
-  } else if (itinerary.days && Array.isArray(itinerary.days)) {
-    // 如果是按天组织的结构
-    planItems = itinerary.days.flatMap((day: any) => day.items || []);
-  }
-
-  // 如果没有解析到数据，显示原始数据结构
-  if (planItems.length === 0) {
-    return (
-      <div className="space-y-4">
-        <div className="text-sm text-muted-foreground">
-          <p className="font-medium mb-2">方案数据结构：</p>
-          <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-64">
-            {JSON.stringify(itinerary, null, 2)}
+        <p className="text-sm font-medium text-foreground">暂无具体行程安排</p>
+        <p className="text-xs mt-2 max-w-sm mx-auto">
+          方案骨架已生成，但还没有可展示的行程项。请使用「调整方案」补充，或提交后在时间轴继续编辑。
+        </p>
+        {!embedMode && import.meta.env.DEV && planState.itinerary && (
+          <pre className="mt-4 text-left bg-muted p-3 rounded text-xs overflow-auto max-h-40">
+            {JSON.stringify(planState.itinerary, null, 2)}
           </pre>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          <p>提示：方案数据结构可能与预期不同，提交方案后可在行程详情中查看。</p>
-        </div>
+        )}
       </div>
     );
   }
 
+  if (isSegmentPlan) {
+    const segments = planItems as Array<{
+      segmentId?: string;
+      dayIndex?: number;
+      distanceKm?: number;
+      metadata?: { name?: string; fromName?: string; toName?: string; stops?: string[] };
+      name?: string;
+      placeName?: string;
+    }>;
+    const byDay = new Map<number, typeof segments>();
+    for (const seg of segments) {
+      const day = typeof seg.dayIndex === 'number' ? seg.dayIndex : 0;
+      const list = byDay.get(day) ?? [];
+      list.push(seg);
+      byDay.set(day, list);
+    }
+    const sortedDays = [...byDay.keys()].sort((a, b) => a - b);
+    const resolvedTrip = trip ?? currentTrip;
+
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          共 {sortedDays.length} 天 · {segments.length} 段路线
+          {resolvedTrip?.TripDay?.some((d) => (d.ItineraryItem?.length ?? 0) > 0)
+            ? '（名称来自时间轴停留点，提交后可继续编辑）'
+            : '（请在时间轴添加停留点后重新生成，以查看具体路线）'}
+        </p>
+        {sortedDays.map((dayIndex) => {
+          const daySegments = byDay.get(dayIndex) ?? [];
+          const primarySeg = daySegments[0];
+          const stopNames = primarySeg
+            ? getSegmentPreviewStops(primarySeg, resolvedTrip, dayIndex)
+            : getTripDayPoiNames(resolvedTrip, dayIndex);
+          return (
+          <div key={dayIndex} className="rounded-lg border p-3">
+            <p className="text-sm font-semibold mb-2">第 {dayIndex + 1} 天</p>
+            <div className="space-y-2">
+              {daySegments.map((seg, idx) => (
+                <div key={seg.segmentId ?? idx} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">
+                    {formatPlanSegmentLabel(seg, resolvedTrip, dayIndex)}
+                  </span>
+                  {typeof seg.distanceKm === 'number' && seg.distanceKm > 0 && (
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                      {seg.distanceKm.toFixed(1)} km
+                    </span>
+                  )}
+                </div>
+              ))}
+              {stopNames.length > 0 ? (
+                <ul className="pt-1 space-y-0.5 border-t border-dashed">
+                  {stopNames.slice(0, 5).map((name, i) => (
+                    <li key={i} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <MapPin className="h-3 w-3 shrink-0 opacity-60" />
+                      {name}
+                    </li>
+                  ))}
+                  {stopNames.length > 5 ? (
+                    <li className="text-xs text-muted-foreground">… 共 {stopNames.length} 个停留点</li>
+                  ) : null}
+                </ul>
+              ) : null}
+            </div>
+          </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // 标准行程项列表（legacy 解析路径保留）
+  let legacyPlanItems: any[] = planItems as any[];
   return (
     <div className="space-y-4">
       {/* 方案统计 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="text-center p-3 bg-muted rounded-lg">
-          <p className="text-2xl font-bold">{planItems.length}</p>
+          <p className="text-2xl font-bold">{legacyPlanItems.length}</p>
           <p className="text-xs text-muted-foreground mt-1">行程项</p>
         </div>
         <div className="text-center p-3 bg-muted rounded-lg">
@@ -2770,7 +3324,7 @@ function PlanPreviewContent(props: {
       <div className="space-y-2">
         <h4 className="text-sm font-semibold">行程项预览</h4>
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {planItems.slice(0, 20).map((item: any, index: number) => (
+          {legacyPlanItems.slice(0, 20).map((item: any, index: number) => (
             <div
               key={index}
               className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
@@ -2844,9 +3398,9 @@ function PlanPreviewContent(props: {
               </div>
             </div>
           ))}
-          {planItems.length > 20 && (
+          {legacyPlanItems.length > 20 && (
             <div className="text-center text-sm text-muted-foreground py-2">
-              还有 {planItems.length - 20} 个行程项，提交方案后可在行程详情中查看完整列表
+              还有 {legacyPlanItems.length - 20} 个行程项，提交方案后可在行程详情中查看完整列表
             </div>
           )}
         </div>
@@ -3026,38 +3580,23 @@ function PlanComparison({
   );
 }
 
-// 辅助函数：从 planState 中提取行程项
-function extractPlanItems(planState: any): any[] {
-  // 安全检查：确保 planState 存在
-  if (!planState) return [];
-  
-  const itinerary = planState.itinerary;
-  
-  if (!itinerary) return [];
-  
-  if (Array.isArray(itinerary)) {
-    return itinerary;
-  } else if (itinerary.items && Array.isArray(itinerary.items)) {
-    return itinerary.items;
-  } else if (itinerary.days && Array.isArray(itinerary.days)) {
-    return itinerary.days.flatMap((day: any) => day.items || []);
-  }
-  
-  return [];
-}
-
 // 🆕 方案概览卡片组件
 function PlanSummaryCard({
   planState,
   trip,
   currency = 'CNY',
+  budgetPreview,
 }: {
   planState: any;
   trip: TripDetail | null;
   currency?: string;
+  budgetPreview?: import('@/api/planning-workbench').WorkbenchBudgetPreview;
 }) {
   const planItems = extractPlanItems(planState);
   const itemCount = planItems.length;
+  const isSegmentPlan = planItems.some(
+    (item) => item && typeof item === 'object' && 'segmentId' in (item as object),
+  );
   const days = planState.constraints?.days || trip?.TripDay?.length || 0;
   const totalBudget = planState.budget?.total || 0;
   
@@ -3091,12 +3630,32 @@ function PlanSummaryCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {itemCount === 0 && days > 0 && (
+          <Alert className="border-amber-200 bg-amber-50/50 py-2">
+            <AlertDescription className="text-xs text-amber-900">
+              方案骨架已生成，具体行程项待填充。可通过「调整方案」补充后再提交。
+            </AlertDescription>
+          </Alert>
+        )}
+        {isSegmentPlan && itemCount > 0 && (
+          <Alert className="border-blue-200 bg-blue-50/50 py-2">
+            <AlertDescription className="text-xs text-blue-900">
+              已生成 {itemCount} 段路线骨架，详细 POI 可在提交后继续完善。
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-start gap-3">
             <MapPin className="w-5 h-5 text-primary mt-0.5" />
             <div>
               <p className="text-2xl font-bold">{itemCount}</p>
-              <p className="text-xs text-muted-foreground mt-1">行程项</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {itemCount === 0
+                  ? '行程项（待填充）'
+                  : isSegmentPlan
+                    ? '路线段'
+                    : '行程项'}
+              </p>
             </div>
           </div>
           
@@ -3131,6 +3690,15 @@ function PlanSummaryCard({
               <span className="text-sm text-muted-foreground">总预算</span>
               <span className="text-lg font-bold">{formatCurrency(totalBudget, currency)}</span>
             </div>
+          </div>
+        )}
+
+        {!totalBudget && formatWorkbenchBudgetPreviewLine(budgetPreview, currency) && (
+          <div className="pt-3 border-t">
+            <p className="text-xs text-muted-foreground mb-1">预算摘要</p>
+            <p className="text-sm font-medium">
+              {formatWorkbenchBudgetPreviewLine(budgetPreview, currency)}
+            </p>
           </div>
         )}
         

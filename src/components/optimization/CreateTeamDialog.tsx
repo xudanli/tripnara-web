@@ -48,6 +48,7 @@ export interface CreateTeamDialogProps {
   currentUserId: string;
   currentUserDisplayName: string;
   isSubmitting?: boolean;
+  defaultName?: string;
 }
 
 export function CreateTeamDialog({
@@ -57,10 +58,15 @@ export function CreateTeamDialog({
   currentUserId,
   currentUserDisplayName,
   isSubmitting = false,
+  defaultName = '',
 }: CreateTeamDialogProps) {
-  const [name, setName] = React.useState('');
+  const [name, setName] = React.useState(defaultName);
   const [type, setType] = React.useState<TeamType>('FAMILY');
   const [decisionWeightMode, setDecisionWeightMode] = React.useState<DecisionWeightMode>('LEADER_DOMINANT');
+
+  React.useEffect(() => {
+    if (open) setName(defaultName);
+  }, [open, defaultName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,10 +99,10 @@ export function CreateTeamDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            创建团队
+            创建同行者名单
           </DialogTitle>
           <DialogDescription>
-            创建团队后，您将作为领队，可后续添加成员并使用团队协商功能
+            您将作为领队；之后可邀请他人并设置「谁来做决定」
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -234,6 +234,8 @@ export type ComplianceRuleType = 'VISA' | 'TRANSPORT' | 'ENTRY' | 'EXIT';
  */
 export interface ExtractComplianceRulesRequest {
   tripId: string;
+  /** 关联 planning-workbench execute 的 planId（决策上下文） */
+  planId?: string;
   countryCodes: string[];
   ruleTypes?: ComplianceRuleType[];
 }

@@ -1,4 +1,10 @@
 import apiClient from './client';
+import type {
+  GetScheduleTimelineParams,
+  ScheduleTimelineFetchResult,
+  ScheduleTimelineResponse,
+} from '@/types/schedule-timeline';
+import { buildGetPersonaAlertsParams, normalizePersonaAlerts } from '@/lib/persona-alert.adapter';
 
 // 文档中的响应格式是 { success: true, data: T }
 interface SuccessResponse<T> {
@@ -68,6 +74,24 @@ function isEndpointNotFound(error: unknown): boolean {
   if (code === 'NOT_FOUND' || code === 'ENDPOINT_NOT_FOUND') return true;
   const status = (error as { response?: { status?: number } })?.response?.status;
   return status === 404 || status === 501;
+}
+
+/** 统一 ETag / If-None-Match 值（去掉引号） */
+function normalizeEtagValue(value: string | undefined | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function formatIfNoneMatch(etag: string): string {
+  const normalized = normalizeEtagValue(etag) ?? etag;
+  if (normalized.startsWith('W/') || (normalized.startsWith('"') && normalized.endsWith('"'))) {
+    return normalized;
+  }
+  return `"${normalized}"`;
 }
 
 function tryUnwrapRequiresConfirmation(payload: any): (Error & {
@@ -175,6 +199,7 @@ import type {
   BudgetStatisticsResponse,
   BudgetMonitorResponse,
   PersonaAlert,
+  GetPersonaAlertsParams,
   DecisionLogResponse,
   Task,
   PipelineStatus,
@@ -692,6 +717,54 @@ export const tripsApi = {
   },
 
   /**
+   * 时间轴首屏聚合 BFF（items / schedule / metrics / travelInfo）
+   * GET /trips/:id/schedule-timeline
+   */
+  getScheduleTimeline: async (
+    id: string,
+    params?: GetScheduleTimelineParams,
+  ): Promise<ScheduleTimelineFetchResult> => {
+    const query: Record<string, string | number> = {};
+    if (params?.include) {
+      query.include = Array.isArray(params.include) ? params.include.join(',') : params.include;
+    }
+    if (params?.dates?.length) query.dates = params.dates.join(',');
+    if (params?.from != null) query.from = params.from;
+    if (params?.limit != null) query.limit = params.limit;
+    if (params?.travelInfoMode) query.travelInfoMode = params.travelInfoMode;
+
+    const response = await apiClient.get<ApiResponseWrapper<ScheduleTimelineResponse>>(
+      `/trips/${id}/schedule-timeline`,
+      {
+        params: Object.keys(query).length > 0 ? query : undefined,
+        headers: params?.ifNoneMatch
+          ? { 'If-None-Match': formatIfNoneMatch(params.ifNoneMatch) }
+          : undefined,
+        validateStatus: (status) => status === 200 || status === 304,
+      },
+    );
+
+    const headerEtag =
+      (response.headers?.etag as string | undefined) ??
+      (response.headers?.ETag as string | undefined);
+
+    if (response.status === 304) {
+      return {
+        status: 'not_modified',
+        etag: normalizeEtagValue(headerEtag ?? params?.ifNoneMatch),
+      };
+    }
+
+    const data = handleResponse(response);
+    const etag = normalizeEtagValue(data.etag ?? headerEtag);
+    return {
+      status: 'ok',
+      data: etag ? { ...data, etag } : data,
+      etag,
+    };
+  },
+
+  /**
    * 保存指定日期的 Schedule
    * PUT /trips/:id/schedule
    */
@@ -1171,12 +1244,20 @@ export const tripsApi = {
   // ==================== Dashboard 决策系统 ====================
 
   /**
-   * 获取三人格提醒列表
+   * 获取三人格提醒列表（BFF M1：默认 audience=user）
    * GET /trips/:id/persona-alerts
    */
-  getPersonaAlerts: async (id: string): Promise<PersonaAlert[]> => {
-    const response = await apiClient.get<ApiResponseWrapper<PersonaAlert[]>>(`/trips/${id}/persona-alerts`);
-    return handleResponse(response);
+  getPersonaAlerts: async (
+    id: string,
+    params?: GetPersonaAlertsParams,
+  ): Promise<PersonaAlert[]> => {
+    const response = await apiClient.get<ApiResponseWrapper<unknown[]>>(
+      `/trips/${id}/persona-alerts`,
+      {
+        params: buildGetPersonaAlertsParams(params),
+      },
+    );
+    return normalizePersonaAlerts(handleResponse(response));
   },
 
   /**
@@ -2161,12 +2242,33 @@ export const itineraryItemsApi = {
   // ==================== 交通信息接口 ====================
 
   /**
+   * P1 批量只读交通缓存（不触发 calculate-all-travel）
+   * GET /itinerary-items/trip/:tripId/travel-info
+   */
+  getTripTravelInfo: async (
+    tripId: string,
+    params?: { dates?: string[] },
+  ): Promise<import('@/types/trip').TripTravelInfoBatchResponse> => {
+    const response = await apiClient.get<
+      ApiResponseWrapper<import('@/types/trip').TripTravelInfoBatchResponse>
+    >(`/itinerary-items/trip/${tripId}/travel-info`, {
+      params: params?.dates?.length ? { dates: params.dates.join(',') } : undefined,
+    });
+    return handleResponse(response);
+  },
+
+  /**
    * 获取某天所有行程项之间的交通信息
    * GET /itinerary-items/trip/:tripId/days/:dayId/travel-info
    */
-  getDayTravelInfo: async (tripId: string, dayId: string): Promise<DayTravelInfoResponse> => {
+  getDayTravelInfo: async (
+    tripId: string,
+    dayId: string,
+    params?: { mode?: 'cached' | 'live' },
+  ): Promise<DayTravelInfoResponse> => {
     const response = await apiClient.get<ApiResponseWrapper<DayTravelInfoResponse>>(
-      `/itinerary-items/trip/${tripId}/days/${dayId}/travel-info`
+      `/itinerary-items/trip/${tripId}/days/${dayId}/travel-info`,
+      { params: params?.mode ? { mode: params.mode } : undefined },
     );
     return handleResponse(response);
   },

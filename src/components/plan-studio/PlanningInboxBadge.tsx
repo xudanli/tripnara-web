@@ -6,7 +6,7 @@ export interface PlanningInboxBadgeProps {
   className?: string;
 }
 
-/** 与 Plan Studio「规划待办」Tab 角标共用样式 */
+/** 与 Plan Studio 可执行证明入口角标共用样式 */
 export function PlanningInboxBadge({ count, className }: PlanningInboxBadgeProps) {
   if (count <= 0) return null;
   return (

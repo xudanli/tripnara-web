@@ -35,9 +35,9 @@ export default function TeamDecisionModeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>决策规则</DialogTitle>
+          <DialogTitle>谁来做决定？</DialogTitle>
           <DialogDescription>
-            决定团队如何做选择。此为治理设置，不影响成员身份。
+            遇到分歧时的拍板方式。不影响谁能编辑行程。
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 pt-1">

@@ -45,13 +45,16 @@ export function PlanningHeaderSection({
   accent,
   children,
   className,
+  id,
 }: {
   accent: PlanningHeaderAccent;
   children: ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       className={cn(
         'border-l-[3px] transition-colors duration-200',
         ACCENT_CLASS[accent],

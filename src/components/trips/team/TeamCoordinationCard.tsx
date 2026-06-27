@@ -33,9 +33,11 @@ export default function TeamCoordinationCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">协调与冲突</CardTitle>
+        <CardTitle className="text-base">大家对行程合拍吗？</CardTitle>
         <CardDescription className="text-sm">
-          {isSolo ? '单人行程无需协调，可直接进入规划' : '发现分歧时，发起协调流程生成共识方案'}
+          {isSolo
+            ? '只有您一人时无需对齐，直接去时间轴改行程即可'
+            : '系统会比对体力、预算等偏好，找出可能需要商量的地方'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -43,13 +45,10 @@ export default function TeamCoordinationCard({
           <div className="flex items-start gap-3 rounded-lg bg-muted/40 px-4 py-3">
             <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
             <div className="space-y-2 min-w-0">
-              <p className="text-sm font-medium">无需协调（单人决策）</p>
-              <p className="text-xs text-muted-foreground">
-                添加更多成员后，系统会自动识别偏好分歧并引导协调。
-              </p>
+              <p className="text-sm font-medium">单人行程，您说了算</p>
               {onGoToPlan ? (
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={onGoToPlan}>
-                  去规划行程
+                  去时间轴
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               ) : null}
@@ -59,9 +58,7 @@ export default function TeamCoordinationCard({
           <>
             {conflicts.length > 0 ? (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  分歧项
-                </p>
+                <p className="text-xs font-medium text-muted-foreground">可能需要商量</p>
                 <ul className="space-y-2">
                   {conflicts.map((item) => (
                     <li
@@ -79,7 +76,7 @@ export default function TeamCoordinationCard({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground rounded-lg bg-muted/30 px-3 py-2">
-                暂未检测到明显分歧，可直接规划或发起协调以验证共识。
+                暂未发现明显冲突。您也可以主动检查一下，确认大家都接受当前方案。
               </p>
             )}
 
@@ -87,11 +84,12 @@ export default function TeamCoordinationCard({
               onClick={onStartCoordination}
               disabled={negotiating || !hasPlan || memberCount < 1}
               className="gap-2"
+              variant="outline"
             >
-              {negotiating ? '协调中…' : '发起协调流程'}
+              {negotiating ? '检查中…' : '检查是否合拍'}
             </Button>
             {!hasPlan ? (
-              <p className="text-xs text-muted-foreground">请先在时间轴生成行程后再协调</p>
+              <p className="text-xs text-muted-foreground">请先在时间轴生成日程后再检查</p>
             ) : null}
           </>
         )}

@@ -3,9 +3,11 @@ import { ChevronDown, GitBranch, Scale } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { getGateStatusClasses, normalizeGateStatus } from '@/lib/gate-status';
 import type {
   CausalCounterfactualReport,
   CausalPersonaProjection,
+  CausalPersonaSeat,
   IcelandSelfDriveCausalAssessment,
   IcelandCausalCalibration,
 } from '@/types/causal-travel-runtime';
@@ -26,6 +28,40 @@ function formatProb(value?: number): string {
 function formatMinutes(value?: number): string {
   if (value == null || Number.isNaN(value)) return '—';
   return `${Math.round(value)} min`;
+}
+
+const PERSONA_LABELS: Record<CausalPersonaSeat, string> = {
+  ABU: 'Abu',
+  DR_DRE: 'Dr.Dre',
+  NEPTUNE: 'Neptune',
+};
+
+function PersonaSliceRow({
+  persona,
+  summary,
+  verdict,
+}: {
+  persona: CausalPersonaSeat;
+  summary?: string;
+  verdict?: string;
+}) {
+  if (!summary?.trim() && !verdict?.trim()) return null;
+  const normalized = verdict ? normalizeGateStatus(verdict) : null;
+  const verdictStyle = normalized ? getGateStatusClasses(normalized) : undefined;
+
+  return (
+    <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="font-medium text-foreground">{PERSONA_LABELS[persona]}</span>
+        {verdict ? (
+          <Badge variant="outline" className={cn('text-[10px]', verdictStyle)}>
+            {verdict}
+          </Badge>
+        ) : null}
+      </div>
+      {summary?.trim() ? <p className="text-muted-foreground leading-relaxed">{summary.trim()}</p> : null}
+    </div>
+  );
 }
 
 export function CausalInsightPanel({
@@ -72,6 +108,26 @@ export function CausalInsightPanel({
       <CardContent className="space-y-4 text-sm">
         {narrative ? (
           <p className="leading-relaxed text-foreground">{narrative}</p>
+        ) : null}
+
+        {projection?.abuSlice || projection?.dreSlice || projection?.neptuneSlice ? (
+          <div className="space-y-2">
+            <PersonaSliceRow
+              persona="ABU"
+              summary={projection.abuSlice?.summary}
+              verdict={projection.abuSlice?.verdict}
+            />
+            <PersonaSliceRow
+              persona="DR_DRE"
+              summary={projection.dreSlice?.summary}
+              verdict={projection.dreSlice?.verdict}
+            />
+            <PersonaSliceRow
+              persona="NEPTUNE"
+              summary={projection.neptuneSlice?.summary}
+              verdict={projection.neptuneSlice?.verdict}
+            />
+          </div>
         ) : null}
 
         {iceland ? (

@@ -12,6 +12,11 @@ import {
   translateFailureReasonCodeForUser,
   translateVerificationStatusForUser,
 } from '@/lib/agent-display-zh';
+import {
+  listIronShieldEvidenceMetaEntries,
+  normalizeIronShieldEvidenceCardMeta,
+  resolveIronShieldUiBadgeVariant,
+} from '@/lib/iron-shield-evidence-ui';
 
 function bundleTone(status?: VerificationStatus): 'pass' | 'warn' | 'block' | 'neutral' {
   if (!status) return 'neutral';
@@ -47,6 +52,25 @@ function BundleIcon({ tone }: { tone: ReturnType<typeof bundleTone> }) {
 function SoftBadgeIcon({ tone }: { tone: 'info' | 'warning' }) {
   if (tone === 'info') return <Info className="h-4 w-4 text-blue-600" />;
   return <ShieldQuestion className="h-4 w-4 text-amber-700" />;
+}
+
+function EvidenceCardMetaRow({ meta }: { meta?: Record<string, unknown> }) {
+  const entries = listIronShieldEvidenceMetaEntries(meta);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {entries.map((entry) => (
+        <Badge
+          key={entry.key}
+          variant="secondary"
+          className="text-[9px] font-normal max-w-[240px] truncate"
+        >
+          {entry.label}：{entry.value}
+        </Badge>
+      ))}
+    </div>
+  );
 }
 
 /** 优先后端 failure_reason_labels_zh；否则前端映射（preferZhLabels） */
@@ -270,6 +294,10 @@ export default function IronShieldEvidenceCards({
                   card?.badge_text ??
                   card?.verification_status ??
                   (card?.severity ? `SEV:${String(card.severity)}` : undefined);
+                const badgeVariant = card?.badge_variant
+                  ? resolveIronShieldUiBadgeVariant(String(card.badge_variant))
+                  : undefined;
+                const cardMeta = normalizeIronShieldEvidenceCardMeta(card?.meta);
 
                 return (
                   <Card
@@ -317,14 +345,17 @@ export default function IronShieldEvidenceCards({
                               </div>
                             </div>
                           ) : null}
+
+                          <EvidenceCardMetaRow meta={cardMeta} />
                         </div>
 
                         {badgeText ? (
                           <Badge
-                            variant="outline"
+                            variant={badgeVariant ?? 'outline'}
                             className={cn(
                               'text-[10px] shrink-0',
-                              toneBadgeClass(localTone === 'neutral' ? 'neutral' : localTone)
+                              !badgeVariant &&
+                                toneBadgeClass(localTone === 'neutral' ? 'neutral' : localTone),
                             )}
                             title={String(badgeText)}
                           >

@@ -44,7 +44,7 @@ export function LoopProgressHeader({ ui, loading, className }: LoopProgressHeade
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="space-y-1 min-w-0">
           <div className="flex items-center gap-2">
-            {loading || ui.phase === 'validating' ? (
+            {loading ? (
               <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" aria-hidden />
             ) : null}
             <h2 className="text-base font-semibold tracking-tight">{presentation.headline}</h2>

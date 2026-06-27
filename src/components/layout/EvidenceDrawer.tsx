@@ -10,6 +10,8 @@ import { isConstraintSinkEnabled } from '@/lib/memory-feature';
 import { MEMORY_CONSOLE_UI_DEFAULT_ZH } from '@/contracts/memory-console-ui-state.v1';
 import { MemoryConstraintSinkPanel } from './MemoryConstraintSinkPanel';
 import { EvidenceDrawerSkeleton } from './EvidenceDrawerSkeleton';
+import { ScheduleRouteRunEvidenceSection } from '@/components/plan-studio/ScheduleRouteRunEvidenceSection';
+import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
 import { X, FileText, AlertTriangle, History, ExternalLink, Clock, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAssistantDrawerRightOffset } from '@/hooks/use-assistant-drawer-offset';
@@ -78,6 +80,9 @@ export default function EvidenceDrawer({
   onEvidenceClick,
 }: EvidenceDrawerProps) {
   const assistantRightOffset = useAssistantDrawerRightOffset();
+  const routeRunLegEvidenceCount = useWorldModelGuardsStore((s) => s.legEvidenceCards.length);
+  const routeRunPoiEvidenceCount = useWorldModelGuardsStore((s) => s.poiPitfallCards.length);
+  const hasRouteRunPhysicalEvidence = routeRunLegEvidenceCount > 0 || routeRunPoiEvidenceCount > 0;
   const showMemoryTab = isConstraintSinkEnabled();
   const [currentTab, setCurrentTab] = useState<'evidence' | 'risk' | 'decision' | 'memory'>(activeTab);
   const [decisionLogItems, setDecisionLogItems] = useState<DecisionLogEntry[]>([]);
@@ -379,12 +384,17 @@ export default function EvidenceDrawer({
             <div className="p-4 space-y-4">
               {/* Evidence Tab */}
               <TabsContent value="evidence" className="mt-0 space-y-3">
+                {hasRouteRunPhysicalEvidence ? (
+                  <ScheduleRouteRunEvidenceSection className="space-y-3" />
+                ) : null}
                 {loadingEvidence ? (
                   <EvidenceDrawerSkeleton count={5} />
                 ) : evidenceItems.length === 0 ? (
+                  hasRouteRunPhysicalEvidence ? null : (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     暂无证据数据
                   </div>
+                  )
                 ) : (
                   evidenceItems.map((item) => {
                     // 如果是营业时间类型，使用优化的组件

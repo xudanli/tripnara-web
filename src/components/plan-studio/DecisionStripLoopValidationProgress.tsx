@@ -46,7 +46,7 @@ export function DecisionStripLoopValidationProgress({
         aria-busy={isActive}
       >
         {validation.progressPct != null ? (
-          <Progress value={pct} className="h-1.5" />
+          <Progress value={pct} className="h-1 bg-muted/70 [&>div]:bg-sky-500/60" />
         ) : null}
         {validation.issueCount > 0 ? (
           <p className="text-[10px] text-muted-foreground">

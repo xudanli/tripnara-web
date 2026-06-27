@@ -9,7 +9,13 @@ export const DECISION_STRIP_ANALYTICS_EVENTS = {
   PRIMARY_CTA: 'decision_strip_primary_cta',
   EXPAND: 'decision_strip_expand',
   EVIDENCE_OPEN: 'decision_strip_evidence_open',
+  DEEP_LINK: 'decision_strip_deep_link',
 } as const;
+
+export type DecisionStripDeepLinkTarget =
+  | 'causal_insight'
+  | 'decision_cockpit'
+  | 'evidence_drawer';
 
 function track(eventName: string, properties?: Record<string, unknown>): void {
   if (import.meta.env.DEV) {
@@ -64,5 +70,17 @@ export function trackDecisionStripEvidenceOpen(payload: {
   track(DECISION_STRIP_ANALYTICS_EVENTS.EVIDENCE_OPEN, {
     trip_id: payload.tripId,
     source: payload.source,
+  });
+}
+
+export function trackDecisionStripDeepLink(payload: {
+  tripId: string;
+  target: DecisionStripDeepLinkTarget;
+  stripState?: DecisionStripState;
+}): void {
+  track(DECISION_STRIP_ANALYTICS_EVENTS.DEEP_LINK, {
+    trip_id: payload.tripId,
+    target: payload.target,
+    strip_state: payload.stripState,
   });
 }

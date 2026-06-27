@@ -39,6 +39,7 @@ pipeline {
                     set -euxo pipefail
                     node -v
                     npm ci
+                    npm run smoke:world-model
                     npm run build
                 '''
             }

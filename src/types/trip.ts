@@ -6,6 +6,16 @@ import type {
   ItineraryPresentationBundle,
   TravelUnderstandingCard,
 } from './experience-fulfillment';
+import type {
+  GuardianAction,
+  GuardianActionSlot,
+  GuardianExpressionPhase,
+  GuardianSupportingLine,
+  LeadSpeakerPersona,
+  LeadSpeakerScenario,
+  PersonaDisplayStyle,
+  PersonaStructuredStatus,
+} from './guardian-presentation';
 
 // ==================== 基础类型 ====================
 
@@ -1904,6 +1914,21 @@ export interface DayTravelInfoResponse {
     totalDistance: number;
     segmentCount: number;
   };
+  /** P1 batch 接口：cached 只读段 */
+  source?: 'cached' | string;
+}
+
+/** GET /itinerary-items/trip/:tripId/travel-info — 批量只读缓存交通 */
+export interface TripTravelInfoBatchResponse {
+  tripId: string;
+  source: 'cached';
+  days: DayTravelInfoResponse[];
+  summary: {
+    totalDays: number;
+    totalDuration: number;
+    totalDistance: number;
+    segmentCount: number;
+  };
 }
 
 /**
@@ -2600,23 +2625,71 @@ export interface PlanBudgetEvaluationResponse {
 
 // ==================== Dashboard 决策系统 ====================
 
+export type PersonaAlertAudience = 'user' | 'internal';
+
+export type PersonaAlertDeepLinkType =
+  | 'feasibility'
+  | 'schedule_day'
+  | 'decision_log'
+  | 'plan_gate';
+
+export interface PersonaAlertDeepLink {
+  type: PersonaAlertDeepLinkType;
+  issueId?: string;
+  /** 1-based day number（与 BFF deepLink.dayIndex 一致） */
+  dayIndex?: number;
+  decisionLogId?: string;
+}
+
+export interface PersonaAlertPresentationSnapshot {
+  mode?: 'single_lead' | 'decision_committee';
+  headline?: string;
+  narrative?: string;
+  briefLines?: string[];
+  supportingLines?: GuardianSupportingLine[];
+  leadSpeaker?: LeadSpeakerPersona;
+  scenario?: LeadSpeakerScenario;
+  displayStyle?: PersonaDisplayStyle;
+  expressionPhase?: GuardianExpressionPhase;
+  actions?: Partial<Record<GuardianActionSlot, GuardianAction>>;
+  structuredStatus?: PersonaStructuredStatus;
+  /** M2：硬约束门控 — 禁用「忽略继续」类 CTA */
+  hardConstraintBlocked?: boolean;
+}
+
+export interface PersonaAlertMetadata {
+  audience?: PersonaAlertAudience;
+  scenario?: LeadSpeakerScenario;
+  action?: 'ALLOW' | 'REJECT' | 'ADJUST' | 'REPLACE';
+  decisionSource?: 'PHYSICAL' | 'HUMAN' | 'PHILOSOPHY' | 'HEURISTIC';
+  reasonCodes?: string[];
+  reasonCodesDisplayZh?: string[];
+  readinessEvidenceDisplayZh?: string;
+  deepLink?: PersonaAlertDeepLink;
+  [key: string]: unknown;
+}
+
+export interface GetPersonaAlertsParams {
+  audience?: PersonaAlertAudience;
+  limit?: number;
+  phase?: GuardianExpressionPhase;
+}
+
 // 三人格提醒
 export interface PersonaAlert {
   id: string;
   persona: 'ABU' | 'DR_DRE' | 'NEPTUNE' | 'USER_ACTION';
-  name: string;
+  /** @deprecated BFF M1 起 C 端不展示；保留兼容 */
+  name?: string;
   title: string;
-  /** 面向用户的说明（可与决策日志 explanation 对齐）；有则优先于 message 展示 */
+  /** BFF M1：C 端主文案（audience=user 时必填） */
   explanation?: string;
-  message: string;
+  /** 可选 debug；C 端 UI 不得作为主文案 fallback */
+  message?: string;
   severity: 'warning' | 'info' | 'success';
   createdAt: string;
-  metadata?: {
-    decisionSource?: 'PHYSICAL' | 'HUMAN' | 'PHILOSOPHY' | 'HEURISTIC';
-    action?: 'ALLOW' | 'REJECT' | 'ADJUST' | 'REPLACE';
-    reasonCodes?: string[];
-    [key: string]: any;
-  };
+  presentation?: PersonaAlertPresentationSnapshot;
+  metadata?: PersonaAlertMetadata;
 }
 
 /** 决策日志 / 证据中与本体硬锚对齐的快照（与后端 result.ontology_hard_anchor 一致） */

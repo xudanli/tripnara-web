@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -38,7 +38,7 @@ import { LogoLoading } from '@/components/common/LogoLoading';
 import type { PipelineStatus, PipelineStage, TripListItem, TripDetail } from '@/types/trip';
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
-import { Settings2, Zap, Footprints, Wallet } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import {
   FeasibilityReportSheet,
   FeasibilityReportTrigger,
@@ -50,11 +50,7 @@ import {
 import { isTripLoopReadinessEnabled } from '@/lib/trip-loop-feature';
 import { resolveLoopValidationPresentation } from '@/lib/trip-loop-display';
 import { notifyLoopReadinessChanged } from '@/lib/plan-studio-loop-events';
-import { PrivateWishDialog } from '@/components/wishlist';
-import { StructuredNegotiationDialog } from '@/components/domain-influence/StructuredNegotiationDialog';
-import { DecisionProfilingHubDialog } from '@/components/decision-profiling';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
-import { SilentVoteHubDialog } from '@/components/silent-vote';
 import { useTripWishSummary } from '@/hooks/useTripWishes';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -68,7 +64,6 @@ import { getTripHikingTrailSegments } from '@/lib/hiking-day-card';
 import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
 import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
 import { PlanStudioProvider, usePlanStudio } from '@/contexts/PlanStudioContext';
-import { formatCurrency } from '@/utils/format';
 import { WeatherCard } from '@/components/weather/WeatherCard';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
@@ -77,14 +72,26 @@ import { TripGeneratingPlaceholder } from '@/components/trips/TripGeneratingPlac
 import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
+import { normalizeTripStatusFromApi } from '@/lib/in-trip-execution';
 import { PlanningBanner } from '@/components/planning/PlanningBanner';
 import { NarrativeThemeSection } from '@/components/narrative/NarrativeThemeSection';
 import { TripExperienceIntentPanel, shouldShowTripExperienceIntentPanel } from '@/components/experience-fulfillment';
 import { WorldConstraintBanner } from '@/components/planning/WorldConstraintBanner';
 import { DecisionCockpitPanel } from '@/components/agent/DecisionCockpitPanel';
 import { hasDecisionCockpitUi } from '@/lib/decision-cockpit';
+import {
+  shouldHideDecisionCockpitCounterfactuals,
+  shouldShowPlanStudioDecisionCockpit,
+} from '@/lib/plan-studio-cockpit-visibility';
+import { shouldShowPlanStudioRelaxationBar } from '@/lib/plan-studio-relaxation-visibility';
 import { formatOptimizationMethodZh } from '@/lib/route-run-optimization-explain';
-import { resetWorldModelGuardsStore } from '@/lib/world-model-guards';
+import { resetWorldModelGuardsStore, guardRouteRecalculationOrToast } from '@/lib/world-model-guards';
+import { usePlanningTaskStore } from '@/store/planningTaskStore';
+import { clearRouteRunConfirmationFromStore } from '@/lib/route-run-confirmation';
+import { clearRouteRunNegotiationFromStore } from '@/lib/route-run-negotiation';
+import ApprovalDialog from '@/components/trips/ApprovalDialog';
+import NegotiationDialog from '@/components/agent/NegotiationDialog';
 import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
 import { isSelfDrivePlanningTrip } from '@/lib/trip-self-drive';
 import {
@@ -101,21 +108,41 @@ import {
   getPlanStudioPipelineStageAction,
   pipelineStageActionLabel,
 } from '@/lib/plan-studio-pipeline-navigation';
-import { DecisionStrip } from '@/components/plan-studio/DecisionStrip';
-import { PlanningConstraintsCard } from '@/components/plan-studio/PlanningConstraintsCard';
-import PlanningConflictsPanel from '@/components/plan-studio/PlanningConflictsPanel';
-import { PlanningInboxBadge } from '@/components/plan-studio/PlanningInboxBadge';
+import { PlanStudioPlanningHeader } from '@/components/plan-studio/PlanStudioPlanningHeader';
+import { PlanStudioCollaborationMenu } from '@/components/plan-studio/PlanStudioCollaborationMenu';
 import { PlanningBudgetConstraintsDialog } from '@/components/plan-studio/PlanningBudgetConstraintsDialog';
+import { PlanningTimeRangeConstraintsDialog } from '@/components/plan-studio/PlanningTimeRangeConstraintsDialog';
+import { PlanningTravelersConstraintsDialog } from '@/components/plan-studio/PlanningTravelersConstraintsDialog';
+import { PlanningTransportConstraintsDialog } from '@/components/plan-studio/PlanningTransportConstraintsDialog';
 import { useDecisionStripModel } from '@/hooks/useDecisionStripModel';
+import { useSolutionMatrixModel } from '@/hooks/useSolutionMatrixModel';
+import { useRelaxationSuggestionsModel } from '@/hooks/useRelaxationSuggestionsModel';
+import { useRelaxationSuggestionSubmit } from '@/hooks/useRelaxationSuggestionSubmit';
+import type { CompareStripSelection } from '@/lib/decision-strip-compare-cta';
 import { useDecisionStripPlanningReadiness } from '@/hooks/useDecisionStripPlanningReadiness';
 import { usePlanningConflicts } from '@/hooks/usePlanningConflicts';
 import { useConstraintsSummary } from '@/hooks/useConstraintsSummary';
 import { parseConstraintDeepLink } from '@/lib/planning-constraints.util';
+import {
+  PLAN_STUDIO_OPEN_CONSTRAINT_EDITOR,
+  type PlanStudioOpenConstraintEditorDetail,
+} from '@/lib/plan-studio-constraints-events';
 import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
 import { useDrawerOptional } from '@/components/layout/DashboardLayout';
 import type { DecisionStripCtaType } from '@/lib/decision-strip-model';
-import type { ConstraintPendingItem } from '@/types/planning-constraints';
-import { trackDecisionStripEvidenceOpen } from '@/utils/plan-studio-decision-strip-analytics';
+import type { ConstraintPendingItem, ConstraintPendingKey } from '@/types/planning-constraints';
+import { trackDecisionStripEvidenceOpen, trackDecisionStripDeepLink } from '@/utils/plan-studio-decision-strip-analytics';
+import CascadeImpactPanel from '@/components/readiness/CascadeImpactPanel';
+import type { CascadeUiHint } from '@/types/readiness-cascade';
+import { CausalInsightPanel } from '@/components/causal';
+import { loadCausalRuntimeSession } from '@/lib/causal-runtime-session';
+import { PlanStudioRobustnessFold } from '@/components/plan-studio/PlanStudioRobustnessFold';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 
 /** 工作台标题副文案：与侧栏行程列表展示逻辑对齐 */
 function planStudioTripHeadingLabel(trip: TripDetail): string {
@@ -133,7 +160,7 @@ function planStudioTripHeadingLabel(trip: TripDetail): string {
 
 /** 将 URL tab 参数规范为可展示的 Tab value */
 function resolvePlanStudioTab(tabParam: string | null): string {
-  const removedTabs = new Set(['optimize', 'what-if', 'decision-draft', 'bookings', 'workbench', 'feasibility']);
+  const removedTabs = new Set(['optimize', 'what-if', 'decision-draft', 'bookings', 'workbench', 'feasibility', 'conflicts']);
   const tab = tabParam || 'schedule';
   const normalized = removedTabs.has(tab) ? 'schedule' : tab;
   if (normalized === 'intent' || normalized === 'places') return 'schedule';
@@ -156,15 +183,17 @@ function PlanStudioPageContent() {
     resolvePlanStudioTab(searchParams.get('tab')),
   );
   const planStudio = usePlanStudio();
-  const { openAssistant, sendAssistantMessage } = useAssistantSidebar();
+  const { openAssistant, sendAssistantMessage, expanded: assistantExpanded } = useAssistantSidebar();
   const drawer = useDrawerOptional();
   const planGateUrlHandledRef = useRef(false);
+  const resumePlanGateAfterConstraintsRef = useRef(false);
   const { user } = useAuth();
-  const { summary: wishSummary, reload: reloadWishSummary } = useTripWishSummary(tripId);
   
   // 意图与约束弹窗
   const [showIntentDialog, setShowIntentDialog] = useState(false);
-  const [showBudgetDialog, setShowBudgetDialog] = useState(false);
+  const [activeConstraintDialog, setActiveConstraintDialog] = useState<ConstraintPendingKey | null>(
+    null,
+  );
   // personaMode 已移除 - 三人格由系统自动调用，不再需要用户切换视图
   
   const [loading, setLoading] = useState(true);
@@ -173,6 +202,8 @@ function PlanStudioPageContent() {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
   const [structuredNegotiationOpen, setStructuredNegotiationOpen] = useState(false);
+  const [silentVoteOpen, setSilentVoteOpen] = useState(false);
+  const [privateWishOpen, setPrivateWishOpen] = useState(false);
   const [feasibilitySheetOpen, setFeasibilitySheetOpen] = useState(false);
   const [feasibilityInitialIssueId, setFeasibilityInitialIssueId] = useState<string | null>(null);
   const [decisionProfilingHubOpen, setDecisionProfilingHubOpen] = useState(false);
@@ -191,29 +222,72 @@ function PlanStudioPageContent() {
   
   // 当前行程详情（用于摘要条显示）
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
-  const embeddedHiking = useEmbeddedHikingTrip(currentTrip);
+
+  /** 首屏校验通过后再拉取子模块数据，避免 LogoLoading 期间并发打满 API */
+  const readyTripId = !loading && tripExists && tripId ? tripId : null;
+
+  const { summary: wishSummary, reload: reloadWishSummary } = useTripWishSummary(readyTripId);
+  const embeddedHiking = useEmbeddedHikingTrip(readyTripId ? currentTrip : null);
   const showEmbeddedPlanStudio =
     Boolean(tripId) &&
     isEmbeddedHikingEnabled() &&
     embeddedHiking.embedded &&
     isEmbeddedHikingTrip(currentTrip);
 
-  const planningConflicts = usePlanningConflicts(tripId && tripExists ? tripId : null);
+  const planningConflicts = usePlanningConflicts(readyTripId);
   const constraintsSummary = useConstraintsSummary(
-    tripId && tripExists ? tripId : null,
+    readyTripId,
     currentTrip,
     { embeddedSummary: planningConflicts.constraintsSummary },
   );
   const planningReadiness = useDecisionStripPlanningReadiness(
-    tripId && tripExists ? tripId : null,
+    readyTripId,
     currentTrip,
     planningConflicts,
     { deferConstraintTopicsToCard: true },
   );
-  const decisionStrip = useDecisionStripModel(tripId, {
+  const decisionStrip = useDecisionStripModel(readyTripId, {
     planningReadiness,
     planningInboxCount: planningConflicts.inbox.inboxCount,
   });
+  const solutionMatrix = useSolutionMatrixModel(readyTripId);
+  const relaxationModel = useRelaxationSuggestionsModel(readyTripId);
+  const relaxationSubmit = useRelaxationSuggestionSubmit(readyTripId);
+
+  const compareSelection = useMemo((): CompareStripSelection | null => {
+    if (!decisionStrip.compareSummary || !solutionMatrix.selectedOptionId) return null;
+    const column = solutionMatrix.model.columns.find(
+      (col) => col.optionId === solutionMatrix.selectedOptionId,
+    );
+    if (!column) return null;
+    return {
+      optionId: column.optionId,
+      label: column.label,
+      isRecommended: column.isRecommended,
+    };
+  }, [
+    decisionStrip.compareSummary,
+    solutionMatrix.selectedOptionId,
+    solutionMatrix.model.columns,
+  ]);
+
+  const isSoloPlanning = useMemo(() => {
+    const count = constraintsSummary.summary?.travelers.count ?? 1;
+    return count <= 1;
+  }, [constraintsSummary.summary?.travelers.count]);
+  /** Strip 已展示验证/待优化 CTA 时，顶栏不再重复「方案验证」入口 */
+  const hideHeaderFeasibilityTrigger = useMemo(() => {
+    if (!decisionStrip.showStrip) return false;
+    if (decisionStrip.loopValidation?.active) return true;
+    return (
+      decisionStrip.primaryCta.type === 'open_feasibility' ||
+      decisionStrip.primaryCta.type === 'open_conflicts'
+    );
+  }, [
+    decisionStrip.showStrip,
+    decisionStrip.loopValidation?.active,
+    decisionStrip.primaryCta.type,
+  ]);
 
   // 对话框状态
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -223,14 +297,74 @@ function PlanStudioPageContent() {
   const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
   const explainOptimization = useWorldModelGuardsStore((s) => s.explainOptimization);
   const decisionCockpit = useWorldModelGuardsStore((s) => s.decisionCockpit);
+  const cascadeUiHints = useWorldModelGuardsStore((s) => s.cascadeUiHints);
+  const cascadeAffectedItems = useWorldModelGuardsStore((s) => s.cascadeAffectedItems);
+  const lastRouteRunRequestId = useWorldModelGuardsStore((s) => s.lastRequestId);
+  const routeRunConfirmation = useWorldModelGuardsStore((s) => s.routeRunConfirmation);
+  const routeRunNegotiation = useWorldModelGuardsStore((s) => s.routeRunNegotiation);
   const showDecisionCockpitDeepLink = searchParams.get('decisionCockpit') === '1';
   const decisionCockpitRef = useRef<HTMLDivElement>(null);
+  const causalInsightRef = useRef<HTMLDivElement>(null);
+  const [causalInsightOpen, setCausalInsightOpen] = useState(false);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [negotiationDialogOpen, setNegotiationDialogOpen] = useState(false);
   const optimizationMethodLabel = formatOptimizationMethodZh(
     useWorldModelGuardsStore((s) => s.optimizationMethod)
   );
 
+  const showPlanStudioDecisionCockpit = useMemo(
+    () =>
+      shouldShowPlanStudioDecisionCockpit({
+        hasCockpitUi: hasDecisionCockpitUi(decisionCockpit),
+        showDecisionCockpitDeepLink,
+        hasSolutionMatrix: solutionMatrix.model.visible,
+        hasCompareSummary: Boolean(decisionStrip.compareSummary),
+        hasRelaxationBar: relaxationModel.visible && Boolean(relaxationModel.bundle),
+      }),
+    [
+      decisionCockpit,
+      showDecisionCockpitDeepLink,
+      solutionMatrix.model.visible,
+      decisionStrip.compareSummary,
+      relaxationModel.visible,
+      relaxationModel.bundle,
+    ],
+  );
+
+  const hideDecisionCockpitCounterfactuals = useMemo(
+    () =>
+      shouldHideDecisionCockpitCounterfactuals({
+        hasSolutionMatrix: solutionMatrix.model.visible,
+        hasCompareSummary: Boolean(decisionStrip.compareSummary),
+      }),
+    [solutionMatrix.model.visible, decisionStrip.compareSummary],
+  );
+
+  const showPlanStudioRelaxationBar = useMemo(
+    () =>
+      shouldShowPlanStudioRelaxationBar(
+        relaxationModel.visible && Boolean(relaxationModel.bundle),
+        assistantExpanded,
+      ),
+    [relaxationModel.visible, relaxationModel.bundle, assistantExpanded],
+  );
+
+  const causalRuntimeSession = useMemo(
+    () => (tripId ? loadCausalRuntimeSession(tripId) : null),
+    [tripId, lastRouteRunRequestId, planStudio.planGateSession],
+  );
+  const causalProjection = causalRuntimeSession?.echo?.causalPersonaProjection;
+  const causalCounterfactual = causalRuntimeSession?.lastCounterfactualReport;
+  const showCascadePanel =
+    cascadeUiHints.length > 0 || cascadeAffectedItems.length > 0;
+
   useEffect(() => {
     resetWorldModelGuardsStore();
+  }, [tripId]);
+
+  /** 切换行程时清掉上一趟的异步规划任务，避免 Decision Strip 一直显示「方案生成/验证中」 */
+  useEffect(() => {
+    usePlanningTaskStore.getState().reset();
   }, [tripId]);
 
   // 根据国家代码获取国家名称
@@ -256,6 +390,11 @@ function PlanStudioPageContent() {
     // 不再需要切换 personaMode，三人格由系统自动调用
   };
 
+  const openFeasibilitySheet = useCallback((issueId?: string | null) => {
+    if (issueId) setFeasibilityInitialIssueId(issueId);
+    setFeasibilitySheetOpen(true);
+  }, []);
+
   // 监听「加入行程」等操作，刷新 ScheduleTab（右侧助手添加住宿/火车后）
   useEffect(() => {
     const handler = () => setRefreshKey((k) => k + 1);
@@ -271,6 +410,10 @@ function PlanStudioPageContent() {
         if (tripId) navigate(buildFeasibilityPagePath(tripId));
         return;
       }
+      if (tab === 'conflicts') {
+        openFeasibilitySheet();
+        return;
+      }
       setActiveTab(tab);
       const newParams = new URLSearchParams(searchParams);
       newParams.set('tab', tab);
@@ -282,7 +425,16 @@ function PlanStudioPageContent() {
     };
     window.addEventListener('plan-studio:switch-tab', onSwitchTab);
     return () => window.removeEventListener('plan-studio:switch-tab', onSwitchTab);
-  }, [searchParams, setSearchParams, navigate, tripId]);
+  }, [searchParams, setSearchParams, navigate, tripId, openFeasibilitySheet]);
+
+  // 旧链接 ?tab=conflicts → 打开可执行证明侧栏
+  useEffect(() => {
+    if (!tripId || searchParams.get('tab') !== 'conflicts') return;
+    openFeasibilitySheet();
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tab', 'schedule');
+    setSearchParams(newParams, { replace: true });
+  }, [tripId, searchParams, setSearchParams, openFeasibilitySheet]);
 
   // URL ?tab= 变化时同步 Tab（例如时间轴卡片「查看报告」仅改 query）
   useEffect(() => {
@@ -313,16 +465,43 @@ function PlanStudioPageContent() {
     });
   };
 
+  const handleRelaxationDiscuss = useCallback(() => {
+    openAssistant();
+  }, [openAssistant]);
+
+  const handleCascadeDiscussWithAi = useCallback(
+    (hint: CascadeUiHint) => {
+      openAssistant();
+      const message = hint.message?.trim();
+      if (message) {
+        sendAssistantMessage(
+          `关于级联影响：${message}。请说明推荐的修复方式，以及会影响哪些天。`,
+        );
+      }
+    },
+    [openAssistant, sendAssistantMessage],
+  );
+
+  const handleRelaxationSubmit = useCallback(
+    (actionIds: string[]) => {
+      if (!relaxationModel.bundle) return;
+      void relaxationSubmit.submit(relaxationModel.bundle.context, actionIds);
+    },
+    [relaxationModel.bundle, relaxationSubmit],
+  );
+
   const handleDecisionStripPrimaryCta = (type: DecisionStripCtaType) => {
     switch (type) {
       case 'open_plan_gate':
+        solutionMatrix.setExpanded(true);
         planStudio.openPlanGate();
         break;
       case 'open_budget':
         handleTabChange('budget');
         break;
       case 'open_conflicts':
-        handleTabChange('conflicts');
+      case 'open_feasibility':
+        openFeasibilitySheet();
         break;
       case 'open_team':
         handleTabChange('team');
@@ -333,11 +512,23 @@ function PlanStudioPageContent() {
       case 'adjust_schedule':
         handleTabChange('schedule');
         break;
-      case 'open_feasibility':
-        if (tripId) navigate(buildFeasibilityPagePath(tripId));
-        break;
       case 'optimize':
+        if (!guardRouteRecalculationOrToast(worldModelGuards)) break;
         sendAssistantMessage(decisionStrip.optimizeMessage ?? '请帮我优化当前行程方案');
+        break;
+      case 'confirm_continue':
+        if (routeRunConfirmation?.approvalId) {
+          setApprovalDialogOpen(true);
+        } else {
+          openAssistant();
+        }
+        break;
+      case 'open_negotiation':
+        if (routeRunNegotiation?.payload) {
+          setNegotiationDialogOpen(true);
+        } else {
+          openAssistant();
+        }
         break;
       case 'open_assistant':
       default:
@@ -349,34 +540,69 @@ function PlanStudioPageContent() {
   const handleDecisionStripOpenEvidence = () => {
     if (!drawer || !tripId) return;
     trackDecisionStripEvidenceOpen({ tripId, source: 'drawer' });
+    trackDecisionStripDeepLink({
+      tripId,
+      target: 'evidence_drawer',
+      stripState: decisionStrip.state,
+    });
     drawer.setDrawerTab('decision');
     drawer.setDrawerOpen(true);
   };
 
-  const handleConstraintPendingEdit = (item: ConstraintPendingItem) => {
-    const nav = item.deepLink ? parseConstraintDeepLink(item.deepLink) : item;
-    const editTab = nav.editTab ?? item.editTab;
+  const handleDecisionStripOpenCausalInsight = useCallback(() => {
+    setCausalInsightOpen(true);
+    requestAnimationFrame(() => {
+      causalInsightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }, []);
 
-    if (item.key === 'budget' || nav.openBudgetDialog || item.openBudgetDialog) {
-      setShowBudgetDialog(true);
+  const handleDecisionStripOpenDecisionCockpit = useCallback(() => {
+    requestAnimationFrame(() => {
+      decisionCockpitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }, []);
+
+  const maybePromptResumePlanGate = useCallback(() => {
+    if (!resumePlanGateAfterConstraintsRef.current) {
       return;
     }
-    if (editTab === 'conflicts') {
-      handleTabChange('conflicts');
-      return;
+    resumePlanGateAfterConstraintsRef.current = false;
+    planStudio.openPlanGate({ autoGenerate: true });
+    toast.success('约束已更新', {
+      description: '正在重新评估方案，合规规则将一并刷新',
+    });
+  }, [planStudio]);
+
+  const handleConstraintSaved = useCallback(() => {
+    void constraintsSummary.reload();
+    if (tripId) {
+      tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
     }
-    if (nav.openEditTrip || item.openEditTrip) {
-      setEditDialogOpen(true);
-      return;
-    }
-    if (editTab) {
-      handleTabChange(editTab);
-      return;
-    }
-    if (nav.openIntent || item.openIntent) {
-      setShowIntentDialog(true);
-    }
-  };
+    maybePromptResumePlanGate();
+  }, [constraintsSummary, tripId, maybePromptResumePlanGate]);
+
+  const openConstraintEditor = useCallback(
+    (key: ConstraintPendingKey, item?: ConstraintPendingItem) => {
+      if (item?.deepLink) {
+        const nav = parseConstraintDeepLink(item.deepLink);
+        if (nav.editTab === 'conflicts') {
+          openFeasibilitySheet();
+          return;
+        }
+        if (nav.key) {
+          setActiveConstraintDialog(nav.key);
+          return;
+        }
+        if (nav.editTab) {
+          handleTabChange(nav.editTab);
+          return;
+        }
+      }
+      setActiveConstraintDialog(key);
+    },
+    [openFeasibilitySheet, handleTabChange],
+  );
+
 
   const handleConfirmConstraints = () => {
     if (!user?.id) {
@@ -387,6 +613,7 @@ function PlanStudioPageContent() {
       if (tripId) {
         tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
       }
+      maybePromptResumePlanGate();
     });
   };
 
@@ -423,11 +650,50 @@ function PlanStudioPageContent() {
     const onOpenFeasibility = (event: Event) => {
       if (!tripId) return;
       const issueId = (event as CustomEvent<{ issueId?: string }>).detail?.issueId;
-      navigate(buildFeasibilityPagePath(tripId, issueId ?? null));
+      openFeasibilitySheet(issueId ?? null);
     };
     window.addEventListener('plan-studio:open-feasibility', onOpenFeasibility);
     return () => window.removeEventListener('plan-studio:open-feasibility', onOpenFeasibility);
-  }, []);
+  }, [tripId, openFeasibilitySheet]);
+
+  useEffect(() => {
+    const onOpenConstraintEditor = (event: Event) => {
+      const detail = (event as CustomEvent<PlanStudioOpenConstraintEditorDetail>).detail;
+      if (!tripId || (detail?.tripId && detail.tripId !== tripId)) return;
+
+      if (detail?.closePlanGate !== false) {
+        planStudio.closePlanGate();
+      }
+
+      if (detail?.resumePlanGate) {
+        resumePlanGateAfterConstraintsRef.current = true;
+      }
+
+      const pending = constraintsSummary.summary?.pendingItems ?? [];
+      const targetItem = detail?.item ?? pending.find((p) => p.key === detail?.key) ?? pending[0];
+      const targetKey = detail?.key ?? targetItem?.key ?? 'time_range';
+
+      if (targetItem) {
+        openConstraintEditor(targetKey, targetItem);
+      } else {
+        openConstraintEditor(targetKey);
+      }
+
+      window.setTimeout(() => {
+        document
+          .getElementById('plan-studio-planning-constraints')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 150);
+    };
+    window.addEventListener(PLAN_STUDIO_OPEN_CONSTRAINT_EDITOR, onOpenConstraintEditor);
+    return () =>
+      window.removeEventListener(PLAN_STUDIO_OPEN_CONSTRAINT_EDITOR, onOpenConstraintEditor);
+  }, [
+    tripId,
+    planStudio,
+    openConstraintEditor,
+    constraintsSummary.summary?.pendingItems,
+  ]);
 
   const roundIdParam = searchParams.get('roundId');
   useEffect(() => {
@@ -534,8 +800,10 @@ function PlanStudioPageContent() {
     setSearchParams(next, { replace: true });
   }, [showDecisionCockpitDeepLink, decisionCockpit, searchParams, setSearchParams]);
 
-  // 加载国家信息
+  // 加载国家信息（行程就绪后再拉，避免与首屏抢带宽）
   useEffect(() => {
+    if (!tripExists) return;
+
     const loadCountries = async () => {
       try {
         const response = await countriesApi.getAll();
@@ -545,12 +813,12 @@ function PlanStudioPageContent() {
           map.set(country.isoCode, country);
         });
         setCountryMap(map);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to load countries:', err);
       }
     };
-    loadCountries();
-  }, []);
+    void loadCountries();
+  }, [tripExists]);
 
   // 处理从其他页面传递过来的状态（如侧边栏的操作）
   useEffect(() => {
@@ -562,7 +830,7 @@ function PlanStudioPageContent() {
 
     if (state) {
       if (state.openEditDialog) {
-        setEditDialogOpen(true);
+        setActiveConstraintDialog('time_range');
       }
       if (state.openShareDialog) {
         setShareDialogOpen(true);
@@ -581,45 +849,60 @@ function PlanStudioPageContent() {
     const checkTripsAndTripId = async () => {
       try {
         setLoading(true);
-        
-        // 1. 检查是否有任何行程（只显示规划中的行程）
-        const allTripsData = await tripsApi.getAll();
-        const allTripsList = Array.isArray(allTripsData) ? allTripsData : [];
-        // ✅ 只显示规划中状态的行程
-        const planningTrips = allTripsList.filter(trip => trip.status === 'PLANNING');
-        setAllTrips(planningTrips);
-        setHasTrips(planningTrips.length > 0);
-        
-        // 2. 如果有tripId，验证行程是否存在且为规划中状态
+        setTripExists(false);
+        setCurrentTrip(null);
+
         if (tripId) {
-          try {
-            const trip = await tripsApi.getById(tripId);
-            // ✅ 检查行程状态是否为规划中
+          // 有 tripId 时并行拉列表与当前行程，避免 getAll → getById 串行阻塞首屏
+          const [tripResult, allTripsResult] = await Promise.allSettled([
+            tripsApi.getById(tripId),
+            tripsApi.getAll(),
+          ]);
+
+          let allTripsList: TripListItem[] = [];
+          if (allTripsResult.status === 'fulfilled') {
+            allTripsList = Array.isArray(allTripsResult.value) ? allTripsResult.value : [];
+            const planningTrips = allTripsList.filter((trip) => trip.status === 'PLANNING');
+            setAllTrips(planningTrips);
+            setHasTrips(planningTrips.length > 0);
+            if (allTripsList.length === 0) {
+              setShowWelcomeModal(true);
+            }
+          }
+
+          if (tripResult.status === 'fulfilled') {
+            const trip = tripResult.value;
             if (trip.status === 'PLANNING') {
               setTripExists(true);
-              setCurrentTrip(trip); // 保存当前行程详情
+              setCurrentTrip(trip);
+              if (allTripsResult.status === 'rejected') {
+                setHasTrips(true);
+              }
             } else {
-              // 行程不是规划中状态，清除tripId参数
               console.warn('Trip is not in PLANNING status:', tripId, trip.status);
               setTripExists(false);
               const newParams = new URLSearchParams(searchParams);
               newParams.delete('tripId');
               setSearchParams(newParams);
             }
-          } catch (err: any) {
-            // 行程不存在（可能已被删除）
+          } else {
             console.warn('Trip not found or deleted:', tripId);
             setTripExists(false);
-            // 清除无效的tripId参数
             const newParams = new URLSearchParams(searchParams);
             newParams.delete('tripId');
             setSearchParams(newParams);
           }
-        } else {
-          setTripExists(false);
+          return;
         }
-        
-        // 3. 如果没有行程数据，显示引导状态
+
+        // 无 tripId：只需行程列表
+        const allTripsData = await tripsApi.getAll();
+        const allTripsList = Array.isArray(allTripsData) ? allTripsData : [];
+        const planningTrips = allTripsList.filter((trip) => trip.status === 'PLANNING');
+        setAllTrips(planningTrips);
+        setHasTrips(planningTrips.length > 0);
+        setTripExists(false);
+
         if (allTripsList.length === 0) {
           setShowWelcomeModal(true);
         }
@@ -627,36 +910,38 @@ function PlanStudioPageContent() {
         console.error('Failed to check trips:', err);
         setHasTrips(false);
         setTripExists(false);
-        // 出错时也显示引导状态
         setShowWelcomeModal(true);
       } finally {
         setLoading(false);
       }
     };
-    
-    checkTripsAndTripId();
+
+    void checkTripsAndTripId();
   }, [tripId, searchParams, setSearchParams]);
 
   // 获取行程 Pipeline 状态
   const loadPipelineStatus = async () => {
     if (!tripId) return;
-    
+
     try {
       setLoadingStatus(true);
       setStatusError(null);
       const status = await tripsApi.getPipelineStatus(tripId);
       setPipelineStatus(status);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[PlanStudio] Failed to load pipeline status:', err);
-      setStatusError(err.message || '获取状态失败');
-      // 如果获取失败，尝试从 trip 详情中获取
-      try {
-        const trip = await tripsApi.getById(tripId);
-        if (trip.pipelineStatus) {
-          setPipelineStatus(trip.pipelineStatus);
+      setStatusError(err instanceof Error ? err.message : '获取状态失败');
+      if (currentTrip?.id === tripId && currentTrip.pipelineStatus) {
+        setPipelineStatus(currentTrip.pipelineStatus);
+      } else {
+        try {
+          const trip = await tripsApi.getById(tripId);
+          if (trip.pipelineStatus) {
+            setPipelineStatus(trip.pipelineStatus);
+          }
+        } catch {
+          // 忽略错误，保持 statusError
         }
-      } catch (tripErr) {
-        // 忽略错误，保持 statusError
       }
     } finally {
       setLoadingStatus(false);
@@ -666,12 +951,15 @@ function PlanStudioPageContent() {
   // 当 tripId 变化时，加载 Pipeline 状态
   useEffect(() => {
     if (tripId && tripExists) {
-      loadPipelineStatus();
+      if (currentTrip?.pipelineStatus) {
+        setPipelineStatus(currentTrip.pipelineStatus);
+      }
+      void loadPipelineStatus();
     } else {
       setPipelineStatus(null);
       setStatusError(null);
     }
-  }, [tripId, tripExists]);
+  }, [tripId, tripExists, currentTrip?.id, currentTrip?.pipelineStatus]);
 
   // 定期刷新状态（每30秒）
   useEffect(() => {
@@ -924,52 +1212,53 @@ function PlanStudioPageContent() {
         {/* 第一行：标题和主要操作 */}
         <div className="flex items-start justify-between gap-3 sm:gap-4 mb-3 sm:mb-0">
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold truncate">
-              {tripId && currentTrip
-                ? `${t('planStudio.title')} - ${planStudioTripHeadingLabel(currentTrip)}`
-                : t('planStudio.title')}
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
-              {t('planStudio.subtitle')}
-            </p>
+            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold truncate">
+                {currentTrip
+                  ? planStudioTripHeadingLabel(currentTrip)
+                  : t('planStudio.title')}
+              </h1>
+              {currentTrip ? (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'font-medium flex-shrink-0 text-xs',
+                    getTripStatusClasses(normalizeTripStatusFromApi(currentTrip.status as string)),
+                  )}
+                >
+                  {getTripStatusLabel(normalizeTripStatusFromApi(currentTrip.status as string))}
+                </Badge>
+              ) : (
+                <Spinner className="w-4 h-4 flex-shrink-0" />
+              )}
+            </div>
           </div>
           
           {/* 右侧操作区：顶栏工具 + Pipeline 状态 */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {tripId && tripExists && (
-              <DecisionProfilingHubDialog
-                tripId={tripId}
-                open={decisionProfilingHubOpen}
-                onOpenChange={handleDecisionProfilingHubOpenChange}
-                initialStep={decisionProfilingInitialStep}
-                forceOpenQuiz={decisionProfilingForceQuiz}
-                forceReuseProfile={decisionProfilingForceReuse}
-              />
-            )}
-            {tripId && tripExists && (
-              <StructuredNegotiationDialog
-                tripId={tripId}
-                open={structuredNegotiationOpen}
-                onOpenChange={handleStructuredNegotiationOpenChange}
-                initialRoundId={searchParams.get('roundId')}
-                initialRoundDomain={searchParams.get('roundDomain')}
-                showTrigger
-              />
-            )}
-            {tripId && tripExists && (
-              <SilentVoteHubDialog tripId={tripId} />
-            )}
-            {tripId && tripExists && (
-              <PrivateWishDialog
+              <PlanStudioCollaborationMenu
                 tripId={tripId}
                 destinationLabel={currentTrip?.destination?.trim() || '冰岛'}
                 userDisplayName={user?.displayName ?? user?.email ?? '我'}
-                onOpenChange={(open) => {
-                  if (!open) void reloadWishSummary();
-                }}
+                isSoloPlanning={isSoloPlanning}
+                decisionProfilingOpen={decisionProfilingHubOpen}
+                onDecisionProfilingOpenChange={handleDecisionProfilingHubOpenChange}
+                decisionProfilingInitialStep={decisionProfilingInitialStep}
+                decisionProfilingForceQuiz={decisionProfilingForceQuiz}
+                decisionProfilingForceReuse={decisionProfilingForceReuse}
+                structuredNegotiationOpen={structuredNegotiationOpen}
+                onStructuredNegotiationOpenChange={handleStructuredNegotiationOpenChange}
+                negotiationRoundId={searchParams.get('roundId')}
+                negotiationRoundDomain={searchParams.get('roundDomain')}
+                silentVoteOpen={silentVoteOpen}
+                onSilentVoteOpenChange={setSilentVoteOpen}
+                privateWishOpen={privateWishOpen}
+                onPrivateWishOpenChange={setPrivateWishOpen}
+                onPrivateWishClose={() => void reloadWishSummary()}
               />
             )}
-            {tripId && tripExists && (
+            {tripId && tripExists && !hideHeaderFeasibilityTrigger && (
               isTripLoopReadinessEnabled() ? (
                 <ReadinessRepairLoopTrigger
                   tripId={tripId}
@@ -1028,15 +1317,6 @@ function PlanStudioPageContent() {
         )}
       </div>
 
-      {/* 摘要条 - 显示当前行程核心设置 */}
-      {tripId && tripExists && currentTrip && (
-        <TripSummaryBar 
-          trip={currentTrip} 
-          countryName={getCountryName(currentTrip.destination)}
-          onOpenSettings={() => setShowIntentDialog(true)}
-        />
-      )}
-
       {tripId && tripExists && (
         <NarrativeThemeSection
           tripId={tripId}
@@ -1045,47 +1325,114 @@ function PlanStudioPageContent() {
       )}
 
       {tripId && tripExists && (
-        <div className="px-6 space-y-3 pb-2">
-          <PlanningConstraintsCard
-            summary={constraintsSummary.summary}
-            loading={constraintsSummary.loading}
-            loadSettled={constraintsSummary.loadSettled}
-            error={constraintsSummary.error}
-            onRetry={() => void constraintsSummary.reload()}
-            confirming={constraintsSummary.confirming}
-            destinationLabel={
-              currentTrip ? getCountryName(currentTrip.destination) : undefined
+        <div id="plan-studio-planning-constraints" className="px-6 pb-2 scroll-mt-4">
+          <PlanStudioPlanningHeader
+            constraints={{
+              tripId,
+              summary: constraintsSummary.summary,
+              loading: constraintsSummary.loading,
+              loadSettled: constraintsSummary.loadSettled,
+              error: constraintsSummary.error,
+              onRetry: () => void constraintsSummary.reload(),
+              confirming: constraintsSummary.confirming,
+              destinationLabel: currentTrip ? getCountryName(currentTrip.destination) : undefined,
+              trip: currentTrip,
+              onEditConstraint: openConstraintEditor,
+              onConfirm: handleConfirmConstraints,
+              onOpenConflicts: () => openFeasibilitySheet(),
+              planningInboxCount: planningConflicts.inbox.inboxCount,
+              deferToPlanningInbox: planningConflicts.inbox.inboxCount > 0,
+            }}
+            strip={{
+              tripId,
+              model: decisionStrip,
+              hasGuards: Boolean(worldModelGuards),
+              onPrimaryCta: handleDecisionStripPrimaryCta,
+              onOpenEvidence: drawer ? handleDecisionStripOpenEvidence : undefined,
+              onOpenCausalInsight: handleDecisionStripOpenCausalInsight,
+              hasCausalInsight: Boolean(causalProjection),
+              onOpenDecisionCockpit: handleDecisionStripOpenDecisionCockpit,
+              hasDecisionCockpit: showPlanStudioDecisionCockpit,
+            }}
+            solutionMatrix={{
+              tripId,
+              matrix: solutionMatrix,
+              compareSelection,
+              onViewMoreInAssistant: openAssistant,
+            }}
+            relaxation={
+              showPlanStudioRelaxationBar && relaxationModel.bundle
+                ? {
+                    visible: true,
+                    context: relaxationModel.bundle.context,
+                    suggestions: relaxationModel.bundle.suggestions,
+                    selectionMode: relaxationModel.bundle.context.selectionMode,
+                    selectedActionIds: relaxationModel.selectedActionIds,
+                    onToggleAction: relaxationModel.toggleAction,
+                    onSubmit: handleRelaxationSubmit,
+                    submitting: relaxationSubmit.submitting,
+                    onDiscussInAssistant: handleRelaxationDiscuss,
+                  }
+                : undefined
             }
-            trip={currentTrip}
-            onEditPending={handleConstraintPendingEdit}
-            onConfirm={handleConfirmConstraints}
-            onOpenConflicts={() => handleTabChange('conflicts')}
-            planningInboxCount={planningConflicts.inbox.inboxCount}
-          />
-          <DecisionStrip
-            tripId={tripId}
-            model={decisionStrip}
-            hasGuards={Boolean(worldModelGuards)}
-            onPrimaryCta={handleDecisionStripPrimaryCta}
-            onOpenEvidence={drawer ? handleDecisionStripOpenEvidence : undefined}
           />
           {!decisionStrip.hidePlanningBanner ? (
-            <PlanningBanner guards={worldModelGuards} />
+            <PlanningBanner guards={worldModelGuards} className="mt-3" />
           ) : null}
+          {showCascadePanel ? (
+            <CascadeImpactPanel
+              id="plan-studio-cascade-hints"
+              hints={cascadeUiHints}
+              affectedItems={cascadeAffectedItems}
+              modeLabel="修复前预分析"
+              compact
+              showCardActions
+              onViewRepairOptions={() => openFeasibilitySheet()}
+              onDiscussWithAi={handleCascadeDiscussWithAi}
+              className="mt-3"
+            />
+          ) : null}
+          {causalProjection ? (
+            <div ref={causalInsightRef} className="mt-3" id="plan-studio-causal-insight">
+              <Collapsible open={causalInsightOpen} onOpenChange={setCausalInsightOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground">
+                    因果链详情
+                    <ChevronDown
+                      className={cn(
+                        'ml-1 h-3.5 w-3.5 transition-transform',
+                        causalInsightOpen && 'rotate-180',
+                      )}
+                    />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <CausalInsightPanel
+                    projection={causalProjection}
+                    counterfactual={causalCounterfactual}
+                    iceland={causalRuntimeSession?.echo?.icelandSelfDriveCausalAssessment}
+                    calibration={causalRuntimeSession?.echo?.icelandCausalCalibration}
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          ) : null}
+          <PlanStudioRobustnessFold className="mt-2 mb-1" />
           <WorldConstraintBanner
             materialization={explainOptimization?.world_constraint_materialization}
-            className="-mt-2 mb-3"
+            className="mt-3 mb-3"
           />
           {optimizationMethodLabel ? (
-            <p className="text-xs text-muted-foreground -mt-2 mb-4 px-1">
+            <p className="text-xs text-muted-foreground mb-4 px-1">
               优化方式：{optimizationMethodLabel}
             </p>
           ) : null}
-          {hasDecisionCockpitUi(decisionCockpit) ? (
+          {showPlanStudioDecisionCockpit ? (
             <div ref={decisionCockpitRef} className="mb-4">
               <DecisionCockpitPanel
                 cockpit={decisionCockpit}
                 defaultOpen={showDecisionCockpitDeepLink}
+                hideCounterfactualSection={hideDecisionCockpitCounterfactuals}
               />
             </div>
           ) : null}
@@ -1127,18 +1474,12 @@ function PlanStudioPageContent() {
             <div className="border-b bg-white px-6">
               <TabsList className="justify-start">
                 <TabsTrigger value="schedule">{t('planStudio.tabs.schedule')}</TabsTrigger>
-                <TabsTrigger value="conflicts" className="gap-1.5">
-                  规划待办
-                  {!planningConflicts.loading ? (
-                    <PlanningInboxBadge count={planningConflicts.inbox.inboxCount} />
-                  ) : null}
-                </TabsTrigger>
                 {showSelfDriveCoverageTab ? (
                   <TabsTrigger value="coverage">{t('planStudio.tabs.coverage')}</TabsTrigger>
                 ) : null}
                 <TabsTrigger value="budget">预算管理</TabsTrigger>
                 <TabsTrigger value="tasks">行前准备</TabsTrigger>
-                <TabsTrigger value="team">团队</TabsTrigger>
+                <TabsTrigger value="team">同行者</TabsTrigger>
               </TabsList>
             </div>
 
@@ -1153,8 +1494,10 @@ function PlanStudioPageContent() {
                   {tripId && activeTab === 'schedule' ? (
                     <ScheduleTab
                       tripId={tripId}
+                      initialTrip={currentTrip}
                       refreshKey={refreshKey}
                       wishImpactByDay={wishSummary?.impactByDay}
+                      personaAlerts={decisionStrip.personaAlerts}
                     />
                   ) : tripId ? (
                     <div className="flex items-center justify-center p-8 min-h-[200px]">
@@ -1168,26 +1511,20 @@ function PlanStudioPageContent() {
                     </div>
                   )}
                 </TabsContent>
-                <TabsContent value="conflicts" className="mt-0">
-                  {tripId && activeTab === 'conflicts' ? (
-                    <PlanningConflictsPanel
-                      tripId={tripId}
-                      trip={currentTrip}
-                      conflicts={planningConflicts}
-                      onNavigateToSchedule={handleNavigateToScheduleFromFeasibility}
-                    />
-                  ) : null}
-                </TabsContent>
                 {showSelfDriveCoverageTab && tripId ? (
                   <TabsContent value="coverage" className="mt-0">
-                    <CoverageMapTab tripId={tripId} refreshKey={refreshKey} />
+                    {activeTab === 'coverage' ? (
+                      <CoverageMapTab tripId={tripId} refreshKey={refreshKey} />
+                    ) : null}
                   </TabsContent>
                 ) : null}
                 <TabsContent value="budget" className="mt-0">
-                  <BudgetTab tripId={tripId!} />
+                  {tripId && activeTab === 'budget' ? (
+                    <BudgetTab tripId={tripId} />
+                  ) : null}
                 </TabsContent>
                 <TabsContent value="tasks" className="mt-0">
-                  {tripId ? (
+                  {tripId && activeTab === 'tasks' ? (
                     <TasksTab
                       tripId={tripId}
                       initialSubTab={
@@ -1212,7 +1549,49 @@ function PlanStudioPageContent() {
         </div>
       </div>
 
-      <PlanGateDrawer tripId={tripId} />
+      <PlanGateDrawer tripId={tripId} initialTrip={currentTrip} />
+
+      {routeRunConfirmation?.approvalId ? (
+        <ApprovalDialog
+          approvalId={routeRunConfirmation.approvalId}
+          open={approvalDialogOpen}
+          onOpenChange={setApprovalDialogOpen}
+          onDecision={() => {
+            clearRouteRunConfirmationFromStore();
+            setApprovalDialogOpen(false);
+          }}
+        />
+      ) : null}
+
+      {routeRunNegotiation?.payload ? (
+        <NegotiationDialog
+          open={negotiationDialogOpen}
+          correlationRequestId={routeRunNegotiation.requestId}
+          negotiation={routeRunNegotiation.payload}
+          onOpenChange={(open) => {
+            if (
+              !open &&
+              routeRunNegotiation.payload.status === 'PENDING_USER_DECISION'
+            ) {
+              toast.message('需要你做一个选择', {
+                description: '请选择并确认一个方案，或点击“放弃本次调整”回到纯净态。',
+              });
+              return;
+            }
+            setNegotiationDialogOpen(open);
+          }}
+          onConfirmed={() => {
+            clearRouteRunNegotiationFromStore();
+            setNegotiationDialogOpen(false);
+            void loadTrip();
+            window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+          }}
+          onDiscard={() => {
+            clearRouteRunNegotiationFromStore();
+            setNegotiationDialogOpen(false);
+          }}
+        />
+      ) : null}
 
       {/* Pipeline 状态详情对话框 */}
       {pipelineStatus && (
@@ -1237,7 +1616,7 @@ function PlanStudioPageContent() {
         </Dialog>
       )}
 
-      {/* 意图与约束弹窗 */}
+      {/* 完整意图页（Pipeline 等入口）；固化约束四项使用下方聚焦弹窗 */}
       <Dialog open={showIntentDialog} onOpenChange={setShowIntentDialog}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-4 gap-2">
           <DialogHeader>
@@ -1255,20 +1634,62 @@ function PlanStudioPageContent() {
         </DialogContent>
       </Dialog>
 
-      {/* 编辑对话框 */}
       {currentTrip && (
+        <>
+          <PlanningTimeRangeConstraintsDialog
+            trip={currentTrip}
+            tripId={tripId}
+            open={activeConstraintDialog === 'time_range'}
+            onOpenChange={(open) => {
+              if (!open) setActiveConstraintDialog(null);
+            }}
+            onSaved={handleConstraintSaved}
+          />
+          {tripId ? (
+            <PlanningBudgetConstraintsDialog
+              tripId={tripId}
+              open={activeConstraintDialog === 'budget'}
+              onOpenChange={(open) => {
+                if (!open) setActiveConstraintDialog(null);
+              }}
+              onSaved={handleConstraintSaved}
+            />
+          ) : null}
+          <PlanningTravelersConstraintsDialog
+            trip={currentTrip}
+            tripId={tripId}
+            open={activeConstraintDialog === 'travelers'}
+            onOpenChange={(open) => {
+              if (!open) setActiveConstraintDialog(null);
+            }}
+            onSaved={handleConstraintSaved}
+            onOpenTeamTab={() => handleTabChange('team')}
+          />
+          <PlanningTransportConstraintsDialog
+            trip={currentTrip}
+            tripId={tripId}
+            open={activeConstraintDialog === 'transport'}
+            onOpenChange={(open) => {
+              if (!open) setActiveConstraintDialog(null);
+            }}
+            onSaved={handleConstraintSaved}
+          />
+        </>
+      )}
+
+      {/* 侧栏「编辑行程」等非约束入口仍用通用编辑弹窗 */}
+      {currentTrip && editDialogOpen ? (
         <EditTripDialog
           trip={currentTrip}
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
           onSuccess={() => {
-            // 重新加载行程数据
             if (tripId) {
               tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
             }
           }}
         />
-      )}
+      ) : null}
 
       {/* 分享对话框 */}
       {tripId && (
@@ -1285,18 +1706,6 @@ function PlanStudioPageContent() {
           tripId={tripId}
           open={collaboratorsDialogOpen}
           onOpenChange={setCollaboratorsDialogOpen}
-        />
-      )}
-
-      {tripId && (
-        <PlanningBudgetConstraintsDialog
-          open={showBudgetDialog}
-          onOpenChange={setShowBudgetDialog}
-          tripId={tripId}
-          onSaved={() => {
-            void constraintsSummary.reload();
-            if (tripId) tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
-          }}
         />
       )}
 
@@ -1333,98 +1742,6 @@ function PlanStudioPageContent() {
           />
         )
       )}
-    </div>
-  );
-}
-
-// 行程摘要条组件
-function TripSummaryBar({ 
-  trip, 
-  countryName,
-  onOpenSettings 
-}: { 
-  trip: TripDetail; 
-  countryName: string;
-  onOpenSettings: () => void;
-}) {
-  // 从 pacingConfig 获取节奏信息
-  const getPaceLabel = () => {
-    const level = trip.pacingConfig?.level;
-    const maxActivities = trip.pacingConfig?.maxDailyActivities;
-    
-    if (level === 'relaxed' || (maxActivities && maxActivities <= 3)) {
-      return { label: '悠闲', emoji: '🌿', desc: '每天2-3个点' };
-    } else if (level === 'tight' || (maxActivities && maxActivities > 5)) {
-      return { label: '紧凑', emoji: '🚀', desc: '每天6+个点' };
-    }
-    return { label: '标准', emoji: '⚖️', desc: '每天4-5个点' };
-  };
-
-  const pace = getPaceLabel();
-  const budget = trip.totalBudget || trip.budgetConfig?.totalBudget;
-  const currency = trip.budgetConfig?.currency || 'CNY';
-  const days = trip.TripDay?.length || 0;
-  const startDate = trip.startDate ? new Date(trip.startDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
-  const endDate = trip.endDate ? new Date(trip.endDate).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '';
-
-  return (
-    <div className="bg-gradient-to-r from-slate-50 to-slate-100 border-b px-6 py-3">
-      <div className="flex items-center justify-between">
-        {/* 左侧：核心信息 */}
-        <div className="flex items-center gap-6 text-sm">
-          {/* 目的地和日期 */}
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-800">{countryName}</span>
-            {startDate && endDate && (
-              <span className="text-slate-500">
-                {startDate} - {endDate} ({days}天)
-              </span>
-            )}
-          </div>
-          
-          {/* 分隔线 */}
-          <div className="h-4 w-px bg-slate-300" />
-          
-          {/* 节奏 */}
-          <div className="flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-amber-500" />
-            <span className="text-slate-600">{pace.emoji} {pace.label}</span>
-          </div>
-          
-          {/* 预算 */}
-          {budget && budget > 0 && (
-            <>
-              <div className="h-4 w-px bg-slate-300" />
-              <div className="flex items-center gap-1.5">
-                <Wallet className="w-4 h-4 text-emerald-500" />
-                <span className="text-slate-600">{formatCurrency(budget, currency)}</span>
-              </div>
-            </>
-          )}
-          
-          {/* 旅行者数量 */}
-          {trip.pacingConfig?.travelers && trip.pacingConfig.travelers.length > 0 && (
-            <>
-              <div className="h-4 w-px bg-slate-300" />
-              <div className="flex items-center gap-1.5">
-                <Footprints className="w-4 h-4 text-blue-500" />
-                <span className="text-slate-600">{trip.pacingConfig.travelers.length}人</span>
-              </div>
-            </>
-          )}
-        </div>
-        
-        {/* 右侧：调整按钮 */}
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={onOpenSettings}
-          className="text-slate-600 hover:text-slate-800"
-        >
-          <Settings2 className="w-4 h-4 mr-1.5" />
-          调整约束
-        </Button>
-      </div>
     </div>
   );
 }

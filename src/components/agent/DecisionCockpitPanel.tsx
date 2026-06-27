@@ -253,6 +253,8 @@ export interface DecisionCockpitPanelProps {
   className?: string;
   compact?: boolean;
   defaultOpen?: boolean;
+  /** M2：SolutionMatrix 已覆盖反事实对比时隐藏重叠区块 */
+  hideCounterfactualSection?: boolean;
 }
 
 export function DecisionCockpitPanel({
@@ -260,6 +262,7 @@ export function DecisionCockpitPanel({
   className,
   compact = false,
   defaultOpen = false,
+  hideCounterfactualSection = false,
 }: DecisionCockpitPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -304,7 +307,7 @@ export function DecisionCockpitPanel({
         </section>
       ) : null}
 
-      {cockpit!.counterfactuals?.length ? (
+      {!hideCounterfactualSection && cockpit!.counterfactuals?.length ? (
         <section aria-label="反事实">
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
             若选 base 会怎样

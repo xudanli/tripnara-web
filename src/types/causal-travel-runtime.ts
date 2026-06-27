@@ -51,6 +51,7 @@ export interface CausalPersonaProjection {
   causalChain?: CausalChainStep[];
   evidence?: CausalEvidenceItem[];
   abuSlice?: { summary?: string; verdict?: string };
+  dreSlice?: { summary?: string; verdict?: string };
   neptuneSlice?: { summary?: string; verdict?: string };
 }
 

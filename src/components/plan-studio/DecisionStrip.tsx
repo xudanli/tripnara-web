@@ -12,14 +12,17 @@ import {
   DECISION_STRIP_CTA_LABEL_KEY,
   type DecisionStripCtaType,
 } from '@/lib/decision-strip-model';
+import { resolveCompareStripCtaLabel } from '@/lib/decision-strip-compare-cta';
 import { cn } from '@/lib/utils';
-import { getPersonaAlertUserBody, isUserVisiblePersonaAlert } from '@/lib/persona-alert-display';
+import { getPersonaAlertUserBody, getPersonaAlertUserTitle, isUserVisiblePersonaAlert } from '@/lib/persona-alert-display';
 import type { useDecisionStripModel } from '@/hooks/useDecisionStripModel';
+import type { CompareStripSelection } from '@/lib/decision-strip-compare-cta';
 import {
   trackDecisionStripEvidenceOpen,
   trackDecisionStripExpand,
   trackDecisionStripImpression,
   trackDecisionStripPrimaryCta,
+  trackDecisionStripDeepLink,
 } from '@/utils/plan-studio-decision-strip-analytics';
 import {
   AlertTriangle,
@@ -52,6 +55,12 @@ export interface DecisionStripProps {
   hasGuards?: boolean;
   onPrimaryCta: (type: DecisionStripCtaType) => void;
   onOpenEvidence?: () => void;
+  onOpenCausalInsight?: () => void;
+  hasCausalInsight?: boolean;
+  onOpenDecisionCockpit?: () => void;
+  hasDecisionCockpit?: boolean;
+  /** 方案矩阵选中列 → 主 CTA 文案联动 */
+  compareSelection?: CompareStripSelection | null;
   /** 单行摘要 + 详情按需展开 */
   compact?: boolean;
   /** 嵌入 PlanStudioPlanningHeader */
@@ -99,8 +108,10 @@ function resolveCtaLabel(
     adjustSchedule: '微调时间',
     openFeasibility: '调整方案',
     optimize: '一键优化',
+    confirmContinue: '确认并继续',
+    openNegotiation: '选择方案',
     openBudget: '确认预算结构',
-    openConflicts: '打开规划待办',
+    openConflicts: '打开可执行证明',
     confirmRegret: '确认体验底线',
     openTeam: '对齐团队节奏',
   };
@@ -113,6 +124,11 @@ export function DecisionStrip({
   hasGuards = false,
   onPrimaryCta,
   onOpenEvidence,
+  onOpenCausalInsight,
+  hasCausalInsight = false,
+  onOpenDecisionCockpit,
+  hasDecisionCockpit = false,
+  compareSelection,
   compact = false,
   embedded = false,
   className,
@@ -152,7 +168,30 @@ export function DecisionStrip({
 
   const handleOpenEvidence = () => {
     trackDecisionStripEvidenceOpen({ tripId, source: 'strip' });
+    trackDecisionStripDeepLink({
+      tripId,
+      target: 'evidence_drawer',
+      stripState: model.state,
+    });
     onOpenEvidence?.();
+  };
+
+  const handleOpenCausalInsight = () => {
+    trackDecisionStripDeepLink({
+      tripId,
+      target: 'causal_insight',
+      stripState: model.state,
+    });
+    onOpenCausalInsight?.();
+  };
+
+  const handleOpenDecisionCockpit = () => {
+    trackDecisionStripDeepLink({
+      tripId,
+      target: 'decision_cockpit',
+      stripState: model.state,
+    });
+    onOpenDecisionCockpit?.();
   };
 
   const handleMobileExpand = () => {
@@ -192,12 +231,22 @@ export function DecisionStrip({
     t,
     model.primaryCta.type,
     model.state === 'running',
-    model.primaryCta.labelOverride,
+    model.primaryCta.labelOverride ??
+      resolveCompareStripCtaLabel(model.primaryCta.type, compareSelection),
   );
   const showInboxBadge = model.planningInboxCount > 0;
   const inboxBadge = showInboxBadge ? (
     <PlanningInboxBadge count={model.planningInboxCount} />
   ) : null;
+  const planningInboxMode = Boolean(model.planningReadiness?.active);
+  const detailsExpandLabel = planningInboxMode
+    ? t('planStudio.decisionStrip.whyInbox', { defaultValue: '为什么有待办' })
+    : t('planStudio.decisionStrip.viewDetails', { defaultValue: '查看依据' });
+  const detailsCollapseLabel = planningInboxMode
+    ? t('planStudio.decisionStrip.collapseInbox', { defaultValue: '收起说明' })
+    : t('planStudio.decisionStrip.collapse', { defaultValue: '收起依据' });
+  const primaryButtonVariant =
+    planningInboxMode && model.planningReadiness?.tone === 'warning' ? 'outline' : 'default';
 
   const sectionLabel =
     model.loopValidation?.active && !model.compareSummary && model.state !== 'running'
@@ -250,21 +299,44 @@ export function DecisionStrip({
         </p>
       ) : null}
 
-      {model.personaAlerts
-        .filter(isUserVisiblePersonaAlert)
-        .slice(0, 3)
-        .map((alert) => (
-          <p key={alert.id} className="text-xs text-muted-foreground leading-relaxed">
-            {(alert.persona === 'ABU'
-              ? 'Abu'
-              : alert.persona === 'DR_DRE'
-                ? 'Dr.Dre'
-                : alert.persona === 'NEPTUNE'
-                  ? 'Neptune'
-                  : alert.persona) + '：'}
-            {getPersonaAlertUserBody(alert)}
+      {model.personaMode === 'single_lead' && model.personaLine ? (
+        <div className="rounded-md border border-border/60 bg-background/60 p-2 text-xs space-y-1">
+          <p className="font-medium">
+            {model.personaLeadHeadline ?? model.personaLine.personaLabel}
           </p>
-        ))}
+          <p className="text-muted-foreground leading-relaxed">{model.personaLine.text}</p>
+        </div>
+      ) : (
+        model.personaAlerts
+          .filter(isUserVisiblePersonaAlert)
+          .slice(0, 3)
+          .map((alert) => (
+            <p key={alert.id} className="text-xs text-muted-foreground leading-relaxed">
+              {(alert.persona === 'ABU'
+                ? 'Abu'
+                : alert.persona === 'DR_DRE'
+                  ? 'Dr.Dre'
+                  : alert.persona === 'NEPTUNE'
+                    ? 'Neptune'
+                    : alert.persona) + '：'}
+              {getPersonaAlertUserTitle(alert)} — {getPersonaAlertUserBody(alert)}
+            </p>
+          ))
+      )}
+
+      {model.decisionCockpitSummary ? (
+        <div className="rounded-md border border-border/60 bg-background/60 p-2 text-xs space-y-1">
+          <p className="font-medium">
+            {t('planStudio.decisionStrip.decisionCockpitSummary', {
+              defaultValue: '决策驾驶舱摘要',
+            })}
+          </p>
+          <p className="text-muted-foreground leading-relaxed">{model.decisionCockpitSummary.headline}</p>
+          {model.decisionCockpitSummary.subline ? (
+            <p className="text-muted-foreground/80 leading-relaxed">{model.decisionCockpitSummary.subline}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {model.lastRequestId ? (
         <p className="font-mono text-[10px] text-muted-foreground">
@@ -277,6 +349,16 @@ export function DecisionStrip({
       {onOpenEvidence ? (
         <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleOpenEvidence}>
           {t('planStudio.decisionStrip.openEvidence', { defaultValue: '打开决策证据' })}
+        </Button>
+      ) : null}
+      {onOpenCausalInsight && hasCausalInsight ? (
+        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleOpenCausalInsight}>
+          {t('planStudio.decisionStrip.openCausalInsight', { defaultValue: '查看因果链' })}
+        </Button>
+      ) : null}
+      {onOpenDecisionCockpit && hasDecisionCockpit ? (
+        <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleOpenDecisionCockpit}>
+          {t('planStudio.decisionStrip.openDecisionCockpit', { defaultValue: '查看决策驾驶舱' })}
         </Button>
       ) : null}
     </>
@@ -295,13 +377,16 @@ export function DecisionStrip({
             kicker={sectionLabel ?? t('planStudio.decisionStrip.verifyStep', { defaultValue: '可执行性验证' })}
             title={displayHeadline}
           >
-            {model.planningReadiness?.active ? inboxBadge : null}
+            {model.planningReadiness?.active && model.primaryCta.type !== 'open_conflicts'
+              ? inboxBadge
+              : null}
           </PlanningHeaderCopy>
           {model.score != null && model.state !== 'running' && !model.loopValidation?.active ? (
             <PlanningScoreBadge score={model.score} />
           ) : null}
           <Button
             size="sm"
+            variant={primaryButtonVariant}
             className="h-8 shrink-0 gap-1 rounded-full px-3 text-xs shadow-sm"
             onClick={() => handlePrimaryCta(model.primaryCta.type)}
           >
@@ -315,8 +400,8 @@ export function DecisionStrip({
           </Button>
           <PlanningExpandToggle
             expanded={compactDetailsOpen}
-            labelExpand={t('planStudio.decisionStrip.viewDetails', { defaultValue: '查看依据' })}
-            labelCollapse={t('planStudio.decisionStrip.collapse', { defaultValue: '收起依据' })}
+            labelExpand={detailsExpandLabel}
+            labelCollapse={detailsCollapseLabel}
             onClick={() => {
               setCompactDetailsOpen((v) => !v);
               trackDecisionStripExpand({ tripId, expanded: !compactDetailsOpen });
@@ -485,7 +570,12 @@ export function DecisionStrip({
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button size="sm" className="gap-1.5" onClick={() => handlePrimaryCta(model.primaryCta.type)}>
+        <Button
+          size="sm"
+          variant={primaryButtonVariant}
+          className="gap-1.5"
+          onClick={() => handlePrimaryCta(model.primaryCta.type)}
+        >
           {model.primaryCta.type === 'open_plan_gate' ? (
             <GitCompare className="mr-1.5 h-3.5 w-3.5" />
           ) : model.primaryCta.type === 'open_assistant' || model.primaryCta.type === 'optimize' ? (
@@ -498,7 +588,7 @@ export function DecisionStrip({
         <Collapsible open={expanded} onOpenChange={handleExpandChange}>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="text-xs h-7 px-2">
-              {t('planStudio.decisionStrip.viewDetails', { defaultValue: '查看依据' })}
+              {detailsExpandLabel}
               <ChevronDown
                 className={cn('ml-1 h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')}
               />
