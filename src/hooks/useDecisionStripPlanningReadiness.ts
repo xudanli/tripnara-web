@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { tripBudgetApi } from '@/api/trip-budget';
+import { useMemo } from 'react';
 import {
   resolvePlanningReadinessPresentation,
   type PlanningReadinessPresentation,
 } from '@/lib/decision-strip-planning-readiness';
 import type { UsePlanningConflictsResult } from '@/hooks/usePlanningConflicts';
-import type { BudgetGateStatus } from '@/types/trip-budget';
+import type { TripBudgetProfile } from '@/types/trip-budget';
 import type { TripDetail } from '@/types/trip';
 
 export function useDecisionStripPlanningReadiness(
@@ -15,44 +14,12 @@ export function useDecisionStripPlanningReadiness(
     UsePlanningConflictsResult,
     'gateExecute' | 'items' | 'inbox' | 'loading'
   >,
-  options?: { deferConstraintTopicsToCard?: boolean },
+  options?: {
+    deferConstraintTopicsToCard?: boolean;
+    budgetProfile?: TripBudgetProfile | null;
+  },
 ): PlanningReadinessPresentation | null {
-  const [budgetGate, setBudgetGate] = useState<BudgetGateStatus | null>(null);
-
-  useEffect(() => {
-    if (!tripId) {
-      setBudgetGate(null);
-      return;
-    }
-    let cancelled = false;
-    void tripBudgetApi
-      .getProfile(tripId)
-      .then((profile) => {
-        if (!cancelled) setBudgetGate(profile.gateStatus ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setBudgetGate(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tripId, conflicts.inbox.inboxCount]);
-
-  useEffect(() => {
-    const onRefresh = () => {
-      if (!tripId) return;
-      void tripBudgetApi
-        .getProfile(tripId)
-        .then((profile) => setBudgetGate(profile.gateStatus ?? null))
-        .catch(() => setBudgetGate(null));
-    };
-    window.addEventListener('plan-studio:schedule-refresh', onRefresh);
-    window.addEventListener('plan-studio:loop-readiness-changed', onRefresh);
-    return () => {
-      window.removeEventListener('plan-studio:schedule-refresh', onRefresh);
-      window.removeEventListener('plan-studio:loop-readiness-changed', onRefresh);
-    };
-  }, [tripId]);
+  const budgetGate = options?.budgetProfile?.gateStatus ?? null;
 
   return useMemo(() => {
     if (!tripId || conflicts.loading) return null;

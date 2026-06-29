@@ -6,11 +6,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { workbenchCard } from '@/components/plan-studio/workbench/workbench-ui';
 
 /** 单日时间轴骨架 */
 function DayCardSkeleton() {
   return (
-    <Card>
+    <Card className={workbenchCard}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex-1 space-y-1">
@@ -59,7 +60,7 @@ function DayCardSkeleton() {
 /** 右侧健康度卡片骨架 */
 function HealthCardSkeleton() {
   return (
-    <Card>
+    <Card className={workbenchCard}>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Skeleton className="h-5 w-5 rounded" />
@@ -84,7 +85,7 @@ function HealthCardSkeleton() {
 /** 准备度卡片骨架 */
 function ReadinessCardSkeleton() {
   return (
-    <Card>
+    <Card className={workbenchCard}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

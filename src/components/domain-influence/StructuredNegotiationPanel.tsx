@@ -71,6 +71,14 @@ interface StructuredNegotiationPanelProps {
   initialRoundDomain?: string | null;
   /** 弹窗/深链场景：允许同步 roundId 到 URL（不要求 tab=team） */
   allowUrlSync?: boolean;
+  /** 协作中心布局：隐藏左侧任务列表，仅展示讨论主舞台 */
+  hideTaskList?: boolean;
+  /** 协作中心主舞台增强（进度轴 / 选项对比 / 底栏） */
+  collabStage?: boolean;
+  onStartVote?: () => void;
+  onGenerateCompromise?: () => void;
+  onDiscussWithAssistant?: () => void;
+  voteActionDisabled?: boolean;
 }
 
 function findTaskForRound(
@@ -94,6 +102,12 @@ export function StructuredNegotiationPanel({
   initialRoundId,
   initialRoundDomain,
   allowUrlSync = false,
+  hideTaskList = false,
+  collabStage = false,
+  onStartVote,
+  onGenerateCompromise,
+  onDiscussWithAssistant,
+  voteActionDisabled,
 }: StructuredNegotiationPanelProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: tasks = [], isLoading, refetch, isFetching } = useDomainNegotiationTasks(tripId);
@@ -101,8 +115,9 @@ export function StructuredNegotiationPanel({
   const [focusedRoundId, setFocusedRoundId] = useState<string | null>(initialRoundId ?? null);
   const restoredFromUrlRef = useRef(false);
 
-  const isTeamTabActive = searchParams.get('tab') === 'team';
-  const canSyncRoundToUrl = allowUrlSync || isTeamTabActive;
+  const isCollabCenterActive =
+    searchParams.get('collab') === '1' || searchParams.get('tab') === 'team';
+  const canSyncRoundToUrl = allowUrlSync || isCollabCenterActive;
 
   const syncRoundToUrl = (roundId: string | null, domain?: string | null) => {
     if (!canSyncRoundToUrl) return;
@@ -277,22 +292,29 @@ export function StructuredNegotiationPanel({
         </Button>
       </div>
 
-      <div className="px-5 pt-4">
+      <div className={cn('px-5 pt-4', hideTaskList && 'pt-0')}>
         <VoiceGuardBanner tripId={tripId} />
       </div>
 
-      <div className="grid gap-4 p-5 pt-3 lg:grid-cols-[minmax(200px,260px)_1fr]">
-        <ul className="space-y-2" aria-label="协商任务列表">
-          {tasks.map((task) => (
-            <li key={task.id}>
-              <TaskListItem
-                task={task}
-                selected={selectedTask?.id === task.id}
-                onSelect={() => handleSelectTask(task)}
-              />
-            </li>
-          ))}
-        </ul>
+      <div
+        className={cn(
+          'gap-4 p-5 pt-3',
+          hideTaskList ? 'block' : 'grid lg:grid-cols-[minmax(200px,260px)_1fr]',
+        )}
+      >
+        {!hideTaskList ? (
+          <ul className="space-y-2" aria-label="协商任务列表">
+            {tasks.map((task) => (
+              <li key={task.id}>
+                <TaskListItem
+                  task={task}
+                  selected={selectedTask?.id === task.id}
+                  onSelect={() => handleSelectTask(task)}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         <div className="min-h-[200px]">
           {selectedTask ? (
@@ -301,6 +323,11 @@ export function StructuredNegotiationPanel({
               task={selectedTask}
               roundId={activeRoundId}
               onRequestTaskRefresh={() => void refetch()}
+              collabStage={collabStage}
+              onStartVote={onStartVote}
+              onGenerateCompromise={onGenerateCompromise}
+              onDiscussWithAssistant={onDiscussWithAssistant}
+              voteActionDisabled={voteActionDisabled}
             />
           ) : (
             <p className="text-sm text-muted-foreground">选择左侧任务查看讨论区</p>

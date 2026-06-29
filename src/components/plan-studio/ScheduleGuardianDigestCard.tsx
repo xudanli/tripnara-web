@@ -14,7 +14,7 @@ import type { PersonaAlert } from '@/types/trip';
 
 export interface ScheduleGuardianDigestCardProps {
   tripId: string;
-  /** M3：与 Decision Strip 同源（loop ui.personaAlerts 优先） */
+  /** 与 Decision Strip 同源；未传入时回退 API */
   personaAlerts?: PersonaAlert[];
   className?: string;
 }
@@ -54,10 +54,10 @@ export function ScheduleGuardianDigestCard({
     };
   }, [tripId]);
 
-  const alerts = useMemo(
-    () => resolveTripPersonaAlerts(apiAlerts, personaAlertsProp),
-    [apiAlerts, personaAlertsProp],
-  );
+  const alerts = useMemo(() => {
+    const source = personaAlertsProp?.length ? personaAlertsProp : apiAlerts;
+    return resolveTripPersonaAlerts(source);
+  }, [apiAlerts, personaAlertsProp]);
 
   const items = useMemo(() => pickGuardianDigestAlerts(alerts), [alerts]);
 

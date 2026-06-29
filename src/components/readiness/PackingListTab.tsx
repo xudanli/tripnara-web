@@ -5,7 +5,6 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
@@ -13,8 +12,25 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Package, RefreshCw, CheckCircle2, Edit2, Save, X, Plus, Filter, ListChecks } from 'lucide-react';
+import { Package, RefreshCw, CheckCircle2, Edit2, Save, X, Plus, Filter, ListChecks, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  workbenchCard,
+  workbenchDrawerListItem,
+  workbenchDrawerListItemCompleted,
+  workbenchDrawerSectionBody,
+  workbenchDrawerSectionDesc,
+  workbenchDrawerSectionHeader,
+  workbenchDrawerSectionShell,
+  workbenchDrawerSectionTitle,
+  workbenchDrawerStepIndex,
+  workbenchDrawerToolbarShell,
+  workbenchPackingCategoryBadgeClass,
+  workbenchPackingPriorityBadgeClass,
+  workbenchPanelTitle,
+  workbenchPrimaryAction,
+  workbenchSecondaryMetric,
+} from '@/components/plan-studio/workbench/workbench-ui';
 import { readinessApi } from '@/api/readiness';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -38,6 +54,15 @@ import {
   type PackingListItemLike,
   type PackingListLang,
 } from '@/lib/packing-list-display.util';
+import PackingListAddItemDialog from '@/components/readiness/PackingListAddItemDialog';
+import {
+  createManualPackingItem,
+  isManualPackingItemId,
+  loadManualPackingItems,
+  mergePackingListItems,
+  saveManualPackingItems,
+  summarizeMergedPackingItems,
+} from '@/lib/packing-list-manual-items';
 
 interface PackingListItem extends PackingListItemLike {
   id: string;
@@ -62,23 +87,6 @@ interface PackingListTabProps {
   tripId: string;
   trip: TripDetail | null;
 }
-
-// 🎨 统一颜色 Token（符合 TripNARA 克制原则）
-const CATEGORY_COLORS: Record<string, string> = {
-  'clothing': 'bg-blue-50 text-blue-700', // ✅ 修复：使用 bg-blue-50 而不是 bg-blue-100
-  'electronics': 'bg-purple-50 text-purple-700', // ✅ 修复：使用 bg-purple-50 而不是 bg-purple-100
-  'toiletries': 'bg-pink-50 text-pink-700', // ✅ 修复：使用 bg-pink-50 而不是 bg-pink-100
-  'documents': 'bg-red-50 text-red-700', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
-  'food': 'bg-amber-50 text-amber-700', // ✅ 修复：使用 bg-amber-50 而不是 bg-orange-100
-  'safety': 'bg-amber-50 text-amber-700', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
-  'other': 'bg-gray-50 text-gray-700', // ✅ 修复：使用 bg-gray-50 而不是 bg-gray-100
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  'must': 'bg-red-50 text-red-700 border-red-200', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
-  'should': 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
-  'optional': 'bg-gray-50 text-gray-700 border-gray-200', // ✅ 修复：使用 bg-gray-50 而不是 bg-gray-100
-};
 
 export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
   const { t, i18n } = useTranslation();
@@ -107,6 +115,33 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
   const [loadingPreDeparture, setLoadingPreDeparture] = useState(false);
   const [showPackingOrder, setShowPackingOrder] = useState(false);
   const [showPreDeparture, setShowPreDeparture] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  const buildMergedPackingList = (
+    serverData: Omit<PackingListData, 'items' | 'summary'> & {
+      items: PackingListItem[];
+      summary: PackingListData['summary'];
+    } | null,
+  ): PackingListData | null => {
+    const manual = loadManualPackingItems(tripId);
+    if (!serverData && manual.length === 0) return null;
+
+    const mergedItems = serverData
+      ? (mergePackingListItems(serverData.items, manual) as PackingListItem[])
+      : (manual as PackingListItem[]);
+    const summaryStats = summarizeMergedPackingItems(mergedItems);
+
+    return {
+      tripId,
+      items: mergedItems,
+      summary: {
+        totalItems: summaryStats.totalItems,
+        checkedItems: summaryStats.checkedItems,
+        byCategory: summaryStats.byCategory,
+      },
+      lastGeneratedAt: serverData?.lastGeneratedAt,
+    };
+  };
 
   // 加载打包清单
   const loadPackingList = async () => {
@@ -114,14 +149,14 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
     try {
       setLoading(true);
       const data = await readinessApi.getPackingList(tripId);
-      setPackingList(data);
+      setPackingList(buildMergedPackingList(data as PackingListData));
     } catch (err: any) {
-      // 如果清单不存在，不显示错误（可能是还没生成）
       const errorMessage = err?.message || '';
       if (!errorMessage.includes('未找到') && !errorMessage.includes('not found')) {
         console.error('Failed to load packing list:', err);
         toast.error('加载打包清单失败');
       }
+      setPackingList(buildMergedPackingList(null));
     } finally {
       setLoading(false);
     }
@@ -173,8 +208,45 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
     updates: { checked?: boolean; quantity?: number; note?: string }
   ) => {
     if (!tripId) return;
+
+    if (isManualPackingItemId(itemId)) {
+      const manual = loadManualPackingItems(tripId).map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              ...(updates.checked !== undefined ? { checked: updates.checked } : {}),
+              ...(updates.quantity !== undefined ? { quantity: updates.quantity } : {}),
+              ...(updates.note !== undefined ? { note: updates.note } : {}),
+            }
+          : item,
+      );
+      saveManualPackingItems(tripId, manual);
+      setPackingList((prev) => {
+        if (!prev) return buildMergedPackingList(null);
+        const mergedItems = prev.items.map((item) =>
+          item.id === itemId ? { ...item, ...updates } : item,
+        );
+        const summaryStats = summarizeMergedPackingItems(mergedItems);
+        return {
+          ...prev,
+          items: mergedItems,
+          summary: {
+            totalItems: summaryStats.totalItems,
+            checkedItems: summaryStats.checkedItems,
+            byCategory: summaryStats.byCategory,
+          },
+        };
+      });
+      if (updates.checked !== undefined) setEditingItemId(null);
+      return;
+    }
+
     try {
-      await readinessApi.updatePackingListItem(tripId, itemId, updates);
+      await readinessApi.updatePackingListItem(tripId, itemId, {
+        checked: updates.checked,
+        quantity: updates.quantity,
+        notes: updates.note,
+      });
       
       // 更新本地状态
       if (packingList) {
@@ -224,6 +296,45 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
     setEditingItemId(null);
     setEditQuantity(1);
     setEditNote('');
+  };
+
+  const handleAddManualItem = (values: {
+    name: string;
+    category: string;
+    quantity: number;
+    note?: string;
+  }) => {
+    if (!tripId) return;
+    const manual = loadManualPackingItems(tripId);
+    const next = [...manual, createManualPackingItem(values)];
+    saveManualPackingItems(tripId, next);
+    setPackingList((prev) => buildMergedPackingList(
+      prev
+        ? {
+            tripId: prev.tripId,
+            items: prev.items.filter((item) => !isManualPackingItemId(item.id)),
+            summary: prev.summary,
+            lastGeneratedAt: prev.lastGeneratedAt,
+          }
+        : null,
+    ));
+    toast.success('已添加物品');
+  };
+
+  const handleDeleteManualItem = (itemId: string) => {
+    if (!tripId || !isManualPackingItemId(itemId)) return;
+    const next = loadManualPackingItems(tripId).filter((item) => item.id !== itemId);
+    saveManualPackingItems(tripId, next);
+    setPackingList((prev) => {
+      if (!prev) return buildMergedPackingList(null);
+      return buildMergedPackingList({
+        tripId: prev.tripId,
+        items: prev.items.filter((item) => !isManualPackingItemId(item.id)),
+        summary: prev.summary,
+        lastGeneratedAt: prev.lastGeneratedAt,
+      });
+    });
+    toast.success('已删除');
   };
 
   // 🆕 加载打包顺序步骤
@@ -294,285 +405,297 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* 头部操作区 */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                {t('dashboard.readiness.page.packingList.title')}
-              </CardTitle>
-              <CardDescription>
-                {packingList
-                  ? t('dashboard.readiness.page.packingList.description', {
-                      total: packingList.summary.totalItems,
-                      checked: packingList.summary.checkedItems,
-                    })
-                  : t('dashboard.readiness.page.packingList.noList')}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              {packingList && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setShowPackingOrder(!showPackingOrder);
-                      if (!showPackingOrder && !packingOrderSteps) {
-                        loadPackingOrderSteps();
-                      }
-                    }}
-                    disabled={loadingPackingOrder}
-                  >
-                    {loadingPackingOrder ? (
-                      <Spinner className="h-4 w-4 mr-2" />
-                    ) : (
-                      <ListChecks className="h-4 w-4 mr-2" />
-                    )}
-                    {t('dashboard.readiness.page.packingList.packingOrder') || '打包顺序'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setShowPreDeparture(!showPreDeparture);
-                      if (!showPreDeparture && !preDepartureChecklist) {
-                        loadPreDepartureChecklist();
-                      }
-                    }}
-                    disabled={loadingPreDeparture}
-                  >
-                    {loadingPreDeparture ? (
-                      <Spinner className="h-4 w-4 mr-2" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                    )}
-                    {t('dashboard.readiness.page.packingList.preDeparture') || '出发前检查'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={loadPackingList}
-                    disabled={loading}
-                  >
-                    <RefreshCw className={cn('h-4 w-4 mr-2', loading && 'animate-spin')} />
-                    {t('dashboard.readiness.page.packingList.refresh')}
-                  </Button>
-                </>
-              )}
-              <Button
-                size="sm"
-                onClick={handleGenerate}
-                disabled={generating}
-              >
-                {generating ? (
-                  <>
-                    <Spinner className="h-4 w-4 mr-2" />
-                    {t('dashboard.readiness.page.packingList.generating')}
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-2" />
-                    {t('dashboard.readiness.page.packingList.generate')}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        {packingList && packingList.lastGeneratedAt && (
-          <CardContent>
-            <div className="text-sm text-muted-foreground">
-              {t('dashboard.readiness.page.packingList.lastGenerated', {
-                date: packingLang === 'zh'
-                  ? format(new Date(packingList.lastGeneratedAt), 'yyyy年MM月dd日 HH:mm', { locale: zhCN })
-                  : format(new Date(packingList.lastGeneratedAt), 'MMM dd, yyyy HH:mm'),
-              })}
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* 🆕 打包顺序步骤 */}
-      {showPackingOrder && packingOrderSteps && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ListChecks className="h-5 w-5" />
-              {t('dashboard.readiness.page.packingList.packingOrderTitle') || '推荐打包顺序'}
-            </CardTitle>
-            <CardDescription>
-              {t('dashboard.readiness.page.packingList.packingOrderDescription') || '按照以下顺序打包，让您的旅行更有序'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {packingOrderSteps.map((step) => (
-                <div key={step.order} className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                    {step.order}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold mb-1">{packingListStepTitle(step, packingLang)}</h4>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      {packingListStepDescription(step, packingLang)}
-                    </p>
-                    {step.items.length > 0 && (
-                      <ul className="text-sm text-muted-foreground list-disc list-inside">
-                        {step.items.map((item, idx) => (
-                          <li key={idx}>{packingListKnownName(item, packingLang)}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 🆕 出发前检查清单 */}
-      {showPreDeparture && preDepartureChecklist && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5" />
-              {t('dashboard.readiness.page.packingList.preDepartureTitle') || '出发前24小时检查清单'}
-            </CardTitle>
-            <CardDescription>
-              {t('dashboard.readiness.page.packingList.preDepartureDescription') || '出发前最后确认，确保万无一失'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {preDepartureChecklist.map((item) => (
-                <div key={item.id} className="flex items-center gap-3">
-                  <Checkbox
-                    checked={item.checked}
-                    onCheckedChange={(checked) => {
-                      // 这里可以添加更新逻辑
-                      console.log('Toggle pre-departure item:', item.id, checked);
-                    }}
-                  />
-                  <div className="flex-1">
-                    <Label className="font-medium">{packingListChecklistTitle(item, packingLang)}</Label>
-                    {item.category && (
-                      <Badge variant="outline" className="ml-2">
-                        {packingListCategoryLabel(item.category, packingLang)}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!packingList ? (
-        // 空状态
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">
-              {t('dashboard.readiness.page.packingList.empty.title')}
+      <section className={workbenchDrawerToolbarShell}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className={cn(workbenchPanelTitle, 'flex items-center gap-2')}>
+              <Package className="h-4 w-4 text-muted-foreground" />
+              {t('dashboard.readiness.page.packingList.title')}
             </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t('dashboard.readiness.page.packingList.empty.description')}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {packingList
+                ? t('dashboard.readiness.page.packingList.description', {
+                    total: packingList.summary.totalItems,
+                    checked: packingList.summary.checkedItems,
+                  })
+                : t('dashboard.readiness.page.packingList.noList')}
             </p>
-            <Button onClick={handleGenerate} disabled={generating}>
+            {packingList?.lastGeneratedAt ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {t('dashboard.readiness.page.packingList.lastGenerated', {
+                  date: packingLang === 'zh'
+                    ? format(new Date(packingList.lastGeneratedAt), 'yyyy年MM月dd日 HH:mm', { locale: zhCN })
+                    : format(new Date(packingList.lastGeneratedAt), 'MMM dd, yyyy HH:mm'),
+                })}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {packingList ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setShowPackingOrder(!showPackingOrder);
+                    if (!showPackingOrder && !packingOrderSteps) {
+                      loadPackingOrderSteps();
+                    }
+                  }}
+                  disabled={loadingPackingOrder}
+                >
+                  {loadingPackingOrder ? (
+                    <Spinner className="mr-1.5 h-3.5 w-3.5" />
+                  ) : (
+                    <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {t('dashboard.readiness.page.packingList.packingOrder') || '打包顺序'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setShowPreDeparture(!showPreDeparture);
+                    if (!showPreDeparture && !preDepartureChecklist) {
+                      loadPreDepartureChecklist();
+                    }
+                  }}
+                  disabled={loadingPreDeparture}
+                >
+                  {loadingPreDeparture ? (
+                    <Spinner className="mr-1.5 h-3.5 w-3.5" />
+                  ) : (
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {t('dashboard.readiness.page.packingList.preDeparture') || '出发前检查'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={loadPackingList}
+                  disabled={loading}
+                >
+                  <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', loading && 'animate-spin')} />
+                  {t('dashboard.readiness.page.packingList.refresh')}
+                </Button>
+              </>
+            ) : null}
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setAddDialogOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              添加物品
+            </Button>
+            <Button
+              size="sm"
+              className={cn('h-7 text-xs', workbenchPrimaryAction)}
+              onClick={handleGenerate}
+              disabled={generating}
+            >
               {generating ? (
                 <>
-                  <Spinner className="h-4 w-4 mr-2" />
+                  <Spinner className="mr-1.5 h-3.5 w-3.5" />
                   {t('dashboard.readiness.page.packingList.generating')}
                 </>
               ) : (
                 <>
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
                   {t('dashboard.readiness.page.packingList.generate')}
                 </>
               )}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* 🆕 打包顺序步骤 */}
+      {showPackingOrder && packingOrderSteps ? (
+        <section className={workbenchDrawerSectionShell}>
+          <div className={workbenchDrawerSectionHeader}>
+            <div>
+              <h3 className={cn(workbenchDrawerSectionTitle, 'flex items-center gap-2')}>
+                <ListChecks className="h-4 w-4 text-muted-foreground" />
+                {t('dashboard.readiness.page.packingList.packingOrderTitle') || '推荐打包顺序'}
+              </h3>
+              <p className={workbenchDrawerSectionDesc}>
+                {t('dashboard.readiness.page.packingList.packingOrderDescription') ||
+                  '按照以下顺序打包，让您的旅行更有序'}
+              </p>
+            </div>
+          </div>
+          <div className={workbenchDrawerSectionBody}>
+            <div className="space-y-4">
+              {packingOrderSteps.map((step) => (
+                <div key={step.order} className="flex gap-3">
+                  <div className={workbenchDrawerStepIndex}>{step.order}</div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="mb-1 text-sm font-semibold">{packingListStepTitle(step, packingLang)}</h4>
+                    <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+                      {packingListStepDescription(step, packingLang)}
+                    </p>
+                    {step.items.length > 0 ? (
+                      <ul className="list-inside list-disc text-xs text-muted-foreground">
+                        {step.items.map((item, idx) => (
+                          <li key={idx}>{packingListKnownName(item, packingLang)}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* 🆕 出发前检查清单 */}
+      {showPreDeparture && preDepartureChecklist ? (
+        <section className={workbenchDrawerSectionShell}>
+          <div className={workbenchDrawerSectionHeader}>
+            <div>
+              <h3 className={cn(workbenchDrawerSectionTitle, 'flex items-center gap-2')}>
+                <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+                {t('dashboard.readiness.page.packingList.preDepartureTitle') || '出发前24小时检查清单'}
+              </h3>
+              <p className={workbenchDrawerSectionDesc}>
+                {t('dashboard.readiness.page.packingList.preDepartureDescription') ||
+                  '出发前最后确认，确保万无一失'}
+              </p>
+            </div>
+          </div>
+          <div className={workbenchDrawerSectionBody}>
+            <div className="space-y-2">
+              {preDepartureChecklist.map((item) => (
+                <div
+                  key={item.id}
+                  className={cn(workbenchDrawerListItem, 'flex items-center gap-3 py-2.5')}
+                >
+                  <Checkbox
+                    checked={item.checked}
+                    onCheckedChange={(checked) => {
+                      console.log('Toggle pre-departure item:', item.id, checked);
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <Label className="text-sm font-medium">{packingListChecklistTitle(item, packingLang)}</Label>
+                    {item.category ? (
+                      <Badge
+                        variant="outline"
+                        className={cn('ml-2 text-[10px] font-normal', workbenchPackingCategoryBadgeClass)}
+                      >
+                        {packingListCategoryLabel(item.category, packingLang)}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {!packingList ? (
+        <section className={cn(workbenchCard, 'py-12 text-center')}>
+          <Package className="mx-auto mb-4 h-10 w-10 text-muted-foreground/60" />
+          <h3 className="mb-2 text-base font-semibold">
+            {t('dashboard.readiness.page.packingList.empty.title')}
+          </h3>
+          <p className="mb-4 text-sm text-muted-foreground">
+            {t('dashboard.readiness.page.packingList.empty.description')}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button onClick={handleGenerate} disabled={generating} variant="outline" size="sm" className="h-8">
+              {generating ? (
+                <>
+                  <Spinner className="mr-1.5 h-3.5 w-3.5" />
+                  {t('dashboard.readiness.page.packingList.generating')}
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  {t('dashboard.readiness.page.packingList.generate')}
+                </>
+              )}
+            </Button>
+            <Button onClick={() => setAddDialogOpen(true)} size="sm" className={cn('h-8', workbenchPrimaryAction)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              添加物品
+            </Button>
+          </div>
+        </section>
       ) : (
         <>
           {/* 统计和筛选 */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="text-sm">
-                    <span className="font-semibold">{packingList.summary.totalItems}</span>{' '}
-                    {t('dashboard.readiness.page.packingList.totalItems')} •{' '}
-                    <span className="font-semibold text-green-600">
-                      {packingList.summary.checkedItems}
-                    </span>{' '}
-                    {t('dashboard.readiness.page.packingList.checked')}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="text-sm border rounded px-2 py-1"
-                    >
-                      <option value="all">{t('dashboard.readiness.page.packingList.allCategories')}</option>
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>
-                          {packingListCategoryLabel(cat, packingLang)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+          <section className={workbenchDrawerToolbarShell}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="text-sm text-muted-foreground">
+                  <span className={cn(workbenchSecondaryMetric, 'font-semibold')}>
+                    {packingList.summary.totalItems}
+                  </span>{' '}
+                  {t('dashboard.readiness.page.packingList.totalItems')} ·{' '}
+                  <span className={cn(workbenchSecondaryMetric, 'font-semibold text-nara-tundra-foreground')}>
+                    {packingList.summary.checkedItems}
+                  </span>{' '}
+                  {t('dashboard.readiness.page.packingList.checked')}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="show-checked"
-                    checked={showChecked}
-                    onCheckedChange={(checked) => setShowChecked(checked === true)}
-                  />
-                  <label
-                    htmlFor="show-checked"
-                    className="text-sm cursor-pointer"
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="h-7 rounded-md border border-border/50 bg-background px-2 text-xs text-foreground"
                   >
-                    {t('dashboard.readiness.page.packingList.showChecked')}
-                  </label>
+                    <option value="all">{t('dashboard.readiness.page.packingList.allCategories')}</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {packingListCategoryLabel(cat, packingLang)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-checked"
+                  checked={showChecked}
+                  onCheckedChange={(checked) => setShowChecked(checked === true)}
+                />
+                <label htmlFor="show-checked" className="cursor-pointer text-xs text-muted-foreground">
+                  {t('dashboard.readiness.page.packingList.showChecked')}
+                </label>
+              </div>
+            </div>
+          </section>
 
           {/* 清单项列表 */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {Object.entries(itemsByCategory).map(([category, items]) => (
-              <Card key={category}>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
+              <section key={category} className={workbenchDrawerSectionShell}>
+                <div className={cn(workbenchDrawerSectionHeader, 'py-2.5')}>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant="outline"
-                      className={cn(CATEGORY_COLORS[category] || CATEGORY_COLORS.other)}
+                      className={cn('text-[10px] font-normal', workbenchPackingCategoryBadgeClass)}
                     >
                       {packingListCategoryLabel(category, packingLang)}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ({items.length} {t('dashboard.readiness.page.packingList.items')})
+                    <span className={cn(workbenchSecondaryMetric, 'text-xs text-muted-foreground')}>
+                      {items.length} {t('dashboard.readiness.page.packingList.items')}
                     </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {items.map(item => (
+                  </div>
+                </div>
+                <div className={cn(workbenchDrawerSectionBody, 'space-y-2 pt-2')}>
+                    {items.map((item) => (
                       <div
                         key={item.id}
                         className={cn(
-                          'flex items-start gap-3 p-3 rounded-lg border',
-                          item.checked && 'bg-muted/50',
-                          editingItemId === item.id && 'ring-2 ring-blue-500'
+                          workbenchDrawerListItem,
+                          item.checked && workbenchDrawerListItemCompleted,
+                          editingItemId === item.id && 'ring-1 ring-border/80',
                         )}
                       >
                         <Checkbox
@@ -595,12 +718,17 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                             <Badge
                               variant="outline"
                               className={cn(
-                                'text-xs',
-                                PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.optional
+                                'text-[10px] font-normal',
+                                workbenchPackingPriorityBadgeClass(item.priority),
                               )}
                             >
                               {packingListPriorityLabel(item.priority, packingLang)}
                             </Badge>
+                            {isManualPackingItemId(item.id) ? (
+                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                                手动
+                              </Badge>
+                            ) : null}
                           </div>
                           {(() => {
                             const reason = packingListItemReason(item, packingLang);
@@ -653,9 +781,11 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                           ) : (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <span>
-                                {item.quantity}{' '}
+                              {item.quantity}{' '}
+                              <span className={workbenchSecondaryMetric}>
                                 {packingListUnitLabel(item.unit, packingLang) ||
                                   t('dashboard.readiness.page.packingList.pieces')}
+                              </span>
                               </span>
                               {item.note && (
                                 <>
@@ -671,18 +801,34 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                               >
                                 <Edit2 className="h-3 w-3" />
                               </Button>
+                              {isManualPackingItemId(item.id) ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-muted-foreground hover:text-gate-reject-foreground"
+                                  onClick={() => handleDeleteManualItem(item.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              ) : null}
                             </div>
                           )}
                         </div>
                       </div>
                     ))}
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </section>
             ))}
           </div>
         </>
       )}
+
+      <PackingListAddItemDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        lang={packingLang}
+        onSubmit={handleAddManualItem}
+      />
     </div>
   );
 }

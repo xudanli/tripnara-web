@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { tripBudgetApi } from '@/api/trip-budget';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
 import { buildActualLineItems } from '@/lib/trip-budget-actual-items';
+import {
+  useWorkbenchBudgetProfile,
+  workbenchKeys,
+} from '@/pages/plan-studio/hooks/useWorkbenchData';
 import type { ItemCostRequest, UnpaidItem } from '@/types/trip';
 import type {
   BudgetActualLineItem,
@@ -19,23 +24,25 @@ import {
 } from '@/lib/trip-budget-structure';
 
 export function useTripBudgetProfile(tripId: string | null | undefined) {
-  const [profile, setProfile] = useState<TripBudgetProfile | null>(null);
+  const queryClient = useQueryClient();
+  const profileQuery = useWorkbenchBudgetProfile(tripId);
+  const profile = profileQuery.data ?? null;
+
   const [balances, setBalances] = useState<WalletBalances | null>(null);
   const [unpaidItems, setUnpaidItems] = useState<UnpaidItem[]>([]);
   const [actualLineItems, setActualLineItems] = useState<BudgetActualLineItem[]>([]);
-  const [loading, setLoading] = useState(!!tripId);
+  const [extrasLoading, setExtrasLoading] = useState(false);
   const [savingIntent, setSavingIntent] = useState(false);
   const [savingStructure, setSavingStructure] = useState(false);
   const [savingWalletRule, setSavingWalletRule] = useState(false);
   const [addingExpense, setAddingExpense] = useState(false);
   const [updatingItemCost, setUpdatingItemCost] = useState(false);
 
-  const reload = useCallback(async () => {
-    if (!tripId) return;
-    try {
-      setLoading(true);
-      const [data, unpaid, trip, ledger] = await Promise.all([
-        tripBudgetApi.getProfile(tripId),
+  const loadExtras = useCallback(
+    async (budgetProfile: TripBudgetProfile | null) => {
+      if (!tripId) return;
+
+      const [unpaid, trip, ledger] = await Promise.all([
         itineraryItemsApi.getUnpaidItems(tripId).catch(() => [] as UnpaidItem[]),
         tripsApi.getById(tripId).catch(() => null),
         tripBudgetApi.getLedgerEntries(tripId).catch(() => ({
@@ -45,12 +52,11 @@ export function useTripBudgetProfile(tripId: string | null | undefined) {
           offset: 0,
         })),
       ]);
-      setProfile(data);
       setUnpaidItems(unpaid);
       setActualLineItems(buildActualLineItems(trip, ledger.items));
 
-      const memberCount = data.wallet?.members?.length ?? 0;
-      if (memberCount >= 1 || data.wallet?.paymentRule) {
+      const memberCount = budgetProfile?.wallet?.members?.length ?? 0;
+      if (memberCount >= 1 || budgetProfile?.wallet?.paymentRule) {
         try {
           const b = await tripBudgetApi.getWalletBalances(tripId);
           setBalances(b);
@@ -60,25 +66,46 @@ export function useTripBudgetProfile(tripId: string | null | undefined) {
       } else {
         setBalances(null);
       }
+    },
+    [tripId],
+  );
+
+  const reload = useCallback(async () => {
+    if (!tripId) return;
+    try {
+      setExtrasLoading(true);
+      await queryClient.invalidateQueries({ queryKey: workbenchKeys.budgetProfile(tripId) });
+      const result = await profileQuery.refetch();
+      await loadExtras(result.data ?? null);
     } catch (e) {
       console.error('[useTripBudgetProfile] load failed', e);
       toast.error('加载预算失败');
     } finally {
-      setLoading(false);
+      setExtrasLoading(false);
     }
-  }, [tripId]);
+  }, [tripId, queryClient, profileQuery, loadExtras]);
 
   useEffect(() => {
     if (!tripId) {
-      setProfile(null);
       setBalances(null);
       setUnpaidItems([]);
       setActualLineItems([]);
-      setLoading(false);
       return;
     }
-    reload();
-  }, [tripId, reload]);
+    if (!profile) return;
+    let cancelled = false;
+    setExtrasLoading(true);
+    void loadExtras(profile)
+      .catch((e) => {
+        if (!cancelled) console.error('[useTripBudgetProfile] extras failed', e);
+      })
+      .finally(() => {
+        if (!cancelled) setExtrasLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId, profile, loadExtras]);
 
   const saveIntent = useCallback(
     async (total: number, currency?: string) => {
@@ -135,11 +162,6 @@ export function useTripBudgetProfile(tripId: string | null | undefined) {
         return;
       }
       const allocations = allocationsFromPercentages(profile.intent.total, percentages);
-      setProfile((prev) =>
-        prev?.structure
-          ? { ...prev, structure: { ...prev.structure, allocations } }
-          : prev,
-      );
       await saveStructureFromAllocations(allocations);
     },
     [profile?.intent?.total, saveStructureFromAllocations],
@@ -212,7 +234,7 @@ export function useTripBudgetProfile(tripId: string | null | undefined) {
     balances,
     unpaidItems,
     actualLineItems,
-    loading,
+    loading: profileQuery.isLoading || extrasLoading,
     savingIntent,
     savingStructure,
     savingWalletRule,

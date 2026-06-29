@@ -1549,12 +1549,27 @@ export const tripsApi = {
    */
   getPlanningConflicts: async (
     id: string,
-    options?: { includeConstraintsSummary?: boolean },
+    options?: {
+      includeConstraintsSummary?: boolean;
+      includeDecisionChecker?: boolean;
+      focusConflictId?: string;
+      constraintsVersion?: number;
+      /** deferred 轮询：GET ...?decisionCheckerTaskId= */
+      decisionCheckerTaskId?: string;
+    },
   ): Promise<PlanningConflictsResponse> => {
+    const params: Record<string, string | number> = {};
+    if (options?.includeConstraintsSummary) params.includeConstraintsSummary = 1;
+    if (options?.includeDecisionChecker) params.includeDecisionChecker = 1;
+    if (options?.focusConflictId) params.focusConflictId = options.focusConflictId;
+    if (options?.constraintsVersion != null) params.constraintsVersion = options.constraintsVersion;
+    if (options?.decisionCheckerTaskId) {
+      params.decisionCheckerTaskId = options.decisionCheckerTaskId;
+    }
     const response = await apiClient.get<ApiResponseWrapper<PlanningConflictsResponse>>(
       `/trips/${id}/planning-conflicts`,
       {
-        params: options?.includeConstraintsSummary ? { includeConstraintsSummary: 1 } : undefined,
+        params: Object.keys(params).length > 0 ? params : undefined,
       },
     );
     return handleResponse(response);
@@ -1964,6 +1979,23 @@ export const itineraryItemsApi = {
       
       throw error;
     }
+  },
+
+  /**
+   * 按 trip 批量获取行程项（全程地图 BFF 伴侣接口）
+   * GET /itinerary-items/trip/:tripId
+   */
+  getByTrip: async (
+    tripId: string,
+    options?: { includePlace?: boolean },
+  ): Promise<ItineraryItemDetail[]> => {
+    const response = await apiClient.get<ApiResponseWrapper<ItineraryItemDetail[]>>(
+      `/itinerary-items/trip/${tripId}`,
+      {
+        params: options?.includePlace === false ? { includePlace: false } : undefined,
+      },
+    );
+    return handleResponse(response);
   },
 
   /**

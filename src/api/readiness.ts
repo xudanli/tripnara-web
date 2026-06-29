@@ -1664,16 +1664,21 @@ export interface CoverageMapPoi {
 }
 
 /** 覆盖地图路段 */
+export type RouteGeometrySource = 'route_api' | 'straight_line' | 'cached_metadata';
+
 export interface CoverageMapSegment {
   id: string;
   fromPoiId: string;
   toPoiId: string;
   day: number;
+  /** 全程 0-based 序号（BFF / coverage-map） */
+  sequenceIndex?: number;
   distance: number;
   duration: number;
   routeType: 'driving' | 'walking' | 'transit' | 'cycling';
   coverageStatus: SegmentCoverageStatus;
   polyline: string;
+  geometrySource?: RouteGeometrySource;
   hazards: SegmentHazard[];
 }
 
@@ -1731,6 +1736,7 @@ export interface DataFreshness {
   weather?: string;        // ISO 时间戳
   roadClosure?: string;   // ISO 时间戳
   openingHours?: string;  // ISO 时间戳
+  inventory?: string;     // 住宿库存 ISO 时间戳（全程地图侧栏）
 }
 
 /** 按严重程度分组的警告 */

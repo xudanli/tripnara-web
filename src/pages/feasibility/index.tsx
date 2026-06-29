@@ -3,15 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { tripsApi } from '@/api/trips';
 import { Button } from '@/components/ui/button';
 import { LogoLoading } from '@/components/common/LogoLoading';
-import { ReadinessRepairLoopWorkspace } from '@/components/trip-loop/ReadinessRepairLoopWorkspace';
-import { isTripLoopReadinessEnabled } from '@/lib/trip-loop-feature';
 import { FeasibilityReportPanel } from '@/components/feasibility-report';
 import type { TripDetail } from '@/types/trip';
 import { ArrowLeft } from 'lucide-react';
 
 /**
  * 可执行证明 / 行程可执行性全页
- * 主路径：Loop 验证闭环 + 右侧 feasibility-report 详情（Monte Carlo、维度、逐 issue 证明）
  */
 export default function FeasibilityReportPage() {
   const [searchParams] = useSearchParams();
@@ -77,9 +74,7 @@ export default function FeasibilityReportPage() {
               <h1 className="text-lg font-semibold tracking-tight truncate">可执行证明</h1>
               <p className="text-xs text-muted-foreground truncate">
                 {trip?.destination || trip?.name || tripId}
-                {isTripLoopReadinessEnabled()
-                  ? ' · 验证闭环 + 详细报告'
-                  : ' · 行程可执行性报告'}
+                {' · 行程可执行性报告'}
               </p>
             </div>
           </div>
@@ -87,23 +82,7 @@ export default function FeasibilityReportPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {isTripLoopReadinessEnabled() ? (
-          <ReadinessRepairLoopWorkspace
-            tripId={tripId}
-            variant="page"
-            initialIssueId={issueId}
-            onNavigateToSchedule={(detail) => {
-              const params = new URLSearchParams({ tripId, tab: 'schedule' });
-              if (detail.dayIndex != null) params.set('day', String(detail.dayIndex));
-              navigate(`/dashboard/plan-studio?${params.toString()}`);
-            }}
-            onApplied={() => {
-              void tripsApi.getById(tripId).then(setTrip).catch(() => undefined);
-            }}
-          />
-        ) : (
-          <FeasibilityReportPanel tripId={tripId} initialIssueId={issueId} />
-        )}
+        <FeasibilityReportPanel tripId={tripId} initialIssueId={issueId} />
       </div>
     </div>
   );

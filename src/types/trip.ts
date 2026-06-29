@@ -29,7 +29,7 @@ export type LLMProvider = 'DEEPSEEK' | 'OPENAI' | 'ANTHROPIC';
 export type ModificationType = 'CHANGE_DATE' | 'MOVE_ACTIVITY' | 'ADD_ACTIVITY' | 'REMOVE_ACTIVITY' | 'ADD_BUFFERS';
 export type BudgetAlertType = 'OVERSPEND' | 'APPROACHING_LIMIT' | 'DAILY_EXCEEDED';
 export type SOSStatus = 'SENT' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'RESOLVED';
-export type OptimizationType = 'REPLACE' | 'REMOVE' | 'RESCHEDULE';
+export type OptimizationType = 'REPLACE' | 'REMOVE' | 'RESCHEDULE' | 'REDUCE';
 
 // ==================== 费用分类 ====================
 
@@ -146,6 +146,8 @@ export interface Place {
   id: number;
   nameCN: string;
   nameEN: string | null;
+  /** BFF 投影展示名（时间轴/卡片优先，不用 nameEN） */
+  displayName?: string | null;
   category: PlaceCategory | string;  // 兼容旧数据
   address: string;
   rating: number | null;
@@ -207,6 +209,8 @@ export interface ItineraryItem {
   note?: string | null;
   placeId?: number | null;
   trailId?: number | null;
+  /** BFF 投影 POI 展示名（优先于 Place 字段） */
+  placeName?: string | null;
   tripDayId?: string;
   Place?: Place | null;
   Trail?: any | null;
@@ -236,6 +240,8 @@ export interface ItineraryItem {
   metadata?: Record<string, unknown> | null;
   /** 当天展示序（顶层冗余，优先于 crossDayInfo.displaySortIndex） */
   displaySortIndex?: number;
+  /** 分流分支参与者（journey-map BFF / split plan） */
+  participantIds?: string[];
 }
 
 export interface ItineraryItemDetail extends ItineraryItem {
@@ -2335,11 +2341,43 @@ export interface BudgetAlert {
 }
 
 export interface BudgetOptimizationSuggestion {
+  id?: string;
   type: OptimizationType;
   message: string;
   itemId?: string;
   itemName?: string;
   estimatedSavings: number;
+}
+
+/** evaluate 返回的结构化证据 */
+export interface BudgetEvaluationEvidence {
+  id: string;
+  kind?: string;
+  source?: string;
+  title?: string;
+  label?: string;
+  excerpt?: string;
+  value?: string;
+}
+
+/** evaluate 返回的可应用优化草案 */
+export interface BudgetEvaluationOptimization {
+  id: string;
+  type: OptimizationType | string;
+  message?: string;
+  itemId?: string;
+  itemName?: string;
+  estimatedSavings: number;
+}
+
+/** evaluate 返回的 Checker 热点 */
+export interface BudgetEvaluationHotspot {
+  id?: string;
+  name: string;
+  reason?: string;
+  risk?: 'high' | 'medium' | 'low';
+  amount?: number;
+  dayLabel?: string;
 }
 
 export interface DailySpendingTrend {
@@ -2544,12 +2582,16 @@ export interface BudgetRecommendation {
  * 预算评估响应
  */
 export interface BudgetEvaluationResponse {
-  verdict: 'ALLOW' | 'NEED_ADJUST' | 'REJECT';  // 评估结果
-  reason: string;                                // 评估原因
-  confidence: number;                            // 置信度（0-1）
-  violations?: BudgetViolation[];               // 违规项（如有）
-  recommendations?: BudgetRecommendation[];     // 调整建议
-  evidenceRefs?: string[];                      // 证据引用
+  verdict: 'ALLOW' | 'NEED_ADJUST' | 'REJECT';
+  reason: string;
+  confidence: number;
+  planId?: string;
+  violations?: BudgetViolation[];
+  recommendations?: BudgetRecommendation[];
+  evidence?: BudgetEvaluationEvidence[];
+  evidenceRefs?: string[];
+  optimizations?: BudgetEvaluationOptimization[];
+  hotspots?: BudgetEvaluationHotspot[];
 }
 
 /**
@@ -2593,7 +2635,7 @@ export interface ApplyBudgetOptimizationRequest {
  */
 export interface ApplyBudgetOptimizationResponse {
   planId: string;
-  newPlanId?: string;  // 如果生成了新方案
+  newPlanId?: string;
   appliedOptimizations: Array<{
     id: string;
     type: string;
@@ -2603,6 +2645,7 @@ export interface ApplyBudgetOptimizationResponse {
   }>;
   totalSavings: number;
   newEstimatedCost: number;
+  dryRun?: boolean;
 }
 
 /**
@@ -2630,6 +2673,7 @@ export type PersonaAlertAudience = 'user' | 'internal';
 export type PersonaAlertDeepLinkType =
   | 'feasibility'
   | 'schedule_day'
+  | 'decision_checker'
   | 'decision_log'
   | 'plan_gate';
 
@@ -3128,6 +3172,8 @@ export interface UpdateIntentRequest {
     nightOwl?: boolean;
     mustPlaces?: number[];
     avoidPlaces?: number[];
+    /** 每日驾驶上限（小时）；planning-conflicts / decision-checker 读取 */
+    maxDailyDrivingHours?: number;
   };
   planningPolicy?: 'safe' | 'experience' | 'challenge';
   totalBudget?: number;
@@ -3145,6 +3191,7 @@ export interface IntentResponse {
       nightOwl?: boolean;
       mustPlaces?: number[];
       avoidPlaces?: number[];
+      maxDailyDrivingHours?: number;
     };
     planningPolicy?: string;
   };

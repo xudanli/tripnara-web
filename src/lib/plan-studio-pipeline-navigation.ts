@@ -1,7 +1,7 @@
 import type { PipelineStage } from '@/types/trip';
 
 export type PlanStudioPipelineAction =
-  | { type: 'tab'; tab: 'schedule' | 'budget' | 'tasks' | 'coverage' }
+  | { type: 'tab'; tab: 'schedule' | 'budget' | 'tasks' }
   | { type: 'intent' }
   | { type: 'regenerate' }
   | { type: 'external'; path: string };
@@ -42,7 +42,6 @@ export function pipelineStageActionLabel(action: PlanStudioPipelineAction): stri
       if (action.tab === 'tasks') return '打开行前准备';
       if (action.tab === 'schedule') return '打开时间轴';
       if (action.tab === 'budget') return '打开预算管理';
-      if (action.tab === 'coverage') return '打开路线覆盖';
       return '前往';
     case 'intent':
       return '调整约束';

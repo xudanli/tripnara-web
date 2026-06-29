@@ -13,6 +13,11 @@ import { format, isValid } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';
+import {
+  formatItinerarySplitGroupLabel,
+  parseItinerarySplitPlanNote,
+  stripSplitPlanNoteLines,
+} from '@/lib/itinerary-split-note.util';
 import type { TripDetail, TripState, ScheduleResponse } from '@/types/trip';
 import type { ScheduleItem } from '@/types/trip';
 
@@ -152,7 +157,13 @@ function AllDaysList({
                 const isNext = isCurrentDay && nextStopItemId === item.id;
                 const currentIdx = isCurrentDay && currentItemId ? items.findIndex(i => i.id === currentItemId) : -1;
                 const isPast = isCurrentDay && currentIdx >= 0 && idx < currentIdx;
-                const placeName = item.Place?.nameCN || item.Place?.nameEN || item.note || '未知';
+                const splitMarker = parseItinerarySplitPlanNote(item.note);
+                const noteTitle = stripSplitPlanNoteLines(item.note);
+                const placeName =
+                  item.Place?.nameCN ||
+                  item.Place?.nameEN ||
+                  noteTitle.split('\n')[0]?.trim() ||
+                  '未知';
 
                 return (
                   <div
@@ -169,6 +180,14 @@ function AllDaysList({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm">
                           {formatPlaceName(placeName, item.Place)}
+                          {splitMarker ? (
+                            <Badge
+                              variant="outline"
+                              className="ml-1.5 rounded-full border-violet-300/70 px-1.5 py-0 text-[10px] font-normal text-violet-800"
+                            >
+                              {formatItinerarySplitGroupLabel(splitMarker)}
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                           <Clock className="w-3 h-3" />

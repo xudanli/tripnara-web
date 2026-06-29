@@ -1,0 +1,420 @@
+# 全程地图 · Journey Map BFF API
+#
+# 完整说明：docs/api/journey-map-bff-api.md
+# 前端接入：src/api/journey-map.ts + useJourneyMapData
+#
+# 将 useJourneyMapData 首屏从 1+N+4 次 HTTP 降为 1～2 次
+openapi: 3.0.3
+info:
+  title: Journey Map BFF Contract
+  version: 2026-06-30
+  description: |
+    前端现状（`useJourneyMapData`）：
+    1. GET /trips/:tripId
+    2. N × GET /itinerary-items?tripDayId=…
+    3. GET /readiness/trip/:tripId/coverage-map
+    4. GET /readiness/trip/:tripId/score
+    5. GET /trips/:tripId/collaborators
+    6. GET /trips/:tripId/decision-checker
+
+    本契约提供聚合读模型，支持首屏 shell 与 inspector 分阶段返回。
+
+paths:
+  /trips/{tripId}/journey-map:
+    get:
+      summary: 全程地图聚合读模型（推荐）
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - name: include
+          in: query
+          description: |
+            逗号分隔字段组。默认 `shell`。
+            - shell：trip 摘要、coverage-map、itineraryItems（全 trip 一次查出）
+            - inspector：decision-checker + score 分解（较慢，可二段加载）
+          schema:
+            type: string
+            example: shell,inspector
+        - name: fields
+          in: query
+          description: |
+            coverage 裁剪。`minimal` 省略 gaps / deduplicatedWarnings，segment polyline 为直线（不调路线 API）。
+            `full` 含 gaps，segment 调 Google Routes / 高德（geometrySource=route_api）。
+          schema:
+            type: string
+            enum: [full, minimal]
+            default: full
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+          description: 与上次 ETag 一致时返回 304
+      responses:
+        '200':
+          description: 成功
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: trip.updatedAt + coverage.calculatedAt + query 指纹 + itemCount
+            Cache-Control:
+              schema:
+                type: string
+              example: private, max-age=60
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyMapHttpSuccess'
+        '304':
+          description: 未修改（If-None-Match 命中）
+          headers:
+            ETag:
+              schema:
+                type: string
+        '404':
+          description: 行程不存在
+
+  /itinerary-items/trip/{tripId}:
+    get:
+      summary: 按 trip 批量拉取行程项（P0 最小改动，可先于 journey-map 上线）
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - name: includePlace
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: 是否包含 Place 坐标（全程地图 marker 需要）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItineraryItemsByTripSuccess'
+
+components:
+  parameters:
+    TripId:
+      name: tripId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    JourneyMapHttpSuccess:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          $ref: '#/components/schemas/JourneyMapResponse'
+
+    ItineraryItemsByTripSuccess:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItineraryItemDetail'
+
+    JourneyMapResponse:
+      type: object
+      required: [tripId, trip, coverage, itineraryItems]
+      properties:
+        tripId:
+          type: string
+        etag:
+          type: string
+          description: 响应体指纹（亦在响应头 ETag）
+        trip:
+          $ref: '#/components/schemas/JourneyMapTripSummary'
+        coverage:
+          $ref: '#/components/schemas/CoverageMapResponse'
+        itineraryItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItineraryItemDetail'
+        feasibilityScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: score.overall 四舍五入，供顶栏展示
+        travelerCount:
+          type: integer
+          minimum: 1
+          description: collaborators.length + 1（含 owner）
+        members:
+          type: array
+          description: 成员列表（含 groupId）；缺省时前端按 travelerCount 占位
+          items:
+            $ref: '#/components/schemas/JourneyMember'
+        memberGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyMemberGroup'
+        diversions:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyDiversion'
+        daySummaries:
+          type: array
+          items:
+            type: object
+            required: [day, routeLabel]
+            properties:
+              day:
+                type: integer
+                minimum: 1
+              routeLabel:
+                type: string
+        stats:
+          type: object
+          properties:
+            totalDays: { type: integer }
+            totalDistanceKm: { type: integer }
+            activityCount: { type: integer }
+            diversionCount: { type: integer }
+        dataFeeds:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string }
+              updatedAt: { type: string }
+              status: { type: string, enum: [fresh, stale] }
+        inspector:
+          $ref: '#/components/schemas/JourneyMapInspectorPayload'
+
+    JourneyMapTripSummary:
+      type: object
+      required: [id, destination, TripDay]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        destination:
+          type: string
+        TripDay:
+          type: array
+          items:
+            type: object
+            required: [id, date]
+            properties:
+              id:
+                type: string
+              date:
+                type: string
+                format: date
+              theme:
+                type: string
+                nullable: true
+
+    JourneyMapInspectorPayload:
+      type: object
+      properties:
+        evidence:
+          type: object
+          nullable: true
+          description: DecisionCheckerEvidenceDto
+        impact:
+          type: object
+          nullable: true
+          description: DecisionCheckerImpactDto
+        scoreRisks:
+          type: array
+          items:
+            type: object
+        scoreFindings:
+          type: array
+          items:
+            type: object
+
+    CoverageMapResponse:
+      type: object
+      description: 与 GET /readiness/trip/:tripId/coverage-map 对齐，详见 src/api/readiness.ts
+      properties:
+        tripId:
+          type: string
+        bounds:
+          type: object
+        center:
+          type: object
+          properties:
+            lng: { type: number }
+            lat: { type: number }
+        zoom:
+          type: number
+        pois:
+          type: array
+          items:
+            type: object
+        segments:
+          type: array
+          items:
+            type: object
+            required: [id, day, fromPoiId, toPoiId]
+            properties:
+              id: { type: string }
+              sequenceIndex: { type: integer, minimum: 0 }
+              day: { type: integer, minimum: 1 }
+              fromPoiId: { type: string }
+              toPoiId: { type: string }
+              distance: { type: number }
+              duration: { type: number }
+              routeType: { type: string, enum: [driving, walking, transit, cycling] }
+              coverageStatus: { type: string }
+              polyline:
+                type: string
+                description: encoded polyline；fields=minimal 时为 straight_line 两点
+              geometrySource:
+                type: string
+                enum: [route_api, straight_line, cached_metadata]
+              hazards:
+                type: array
+                items: { type: object }
+        gaps:
+          type: array
+          items:
+            type: object
+        dataFreshness:
+          type: object
+          properties:
+            weather: { type: string, format: date-time }
+            roadClosure: { type: string, format: date-time }
+            openingHours: { type: string, format: date-time }
+            inventory: { type: string, format: date-time }
+        calculatedAt:
+          type: string
+          format: date-time
+
+    ItineraryItemDetail:
+      type: object
+      description: 与 GET /itinerary-items 单条对齐，详见 src/types/trip.ts
+      properties:
+        id:
+          type: string
+        tripDayId:
+          type: string
+        type:
+          type: string
+        startTime:
+          type: string
+          nullable: true
+        endTime:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        Place:
+          type: object
+          nullable: true
+          properties:
+            nameCN: { type: string }
+            nameEN: { type: string }
+            latitude: { type: number }
+            longitude: { type: number }
+            lat: { type: number }
+            lng: { type: number }
+            address: { type: string }
+            description: { type: string }
+        participantIds:
+          type: array
+          items:
+            type: string
+          description: 分流 branch 参与成员；缺省时前端用 members 回退
+
+    JourneyMember:
+      type: object
+      required: [id, name, initials, groupId]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        initials: { type: string }
+        groupId: { type: string, enum: [young, elderly, children] }
+        avatarColor: { type: string }
+
+    JourneyMemberGroup:
+      type: object
+      required: [id, label, count]
+      properties:
+        id: { type: string, enum: [young, elderly, children] }
+        label: { type: string }
+        count: { type: integer, minimum: 0 }
+
+    JourneyDiversion:
+      type: object
+      required: [id, dayIndex, title, groupA, groupB, splitCoordinates]
+      properties:
+        id: { type: string }
+        dayIndex: { type: integer, minimum: 0 }
+        title: { type: string }
+        splitCoordinates:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { type: number }
+          description: 分叉点 [lng, lat]
+        trunkSegmentIds:
+          type: array
+          items: { type: string }
+          description: 分叉前主路线 segment id；前端只绘制这些段，避免与分支重叠
+        forkAfterSegmentId:
+          type: string
+          description: 可选；fork 点对应 coverage segment id（可替代 trunkSegmentIds）
+        groupA:
+          $ref: '#/components/schemas/JourneyDiversionBranch'
+        groupB:
+          $ref: '#/components/schemas/JourneyDiversionBranch'
+        merge:
+          $ref: '#/components/schemas/JourneyDiversionMerge'
+
+    JourneyDiversionBranch:
+      type: object
+      required: [label, activityId, color]
+      properties:
+        label: { type: string }
+        activityId: { type: string }
+        color: { type: string }
+        participantIds:
+          type: array
+          items: { type: string }
+        polyline:
+          type: string
+          description: encoded polyline，分叉点 → 活动点（Mapbox/Google 编码）
+        geometrySource:
+          type: string
+          enum: [route_api, straight_line, cached_metadata]
+
+    JourneyDiversionMerge:
+      type: object
+      required: [activityId, label, coordinates]
+      properties:
+        activityId: { type: string }
+        label: { type: string }
+        time: { type: string, description: 汇合时间展示，如 17:30 }
+        coordinates:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { type: number }
+          description: 汇合点 [lng, lat]
+        polylineA:
+          type: string
+          description: A 活动 → 汇合点
+        polylineB:
+          type: string
+          description: B 活动 → 汇合点
+        geometrySource:
+          type: string
+          enum: [route_api, straight_line, cached_metadata]

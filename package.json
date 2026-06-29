@@ -11,7 +11,9 @@
     "type-check": "tsc --noEmit",
     "generate:types": "echo '⚠️  当前类型定义是手动维护的。\\n📋 请参考 .claude/改动资料/API类型定义重新生成指南.md\\n📝 如果后端提供了 OpenAPI 文档，请先安装工具: npm install --save-dev openapi-typescript-codegen\\n然后运行: openapi-typescript-codegen --input ./openapi.json --output ./src/api/generated'",
     "generate:types:check": "echo '检查类型定义状态...' && npm run type-check && echo '✅ 类型检查通过'",
-    "smoke:world-model": "bash scripts/world-model-causal-smoke.sh"
+    "smoke:world-model": "bash scripts/world-model-causal-smoke.sh",
+    "test:trip-constraints": "bash scripts/test-trip-constraints-api.sh",
+    "test:decision-closure-l1": "vitest run src/lib/decision-closure-l1.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

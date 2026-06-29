@@ -34,7 +34,7 @@ export interface PlanStudioCollaborationMenuProps {
   onPrivateWishClose?: () => void;
 }
 
-/** 单人规划时把协作入口收进「更多」；多人时保持顶栏按钮 */
+/** @deprecated 协作能力已迁入团队协作中心；保留供遗留 Dialog 深链，勿再添加顶栏 trigger */
 export function PlanStudioCollaborationMenu({
   tripId,
   destinationLabel,

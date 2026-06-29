@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { tripBudgetApi } from '@/api/trip-budget';
 import { itineraryItemsApi, tripsApi } from '@/api/trips';
 import {
   buildPlanningConstraintsSummary,
@@ -13,13 +13,18 @@ import {
   dispatchPlanStudioConstraintsChanged,
   PLAN_STUDIO_CONSTRAINTS_CHANGED,
 } from '@/lib/plan-studio-constraints-events';
+import {
+  invalidateWorkbenchAfterConstraintChange,
+  useWorkbenchBudgetProfile,
+  useWorkbenchCollaborators,
+  workbenchKeys,
+} from '@/pages/plan-studio/hooks/useWorkbenchData';
 import type {
   ConstraintsSummaryResponse,
   PlanStudioConstraintsChangeSource,
   PlanningConstraintsSummary,
 } from '@/types/planning-constraints';
 import type { IntentTravelMode, TripDetail } from '@/types/trip';
-import type { TripBudgetProfile } from '@/types/trip-budget';
 
 export type ConstraintsSummarySource = 'bff' | 'embedded' | 'm1';
 
@@ -30,45 +35,11 @@ function isBffUnavailable(error: unknown): boolean {
   return status === 404 || status === 501;
 }
 
-async function loadM1Inputs(
-  tripId: string,
-  trip: TripDetail,
-): Promise<{
-  budgetProfile: TripBudgetProfile | null;
-  collaboratorCount: number;
-  intentTravelMode: IntentTravelMode | null;
-  sampleSegmentTravelMode: string | null;
-}> {
-  const firstDay = trip.TripDay?.[0];
-  const sampleModePromise =
-    firstDay?.id != null
-      ? itineraryItemsApi
-          .getDayTravelInfo(tripId, firstDay.id)
-          .then((info) => {
-            const segment = info.segments?.find((s) => s.duration != null && s.duration > 0);
-            return segment?.travelMode ?? info.segments?.[0]?.travelMode ?? null;
-          })
-          .catch(() => null)
-      : Promise.resolve(null);
-
-  const [profile, collaborators, intent, sampleSegmentTravelMode] = await Promise.all([
-    tripBudgetApi.getProfile(tripId).catch(() => null),
-    tripsApi.getCollaborators(tripId).catch(() => []),
-    tripsApi.getIntent(tripId).catch(() => null),
-    sampleModePromise,
-  ]);
-
-  return {
-    budgetProfile: profile,
-    collaboratorCount: Array.isArray(collaborators) ? collaborators.length : 0,
-    intentTravelMode: intent?.pacingConfig?.travelMode ?? trip.pacingConfig?.travelMode ?? null,
-    sampleSegmentTravelMode,
-  };
-}
-
 export interface UseConstraintsSummaryOptions {
   /** P2：`planning-conflicts?includeConstraintsSummary=1` 嵌入摘要 */
   embeddedSummary?: ConstraintsSummaryResponse | null;
+  /** planning-conflicts 是否仍在加载（避免并行打 constraints-summary） */
+  planningConflictsLoading?: boolean;
 }
 
 export interface UseConstraintsSummaryResult {
@@ -88,6 +59,10 @@ export function useConstraintsSummary(
   trip: TripDetail | null | undefined,
   options?: UseConstraintsSummaryOptions,
 ): UseConstraintsSummaryResult {
+  const queryClient = useQueryClient();
+  const budgetQuery = useWorkbenchBudgetProfile(tripId, Boolean(tripId && trip));
+  const collabQuery = useWorkbenchCollaborators(tripId, Boolean(tripId && trip));
+
   const [summary, setSummary] = useState<PlanningConstraintsSummary | null>(null);
   const [source, setSource] = useState<ConstraintsSummarySource | null>(null);
   const [loading, setLoading] = useState(() => Boolean(tripId && trip));
@@ -97,6 +72,17 @@ export function useConstraintsSummary(
   const wasUserConfirmedRef = useRef<boolean | null>(null);
   const embeddedRef = useRef(options?.embeddedSummary);
   embeddedRef.current = options?.embeddedSummary;
+
+  const localSummaryBase = useMemo(() => {
+    if (!tripId || !trip) return null;
+    return buildPlanningConstraintsSummary({
+      trip,
+      budgetProfile: budgetQuery.data ?? null,
+      collaboratorCount: collabQuery.data?.length ?? 0,
+      intentTravelMode: trip.pacingConfig?.travelMode ?? null,
+      sampleSegmentTravelMode: null,
+    });
+  }, [tripId, trip, budgetQuery.data, collabQuery.data?.length]);
 
   const reload = useCallback(async () => {
     if (!tripId) {
@@ -112,48 +98,62 @@ export function useConstraintsSummary(
       return;
     }
 
+    if (options?.planningConflictsLoading) {
+      // 不阻塞左栏：先用 trip + budget + collaborators 拼本地摘要，BFF 返回后再 enrich
+      if (localSummaryBase) {
+        setSummary(localSummaryBase);
+        setSource('m1');
+        setLoading(budgetQuery.isLoading || collabQuery.isLoading);
+        setLoadSettled(!budgetQuery.isLoading && !collabQuery.isLoading);
+        setError(null);
+      } else {
+        setLoading(true);
+        setLoadSettled(false);
+      }
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setLoadSettled(false);
 
-    let localSummary: PlanningConstraintsSummary | null = null;
+    let localSummary = localSummaryBase;
     try {
-      const m1 = await loadM1Inputs(tripId, trip);
-      localSummary = buildPlanningConstraintsSummary({
-        trip,
-        ...m1,
-      });
+      if (!localSummary) {
+        const firstDay = trip.TripDay?.[0];
+        const sampleSegmentTravelMode =
+          firstDay?.id != null
+            ? await itineraryItemsApi
+                .getDayTravelInfo(tripId, firstDay.id)
+                .then((info) => {
+                  const segment = info.segments?.find((s) => s.duration != null && s.duration > 0);
+                  return segment?.travelMode ?? info.segments?.[0]?.travelMode ?? null;
+                })
+                .catch(() => null)
+            : null;
 
-      try {
-        const bff = await tripsApi.getConstraintsSummary(tripId);
-        setSummary(
-          enrichConstraintsSummaryFromLocal(mapConstraintsSummaryFromBff(bff), localSummary),
-        );
-        setSource('bff');
-        return;
-      } catch (bffError) {
-        if (!isBffUnavailable(bffError)) {
-          console.warn('[useConstraintsSummary] BFF failed, falling back to local', bffError);
+        let intentTravelMode: IntentTravelMode | null = trip.pacingConfig?.travelMode ?? null;
+        if (!intentTravelMode) {
+          const intent = await tripsApi.getIntent(tripId).catch(() => null);
+          intentTravelMode = intent?.pacingConfig?.travelMode ?? null;
         }
+
+        localSummary = buildPlanningConstraintsSummary({
+          trip,
+          budgetProfile: budgetQuery.data ?? null,
+          collaboratorCount: collabQuery.data?.length ?? 0,
+          intentTravelMode,
+          sampleSegmentTravelMode,
+        });
       }
 
       const embedded = embeddedRef.current;
       if (embedded) {
-        try {
-          setSummary(
-            enrichConstraintsSummaryFromLocal(
-              mapConstraintsSummaryFromBff(embedded),
-              localSummary,
-            ),
-          );
-          setSource('embedded');
-          return;
-        } catch (embeddedError) {
-          console.warn(
-            '[useConstraintsSummary] embedded summary invalid, falling back to M1',
-            embeddedError,
-          );
-        }
+        setSummary(
+          enrichConstraintsSummaryFromLocal(mapConstraintsSummaryFromBff(embedded), localSummary),
+        );
+        setSource('embedded');
+        return;
       }
 
       setSummary(localSummary);
@@ -173,13 +173,19 @@ export function useConstraintsSummary(
       setLoading(false);
       setLoadSettled(true);
     }
-  }, [tripId, trip]);
+  }, [
+    tripId,
+    trip,
+    localSummaryBase,
+    budgetQuery.data,
+    collabQuery.data?.length,
+    options?.planningConflictsLoading,
+  ]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  // planning-conflicts 嵌入摘要晚于首屏时补拉
   useEffect(() => {
     if (!tripId || !trip || !embeddedRef.current || summary || loading) return;
     void reload();
@@ -194,14 +200,15 @@ export function useConstraintsSummary(
   }, [summary]);
 
   useEffect(() => {
-    const refresh = () => void reload();
-    window.addEventListener('plan-studio:schedule-refresh', refresh);
+    const refresh = () => {
+      if (!tripId) return;
+      void queryClient.invalidateQueries({ queryKey: workbenchKeys.trip(tripId) });
+    };
     window.addEventListener(PLAN_STUDIO_CONSTRAINTS_CHANGED, refresh);
     return () => {
-      window.removeEventListener('plan-studio:schedule-refresh', refresh);
       window.removeEventListener(PLAN_STUDIO_CONSTRAINTS_CHANGED, refresh);
     };
-  }, [reload]);
+  }, [tripId, queryClient]);
 
   const confirmConstraints = useCallback(
     async (userId: string) => {
@@ -213,7 +220,7 @@ export function useConstraintsSummary(
             constraintsVersion: summary.constraintsVersion,
           });
           toast.success('已确认行程约束');
-          window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+          await invalidateWorkbenchAfterConstraintChange(queryClient, tripId);
           dispatchPlanStudioConstraintsChanged(tripId, 'intent');
           return;
         } catch (patchError) {
@@ -228,7 +235,7 @@ export function useConstraintsSummary(
           }),
         });
         toast.success('已确认行程约束');
-        window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+        await invalidateWorkbenchAfterConstraintChange(queryClient, tripId);
         dispatchPlanStudioConstraintsChanged(tripId, 'intent');
       } catch (err) {
         const code = (err as { code?: string })?.code;
@@ -245,13 +252,13 @@ export function useConstraintsSummary(
         setConfirming(false);
       }
     },
-    [tripId, trip, summary?.allReady, summary?.constraintsVersion, reload],
+    [tripId, trip, summary?.allReady, summary?.constraintsVersion, reload, queryClient],
   );
 
   return {
     summary,
     source,
-    loading,
+    loading: loading || budgetQuery.isLoading || collabQuery.isLoading,
     loadSettled,
     error,
     reload,

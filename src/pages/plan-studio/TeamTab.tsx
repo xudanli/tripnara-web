@@ -1,17 +1,38 @@
-import TeamTabContent from '@/components/trips/TeamTabContent';
-import { CollaborativeTaskFlywheelPanel } from '@/features/match-square/components/CollaborativeTaskFlywheelPanel';
+import { TeamCollaborationCenter } from '@/components/team-collaboration';
 import { Spinner } from '@/components/ui/spinner';
 import type { TripDetail } from '@/types/trip';
+import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
 
 interface TeamTabProps {
   tripId: string;
   trip: TripDetail | null;
   onTripRefetch: () => void | Promise<void>;
   onGoToSchedule: () => void;
+  onInviteMembers?: () => void;
+  onOpenTeamSettings?: () => void;
+  destinationLabel?: string;
+  userDisplayName?: string;
+  onWishSummaryChange?: () => void;
+  decisionProfilingInitialStep?: DecisionProfilingStep | null;
+  decisionProfilingForceQuiz?: boolean;
+  decisionProfilingForceReuse?: boolean;
 }
 
-/** 团队 Tab：成员与协作飞轮；画像/投票/协商由场景或右上角入口触发 */
-export default function TeamTab({ tripId, trip, onTripRefetch, onGoToSchedule }: TeamTabProps) {
+/** 团队 Tab → 团队协作中心（五 Tab 仪表盘） */
+export default function TeamTab({
+  tripId,
+  trip,
+  onTripRefetch,
+  onGoToSchedule,
+  onInviteMembers,
+  onOpenTeamSettings,
+  destinationLabel,
+  userDisplayName,
+  onWishSummaryChange,
+  decisionProfilingInitialStep,
+  decisionProfilingForceQuiz,
+  decisionProfilingForceReuse,
+}: TeamTabProps) {
   if (!trip) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -21,15 +42,19 @@ export default function TeamTab({ tripId, trip, onTripRefetch, onGoToSchedule }:
   }
 
   return (
-    <>
-      <CollaborativeTaskFlywheelPanel tripId={tripId} interactive className="mb-4" />
-      <TeamTabContent
-        tripId={tripId}
-        trip={trip}
-        onTripRefetch={onTripRefetch}
-        onGoToPlanStudio={onGoToSchedule}
-        embedded
-      />
-    </>
+    <TeamCollaborationCenter
+      tripId={tripId}
+      trip={trip}
+      onTripRefetch={onTripRefetch}
+      onGoToSchedule={onGoToSchedule}
+      onInviteMembers={onInviteMembers}
+      onOpenTeamSettings={onOpenTeamSettings}
+      destinationLabel={destinationLabel}
+      userDisplayName={userDisplayName}
+      onWishSummaryChange={onWishSummaryChange}
+      decisionProfilingInitialStep={decisionProfilingInitialStep}
+      decisionProfilingForceQuiz={decisionProfilingForceQuiz}
+      decisionProfilingForceReuse={decisionProfilingForceReuse}
+    />
   );
 }

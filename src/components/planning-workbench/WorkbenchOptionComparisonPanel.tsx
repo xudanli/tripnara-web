@@ -79,7 +79,7 @@ function OptionCard({
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-mono text-xs font-medium">{entry.optionId}</span>
+        <span className="font-mono text-xs font-medium">{entry.label ?? entry.optionId}</span>
         <div className="flex items-center gap-1.5">
           {gateDelta && <GateBadge status={gateDelta.gateStatus} />}
           {isRecommended && (
@@ -89,6 +89,9 @@ function OptionCard({
       </div>
       {entry.summary && (
         <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{entry.summary}</p>
+      )}
+      {entry.budget?.costDisplayValue && (
+        <p className="mt-1.5 text-xs font-medium tabular-nums">{entry.budget.costDisplayValue}</p>
       )}
       <OptionScores scores={entry.scores} />
       {gateDelta && gateDelta.violationCount > 0 && (
@@ -124,7 +127,8 @@ export function WorkbenchOptionComparisonPanel({
   const gateByOption = new Map(
     (kernelGateEval?.optionDeltas ?? []).map((d) => [d.optionId, d]),
   );
-  const recommendedId = recommendation?.optionId;
+  const recommendedId =
+    comparison.budgetComparison?.recommendedPlanId ?? recommendation?.optionId;
 
   if (!options.length && !recommendation && !kernelGateEval) return null;
 

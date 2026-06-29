@@ -13,6 +13,11 @@ import type { PreferenceRoundUtterance } from '@/types/process-fairness';
 import { HeardVoteForm } from './HeardVoteForm';
 import { DomainIcon, negotiationStatusClass } from './domain-influence-ui';
 import { NegotiationDomainClaimEntry } from './NegotiationDomainClaimEntry';
+import { CollabNegotiationProgressTimeline } from '@/components/team-collaboration/widgets/CollabNegotiationProgressTimeline';
+import { CollabSpeakerOrderBar } from '@/components/team-collaboration/widgets/CollabSpeakerOrderBar';
+import { CollabOptionCompareTable } from '@/components/team-collaboration/widgets/CollabOptionCompareTable';
+import { CollabNegotiationActionBar } from '@/components/team-collaboration/widgets/CollabNegotiationActionBar';
+import { buildNegotiationOptions } from '@/lib/collab-negotiation-stage';
 
 function roundStatusClass(status: string): string {
   switch (status) {
@@ -77,6 +82,12 @@ interface PreferenceRoundDiscussionPanelProps {
   roundId: string | null;
   className?: string;
   onRequestTaskRefresh?: () => void;
+  /** 协作中心主舞台：进度轴 / 发言条 / 选项对比 / 底栏操作 */
+  collabStage?: boolean;
+  onStartVote?: () => void;
+  onGenerateCompromise?: () => void;
+  onDiscussWithAssistant?: () => void;
+  voteActionDisabled?: boolean;
 }
 
 export function PreferenceRoundDiscussionPanel({
@@ -85,6 +96,11 @@ export function PreferenceRoundDiscussionPanel({
   roundId,
   className,
   onRequestTaskRefresh,
+  collabStage = false,
+  onStartVote,
+  onGenerateCompromise,
+  onDiscussWithAssistant,
+  voteActionDisabled,
 }: PreferenceRoundDiscussionPanelProps) {
   const { user } = useAuth();
   const { detail, loading, submitting, submitUtterance, submitHeardVotes, reload } =
@@ -95,6 +111,9 @@ export function PreferenceRoundDiscussionPanel({
   if (!roundId) {
     return (
       <div className={cn('rounded-lg border border-border/80 bg-muted/15 p-4', className)}>
+        {collabStage ? (
+          <CollabNegotiationProgressTimeline task={task} detail={null} className="mb-4" />
+        ) : null}
         <TaskSummary task={task} />
         <p className="mt-3 text-sm text-muted-foreground">
           {task.status === 'in_discussion'
@@ -121,6 +140,15 @@ export function PreferenceRoundDiscussionPanel({
           >
             刷新任务列表
           </Button>
+        ) : null}
+        {collabStage ? (
+          <CollabNegotiationActionBar
+            className="mt-4"
+            onStartVote={onStartVote}
+            onGenerateCompromise={onGenerateCompromise}
+            onDiscussWithAssistant={onDiscussWithAssistant}
+            voteDisabled={voteActionDisabled}
+          />
         ) : null}
       </div>
     );
@@ -160,9 +188,16 @@ export function PreferenceRoundDiscussionPanel({
     }
   };
 
+  const optionCount = buildNegotiationOptions(detail, task).length;
+
   return (
     <div className={cn('space-y-4', className)}>
+      {collabStage ? (
+        <CollabNegotiationProgressTimeline task={task} detail={detail} />
+      ) : null}
       <TaskSummary task={task} />
+
+      {collabStage ? <CollabSpeakerOrderBar detail={detail} /> : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={cn('text-[10px] font-normal', roundStatusClass(detail.status))}>
@@ -264,6 +299,19 @@ export function PreferenceRoundDiscussionPanel({
             </div>
           ))}
         </div>
+      ) : null}
+
+      {collabStage && optionCount > 0 ? (
+        <CollabOptionCompareTable task={task} detail={detail} />
+      ) : null}
+
+      {collabStage ? (
+        <CollabNegotiationActionBar
+          onStartVote={onStartVote}
+          onGenerateCompromise={onGenerateCompromise}
+          onDiscussWithAssistant={onDiscussWithAssistant}
+          voteDisabled={voteActionDisabled}
+        />
       ) : null}
     </div>
   );

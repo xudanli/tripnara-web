@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { buildCollabCenterPlanStudioUrl } from '@/lib/collab-center-navigation';
 import { SilentVoteDialog } from '@/components/silent-vote';
 
 /** 深链入口：以弹窗形式展示投票详情，关闭后返回规划工作台 */
@@ -11,7 +12,7 @@ export default function SilentVotePage() {
       navigate(-1);
       return;
     }
-    navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=team`);
+    navigate(buildCollabCenterPlanStudioUrl(tripId, { collabTab: 'decisions' }));
   };
 
   if (!tripId || !voteId) {

@@ -1,22 +1,14 @@
 import type { ApplyRepairResponse } from '@/types/feasibility-repair';
-import { normalizePersonaAlert, normalizePersonaAlerts } from '@/lib/persona-alert.adapter';
+import { normalizePersonaAlert } from '@/lib/persona-alert.adapter';
 import type {
   InTripLoopUiView,
   InTripRecoveryLatestDto,
   InTripRecoveryRunResult,
   InTripRecommendedPlan,
-  LoopApplyPatch,
-  LoopApplyResponse,
   LoopIteration,
-  LoopRecommendedPatch,
   LoopRunDetail,
-  ReadinessRepairLatestDto,
-  ReadinessRepairRunResult,
-  ReadinessSnapshot,
-  TripLoopChecklistItem,
   TripLoopIssueCard,
   TripLoopPrimaryAction,
-  TripLoopUiView,
 } from '@/types/trip-loop';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -44,29 +36,6 @@ function asBool(value: unknown, fallback = false): boolean {
 function asStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.filter((v): v is string => typeof v === 'string');
-}
-
-export function normalizeReadinessSnapshot(raw: unknown): ReadinessSnapshot {
-  const r = asRecord(raw) ?? {};
-  return {
-    readinessScore: asNumber(r.readinessScore ?? r.readiness_score) ?? 0,
-    hardBlockers: asNumber(r.hardBlockers ?? r.hard_blockers) ?? 0,
-    mustHandleCount: asNumber(r.mustHandleCount ?? r.must_handle_count) ?? 0,
-    suggestAdjustCount: asNumber(r.suggestAdjustCount ?? r.suggest_adjust_count) ?? 0,
-    canStartExecute: asBool(r.canStartExecute ?? r.can_start_execute),
-    verdictStatus: String(r.verdictStatus ?? r.verdict_status ?? 'UNKNOWN'),
-    completionRateP10: asNumber(r.completionRateP10 ?? r.completion_rate_p10),
-  };
-}
-
-function normalizeChecklistItem(raw: unknown): TripLoopChecklistItem | null {
-  const r = asRecord(raw);
-  if (!r) return null;
-  const id = asString(r.id);
-  const label = asString(r.label);
-  const result = asString(r.result) as TripLoopChecklistItem['result'] | undefined;
-  if (!id || !label || !result) return null;
-  return { id, label, result, detail: asString(r.detail) };
 }
 
 function normalizeIssueCard(raw: unknown): TripLoopIssueCard | null {
@@ -108,46 +77,6 @@ function normalizePrimaryAction(raw: unknown): TripLoopPrimaryAction | undefined
     loopRunId,
     patchCount: asNumber(r.patchCount ?? r.patch_count),
     planCount: asNumber(r.planCount ?? r.plan_count),
-  };
-}
-
-export function normalizeTripLoopUi(
-  raw: unknown,
-  snapshots?: { before?: ReadinessSnapshot; after?: ReadinessSnapshot },
-): TripLoopUiView | null {
-  const r = asRecord(raw);
-  if (!r) return null;
-  const phase = asString(r.phase) as TripLoopUiView['phase'] | undefined;
-  const headline = asString(r.headline);
-  if (!phase || !headline) return null;
-
-  const progressRaw = asRecord(r.progress) ?? {};
-  const snapshotRaw = asRecord(r.snapshot);
-
-  return {
-    phase,
-    headline,
-    subheadline: asString(r.subheadline ?? r.sub_headline),
-    progress: {
-      completedChecks: asNumber(progressRaw.completedChecks ?? progressRaw.completed_checks) ?? 0,
-      totalChecks: asNumber(progressRaw.totalChecks ?? progressRaw.total_checks) ?? 0,
-      label: asString(progressRaw.label) ?? '',
-    },
-    checklist: (Array.isArray(r.checklist) ? r.checklist : [])
-      .map(normalizeChecklistItem)
-      .filter((x): x is TripLoopChecklistItem => x != null),
-    personaAlerts: normalizePersonaAlerts(r.personaAlerts ?? r.persona_alerts),
-    issueCards: (Array.isArray(r.issueCards ?? r.issue_cards) ? (r.issueCards ?? r.issue_cards) : [])
-      .map(normalizeIssueCard)
-      .filter((x): x is TripLoopIssueCard => x != null),
-    primaryAction: normalizePrimaryAction(r.primaryAction ?? r.primary_action),
-    snapshot:
-      snapshotRaw || snapshots?.before || snapshots?.after
-        ? {
-            before: normalizeReadinessSnapshot(snapshotRaw?.before ?? snapshots?.before),
-            after: normalizeReadinessSnapshot(snapshotRaw?.after ?? snapshots?.after),
-          }
-        : undefined,
   };
 }
 
@@ -215,22 +144,6 @@ function normalizeIteration(raw: unknown): LoopIteration | null {
   };
 }
 
-export function normalizeRecommendedPatch(raw: unknown): LoopRecommendedPatch | null {
-  const r = asRecord(raw);
-  if (!r) return null;
-  const issueId = asString(r.issueId ?? r.issue_id);
-  const optionId = asString(r.optionId ?? r.option_id);
-  if (!issueId || !optionId) return null;
-  return {
-    issueId,
-    blockerId: asString(r.blockerId ?? r.blocker_id),
-    optionId,
-    title: asString(r.title),
-    actionType: asString(r.actionType ?? r.action_type),
-    previewStatus: asString(r.previewStatus ?? r.preview_status),
-  };
-}
-
 function normalizeRecommendedPlan(raw: unknown): InTripRecommendedPlan | null {
   const r = asRecord(raw);
   if (!r) return null;
@@ -258,53 +171,6 @@ export function normalizeLoopRunDetail(raw: unknown): LoopRunDetail | null {
       .map(normalizeIteration)
       .filter((x): x is LoopIteration => x != null),
     finalOutcome: r.finalOutcome ?? r.final_outcome,
-  };
-}
-
-/** POST /readiness-repair — 扁平 ReadinessRepairLoopResult */
-export function normalizeReadinessRepairRunResult(raw: unknown): ReadinessRepairRunResult | null {
-  const r = asRecord(raw);
-  if (!r) return null;
-  const loopRunId = asString(r.loopRunId ?? r.loop_run_id);
-  const status = asString(r.status);
-  if (!loopRunId || !status) return null;
-
-  const before = normalizeReadinessSnapshot(r.before);
-  const after = normalizeReadinessSnapshot(r.after);
-  const runtimeState =
-    asString(r.runtimeState ?? r.runtime_state) ??
-    (status === 'RUNNING' ? 'VALIDATING' : status === 'COMPLETED' ? 'MONITORING' : status);
-
-  return {
-    loopRunId,
-    status: status as ReadinessRepairRunResult['status'],
-    runtimeState,
-    before,
-    after,
-    iterations: (Array.isArray(r.iterations) ? r.iterations : [])
-      .map(normalizeIteration)
-      .filter((x): x is LoopIteration => x != null),
-    recommendedPatches: (Array.isArray(r.recommendedPatches ?? r.recommended_patches)
-      ? (r.recommendedPatches ?? r.recommended_patches)
-      : []
-    )
-      .map(normalizeRecommendedPatch)
-      .filter((x): x is LoopRecommendedPatch => x != null),
-    requiresApproval: asBool(r.requiresApproval ?? r.requires_approval),
-    stopReason: asString(r.stopReason ?? r.stop_reason),
-    ui: normalizeTripLoopUi(r.ui, { before, after }) ?? undefined,
-  };
-}
-
-/** GET /readiness-repair/latest */
-export function normalizeReadinessRepairLatest(raw: unknown): ReadinessRepairLatestDto {
-  const r = asRecord(raw);
-  if (!r) return { loopRun: null, ui: null };
-
-  const loopRunRaw = r.loopRun ?? r.loop_run;
-  return {
-    loopRun: loopRunRaw ? normalizeLoopRunDetail(loopRunRaw) : null,
-    ui: normalizeTripLoopUi(r.ui),
   };
 }
 
@@ -347,64 +213,6 @@ export function normalizeInTripRecoveryLatest(raw: unknown): InTripRecoveryLates
   };
 }
 
-export function normalizeLoopApplyResponse(raw: unknown): LoopApplyResponse {
-  const r = asRecord(raw) ?? {};
-  const applied = Array.isArray(r.applied) ? (r.applied as ApplyRepairResponse[]) : [];
-  return {
-    applied,
-    after: normalizeReadinessSnapshot(r.after),
-    loopRunId: asString(r.loopRunId ?? r.loop_run_id),
-    status: asString(r.status) as LoopApplyResponse['status'],
-  };
-}
-
-const DEFAULT_PATCH_FLAGS = {
-  executeDecision: true,
-  persistDecision: true,
-  runGuardianNegotiation: true,
-} as const;
-
-export function patchesFromRecommended(
-  patches: LoopRecommendedPatch[],
-): LoopApplyPatch[] {
-  return patches.map((p) => ({
-    issueId: p.issueId,
-    optionId: p.optionId,
-    ...DEFAULT_PATCH_FLAGS,
-  }));
-}
-
-export function patchesFromIssueCards(cards: TripLoopIssueCard[]): LoopApplyPatch[] {
-  return cards
-    .filter((c) => c.issueId && c.optionId)
-    .map((c) => ({
-      issueId: c.issueId,
-      optionId: c.optionId!,
-      ...DEFAULT_PATCH_FLAGS,
-    }));
-}
-
-/**
- * 组装 apply patches（后端不接受空数组）。
- * 优先级：recommendedPatches → session 缓存 → ui.issueCards
- */
-export function buildApplyPatches(input: {
-  recommendedPatches?: LoopRecommendedPatch[];
-  cachedPatches?: LoopRecommendedPatch[];
-  ui?: TripLoopUiView | null;
-}): LoopApplyPatch[] {
-  if (input.recommendedPatches?.length) {
-    return patchesFromRecommended(input.recommendedPatches);
-  }
-  if (input.cachedPatches?.length) {
-    return patchesFromRecommended(input.cachedPatches);
-  }
-  if (input.ui?.issueCards?.length) {
-    return patchesFromIssueCards(input.ui.issueCards);
-  }
-  return [];
-}
-
 export function plansFromRecommended(plans: InTripRecommendedPlan[]): import('@/types/trip-loop').InTripApplyPlan[] {
   return plans.map((p) => ({
     environmentEventId: p.environmentEventId,
@@ -437,7 +245,7 @@ export function buildApplyInTripPlans(input: {
 export function resolveLoopRunId(input: {
   runLoopRunId?: string | null;
   detail?: LoopRunDetail | null;
-  ui?: TripLoopUiView | InTripLoopUiView | null;
+  ui?: InTripLoopUiView | null;
   sessionLoopRunId?: string | null;
 }): string | null {
   return (
@@ -450,7 +258,7 @@ export function resolveLoopRunId(input: {
   );
 }
 
-export function summarizeLoopApplyResult(res: LoopApplyResponse): {
+export function summarizeLoopApplyResult(res: { applied: ApplyRepairResponse[] }): {
   allApplied: boolean;
   deferred: ApplyRepairResponse[];
   applied: ApplyRepairResponse[];
@@ -464,41 +272,12 @@ export function summarizeLoopApplyResult(res: LoopApplyResponse): {
   };
 }
 
-/** @deprecated 使用 normalizeReadinessRepairRunResult */
-export const normalizeReadinessRepairLoopRun = normalizeReadinessRepairRunResult;
-
 /** @deprecated 使用 normalizeInTripRecoveryRunResult */
 export const normalizeInTripRecoveryLoopRun = normalizeInTripRecoveryRunResult;
-
-/** @deprecated 使用 buildApplyPatches */
-export const buildDefaultApplyPatches = (
-  run: { recommendedPatches?: LoopRecommendedPatch[]; ui?: TripLoopUiView } | null,
-) =>
-  buildApplyPatches({
-    recommendedPatches: run?.recommendedPatches,
-    ui: run?.ui ?? null,
-  });
 
 /** @deprecated 使用 buildApplyInTripPlans */
 export const buildDefaultInTripApplyPlans = (ui: InTripLoopUiView | null) =>
   buildApplyInTripPlans({ ui });
-
-export function tripLoopPhaseLabel(phase: TripLoopUiView['phase']): string {
-  switch (phase) {
-    case 'validating':
-      return '验证中';
-    case 'issues_found':
-      return '发现问题';
-    case 'awaiting_approval':
-      return '待您确认';
-    case 'completed':
-      return '验证通过';
-    case 'failed':
-      return '验证失败';
-    default:
-      return phase;
-  }
-}
 
 export function inTripLoopPhaseLabel(phase: InTripLoopUiView['phase']): string {
   switch (phase) {
@@ -515,12 +294,6 @@ export function inTripLoopPhaseLabel(phase: InTripLoopUiView['phase']): string {
     default:
       return phase;
   }
-}
-
-/** C 端是否应展示 apply CTA — 只看 ui.phase */
-export function readinessUiCanApply(ui: TripLoopUiView | null | undefined): boolean {
-  if (!ui) return false;
-  return ui.phase === 'awaiting_approval' || ui.phase === 'issues_found';
 }
 
 export function inTripUiCanApply(ui: InTripLoopUiView | null | undefined): boolean {

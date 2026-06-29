@@ -13,6 +13,11 @@ import type {
   PoiCoverageStatus,
   SegmentCoverageStatus,
 } from '@/api/readiness';
+import {
+  COVERAGE_GAP_COLORS,
+  COVERAGE_POI_COLORS,
+  COVERAGE_SEGMENT_COLORS,
+} from '@/lib/coverage-map-colors';
 import { useTranslation } from 'react-i18next';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -31,28 +36,14 @@ interface CoverageMiniMapProps {
   height?: number;
   /** 高亮选中的 POI（路线覆盖 Tab 侧栏联动） */
   selectedPoiId?: string;
+  /** 嵌入工作台等紧凑场景：仅地图，无标题/图例/统计 */
+  compact?: boolean;
 }
 
-// POI 覆盖状态颜色
-const POI_COLORS: Record<PoiCoverageStatus, string> = {
-  covered: '#22c55e',   // 绿色
-  partial: '#eab308',   // 黄色
-  uncovered: '#ef4444', // 红色
-};
-
-// 路段覆盖状态颜色
-const SEGMENT_COLORS: Record<SegmentCoverageStatus, string> = {
-  covered: '#22c55e',   // 绿色
-  warning: '#f97316',   // 橙色
-  blocked: '#ef4444',   // 红色
-};
-
-// 缺口严重程度颜色
-const GAP_COLORS: Record<string, string> = {
-  high: '#ef4444',
-  medium: '#f97316',
-  low: '#eab308',
-};
+// POI / 路段 / 缺口颜色 — 见 @/lib/coverage-map-colors
+const POI_COLORS = COVERAGE_POI_COLORS;
+const SEGMENT_COLORS = COVERAGE_SEGMENT_COLORS;
+const GAP_COLORS = COVERAGE_GAP_COLORS as Record<string, string>;
 
 export default function CoverageMiniMap({
   data,
@@ -64,6 +55,7 @@ export default function CoverageMiniMap({
   className,
   height = 400,
   selectedPoiId,
+  compact = false,
 }: CoverageMiniMapProps) {
   const { t } = useTranslation();
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -433,20 +425,22 @@ export default function CoverageMiniMap({
 
   return (
     <Card className={cn('overflow-hidden', className)}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">
-            {t('readiness.coverageMap', '覆盖地图')}
-          </CardTitle>
-          {data?.summary && (
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                {t('readiness.coverageRate', '覆盖率')}: {Math.round(data.summary.coverageRate * 100)}%
-              </Badge>
-            </div>
-          )}
-        </div>
-      </CardHeader>
+      {!compact ? (
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">
+              {t('readiness.coverageMap', '覆盖地图')}
+            </CardTitle>
+            {data?.summary && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {t('readiness.coverageRate', '覆盖率')}: {Math.round(data.summary.coverageRate * 100)}%
+                </Badge>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+      ) : null}
       <CardContent className="p-0">
         {/* 地图容器 */}
         <div className="relative">
@@ -491,6 +485,8 @@ export default function CoverageMiniMap({
           )}
         </div>
 
+        {!compact ? (
+          <>
         {/* 图例 */}
         <div className="p-3 border-t bg-muted/30">
           <div className="flex flex-wrap items-center gap-4 text-xs">
@@ -615,6 +611,8 @@ export default function CoverageMiniMap({
             </div>
           </div>
         )}
+          </>
+        ) : null}
       </CardContent>
     </Card>
   );

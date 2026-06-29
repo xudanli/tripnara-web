@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -26,6 +25,23 @@ import {
   tasksByScope,
 } from '@/lib/readiness-preparation-tasks';
 import ReadinessTaskFormDialog, { type TaskFormValues } from '@/components/readiness/ReadinessTaskFormDialog';
+import {
+  workbenchConstraintListItemIcon,
+  workbenchConstraintIconToneClass,
+  workbenchDrawerListItem,
+  workbenchDrawerListItemCompleted,
+  workbenchDrawerSectionBody,
+  workbenchDrawerSectionDesc,
+  workbenchDrawerSectionHeader,
+  workbenchDrawerSectionShell,
+  workbenchDrawerSectionTitle,
+  workbenchDrawerToolbarShell,
+  workbenchEmptyHint,
+  workbenchPreDepartureAssigneeAvatar,
+  workbenchPreDeparturePriorityBadgeClass,
+  workbenchPrimaryAction,
+  workbenchSecondaryMetric,
+} from '@/components/plan-studio/workbench/workbench-ui';
 import {
   Users,
   UserRound,
@@ -52,26 +68,13 @@ interface ReadinessTasksTabProps {
   onDeleteTask: (taskId: string) => void;
 }
 
-/** 克制优先级：靠字重与描边，不用情绪化大色块 */
-const PRIORITY_STYLE: Record<
+const PRIORITY_LABEL: Record<
   ReadinessPreparationTask['priority'],
-  { labelZh: string; labelEn: string; className: string }
+  { labelZh: string; labelEn: string }
 > = {
-  high: {
-    labelZh: '高',
-    labelEn: 'High',
-    className: 'border-slate-400 text-slate-900 font-medium',
-  },
-  medium: {
-    labelZh: '中',
-    labelEn: 'Med',
-    className: 'border-slate-200 text-slate-600',
-  },
-  low: {
-    labelZh: '低',
-    labelEn: 'Low',
-    className: 'border-slate-100 text-slate-400',
-  },
+  high: { labelZh: '高', labelEn: 'High' },
+  medium: { labelZh: '中', labelEn: 'Med' },
+  low: { labelZh: '低', labelEn: 'Low' },
 };
 
 const CATEGORY_ICON: Partial<Record<ReadinessTaskCategory, LucideIcon>> = {
@@ -104,42 +107,48 @@ function TaskRow({
   onEdit: (task: ReadinessPreparationTask) => void;
   onDelete: (taskId: string) => void;
 }) {
-  const priority = PRIORITY_STYLE[task.priority];
+  const priorityLabel = PRIORITY_LABEL[task.priority];
   const CatIcon = task.category ? CATEGORY_ICON[task.category] : undefined;
   const catLabel = categoryLabel(task.category, isZh);
+  const assigneeName = task.assigneeLabel || (isZh ? '我' : 'Me');
+  const assigneeInitial = assigneeName.trim().charAt(0).toUpperCase() || '?';
 
   return (
     <li
       className={cn(
-        'group rounded-lg border px-3 py-3 transition-colors',
-        task.completed
-          ? 'border-slate-200/80 bg-muted/20'
-          : 'border-slate-200 bg-white hover:border-slate-300',
+        workbenchDrawerListItem,
+        task.completed && workbenchDrawerListItemCompleted,
       )}
     >
       <div className="flex items-start gap-3">
         <Checkbox
           checked={task.completed}
           onCheckedChange={(value) => onToggleComplete(task.id, value === true)}
-          className="mt-0.5"
+          className="mt-1"
         />
-        <div className="flex-1 min-w-0 space-y-2">
+        {CatIcon ? (
+          <span
+            className={cn(
+              workbenchConstraintListItemIcon,
+              'mt-0.5 h-7 w-7',
+              workbenchConstraintIconToneClass(task.completed ? 'muted' : 'default'),
+            )}
+          >
+            <CatIcon className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+        <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                {CatIcon ? (
-                  <CatIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                ) : null}
-                <p
-                  className={cn(
-                    'text-sm font-medium leading-snug',
-                    task.completed ? 'text-muted-foreground line-through' : 'text-foreground',
-                  )}
-                >
-                  {task.title}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+              <p
+                className={cn(
+                  'text-sm font-medium leading-snug',
+                  task.completed ? 'text-muted-foreground line-through' : 'text-foreground',
+                )}
+              >
+                {task.title}
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 {catLabel ? (
                   <span className="text-[11px] text-muted-foreground">{catLabel}</span>
                 ) : null}
@@ -154,9 +163,15 @@ function TaskRow({
                 ) : null}
               </div>
             </div>
-            <div className="flex items-center gap-0.5 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              <Badge variant="outline" className={cn('text-[10px] mr-1', priority.className)}>
-                {isZh ? priority.labelZh : priority.labelEn}
+            <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+              <Badge
+                variant="outline"
+                className={cn(
+                  'mr-1 h-5 rounded-full px-2 text-[10px] font-normal',
+                  workbenchPreDeparturePriorityBadgeClass(task.priority),
+                )}
+              >
+                {isZh ? priorityLabel.labelZh : priorityLabel.labelEn}
               </Badge>
               <Button
                 type="button"
@@ -173,7 +188,7 @@ function TaskRow({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  className="h-7 w-7 text-muted-foreground hover:text-gate-reject-foreground"
                   onClick={() => onDelete(task.id)}
                   aria-label={isZh ? '删除' : 'Delete'}
                 >
@@ -196,7 +211,7 @@ function TaskRow({
                   onAssign(task.id, value, member?.displayName ?? null);
                 }}
               >
-                <SelectTrigger className="h-7 w-[132px] text-xs border-slate-200 bg-transparent">
+                <SelectTrigger className="h-7 w-[132px] border-border/50 bg-transparent text-xs">
                   <SelectValue placeholder={isZh ? '负责人' : 'Assignee'} />
                 </SelectTrigger>
                 <SelectContent>
@@ -209,8 +224,9 @@ function TaskRow({
                 </SelectContent>
               </Select>
             ) : (
-              <span className="text-[11px] text-muted-foreground">
-                {isZh ? '负责人' : 'Owner'} · {task.assigneeLabel || (isZh ? '我' : 'Me')}
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className={workbenchPreDepartureAssigneeAvatar}>{assigneeInitial}</span>
+                {isZh ? '负责人' : 'Owner'} · {assigneeName}
               </span>
             )}
             <button
@@ -265,20 +281,20 @@ function TaskSectionCard({
   const done = tasks.filter((t) => t.completed).length;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
+    <section className={workbenchDrawerSectionShell}>
+      <div className={workbenchDrawerSectionHeader}>
+        <div className="min-w-0">
+          <h3 className={cn(workbenchDrawerSectionTitle, 'flex items-center gap-2')}>
             <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />
             {title}
-          </CardTitle>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {done}/{tasks.length}
-          </span>
+          </h3>
+          <p className={workbenchDrawerSectionDesc}>{description}</p>
         </div>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="pt-0">
+        <span className={cn(workbenchSecondaryMetric, 'shrink-0 text-xs')}>
+          {done}/{tasks.length}
+        </span>
+      </div>
+      <div className={workbenchDrawerSectionBody}>
         <ul className="space-y-2">
           {tasks.map((task) => (
             <TaskRow
@@ -295,8 +311,8 @@ function TaskSectionCard({
             />
           ))}
         </ul>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -336,31 +352,31 @@ export default function ReadinessTasksTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 pb-1">
+      <div className={workbenchDrawerToolbarShell}>
         <div className="flex items-center gap-3">
           {tasks.length > 0 ? (
-            <div className="flex items-center gap-2 min-w-0 flex-1 max-w-[200px]">
-              <Progress value={progressPct} className="h-1.5 flex-1" />
-              <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+            <div className="flex min-w-0 max-w-[220px] flex-1 items-center gap-2">
+              <Progress value={progressPct} className="h-1.5 flex-1 [&>div]:bg-nara-glacier/70" />
+              <span className={cn(workbenchSecondaryMetric, 'shrink-0 text-xs')}>
                 {done}/{tasks.length}
               </span>
             </div>
           ) : (
-            <span className="text-xs text-muted-foreground flex-1">
+            <span className="flex-1 text-xs text-muted-foreground">
               {isZh ? '快捷添加或新建任务' : 'Quick-add or create a task'}
             </span>
           )}
           <Button
             type="button"
             size="sm"
-            className="shrink-0 h-7 text-xs bg-foreground hover:bg-foreground/90 text-background"
+            className={cn('h-7 shrink-0 text-xs', workbenchPrimaryAction)}
             onClick={openCreate}
           >
-            <Plus className="h-3 w-3 mr-1" />
+            <Plus className="mr-1 h-3 w-3" />
             {isZh ? '新增任务' : 'Add'}
           </Button>
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap gap-1">
           {TASK_QUICK_TEMPLATES.map((tpl) => {
             const TplIcon = CATEGORY_ICON[tpl.category];
             return (
@@ -369,7 +385,7 @@ export default function ReadinessTasksTab({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-6 px-2 text-[11px] border-slate-200 text-slate-600 hover:bg-muted/50"
+                className="h-6 border-border/50 px-2 text-[11px] text-muted-foreground hover:bg-muted/25"
                 onClick={() =>
                   onCreateTask({
                     title: isZh ? tpl.titleZh : tpl.titleEn,
@@ -381,7 +397,7 @@ export default function ReadinessTasksTab({
                   })
                 }
               >
-                {TplIcon ? <TplIcon className="h-3 w-3 mr-0.5 opacity-50" /> : null}
+                {TplIcon ? <TplIcon className="mr-0.5 h-3 w-3 opacity-60" /> : null}
                 {isZh ? tpl.titleZh : tpl.titleEn}
               </Button>
             );
@@ -390,7 +406,7 @@ export default function ReadinessTasksTab({
       </div>
 
       {tasks.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-6">
+        <p className={cn(workbenchEmptyHint, 'py-8 text-center text-sm')}>
           {isZh ? '暂无任务' : 'No tasks yet'}
         </p>
       ) : (

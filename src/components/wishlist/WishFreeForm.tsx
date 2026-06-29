@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import type { WishCategory, WishVisibility } from '@/types/trip-wishes';
 import { WishImportanceDots } from './WishImportanceDots';
+import { WishVisibilityCards } from './WishVisibilityCards';
 import { WishVisibilityToggle } from './WishVisibilityToggle';
 import { WishCategorySelect } from './WishCategorySelect';
 import type { WishDraft } from '@/lib/wish-draft';
@@ -20,9 +21,11 @@ interface WishFreeFormProps {
   tripId: string;
   onSubmit: (draft: WishDraft) => void | Promise<void>;
   submitting?: boolean;
+  /** 协作中心布局：卡片可见模式 + 点状重要程度 */
+  collabMode?: boolean;
 }
 
-export function WishFreeForm({ tripId, onSubmit, submitting }: WishFreeFormProps) {
+export function WishFreeForm({ tripId, onSubmit, submitting, collabMode = false }: WishFreeFormProps) {
   const { user } = useAuth();
   const [category, setCategory] = useState<WishCategory>('activities');
   const [text, setText] = useState('');
@@ -113,86 +116,124 @@ export function WishFreeForm({ tripId, onSubmit, submitting }: WishFreeFormProps
         value={category}
         onChange={setCategory}
         disabled={busy}
+        label={collabMode ? '心愿领域' : undefined}
       />
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <Label className={wishLabel}>我希望</Label>
+          {!collabMode ? <Label className={wishLabel}>我希望</Label> : <span className={wishLabel} />}
           <div className="flex items-center gap-1">
+            {collabMode ? (
+              <span className="text-[10px] text-muted-foreground">{text.length}/300</span>
+            ) : null}
             <Button
               type="button"
-              variant="ghost"
+              variant={collabMode ? 'outline' : 'ghost'}
               size="sm"
               className="h-8 gap-1 text-xs text-muted-foreground"
               disabled={busy || recording}
               onClick={() => void handleOptimize()}
             >
               <Sparkles className={cn('h-3.5 w-3.5', optimizing && 'animate-pulse text-primary')} />
-              {optimizing ? '优化中…' : 'AI 优化'}
+              {optimizing ? '优化中…' : collabMode ? 'AI 优化建议' : 'AI 优化'}
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1 text-xs text-muted-foreground select-none touch-none"
-              disabled={busy}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                if (!recording && !transcribing) void startRecording();
-              }}
-              onPointerUp={() => {
-                if (recording) stopRecording();
-              }}
-              onPointerLeave={() => {
-                if (recording) stopRecording();
-              }}
-            >
-              {recording || transcribing ? (
-                <MicOff className="h-3.5 w-3.5 animate-pulse text-primary" />
-              ) : (
-                <Mic className="h-3.5 w-3.5" />
-              )}
-              {transcribing ? '转写中…' : recording ? '松开结束' : '按住说话'}
-            </Button>
+            {!collabMode ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 text-xs text-muted-foreground select-none touch-none"
+                disabled={busy}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  if (!recording && !transcribing) void startRecording();
+                }}
+                onPointerUp={() => {
+                  if (recording) stopRecording();
+                }}
+                onPointerLeave={() => {
+                  if (recording) stopRecording();
+                }}
+              >
+                {recording || transcribing ? (
+                  <MicOff className="h-3.5 w-3.5 animate-pulse text-primary" />
+                ) : (
+                  <Mic className="h-3.5 w-3.5" />
+                )}
+                {transcribing ? '转写中…' : recording ? '松开结束' : '按住说话'}
+              </Button>
+            ) : null}
           </div>
         </div>
         <Textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => setText(e.target.value.slice(0, 300))}
           placeholder="例如：想在雷克雅未克吃一次网红热狗…"
           className="min-h-[100px] resize-none"
           disabled={busy}
+          maxLength={300}
         />
-        <p className="text-[11px] text-muted-foreground">
-          AI 优化会改写表述并建议分类与在意程度，提交前可继续编辑
-        </p>
+        {!collabMode ? (
+          <p className="text-[11px] text-muted-foreground">
+            AI 优化会改写表述并建议分类与在意程度，提交前可继续编辑
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
         <div className={cn('flex items-center justify-between', wishLabel)}>
-          <span>在意程度</span>
-          <span className="font-medium text-foreground">
-            {importance}/5 <WishImportanceDots value={importance} className="ml-1 inline-flex" />
-          </span>
+          <span>{collabMode ? '重要程度' : '在意程度'}</span>
+          {!collabMode ? (
+            <span className="font-medium text-foreground">
+              {importance}/5 <WishImportanceDots value={importance} className="ml-1 inline-flex" />
+            </span>
+          ) : null}
         </div>
-        <Slider
-          value={[importance]}
-          min={1}
-          max={5}
-          step={1}
-          onValueChange={([v]) => setImportance(v as 1 | 2 | 3 | 4 | 5)}
-          disabled={busy}
-        />
+        {collabMode ? (
+          <div className="flex items-center gap-2">
+            {([1, 2, 3, 4, 5] as const).map((level) => (
+              <button
+                key={level}
+                type="button"
+                disabled={busy}
+                aria-label={`重要程度 ${level}`}
+                onClick={() => setImportance(level)}
+                className={cn(
+                  'h-3 w-3 rounded-full transition-colors',
+                  level <= importance ? 'bg-primary' : 'bg-muted-foreground/25',
+                )}
+              />
+            ))}
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              {importance === 1 ? '不重要' : importance === 5 ? '非常重要' : `${importance}/5`}
+            </span>
+          </div>
+        ) : (
+          <Slider
+            value={[importance]}
+            min={1}
+            max={5}
+            step={1}
+            onValueChange={([v]) => setImportance(v as 1 | 2 | 3 | 4 | 5)}
+            disabled={busy}
+          />
+        )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label className={wishLabel}>可见范围</Label>
-        <WishVisibilityToggle value={visibility} onChange={setVisibility} />
+      <div className="space-y-2">
+        <Label className={wishLabel}>{collabMode ? '可见模式' : '可见范围'}</Label>
+        {collabMode ? (
+          <WishVisibilityCards value={visibility} onChange={setVisibility} disabled={busy} />
+        ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <WishVisibilityToggle value={visibility} onChange={setVisibility} />
+          </div>
+        )}
       </div>
 
       <Button
         type="button"
-        className="w-full"
+        className="w-full gap-1.5"
         onClick={() => void handleSubmit()}
         disabled={busy}
       >

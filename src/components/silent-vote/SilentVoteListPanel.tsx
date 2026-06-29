@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight, Plus, Vote } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,12 +13,21 @@ interface SilentVoteListPanelProps {
   tripId: string;
   className?: string;
   showCreate?: boolean;
+  /** URL 深链 ?voteId= */
+  initialVoteId?: string | null;
+  onInitialVoteConsumed?: () => void;
+  onVoteOpen?: (voteId: string) => void;
+  onVoteClose?: () => void;
 }
 
 export function SilentVoteListPanel({
   tripId,
   className,
   showCreate = true,
+  initialVoteId,
+  onInitialVoteConsumed,
+  onVoteOpen,
+  onVoteClose,
 }: SilentVoteListPanelProps) {
   const { items, loading, reload } = useSilentVoteList(tripId);
   const [createOpen, setCreateOpen] = useState(false);
@@ -28,7 +37,17 @@ export function SilentVoteListPanel({
   const openVote = (voteId: string) => {
     setActiveVoteId(voteId);
     setDetailOpen(true);
+    onVoteOpen?.(voteId);
   };
+
+  useEffect(() => {
+    if (!initialVoteId || loading) return;
+    const exists = items.some((v) => v.id === initialVoteId);
+    if (!exists) return;
+    openVote(initialVoteId);
+    onInitialVoteConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅深链首次打开
+  }, [initialVoteId, loading, items.length]);
 
   const handleCreated = (voteId: string) => {
     void reload();
@@ -39,6 +58,7 @@ export function SilentVoteListPanel({
     setDetailOpen(open);
     if (!open) {
       setActiveVoteId(null);
+      onVoteClose?.();
       void reload();
     }
   };

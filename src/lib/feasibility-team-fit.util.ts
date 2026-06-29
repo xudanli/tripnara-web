@@ -2,6 +2,7 @@ import {
   buildPlanStudioDecisionProfilingUrl,
   type DecisionProfilingSurface,
 } from '@/lib/decision-profiling-navigation';
+import { mergeCollabDeepLink } from '@/lib/collab-center-navigation';
 import type { TripDomain } from '@/types/trip-domain-influence';
 import type {
   FeasibilityIssueDto,
@@ -123,6 +124,18 @@ export function resolveTeamFitHighlightPlan(domains: string[] | undefined): Team
 export function buildTeamFitDeepLinkUrl(tripId: string, issue: FeasibilityIssueDto): string | null {
   const link = issue.uiHints?.deepLink;
   if (!link?.tab) return null;
+  if (link.tab === 'team') {
+    const params = mergeCollabDeepLink(new URLSearchParams({ tripId, tab: 'schedule' }), {
+      collabTab: 'members',
+    });
+    if (link.highlightDomains?.length) {
+      params.set('teamHighlight', link.highlightDomains.join(','));
+    }
+    if (issue.uiHints?.affectedMemberIds?.length) {
+      params.set('teamMembers', issue.uiHints.affectedMemberIds.join(','));
+    }
+    return `/dashboard/plan-studio?${params.toString()}`;
+  }
   const params = new URLSearchParams();
   params.set('tripId', tripId);
   params.set('tab', link.tab);

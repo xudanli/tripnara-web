@@ -131,6 +131,11 @@ export interface TeamTravelStyleItem {
   displayName: string;
   styleLabel: string;
   compatibilityHints: string[];
+  /** 可选：团队画像卡置信度 0–1 */
+  confidence?: number;
+  /** 可选：核心驱动关键词 */
+  coreDrivers?: string[];
+  teamRole?: string;
 }
 
 export interface MoneyDnaVector {
@@ -155,6 +160,8 @@ export interface TeamMoneyDnaItem {
   userId: string;
   displayName: string;
   styleSimilarityPct: number;
+  /** 可选：成员 Money DNA 向量（团队对比柱状图） */
+  vector?: MoneyDnaVector;
 }
 
 export interface FrictionMatrixCell {

@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { normalizeBudgetProfile } from '@/lib/trip-budget-normalize';
 import {
   formatPlanningWorkbenchErrorForDisplay,
   mapPlanningWorkbenchUserMessage,
@@ -273,12 +274,33 @@ export interface PlanItinerarySegment {
 /** 健康度档位（内部能力输出，可放高级页） */
 export type WorkbenchHealthBand = 'healthy' | 'warning' | 'critical';
 
+/** optionComparison.options[].budget — budget/compare 挂到 cost 列 */
+export interface OptionComparisonBudget {
+  estimatedCost: number;
+  currency: string;
+  budgetUsagePercent: number;
+  vsIntentDelta?: number;
+  verdict: string;
+  costDisplayValue: string;
+  topHotspot?: string;
+}
+
+/** optionComparison.budgetComparison — tripnara.budget_comparison@v1 摘要 */
+export interface OptionComparisonBudgetSummary {
+  schema: string;
+  intentTotal: number;
+  currency: string;
+  recommendedPlanId: string;
+}
+
 export interface OptionComparisonEntry {
   optionId: string;
-  /** 各维度 0–100 分；后端不再因 Kernel 门控改写 */
+  label?: string;
+  /** 各维度 0–100 分；cost 越低越省（≈ budgetUsagePercent） */
   scores?: Record<string, number>;
   /** 可能含 [Kernel Gate: ... dominant_cid=...] */
   summary?: string;
+  budget?: OptionComparisonBudget;
 }
 
 export type KernelGateStatus =
@@ -315,12 +337,14 @@ export interface KernelGateEval {
 }
 
 export interface OptionComparison {
+  schema?: string;
   options?: OptionComparisonEntry[];
   recommendation?: {
     optionId: string;
     reason: string;
   };
   kernelGateEval?: KernelGateEval;
+  budgetComparison?: OptionComparisonBudgetSummary;
 }
 
 export type {
@@ -397,8 +421,10 @@ export interface UIOutput {
   timestamp: string;
   /** 方案骨架（偏大，可懒加载 / 调试） */
   skeletonOptions?: PlanSkeletonSet;
-  /** 多方案对比 */
+  /** 多方案对比（BFF；含 budget/compare 挂接后的 cost 列） */
   comparison?: OptionComparison;
+  /** 与 comparison 同构；execute / budget/compare 优先读此字段 */
+  optionComparison?: OptionComparison;
   /** 预算 / 节奏 / 可行性 */
   health?: {
     budget: WorkbenchHealthBand;
@@ -769,7 +795,8 @@ export function normalizeWorkbenchUiOutput(raw: unknown): UIOutput {
     consolidatedDecision,
     timestamp,
     skeletonOptions: r.skeletonOptions as PlanSkeletonSet | undefined,
-    comparison: normalizeOptionComparison(r.comparison),
+    comparison: pickOptionComparisonFromSources(r.optionComparison, r.comparison),
+    optionComparison: pickOptionComparisonFromSources(r.optionComparison, r.comparison),
     health: r.health as UIOutput['health'],
     confirmations: Array.isArray(r.confirmations)
       ? (r.confirmations as unknown[]).filter((x): x is string => typeof x === 'string')
@@ -919,6 +946,53 @@ function normalizeKernelGateEval(raw: unknown): KernelGateEval | undefined {
   return Object.keys(evalOut).length > 0 ? evalOut : undefined;
 }
 
+function normalizeOptionComparisonBudget(raw: unknown): OptionComparisonBudget | undefined {
+  const o = asRecord(raw);
+  if (!o) return undefined;
+  const estimatedCost = Number(o.estimatedCost ?? o.estimated_cost);
+  const budgetUsagePercent = Number(o.budgetUsagePercent ?? o.budget_usage_percent);
+  const verdict = o.verdict;
+  const costDisplayValue = o.costDisplayValue ?? o.cost_display_value;
+  const currency = o.currency;
+  if (
+    !Number.isFinite(estimatedCost) ||
+    !Number.isFinite(budgetUsagePercent) ||
+    typeof verdict !== 'string' ||
+    typeof costDisplayValue !== 'string'
+  ) {
+    return undefined;
+  }
+  const vsIntentDelta = o.vsIntentDelta ?? o.vs_intent_delta;
+  const topHotspot = o.topHotspot ?? o.top_hotspot;
+  return {
+    estimatedCost,
+    currency: typeof currency === 'string' ? currency : 'CNY',
+    budgetUsagePercent,
+    verdict,
+    costDisplayValue,
+    ...(typeof vsIntentDelta === 'number' && Number.isFinite(vsIntentDelta) ? { vsIntentDelta } : {}),
+    ...(typeof topHotspot === 'string' ? { topHotspot } : {}),
+  };
+}
+
+function normalizeOptionComparisonBudgetSummary(raw: unknown): OptionComparisonBudgetSummary | undefined {
+  const o = asRecord(raw);
+  if (!o) return undefined;
+  const schema = o.schema ?? o.schemaVersion ?? o.schema_version;
+  const intentTotal = Number(o.intentTotal ?? o.intent_total);
+  const currency = o.currency;
+  const recommendedPlanId = o.recommendedPlanId ?? o.recommended_plan_id;
+  if (
+    typeof schema !== 'string' ||
+    !Number.isFinite(intentTotal) ||
+    typeof currency !== 'string' ||
+    typeof recommendedPlanId !== 'string'
+  ) {
+    return undefined;
+  }
+  return { schema, intentTotal, currency, recommendedPlanId };
+}
+
 export function normalizeOptionComparison(raw: unknown): OptionComparison | undefined {
   const o = asRecord(raw);
   if (!o) return undefined;
@@ -940,10 +1014,14 @@ export function normalizeOptionComparison(raw: unknown): OptionComparison | unde
               )
             : undefined;
           const summary = entry.summary;
+          const label = entry.label;
+          const budget = normalizeOptionComparisonBudget(entry.budget);
           return {
             optionId,
+            ...(typeof label === 'string' ? { label } : {}),
             ...(scores && Object.keys(scores).length ? { scores } : {}),
             ...(typeof summary === 'string' ? { summary } : {}),
+            ...(budget ? { budget } : {}),
           } satisfies OptionComparisonEntry;
         })
         .filter((x): x is OptionComparisonEntry => x != null)
@@ -961,29 +1039,54 @@ export function normalizeOptionComparison(raw: unknown): OptionComparison | unde
       : undefined;
 
   const kernelGateEval = normalizeKernelGateEval(o.kernelGateEval ?? o.kernel_gate_eval);
+  const budgetComparison = normalizeOptionComparisonBudgetSummary(
+    o.budgetComparison ?? o.budget_comparison,
+  );
+  const schema = o.schema ?? o.schemaVersion ?? o.schema_version;
 
   const out: OptionComparison = {};
+  if (typeof schema === 'string') out.schema = schema;
   if (options?.length) out.options = options;
   if (recommendation) out.recommendation = recommendation;
   if (kernelGateEval) out.kernelGateEval = kernelGateEval;
+  if (budgetComparison) out.budgetComparison = budgetComparison;
 
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/** 从 uiOutput 或 planState.metadata 提取多方案对比（compare / generate 共用） */
+export function pickOptionComparisonFromSources(
+  ...rawSources: unknown[]
+): OptionComparison | undefined {
+  for (const raw of rawSources) {
+    const cmp = normalizeOptionComparison(raw);
+    if (cmp && (cmp.options?.length || cmp.recommendation || cmp.kernelGateEval || cmp.budgetComparison)) {
+      return cmp;
+    }
+  }
+  return undefined;
+}
+
+/** 从 uiOutput 或 planState.metadata 提取多方案对比（compare / generate / budget/compare 共用） */
 export function pickWorkbenchOptionComparison(
   sources: Array<{ uiOutput?: UIOutput; planState?: PlanState }>,
 ): OptionComparison | undefined {
   for (const s of sources) {
-    const cmp = s.uiOutput?.comparison;
-    if (cmp && (cmp.options?.length || cmp.recommendation || cmp.kernelGateEval)) {
-      return cmp;
-    }
+    const cmp = pickOptionComparisonFromSources(
+      s.uiOutput?.optionComparison,
+      s.uiOutput?.comparison,
+    );
+    if (cmp) return cmp;
   }
   for (const s of sources) {
     const meta = asRecord(s.planState?.metadata);
     if (!meta) continue;
-    const cmp = normalizeOptionComparison(meta.comparison);
+    const budgetMeta = asRecord(meta.budgetComparison);
+    const cmp = pickOptionComparisonFromSources(
+      meta.optionComparison,
+      meta.comparison,
+      budgetMeta?.optionComparison,
+      meta.budgetComparison,
+    );
     if (cmp) return cmp;
   }
   return undefined;
@@ -1829,69 +1932,29 @@ export const planningWorkbenchApi = {
   /**
    * 预算合理性评估（Should-Exist Gate）
    * POST /planning-workbench/budget/evaluate
+   *
+   * budgetIntent / budgetStructure 可省略（服务端从 trip 读取）；显式传入用于草稿预览。
    */
   evaluateBudget: async (
-    data: {
-      planId: string;
-      tripId: string;
-      estimatedCost: number;
-      categoryBreakdown: {
-        accommodation: number;
-        transportation: number;
-        food: number;
-        activities: number;
-        other: number;
-      };
-      budgetConstraint: BudgetConstraint;
-    }
+    data: import('@/types/trip-budget').BudgetEvaluateRequest,
   ): Promise<import('@/types/trip').BudgetEvaluationResponse> => {
     try {
-      console.log('[Planning Workbench API] 发送 evaluateBudget 请求:', {
-        planId: data.planId,
-        tripId: data.tripId,
-        estimatedCost: data.estimatedCost,
-      });
-
       const response = await apiClient.post<ApiResponseWrapper<import('@/types/trip').BudgetEvaluationResponse>>(
         '/planning-workbench/budget/evaluate',
         data,
-        {
-          timeout: 30000, // 30 秒超时
-        }
+        { timeout: 30000 },
       );
-
-      console.log('[Planning Workbench API] 收到 evaluateBudget 原始响应:', {
-        hasData: !!response.data,
-        success: response.data?.success,
-      });
-
-      const wrappedResponse = handleResponse(response);
-      console.log('[Planning Workbench API] 解析后的响应:', {
-        verdict: wrappedResponse.verdict,
-        confidence: wrappedResponse.confidence,
-      });
-
-      return wrappedResponse;
-    } catch (error: any) {
-      console.error('[Planning Workbench API] evaluateBudget 请求失败:', {
-        error,
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        planId: data.planId,
-        tripId: data.tripId,
-      });
-
-      if (error.message) {
-        throw error;
-      }
-      if (error.code === 'ECONNABORTED') {
+      return handleResponse(response);
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string };
+      if (err.message) throw error;
+      if (err.code === 'ECONNABORTED') {
         throw new Error('请求超时，请稍后重试');
-      } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
-        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
-      } else {
-        throw new Error(error.message || '预算评估失败，请稍后重试');
       }
+      if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      }
+      throw new Error('预算评估失败，请稍后重试');
     }
   },
 
@@ -2019,6 +2082,72 @@ export const planningWorkbenchApi = {
       } else {
         throw new Error(error.message || '应用预算优化失败，请稍后重试');
       }
+    }
+  },
+
+  /**
+   * 多方案预算对比
+   * POST /planning-workbench/budget/compare
+   */
+  compareBudgetPlans: async (
+    data: import('@/types/trip-budget').BudgetCompareRequest,
+  ): Promise<import('@/types/trip-budget').BudgetCompareResponse> => {
+    try {
+      const response = await apiClient.post<
+        ApiResponseWrapper<import('@/types/trip-budget').BudgetCompareResponse>
+      >('/planning-workbench/budget/compare', data, { timeout: 30000 });
+      const wrapped = handleResponse(response);
+      const optionComparison = normalizeOptionComparison(wrapped.optionComparison);
+      return {
+        ...wrapped,
+        ...(optionComparison ? { optionComparison } : {}),
+      };
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string };
+      if (err.message) throw error;
+      if (err.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      }
+      if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      }
+      throw new Error('预算方案对比失败，请稍后重试');
+    }
+  },
+
+  /**
+   * 预算工作台详情（profile + evidence + optimizations + priceEvidence）
+   * GET /planning-workbench/budget/details
+   */
+  getBudgetWorkbenchDetails: async (
+    tripId: string,
+    planId?: string | null,
+  ): Promise<import('@/types/trip-budget').BudgetWorkbenchDetailsResponse> => {
+    try {
+      const response = await apiClient.get<
+        ApiResponseWrapper<import('@/types/trip-budget').BudgetWorkbenchDetailsResponse>
+      >('/planning-workbench/budget/details', {
+        params: {
+          tripId,
+          ...(planId ? { planId } : {}),
+        },
+        timeout: 30000,
+      });
+      const wrapped = handleResponse(response);
+      return {
+        ...wrapped,
+        profile: normalizeBudgetProfile(wrapped.profile),
+      };
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string };
+      if (err.message) throw error;
+      if (err.code === 'ECONNABORTED') {
+        throw new Error('请求超时，请稍后重试');
+      }
+      if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED') {
+        throw new Error('无法连接到后端服务，请确认后端服务是否在运行');
+      }
+      throw new Error('获取预算详情失败，请稍后重试');
     }
   },
 

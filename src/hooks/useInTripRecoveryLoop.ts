@@ -166,17 +166,7 @@ export function useInTripRecoveryLoop(
         setError(null);
         const res = await tripLoopsApi.applyInTripRecovery(tripId, id, { plans: resolvedPlans });
         if (res.applied) {
-          const summary = summarizeLoopApplyResult({
-            applied: res.applied,
-            after: {
-              readinessScore: 0,
-              hardBlockers: 0,
-              mustHandleCount: 0,
-              suggestAdjustCount: 0,
-              canStartExecute: false,
-              verdictStatus: 'UNKNOWN',
-            },
-          });
+          const summary = summarizeLoopApplyResult({ applied: res.applied });
           if (summary.deferred.length > 0) {
             setError(
               summary.deferred.map((d) => d.message).filter(Boolean).join('；') ||

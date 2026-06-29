@@ -3087,17 +3087,22 @@ function PlanPreviewContent(props: {
                   置信度: {(budgetEvaluation.budgetEvaluation.confidence * 100).toFixed(0)}%
                 </CardDescription>
               </div>
-              {budgetEvaluation.budgetEvaluation.recommendations &&
-                budgetEvaluation.budgetEvaluation.recommendations.length > 0 && (
+              {(budgetEvaluation.budgetEvaluation.optimizations?.length ??
+                budgetEvaluation.budgetEvaluation.recommendations?.length ??
+                0) > 0 && (
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={async () => {
                       try {
-                        // 获取优化建议 ID（这里需要根据实际数据结构调整）
-                        const optimizationIds = budgetEvaluation.budgetEvaluation.recommendations?.map(
-                          (_, index) => `rec-${budgetEvaluation.planId}-${index}`
-                        ) || [];
+                        const optimizationIds =
+                          budgetEvaluation.budgetEvaluation.optimizations?.map((item) => item.id).filter(Boolean) ??
+                          [];
+
+                        if (optimizationIds.length === 0) {
+                          toast.error('暂无可用优化草案，请先运行预算评估');
+                          return;
+                        }
 
                         const result = await planningWorkbenchApi.applyBudgetOptimization({
                           planId: budgetEvaluation.planId,

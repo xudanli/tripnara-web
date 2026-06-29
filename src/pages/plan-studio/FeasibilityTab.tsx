@@ -1,4 +1,4 @@
-import { ReadinessRepairLoopWorkspace } from '@/components/trip-loop/ReadinessRepairLoopWorkspace';
+import { FeasibilityReportPanel } from '@/components/feasibility-report';
 
 interface FeasibilityTabProps {
   tripId: string;
@@ -8,7 +8,7 @@ interface FeasibilityTabProps {
 export default function FeasibilityTab({ tripId }: FeasibilityTabProps) {
   return (
     <div className="max-w-7xl mx-auto">
-      <ReadinessRepairLoopWorkspace tripId={tripId} variant="page" />
+      <FeasibilityReportPanel tripId={tripId} />
     </div>
   );
 }

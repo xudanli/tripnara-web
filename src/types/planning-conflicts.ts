@@ -1,4 +1,6 @@
 import type { PlanStudioConflict } from '@/types/trip';
+import type { DecisionCheckerResponse } from '@/types/decision-checker';
+import type { PlanningDaySplitDto } from '@/types/planning-day-split';
 import type {
   FeasibilityIssueDto,
   FeasibilityIssuePriority,
@@ -41,6 +43,17 @@ export interface PlanningConflictsSummaryDto {
   byCategory: Partial<Record<PlanningConflictCategory, number>>;
 }
 
+/** BFF 首包 defer：decisionChecker 后台计算，客户端轮询补全 */
+export interface DecisionCheckerDeferredDto {
+  status: 'pending' | 'ready' | 'failed';
+  taskId: string;
+  /** 相对路径，如 `/trips/:id/planning-conflicts?decisionCheckerTaskId=...` */
+  pollUrl?: string;
+  /** BFF 建议轮询间隔（ms），默认 5000 */
+  pollIntervalMs?: number;
+  error?: string;
+}
+
 export interface PlanningConflictsResponse {
   tripId: string;
   verdict?: {
@@ -56,4 +69,10 @@ export interface PlanningConflictsResponse {
   conflicts: PlanningConflictDto[];
   /** P2：`?includeConstraintsSummary=1` */
   constraintsSummary?: import('@/types/planning-constraints').ConstraintsSummaryResponse;
+  /** 决策检查器读模型：`?includeDecisionChecker=1` 或 deferred 轮询 ready 后 */
+  decisionChecker?: DecisionCheckerResponse;
+  /** includeDecisionChecker=1 且 decisionChecker 尚未就绪时 */
+  decisionCheckerDeferred?: DecisionCheckerDeferredDto;
+  /** 并行分流时间线：`docs/api/planning-workbench-split-plan-api.md` */
+  daySplits?: PlanningDaySplitDto[];
 }

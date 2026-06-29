@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { DateTime } from 'luxon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, X, ChevronLeft, ChevronRight, Compass, Pencil, RefreshCw, Trash2, Lock, Utensils, Hotel, Coffee, Fuel } from 'lucide-react';
+import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, Compass, Pencil, RefreshCw, Trash2, Lock, Utensils, Hotel, Coffee, Fuel } from 'lucide-react';
 import type { ItineraryItem, BookingStatus } from '@/types/trip';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import type { PlaceImageInfo } from '@/types/place-image';
@@ -47,10 +47,13 @@ import { formatCurrency } from '@/utils/format';
 import { isAlwaysOpenHours } from '@/utils/opening-hours-schedule-check';
 import { toast } from 'sonner';
 import type { DecisionAuthorityLabel } from '@/lib/domain-influence-mapping';
+import { ItineraryDecisionAuthorityRow } from '@/components/domain-influence';
 import { getCrossDayBadgeLabel, readCrossDayInfo } from '@/lib/itinerary-item-sort';
 import { isItineraryCarRentalDisplay, isItineraryDeparturePointDisplay, isItineraryLandingPointDisplay } from '@/lib/itinerary-special-display';
 import { isCarRentalItineraryItem } from '@/lib/trip-car-rental-status';
 import { PresentedItineraryItemInsight } from '@/components/experience-fulfillment/PresentedItineraryItemInsight';
+import { PlaceImageViewerDialog } from '@/components/plan-studio/PlaceImageViewerDialog';
+import { collectPlaceImages } from '@/lib/collect-place-images';
 import type { PresentedItineraryItem } from '@/types/experience-fulfillment';
 
 interface ItineraryItemRowProps {
@@ -656,27 +659,14 @@ export default function ItineraryItemRow({
   const placeImage = placeImagesFromMetadata && placeImagesFromMetadata.length > 0 ? placeImagesFromMetadata[0] : null;
   
   // 收集所有可用的图片（用于详情弹窗和图片查看器）
-  const allImages = useMemo(() => {
-    const images: Array<{ url: string; caption?: string }> = [];
-    
-    // 1. 优先添加上传的图片
-    if (placeImages && placeImages.length > 0) {
-      placeImages.forEach(img => {
-        images.push({ url: img.url, caption: img.caption });
-      });
-    }
-    
-    // 2. 添加地点自带的图片（避免重复）
-    if (placeImagesFromMetadata && Array.isArray(placeImagesFromMetadata)) {
-      placeImagesFromMetadata.forEach((imgUrl: string) => {
-        if (typeof imgUrl === 'string' && !images.some(i => i.url === imgUrl)) {
-          images.push({ url: imgUrl });
-        }
-      });
-    }
-    
-    return images;
-  }, [placeImages, placeImagesFromMetadata]);
+  const allImages = useMemo(
+    () =>
+      collectPlaceImages({
+        placeImages,
+        place: place ?? null,
+      }),
+    [placeImages, place],
+  );
 
   // 打开详情弹窗
   const handleOpenDetail = () => {
@@ -808,7 +798,7 @@ export default function ItineraryItemRow({
             {isDeparturePointDisplay && (
               <Badge
                 variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-violet-50 text-violet-700 border-violet-200"
+                className="text-[10px] px-1.5 py-0 border-border/60 bg-muted/40 text-muted-foreground"
               >
                 离境点
               </Badge>
@@ -1184,7 +1174,7 @@ export default function ItineraryItemRow({
                         disabled={!getPlaceCoordinates}
                         className="cursor-pointer"
                       >
-                        <Hotel className="w-4 h-4 mr-2 text-purple-500" />
+                        <Hotel className="w-4 h-4 mr-2 text-muted-foreground" />
                         <span>酒店</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -1437,83 +1427,13 @@ export default function ItineraryItemRow({
     </Dialog>
 
     {/* 图片查看器（大图） */}
-    {allImages.length > 0 && (
-      <Dialog open={imageViewerOpen} onOpenChange={setImageViewerOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] p-0 bg-black/95 [&>button]:hidden">
-          <div className="relative w-full h-[80vh] flex items-center justify-center">
-            {/* 关闭按钮 */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
-              onClick={() => setImageViewerOpen(false)}
-            >
-              <X className="w-5 h-5" />
-            </Button>
-
-            {/* 上一张按钮 */}
-            {allImages.length > 1 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute left-4 z-10 text-white hover:bg-white/20"
-                onClick={() => setCurrentImageIndex((prev) => (prev > 0 ? prev - 1 : allImages.length - 1))}
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </Button>
-            )}
-
-            {/* 图片 */}
-            <img
-              src={allImages[currentImageIndex]?.url}
-              alt={allImages[currentImageIndex]?.caption || `${name} - 图片 ${currentImageIndex + 1}`}
-              className="max-w-full max-h-full object-contain"
-            />
-
-            {/* 下一张按钮 */}
-            {allImages.length > 1 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-4 z-10 text-white hover:bg-white/20"
-                onClick={() => setCurrentImageIndex((prev) => (prev < allImages.length - 1 ? prev + 1 : 0))}
-              >
-                <ChevronRight className="w-6 h-6" />
-              </Button>
-            )}
-
-            {/* 图片信息 */}
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-lg text-sm">
-              {allImages[currentImageIndex]?.caption || `${name} (${currentImageIndex + 1}/${allImages.length})`}
-            </div>
-
-            {/* 缩略图导航（多张图片时显示） */}
-            {allImages.length > 1 && (
-              <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4">
-                {allImages.map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentImageIndex(idx)}
-                    className={cn(
-                      "flex-shrink-0 w-16 h-16 rounded overflow-hidden border-2 transition-all",
-                      idx === currentImageIndex 
-                        ? "border-white" 
-                        : "border-transparent opacity-60 hover:opacity-100"
-                    )}
-                  >
-                    <img
-                      src={img.url}
-                      alt={`缩略图 ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    )}
+    <PlaceImageViewerDialog
+      open={imageViewerOpen}
+      onOpenChange={setImageViewerOpen}
+      images={allImages}
+      initialIndex={currentImageIndex}
+      title={name}
+    />
     </>
   );
 }

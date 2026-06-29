@@ -140,6 +140,30 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-intake-axis-i: var(--intake-axis-i);
   --color-intake-axis-e: var(--intake-axis-e);
+  --color-nara-lava: var(--nara-lava);
+  --color-nara-lava-foreground: var(--nara-lava-foreground);
+  --color-nara-lava-border: var(--nara-lava-border);
+  --color-nara-lava-muted: var(--nara-lava-muted);
+  --color-nara-glacier: var(--nara-glacier);
+  --color-nara-glacier-foreground: var(--nara-glacier-foreground);
+  --color-nara-glacier-border: var(--nara-glacier-border);
+  --color-nara-glacier-muted: var(--nara-glacier-muted);
+  --color-nara-tundra: var(--nara-tundra);
+  --color-nara-tundra-foreground: var(--nara-tundra-foreground);
+  --color-nara-tundra-border: var(--nara-tundra-border);
+  --color-nara-tundra-muted: var(--nara-tundra-muted);
+  --color-gate-allow: var(--gate-allow);
+  --color-gate-allow-foreground: var(--gate-allow-foreground);
+  --color-gate-allow-border: var(--gate-allow-border);
+  --color-gate-confirm: var(--gate-confirm);
+  --color-gate-confirm-foreground: var(--gate-confirm-foreground);
+  --color-gate-confirm-border: var(--gate-confirm-border);
+  --color-gate-suggest: var(--gate-suggest);
+  --color-gate-suggest-foreground: var(--gate-suggest-foreground);
+  --color-gate-suggest-border: var(--gate-suggest-border);
+  --color-gate-reject: var(--gate-reject);
+  --color-gate-reject-foreground: var(--gate-reject-foreground);
+  --color-gate-reject-border: var(--gate-reject-border);
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 
@@ -223,15 +247,31 @@
   --gate-confirm-foreground: oklch(0.45 0.15 85);
   --gate-confirm-border: oklch(0.90 0.05 85);
   
-  /* 决策状态 - SUGGEST_REPLACE (建议替换) */
-  --gate-suggest: oklch(0.97 0.02 280);
-  --gate-suggest-foreground: oklch(0.50 0.15 280);
-  --gate-suggest-border: oklch(0.88 0.05 280);
+  /* 决策状态 - SUGGEST_REPLACE (建议替换) · 冰川蓝，禁止紫色 */
+  --gate-suggest: var(--nara-glacier-muted);
+  --gate-suggest-foreground: var(--nara-glacier-foreground);
+  --gate-suggest-border: var(--nara-glacier-border);
   
   /* 决策状态 - REJECT (拒绝) */
   --gate-reject: oklch(0.95 0.02 25);
   --gate-reject-foreground: oklch(0.45 0.20 25);
   --gate-reject-border: oklch(0.85 0.08 25);
+
+  /* 冰岛品牌辅助色 · nara */
+  --nara-lava: #C25A3C;
+  --nara-lava-foreground: #8F3D28;
+  --nara-lava-border: #D4846E;
+  --nara-lava-muted: #F9EFEC;
+
+  --nara-glacier: #88C0D0;
+  --nara-glacier-foreground: #3D6570;
+  --nara-glacier-border: #6BA8B8;
+  --nara-glacier-muted: #EEF6F8;
+
+  --nara-tundra: #5E7D5B;
+  --nara-tundra-foreground: #3D5239;
+  --nara-tundra-border: #7A9976;
+  --nara-tundra-muted: #EEF2ED;
   
   /* 三人格 - Abu (安全守护者: 静谧蓝/冰川白) */
   --persona-abu: oklch(0.95 0.02 240);
@@ -331,7 +371,6 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
   
-  /* 决策状态 - 暗色模式 */
   --gate-allow: oklch(0.20 0.05 145);
   --gate-allow-foreground: oklch(0.85 0.10 145);
   --gate-allow-border: oklch(0.30 0.08 145);
@@ -340,13 +379,28 @@
   --gate-confirm-foreground: oklch(0.90 0.10 85);
   --gate-confirm-border: oklch(0.35 0.08 85);
   
-  --gate-suggest: oklch(0.22 0.05 280);
-  --gate-suggest-foreground: oklch(0.88 0.10 280);
-  --gate-suggest-border: oklch(0.32 0.08 280);
+  --gate-suggest: var(--nara-glacier-muted);
+  --gate-suggest-foreground: var(--nara-glacier-foreground);
+  --gate-suggest-border: var(--nara-glacier-border);
   
   --gate-reject: oklch(0.25 0.08 25);
   --gate-reject-foreground: oklch(0.90 0.15 25);
   --gate-reject-border: oklch(0.35 0.10 25);
+
+  --nara-lava: #C25A3C;
+  --nara-lava-foreground: #F0C4B8;
+  --nara-lava-border: #9A4A32;
+  --nara-lava-muted: oklch(0.24 0.04 35);
+
+  --nara-glacier: #88C0D0;
+  --nara-glacier-foreground: #B8DCE6;
+  --nara-glacier-border: #4A7884;
+  --nara-glacier-muted: oklch(0.22 0.03 205);
+
+  --nara-tundra: #5E7D5B;
+  --nara-tundra-foreground: #B8CEB5;
+  --nara-tundra-border: #4A6348;
+  --nara-tundra-muted: oklch(0.22 0.03 145);
   
   /* 三人格 - 暗色模式 */
   --persona-abu: oklch(0.20 0.05 240);
@@ -524,10 +578,337 @@
 .planner-dot-pulse-delay-2 { animation-delay: 0.4s; }
 .planner-dot-pulse-delay-3 { animation-delay: 0.6s; }
 
+/* ==================== 工作台 · 按需显示滚动条 ==================== */
+
+.scrollbar-auto-hide {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-auto-hide:hover,
+.scrollbar-auto-hide:focus-within {
+  scrollbar-color: color-mix(in oklch, var(--border) 65%, transparent) transparent;
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+.scrollbar-auto-hide:hover::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide:focus-within::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--border) 70%, transparent);
+}
+
+.scrollbar-auto-hide:hover::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+}
+
 /* ==================== AI 助手侧边栏样式 ==================== */
 
 /* 垂直文字 */
 .writing-vertical-rl {
   writing-mode: vertical-rl;
   text-orientation: mixed;
+}
+
+/* 全程地图 · Mapbox 活动弹窗 */
+.mapboxgl-popup.journey-map-popup .mapboxgl-popup-content {
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid oklch(0.88 0 0);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+.dark .mapboxgl-popup.journey-map-popup .mapboxgl-popup-content {
+  border-color: oklch(0.35 0 0);
+}
+.mapboxgl-popup.journey-map-popup .mapboxgl-popup-tip {
+  border-top-color: oklch(0.99 0 0);
+}
+.dark .mapboxgl-popup.journey-map-popup .mapboxgl-popup-tip {
+  border-top-color: oklch(0.2 0 0);
+}
+
+.journey-map-popup-body {
+  min-width: 240px;
+  max-width: 300px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  color: oklch(0.35 0 0);
+}
+.journey-map-popup-body--compact {
+  padding: 12px;
+}
+.journey-map-popup-body--compact .journey-map-popup-title {
+  margin-bottom: 12px;
+}
+.journey-map-popup-body--poi {
+  padding: 0;
+}
+.journey-map-popup-body--with-cover .journey-map-popup-inner {
+  padding-top: 10px;
+}
+.journey-map-popup-inner {
+  padding: 0 12px 10px;
+}
+.journey-map-popup-cover {
+  height: 112px;
+  overflow: hidden;
+  background: oklch(0.94 0 0);
+}
+.journey-map-popup-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.journey-map-popup-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.journey-map-popup-heading {
+  min-width: 0;
+  flex: 1;
+}
+.journey-map-popup-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+}
+.journey-map-popup-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: oklch(0.2 0 0);
+}
+.journey-map-popup-detail {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: oklch(0.45 0 0);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.journey-map-popup-stats-wrap {
+  margin-top: 8px;
+}
+.journey-map-popup-tags {
+  margin-bottom: 6px;
+}
+
+.mapboxgl-popup.journey-map-popup .journey-map-popup-icon {
+  display: inline-flex;
+  height: 32px;
+  width: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+.mapboxgl-popup.journey-map-popup .mapboxgl-popup-close-button {
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 8px;
+  color: oklch(0.45 0 0);
+}
+.mapboxgl-popup.journey-map-popup .journey-map-popup-tag {
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid oklch(0.82 0.04 75);
+  background: oklch(0.96 0.02 85);
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: oklch(0.42 0.06 75);
+}
+
+.journey-map-popup-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: oklch(0.48 0 0);
+}
+.journey-map-popup-meta-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+.journey-map-popup-meta-icon svg {
+  display: block;
+  height: 12px;
+  width: 12px;
+}
+
+.journey-map-popup-stats {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+.journey-map-popup-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.journey-map-popup-stat-label {
+  color: oklch(0.52 0 0);
+}
+.journey-map-popup-stat-value {
+  font-weight: 500;
+  color: oklch(0.28 0 0);
+  text-align: right;
+}
+
+.journey-map-popup-intensity {
+  display: inline-flex;
+  gap: 3px;
+}
+.journey-map-popup-intensity-dot {
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+  border-radius: 9999px;
+  border: 1px solid oklch(0.78 0 0);
+  background: transparent;
+}
+.journey-map-popup-intensity-dot.is-filled {
+  border-color: oklch(0.45 0.06 175);
+  background: oklch(0.52 0.08 175);
+}
+
+.journey-map-popup-participants {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 2px;
+}
+.journey-map-popup-avatar {
+  display: inline-flex;
+  height: 26px;
+  width: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 2px solid white;
+  margin-left: -6px;
+  font-size: 9px;
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.journey-map-popup-participants .journey-map-popup-avatar:first-child {
+  margin-left: 0;
+}
+.journey-map-popup-avatar-more {
+  background: oklch(0.92 0 0) !important;
+  color: oklch(0.45 0 0) !important;
+  font-size: 10px;
+}
+
+.journey-map-popup-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+.journey-map-popup-footer--stacked {
+  justify-content: stretch;
+}
+.journey-map-popup-footer--stacked .journey-map-popup-cta--primary {
+  width: 100%;
+}
+
+.journey-map-popup-cta {
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.journey-map-popup-cta--primary {
+  width: 100%;
+  margin-top: 12px;
+  background: oklch(0.205 0 0);
+  color: white;
+  border: none;
+}
+.journey-map-popup-cta--primary:hover {
+  background: oklch(0.28 0 0);
+}
+.journey-map-popup-cta--secondary {
+  background: white;
+  color: oklch(0.28 0 0);
+  border: 1px solid oklch(0.82 0 0);
+}
+.journey-map-popup-cta--secondary:hover {
+  background: oklch(0.97 0 0);
+  border-color: oklch(0.72 0 0);
+}
+
+/* 全程地图 · 路线标签（分流 / 汇合） */
+.journey-map-route-label {
+  --route-label-accent: oklch(0.45 0.02 260);
+  pointer-events: none;
+  max-width: 160px;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 0.9);
+  background: rgb(255 255 255 / 0.96);
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--route-label-accent);
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.1);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.journey-map-route-label--merge {
+  --route-label-accent: white;
+  border-color: oklch(0.35 0.02 260);
+  background: oklch(0.28 0.01 260);
+  color: white;
+}
+
+/* 全程地图 · 路线 Day 标签（高保真） */
+.journey-map-day-label {
+  pointer-events: none;
+  border-radius: 8px;
+  border: 2px solid rgb(255 255 255 / 0.92);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: white;
+  box-shadow: 0 2px 10px rgb(15 23 42 / 0.22);
+  opacity: 0.88;
+  white-space: nowrap;
+}
+
+.journey-map-day-label--selected {
+  opacity: 1;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 0.28);
+  transform: scale(1.06);
 }

@@ -136,9 +136,14 @@ export function pickRouteRunExplainOptimizationForMessage(
   return pickExplainOptimizationFromRouteRun(res);
 }
 
+/** L1：是否有「优化决策说明」折叠卡片（decision_verdict_narration_zh） */
+export function hasDecisionVerdictCard(opt: RouteRunExplainOptimization | undefined | null): boolean {
+  return !!opt?.decision_verdict_narration_zh?.trim();
+}
+
 export function hasOptimizationDecisionUi(opt: RouteRunExplainOptimization | undefined): boolean {
   if (!opt) return false;
-  if (opt.decision_verdict_narration_zh?.trim()) return true;
+  if (hasDecisionVerdictCard(opt)) return true;
   if (opt.meta_decision_audit?.trim()) return true;
   const v = opt.decision_verdict;
   if (v?.monte_carlo_summary?.total_samples) return true;
@@ -147,5 +152,62 @@ export function hasOptimizationDecisionUi(opt: RouteRunExplainOptimization | und
 
 /** L2：是否展示弃选方案表 */
 export function shouldShowRejectedPlansTable(opt: RouteRunExplainOptimization | undefined): boolean {
-  return (opt?.decision_verdict?.rejected_plans?.length ?? 0) > 0;
+  return hasRejectedPlansRows(opt?.decision_verdict);
+}
+
+export function hasRejectedPlansRows(
+  verdict?: RouteRunExplainOptimization['decision_verdict'] | null
+): boolean {
+  return (verdict?.rejected_plans?.length ?? 0) > 0;
+}
+
+export function formatRejectedPlanStatus(status: string | undefined): string {
+  const map: Record<string, string> = {
+    infeasible: '不可行',
+    rejected: '已弃选',
+    chosen: '已选用',
+    dominated: '被支配',
+    filtered: '已过滤',
+  };
+  if (!status?.trim()) return '—';
+  return map[status.trim().toLowerCase()] ?? status;
+}
+
+export function resolveChosenAlternativeId(opt?: RouteRunExplainOptimization | null): string {
+  if (!opt) return '';
+  return (
+    opt.decision_verdict?.chosen_plan_id?.trim() ||
+    opt.recommended_alternative_id?.trim() ||
+    ''
+  );
+}
+
+export function hasAlternativesRows(
+  alternatives?: RouteRunExplainOptimization['alternatives']
+): boolean {
+  return (alternatives?.length ?? 0) > 0;
+}
+
+export function sortAlternativesForDisplay(
+  rows: NonNullable<RouteRunExplainOptimization['alternatives']>
+) {
+  return [...rows].sort((a, b) => {
+    const sa = a.score ?? a.expected_utility ?? -1;
+    const sb = b.score ?? b.expected_utility ?? -1;
+    return sb - sa;
+  });
+}
+
+export function formatScorePct(score?: number): string {
+  if (score == null || !Number.isFinite(score)) return '—';
+  return `${Math.round(score * 1000) / 10}%`;
+}
+
+export function panelHasDecisionClosureContent(opt: RouteRunExplainOptimization): boolean {
+  return (
+    shouldShowRoadBanner(opt.world_constraint_materialization) ||
+    hasDecisionVerdictCard(opt) ||
+    hasRejectedPlansRows(opt.decision_verdict) ||
+    hasAlternativesRows(opt.alternatives)
+  );
 }

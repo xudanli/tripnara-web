@@ -29,7 +29,8 @@ describe('buildTeamFitDeepLinkUrl', () => {
         affectedMemberIds: ['u-alice', 'u-bob'],
       },
     }));
-    expect(url).toContain('tab=team');
+    expect(url).toContain('collab=1');
+    expect(url).toContain('collabTab=members');
     expect(url).toContain('teamHighlight=pacing%2Cbudget');
     expect(url).toContain('teamMembers=u-alice%2Cu-bob');
   });

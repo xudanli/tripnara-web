@@ -1,0 +1,162 @@
+import type { ConstraintListEntry } from '@/components/plan-studio/workbench/constraint-console-types';
+import { uiConstraintIdToApi } from '@/lib/trip-constraints.adapter';
+import {
+  TRIP_CONSTRAINT_LEGACY_IDS,
+  type TripConstraint,
+  type TripConstraintsCheckIssue,
+} from '@/types/trip-constraints';
+
+export interface ConstraintConsolePartition {
+  userHardItems: ConstraintListEntry[];
+  userSoftItems: ConstraintListEntry[];
+  officialRuleItems: ConstraintListEntry[];
+  worldFeasibilityItem: ConstraintListEntry | null;
+}
+
+export function isWorldFeasibilityConstraint(
+  constraint: Pick<TripConstraint, 'id'> | Pick<ConstraintListEntry, 'id'>,
+): boolean {
+  return (
+    constraint.id === TRIP_CONSTRAINT_LEGACY_IDS.WORLD_FEASIBILITY ||
+    constraint.id === 'c_world_feasibility' ||
+    constraint.id === 'world_feasibility'
+  );
+}
+
+export function isOfficialRuleConstraint(
+  constraint: Pick<TripConstraint, 'type' | 'source'> | Pick<ConstraintListEntry, 'kind' | 'sourceType'>,
+): boolean {
+  if ('type' in constraint && constraint.type === 'EXTERNAL') {
+    return constraint.source?.type === 'OFFICIAL_RULE';
+  }
+  if ('kind' in constraint) {
+    return constraint.kind === 'external' && constraint.sourceType === 'OFFICIAL_RULE';
+  }
+  return false;
+}
+
+export function isSafetyCategory(category?: string | null): boolean {
+  return category === 'SAFETY';
+}
+
+export function hasConstraintConflict(entry: Pick<ConstraintListEntry, 'hasConflict' | 'cardTone'>): boolean {
+  return entry.hasConflict === true || entry.cardTone === 'danger';
+}
+
+/** 官方目的地规则：只读，无编辑/删除/停用 */
+export function isConstraintReadOnly(entry: ConstraintListEntry): boolean {
+  return entry.readOnly === true || isOfficialRuleConstraint(entry);
+}
+
+/** 是否允许 PATCH（locked 或官方规则均禁止） */
+export function canPatchConstraint(entry: ConstraintListEntry): boolean {
+  if (isConstraintReadOnly(entry)) return false;
+  if (entry.locked) return false;
+  return entry.kind === 'hard' || entry.kind === 'soft';
+}
+
+export function canShowConstraintEdit(entry: ConstraintListEntry): boolean {
+  return canPatchConstraint(entry);
+}
+
+export function canShowConstraintDelete(entry: ConstraintListEntry): boolean {
+  if (isConstraintReadOnly(entry)) return false;
+  if (entry.locked) return false;
+  return entry.kind === 'soft';
+}
+
+export function canOfferRelaxation(entry: ConstraintListEntry): boolean {
+  if (isConstraintReadOnly(entry)) return false;
+  return entry.allowRelaxation !== false;
+}
+
+export function sortOfficialRuleItems(items: ConstraintListEntry[]): ConstraintListEntry[] {
+  return [...items].sort((a, b) => {
+    const aSafety = isSafetyCategory(a.category) ? 0 : 1;
+    const bSafety = isSafetyCategory(b.category) ? 0 : 1;
+    if (aSafety !== bSafety) return aSafety - bSafety;
+    return a.label.localeCompare(b.label, 'zh');
+  });
+}
+
+export function partitionConstraintEntries(items: ConstraintListEntry[]): ConstraintConsolePartition {
+  const userHardItems: ConstraintListEntry[] = [];
+  const userSoftItems: ConstraintListEntry[] = [];
+  const officialRuleItems: ConstraintListEntry[] = [];
+  let worldFeasibilityItem: ConstraintListEntry | null = null;
+
+  for (const item of items) {
+    if (isWorldFeasibilityConstraint(item)) {
+      worldFeasibilityItem = item;
+      continue;
+    }
+    if (isOfficialRuleConstraint(item)) {
+      officialRuleItems.push(item);
+      continue;
+    }
+    if (item.kind === 'hard') {
+      userHardItems.push(item);
+    } else if (item.kind === 'soft') {
+      userSoftItems.push(item);
+    }
+  }
+
+  return {
+    userHardItems,
+    userSoftItems,
+    officialRuleItems: sortOfficialRuleItems(officialRuleItems),
+    worldFeasibilityItem,
+  };
+}
+
+export function attachCheckIssuesToEntries(
+  items: ConstraintListEntry[],
+  issues: TripConstraintsCheckIssue[] | undefined,
+): ConstraintListEntry[] {
+  if (!issues?.length) return items;
+  const byConstraintId = new Map<string, TripConstraintsCheckIssue>();
+  for (const issue of issues) {
+    if (issue.constraintId) {
+      byConstraintId.set(issue.constraintId, issue);
+    }
+  }
+  return items.map((item) => {
+    const apiId = uiConstraintIdToApi(item.id);
+    const issue = byConstraintId.get(apiId) ?? byConstraintId.get(item.id);
+    if (!issue) return item;
+    return { ...item, checkIssueId: issue.id };
+  });
+}
+
+export function flattenPartition(partition: ConstraintConsolePartition): ConstraintListEntry[] {
+  return [
+    ...partition.userHardItems,
+    ...partition.userSoftItems,
+    ...partition.officialRuleItems,
+    ...(partition.worldFeasibilityItem ? [partition.worldFeasibilityItem] : []),
+  ];
+}
+
+export const OFFICIAL_RULE_READONLY_HINT =
+  '此项为目的地官方规则，由系统自动维护，不可手动修改或关闭。';
+
+/** @deprecated 使用 OFFICIAL_RULE_READONLY_HINT */
+export const OFFICIAL_RULE_WHY_NOT_EDITABLE = OFFICIAL_RULE_READONLY_HINT;
+
+export function isOfficialReadonlyConstraint(
+  item: Pick<ConstraintListEntry, 'sourceType' | 'locked'>,
+): boolean {
+  return item.sourceType === 'OFFICIAL_RULE' && item.locked === true;
+}
+
+/** ? tooltip：规则说明（description）+ 官方只读系统提示（前端固定文案） */
+export function buildConstraintHelpTooltip(
+  item: Pick<ConstraintListEntry, 'description' | 'sourceType' | 'locked'>,
+): string | null {
+  const description = item.description?.trim();
+  const parts = [
+    description || null,
+    isOfficialReadonlyConstraint(item) ? OFFICIAL_RULE_READONLY_HINT : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join('\n\n') : null;
+}

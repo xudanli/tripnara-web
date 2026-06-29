@@ -30,8 +30,8 @@ describe('persona-alert.adapter (M2)', () => {
   });
 });
 
-describe('resolveTripPersonaAlerts (M3)', () => {
-  it('prefers loop personaAlerts over API', () => {
+describe('resolveTripPersonaAlerts', () => {
+  it('normalizes and filters user-visible alerts', () => {
     const api = normalizePersonaAlerts([
       {
         id: 'api-1',
@@ -43,20 +43,9 @@ describe('resolveTripPersonaAlerts (M3)', () => {
         metadata: { audience: 'user' },
       },
     ]);
-    const loop = normalizePersonaAlerts([
-      {
-        id: 'loop-1',
-        persona: 'ABU',
-        title: 'Loop 提醒',
-        explanation: '来自 loop',
-        severity: 'warning',
-        createdAt: '2026-01-01T00:00:00Z',
-        metadata: { audience: 'user' },
-      },
-    ]);
 
-    const resolved = resolveTripPersonaAlerts(api, loop);
+    const resolved = resolveTripPersonaAlerts(api);
     expect(resolved).toHaveLength(1);
-    expect(resolved[0]?.id).toBe('loop-1');
+    expect(resolved[0]?.id).toBe('api-1');
   });
 });

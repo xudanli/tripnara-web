@@ -127,6 +127,48 @@ export async function saveConstraintTimeRange(
   notifyPlanStudioConstraintsChanged(tripId, 'dates');
 }
 
+export async function saveConstraintDailyDrive(tripId: string, hours: number): Promise<void> {
+  const intent = await tripsApi.getIntent(tripId);
+  const existing = intent.metadata?.constraints ?? {};
+
+  await tripsApi.updateIntent(tripId, {
+    pacingConfig: intent.pacingConfig
+      ? {
+          level: intent.pacingConfig.level as 'relaxed' | 'standard' | 'tight' | undefined,
+          maxDailyActivities: intent.pacingConfig.maxDailyActivities,
+          travelMode: intent.pacingConfig.travelMode,
+        }
+      : undefined,
+    preferences: intent.metadata?.preferences,
+    constraints: {
+      dailyWalkLimit: existing.dailyWalkLimit,
+      earlyRiser: existing.earlyRiser,
+      nightOwl: existing.nightOwl,
+      avoidPlaces: existing.avoidPlaces,
+      mustPlaces: existing.mustPlaces,
+      maxDailyDrivingHours: hours,
+    },
+    planningPolicy: intent.metadata?.planningPolicy as
+      | 'safe'
+      | 'experience'
+      | 'challenge'
+      | undefined,
+    totalBudget: intent.budgetConfig?.totalBudget ?? intent.totalBudget,
+  });
+
+  notifyPlanStudioConstraintsChanged(tripId, 'transport');
+}
+
+export async function saveConstraintAccommodation(tripId: string, stars: number): Promise<void> {
+  await tripsApi.update(tripId, {
+    metadata: {
+      accommodationStandard: `${stars} 星或以上`,
+    },
+  });
+
+  notifyPlanStudioConstraintsChanged(tripId, 'budget');
+}
+
 export function constraintKeyToFlexKey(key: ConstraintPendingKey): ConstraintFlexKey {
   return key;
 }

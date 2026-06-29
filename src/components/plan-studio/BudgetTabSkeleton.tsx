@@ -1,37 +1,38 @@
 /**
- * Budget Tab 骨架屏 — 与 TripBudgetPanel 卡片布局对齐
+ * Budget Tab 骨架屏 — 与 BudgetPlanningWorkbench 三栏布局对齐
  */
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-function skeletonCard(className?: string) {
-  return cn('rounded-lg border border-border/80 bg-card p-4 sm:p-5 shadow-sm space-y-4', className);
-}
-
 export function BudgetTabSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('mx-auto max-w-3xl space-y-4', className)}>
-      <div className={skeletonCard()}>
-        <div className="flex items-start gap-3">
-          <Skeleton className="h-9 w-9 rounded-md shrink-0" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-8 w-40" />
-          </div>
-          <Skeleton className="h-8 w-20 shrink-0" />
+    <div className={cn('flex h-full min-h-[480px] flex-col', className)}>
+      <div className="shrink-0 border-b border-border bg-card px-4 py-3 sm:px-5">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="mt-2 h-3 w-48" />
+        <div className="mt-3 flex justify-end gap-2">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-8 w-20" />
         </div>
-        <Skeleton className="h-2 w-full" />
-        <Skeleton className="h-12 w-full rounded-md" />
       </div>
-      <div className={skeletonCard()}>
-        <div className="flex justify-between">
-          <Skeleton className="h-5 w-28" />
-          <Skeleton className="h-8 w-24" />
-        </div>
-        <Skeleton className="h-10 w-full rounded-md" />
-        <Skeleton className="h-11 w-full rounded-md" />
-        <Skeleton className="h-11 w-full rounded-md" />
+      <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[18%_1fr_22%]">
+        <aside className="space-y-3 border-b border-border/60 p-3 xl:border-b-0 xl:border-r">
+          <Skeleton className="h-36 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+        </aside>
+        <main className="space-y-3 border-b border-border/60 p-3 xl:border-b-0 xl:border-r">
+          <Skeleton className="h-44 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-52 w-full rounded-xl" />
+        </main>
+        <aside className="space-y-3 p-3">
+          <Skeleton className="h-8 w-28" />
+          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-9 w-full rounded-md" />
+        </aside>
       </div>
     </div>
   );

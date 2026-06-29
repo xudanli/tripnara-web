@@ -65,4 +65,33 @@ describe('persona-alert-display (BFF M1)', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('dispatches decision_checker deep link with issueId and dayIndex', () => {
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal('CustomEvent', class {
+      type: string;
+      detail: unknown;
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    });
+    vi.stubGlobal('window', { dispatchEvent });
+
+    dispatchPersonaAlertDeepLink({
+      type: 'decision_checker',
+      issueId: 'issue-xxx',
+      dayIndex: 6,
+    });
+
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    const event = dispatchEvent.mock.calls[0]?.[0] as {
+      type: string;
+      detail?: { issueId?: string; dayIndex?: number };
+    };
+    expect(event.type).toBe('plan-studio:open-decision-checker');
+    expect(event.detail).toEqual({ issueId: 'issue-xxx', dayIndex: 6 });
+
+    vi.unstubAllGlobals();
+  });
 });

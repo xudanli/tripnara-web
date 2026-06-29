@@ -30,11 +30,9 @@ import {
   GitCompare,
   Info,
   Loader2,
-  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
 import { DecisionStripDecisionLogPreview } from './DecisionStripDecisionLogPreview';
-import { DecisionStripLoopValidationProgress } from './DecisionStripLoopValidationProgress';
 import { PlanningInboxBadge } from './PlanningInboxBadge';
 import {
   PlanningDetailsPanel,
@@ -68,18 +66,11 @@ export interface DecisionStripProps {
   className?: string;
 }
 
-function stripTone(
-  state: StripModel['state'],
-  hasCompare: boolean,
-  loopValidation: StripModel['loopValidation'],
-) {
+function stripTone(state: StripModel['state'], hasCompare: boolean) {
   if (state === 'error') return 'error' as const;
-  if (state === 'blocked' || loopValidation?.phase === 'awaiting_approval') {
-    return 'blocked' as const;
-  }
+  if (state === 'blocked') return 'blocked' as const;
   if (hasCompare) return 'compare' as const;
   if (state === 'running') return 'running' as const;
-  if (loopValidation?.active && loopValidation.verifyStepStatus === 'done') return 'info' as const;
   return 'info' as const;
 }
 
@@ -201,26 +192,17 @@ export function DecisionStrip({
 
   if (!model.showStrip) return null;
 
-  const tone = stripTone(model.state, Boolean(model.compareSummary), model.loopValidation);
+  const tone = stripTone(model.state, Boolean(model.compareSummary));
   const showOrchestrationProgress = model.orchestrationRunning;
-  const showLoopValidationProgress =
-    Boolean(model.loopValidation?.active) &&
-    model.loopValidation.verifyStepStatus === 'active' &&
-    (model.loopValidation.progressPct != null || model.loopValidation.issueCount > 0) &&
-    (model.state === 'running' ? !showOrchestrationProgress : true);
 
   const Icon =
-    showLoopValidationProgress && !showOrchestrationProgress
-      ? model.loopValidation?.verifyStepStatus === 'active'
-        ? Loader2
-        : ShieldCheck
-      : model.state === 'running'
-        ? Loader2
-        : model.state === 'error' || model.state === 'blocked'
-          ? AlertTriangle
-          : model.compareSummary
-            ? GitCompare
-            : Info;
+    model.state === 'running'
+      ? Loader2
+      : model.state === 'error' || model.state === 'blocked'
+        ? AlertTriangle
+        : model.compareSummary
+          ? GitCompare
+          : Info;
 
   const idleHeadline = t('planStudio.decisionStrip.idleHeadline', {
     defaultValue: '向助手描述需求，或在下方日程中微调',
@@ -249,13 +231,11 @@ export function DecisionStrip({
     planningInboxMode && model.planningReadiness?.tone === 'warning' ? 'outline' : 'default';
 
   const sectionLabel =
-    model.loopValidation?.active && !model.compareSummary && model.state !== 'running'
-      ? t('planStudio.decisionStrip.verifyStep', { defaultValue: '可执行性验证' })
-      : model.planningReadiness?.active && model.state !== 'running'
-        ? t('planStudio.decisionStrip.planningReadinessLabel', { defaultValue: '规划决策' })
-        : model.compareSummary && model.state !== 'running'
-          ? t('planStudio.decisionStrip.compareLabel', { defaultValue: '方案对比' })
-          : null;
+    model.planningReadiness?.active && model.state !== 'running'
+      ? t('planStudio.decisionStrip.planningReadinessLabel', { defaultValue: '规划决策' })
+      : model.compareSummary && model.state !== 'running'
+        ? t('planStudio.decisionStrip.compareLabel', { defaultValue: '方案对比' })
+        : null;
 
   const detailsBlock = (
     <>
@@ -366,8 +346,7 @@ export function DecisionStrip({
 
   if (compact && !isMobile) {
     const stripAccent = resolveStripAccent(tone);
-    const iconSpin =
-      model.state === 'running' || model.loopValidation?.verifyStepStatus === 'active';
+    const iconSpin = model.state === 'running';
 
     return (
       <PlanningHeaderSection accent={stripAccent} className={className}>
@@ -381,7 +360,7 @@ export function DecisionStrip({
               ? inboxBadge
               : null}
           </PlanningHeaderCopy>
-          {model.score != null && model.state !== 'running' && !model.loopValidation?.active ? (
+          {model.score != null && model.state !== 'running' ? (
             <PlanningScoreBadge score={model.score} />
           ) : null}
           <Button
@@ -418,10 +397,6 @@ export function DecisionStrip({
               progressPercentage={model.taskProgress}
             />
           </div>
-        ) : showLoopValidationProgress && model.loopValidation ? (
-          <div className="px-3.5 pb-2">
-            <DecisionStripLoopValidationProgress validation={model.loopValidation} compact />
-          </div>
         ) : null}
 
         <PlanningDetailsPanel open={compactDetailsOpen}>
@@ -453,9 +428,7 @@ export function DecisionStrip({
         <Icon
           className={cn(
             'h-4 w-4 shrink-0',
-            (model.state === 'running' ||
-              model.loopValidation?.verifyStepStatus === 'active') &&
-              'animate-spin text-primary',
+            model.state === 'running' && 'animate-spin text-primary',
           )}
         />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{displayHeadline}</span>
@@ -498,20 +471,12 @@ export function DecisionStrip({
             <Icon
               className={cn(
                 'h-4 w-4',
-                (model.state === 'running' ||
-                  model.loopValidation?.verifyStepStatus === 'active') &&
-                  'animate-spin text-primary',
+                model.state === 'running' && 'animate-spin text-primary',
               )}
             />
           </div>
           <div className="min-w-0 space-y-1">
-            {model.loopValidation?.active &&
-            !model.compareSummary &&
-            model.state !== 'running' ? (
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {t('planStudio.decisionStrip.verifyStep', { defaultValue: '可执行性验证' })}
-              </p>
-            ) : model.planningReadiness?.active && model.state !== 'running' ? (
+            {model.planningReadiness?.active && model.state !== 'running' ? (
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                 {t('planStudio.decisionStrip.planningReadinessLabel', { defaultValue: '规划决策摘要' })}
                 {inboxBadge}
@@ -539,9 +504,7 @@ export function DecisionStrip({
           </div>
         </div>
 
-        {model.score != null &&
-        model.state !== 'running' &&
-        !model.loopValidation?.active ? (
+        {model.score != null && model.state !== 'running' ? (
           <div className="shrink-0 text-right">
             <p className="text-[10px] text-muted-foreground">
               {t('planStudio.decisionStrip.scoreLabel', { defaultValue: '行程评分' })}
@@ -558,13 +521,6 @@ export function DecisionStrip({
             message={model.taskMessage}
             currentPhase={model.taskPhase}
             progressPercentage={model.taskProgress}
-          />
-        </div>
-      ) : showLoopValidationProgress && model.loopValidation ? (
-        <div className="mt-3">
-          <DecisionStripLoopValidationProgress
-            validation={model.loopValidation}
-            compact
           />
         </div>
       ) : null}

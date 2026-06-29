@@ -23,6 +23,7 @@ import {
   sumAllocations,
   validateStructureSum,
 } from '@/lib/trip-budget-structure';
+import { normalizeBudgetProfile } from '@/lib/trip-budget-normalize';
 
 interface SuccessResponse<T> {
   success: true;
@@ -128,7 +129,7 @@ export const tripBudgetApi = {
         `/trips/${tripId}/budget/profile`,
         { params: { include: 'actuals,wallet,value' } },
       );
-      const profile = handleResponse(response);
+      const profile = normalizeBudgetProfile(handleResponse(response));
       if (profile.structure) saveBudgetStructureLocal(tripId, profile.structure);
       return profile;
     } catch (err) {

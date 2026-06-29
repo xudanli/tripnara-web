@@ -1,0 +1,62 @@
+{
+  "request_id": "req-decision-closure-l1-mock",
+  "result": {
+    "status": "OK",
+    "answer_text": "已为你调整冰岛南岸动线：避开 F208 封路段，Day 2 改走 F209 绕行，整体节奏与住宿锚点不变。"
+  },
+  "explain": {
+    "optimization": {
+      "method": "CGUS",
+      "recommended_alternative_id": "repair-spatial-poi-v2",
+      "decision_verdict_narration_zh": "**推荐方案：** `repair-spatial-poi-v2`\n\n- 候选方案 A 需经 **F208**，与路政公告冲突。\n- 方案 B 经 **F209** 绕行，满足日程缓冲与住宿锚点。\n- 综合约束优化（CGUS）后选用当前方案。",
+      "world_constraint_materialization": {
+        "applied_events": 2,
+        "road_ids": ["F208", "IS-R1-SOUTH"],
+        "weather_dates": ["2026-01-16"],
+        "store_version": 1
+      },
+      "meta_decision_audit": "audit:cgus:iceland-f208:v1",
+      "decision_verdict": {
+        "chosen_plan_id": "repair-spatial-poi-v2",
+        "rejected_plans": [
+          {
+            "id": "plan-a-f208-direct",
+            "status": "infeasible",
+            "rejection_reasons": ["HARD:ROAD_CLOSURE:F208"],
+            "hard_violation_count": 1
+          },
+          {
+            "id": "plan-c-weather-risk",
+            "status": "rejected",
+            "rejection_reasons": ["SOFT:WEATHER_EXPOSURE"],
+            "utility_delta_vs_chosen": -0.12
+          }
+        ],
+        "monte_carlo_summary": {
+          "used": true,
+          "total_samples": 500
+        }
+      },
+      "alternatives": [
+        {
+          "id": "plan-a-f208-direct",
+          "score": 0.91,
+          "expected_utility": 0.88,
+          "feasibility_probability": 0.15
+        },
+        {
+          "id": "repair-spatial-poi-v2",
+          "score": 0.825,
+          "expected_utility": 0.82,
+          "feasibility_probability": 0.94
+        },
+        {
+          "id": "plan-c-weather-risk",
+          "score": 0.71,
+          "expected_utility": 0.68,
+          "feasibility_probability": 0.72
+        }
+      ]
+    }
+  }
+}

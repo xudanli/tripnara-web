@@ -18,11 +18,6 @@ import {
   type DecisionStripPrimaryCta,
   type DecisionStripState,
 } from '@/lib/decision-strip-model';
-import {
-  resolveDecisionStripLoopValidation,
-  shouldEnhanceOrchestrationVerifyStep,
-  type DecisionStripLoopValidationView,
-} from '@/lib/decision-strip-loop-validation';
 import { resolvePlanningBannerText } from '@/lib/world-model-guards';
 import { pickDecisionCockpitStripSummary } from '@/lib/decision-cockpit';
 import { pickRouteRunConfirmationFromResponse } from '@/lib/route-run-confirmation';
@@ -31,15 +26,12 @@ import {
   pickComparisonFromRouteRun,
   pickOptimizeSuggestedOperation,
 } from '@/lib/decision-strip-route-run';
-import { useReadinessRepairLoop } from '@/hooks/useReadinessRepairLoop';
-import { isTripLoopReadinessEnabled } from '@/lib/trip-loop-feature';
 import { usePlanStudioCompareStore } from '@/store/planStudioCompareStore';
 import { usePlanningTaskStore } from '@/store/planningTaskStore';
 import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
 import { tripsApi } from '@/api/trips';
 import { resolveTripPersonaAlerts } from '@/lib/resolve-trip-persona-alerts';
 import type { PersonaAlert } from '@/types/trip';
-import type { TripLoopUiView } from '@/types/trip-loop';
 
 export interface DecisionStripModel {
   state: DecisionStripState;
@@ -58,15 +50,11 @@ export interface DecisionStripModel {
   taskProgress: number;
   lastRequestId: string | undefined;
   personaAlerts: PersonaAlert[];
-  /** Loop 验证步（ui.phase 驱动） */
-  loopValidation: DecisionStripLoopValidationView | null;
-  loopUi: TripLoopUiView | null;
   orchestrationRunning: boolean;
   planningReadiness: PlanningReadinessPresentation | null;
   /** 规划待办收件箱计数（与可执行证明入口角标同步） */
   planningInboxCount: number;
   reload: () => void;
-  reloadLoopValidation: () => void;
 }
 
 async function fetchWorkbenchComparison(tripId: string) {
@@ -104,12 +92,6 @@ export function useDecisionStripModel(
   const taskPhase = usePlanningTaskStore((s) => s.currentPhase);
   const taskProgress = usePlanningTaskStore((s) => s.progressPercentage);
   const taskResult = usePlanningTaskStore((s) => s.resultData);
-
-  const loopEnabled = isTripLoopReadinessEnabled();
-  const readinessLoop = useReadinessRepairLoop(tripId, {
-    enabled: loopEnabled && Boolean(tripId),
-    autoRestore: true,
-  });
 
   const cachedComparison = usePlanStudioCompareStore((s) =>
     tripId ? s.byTripId[tripId] : undefined,
@@ -174,7 +156,7 @@ export function useDecisionStripModel(
     const onLoopReadinessChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ tripId?: string }>).detail;
       if (detail?.tripId && detail.tripId !== tripId) return;
-      void readinessLoop.restore();
+      reload();
     };
     window.addEventListener('plan-studio:comparison-updated', onComparisonUpdated);
     window.addEventListener('plan-studio:schedule-refresh', onScheduleRefresh);
@@ -184,7 +166,7 @@ export function useDecisionStripModel(
       window.removeEventListener('plan-studio:schedule-refresh', onScheduleRefresh);
       window.removeEventListener('plan-studio:loop-readiness-changed', onLoopReadinessChanged);
     };
-  }, [tripId, reload, readinessLoop.restore]);
+  }, [tripId, reload]);
 
   useEffect(() => {
     if (!tripId || !taskResult) return;
@@ -211,16 +193,7 @@ export function useDecisionStripModel(
     const isRunning = taskStatus === 'PROCESSING';
     const isError = taskStatus === 'FAILED';
 
-    const loopValidation = resolveDecisionStripLoopValidation({
-      ui: readinessLoop.ui,
-      loopRunning: readinessLoop.running,
-      loopApplying: readinessLoop.applying,
-    });
-
-    const resolvedPersonaAlerts = resolveTripPersonaAlerts(
-      personaAlerts,
-      readinessLoop.ui?.personaAlerts,
-    );
+    const resolvedPersonaAlerts = resolveTripPersonaAlerts(personaAlerts);
 
     const comparison = remoteComparison ?? cachedComparison;
     const compareSummary = buildDecisionStripCompareSummary(comparison);
@@ -269,30 +242,10 @@ export function useDecisionStripModel(
       subline = personaLine
         ? `${personaLine.personaLabel}：${personaLine.text}`
         : compareSummary?.reason ?? null;
-
-      if (
-        shouldEnhanceOrchestrationVerifyStep({ taskPhase, loopValidation }) &&
-        loopValidation
-      ) {
-        subline = loopValidation.subline ?? loopValidation.headline;
-      }
-
       primaryCta = { type: 'open_assistant' };
     } else if (isError) {
       state = 'error';
       headline = taskMessage?.trim() || '规划任务失败，请重试';
-    } else if (!compareSummary && loopValidation?.active) {
-      state = loopValidation.state;
-      headline = loopValidation.headline;
-      subline = loopValidation.subline;
-      primaryCta = loopValidation.primaryCta;
-    } else if (loopValidation?.active && loopValidation.phase === 'awaiting_approval') {
-      primaryCta = loopValidation.primaryCta;
-      if (!compareSummary) {
-        state = loopValidation.state;
-        headline = loopValidation.headline;
-        subline = loopValidation.subline;
-      }
     }
 
     const hasBlockGuard =
@@ -384,7 +337,6 @@ export function useDecisionStripModel(
       !isError &&
       !compareSummary &&
       planningReadiness?.active &&
-      !(loopValidation?.active && loopValidation.phase === 'awaiting_approval') &&
       !effectiveConfirmation &&
       !effectiveNegotiation
     ) {
@@ -423,13 +375,10 @@ export function useDecisionStripModel(
       taskProgress,
       lastRequestId,
       personaAlerts: resolvedPersonaAlerts,
-      loopValidation,
-      loopUi: readinessLoop.ui,
       orchestrationRunning: isRunning,
       planningReadiness,
       planningInboxCount,
       reload,
-      reloadLoopValidation: readinessLoop.restore,
     };
   }, [
     taskStatus,
@@ -449,11 +398,8 @@ export function useDecisionStripModel(
     taskProgress,
     lastRequestId,
     loading,
-    readinessLoop.ui,
-    readinessLoop.running,
-    readinessLoop.applying,
-    readinessLoop.restore,
     planningReadiness,
     planningInboxCount,
+    reload,
   ]);
 }

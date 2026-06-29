@@ -1,4 +1,5 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { buildCollabCenterPlanStudioUrl } from '@/lib/collab-center-navigation';
 import { DecisionProfilingQuizDialog } from '@/components/decision-profiling';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
 
@@ -15,7 +16,7 @@ export default function DecisionProfilingQuizPage() {
       navigate(-1);
       return;
     }
-    navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=team`);
+    navigate(buildCollabCenterPlanStudioUrl(tripId, { collabTab: 'persona' }));
   };
 
   if (!tripId) return null;

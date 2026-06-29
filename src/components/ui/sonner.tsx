@@ -8,7 +8,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="light"
-      className="toaster group"
+      className="toaster group [&_[data-sonner-toaster]]:z-[200]"
+      style={{ zIndex: 200 }}
       toastOptions={{
         classNames: {
           toast:

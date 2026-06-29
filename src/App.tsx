@@ -105,6 +105,7 @@ import PublicOrganizationTrustProfilePage from './pages/trust/PublicOrganization
 import MemoryConsolePage from './features/memory/pages/MemoryConsolePage';
 import { ProfilePage, OdysseyIntakePage } from './features/odyssey-intake';
 import AgentPage from './pages/agent';
+import { FullJourneyMapPage } from '@/features/full-journey-map';
 import DecisionDraftPage from './pages/decision-draft';
 import PlanningAssistantV2Page from './pages/planning-assistant-v2';
 import TrailsHubPage from './pages/trails';
@@ -300,6 +301,7 @@ function App() {
           <Route path="trips/:id/schedule" element={<TripSchedulePage />} />
           <Route path="trips/:id/review" element={<TripReviewPage />} />
           <Route path="plan-studio" element={<PlanStudioPage />} />
+          <Route path="journey-map" element={<FullJourneyMapPage />} />
           <Route path="trips/:tripId/silent-votes/:voteId" element={<SilentVotePage />} />
           <Route path="trips/:tripId/decision-profiling/quiz" element={<DecisionProfilingQuizPage />} />
           <Route path="trips/:tripId/plan-variants" element={<PlanVariantsPage />} />

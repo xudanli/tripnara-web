@@ -138,6 +138,21 @@ export function resolveFeasibilityIssueActionTarget(
     issue.issueKind === 'road_class' ||
     ruleIdHints(issue).includes('transport.road')
   ) {
+    if (preferPlanStudio) {
+      const params = new URLSearchParams({
+        tripId,
+        tab: 'schedule',
+        view: 'constraints',
+        constraintId: 'max_segment_distance',
+      });
+      return {
+        surface: 'road_class_repair',
+        label: '调整单段距离',
+        href: `/dashboard/plan-studio?${params.toString()}`,
+        issueId: issue.id,
+        categoryFilter: resolveFeasibilityIssueVisualCategory(issue),
+      };
+    }
     return {
       surface: 'road_class_repair',
       label: '查看路段修复方案',

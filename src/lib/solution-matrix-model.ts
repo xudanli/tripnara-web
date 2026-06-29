@@ -55,6 +55,7 @@ export interface SolutionMatrixModel {
 }
 
 function resolveOptionLabel(entry: OptionComparisonEntry, index: number): string {
+  if (entry.label?.trim()) return entry.label.trim();
   const id = entry.optionId?.trim();
   if (!id) return `方案 ${index + 1}`;
   if (/^opt-[a-z]$/i.test(id)) {
@@ -90,6 +91,17 @@ function resolveRowValue(
   return null;
 }
 
+function resolveRowDisplayValue(
+  dimensionId: string,
+  entry: OptionComparisonEntry,
+  rawValue: number | null,
+): string {
+  if (dimensionId === 'cost' && entry.budget?.costDisplayValue) {
+    return entry.budget.costDisplayValue;
+  }
+  return formatSolutionScore(rawValue);
+}
+
 function buildCaveat(
   entry: OptionComparisonEntry,
   gateDelta: KernelGateOptionDelta | undefined,
@@ -119,7 +131,10 @@ export function buildSolutionMatrixModel(
   if (!comparison) return empty;
 
   const options = comparison.options ?? [];
-  const recommendedId = comparison.recommendation?.optionId ?? null;
+  const recommendedId =
+    comparison.budgetComparison?.recommendedPlanId ??
+    comparison.recommendation?.optionId ??
+    null;
   const optionCount = options.length;
 
   if (optionCount < 2 && !recommendedId) return empty;
@@ -164,7 +179,7 @@ export function buildSolutionMatrixModel(
         const rawValue = resolveRowValue(dimensionId, entry);
         return {
           dimensionId,
-          displayValue: formatSolutionScore(rawValue),
+          displayValue: resolveRowDisplayValue(dimensionId, entry, rawValue),
           rawValue,
           diffTone: resolveSolutionDiffTone(baselineValue, rawValue, meta.higherIsBetter),
         };

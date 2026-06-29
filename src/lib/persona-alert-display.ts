@@ -155,6 +155,18 @@ export function dispatchPersonaAlertDeepLink(deepLink?: PersonaAlertDeepLink | n
     return;
   }
 
+  if (deepLink?.type === 'decision_checker') {
+    window.dispatchEvent(
+      new CustomEvent('plan-studio:open-decision-checker', {
+        detail: {
+          issueId: deepLink.issueId,
+          dayIndex: deepLink.dayIndex,
+        },
+      }),
+    );
+    return;
+  }
+
   if (deepLink?.type === 'schedule_day' && deepLink.dayIndex != null) {
     dispatchPlanStudioSelectScheduleDay({ dayNumber: deepLink.dayIndex });
     return;

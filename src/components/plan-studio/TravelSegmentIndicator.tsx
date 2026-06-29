@@ -14,7 +14,7 @@ const travelModeConfig: Record<TravelMode, { icon: string; label: string; color:
   WALKING: { icon: '🚶', label: '步行', color: 'text-green-600 bg-green-50 border-green-200' },
   TRANSIT: { icon: '🚌', label: '公交', color: 'text-orange-600 bg-orange-50 border-orange-200' },
   TRAIN: { icon: '🚄', label: '高铁', color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
-  FLIGHT: { icon: '✈️', label: '飞机', color: 'text-purple-600 bg-purple-50 border-purple-200' },
+  FLIGHT: { icon: '✈️', label: '飞机', color: 'text-muted-foreground bg-muted border-border' },
   FERRY: { icon: '⛴️', label: '轮渡', color: 'text-cyan-600 bg-cyan-50 border-cyan-200' },
   BICYCLE: { icon: '🚴', label: '骑行', color: 'text-lime-600 bg-lime-50 border-lime-200' },
   TAXI: { icon: '🚕', label: '出租车', color: 'text-yellow-600 bg-yellow-50 border-yellow-200' },

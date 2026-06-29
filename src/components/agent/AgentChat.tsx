@@ -254,9 +254,8 @@ import type { ClarificationAnswer } from '@/types/clarification';
 import type { AgentRouteRunClarificationSubmitPayload } from '@/components/agent/AgentRouteRunClarificationCard';
 import type { EvidenceBundleDto, EvidenceCardDto, EvidenceCardUiDto } from '@/api/agent';
 import CandidatesPanel from '@/components/agent/CandidatesPanel';
-import { OptimizationExplainBlock } from '@/components/agent/OptimizationExplainBlock';
+import { DecisionClosureL1Panel } from '@/components/decision-closure/DecisionClosureL1Panel';
 import { DecisionCockpitPanel } from '@/components/agent/DecisionCockpitPanel';
-import { WorldConstraintBanner } from '@/components/planning/WorldConstraintBanner';
 import { pickRouteRunExplainOptimizationForMessage } from '@/lib/route-run-optimization-explain';
 import { pickDecisionCockpitFromRouteRun, hasDecisionCockpitUi } from '@/lib/decision-cockpit';
 import {
@@ -2152,8 +2151,9 @@ function MessageBubble({
         showPlanningDashboard &&
         !isConsultationSurface &&
         !showClarificationCard ? (
-          <WorldConstraintBanner
-            materialization={message.routeRunExplainOptimization?.world_constraint_materialization}
+          <DecisionClosureL1Panel
+            optimization={message.routeRunExplainOptimization}
+            part="banner"
             className="mb-2"
           />
         ) : null}
@@ -2383,9 +2383,10 @@ function MessageBubble({
             showPlanningDashboard &&
             !hideItineraryAdjustIronShieldChrome &&
             message.routeRunExplainOptimization ? (
-              <OptimizationExplainBlock
+              <DecisionClosureL1Panel
                 optimization={message.routeRunExplainOptimization}
-                tier={debugUiDefaults ? 'L2' : 'L1'}
+                part="verdict"
+                detailsDefaultOpen={Boolean(debugUiDefaults)}
                 className="mt-2"
               />
             ) : null}

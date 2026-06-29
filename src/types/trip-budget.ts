@@ -80,6 +80,28 @@ export interface PutBudgetStructureRequest {
   percentages?: BudgetAllocations;
 }
 
+/** POST /planning-workbench/budget/evaluate 请求体 */
+export interface BudgetEvaluateRequest {
+  tripId: string;
+  planId?: string;
+  estimatedCost?: number;
+  categoryBreakdown?: {
+    accommodation: number;
+    transportation: number;
+    food: number;
+    activities: number;
+    other: number;
+  };
+  budgetConstraint?: {
+    total?: number;
+    currency?: string;
+    dailyBudget?: number;
+  };
+  /** 预览未保存草稿时可显式传入 */
+  budgetIntent?: PutTripBudgetIntentRequest;
+  budgetStructure?: PutBudgetStructureRequest;
+}
+
 export interface StructureOverflowError {
   code: 'STRUCTURE_OVERFLOW';
   structureTotal: number;
@@ -199,4 +221,67 @@ export interface BudgetActualLineItem {
   currency: string;
   category?: string;
   source: 'itinerary' | 'ledger';
+}
+
+// ==================== 预算工作台 · compare / details ====================
+
+export interface BudgetCompareCategoryBreakdown {
+  accommodation: number;
+  transportation: number;
+  food: number;
+  activities: number;
+  other: number;
+}
+
+export interface BudgetComparePlanInput {
+  planId: string;
+  label: string;
+  estimatedCost: number;
+  categoryBreakdown: BudgetCompareCategoryBreakdown;
+}
+
+export interface BudgetCompareRequest {
+  tripId: string;
+  plans: BudgetComparePlanInput[];
+  /** 已有 LLM 方案矩阵时传入，服务端合并 budget 到 cost 列 */
+  optionComparison?: import('@/api/planning-workbench').OptionComparison;
+}
+
+export interface BudgetComparePlanResult {
+  planId: string;
+  label: string;
+  estimatedCost: number;
+  budgetUsagePercent: number;
+  verdict: string;
+  violationCount: number;
+  topHotspot?: string | null;
+}
+
+export interface BudgetWorkbenchPriceEvidence {
+  fxRate?: string;
+  tickets?: string;
+  carRental?: string;
+  allocationSummary?: string;
+  structureSummary?: string;
+  updatedAt?: string;
+  updatedLabel?: string;
+}
+
+/** tripnara.budget_comparison@v1 */
+export interface BudgetCompareResponse {
+  schemaVersion?: string;
+  plans: BudgetComparePlanResult[];
+  recommendedPlanId: string;
+  priceEvidence?: BudgetWorkbenchPriceEvidence;
+  /** 完整 OptionComparison BFF（含 options[].budget / budgetComparison） */
+  optionComparison?: import('@/api/planning-workbench').OptionComparison;
+}
+
+/** GET /planning-workbench/budget/details */
+export interface BudgetWorkbenchDetailsResponse {
+  profile: TripBudgetProfile;
+  evidence: import('@/types/trip').BudgetEvaluationEvidence[];
+  optimizations: import('@/types/trip').BudgetEvaluationOptimization[];
+  priceEvidence?: BudgetWorkbenchPriceEvidence;
+  planId?: string;
 }

@@ -1,4 +1,4 @@
-import type { TripStatus } from '@/types/trip';
+import { buildCollabCenterPlanStudioUrl } from '@/lib/collab-center-navigation';
 import type {
   EnvironmentEventType,
   HandoffMissingCode,
@@ -59,7 +59,7 @@ const HANDOFF_MISSING_META: Record<HandoffMissingCode, HandoffMissingItemMeta> =
   split_mechanism_locked: {
     label: '锁定分摊共识',
     description: '全员确认分摊机制后方可进入行中',
-    path: (tripId) => `/dashboard/plan-studio?tripId=${tripId}&tab=team`,
+    path: (tripId) => buildCollabCenterPlanStudioUrl(tripId),
   },
   itinerary_days: {
     label: '完善行程日程',

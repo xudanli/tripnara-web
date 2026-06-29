@@ -266,3 +266,11 @@ export function enrichPlanningConflictItems(
 }
 
 export { CATEGORY_LABELS as PLANNING_CONFLICT_CATEGORY_LABELS };
+
+/** 超长单段行驶冲突（road_class / issue-transport-seg-*-long_distance） */
+export function isLongDistanceTransportConflict(item: PlanningConflictItem): boolean {
+  if (/issue-transport-seg-\d+-long_distance/.test(item.id)) return true;
+  if (item.issue?.issueKind === 'road_class') return true;
+  const text = `${item.title} ${item.message}`;
+  return /超长距离|>\s*\d+\s*km|超过\s*\d+\s*km/i.test(text);
+}

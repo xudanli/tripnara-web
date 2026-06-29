@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { buildCollabCenterPlanStudioUrl } from '@/lib/collab-center-navigation';
 import { Lock, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -64,7 +65,7 @@ export function InTripAnchorBar({ snapshot, loading, className, onTeamFrictionCl
               if (onTeamFrictionClick) {
                 onTeamFrictionClick();
               } else {
-                navigate(`/dashboard/plan-studio?tripId=${snapshot.tripId}&tab=team`);
+                navigate(buildCollabCenterPlanStudioUrl(snapshot.tripId));
               }
             }}
           >

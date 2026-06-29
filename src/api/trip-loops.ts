@@ -2,21 +2,12 @@ import apiClient from './client';
 import {
   normalizeInTripRecoveryLatest,
   normalizeInTripRecoveryRunResult,
-  normalizeLoopApplyResponse,
-  normalizeReadinessRepairLatest,
-  normalizeReadinessRepairRunResult,
 } from '@/lib/trip-loop.adapter';
 import type {
   InTripApplyRequest,
   InTripApplyResponse,
   InTripRecoveryLatestDto,
   InTripRecoveryRunResult,
-  LoopApplyRequest,
-  LoopApplyResponse,
-  ReadinessRepairLatestDto,
-  ReadinessRepairRunResult,
-  ReadinessRepairRunRequest,
-  ReadinessRepairTriggerRequest,
 } from '@/types/trip-loop';
 
 interface SuccessResponse<T> {
@@ -56,12 +47,6 @@ function unwrapLoopData<T>(response: { data: ApiResponseWrapper<T> }): T {
 
 const base = (tripId: string) => `/trips/${tripId}/loops`;
 
-function assertNonEmptyPatches(body: LoopApplyRequest): void {
-  if (!body.patches?.length) {
-    throw new TripLoopsApiError('BAD_REQUEST', 'patches 不能为空');
-  }
-}
-
 function assertNonEmptyPlans(body: InTripApplyRequest): void {
   if (!body.plans?.length) {
     throw new TripLoopsApiError('BAD_REQUEST', 'plans 不能为空');
@@ -69,59 +54,6 @@ function assertNonEmptyPlans(body: InTripApplyRequest): void {
 }
 
 export const tripLoopsApi = {
-  async runReadinessRepair(
-    tripId: string,
-    body: ReadinessRepairRunRequest = {},
-  ): Promise<ReadinessRepairRunResult> {
-    const res = await apiClient.post<ApiResponseWrapper<unknown>>(
-      `${base(tripId)}/readiness-repair`,
-      body,
-    );
-    const data = unwrapLoopData(res);
-    const run = normalizeReadinessRepairRunResult(data);
-    if (!run) throw new TripLoopsApiError('PARSE_ERROR', '无法解析 readiness-repair 响应');
-    return run;
-  },
-
-  async getReadinessRepairLatest(tripId: string): Promise<ReadinessRepairLatestDto> {
-    const res = await apiClient.get<ApiResponseWrapper<unknown>>(
-      `${base(tripId)}/readiness-repair/latest`,
-    );
-    return normalizeReadinessRepairLatest(unwrapLoopData(res));
-  },
-
-  async triggerReadinessRepair(
-    tripId: string,
-    body: ReadinessRepairTriggerRequest,
-  ): Promise<ReadinessRepairRunResult | null> {
-    const res = await apiClient.post<ApiResponseWrapper<unknown>>(
-      `${base(tripId)}/readiness-repair/trigger`,
-      body,
-    );
-    const data = unwrapLoopData(res);
-    return normalizeReadinessRepairRunResult(data);
-  },
-
-  async getLoopRun(tripId: string, loopRunId: string): Promise<ReadinessRepairRunResult | null> {
-    const res = await apiClient.get<ApiResponseWrapper<unknown>>(
-      `${base(tripId)}/${encodeURIComponent(loopRunId)}`,
-    );
-    return normalizeReadinessRepairRunResult(unwrapLoopData(res));
-  },
-
-  async applyReadinessRepair(
-    tripId: string,
-    loopRunId: string,
-    body: LoopApplyRequest,
-  ): Promise<LoopApplyResponse> {
-    assertNonEmptyPatches(body);
-    const res = await apiClient.post<ApiResponseWrapper<unknown>>(
-      `${base(tripId)}/${encodeURIComponent(loopRunId)}/apply`,
-      body,
-    );
-    return normalizeLoopApplyResponse(unwrapLoopData(res));
-  },
-
   async runInTripRecovery(
     tripId: string,
     body: { environmentEventId?: string } = {},

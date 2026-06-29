@@ -23,6 +23,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Compass } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { EntryPoint } from '@/api/agent';
 import type { TripDetail } from '@/types/trip';
 
@@ -297,7 +298,11 @@ function DashboardLayoutInner({
   const [assistantSheetOpen, setAssistantSheetOpen] = useState(false);
   const [assistantWidth, setAssistantWidth] = useState(() => readAgentSidebarWidth());
   const isLgUp = useIsLgUp();
-  const showAssistantArea = (location.pathname.includes('/plan-studio') || location.pathname.includes('/execute')) && !isDashboardPage;
+  const isImmersiveJourneyMap = location.pathname.includes('/journey-map');
+  const showAssistantArea =
+    (location.pathname.includes('/plan-studio') || location.pathname.includes('/execute')) &&
+    !isDashboardPage &&
+    !isImmersiveJourneyMap;
   const useDesktopAssistantLayout = showAssistantArea && !isMobile && isLgUp;
 
   const handleAssistantPanelResize = useCallback(
@@ -332,9 +337,11 @@ function DashboardLayoutInner({
         {/* 主内容区域 */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* 左侧主导航：固定视口高度，仅内部 ScrollArea 滚动 */}
-          <div className="hidden lg:flex h-full max-h-screen shrink-0 overflow-hidden">
-            <MainSidebar />
-          </div>
+          {!isImmersiveJourneyMap ? (
+            <div className="hidden lg:flex h-full max-h-screen shrink-0 overflow-hidden">
+              <MainSidebar />
+            </div>
+          ) : null}
 
           {/* 主内容区 + 可拖拽智能体（仅 lg+ 分栏，避免 hidden lg:flex 吞掉整页） */}
           <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
@@ -345,7 +352,12 @@ function DashboardLayoutInner({
                 assistantWidth={assistantWidth}
                 onAssistantResize={handleAssistantPanelResize}
                 main={
-                  <main className="h-full min-h-0 overflow-y-auto overscroll-y-contain pb-16 lg:pb-0">
+                  <main
+                    className={cn(
+                      'flex h-full min-h-0 flex-1 flex-col',
+                      isImmersiveJourneyMap ? 'overflow-hidden' : 'overflow-y-auto overscroll-y-contain pb-16 lg:pb-0',
+                    )}
+                  >
                     <Outlet />
                   </main>
                 }
@@ -361,7 +373,12 @@ function DashboardLayoutInner({
               />
             ) : (
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-16 lg:pb-0">
+                <main
+                  className={cn(
+                    'flex min-h-0 flex-1 flex-col',
+                    isImmersiveJourneyMap ? 'h-full overflow-hidden' : 'overflow-y-auto overscroll-y-contain pb-16 lg:pb-0',
+                  )}
+                >
                   <Outlet />
                 </main>
               </div>
@@ -413,10 +430,10 @@ function DashboardLayoutInner({
         </div>
 
         {/* 移动端底部导航 */}
-        <MobileBottomNav />
+        {!isImmersiveJourneyMap ? <MobileBottomNav /> : null}
 
         {/* Toast 通知组件 */}
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-center" richColors />
 
         {/* Reputation OS 互评已冻结（Gate 0-1 信任体系重构） */}
       </div>

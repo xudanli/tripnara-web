@@ -33,6 +33,38 @@ export interface PlanStudioConstraintsChangedDetail {
   source: PlanStudioConstraintsChangeSource;
 }
 
+export const PLAN_STUDIO_CONSTRAINT_LIST_ITEM_PATCH = 'plan-studio:constraint-list-item-patch';
+
+export interface PlanStudioConstraintListItemPatchDetail {
+  tripId: string;
+  itemId: string;
+  patch: Partial<import('@/components/plan-studio/workbench/constraint-console-types').ConstraintListEntry>;
+}
+
+export function dispatchConstraintListItemPatch(
+  tripId: string,
+  itemId: string,
+  patch: PlanStudioConstraintListItemPatchDetail['patch'],
+): void {
+  window.dispatchEvent(
+    new CustomEvent<PlanStudioConstraintListItemPatchDetail>(PLAN_STUDIO_CONSTRAINT_LIST_ITEM_PATCH, {
+      detail: { tripId, itemId, patch },
+    }),
+  );
+}
+
+export function subscribeConstraintListItemPatch(
+  handler: (detail: PlanStudioConstraintListItemPatchDetail) => void,
+): () => void {
+  const listener = (event: Event) => {
+    const detail = (event as CustomEvent<PlanStudioConstraintListItemPatchDetail>).detail;
+    if (!detail?.tripId || !detail.itemId) return;
+    handler(detail);
+  };
+  window.addEventListener(PLAN_STUDIO_CONSTRAINT_LIST_ITEM_PATCH, listener);
+  return () => window.removeEventListener(PLAN_STUDIO_CONSTRAINT_LIST_ITEM_PATCH, listener);
+}
+
 export function dispatchPlanStudioConstraintsChanged(
   tripId: string,
   source: PlanStudioConstraintsChangeSource,

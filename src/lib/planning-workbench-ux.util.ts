@@ -13,6 +13,7 @@ import {
   reasonCodeToDisplayZh,
   stripPersonaMessageTechnicalTail,
 } from '@/lib/persona-alert-display';
+import { resolveItineraryItemPlaceDisplayName } from '@/lib/itinerary-place-display.util';
 
 const WORKBENCH_PERSONA_PREFIX =
   /^(?:Abu|Dr\.?\s*Dre|Neptune)\s*(?:拒绝|发现风险|提示|警告)[:：]\s*/i;
@@ -129,7 +130,7 @@ function resolveTripDayPreviewLabel(
 
   const poiNames =
     day.ItineraryItem?.map(
-      (item) => item.Place?.nameCN || item.Place?.nameEN || item.note?.trim(),
+      (item) => resolveItineraryItemPlaceDisplayName(item) || item.note?.trim(),
     ).filter((name): name is string => Boolean(name && !isGenericPlanSegmentLabel(name))) ?? [];
 
   if (poiNames.length >= 2) {
@@ -159,7 +160,7 @@ export function getTripDayPoiNames(
   const day = trip?.TripDay?.[dayIndex];
   if (!day?.ItineraryItem?.length) return [];
   return day.ItineraryItem.map(
-    (item) => item.Place?.nameCN || item.Place?.nameEN || item.note?.trim() || '',
+    (item) => resolveItineraryItemPlaceDisplayName(item) || item.note?.trim() || '',
   ).filter((name) => Boolean(name) && !isGenericPlanSegmentLabel(name));
 }
 
