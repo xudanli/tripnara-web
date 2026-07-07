@@ -51,6 +51,12 @@ describe('mapConflictPriority', () => {
     );
   });
 
+  it('maps enforced hard constraint issue kinds to must_handle', () => {
+    expect(mapConflictPriority({ issueKind: 'daily_drive' })).toBe('must_handle');
+    expect(mapConflictPriority({ issueKind: 'no_night_drive' })).toBe('must_handle');
+    expect(mapConflictPriority({ issueKind: 'budget' })).toBe('must_handle');
+  });
+
   it('maps travel timing signals', () => {
     expect(
       mapTravelTimingPriority({ isStartTooEarly: true } as Parameters<

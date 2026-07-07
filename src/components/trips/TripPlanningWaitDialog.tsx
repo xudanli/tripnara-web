@@ -9,6 +9,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { tripsApi } from '@/api/trips';
+import { SEMANTIC_RED_HEX } from '@/lib/semantic-colors';
 import type { TripDetail, GenerationProgress } from '@/types/trip';
 import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
@@ -188,7 +189,7 @@ export default function TripPlanningWaitDialog({
               {/* 路线轨迹（动画效果） */}
               <path
                 d="M 60 90 Q 80 85 100 95 Q 120 105 140 90 Q 160 85 180 95"
-                stroke="#DC2626"
+                stroke={SEMANTIC_RED_HEX}
                 strokeWidth="3"
                 strokeDasharray="8 4"
                 fill="none"
@@ -196,17 +197,17 @@ export default function TripPlanningWaitDialog({
               />
               
               {/* 关键节点（酒红色） */}
-              <circle cx="60" cy="90" r="6" fill="#DC2626" />
-              <circle cx="100" cy="95" r="6" fill="#DC2626" />
-              <circle cx="140" cy="90" r="6" fill="#DC2626" />
-              <circle cx="180" cy="95" r="6" fill="#DC2626" />
+              <circle cx="60" cy="90" r="6" fill={SEMANTIC_RED_HEX} />
+              <circle cx="100" cy="95" r="6" fill={SEMANTIC_RED_HEX} />
+              <circle cx="140" cy="90" r="6" fill={SEMANTIC_RED_HEX} />
+              <circle cx="180" cy="95" r="6" fill={SEMANTIC_RED_HEX} />
               
               {/* 指南针 */}
               <g transform="translate(200, 50)">
                 <circle cx="0" cy="0" r="20" stroke="#1F2937" fill="none" />
                 <line x1="0" y1="-20" x2="0" y2="20" stroke="#1F2937" />
                 <line x1="-20" y1="0" x2="20" y2="0" stroke="#1F2937" />
-                <path d="M 0 -15 L -5 -5 L 0 0 L 5 -5 Z" fill="#DC2626" />
+                <path d="M 0 -15 L -5 -5 L 0 0 L 5 -5 Z" fill={SEMANTIC_RED_HEX} />
                 <text x="0" y="35" textAnchor="middle" fontSize="10" fill="#1F2937">N</text>
               </g>
               
@@ -215,7 +216,7 @@ export default function TripPlanningWaitDialog({
                 cx="128"
                 cy="200"
                 r="20"
-                stroke="#DC2626"
+                stroke={SEMANTIC_RED_HEX}
                 strokeWidth="2"
                 fill="none"
                 strokeDasharray="40 20"
@@ -239,9 +240,9 @@ export default function TripPlanningWaitDialog({
             <div className="text-center space-y-2">
               <div className="flex items-center justify-center gap-2">
                 {progress?.status === 'completed' ? (
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <CheckCircle2 className="w-5 h-5 text-gate-allow-foreground" />
                 ) : progress?.status === 'failed' ? (
-                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <AlertCircle className="w-5 h-5 text-gate-reject-foreground" />
                 ) : (
                   <Spinner className="w-5 h-5" />
                 )}
@@ -261,7 +262,7 @@ export default function TripPlanningWaitDialog({
 
               {/* LLM 编排完成特别提示 */}
               {progress?.stage === 'llm_completed' && (
-                <Badge variant="default" className="bg-green-100 text-green-800 border-green-300">
+                <Badge variant="default" className="bg-gate-allow text-gate-allow-foreground border-gate-allow-border">
                   ✨ LLM 编排已完成
                 </Badge>
               )}
@@ -275,7 +276,7 @@ export default function TripPlanningWaitDialog({
 
               {/* 失败信息 */}
               {progress?.status === 'failed' && (
-                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+                <div className="mt-2 p-2 bg-gate-reject border border-gate-reject-border rounded text-xs text-gate-reject-foreground">
                   {progress.message || '生成失败，请稍后重试'}
                 </div>
               )}

@@ -23,24 +23,24 @@ export default function PersonaInfoCard({
   
   // 根据置信度确定颜色
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return 'text-green-600';
-    if (confidence >= 0.6) return 'text-blue-600';
+    if (confidence >= 0.8) return 'text-gate-allow-foreground';
+    if (confidence >= 0.6) return 'text-muted-foreground';
     if (confidence >= 0.4) return 'text-amber-600';
     return 'text-slate-600';
   };
   
   const ____getProgressColor = (confidence: number) => {
-    if (confidence >= 0.8) return 'bg-green-500';
-    if (confidence >= 0.6) return 'bg-blue-500';
+    if (confidence >= 0.8) return 'bg-gate-allow-foreground';
+    if (confidence >= 0.6) return 'bg-muted/150';
     if (confidence >= 0.4) return 'bg-amber-500';
     return 'bg-slate-500';
   };
   
   return (
-    <Card className={cn('border-blue-200 bg-blue-50/50', className)}>
+    <Card className={cn('border-border bg-muted/15', className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
-          <User className="h-4 w-4 text-blue-600" />
+          <User className="h-4 w-4 text-muted-foreground" />
           <span>根据您的回答，我们识别您可能是：</span>
         </CardTitle>
       </CardHeader>
@@ -80,7 +80,7 @@ export default function PersonaInfoCard({
             <ul className="space-y-1.5">
               {personaInfo.matchReasons.map((reason, index) => (
                 <li key={index} className="flex items-start gap-2 text-sm text-slate-700">
-                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span className="text-muted-foreground mt-0.5">•</span>
                   <span>{reason}</span>
                 </li>
               ))}

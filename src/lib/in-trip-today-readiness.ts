@@ -26,30 +26,30 @@ export function todayReadinessStatusLabel(status: InTripTodayReadinessStatus): s
 export function todayReadinessStatusClasses(status: InTripTodayReadinessStatus): string {
   switch (status) {
     case 'block':
-      return 'text-red-700 bg-red-50 border-red-200';
+      return 'text-error bg-muted border-border';
     case 'warn':
       return 'text-amber-800 bg-amber-50 border-amber-200';
     case 'pass':
-      return 'text-green-700 bg-green-50 border-green-200';
+      return 'text-success bg-muted border-gate-allow-border';
     default:
       return 'text-muted-foreground bg-muted border-border';
   }
 }
 
 export function todayReadinessScoreClasses(score: number): string {
-  if (score < 70) return 'text-red-600';
+  if (score < 70) return 'text-error';
   if (score < 85) return 'text-amber-600';
-  return 'text-green-600';
+  return 'text-success';
 }
 
 export function todayReadinessBorderClasses(status: InTripTodayReadinessStatus): string {
   switch (status) {
     case 'block':
-      return 'border-l-red-500';
+      return 'border-l-gate-reject-foreground';
     case 'warn':
       return 'border-l-amber-500';
     case 'pass':
-      return 'border-l-green-500';
+      return 'border-l-gate-allow-foreground';
     default:
       return '';
   }

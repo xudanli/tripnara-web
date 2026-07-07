@@ -6,7 +6,7 @@ function decisionTone(decision: string): { className: string; label: string } {
   const d = decision.trim().toUpperCase();
   if (d === 'PASS') {
     return {
-      className: 'border-green-300 bg-green-50 text-green-900 dark:bg-green-950/40 dark:text-green-100',
+      className: 'border-gate-allow-border bg-gate-allow text-gate-allow-foreground dark:bg-gate-allow/40 dark:text-gate-allow-foreground',
       label: 'PASS',
     };
   }

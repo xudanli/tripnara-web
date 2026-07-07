@@ -235,9 +235,9 @@ export default function ReadinessDrawer({
                        mustRefs.current.get(highlightFindingId);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+          element.classList.add('ring-2', 'ring-border', 'ring-offset-2');
           setTimeout(() => {
-            element.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+            element.classList.remove('ring-2', 'ring-border', 'ring-offset-2');
           }, 2000);
         }
       }, 300);
@@ -901,7 +901,7 @@ export default function ReadinessDrawer({
                       {/* 🎯 优先显示所有阻塞项（跨分类） */}
                       {allBlockers.length > 0 && (
                         <div className="space-y-3" data-readiness-section="blockers">
-                          <h4 className="text-xs font-medium text-red-700 uppercase font-semibold">
+                          <h4 className="text-xs font-medium text-error uppercase font-semibold">
                             {t('dashboard.readiness.page.blockers')}
                           </h4>
                           <ChecklistSection

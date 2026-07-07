@@ -80,16 +80,16 @@ export default function EvidenceCompletenessCard({
 
   // 影响等级配置
   const impactConfig = {
-    HIGH: { icon: AlertCircle, className: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
-    MEDIUM: { icon: AlertTriangle, className: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-    LOW: { icon: CheckCircle2, className: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
+    HIGH: { icon: AlertCircle, className: 'text-error', bg: 'bg-muted', border: 'border-border' },
+    MEDIUM: { icon: AlertTriangle, className: 'text-warning', bg: 'bg-muted', border: 'border-border' },
+    LOW: { icon: CheckCircle2, className: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' },
   };
 
   // 优先级配置
   const priorityConfig = {
-    HIGH: { className: 'bg-red-50 text-red-700 border-red-300', icon: AlertCircle },
-    MEDIUM: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: AlertTriangle },
-    LOW: { className: 'bg-blue-50 text-blue-700 border-blue-200', icon: CheckCircle2 },
+    HIGH: { className: 'bg-muted text-error border-border', icon: AlertCircle },
+    MEDIUM: { className: 'bg-muted text-warning border-border', icon: AlertTriangle },
+    LOW: { className: 'bg-muted text-muted-foreground border-border', icon: CheckCircle2 },
   };
 
   return (
@@ -118,13 +118,13 @@ export default function EvidenceCompletenessCard({
             className={cn(
               'rounded-lg border px-3 py-2 text-xs',
               readinessPhase === 'in_trip'
-                ? 'border-sky-200 bg-sky-50 text-sky-900'
-                : 'border-blue-200 bg-blue-50 text-blue-800',
+                ? 'border-border bg-muted text-muted-foreground'
+                : 'border-border bg-muted text-muted-foreground',
             )}
           >
             {phaseHint}
             {readinessPhase === 'planning' && deferredEvidenceCount != null && deferredEvidenceCount > 0 && (
-              <span className="ml-1 text-blue-700">
+              <span className="ml-1 text-muted-foreground">
                 （{deferredEvidenceCount} 项实时证据将在出发前 14 天内检查）
               </span>
             )}
@@ -145,9 +145,9 @@ export default function EvidenceCompletenessCard({
             value={completenessScore * 100} 
             className={cn(
               'h-2',
-              status === 'PASS' && 'bg-green-50',
-              status === 'WARN' && 'bg-amber-50',
-              status === 'BLOCK' && 'bg-red-50'
+              status === 'PASS' && 'bg-muted',
+              status === 'WARN' && 'bg-muted',
+              status === 'BLOCK' && 'bg-muted'
             )}
           />
         </div>
@@ -282,7 +282,7 @@ export default function EvidenceCompletenessCard({
         {/* 无缺失证据 */}
         {missingEvidence.length === 0 && (
           <div className="text-center py-6 text-muted-foreground">
-            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-600" />
+            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-success" />
             <p className="text-sm">
               {t('dashboard.readiness.evidence.completeness.noMissing', {
                 defaultValue: '所有证据完整，无需补充',

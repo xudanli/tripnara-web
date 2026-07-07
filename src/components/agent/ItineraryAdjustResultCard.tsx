@@ -72,7 +72,7 @@ export function ItineraryAdjustResultCard({
       className={cn(
         'mb-3 rounded-lg border px-3 py-2.5 text-xs',
         isApplied
-          ? 'border-emerald-200/90 bg-emerald-50/80 text-emerald-950 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-100'
+          ? 'border-gate-allow-border/90 bg-gate-allow/80 text-gate-allow-foreground dark:border-gate-allow-border/60 dark:bg-gate-allow/30 dark:text-gate-allow-foreground'
           : 'border-amber-200/90 bg-amber-50/80 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100',
         className
       )}
@@ -83,7 +83,7 @@ export function ItineraryAdjustResultCard({
           className={cn(
             'inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none',
             isApplied
-              ? 'border-emerald-300/80 bg-emerald-100/80 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-100'
+              ? 'border-gate-allow-border/80 bg-gate-allow/80 text-gate-allow-foreground dark:border-gate-allow-border dark:bg-gate-allow/40 dark:text-gate-allow-foreground'
               : 'border-amber-300/80 bg-amber-100/80 text-amber-900 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-100'
           )}
         >
@@ -152,7 +152,7 @@ export function ItineraryAdjustResultCard({
         <p
           className={cn(
             'mt-2 text-[10px] leading-snug',
-            isApplied ? 'text-emerald-900/75 dark:text-emerald-200/75' : 'text-amber-900/70 dark:text-amber-200/70'
+            isApplied ? 'text-gate-allow-foreground/75 dark:text-gate-allow-foreground/75' : 'text-amber-900/70 dark:text-amber-200/70'
           )}
         >
           {applyHint}

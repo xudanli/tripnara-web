@@ -62,11 +62,11 @@ function getWeatherIcon(condition: string, size: 'sm' | 'md' = 'md') {
     case 'cloudy':
       return <Cloud className={cn(iconSize, 'text-gray-500')} />;
     case 'rainy':
-      return <CloudRain className={cn(iconSize, 'text-blue-500')} />;
+      return <CloudRain className={cn(iconSize, 'text-muted-foreground')} />;
     case 'snowy':
-      return <CloudSnow className={cn(iconSize, 'text-blue-300')} />;
+      return <CloudSnow className={cn(iconSize, 'text-muted-foreground')} />;
     case 'stormy':
-      return <CloudRain className={cn(iconSize, 'text-purple-600')} />;
+      return <CloudRain className={cn(iconSize, 'text-muted-foreground')} />;
     case 'foggy':
       return <Cloud className={cn(iconSize, 'text-gray-400')} />;
     case 'hazy':
@@ -101,11 +101,11 @@ function getWeatherLabel(condition: string): string {
 function getAlertColor(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-50 text-red-700 border-red-200';
+      return 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border';
     case 'warning':
       return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'info':
-      return 'bg-blue-50 text-blue-700 border-blue-200';
+      return 'bg-muted/15 text-muted-foreground border-border';
     default:
       return 'bg-gray-50 text-gray-700 border-gray-200';
   }
@@ -118,24 +118,24 @@ export function WeatherCard({
   refreshInterval = 5 * 60 * 1000,
   locationName,
 }: WeatherCardProps) {
-  // ⚠️ 重要：必须在所有 hooks 调用之前检查 location
-  // 如果 location 为 null，直接返回，不调用任何 hooks
+  const [showDetails, setShowDetails] = useState(false);
+
+  const weatherParams: GetCurrentWeatherParams | null = location
+    ? {
+        lat: location.lat,
+        lng: location.lng,
+        includeWindDetails,
+      }
+    : null;
+
+  const { data, loading, error, refetch } = useWeather(weatherParams, {
+    enabled: Boolean(location),
+    refreshInterval,
+  });
+
   if (!location) {
     return null;
   }
-
-  const [showDetails, setShowDetails] = useState(false);
-
-  const weatherParams: GetCurrentWeatherParams = {
-    lat: location.lat,
-    lng: location.lng,
-    includeWindDetails,
-  };
-
-  const { data, loading, error, refetch } = useWeather(weatherParams, {
-    enabled: true,
-    refreshInterval,
-  });
 
   // 加载状态
   if (loading && !data) {
@@ -201,7 +201,7 @@ export function WeatherCard({
                 variant="outline" 
                 className={cn(
                   'ml-1 h-4 px-1 text-[10px]',
-                  criticalAlerts.length > 0 && 'bg-red-100 text-red-700 border-red-300',
+                  criticalAlerts.length > 0 && 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border',
                   criticalAlerts.length === 0 && warningAlerts.length > 0 && 'bg-amber-100 text-amber-700 border-amber-300'
                 )}
               >
@@ -421,15 +421,14 @@ interface WeatherMiniProps {
  * 用于行程项行内显示，只显示图标和温度
  */
 export function WeatherMini({ location, isForecast = false }: WeatherMiniProps) {
-  // 如果没有位置，不显示
+  const { data, loading, error } = useWeather(
+    location ? { lat: location.lat, lng: location.lng } : null,
+    { enabled: Boolean(location), refreshInterval: 10 * 60 * 1000 },
+  );
+
   if (!location) {
     return null;
   }
-
-  const { data, loading, error } = useWeather(
-    { lat: location.lat, lng: location.lng },
-    { enabled: true, refreshInterval: 10 * 60 * 1000 } // 10分钟刷新
-  );
 
   // 加载中 - 显示小型加载图标
   if (loading && !data) {
@@ -462,7 +461,7 @@ export function WeatherMini({ location, isForecast = false }: WeatherMiniProps) 
               "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md cursor-default",
               isExtremeWeather 
                 ? "bg-amber-50 text-amber-700 border border-amber-200" 
-                : "bg-sky-50 text-sky-700 border border-sky-200"
+                : "bg-muted/15 text-muted-foreground border border-border"
             )}
           >
             {getWeatherIcon(data.condition, 'sm')}
@@ -544,30 +543,27 @@ const COUNTRY_COORDS: Record<string, { lat: number; lng: number; name: string }>
  * 用于在行程列表中显示即将出发行程的目的地天气
  */
 export function TripCardWeather({ countryCode, startDate, showOnlyUpcoming = true }: TripCardWeatherProps) {
-  // 解析国家代码
   const code = countryCode?.split(',')[0]?.trim().toUpperCase();
   const coords = COUNTRY_COORDS[code];
-  
-  // 检查是否即将出发（7天内）
+
   const daysUntilStart = Math.ceil(
-    (new Date(startDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    (new Date(startDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
   );
   const isUpcoming = daysUntilStart >= 0 && daysUntilStart <= 7;
-  
-  // 如果只显示即将出发的，且不满足条件，则不显示
+  const shouldFetch = Boolean(coords) && (!showOnlyUpcoming || isUpcoming);
+
+  const { data, loading, error } = useWeather(
+    coords ? { lat: coords.lat, lng: coords.lng } : null,
+    { enabled: shouldFetch, refreshInterval: 15 * 60 * 1000 },
+  );
+
   if (showOnlyUpcoming && !isUpcoming) {
     return null;
   }
-  
-  // 如果没有坐标信息，不显示
+
   if (!coords) {
     return null;
   }
-
-  const { data, loading, error } = useWeather(
-    { lat: coords.lat, lng: coords.lng },
-    { enabled: true, refreshInterval: 15 * 60 * 1000 } // 15分钟刷新
-  );
 
   // 加载中
   if (loading && !data) {
@@ -600,7 +596,7 @@ export function TripCardWeather({ countryCode, startDate, showOnlyUpcoming = tru
               "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs",
               isExtremeWeather 
                 ? "bg-amber-50 text-amber-700 border border-amber-200" 
-                : "bg-sky-50 text-sky-700 border border-sky-200"
+                : "bg-muted/15 text-muted-foreground border border-border"
             )}
           >
             {getWeatherIcon(data.condition, 'sm')}
@@ -635,6 +631,27 @@ export function TripCardWeather({ countryCode, startDate, showOnlyUpcoming = tru
   );
 }
 
+/** 行程列表卡片内紧凑温度读数（只读 metric，中性字色） */
+export function TripListCompactWeather({ countryCode }: { countryCode: string }) {
+  const code = countryCode?.split(',')[0]?.trim().toUpperCase();
+  const coords = COUNTRY_COORDS[code];
+
+  const { data, loading } = useWeather(
+    coords ? { lat: coords.lat, lng: coords.lng } : null,
+    { enabled: Boolean(coords), refreshInterval: 15 * 60 * 1000 },
+  );
+
+  if (!coords) return <span className="text-muted-foreground">—</span>;
+  if (loading && !data) return <span className="text-muted-foreground text-xs">…</span>;
+  if (!data) return <span className="text-muted-foreground">—</span>;
+
+  return (
+    <span className="font-mono-brand text-muted-foreground tabular-nums">
+      {Math.round(data.temperature)}°C
+    </span>
+  );
+}
+
 // ==================== WeatherAlertBanner 天气预警横幅 ====================
 
 interface WeatherAlertBannerProps {
@@ -661,15 +678,14 @@ export function WeatherAlertBanner({
   className,
   onDismiss 
 }: WeatherAlertBannerProps) {
-  // 如果没有位置，不显示
+  const { data, loading, error } = useWeather(
+    location ? { lat: location.lat, lng: location.lng } : null,
+    { enabled: Boolean(location), refreshInterval: 10 * 60 * 1000 },
+  );
+
   if (!location) {
     return null;
   }
-
-  const { data, loading, error } = useWeather(
-    { lat: location.lat, lng: location.lng },
-    { enabled: true, refreshInterval: 10 * 60 * 1000 }
-  );
 
   // 加载中或错误，不显示
   if (loading || error || !data) {
@@ -729,21 +745,21 @@ export function WeatherAlertBanner({
   }
 
   const bgColor = {
-    critical: 'bg-red-50 border-red-200',
+    critical: 'bg-gate-reject border-gate-reject-border',
     warning: 'bg-amber-50 border-amber-200',
-    info: 'bg-blue-50 border-blue-200',
+    info: 'bg-muted/15 border-border',
   }[severity];
 
   const textColor = {
-    critical: 'text-red-800',
+    critical: 'text-gate-reject-foreground',
     warning: 'text-amber-800',
-    info: 'text-blue-800',
+    info: 'text-muted-foreground',
   }[severity];
 
   const iconColor = {
-    critical: 'text-red-500',
+    critical: 'text-gate-reject-foreground',
     warning: 'text-amber-500',
-    info: 'text-blue-500',
+    info: 'text-muted-foreground',
   }[severity];
 
   return (
@@ -758,7 +774,7 @@ export function WeatherAlertBanner({
           <div className="flex items-center gap-2 mb-1">
             <h4 className={cn("font-medium", textColor)}>{title}</h4>
             {isUrgent && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300">
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-gate-reject text-gate-reject-foreground border-gate-reject-border">
                 {daysUntilStart === 0 ? '今天出发' : `${daysUntilStart}天后出发`}
               </Badge>
             )}

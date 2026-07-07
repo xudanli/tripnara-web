@@ -39,6 +39,7 @@ function mergeDraft(request: ConstraintPreviewImpactRequest): ConstraintEditorDr
 }
 
 export interface MockConstraintPreviewContext {
+  constraintsVersion?: number;
   conflicts?: PlanningConflictDto[];
   feasibilityScore?: number | null;
   budgetProfile?: TripBudgetProfile | null;

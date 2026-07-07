@@ -9,12 +9,12 @@ import type {
   SubmitSilentVoteBallotRequest,
 } from '@/types/silent-votes';
 
-export function useSilentVoteList(tripId: string | null | undefined) {
+export function useSilentVoteList(tripId: string | null | undefined, enabled = true) {
   const [items, setItems] = useState<SilentVoteDetail[]>([]);
-  const [loading, setLoading] = useState(!!tripId);
+  const [loading, setLoading] = useState(!!tripId && enabled);
 
   const reload = useCallback(async () => {
-    if (!tripId) return;
+    if (!tripId || !enabled) return;
     try {
       setLoading(true);
       const res = await silentVotesApi.list(tripId);
@@ -25,11 +25,12 @@ export function useSilentVoteList(tripId: string | null | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [tripId]);
+  }, [tripId, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     void reload();
-  }, [reload]);
+  }, [reload, enabled]);
 
   return { items, loading, reload };
 }

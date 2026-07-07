@@ -14,6 +14,7 @@ import type {
   PersonaAlertDeepLinkType,
   PersonaAlertMetadata,
   PersonaAlertPresentationSnapshot,
+  PersonaAlertTradeoffDimension,
 } from '@/types/trip';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -94,9 +95,26 @@ export function normalizePersonaAlertPresentation(
   };
 }
 
+function normalizeTradeoffDimension(raw: unknown): PersonaAlertTradeoffDimension | null {
+  const r = asRecord(raw);
+  if (!r) return null;
+  const dimension = asString(r.dimension);
+  if (!dimension) return null;
+  return {
+    dimension,
+    direction: asString(r.direction) as PersonaAlertTradeoffDimension['direction'],
+    explanation: asString(r.explanation),
+    contextualNarrative: asString(r.contextualNarrative ?? r.contextual_narrative),
+  };
+}
+
 export function normalizePersonaAlertMetadata(raw: unknown): PersonaAlertMetadata | undefined {
   const r = asRecord(raw);
   if (!r) return undefined;
+  const tradeoffRaw = r.tradeoffDimensions ?? r.tradeoff_dimensions;
+  const tradeoffDimensions = Array.isArray(tradeoffRaw)
+    ? tradeoffRaw.map(normalizeTradeoffDimension).filter((x): x is PersonaAlertTradeoffDimension => x != null)
+    : undefined;
   return {
     audience: asString(r.audience) as PersonaAlertMetadata['audience'],
     scenario: asString(r.scenario) as LeadSpeakerScenario | undefined,
@@ -108,6 +126,7 @@ export function normalizePersonaAlertMetadata(raw: unknown): PersonaAlertMetadat
       r.readinessEvidenceDisplayZh ?? r.readiness_evidence_display_zh,
     ),
     deepLink: normalizeDeepLink(r.deepLink ?? r.deep_link),
+    tradeoffDimensions: tradeoffDimensions?.length ? tradeoffDimensions : undefined,
   };
 }
 

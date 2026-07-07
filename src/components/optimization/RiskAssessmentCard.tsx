@@ -23,9 +23,9 @@ import { AlertTriangle, CheckCircle, TrendingDown, Target, Shield, Info, BarChar
 const RISK_LEVEL_CONFIG = {
   low: {
     label: '低风险',
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-200',
+    color: 'text-gate-allow-foreground',
+    bgColor: 'bg-gate-allow',
+    borderColor: 'border-gate-allow-border',
     icon: CheckCircle,
   },
   medium: {
@@ -44,9 +44,9 @@ const RISK_LEVEL_CONFIG = {
   },
   critical: {
     label: '极高风险',
-    color: 'text-red-600',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-200',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
+    borderColor: 'border-gate-reject-border',
     icon: AlertTriangle,
   },
 };
@@ -67,10 +67,10 @@ function getRiskLevel(downsideRisk: number): RiskLevel {
 
 /** 根据可行概率计算颜色 */
 function getFeasibilityColor(probability: number): string {
-  if (probability >= 0.9) return 'text-green-600';
-  if (probability >= 0.7) return 'text-blue-600';
+  if (probability >= 0.9) return 'text-gate-allow-foreground';
+  if (probability >= 0.7) return 'text-muted-foreground';
   if (probability >= 0.5) return 'text-yellow-600';
-  return 'text-red-600';
+  return 'text-gate-reject-foreground';
 }
 
 // ==================== 子组件 ====================
@@ -224,9 +224,9 @@ function RiskFactorsList({
           >
             <div className={cn(
               'flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold',
-              riskLevel === 'low' ? 'bg-green-100 text-green-700' :
+              riskLevel === 'low' ? 'bg-gate-allow text-gate-allow-foreground' :
               riskLevel === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
+              'bg-gate-reject text-gate-reject-foreground'
             )}>
               {index + 1}
             </div>

@@ -112,8 +112,8 @@ export function extractTripDecisionOntologyEvidenceDisplayZh(log: TripDecisionLo
 /** 决策日志内：自然语言本体/路况结论（优先于 URI 行展示） */
 export function OntologyEvidenceZhCallout({ text }: { text: string }) {
   return (
-    <div className="rounded-md border border-emerald-200/90 bg-emerald-50/65 px-2.5 py-2 text-[12px] leading-relaxed text-foreground/95">
-      <div className="text-[10px] font-semibold text-emerald-900/90 mb-1">依据说明（本体 / 路况）</div>
+    <div className="rounded-md border border-gate-allow-border/90 bg-muted/65 px-2.5 py-2 text-[12px] leading-relaxed text-foreground/95">
+      <div className="text-[10px] font-semibold text-success/90 mb-1">依据说明（本体 / 路况）</div>
       <p className="whitespace-pre-wrap">{text}</p>
     </div>
   );
@@ -257,8 +257,8 @@ export function extractTripDecisionReadinessEvidenceDisplayZh(log: TripDecisionL
 /** 决策日志内：自然语言准备度 / 就绪结论（优先于 readiness_pack_check UUID 行） */
 export function ReadinessEvidenceZhCallout({ text }: { text: string }) {
   return (
-    <div className="rounded-md border border-sky-200/90 bg-sky-50/70 px-2.5 py-2 text-[12px] leading-relaxed text-foreground/95">
-      <div className="text-[10px] font-semibold text-sky-900/90 mb-1">依据说明（准备度 / 就绪）</div>
+    <div className="rounded-md border border-border/90 bg-muted/70 px-2.5 py-2 text-[12px] leading-relaxed text-foreground/95">
+      <div className="text-[10px] font-semibold text-muted-foreground/90 mb-1">依据说明（准备度 / 就绪）</div>
       <p className="whitespace-pre-wrap">{text}</p>
     </div>
   );
@@ -335,8 +335,8 @@ export function OntologyHardAnchorBlock({ data }: { data: OntologyHardAnchorSnap
   if (ids.length === 0 && labels.length === 0 && !hasRoad) return null;
 
   return (
-    <div className="mt-1.5 rounded-md border border-violet-200/80 bg-violet-50/50 px-2 py-1.5 text-[11px] leading-snug space-y-1.5">
-      <div className="font-medium text-violet-900/95">本体命中</div>
+    <div className="mt-1.5 rounded-md border border-border/80 bg-muted/50 px-2 py-1.5 text-[11px] leading-snug space-y-1.5">
+      <div className="font-medium text-muted-foreground/95">本体命中</div>
       {labels.length > 0 ? (
         <ul className="list-disc pl-4 space-y-0.5 text-foreground/90">
           {labels.map((t, i) => (
@@ -351,13 +351,13 @@ export function OntologyHardAnchorBlock({ data }: { data: OntologyHardAnchorSnap
         </div>
       ) : null}
       {hasRoad && road ? (
-        <details className="group rounded border border-violet-100/90 bg-white/60 px-1.5 py-1">
-          <summary className="cursor-pointer text-[10px] font-medium text-violet-800/90 select-none">
+        <details className="group rounded border border-border/90 bg-white/60 px-1.5 py-1">
+          <summary className="cursor-pointer text-[10px] font-medium text-muted-foreground/90 select-none">
             路段 accessState / aggregate
           </summary>
           <div className="mt-1.5 space-y-2 pl-0.5">
             {Object.entries(road).map(([nodeId, payload]) => (
-              <div key={nodeId} className="border-l-2 border-violet-300/60 pl-2">
+              <div key={nodeId} className="border-l-2 border-border/60 pl-2">
                 <div className="font-mono text-[10px] text-foreground/85 break-all">{nodeId}</div>
                 {isRecord(payload) ? (
                   <div className="mt-0.5 space-y-1 text-[10px] text-muted-foreground">
@@ -400,7 +400,7 @@ export function OntologyAppendixLine({ appendix }: { appendix: OntologyHardAncho
         ? prov.provider
         : 'ontology_road_status_provider';
   return (
-    <div className="mt-1 text-[10px] text-muted-foreground border-t border-violet-100/80 pt-1">
+    <div className="mt-1 text-[10px] text-muted-foreground border-t border-border/80 pt-1">
       <span className="font-medium text-foreground/75">路况真值来源：</span>
       {label}
       {typeof ms === 'number' ? <span className="ml-1 font-mono">（{ms} ms）</span> : null}
@@ -437,7 +437,7 @@ export function OntologyDecisionStepExtras({ log }: { log: DecisionLogEntry }) {
     <div className="mt-1 space-y-2">
       {anchor || appendix ? (
         displayZh ? (
-          <details className="rounded-md border border-violet-100/90 bg-muted/20 text-[11px]">
+          <details className="rounded-md border border-border/90 bg-muted/20 text-[11px]">
             <summary className="cursor-pointer px-2 py-1.5 font-medium text-muted-foreground select-none hover:text-foreground">
               结构化本体命中（供核对）
             </summary>
@@ -471,7 +471,7 @@ export function OntologyTripDecisionExtras({ log }: { log: TripDecisionLogEntry 
     <div className="mt-2 space-y-2">
       {anchor || appendix ? (
         displayZh ? (
-          <details className="rounded-md border border-violet-100/90 bg-muted/20 text-[11px]">
+          <details className="rounded-md border border-border/90 bg-muted/20 text-[11px]">
             <summary className="cursor-pointer px-2 py-1.5 font-medium text-muted-foreground select-none hover:text-foreground">
               结构化本体命中（供核对）
             </summary>

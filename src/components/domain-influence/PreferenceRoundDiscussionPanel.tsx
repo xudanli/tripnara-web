@@ -13,11 +13,8 @@ import type { PreferenceRoundUtterance } from '@/types/process-fairness';
 import { HeardVoteForm } from './HeardVoteForm';
 import { DomainIcon, negotiationStatusClass } from './domain-influence-ui';
 import { NegotiationDomainClaimEntry } from './NegotiationDomainClaimEntry';
-import { CollabNegotiationProgressTimeline } from '@/components/team-collaboration/widgets/CollabNegotiationProgressTimeline';
-import { CollabSpeakerOrderBar } from '@/components/team-collaboration/widgets/CollabSpeakerOrderBar';
-import { CollabOptionCompareTable } from '@/components/team-collaboration/widgets/CollabOptionCompareTable';
-import { CollabNegotiationActionBar } from '@/components/team-collaboration/widgets/CollabNegotiationActionBar';
-import { buildNegotiationOptions } from '@/lib/collab-negotiation-stage';
+import { CollabNegotiationStageView } from '@/components/team-collaboration/widgets/CollabNegotiationStageView';
+import { workbenchInsetPanel } from '@/components/plan-studio/workbench/workbench-ui';
 
 function roundStatusClass(status: string): string {
   switch (status) {
@@ -35,22 +32,22 @@ function UtteranceBubble({ utterance }: { utterance: PreferenceRoundUtterance })
   const isMedia = utterance.modality === 'image' || utterance.modality === 'link';
 
   return (
-    <div className="rounded-lg border border-border/80 bg-muted/15 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-1.5 min-w-0">
+    <div className={cn(workbenchInsetPanel, 'px-3 py-2')}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
           <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="text-sm font-medium truncate">{utterance.displayName}</span>
+          <span className="truncate text-sm font-medium">{utterance.displayName}</span>
           {utterance.viaProxy ? (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal">
+            <Badge variant="outline" className="px-1 py-0 text-[9px] font-normal">
               代述
             </Badge>
           ) : null}
         </div>
-        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
           {format(new Date(utterance.createdAt), 'HH:mm')}
         </span>
       </div>
-      <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+      <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
         {isVoice ? (
           <span className="inline-flex items-center gap-1 text-muted-foreground">
             <Mic className="h-3.5 w-3.5" />
@@ -82,7 +79,8 @@ interface PreferenceRoundDiscussionPanelProps {
   roundId: string | null;
   className?: string;
   onRequestTaskRefresh?: () => void;
-  /** 协作中心主舞台：进度轴 / 发言条 / 选项对比 / 底栏操作 */
+  onRefresh?: () => void;
+  refreshing?: boolean;
   collabStage?: boolean;
   onStartVote?: () => void;
   onGenerateCompromise?: () => void;
@@ -96,6 +94,8 @@ export function PreferenceRoundDiscussionPanel({
   roundId,
   className,
   onRequestTaskRefresh,
+  onRefresh,
+  refreshing,
   collabStage = false,
   onStartVote,
   onGenerateCompromise,
@@ -108,12 +108,46 @@ export function PreferenceRoundDiscussionPanel({
   const [content, setContent] = useState('');
   const [reason, setReason] = useState('');
 
+  if (collabStage) {
+    if (loading && roundId && !detail) {
+      return (
+        <div className={cn('flex justify-center py-12', className)}>
+          <Spinner className="h-5 w-5 text-muted-foreground" />
+        </div>
+      );
+    }
+
+    return (
+      <CollabNegotiationStageView
+        tripId={tripId}
+        task={task}
+        detail={detail}
+        roundId={roundId}
+        submitting={submitting}
+        currentUserId={user?.id}
+        onRequestTaskRefresh={onRequestTaskRefresh}
+        onRefresh={onRefresh ?? (() => void reload())}
+        refreshing={refreshing}
+        onSubmitUtterance={async (payload) => {
+          await submitUtterance({
+            modality: 'text',
+            content: payload.content,
+            reason: payload.reason,
+          });
+        }}
+        onSubmitHeardVotes={(votes) => void submitHeardVotes({ votes })}
+        onStartVote={onStartVote}
+        onGenerateCompromise={onGenerateCompromise}
+        onDiscussWithAssistant={onDiscussWithAssistant}
+        voteActionDisabled={voteActionDisabled}
+        className={className}
+      />
+    );
+  }
+
   if (!roundId) {
     return (
-      <div className={cn('rounded-lg border border-border/80 bg-muted/15 p-4', className)}>
-        {collabStage ? (
-          <CollabNegotiationProgressTimeline task={task} detail={null} className="mb-4" />
-        ) : null}
+      <div className={cn(workbenchInsetPanel, 'p-4', className)}>
         <TaskSummary task={task} />
         <p className="mt-3 text-sm text-muted-foreground">
           {task.status === 'in_discussion'
@@ -141,15 +175,6 @@ export function PreferenceRoundDiscussionPanel({
             刷新任务列表
           </Button>
         ) : null}
-        {collabStage ? (
-          <CollabNegotiationActionBar
-            className="mt-4"
-            onStartVote={onStartVote}
-            onGenerateCompromise={onGenerateCompromise}
-            onDiscussWithAssistant={onDiscussWithAssistant}
-            voteDisabled={voteActionDisabled}
-          />
-        ) : null}
       </div>
     );
   }
@@ -164,7 +189,7 @@ export function PreferenceRoundDiscussionPanel({
 
   if (!detail) {
     return (
-      <div className={cn('rounded-lg border border-border/80 bg-muted/15 p-4', className)}>
+      <div className={cn(workbenchInsetPanel, 'p-4', className)}>
         <TaskSummary task={task} />
         <p className="mt-3 text-sm text-muted-foreground">无法加载讨论区，请稍后刷新。</p>
         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void reload()}>
@@ -188,16 +213,9 @@ export function PreferenceRoundDiscussionPanel({
     }
   };
 
-  const optionCount = buildNegotiationOptions(detail, task).length;
-
   return (
     <div className={cn('space-y-4', className)}>
-      {collabStage ? (
-        <CollabNegotiationProgressTimeline task={task} detail={detail} />
-      ) : null}
       <TaskSummary task={task} />
-
-      {collabStage ? <CollabSpeakerOrderBar detail={detail} /> : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={cn('text-[10px] font-normal', roundStatusClass(detail.status))}>
@@ -209,41 +227,42 @@ export function PreferenceRoundDiscussionPanel({
           </span>
         ) : null}
         {detail.closesAt ? (
-          <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground tabular-nums">
+          <span className="inline-flex items-center gap-0.5 text-[10px] tabular-nums text-muted-foreground">
             <Clock className="h-3 w-3" />
             截止 {format(new Date(detail.closesAt), 'MM/dd HH:mm')}
           </span>
         ) : null}
       </div>
 
-      <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1" aria-label="发言记录">
+      <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1" aria-label="发言记录">
         {detail.utterances.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">尚无发言，轮到你了就开始吧。</p>
+          <p className="py-4 text-center text-sm text-muted-foreground">尚无发言，轮到你了就开始吧。</p>
         ) : (
           detail.utterances.map((u) => <UtteranceBubble key={u.id} utterance={u} />)
         )}
       </div>
 
       {detail.status === 'collecting' && detail.canSpeak ? (
-        <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-3 space-y-2">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <MessageSquare className="h-3.5 w-3.5" />
+        <div className={cn(workbenchInsetPanel, 'space-y-2 p-2.5')}>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+            <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
             轮到你发言了
           </div>
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="分享你的偏好…"
-            rows={3}
+            rows={2}
             disabled={submitting}
+            className="min-h-0 resize-none"
           />
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="可选：补充理由"
-            rows={2}
+            rows={1}
             disabled={submitting}
-            className="min-h-[48px]"
+            className="min-h-0 resize-none"
           />
           <Button
             type="button"
@@ -263,8 +282,8 @@ export function PreferenceRoundDiscussionPanel({
       ) : null}
 
       {detail.status === 'synthesizing' ? (
-        <div className="rounded-lg border border-border/80 bg-muted/15 p-4">
-          <h4 className="text-sm font-semibold mb-3">你被听见了吗？</h4>
+        <div className={cn(workbenchInsetPanel, 'p-3')}>
+          <h4 className="mb-3 text-sm font-semibold">你被听见了吗？</h4>
           <HeardVoteForm
             detail={detail}
             currentUserId={user?.id}
@@ -275,13 +294,13 @@ export function PreferenceRoundDiscussionPanel({
       ) : null}
 
       {detail.status === 'closed' && detail.heardRates?.length ? (
-        <div className="rounded-lg border border-border/80 bg-muted/15 p-3 space-y-2">
+        <div className={cn(workbenchInsetPanel, 'space-y-2 p-3')}>
           <h4 className="text-sm font-semibold">被听见率</h4>
           <ul className="space-y-1">
             {detail.heardRates.map((hr) => (
               <li key={hr.userId} className="flex justify-between text-sm">
                 <span>{hr.displayName}</span>
-                <span className="tabular-nums font-medium">{Math.round(hr.heardRate * 100)}%</span>
+                <span className="font-medium tabular-nums">{Math.round(hr.heardRate * 100)}%</span>
               </li>
             ))}
           </ul>
@@ -300,19 +319,6 @@ export function PreferenceRoundDiscussionPanel({
           ))}
         </div>
       ) : null}
-
-      {collabStage && optionCount > 0 ? (
-        <CollabOptionCompareTable task={task} detail={detail} />
-      ) : null}
-
-      {collabStage ? (
-        <CollabNegotiationActionBar
-          onStartVote={onStartVote}
-          onGenerateCompromise={onGenerateCompromise}
-          onDiscussWithAssistant={onDiscussWithAssistant}
-          voteDisabled={voteActionDisabled}
-        />
-      ) : null}
     </div>
   );
 }
@@ -328,7 +334,7 @@ function TaskSummary({ task }: { task: DomainNegotiationTask }) {
         </Badge>
       </div>
       {task.description ? (
-        <p className="text-sm text-muted-foreground leading-relaxed">{task.description}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{task.description}</p>
       ) : null}
       {task.leaderDisplayName || task.endorsementSummary ? (
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">

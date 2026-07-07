@@ -408,7 +408,7 @@ export function EditItineraryItemDialog({
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
           <div className="space-y-4 py-4 overflow-y-auto flex-1">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2">
+              <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
@@ -422,7 +422,7 @@ export function EditItineraryItemDialog({
             )}
 
             {startTimeChanged && !warning && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
+              <div className="rounded-lg border border-border bg-muted/15 p-3 text-sm text-muted-foreground flex items-start gap-2">
                 <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span>
                   更新开始时间后，系统会根据实际距离和交通方式自动计算旅行时间，并智能调整后续行程项的时间。

@@ -14,6 +14,7 @@ import type {
   FeasibilityVerdictStatus,
   TripFeasibilityReportDto,
 } from '@/types/trip-feasibility-report';
+import { refreshRoadClassTransportMessage } from '@/lib/trip-constraints.adapter';
 import { resolveFeasibilityVerdictSubheadline } from '@/lib/feasibility-verdict-copy';
 import { computeCanStartExecute } from '@/lib/feasibility-can-start-execute';
 import { normalizeCoverageDisclosure } from '@/lib/coverage-disclosure.util';
@@ -74,21 +75,31 @@ function mapRiskToIssue(risk: ScoreRisk): FeasibilityIssueDto {
   };
 }
 
-function findingToIssue(finding: ScoreFinding): FeasibilityIssueDto {
+function findingToIssue(
+  finding: ScoreFinding,
+  maxSegmentDistanceKm?: number | null,
+): FeasibilityIssueDto {
   const proofs: FeasibilityProofAtomDto[] = [];
   if (finding.actionRequired) {
     proofs.push({ conclusion: finding.actionRequired });
   }
+  const issueKind =
+    finding.issueKind ??
+    (/long_distance|road_class/i.test(finding.message ?? '') ? 'road_class' : undefined);
+  const message =
+    issueKind === 'road_class' && maxSegmentDistanceKm != null
+      ? refreshRoadClassTransportMessage(finding.message, maxSegmentDistanceKm)
+      : finding.message;
   return {
     id: finding.id,
     priority: resolveFindingPriority(finding),
     category: mapCategoryToDimension(finding.category),
     title: finding.category,
-    message: finding.message,
+    message,
     affectedDays: finding.affectedDays,
     actionRequired: finding.actionRequired,
     severity: finding.severity,
-    issueKind: finding.issueKind,
+    issueKind,
     anchors: finding.anchors,
     uiHints: finding.uiHints,
     repairOptions: finding.repairOptions,
@@ -278,8 +289,12 @@ export function buildTripFeasibilityReport(
   scoreBreakdown: ScoreBreakdownResponse | null,
   trip: TripDetail | null | undefined,
   alternatives?: FeasibilityAlternativeDto[],
+  options?: { maxSegmentDistanceKm?: number | null },
 ): TripFeasibilityReportDto {
-  const findingIssues = (scoreBreakdown?.findings ?? []).map(findingToIssue);
+  const maxSegmentDistanceKm = options?.maxSegmentDistanceKm ?? null;
+  const findingIssues = (scoreBreakdown?.findings ?? []).map((finding) =>
+    findingToIssue(finding, maxSegmentDistanceKm),
+  );
   const riskIssues = (scoreBreakdown?.risks ?? []).map(mapRiskToIssue);
   const issues = [...findingIssues, ...riskIssues];
 

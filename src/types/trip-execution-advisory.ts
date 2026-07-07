@@ -2,6 +2,8 @@
  * 行中「实时执行状态」读模型 — Runtime Assurance 产品层 DTO
  */
 
+import type { CausalStoryChainNode } from '@/types/causal-trace';
+
 export type ExecutionVerdictStatus =
   | 'ON_TRACK'
   | 'AT_RISK'
@@ -30,6 +32,23 @@ export interface ExecutionAlternativeDto {
   estimatedHotelArrival?: string;
   drivingAfterDarkRisk?: number;
   actionType?: 'shorten' | 'skip' | 'reroute' | 'keep' | 'replace';
+}
+
+/** execution-advisory.causalInsight.primaryEnforcement */
+export type ExecutionCausalPrimaryEnforcement = 'ADJUST_REQUIRED' | 'NOT_EXECUTABLE';
+
+export interface ExecutionCausalStoryDto {
+  chain: CausalStoryChainNode[];
+  assessment: string;
+}
+
+/** P0 · 行中因果链（Abu + stepper） */
+export interface ExecutionCausalInsightDto {
+  guardianHeadline: string;
+  primaryEnforcement: ExecutionCausalPrimaryEnforcement;
+  causalStory: ExecutionCausalStoryDto;
+  /** Tier-3 · GET …/decision-problems/:id/causal-trace */
+  linkedProblemId?: string;
 }
 
 export interface TripExecutionAdvisoryDto {
@@ -86,4 +105,38 @@ export interface TripExecutionAdvisoryDto {
     message: string;
     score?: number;
   }>;
+
+  /** P0 · 行中因果链 */
+  causalInsight?: ExecutionCausalInsightDto;
+}
+
+export type ExecutionScheduleMutationType = 'SHORTEN_STAY' | 'SKIP_ITEM' | 'REPLACE_ITEM';
+
+export interface ExecutionScheduleMutationDto {
+  type: ExecutionScheduleMutationType;
+  itemId: string;
+  deltaMinutes?: number;
+}
+
+export interface ApplyExecutionRecommendationRequest {
+  confirm: true;
+  clientTimestamp?: string;
+}
+
+export interface ApplyExecutionRecommendationResponse {
+  applied: boolean;
+  executionAdvisory: TripExecutionAdvisoryDto;
+  scheduleMutations: ExecutionScheduleMutationDto[];
+  updatedSchedule: {
+    date: string;
+    schedule: {
+      items: Array<{
+        placeId: number | string;
+        placeName: string;
+        startTime: string;
+        endTime: string;
+        status?: 'upcoming' | 'in_progress' | 'completed' | 'cancelled';
+      }>;
+    };
+  };
 }

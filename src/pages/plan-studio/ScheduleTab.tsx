@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -92,6 +93,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 // PersonaMode 已移除 - 三人格现在是系统内部工具
 import { toast } from 'sonner';
+import { handleWriteChainBlockedError, notifyDirectWriteBlocked } from '@/lib/write-chain-blocked-ui.util';
 import ItineraryItemRow from '@/components/plan-studio/ItineraryItemRow';
 import { TravelSegmentIndicator, TravelSummary, CrossDayTravelLeadIn, DayOneArrivalLeadIn, CheckoutMorningLeadIn, OvernightCheckinTravelConnector } from '@/components/plan-studio/TravelSegmentIndicator';
 import { DayAccommodationNotice } from '@/components/plan-studio/DayAccommodationNotice';
@@ -99,6 +101,10 @@ import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { usePlaceImages } from '@/hooks/usePlaceImages';
 import PlanStudioContext, { type PendingSuggestion } from '@/contexts/PlanStudioContext';
 import { ItineraryAdjustScheduleDayPreview } from '@/components/plan-studio/ItineraryAdjustScheduleDayPreview';
+import {
+  PlanContentStateLegend,
+  PlanStudioPlanLayersStrip,
+} from '@/features/trip-context';
 import { scheduleDayMatchesItineraryAdjustDraftPreview } from '@/lib/itinerary-adjust-response';
 import {
   buildLockedItineraryItemIdSet,
@@ -130,10 +136,7 @@ import {
 import type { DayWishImpact } from '@/types/trip-wishes';
 import { useDomainWorkbenchBreakdown } from '@/hooks/useTripDomainInfluence';
 import { resolveDecisionAuthority } from '@/lib/domain-influence-mapping';
-import { TripDomainBreakdownCard } from '@/components/domain-influence/TripDomainBreakdownCard';
-import { ScheduleGuardianDigestCard } from '@/components/plan-studio/ScheduleGuardianDigestCard';
 import { ScheduleRouteRunEvidenceSection } from '@/components/plan-studio/ScheduleRouteRunEvidenceSection';
-import { DomainInfluenceClaimWorkbenchDialog } from '@/components/domain-influence/DomainInfluenceClaimWorkbenchDialog';
 
 interface ScheduleTabProps {
   tripId: string;
@@ -141,7 +144,6 @@ interface ScheduleTabProps {
   initialTrip?: TripDetail | null;
   refreshKey?: number; // 用于触发刷新
   wishImpactByDay?: DayWishImpact[];
-  personaAlerts?: import('@/types/trip').PersonaAlert[];
 }
 
 export default function ScheduleTab({
@@ -149,12 +151,10 @@ export default function ScheduleTab({
   initialTrip,
   refreshKey,
   wishImpactByDay,
-  personaAlerts,
 }: ScheduleTabProps) {
   const { t } = useTranslation();
-  const { breakdown: domainBreakdown, loading: domainBreakdownLoading, reload: reloadDomainBreakdown } =
-    useDomainWorkbenchBreakdown(tripId);
-  const [domainClaimDialogOpen, setDomainClaimDialogOpen] = useState(false);
+  const navigate = useNavigate();
+  const { breakdown: domainBreakdown } = useDomainWorkbenchBreakdown(tripId);
   const getItemDecisionAuthority = useCallback(
     (item: ItineraryItem) =>
       resolveDecisionAuthority(domainBreakdown, item.Place?.category || item.type),
@@ -1045,6 +1045,8 @@ export default function ScheduleTab({
             toast.error(`第 ${suggestion.targetDay} 天不存在`);
             return false;
           }
+
+          if (notifyDirectWriteBlocked({ tripId, navigate })) return false;
           
           // 获取 sessionId（从 planStudioContext 或创建新会话）
           // 注意：ScheduleTab 没有直接访问 sessionId，需要通过其他方式获取
@@ -1097,13 +1099,15 @@ export default function ScheduleTab({
           return true;
         }
         return false;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('应用建议失败:', err);
-        toast.error(err.message || '添加失败，请重试');
+        if (handleWriteChainBlockedError(err, { tripId, navigate })) return false;
+        const message = err instanceof Error ? err.message : '添加失败，请重试';
+        toast.error(message);
         return false;
       }
     });
-  }, [setOnApplySuggestion, trip, tripId, refreshAfterItineraryChange]);
+  }, [setOnApplySuggestion, trip, tripId, refreshAfterItineraryChange, navigate]);
 
   const handleFixConflict = (conflict: PlanStudioConflict | string | { type?: string; title?: string; description?: string; affectedItemIds?: string[]; affected_item_ids?: string[]; affectedDays?: string[] }, dayDate: string) => {
     // 交通时间相关冲突（交通时间不足、交通过长等）→ 打开时间编辑弹窗，而非证据抽屉
@@ -1325,15 +1329,15 @@ export default function ScheduleTab({
   const getGradeStyle = (grade: string) => {
     switch (grade) {
       case 'EXCELLENT':
-        return { bg: 'bg-green-100', text: 'text-green-700', label: '优秀' };
+        return { bg: 'bg-muted', text: 'text-success', label: '优秀' };
       case 'GOOD':
-        return { bg: 'bg-blue-100', text: 'text-blue-700', label: '良好' };
+        return { bg: 'bg-muted', text: 'text-muted-foreground', label: '良好' };
       case 'FAIR':
-        return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: '合格' };
+        return { bg: 'bg-muted/40', text: 'text-warning', label: '合格' };
       case 'POOR':
-        return { bg: 'bg-orange-100', text: 'text-orange-700', label: '待改进' };
+        return { bg: 'bg-muted/30', text: 'text-muted-foreground', label: '待改进' };
       case 'BAD':
-        return { bg: 'bg-red-100', text: 'text-red-700', label: '不合理' };
+        return { bg: 'bg-muted', text: 'text-error', label: '不合理' };
       default:
         return { bg: 'bg-gray-100', text: 'text-gray-700', label: grade };
     }
@@ -1343,11 +1347,11 @@ export default function ScheduleTab({
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'REASONABLE':
-        return { bg: 'bg-green-100', text: 'text-green-700', icon: '✅', label: '合理' };
+        return { bg: 'bg-muted', text: 'text-success', icon: '✅', label: '合理' };
       case 'NEEDS_ATTENTION':
-        return { bg: 'bg-amber-100', text: 'text-amber-700', icon: '⚠️', label: '需关注' };
+        return { bg: 'bg-muted/40', text: 'text-warning', icon: '⚠️', label: '需关注' };
       case 'HAS_ISSUES':
-        return { bg: 'bg-red-100', text: 'text-red-700', icon: '❌', label: '有问题' };
+        return { bg: 'bg-muted', text: 'text-error', icon: '❌', label: '有问题' };
       case 'UNPLANNED':
         return { bg: 'bg-gray-100', text: 'text-gray-500', icon: '📋', label: '待规划' };
       default:
@@ -1708,7 +1712,10 @@ export default function ScheduleTab({
           }
         >
         <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
-          <p className="text-sm font-medium text-foreground">日程时间轴</p>
+          <div className="space-y-2 min-w-0">
+            <p className="text-sm font-medium text-foreground">日程时间轴</p>
+            <PlanContentStateLegend compact className="hidden sm:flex" />
+          </div>
           <div className="flex items-center gap-2">
             {planStudioContext?.openPlanGate ? (
               <Button
@@ -1754,6 +1761,10 @@ export default function ScheduleTab({
             </TooltipProvider>
           </div>
         </div>
+        <PlanStudioPlanLayersStrip
+          hasItineraryAdjustPreview={Boolean(itineraryAdjustDraftPreview)}
+          className="mb-3"
+        />
         {trip && trip.TripDay && Array.isArray(trip.TripDay) ? trip.TripDay.map((day, idx) => {
           const isWindowedTrip = shouldUseTimelineWindowedLoad(trip.TripDay!.length);
           if (isWindowedTrip && idx >= timelineLoadedThrough) {
@@ -1931,7 +1942,7 @@ export default function ScheduleTab({
             <Card
               key={day.id}
               data-schedule-day-index={idx}
-              className={showAdjustDraftPreview ? 'ring-1 ring-amber-300/60' : undefined}
+              className={showAdjustDraftPreview ? 'ring-1 ring-border/60' : undefined}
             >
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -1968,7 +1979,7 @@ export default function ScheduleTab({
                       </div>
                     )}
                     {dayWishImpact && dayWishImpact.impactCount > 0 ? (
-                      <p className="text-xs text-amber-700/90 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                         <Lightbulb className="h-3.5 w-3.5 shrink-0" />
                         有 {dayWishImpact.impactCount} 条私密偏好影响本日
                       </p>
@@ -2468,7 +2479,7 @@ export default function ScheduleTab({
                                       {t('planStudio.scheduleTab.actions.skip')}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      className="text-red-600"
+                                      className="text-error"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleDeleteItem(item.metadata!.itemId, day.id, item.placeName);
@@ -2529,16 +2540,9 @@ export default function ScheduleTab({
         </SegmentEditorDegradedShell>
       </div>
 
-      {/* 右（4/12）：守护者提醒 + 领域分解 */}
+      {/* 右（4/12）：路线依据（完整时间轴不展示守护者提醒 / 领域分解） */}
       <div className="col-span-12 lg:col-span-4 space-y-6">
-        <ScheduleGuardianDigestCard tripId={tripId} personaAlerts={personaAlerts} />
         <ScheduleRouteRunEvidenceSection className="space-y-4" />
-        <TripDomainBreakdownCard
-          tripId={tripId}
-          breakdown={domainBreakdown}
-          loading={domainBreakdownLoading}
-          onClaimDomain={() => setDomainClaimDialogOpen(true)}
-        />
       </div>
     </div>
       {/* 编辑对话框 */}
@@ -2775,7 +2779,7 @@ export default function ScheduleTab({
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Copy className="h-5 w-5 text-amber-500" />
+              <Copy className="h-5 w-5 text-muted-foreground" />
               处理重复行程项
             </DialogTitle>
             <DialogDescription>
@@ -2803,7 +2807,7 @@ export default function ScheduleTab({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="h-7 text-xs text-error hover:text-error hover:bg-muted"
                         disabled={removingDuplicate}
                         onClick={async () => {
                           setRemovingDuplicate(true);
@@ -2837,8 +2841,8 @@ export default function ScheduleTab({
               </div>
               
               {/* 提示信息 */}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-xs text-amber-800">
+              <div className="rounded-lg border border-border/60 bg-muted/15 p-3">
+                <p className="text-xs text-muted-foreground">
                   <strong>提示：</strong>点击「移除」可删除对应天的行程项。如果您希望保留所有行程项，可以直接关闭此对话框。
                 </p>
               </div>
@@ -2861,14 +2865,6 @@ export default function ScheduleTab({
       </Dialog>
 
       {/* 行程合理性评估对话框 V2 */}
-      <DomainInfluenceClaimWorkbenchDialog
-        tripId={tripId}
-        open={domainClaimDialogOpen}
-        onOpenChange={(open) => {
-          setDomainClaimDialogOpen(open);
-          if (!open) void reloadDomainBreakdown();
-        }}
-      />
       <AssessmentDialog 
         open={assessmentDialogOpen}
         onOpenChange={(open) => {
@@ -2931,7 +2927,7 @@ function AssessmentDialog({
       <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ClipboardCheck className="h-5 w-5 text-blue-500" />
+            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
             行程合理性评估
           </DialogTitle>
           <DialogDescription>
@@ -2966,7 +2962,7 @@ function AssessmentDialog({
               </div>
 
               {/* 整体评估摘要 */}
-              <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="p-4 rounded-lg border bg-gradient-to-r from-muted/15 to-muted/15">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">整体合理率</span>
@@ -2980,7 +2976,7 @@ function AssessmentDialog({
                       </Badge>
                     )}
                   </div>
-                  <span className="text-2xl font-bold text-blue-600">
+                  <span className="text-2xl font-bold text-muted-foreground">
                     {result.overallReasonableRate}%
                   </span>
                 </div>
@@ -2990,8 +2986,8 @@ function AssessmentDialog({
                   <div 
                     className={cn(
                       "h-full rounded-full transition-all",
-                      result.overallReasonableRate >= 75 ? 'bg-green-500' :
-                      result.overallReasonableRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                      result.overallReasonableRate >= 75 ? 'bg-muted-foreground' :
+                      result.overallReasonableRate >= 60 ? 'bg-muted-foreground/40' : 'bg-muted-foreground'
                     )}
                     style={{ width: `${result.overallReasonableRate}%` }}
                   />
@@ -2999,15 +2995,15 @@ function AssessmentDialog({
                 
                 {/* 四态统计 V2 */}
                 <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
-                  <div className="flex items-center gap-1 text-green-700">
+                  <div className="flex items-center gap-1 text-success">
                     <span>✅</span>
                     <span>{result.reasonableDays} 合理</span>
                   </div>
-                  <div className="flex items-center gap-1 text-amber-700">
+                  <div className="flex items-center gap-1 text-warning">
                     <span>⚠️</span>
                     <span>{result.needsAttentionDays ?? 0} 需关注</span>
                   </div>
-                  <div className="flex items-center gap-1 text-red-700">
+                  <div className="flex items-center gap-1 text-error">
                     <span>❌</span>
                     <span>{result.hasIssuesDays ?? 0} 有问题</span>
                   </div>
@@ -3020,12 +3016,12 @@ function AssessmentDialog({
 
               {/* 整体建议 */}
               {result.topSuggestions && result.topSuggestions.length > 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="rounded-lg border border-border/60 bg-muted/15 p-3">
                   <div className="flex items-start gap-2">
-                    <Lightbulb className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-amber-800">主要建议</p>
-                      <ul className="text-xs text-amber-700 space-y-1">
+                      <p className="text-sm font-medium text-foreground">主要建议</p>
+                      <ul className="space-y-1 text-xs text-muted-foreground">
                         {result.topSuggestions.slice(0, 3).map((suggestion, idx) => (
                           <li key={idx}>• {suggestion}</li>
                         ))}
@@ -3049,8 +3045,8 @@ function AssessmentDialog({
                           "flex items-center justify-between p-3 rounded-lg border transition-colors",
                           isUnplanned ? 'border-dashed border-gray-300 bg-gray-50' :
                           day.status === 'REASONABLE' ? 'border-gray-200 hover:bg-gray-50' :
-                          day.status === 'NEEDS_ATTENTION' ? 'border-amber-200 bg-amber-50/50 hover:bg-amber-50' :
-                          'border-red-200 bg-red-50/50 hover:bg-red-50'
+                          day.status === 'NEEDS_ATTENTION' ? 'border-border/60 bg-muted/15 hover:bg-muted/25' :
+                          'border-border bg-muted/50 hover:bg-muted'
                         )}>
                           <div className="flex items-center gap-3">
                             <div className="flex flex-col items-start">
@@ -3091,19 +3087,19 @@ function AssessmentDialog({
                                   key={dim.dimension}
                                   className={cn(
                                     "flex items-center justify-between p-2 rounded text-xs",
-                                    dim.passed ? 'bg-white' : 'bg-red-50'
+                                    dim.passed ? 'bg-white' : 'bg-muted'
                                   )}
                                 >
                                   <span className="text-gray-600">{dim.name}</span>
                                   <div className="flex items-center gap-1.5">
                                     <span className={cn(
                                       "font-medium",
-                                      dim.passed ? 'text-gray-900' : 'text-red-600'
+                                      dim.passed ? 'text-gray-900' : 'text-error'
                                     )}>{dim.score}</span>
                                     {dim.passed ? (
-                                      <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                      <CheckCircle2 className="w-3 h-3 text-success" />
                                     ) : (
-                                      <XCircle className="w-3 h-3 text-red-500" />
+                                      <XCircle className="w-3 h-3 text-error" />
                                     )}
                                   </div>
                                 </div>
@@ -3112,9 +3108,9 @@ function AssessmentDialog({
                             
                             {/* 问题和建议 */}
                             {day.topSuggestion && (
-                              <div className="flex items-start gap-2 p-2 bg-amber-50 rounded text-xs">
-                                <Lightbulb className="w-3 h-3 text-amber-600 mt-0.5 flex-shrink-0" />
-                                <span className="text-amber-800">{day.topSuggestion}</span>
+                              <div className="flex items-start gap-2 rounded border border-border/50 bg-muted/12 p-2 text-xs">
+                                <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                                <span className="text-muted-foreground">{day.topSuggestion}</span>
                               </div>
                             )}
                           </div>

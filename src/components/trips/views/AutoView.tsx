@@ -84,9 +84,9 @@ export default function AutoView({
   }, [abuData]);
 
   const getSafetyColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
+    if (score >= 80) return 'text-gate-allow-foreground';
     if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    return 'text-gate-reject-foreground';
   };
 
   
@@ -180,8 +180,8 @@ export default function AutoView({
       return {
         icon: '🟢',
         text: '行程状态：良好',
-        color: 'text-green-600',
-        bgColor: 'bg-green-50',
+        color: 'text-gate-allow-foreground',
+        bgColor: 'bg-gate-allow',
       };
     } else if (overallHealth >= 60) {
       return {
@@ -194,8 +194,8 @@ export default function AutoView({
       return {
         icon: '🔴',
         text: '行程状态：需修复',
-        color: 'text-red-600',
-        bgColor: 'bg-red-50',
+        color: 'text-gate-reject-foreground',
+        bgColor: 'bg-gate-reject',
       };
     }
   };
@@ -344,14 +344,14 @@ export default function AutoView({
                     {/* 🆕 关键问题列表（整合到安全视角卡片中） */}
                     {criticalIssues.length > 0 && (
                       <div className="mt-3 pt-3 border-t space-y-2">
-                        <div className="text-xs font-medium text-red-600 mb-2">关键问题：</div>
+                        <div className="text-xs font-medium text-gate-reject-foreground mb-2">关键问题：</div>
                         {criticalIssues.slice(0, 3).map((issue) => (
                           <div
                             key={issue.id}
-                            className="p-2 bg-red-50 border border-red-200 rounded text-xs"
+                            className="p-2 bg-gate-reject border border-gate-reject-border rounded text-xs"
                           >
-                            <div className="font-medium text-red-900 mb-0.5">{issue.title}</div>
-                            <div className="text-red-700 line-clamp-2">{issue.description}</div>
+                            <div className="font-medium text-gate-reject-foreground mb-0.5">{issue.title}</div>
+                            <div className="text-gate-reject-foreground line-clamp-2">{issue.description}</div>
                           </div>
                         ))}
                         {criticalIssues.length > 3 && (

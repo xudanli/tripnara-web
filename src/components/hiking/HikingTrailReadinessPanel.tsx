@@ -134,7 +134,7 @@ export function HikingTrailReadinessPanel({
 
   const statusBadge =
     result.status === 'go' ? (
-      <Badge className="bg-green-600">可走</Badge>
+      <Badge className="bg-gate-allow-foreground">可走</Badge>
     ) : result.status === 'caution' ? (
       <Badge className="bg-amber-500">注意</Badge>
     ) : (
@@ -203,7 +203,7 @@ export function HikingTrailReadinessPanel({
             <CardContent>
               <div className="text-2xl font-bold">{f.score}</div>
               <div className="h-2 bg-muted rounded-full mt-2 overflow-hidden">
-                <div className="h-full bg-teal-600" style={{ width: `${f.score}%` }} />
+                <div className="h-full bg-gate-allow-foreground" style={{ width: `${f.score}%` }} />
               </div>
               {'detailZh' in f && f.detailZh ? (
                 <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{f.detailZh}</p>
@@ -226,7 +226,7 @@ export function HikingTrailReadinessPanel({
           </CardHeader>
           <CardContent className="space-y-3">
             {result.blockers.map((b) => (
-              <div key={b} className="flex gap-2 text-sm text-red-800 bg-red-50 p-3 rounded-lg">
+              <div key={b} className="flex gap-2 text-sm text-gate-reject-foreground bg-gate-reject p-3 rounded-lg">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {b}
               </div>
@@ -325,7 +325,7 @@ export function HikingTrailReadinessPanel({
       )}
 
       {result.status === 'go' && (
-        <div className="flex items-center gap-2 text-sm text-green-700">
+        <div className="flex items-center gap-2 text-sm text-gate-allow-foreground">
           <CheckCircle2 className="h-4 w-4" />
           完成准备清单与离线包后，可从准备页开始徒步
         </div>

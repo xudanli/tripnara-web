@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { SEMANTIC_BLUE_HEX } from '@/lib/semantic-colors';
 
 interface TravelPersonaRadarProps {
   radar: Record<string, number>;
@@ -32,7 +33,7 @@ function formatLabel(key: string): string {
 export function TravelPersonaRadar({
   radar,
   size = 160,
-  accent = '#38bdf8',
+  accent = SEMANTIC_BLUE_HEX,
   className,
 }: TravelPersonaRadarProps) {
   const axes = useMemo(

@@ -32,7 +32,7 @@ export function PartyNegotiationPreviewCard({
 
   return (
     <div className={className}>
-      <Card className="shadow-none border-violet-500/25 bg-violet-50/30 dark:bg-violet-950/15">
+      <Card className="shadow-none border-border/25 bg-muted/15 dark:bg-muted/15/15">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2 flex-wrap">
             <Users className="h-4 w-4" />
@@ -75,7 +75,7 @@ export function PartyNegotiationPreviewCard({
           </div>
 
           {partyNegotiation.nash_reorder_hint ? (
-            <p className="text-sm text-muted-foreground border-l-2 border-violet-400/50 pl-2.5">
+            <p className="text-sm text-muted-foreground border-l-2 border-border/50 pl-2.5">
               {partyNegotiation.nash_reorder_hint}
             </p>
           ) : null}

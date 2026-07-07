@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tripConstraintsApi, isTripConstraintsUnavailable } from '@/api/trip-constraints';
+import { normalizeConstraintsCheckResponse } from '@/lib/constraints-check-normalize.util';
+import {
+  isNarrateOnlySafetyConstraintCheck,
+  parseSafetyConstraintCheckMeta,
+} from '@/lib/safety-constraints-check.util';
 import type { TripConstraintsCheckResponse } from '@/types/trip-constraints';
 
 export interface UseTripConstraintsCheckOptions {
@@ -10,6 +15,8 @@ export interface UseTripConstraintsCheckOptions {
 
 export interface UseTripConstraintsCheckResult {
   checkResult: TripConstraintsCheckResponse | null;
+  /** narrate_only：violations/warnings 仅 UI 提示，勿作正式门禁 */
+  isNarrateOnlyCheck: boolean;
   checking: boolean;
   checkError: string | null;
   runCheck: () => Promise<TripConstraintsCheckResponse | null>;
@@ -41,10 +48,14 @@ export function useTripConstraintsCheck(
     setCheckError(null);
     try {
       const result = await tripConstraintsApi.check(tripId);
+      const normalized: TripConstraintsCheckResponse = normalizeConstraintsCheckResponse({
+        ...result,
+        ...parseSafetyConstraintCheckMeta(result),
+      });
       if (mountedRef.current) {
-        setCheckResult(result);
+        setCheckResult(normalized);
       }
-      return result;
+      return normalized;
     } catch (err) {
       if (isTripConstraintsUnavailable(err)) {
         if (mountedRef.current) {
@@ -86,6 +97,7 @@ export function useTripConstraintsCheck(
 
   return {
     checkResult,
+    isNarrateOnlyCheck: isNarrateOnlySafetyConstraintCheck(checkResult),
     checking,
     checkError,
     runCheck,

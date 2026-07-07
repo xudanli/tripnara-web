@@ -20,6 +20,8 @@ export interface Country {
   paymentType: PaymentType;
   exchangeRateToCNY?: number; // 🇨🇳 中国特定
   exchangeRateToUSD?: number; // 🌍 国际化字段
+  /** 目的地默认封面（档案 API / BFF 可选返回） */
+  coverImageUrl?: string | null;
 }
 
 // ==================== 货币策略 ====================
@@ -234,6 +236,8 @@ export interface CountryProfile {
   exchangeRateToCNY?: number;
   exchangeRateToUSD?: number;
   paymentType: PaymentType;
+  /** 目的地默认封面（列表 POI 图为空时使用） */
+  coverImageUrl?: string | null;
   paymentInfo?: {
     tipping?: string;
     atm_network?: string;

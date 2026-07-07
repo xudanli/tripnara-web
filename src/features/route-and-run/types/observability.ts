@@ -12,9 +12,18 @@ export type MemoryContractConstraintSink = {
   overridden_by_request_keys?: string[];
 };
 
+/** observability.ledger_healing（V1.6） */
+export type LedgerHealingObs = {
+  status?: string;
+  affected_node_ids?: string[];
+  user_decision_by_node_id?: Record<string, string>;
+};
+
 export type MemoryContractObs = {
   revision: string;
   loaded: boolean;
   layers: string[];
   constraint_sink?: MemoryContractConstraintSink;
+  /** V1.6.1 — 与 Memory Console decision_ledger_causality 同结构 */
+  decision_ledger_causality?: Record<string, unknown>;
 };

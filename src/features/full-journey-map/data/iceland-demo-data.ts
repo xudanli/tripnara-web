@@ -4,7 +4,7 @@ import { DAY_COLORS } from '../types';
 const MEMBERS = [
   { id: 'm1', name: 'Danny', initials: 'DN', groupId: 'young' as const, avatarColor: '#6366f1' },
   { id: 'm2', name: 'Sophie', initials: 'SO', groupId: 'young' as const, avatarColor: '#8b5cf6' },
-  { id: 'm3', name: 'Alex', initials: 'AL', groupId: 'young' as const, avatarColor: '#0ea5e9' },
+  { id: 'm3', name: 'Alex', initials: 'AL', groupId: 'young' as const, avatarColor: '#88C0D0' },
   { id: 'm4', name: 'Mia', initials: 'MI', groupId: 'young' as const, avatarColor: '#14b8a6' },
   { id: 'm5', name: 'Leo', initials: 'LE', groupId: 'young' as const, avatarColor: '#f59e0b' },
   { id: 'm6', name: 'Emma', initials: 'EM', groupId: 'young' as const, avatarColor: '#ec4899' },

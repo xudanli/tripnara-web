@@ -177,7 +177,7 @@ export function InTripExperiencePulseDialog({
                     className={cn(
                       'rounded-full border px-3 py-1.5 text-xs transition-colors',
                       tagMatch === opt.value
-                        ? 'border-violet-500 bg-violet-50 text-violet-900 ring-2 ring-violet-200'
+                        ? 'border-border bg-muted/15 text-muted-foreground ring-2 ring-border'
                         : 'hover:bg-muted/50',
                     )}
                   >

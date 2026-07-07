@@ -59,7 +59,7 @@
   }
 
   a:hover {
-    color: #007bff;
+    color: var(--foreground);
   }
 
   /* Button styles */
@@ -88,7 +88,7 @@
   input:focus,
   textarea:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--ring);
   }
 
   /* Responsive utilities */
@@ -164,6 +164,186 @@
   --color-gate-reject: var(--gate-reject);
   --color-gate-reject-foreground: var(--gate-reject-foreground);
   --color-gate-reject-border: var(--gate-reject-border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+
+  /*
+   * 语义色收敛 · 黑白灰结构 + success/warning/error 仅作反馈
+   * green/emerald/teal → success 字色 + 中性底
+   * amber/yellow/orange → warning 字色 + 中性底
+   * red/rose → error 字色 + 中性底
+   * blue/sky/cyan/indigo/violet/purple → 中性（禁止蓝紫语义面）
+   */
+  --color-green-50: var(--gate-allow);
+  --color-green-100: var(--gate-allow);
+  --color-green-200: var(--gate-allow-border);
+  --color-green-300: var(--gate-allow-border);
+  --color-green-400: var(--gate-allow-foreground);
+  --color-green-500: var(--gate-allow-foreground);
+  --color-green-600: var(--gate-allow-foreground);
+  --color-green-700: var(--gate-allow-foreground);
+  --color-green-800: var(--gate-allow-foreground);
+  --color-green-900: var(--gate-allow-foreground);
+  --color-green-950: var(--gate-allow-foreground);
+
+  --color-emerald-50: var(--gate-allow);
+  --color-emerald-100: var(--gate-allow);
+  --color-emerald-200: var(--gate-allow-border);
+  --color-emerald-300: var(--gate-allow-border);
+  --color-emerald-400: var(--gate-allow-foreground);
+  --color-emerald-500: var(--gate-allow-foreground);
+  --color-emerald-600: var(--gate-allow-foreground);
+  --color-emerald-700: var(--gate-allow-foreground);
+  --color-emerald-800: var(--gate-allow-foreground);
+  --color-emerald-900: var(--gate-allow-foreground);
+  --color-emerald-950: var(--gate-allow-foreground);
+
+  --color-teal-50: var(--gate-allow);
+  --color-teal-100: var(--gate-allow);
+  --color-teal-200: var(--gate-allow-border);
+  --color-teal-300: var(--gate-allow-border);
+  --color-teal-400: var(--gate-allow-foreground);
+  --color-teal-500: var(--gate-allow-foreground);
+  --color-teal-600: var(--gate-allow-foreground);
+  --color-teal-700: var(--gate-allow-foreground);
+  --color-teal-800: var(--gate-allow-foreground);
+  --color-teal-900: var(--gate-allow-foreground);
+  --color-teal-950: var(--gate-allow-foreground);
+
+  --color-red-50: var(--gate-reject);
+  --color-red-100: var(--gate-reject);
+  --color-red-200: var(--gate-reject-border);
+  --color-red-300: var(--gate-reject-border);
+  --color-red-400: var(--gate-reject-foreground);
+  --color-red-500: var(--gate-reject-foreground);
+  --color-red-600: var(--gate-reject-foreground);
+  --color-red-700: var(--gate-reject-foreground);
+  --color-red-800: var(--gate-reject-foreground);
+  --color-red-900: var(--gate-reject-foreground);
+  --color-red-950: var(--gate-reject-foreground);
+
+  --color-amber-50: var(--muted);
+  --color-amber-100: var(--muted);
+  --color-amber-200: var(--border);
+  --color-amber-300: var(--border);
+  --color-amber-400: var(--warning);
+  --color-amber-500: var(--warning);
+  --color-amber-600: var(--warning);
+  --color-amber-700: var(--warning);
+  --color-amber-800: var(--warning);
+  --color-amber-900: var(--foreground);
+  --color-amber-950: var(--foreground);
+
+  --color-yellow-50: var(--muted);
+  --color-yellow-100: var(--muted);
+  --color-yellow-200: var(--border);
+  --color-yellow-300: var(--border);
+  --color-yellow-400: var(--warning);
+  --color-yellow-500: var(--warning);
+  --color-yellow-600: var(--warning);
+  --color-yellow-700: var(--warning);
+  --color-yellow-800: var(--foreground);
+  --color-yellow-900: var(--foreground);
+  --color-yellow-950: var(--foreground);
+
+  --color-orange-50: var(--muted);
+  --color-orange-100: var(--muted);
+  --color-orange-200: var(--border);
+  --color-orange-300: var(--border);
+  --color-orange-400: var(--warning);
+  --color-orange-500: var(--warning);
+  --color-orange-600: var(--warning);
+  --color-orange-700: var(--warning);
+  --color-orange-800: var(--foreground);
+  --color-orange-900: var(--foreground);
+  --color-orange-950: var(--foreground);
+
+  --color-rose-50: var(--muted);
+  --color-rose-100: var(--muted);
+  --color-rose-200: var(--border);
+  --color-rose-300: var(--border);
+  --color-rose-400: var(--error);
+  --color-rose-500: var(--error);
+  --color-rose-600: var(--error);
+  --color-rose-700: var(--error);
+  --color-rose-800: var(--error);
+  --color-rose-900: var(--foreground);
+  --color-rose-950: var(--foreground);
+
+  --color-blue-50: var(--muted);
+  --color-blue-50: var(--muted);
+  --color-blue-100: var(--muted);
+  --color-blue-200: var(--border);
+  --color-blue-300: var(--border);
+  --color-blue-400: var(--muted-foreground);
+  --color-blue-500: var(--muted-foreground);
+  --color-blue-600: var(--muted-foreground);
+  --color-blue-700: var(--foreground);
+  --color-blue-800: var(--foreground);
+  --color-blue-900: var(--foreground);
+  --color-blue-950: var(--foreground);
+
+  --color-sky-50: var(--muted);
+  --color-sky-100: var(--muted);
+  --color-sky-200: var(--border);
+  --color-sky-300: var(--border);
+  --color-sky-400: var(--muted-foreground);
+  --color-sky-500: var(--muted-foreground);
+  --color-sky-600: var(--muted-foreground);
+  --color-sky-700: var(--foreground);
+  --color-sky-800: var(--foreground);
+  --color-sky-900: var(--foreground);
+  --color-sky-950: var(--foreground);
+
+  --color-cyan-50: var(--muted);
+  --color-cyan-100: var(--muted);
+  --color-cyan-200: var(--border);
+  --color-cyan-300: var(--border);
+  --color-cyan-400: var(--muted-foreground);
+  --color-cyan-500: var(--muted-foreground);
+  --color-cyan-600: var(--muted-foreground);
+  --color-cyan-700: var(--foreground);
+  --color-cyan-800: var(--foreground);
+  --color-cyan-900: var(--foreground);
+  --color-cyan-950: var(--foreground);
+
+  --color-indigo-50: var(--muted);
+  --color-indigo-100: var(--muted);
+  --color-indigo-200: var(--border);
+  --color-indigo-300: var(--border);
+  --color-indigo-400: var(--muted-foreground);
+  --color-indigo-500: var(--muted-foreground);
+  --color-indigo-600: var(--muted-foreground);
+  --color-indigo-700: var(--foreground);
+  --color-indigo-800: var(--foreground);
+  --color-indigo-900: var(--foreground);
+  --color-indigo-950: var(--foreground);
+
+  --color-violet-50: var(--muted);
+  --color-violet-100: var(--muted);
+  --color-violet-200: var(--border);
+  --color-violet-300: var(--border);
+  --color-violet-400: var(--muted-foreground);
+  --color-violet-500: var(--muted-foreground);
+  --color-violet-600: var(--muted-foreground);
+  --color-violet-700: var(--foreground);
+  --color-violet-800: var(--foreground);
+  --color-violet-900: var(--foreground);
+  --color-violet-950: var(--foreground);
+
+  --color-purple-50: var(--muted);
+  --color-purple-100: var(--muted);
+  --color-purple-200: var(--border);
+  --color-purple-300: var(--border);
+  --color-purple-400: var(--muted-foreground);
+  --color-purple-500: var(--muted-foreground);
+  --color-purple-600: var(--muted-foreground);
+  --color-purple-700: var(--foreground);
+  --color-purple-800: var(--foreground);
+  --color-purple-900: var(--foreground);
+  --color-purple-950: var(--foreground);
+
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 
@@ -236,42 +416,48 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  
-  /* 决策状态 - ALLOW (通过) */
-  --gate-allow: oklch(0.95 0.02 145);
-  --gate-allow-foreground: oklch(0.35 0.15 145);
-  --gate-allow-border: oklch(0.85 0.05 145);
-  
-  /* 决策状态 - NEED_CONFIRM (需确认) */
-  --gate-confirm: oklch(0.98 0.02 85);
-  --gate-confirm-foreground: oklch(0.45 0.15 85);
-  --gate-confirm-border: oklch(0.90 0.05 85);
-  
-  /* 决策状态 - SUGGEST_REPLACE (建议替换) · 冰川蓝，禁止紫色 */
-  --gate-suggest: var(--nara-glacier-muted);
-  --gate-suggest-foreground: var(--nara-glacier-foreground);
-  --gate-suggest-border: var(--nara-glacier-border);
-  
-  /* 决策状态 - REJECT (拒绝) */
-  --gate-reject: oklch(0.95 0.02 25);
-  --gate-reject-foreground: oklch(0.45 0.20 25);
-  --gate-reject-border: oklch(0.85 0.08 25);
 
-  /* 冰岛品牌辅助色 · nara */
+  /* 全站唯一语义反馈色（Icon / 小圆点 / Toast；禁止铺底） */
+  --success: #5e7d5b;
+  --warning: #946200;
+  --error: #8f3d28;
+  
+  /* 决策状态 · 中性面 + 语义字色（兼容 gate-* 类名） */
+  --gate-allow: var(--card);
+  --gate-allow-foreground: var(--success);
+  --gate-allow-border: var(--border);
+  
+  --gate-confirm: var(--card);
+  --gate-confirm-foreground: var(--warning);
+  --gate-confirm-border: var(--border);
+  
+  --gate-suggest: var(--card);
+  --gate-suggest-foreground: var(--foreground);
+  --gate-suggest-border: var(--border);
+  
+  --gate-reject: var(--card);
+  --gate-reject-foreground: var(--error);
+  --gate-reject-border: var(--border);
+
+  /* 冰岛品牌辅助色 · Layer B 地图/营销；产品 UI 禁止 nara-* Tailwind 类 */
+  /* @deprecated nara-tundra — 与 --success 同色，请用 gate-allow / text-success */
   --nara-lava: #C25A3C;
-  --nara-lava-foreground: #8F3D28;
-  --nara-lava-border: #D4846E;
-  --nara-lava-muted: #F9EFEC;
+  /* @deprecated nara-lava — 未接入产品 UI；见 brand-map-colors.ts BRAND_MAP_LAVA_HEX */
+  --nara-lava-foreground: #A34E35;
+  --nara-lava-border: var(--border);
+  --nara-lava-muted: var(--muted);
 
+  /* @deprecated 产品面请用 text-muted-foreground；仅地图/营销 Layer B */
   --nara-glacier: #88C0D0;
   --nara-glacier-foreground: #3D6570;
-  --nara-glacier-border: #6BA8B8;
-  --nara-glacier-muted: #EEF6F8;
+  --nara-glacier-border: var(--border);
+  --nara-glacier-muted: var(--muted);
 
   --nara-tundra: #5E7D5B;
-  --nara-tundra-foreground: #3D5239;
-  --nara-tundra-border: #7A9976;
-  --nara-tundra-muted: #EEF2ED;
+  /* @deprecated 与 --success 同色；产品面用 gate-allow / text-success */
+  --nara-tundra-foreground: var(--success);
+  --nara-tundra-border: var(--border);
+  --nara-tundra-muted: var(--muted);
   
   /* 三人格 - Abu (安全守护者: 静谧蓝/冰川白) */
   --persona-abu: oklch(0.95 0.02 240);
@@ -288,49 +474,49 @@
   --persona-neptune-foreground: oklch(0.35 0.12 145);
   --persona-neptune-accent: oklch(0.55 0.15 145);
   
-  /* 预算状态颜色（克制、中性，符合 TripNARA 设计哲学） */
-  --budget-safe: oklch(0.97 0.015 150);           /* 预算充足：极浅绿，低饱和度 */
-  --budget-safe-foreground: oklch(0.40 0.08 150);
-  --budget-safe-border: oklch(0.90 0.02 150);
+  /* 预算状态 · 中性面 + 语义字色 */
+  --budget-safe: var(--muted);
+  --budget-safe-foreground: var(--success);
+  --budget-safe-border: var(--border);
   
-  --budget-warning: oklch(0.98 0.015 85);        /* 预算警告：极浅黄，低饱和度 */
-  --budget-warning-foreground: oklch(0.45 0.08 85);
-  --budget-warning-border: oklch(0.92 0.02 85);
+  --budget-warning: var(--muted);
+  --budget-warning-foreground: var(--warning);
+  --budget-warning-border: var(--border);
   
-  --budget-critical: oklch(0.97 0.015 25);       /* 预算超支：极浅红，低饱和度 */
-  --budget-critical-foreground: oklch(0.45 0.10 25);
-  --budget-critical-border: oklch(0.88 0.03 25);
+  --budget-critical: var(--muted);
+  --budget-critical-foreground: var(--error);
+  --budget-critical-border: var(--border);
   
   /* 风险评分颜色系统（基于体验设计文档 v1.0） */
-  /* 低风险（0-30）：#4CAF50 */
-  --risk-very-low: #4CAF50;
-  --risk-very-low-bg: #E8F5E9;
-  --risk-very-low-border: #C8E6C9;
+  /* 低风险（0-30）→ gate-allow */
+  --risk-very-low: var(--gate-allow-foreground);
+  --risk-very-low-bg: var(--gate-allow);
+  --risk-very-low-border: var(--gate-allow-border);
   
-  /* 中低风险（31-45）：#9CCC65 */
-  --risk-low-medium: #9CCC65;
-  --risk-low-medium-bg: #F1F8E9;
-  --risk-low-medium-border: #DCEDC8;
+  /* 中低风险（31-45）→ gate-allow 浅变体 */
+  --risk-low-medium: var(--gate-allow-foreground);
+  --risk-low-medium-bg: var(--gate-allow);
+  --risk-low-medium-border: var(--gate-allow-border);
   
-  /* 中等风险（46-60）：#FFC107 */
-  --risk-medium: #FFC107;
-  --risk-medium-bg: #FFF9C4;
-  --risk-medium-border: #FFF59D;
+  /* 中等风险（46-60）→ warning */
+  --risk-medium: var(--warning);
+  --risk-medium-bg: var(--muted);
+  --risk-medium-border: var(--border);
   
-  /* 中高风险（61-75）：#FF9800 */
-  --risk-medium-high: #FF9800;
-  --risk-medium-high-bg: #FFF3E0;
-  --risk-medium-high-border: #FFB74D; /* 基于主色的浅色变体，避免与高风险背景重复 */
+  /* 中高风险（61-75）→ warning */
+  --risk-medium-high: var(--warning);
+  --risk-medium-high-bg: var(--muted);
+  --risk-medium-high-border: var(--border);
   
-  /* 高风险（76-90）：#FF6F00 */
-  --risk-high: #FF6F00;
-  --risk-high-bg: #FFE0B2;
-  --risk-high-border: #FFCC80;
+  /* 高风险（76-90）→ error */
+  --risk-high: var(--error);
+  --risk-high-bg: var(--muted);
+  --risk-high-border: var(--border);
   
-  /* 极高风险（91-100）：#F44336 */
-  --risk-very-high: #F44336;
-  --risk-very-high-bg: #FFEBEE;
-  --risk-very-high-border: #FFCDD2;
+  /* 极高风险（91-100）→ gate-reject */
+  --risk-very-high: var(--gate-reject-foreground);
+  --risk-very-high-bg: var(--gate-reject);
+  --risk-very-high-border: var(--gate-reject-border);
 
   /* Intake / Odyssey 体验面 — 映射人格轴，不引入独立色板 */
   --intake-axis-i: var(--persona-dre-foreground);
@@ -364,43 +550,49 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  --success: #7a9976;
+  --warning: #c9a227;
+  --error: #c46a52;
   
-  --gate-allow: oklch(0.20 0.05 145);
-  --gate-allow-foreground: oklch(0.85 0.10 145);
-  --gate-allow-border: oklch(0.30 0.08 145);
+  --gate-allow: var(--card);
+  --gate-allow-foreground: var(--success);
+  --gate-allow-border: var(--border);
   
-  --gate-confirm: oklch(0.25 0.05 85);
-  --gate-confirm-foreground: oklch(0.90 0.10 85);
-  --gate-confirm-border: oklch(0.35 0.08 85);
+  --gate-confirm: var(--card);
+  --gate-confirm-foreground: var(--warning);
+  --gate-confirm-border: var(--border);
   
-  --gate-suggest: var(--nara-glacier-muted);
-  --gate-suggest-foreground: var(--nara-glacier-foreground);
-  --gate-suggest-border: var(--nara-glacier-border);
+  --gate-suggest: var(--card);
+  --gate-suggest-foreground: var(--foreground);
+  --gate-suggest-border: var(--border);
   
-  --gate-reject: oklch(0.25 0.08 25);
-  --gate-reject-foreground: oklch(0.90 0.15 25);
-  --gate-reject-border: oklch(0.35 0.10 25);
+  --gate-reject: var(--card);
+  --gate-reject-foreground: var(--error);
+  --gate-reject-border: var(--border);
 
   --nara-lava: #C25A3C;
-  --nara-lava-foreground: #F0C4B8;
-  --nara-lava-border: #9A4A32;
-  --nara-lava-muted: oklch(0.24 0.04 35);
+  --nara-lava-foreground: #D4735A;
+  --nara-lava-border: var(--border);
+  --nara-lava-muted: var(--muted);
 
+  /* @deprecated 产品面请用 text-muted-foreground；仅地图/营销 Layer B */
   --nara-glacier: #88C0D0;
-  --nara-glacier-foreground: #B8DCE6;
-  --nara-glacier-border: #4A7884;
-  --nara-glacier-muted: oklch(0.22 0.03 205);
+  --nara-glacier-foreground: #88C0D0;
+  --nara-glacier-border: var(--border);
+  --nara-glacier-muted: var(--muted);
 
   --nara-tundra: #5E7D5B;
-  --nara-tundra-foreground: #B8CEB5;
-  --nara-tundra-border: #4A6348;
-  --nara-tundra-muted: oklch(0.22 0.03 145);
+  /* @deprecated 与 --success 同色；产品面用 gate-allow / text-success */
+  --nara-tundra-foreground: var(--success);
+  --nara-tundra-border: var(--border);
+  --nara-tundra-muted: var(--muted);
   
   /* 三人格 - 暗色模式 */
   --persona-abu: oklch(0.20 0.05 240);
@@ -415,41 +607,41 @@
   --persona-neptune-foreground: oklch(0.85 0.10 145);
   --persona-neptune-accent: oklch(0.55 0.15 145);
   
-  /* 预算状态颜色（暗色模式） */
-  --budget-safe: oklch(0.25 0.03 150);
-  --budget-safe-foreground: oklch(0.75 0.08 150);
-  --budget-safe-border: oklch(0.35 0.05 150);
+  /* 预算状态 · 暗色模式 · 中性面 + 语义字色 */
+  --budget-safe: var(--muted);
+  --budget-safe-foreground: var(--success);
+  --budget-safe-border: var(--border);
   
-  --budget-warning: oklch(0.28 0.03 85);
-  --budget-warning-foreground: oklch(0.80 0.08 85);
-  --budget-warning-border: oklch(0.38 0.05 85);
+  --budget-warning: var(--muted);
+  --budget-warning-foreground: var(--warning);
+  --budget-warning-border: var(--border);
   
-  --budget-critical: oklch(0.28 0.04 25);
-  --budget-critical-foreground: oklch(0.80 0.10 25);
-  --budget-critical-border: oklch(0.38 0.06 25);
+  --budget-critical: var(--muted);
+  --budget-critical-foreground: var(--error);
+  --budget-critical-border: var(--border);
   
   /* 风险评分颜色系统 - 暗色模式 */
-  --risk-very-low: #66BB6A;
+  --risk-very-low: var(--gate-allow-foreground);
   --risk-very-low-bg: oklch(0.25 0.05 145);
   --risk-very-low-border: oklch(0.35 0.08 145);
   
-  --risk-low-medium: #AED581;
+  --risk-low-medium: var(--gate-allow-foreground);
   --risk-low-medium-bg: oklch(0.27 0.05 145);
   --risk-low-medium-border: oklch(0.37 0.08 145);
   
-  --risk-medium: #FFD54F;
-  --risk-medium-bg: oklch(0.30 0.05 85);
-  --risk-medium-border: oklch(0.40 0.08 85);
+  --risk-medium: var(--warning);
+  --risk-medium-bg: var(--muted);
+  --risk-medium-border: var(--border);
   
-  --risk-medium-high: #FFB74D;
-  --risk-medium-high-bg: oklch(0.28 0.05 50);
-  --risk-medium-high-border: oklch(0.38 0.08 50);
+  --risk-medium-high: var(--warning);
+  --risk-medium-high-bg: var(--muted);
+  --risk-medium-high-border: var(--border);
   
-  --risk-high: #FF8A65;
-  --risk-high-bg: oklch(0.30 0.05 25);
-  --risk-high-border: oklch(0.40 0.08 25);
+  --risk-high: var(--error);
+  --risk-high-bg: var(--muted);
+  --risk-high-border: var(--border);
   
-  --risk-very-high: #E57373;
+  --risk-very-high: var(--gate-reject-foreground);
   --risk-very-high-bg: oklch(0.28 0.05 25);
   --risk-very-high-border: oklch(0.38 0.08 25);
 
@@ -911,4 +1103,88 @@
   opacity: 1;
   box-shadow: 0 4px 14px rgb(15 23 42 / 0.28);
   transform: scale(1.06);
+}
+
+/* 探索路线详情 · Day 活动标记（Mapbox DOM — 青绿主路线 + 橙色选中） */
+.explore-day-map-marker {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.explore-day-map-marker__pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  background: #1d6b78;
+  box-shadow: 0 2px 10px rgb(15 23 42 / 0.28);
+}
+
+.explore-day-map-marker__badge {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.explore-day-map-marker__labels {
+  position: absolute;
+  left: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 120px;
+  text-align: left;
+  text-shadow:
+    0 0 4px #ffffff,
+    0 0 8px #ffffff,
+    0 1px 2px rgb(255 255 255 / 0.9);
+  pointer-events: none;
+}
+
+.explore-day-map-marker__label-en {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explore-day-map-marker__label-zh {
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #4b5563;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explore-day-map-marker--highlight .explore-day-map-marker__pin {
+  background: #e07a3a;
+  box-shadow: 0 0 0 2px #ffffff, 0 2px 12px rgb(224 122 58 / 0.45);
+}
+
+.explore-day-map-marker--selected .explore-day-map-marker__pin {
+  background: #e07a3a;
+  transform: scale(1.08);
+  box-shadow: 0 0 0 3px #ffffff, 0 4px 14px rgb(224 122 58 / 0.5);
+}
+
+.explore-day-map-marker--selected .explore-day-map-marker__label-en,
+.explore-day-map-marker--selected .explore-day-map-marker__label-zh {
+  color: #111827;
+  font-weight: 600;
 }

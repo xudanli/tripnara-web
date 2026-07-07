@@ -37,7 +37,7 @@ export function VibePuzzlePreview({ slots, slotsNeeded, className }: VibePuzzleP
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.06 }}
-              className="inline-flex max-w-[220px] items-center rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/5 px-2 py-1 text-xs text-emerald-900 dark:text-emerald-100"
+              className="inline-flex max-w-[220px] items-center rounded-md border border-dashed border-gate-allow-border/40 bg-gate-allow-foreground/5 px-2 py-1 text-xs text-gate-allow-foreground dark:text-gate-allow-foreground"
               title={slot.reason}
             >
               🧩 建议补位 · {slot.expected_tag}

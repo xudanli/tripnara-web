@@ -220,13 +220,13 @@ export default function RouteTemplatesPage() {
   const getIntensityColor = (intensity?: string) => {
     switch (intensity) {
       case 'LIGHT':
-        return 'bg-green-100 text-green-800';
+        return 'bg-gate-allow text-gate-allow-foreground';
       case 'MODERATE':
         return 'bg-yellow-100 text-yellow-800';
       case 'CHALLENGE':
         return 'bg-orange-100 text-orange-800';
       case 'EXTREME':
-        return 'bg-red-100 text-red-800';
+        return 'bg-gate-reject text-gate-reject-foreground';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -235,9 +235,9 @@ export default function RouteTemplatesPage() {
   const getPaceColor = (pace?: string) => {
     switch (pace) {
       case 'RELAXED':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-muted/15 text-muted-foreground';
       case 'BALANCED':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-muted/15 text-muted-foreground';
       case 'CHALLENGE':
         return 'bg-pink-100 text-pink-800';
       default:
@@ -370,9 +370,9 @@ export default function RouteTemplatesPage() {
 
       {/* 错误提示 */}
       {error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-800">
+            <div className="flex items-center gap-2 text-gate-reject-foreground">
               <XCircle className="w-4 h-4" />
               <span>{error}</span>
             </div>
@@ -413,7 +413,7 @@ export default function RouteTemplatesPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         {template.isActive ? (
-                          <CheckCircle2 className="w-5 h-5 text-green-600" />
+                          <CheckCircle2 className="w-5 h-5 text-gate-allow-foreground" />
                         ) : (
                           <XCircle className="w-5 h-5 text-gray-400" />
                         )}

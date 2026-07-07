@@ -200,7 +200,7 @@ export function FitnessReportPage({ periodDays = 30, onBack, className }: Fitnes
                 <ul className="space-y-2">
                   {report.recommendationsZh.map((rec, index) => (
                     <li key={index} className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-gate-allow-foreground mt-0.5 shrink-0" />
                       <span className="text-sm">{rec}</span>
                     </li>
                   ))}
@@ -226,7 +226,7 @@ export function FitnessReportPage({ periodDays = 30, onBack, className }: Fitnes
                       {report.capabilityChanges.startMaxDailyAscentM}m → {report.capabilityChanges.endMaxDailyAscentM}m
                     </p>
                   </div>
-                  <Badge className={report.capabilityChanges.changePercent >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                  <Badge className={report.capabilityChanges.changePercent >= 0 ? 'bg-gate-allow text-gate-allow-foreground' : 'bg-gate-reject text-gate-reject-foreground'}>
                     {report.capabilityChanges.changePercent >= 0 ? '+' : ''}{report.capabilityChanges.changePercent.toFixed(1)}%
                   </Badge>
                 </div>

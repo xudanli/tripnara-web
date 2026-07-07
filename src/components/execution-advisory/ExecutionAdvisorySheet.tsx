@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -17,11 +18,13 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { TripExecutionAdvisoryDto } from '@/types/trip-execution-advisory';
 import { executionVerdictLabel } from '@/lib/trip-execution-advisory.adapter';
-import { ChevronDown } from 'lucide-react';
+import { useExecuteCausalInsight } from '@/hooks/useExecuteCausalInsight';
+import { ExecuteCausalInsightPanel } from '@/components/execute/live/ExecuteCausalInsightPanel';
 
 interface ExecutionAdvisorySheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  tripId?: string | null;
   advisory: TripExecutionAdvisoryDto | null;
   onApplyRecommendation?: (id: string) => void;
   onKeepPlan?: () => void;
@@ -30,16 +33,24 @@ interface ExecutionAdvisorySheetProps {
 export function ExecutionAdvisorySheet({
   open,
   onOpenChange,
+  tripId,
   advisory,
   onApplyRecommendation,
   onKeepPlan,
 }: ExecutionAdvisorySheetProps) {
   const [technicalOpen, setTechnicalOpen] = useState(false);
+  const { insight: causalInsight, loading: causalInsightLoading } = useExecuteCausalInsight(
+    tripId,
+    advisory,
+    { overviewTabActive: open, allowDemoFallback: false },
+  );
 
   if (!advisory) return null;
 
   const keepPlan = advisory.recommendations.find((r) => r.actionType === 'keep');
   const actionable = advisory.recommendations.filter((r) => r.actionType !== 'keep');
+  const showCausalChain = Boolean(causalInsight?.causalStory.chain?.length || causalInsightLoading);
+  const showDeviationFallback = !showCausalChain && advisory.deviations.length > 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -52,14 +63,20 @@ export function ExecutionAdvisorySheet({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          <div className="rounded-lg border bg-slate-50 p-4">
-            <p className="font-medium">{advisory.verdict.headline}</p>
-            {advisory.currentState.delayMinutes > 0 && (
-              <p className="text-sm text-muted-foreground mt-1">
-                当前延误约 {advisory.currentState.delayMinutes} 分钟
-              </p>
-            )}
-          </div>
+          {(causalInsight || causalInsightLoading) && (
+            <ExecuteCausalInsightPanel insight={causalInsight} loading={causalInsightLoading} />
+          )}
+
+          {!causalInsight && !causalInsightLoading && (
+            <div className="rounded-lg border bg-slate-50 p-4">
+              <p className="font-medium">{advisory.verdict.headline}</p>
+              {advisory.currentState.delayMinutes > 0 && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  当前延误约 {advisory.currentState.delayMinutes} 分钟
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <h3 className="text-sm font-medium mb-2">当前状态</h3>
@@ -85,7 +102,7 @@ export function ExecutionAdvisorySheet({
             </ul>
           </div>
 
-          {advisory.deviations.length > 0 && (
+          {showDeviationFallback && (
             <div>
               <h3 className="text-sm font-medium mb-2">发生了什么</h3>
               <ul className="text-sm space-y-1 text-muted-foreground">
@@ -104,7 +121,7 @@ export function ExecutionAdvisorySheet({
                   key={rec.id}
                   className={cn(
                     'rounded-lg border p-3',
-                    rec.isRecommended && 'border-sky-300 bg-sky-50/40',
+                    rec.isRecommended && 'border-border bg-muted/15',
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -115,7 +132,7 @@ export function ExecutionAdvisorySheet({
                   </div>
                   <p className="text-xs text-muted-foreground">{rec.description}</p>
                   {rec.impactSummary && (
-                    <p className="text-xs text-sky-700 mt-1">{rec.impactSummary}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{rec.impactSummary}</p>
                   )}
                   {rec.estimatedHotelArrival && (
                     <p className="text-xs mt-1">
@@ -139,7 +156,6 @@ export function ExecutionAdvisorySheet({
             </div>
           </div>
 
-          {/* 后果对比 */}
           {keepPlan && advisory.verdict.status !== 'ON_TRACK' && (
             <div className="rounded-lg border p-3 space-y-2 text-sm">
               <p className="font-medium text-xs text-muted-foreground">后果对比</p>
@@ -152,7 +168,7 @@ export function ExecutionAdvisorySheet({
                       : '可能无法完成全部站点'}
                   </p>
                 </div>
-                <div className="rounded bg-sky-50 p-2">
+                <div className="rounded bg-muted/15 p-2">
                   <p className="font-medium">采用调整</p>
                   <p className="text-muted-foreground mt-1">
                     {actionable[0]?.impactSummary ?? '降低赶路风险，优先安全与可恢复性'}

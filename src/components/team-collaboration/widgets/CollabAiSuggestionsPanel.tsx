@@ -1,7 +1,7 @@
 import { MessageSquare, Handshake, Vote, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCollabOverview } from '@/hooks/useCollabOverview';
-import { workbenchInsightPanel } from '@/components/plan-studio/workbench/workbench-ui';
+import { workbenchInsetPanel } from '@/components/plan-studio/workbench/workbench-ui';
 import { cn } from '@/lib/utils';
 import { CollabWidgetCard } from './CollabWidgetCard';
 
@@ -44,7 +44,7 @@ export function CollabAiSuggestionsPanel({
 
   return (
     <CollabWidgetCard title="AI 协作建议" className={className}>
-      <div className={cn(workbenchInsightPanel, 'mb-3 p-3')}>
+      <div className={cn(workbenchInsetPanel, 'mb-3 p-3')}>
         <div className="flex gap-2">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gate-suggest-foreground" />
           <p className="text-xs leading-relaxed text-foreground">{insight}</p>

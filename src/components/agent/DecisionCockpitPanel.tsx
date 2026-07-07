@@ -46,9 +46,9 @@ function badgeStatusTone(status: string | undefined): 'pass' | 'warn' | 'fail' |
 }
 
 function BadgeStatusIcon({ tone }: { tone: ReturnType<typeof badgeStatusTone> }) {
-  if (tone === 'pass') return <ShieldCheck className="h-3.5 w-3.5 text-green-700" />;
+  if (tone === 'pass') return <ShieldCheck className="h-3.5 w-3.5 text-gate-allow-foreground" />;
   if (tone === 'warn') return <ShieldQuestion className="h-3.5 w-3.5 text-amber-700" />;
-  if (tone === 'fail') return <ShieldAlert className="h-3.5 w-3.5 text-red-700" />;
+  if (tone === 'fail') return <ShieldAlert className="h-3.5 w-3.5 text-gate-reject-foreground" />;
   return <ShieldQuestion className="h-3.5 w-3.5 text-muted-foreground" />;
 }
 
@@ -64,9 +64,9 @@ function IntegrityBadgesRow({ badges }: { badges: DecisionCockpitIntegrityBadge[
             variant="outline"
             className={cn(
               'gap-1.5 text-[11px] font-normal py-1 px-2',
-              tone === 'pass' && 'border-green-200 bg-green-50 text-green-800',
+              tone === 'pass' && 'border-gate-allow-border bg-gate-allow text-gate-allow-foreground',
               tone === 'warn' && 'border-amber-200 bg-amber-50 text-amber-900',
-              tone === 'fail' && 'border-red-200 bg-red-50 text-red-800'
+              tone === 'fail' && 'border-gate-reject-border bg-gate-reject text-gate-reject-foreground'
             )}
             title={b.summary_zh?.trim() || undefined}
           >

@@ -6,11 +6,22 @@ export type CollabDeepLinkPatch = {
   wishId?: string | null;
   roundId?: string | null;
   roundDomain?: string | null;
+  negotiationTaskId?: string | null;
+  taskFilter?: string | null;
+  taskAssignee?: string | null;
 };
 
 export const COLLAB_CENTER_OPEN_KEY = 'collab';
 
-const DEEP_LINK_KEYS = ['voteId', 'wishId', 'roundId', 'roundDomain'] as const;
+const DEEP_LINK_KEYS = [
+  'voteId',
+  'wishId',
+  'roundId',
+  'roundDomain',
+  'negotiationTaskId',
+  'taskFilter',
+  'taskAssignee',
+] as const;
 
 /** 团队协作中心是否应打开（含旧 tab=team 深链） */
 export function isCollabCenterOpenParam(params: URLSearchParams): boolean {
@@ -47,6 +58,7 @@ export function clearCollabDeepLinkKeys(params: URLSearchParams): URLSearchParam
   next.delete(COLLAB_CENTER_OPEN_KEY);
   next.delete('collabTab');
   next.delete('taskFilter');
+  next.delete('taskAssignee');
   for (const key of DEEP_LINK_KEYS) {
     next.delete(key);
   }

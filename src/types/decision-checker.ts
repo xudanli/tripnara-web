@@ -10,6 +10,7 @@ import {
   normalizePlanningDaySplits,
   type PlanningDaySplitDto,
 } from '@/types/planning-day-split';
+import { formatDecisionCheckerEvidenceItems } from '@/lib/decision-checker-evidence-display.util';
 
 export const DECISION_CHECKER_SCHEMA = 'tripnara.decision_checker@v1' as const;
 
@@ -42,6 +43,7 @@ export type DecisionCheckerEvidenceKind =
   | 'inventory'
   | 'opening_hours'
   | 'persona_trace'
+  | 'destination_knowledge'
   | 'other';
 
 export type DecisionCheckerScenarioBadge = 'recommended' | 'alternative' | 'best';
@@ -352,7 +354,7 @@ export function normalizeDecisionCheckerResponse(
     overview: { ...overview, conflict, repairPlan },
     evidence: {
       ...evidence,
-      items: evidence.items ?? [],
+      items: formatDecisionCheckerEvidenceItems(evidence.items),
       summary: evidence.summary ?? { high: 0, medium: 0, low: 0 },
     },
     impact: {

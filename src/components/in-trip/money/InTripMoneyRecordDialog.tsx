@@ -159,7 +159,7 @@ export function InTripMoneyRecordDialog({
 
         {showNudges ? (
           <div className="space-y-4 py-2">
-            <p className="text-sm text-emerald-700 font-medium">记账成功</p>
+            <p className="text-sm text-gate-allow-foreground font-medium">记账成功</p>
             <InTripMoneyNudgeList nudges={lastNudges} />
             <DialogFooter>
               <Button type="button" onClick={() => onOpenChange(false)}>

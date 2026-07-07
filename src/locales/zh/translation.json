@@ -107,6 +107,63 @@
     "tripnaraFocus": "关注「应不应该去」与「是否适合组队」—— 可验证，不排名",
     "existBadge": "存在"
   },
+  "impact": {
+    "_legacy_headline": "{{text}}",
+    "road_close": {
+      "affects_arrangements": "这次 {{road}} 道路关闭将影响第 {{day}} 天的 {{count}} 个安排：{{names}}。"
+    },
+    "daily_load": {
+      "affects_arrangements": "第 {{day}} 天驾驶负荷过高，将影响第 {{day}} 天的 {{count}} 项安排：{{names}}。"
+    },
+    "weather": {
+      "affects_arrangements": "天气限制将影响第 {{day}} 天的 {{count}} 项安排：{{names}}。"
+    },
+    "scope": {
+      "sectionTitle": "影响范围",
+      "sectionHint": "这次变化将影响以下安排（连锁影响，而非单点告警）",
+      "triggerSource": "触发源",
+      "chainTitle": "连锁影响",
+      "chainExpand": "查看连锁逻辑",
+      "chainCollapse": "收起连锁逻辑",
+      "arrangementsTitle": "受影响安排",
+      "directImpact": "直接影响",
+      "sameDayCascade": "同日连锁",
+      "dayLabel": "第 {{day}} 天",
+      "affectedDays": "第 {{days}} 天"
+    },
+    "trigger": {
+      "ROAD_SEGMENT_UNAVAILABLE": "{{subjectId}} · {{status}}",
+      "WEATHER_RESTRICTION": "天气限制 · {{subjectId}}",
+      "EXCESSIVE_DAILY_LOAD": "第 {{day}} 日驾驶负荷过高"
+    },
+    "status": {
+      "CLOSED": "道路关闭",
+      "RESTRICTED": "通行受限"
+    },
+    "chain": {
+      "kind": {
+        "trigger": "触发",
+        "route": "路线",
+        "arrangement": "行程项",
+        "downstream": "连带影响",
+        "DOWNSTREAM": "连带影响",
+        "consequence": "连锁后果"
+      },
+      "consequence": {
+        "DAILY_DRIVING_LOAD": "当日驾驶负荷超标，后续安排时间不可行",
+        "CHECKIN_AND_RESERVATION_TIMING": "入住与预约时间连锁冲突"
+      }
+    },
+    "arrangement": {
+      "kind": {
+        "POI": "景点",
+        "HOTEL": "住宿",
+        "MEAL": "用餐",
+        "TRANSPORT": "交通",
+        "ACTIVITY": "活动"
+      }
+    }
+  },
   "personas": {
     "title": "帮助你做出更好旅行决定的三位合伙人",
     "abu": {
@@ -200,8 +257,8 @@
       "places": "找点",
       "schedule": "时间轴",
       "coverage": "路线覆盖",
-      "workbench": "方案预览与提交",
-      "planGate": "方案预览与提交",
+      "workbench": "方案确认",
+      "planGate": "方案确认",
       "bookings": "预订"
     },
     "noTrip": "请先选择一个行程",

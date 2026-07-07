@@ -16,15 +16,15 @@ function sentimentStyles(sentiment: string | undefined): {
 } {
   if (sentiment === 'NEGATIVE_TRAUMA') {
     return {
-      card: 'border-violet-200/80 bg-violet-50/40 dark:border-violet-900/40 dark:bg-violet-950/20',
-      badge: 'border-violet-300/60 text-violet-900 dark:text-violet-100',
+      card: 'border-border/80 bg-muted/15 dark:border-border/40 dark:bg-muted/15',
+      badge: 'border-border/60 text-muted-foreground dark:text-muted-foreground',
       label: '共同回忆',
     };
   }
   if (sentiment === 'POSITIVE_HIGH') {
     return {
-      card: 'border-emerald-200/70 bg-emerald-50/35 dark:border-emerald-900/35 dark:bg-emerald-950/15',
-      badge: 'border-emerald-400/50 text-emerald-900 dark:text-emerald-100',
+      card: 'border-gate-allow-border/70 bg-gate-allow/35 dark:border-gate-allow-border/35 dark:bg-gate-allow/15',
+      badge: 'border-gate-allow-border/50 text-gate-allow-foreground dark:text-gate-allow-foreground',
       label: '高光时刻',
     };
   }

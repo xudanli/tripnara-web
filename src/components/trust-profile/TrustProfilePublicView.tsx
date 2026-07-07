@@ -53,7 +53,7 @@ export function TrustProfilePublicView({
           </div>
 
           {profile.professional?.isVerifiedProfessional && (
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+            <div className="rounded-lg border border-gate-allow-border/20 bg-gate-allow-foreground/5 px-4 py-3">
               <p className="text-sm font-medium text-foreground">Professional 已认证</p>
               {profile.professional.bio && (
                 <p className="mt-1 text-sm text-muted-foreground">{profile.professional.bio}</p>

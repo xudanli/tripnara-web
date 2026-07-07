@@ -23,6 +23,7 @@ export interface ExplainAlternativeDto {
   scores?: Record<string, number>;
   caveat?: string;
   caveats?: string[];
+  tradeoffs?: string[];
   is_recommended?: boolean;
   isRecommended?: boolean;
   gate_status?: string;

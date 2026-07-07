@@ -9,12 +9,49 @@ import type {
   ConstraintPreviewImpactRequest,
   ConstraintPreviewImpactResponse,
 } from '@/types/constraint-console';
+import { isCatalogHardTemplate } from '@/lib/constraint-catalog-template-ids';
+import { enrichConstraintImpactPreviewWithSchedule } from '@/lib/constraint-preview-schedule.util';
+import type { TripDetail } from '@/types/trip';
 
 const USE_MOCK_API =
   import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_CONSTRAINT_PREVIEW === 'true';
 
+function mergePreviewDraft(body: ConstraintPreviewImpactRequest): ConstraintEditorDraft {
+  const partial = body.draft ?? {};
+  return {
+    id: body.constraintId,
+    name: partial.name ?? body.constraintId,
+    enabled: partial.enabled ?? true,
+    type: partial.type ?? 'HARD',
+    scope: partial.scope ?? 'TRIP',
+    targetValue: partial.targetValue ?? 0,
+    targetUnit: partial.targetUnit ?? 'day',
+    toleranceMode: partial.toleranceMode ?? 'none',
+    toleranceMinutes: partial.toleranceMinutes ?? 0,
+    priority: partial.priority ?? 5,
+    locked: partial.locked ?? false,
+    reason: partial.reason ?? '',
+    startDate: partial.startDate,
+    endDate: partial.endDate,
+    currency: partial.currency,
+    transportMode: partial.transportMode,
+    scopeBinding: partial.scopeBinding,
+  };
+}
+
+function shouldRequestDeepPreview(draft: ConstraintEditorDraft): boolean {
+  if (!isCatalogHardTemplate(draft.id)) return false;
+  return (
+    draft.id === 'earliest_departure' ||
+    draft.id === 'latest_end' ||
+    draft.id === 'child_nap_time' ||
+    draft.id === 'fixed_appointments'
+  );
+}
+
 export interface ConstraintPreviewImpactOptions {
   constraintsVersion?: number;
+  trip?: TripDetail | null;
 }
 
 export const constraintConsoleApi = {
@@ -28,27 +65,15 @@ export const constraintConsoleApi = {
     body: ConstraintPreviewImpactRequest,
     options: ConstraintPreviewImpactOptions = {},
   ): Promise<ConstraintPreviewImpactResponse | null> => {
-    const draft: ConstraintEditorDraft = {
-      id: body.constraintId,
-      name: body.draft.name ?? body.constraintId,
-      enabled: body.draft.enabled ?? true,
-      type: body.draft.type ?? 'HARD',
-      scope: body.draft.scope ?? 'TRIP',
-      targetValue: body.draft.targetValue ?? 0,
-      targetUnit: body.draft.targetUnit ?? 'day',
-      toleranceMode: body.draft.toleranceMode ?? 'none',
-      toleranceMinutes: body.draft.toleranceMinutes ?? 0,
-      priority: body.draft.priority ?? 5,
-      locked: body.draft.locked ?? false,
-      reason: body.draft.reason ?? '',
-      startDate: body.draft.startDate,
-      endDate: body.draft.endDate,
-      currency: body.draft.currency,
-    };
+    const draft = mergePreviewDraft(body);
 
     if (USE_MOCK_API) {
       const { mockConstraintConsoleApi } = await import('@/utils/mock-constraint-console-api');
-      const preview = await mockConstraintConsoleApi.previewImpact(tripId, body, options);
+      const preview = enrichConstraintImpactPreviewWithSchedule(
+        await mockConstraintConsoleApi.previewImpact(tripId, body, options),
+        draft,
+        options.trip,
+      );
       return { preview, source: 'bff' };
     }
 
@@ -57,9 +82,16 @@ export const constraintConsoleApi = {
       const data = await tripConstraintsApi.previewImpact(tripId, {
         changes: [change],
         persist: false,
+        constraintsVersion: options.constraintsVersion,
+        ...(shouldRequestDeepPreview(draft) ? { refreshType: 'deep' as const } : {}),
       });
+      const preview = enrichConstraintImpactPreviewWithSchedule(
+        mapPreviewImpactToUi(data, EMPTY_CONSTRAINT_IMPACT_PREVIEW),
+        draft,
+        options.trip,
+      );
       return {
-        preview: mapPreviewImpactToUi(data, EMPTY_CONSTRAINT_IMPACT_PREVIEW),
+        preview,
         source: 'bff',
       };
     } catch (err) {

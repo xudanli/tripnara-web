@@ -30,15 +30,15 @@ export function AnchoringPresencePanel({
   return (
     <Card
       className={cn(
-        'border-sky-300/60 bg-gradient-to-br from-sky-50/90 to-slate-50/80 dark:from-sky-950/30 dark:to-slate-950/40',
+        'border-border/60 bg-gradient-to-br from-muted/15 to-slate-50/80 dark:from-muted/15/30 dark:to-slate-950/40',
         windLock && 'border-amber-400/70 from-amber-50/90 dark:from-amber-950/25',
         className
       )}
     >
       <CardHeader className="pb-2 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Shield className="h-4 w-4 text-sky-700 dark:text-sky-300" aria-hidden />
-          <CardTitle className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+          <Shield className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" aria-hidden />
+          <CardTitle className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {isReassurance ? '别担心，我帮你看过了' : '别慌，有我在'}
           </CardTitle>
           {windLock ? (
@@ -54,7 +54,7 @@ export function AnchoringPresencePanel({
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-lg border border-border/70 bg-background/60 px-3 py-2.5">
             <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-              <MapPin className="h-3.5 w-3.5 text-sky-600" aria-hidden />
+              <MapPin className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
               待在原地
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">已锁定当前上下文，勿贸然改线</p>
@@ -77,7 +77,7 @@ export function AnchoringPresencePanel({
           </div>
           <div className="rounded-lg border border-border/70 bg-background/60 px-3 py-2.5">
             <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-              <Clock className="h-3.5 w-3.5 text-violet-600" aria-hidden />
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
               可变约项
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">已标记延期，恢复后再安排</p>

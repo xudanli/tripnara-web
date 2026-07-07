@@ -139,7 +139,7 @@ export function EditTripDialog({ trip, open, onOpenChange, onSuccess }: EditTrip
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4 min-h-[200px]">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground">
                 {error}
               </div>
             )}

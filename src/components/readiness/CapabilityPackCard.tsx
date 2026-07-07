@@ -78,8 +78,8 @@ export default function CapabilityPackCard({
             <div
               className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-xs ${
                 deferUrgency
-                  ? 'bg-blue-50 border border-blue-200 text-blue-900'
-                  : 'bg-amber-50 border border-amber-200 text-amber-900'
+                  ? 'bg-muted border border-border text-muted-foreground'
+                  : 'bg-muted border border-border text-warning'
               }`}
             >
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -96,7 +96,7 @@ export default function CapabilityPackCard({
           )}
 
           {deferUrgency && daysUntilStart != null && (
-            <p className="text-xs text-blue-700 bg-blue-50/60 rounded px-2 py-1.5">
+            <p className="text-xs text-muted-foreground bg-muted/60 rounded px-2 py-1.5">
               {t('dashboard.readiness.page.capabilityPackPlanningHint', {
                 days: daysUntilStart,
                 defaultValue: `距离出发还有 ${daysUntilStart} 天。现在只需提前准备装备和路线意识；具体路况出发前 14 天内再查即可。`,
@@ -116,11 +116,11 @@ export default function CapabilityPackCard({
                   key={rule.id ?? index}
                   className={`p-2.5 rounded-md text-xs border ${
                     rule.level === 'blocker'
-                      ? 'bg-red-50 border-red-200'
+                      ? 'bg-muted border-border'
                       : rule.level === 'must'
-                        ? 'bg-orange-50 border-orange-200'
+                        ? 'bg-muted border-border'
                         : rule.level === 'should'
-                          ? 'bg-yellow-50 border-yellow-200'
+                          ? 'bg-muted border-border'
                           : 'bg-gray-50 border-gray-200'
                   }`}
                 >
@@ -129,11 +129,11 @@ export default function CapabilityPackCard({
                       variant="outline"
                       className={`text-[10px] shrink-0 ${
                         rule.level === 'blocker'
-                          ? 'border-red-500 text-red-700'
+                          ? 'border-border text-error'
                           : rule.level === 'must'
-                            ? 'border-orange-500 text-orange-700'
+                            ? 'border-border text-warning'
                             : rule.level === 'should'
-                              ? 'border-yellow-600 text-yellow-700'
+                              ? 'border-border text-warning'
                               : 'border-gray-500 text-gray-700'
                       }`}
                     >

@@ -11,12 +11,15 @@ import { extractChooseOptionsFromPresentation } from '@/lib/planning-workbench-u
 import type { GuardianPersonaPresentation } from '@/types/guardian-presentation';
 import { cn } from '@/lib/utils';
 import { Scale } from 'lucide-react';
+import { workbenchCard } from '@/components/plan-studio/workbench/workbench-ui';
 
 export interface PlanGateChoosePanelProps {
   presentation: GuardianPersonaPresentation;
   tripId: string;
   userId?: string | null;
   className?: string;
+  /** plan-gate：方案确认抽屉样式（无人格头像、gate token） */
+  variant?: 'default' | 'plan-gate';
   onPresentationChange?: (presentation: GuardianPersonaPresentation) => void;
   /** CHOOSE 成功后自动重新 execute(generate) */
   onRegenerate?: () => void | Promise<void>;
@@ -28,6 +31,7 @@ export default function PlanGateChoosePanel({
   tripId,
   userId,
   className,
+  variant = 'default',
   onPresentationChange,
   onRegenerate,
   onChooseSuccess,
@@ -61,18 +65,28 @@ export default function PlanGateChoosePanel({
 
   if (options.length === 0) return null;
 
+  const isPlanGate = variant === 'plan-gate';
+  const optionLabels = ['A', 'B', 'C', 'D'];
+
   return (
     <Card
       id="plan-gate-choose-block"
-      className={cn('border-2 border-amber-200 bg-amber-50/20', className)}
+      className={cn(
+        isPlanGate
+          ? cn(workbenchCard, 'border-border/40 bg-background p-0 shadow-none')
+          : 'border-2 border-amber-200 bg-amber-50/20',
+        className,
+      )}
     >
       <CardHeader className="pb-3">
         <div className="flex items-start gap-3">
-          <PersonaAvatar persona={presentation.leadSpeaker} size={36} withBackground />
+          {!isPlanGate ? (
+            <PersonaAvatar persona={presentation.leadSpeaker} size={36} withBackground />
+          ) : null}
           <div className="min-w-0 flex-1">
             <CardTitle className="text-base flex items-center gap-2">
-              <Scale className="h-4 w-4 text-amber-700" />
-              请选择您的取舍
+              <Scale className={cn('h-4 w-4', isPlanGate ? 'text-warning' : 'text-amber-700')} />
+              {isPlanGate ? '确认本次取舍' : '请选择您的取舍'}
             </CardTitle>
             <CardDescription className="text-xs mt-1">
               {presentation.headline || '选定后系统将据此继续评估方案'}
@@ -92,11 +106,13 @@ export default function PlanGateChoosePanel({
                 className={cn(
                   'w-full text-left rounded-lg border px-3 py-2.5 text-sm transition-colors',
                   selected
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                    ? 'border-primary bg-muted/25 ring-1 ring-border'
                     : 'border-border bg-background hover:bg-muted/50',
                 )}
               >
-                <span className="font-medium text-muted-foreground mr-2">{index + 1}.</span>
+                <span className="font-medium text-muted-foreground mr-2">
+                  {isPlanGate ? `${optionLabels[index] ?? index + 1}.` : `${index + 1}.`}
+                </span>
                 {option}
               </button>
             );
@@ -115,6 +131,8 @@ export default function PlanGateChoosePanel({
               <Spinner className="w-4 h-4 mr-2" />
               提交中…
             </>
+          ) : isPlanGate ? (
+            `确认选择 ${optionLabels[selectedIndex ?? 0] ?? ''}`.trim()
           ) : (
             '确认选择'
           )}

@@ -81,15 +81,15 @@ const DECISION_MODE_CONFIG: Record<DecisionWeightMode, { label: string; descript
 
 const ROLE_CONFIG: Record<MemberRole, { label: string; icon: React.ElementType; color: string }> = {
   LEADER: { label: '领队', icon: Crown, color: 'text-yellow-500' },
-  MEMBER: { label: '成员', icon: User, color: 'text-blue-500' },
+  MEMBER: { label: '成员', icon: User, color: 'text-muted-foreground' },
   OBSERVER: { label: '观察者', icon: Eye, color: 'text-gray-500' },
 };
 
 const FITNESS_LEVEL_CONFIG: Record<FitnessLevelType, { label: string; color: string }> = {
-  BEGINNER: { label: '初级', color: 'bg-green-100 text-green-700' },
-  INTERMEDIATE: { label: '中级', color: 'bg-blue-100 text-blue-700' },
-  ADVANCED: { label: '高级', color: 'bg-purple-100 text-purple-700' },
-  EXPERT: { label: '专家', color: 'bg-red-100 text-red-700' },
+  BEGINNER: { label: '初级', color: 'bg-gate-allow text-gate-allow-foreground' },
+  INTERMEDIATE: { label: '中级', color: 'bg-muted/15 text-muted-foreground' },
+  ADVANCED: { label: '高级', color: 'bg-muted/15 text-muted-foreground' },
+  EXPERT: { label: '专家', color: 'bg-gate-reject text-gate-reject-foreground' },
 };
 
 const EXPERIENCE_LEVEL_CONFIG: Record<ExperienceLevelType, { label: string }> = {
@@ -271,7 +271,7 @@ function WeightsDistribution({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Scale className="h-4 w-4 text-blue-500" />
+        <Scale className="h-4 w-4 text-muted-foreground" />
         <span>决策权重分配</span>
       </div>
       
@@ -802,7 +802,7 @@ export function TeamManagementPanel({
               onClick={() => toggleSection('weights')}
             >
               <span className="font-medium flex items-center gap-2">
-                <Scale className="h-4 w-4 text-blue-500" />
+                <Scale className="h-4 w-4 text-muted-foreground" />
                 权重分配
               </span>
               {expandedSections.weights ? (

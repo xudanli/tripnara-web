@@ -163,7 +163,7 @@ function IntegrationCard({ service, title, description, iconSrc, iconAlt }: Inte
 
     if (isAuthorized) {
       return (
-        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+        <div className="flex items-center gap-2 text-sm text-gate-allow-foreground dark:text-gate-allow-foreground">
           <CheckCircle2 className="h-4 w-4" />
           已连接
         </div>
@@ -559,9 +559,9 @@ export default function SettingsPage() {
                 <form onSubmit={handleAccountSubmit}>
                   {/* 错误提示 */}
                   {userError && (
-                    <Card className="border-red-200 bg-red-50 mb-6">
+                    <Card className="border-gate-reject-border bg-gate-reject mb-6">
                       <CardContent className="pt-6">
-                        <div className="flex items-center gap-2 text-red-800">
+                        <div className="flex items-center gap-2 text-gate-reject-foreground">
                           <AlertCircle className="h-5 w-5" />
                           <span>{userError}</span>
                         </div>
@@ -571,9 +571,9 @@ export default function SettingsPage() {
 
                   {/* 成功提示 */}
                   {userUpdateSuccess && (
-                    <Card className="border-green-200 bg-green-50 mb-6">
+                    <Card className="border-gate-allow-border bg-gate-allow mb-6">
                       <CardContent className="pt-6">
-                        <div className="flex items-center gap-2 text-green-800">
+                        <div className="flex items-center gap-2 text-gate-allow-foreground">
                           <CheckCircle2 className="h-5 w-5" />
                           <span>账户信息已更新</span>
                         </div>
@@ -674,9 +674,9 @@ export default function SettingsPage() {
                 <form onSubmit={handleSubmit}>
                   {/* 错误提示 */}
                   {(error || updateError) && (
-                    <Card className="border-red-200 bg-red-50 mb-6">
+                    <Card className="border-gate-reject-border bg-gate-reject mb-6">
                       <CardContent className="pt-6">
-                        <div className="flex items-center gap-2 text-red-800">
+                        <div className="flex items-center gap-2 text-gate-reject-foreground">
                           <AlertCircle className="h-5 w-5" />
                           <span>{error || updateError}</span>
                         </div>
@@ -686,9 +686,9 @@ export default function SettingsPage() {
 
                   {/* 成功提示 */}
                   {submitSuccess && (
-                    <Card className="border-green-200 bg-green-50 mb-6">
+                    <Card className="border-gate-allow-border bg-gate-allow mb-6">
                       <CardContent className="pt-6">
-                        <div className="flex items-center gap-2 text-green-800">
+                        <div className="flex items-center gap-2 text-gate-allow-foreground">
                           <CheckCircle2 className="h-5 w-5" />
                           <span>偏好设置已保存</span>
                         </div>
@@ -1238,9 +1238,9 @@ export default function SettingsPage() {
                     </div>
                     <Button variant="outline">导出</Button>
                   </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg border-red-200">
+                  <div className="flex items-center justify-between p-4 border rounded-lg border-gate-reject-border">
                     <div>
-                      <div className="font-medium text-red-600">删除账户</div>
+                      <div className="font-medium text-gate-reject-foreground">删除账户</div>
                       <div className="text-sm text-muted-foreground">
                         永久删除所有数据，此操作不可撤销
                       </div>
@@ -1262,7 +1262,7 @@ export default function SettingsPage() {
                               <li>用户偏好设置</li>
                               <li>其他关联数据</li>
                             </ul>
-                            <p className="mt-4 font-medium text-red-600">
+                            <p className="mt-4 font-medium text-gate-reject-foreground">
                               此操作不可撤销！
                             </p>
                             <div className="mt-4 space-y-2">
@@ -1279,7 +1279,7 @@ export default function SettingsPage() {
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         {userError && (
-                          <div className="flex items-center gap-2 text-red-600 text-sm">
+                          <div className="flex items-center gap-2 text-gate-reject-foreground text-sm">
                             <AlertCircle className="h-4 w-4" />
                             <span>{userError}</span>
                           </div>
@@ -1296,7 +1296,7 @@ export default function SettingsPage() {
                           <AlertDialogAction
                             onClick={handleDeleteAccount}
                             disabled={deleting || deleteConfirmText !== '确认删除'}
-                            className="bg-red-600 hover:bg-red-700"
+                            className="bg-gate-reject-foreground hover:bg-gate-reject-foreground"
                           >
                             {deleting ? (
                               <>

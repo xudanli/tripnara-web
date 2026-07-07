@@ -189,9 +189,9 @@ export function buildReviewAttributionContext(
 }
 
 export function recruitingSignalBarColor(score: number): string {
-  if (score > 0.7) return 'bg-emerald-500';
+  if (score > 0.7) return 'bg-gate-allow-foreground';
   if (score > 0.4) return 'bg-amber-500';
-  return 'bg-red-500';
+  return 'bg-gate-reject-foreground';
 }
 
 export function recruitingConfidenceBadgeVariant(
@@ -215,11 +215,11 @@ export function recruitingSuccessLevelLabel(level: string): string {
 
 export function recruitingSuccessLevelColor(level: string): string {
   const colors: Record<string, string> = {
-    EXCELLENT: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    GOOD: 'bg-blue-100 text-blue-800 border-blue-200',
+    EXCELLENT: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border',
+    GOOD: 'bg-muted/15 text-muted-foreground border-border',
     ACCEPTABLE: 'bg-amber-100 text-amber-800 border-amber-200',
     POOR: 'bg-orange-100 text-orange-800 border-orange-200',
-    FAILED: 'bg-red-100 text-red-800 border-red-200',
+    FAILED: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border',
   };
   return colors[level] ?? 'bg-muted text-muted-foreground';
 }

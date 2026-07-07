@@ -11,6 +11,7 @@ import {
   workbenchSecondaryMetric,
   workbenchTabTriggerCompact,
 } from '@/components/plan-studio/workbench/workbench-ui';
+import { SEMANTIC_GREEN_HEX, SEMANTIC_RED_HEX } from '@/lib/semantic-colors';
 
 /**
  * 全程地图视觉 token
@@ -252,6 +253,6 @@ export const JOURNEY_MAP_MARKER_COLORS: Record<string, string> = {
   diversion: '#c2410c',
   accommodation: '#475569',
   transport: '#64748b',
-  meeting: '#0f766e',
-  risk: '#dc2626',
+  meeting: SEMANTIC_GREEN_HEX,
+  risk: SEMANTIC_RED_HEX,
 };

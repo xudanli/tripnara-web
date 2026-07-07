@@ -71,7 +71,7 @@ export default function LoginIllustration() {
           
           {/* Butterfly */}
           <svg
-            className="absolute -top-4 -left-2 w-8 h-8 text-green-500"
+            className="absolute -top-4 -left-2 w-8 h-8 text-gate-allow-foreground"
             fill="currentColor"
             viewBox="0 0 24 24"
           >

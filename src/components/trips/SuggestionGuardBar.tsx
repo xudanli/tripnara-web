@@ -40,11 +40,11 @@ export function SuggestionGuardBar({ stats, onClick, className }: SuggestionGuar
   };
 
   return (
-    <div className={`bg-blue-50/50 border border-blue-200/60 rounded-lg p-4 ${className || ''}`}>
+    <div className={`bg-muted/15 border border-border/60 rounded-lg p-4 ${className || ''}`}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
-          <Search className="w-5 h-5 text-blue-600 flex-shrink-0" />
-          <span className="text-sm text-blue-900">
+          <Search className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+          <span className="text-sm text-muted-foreground">
             <strong className="text-base">🔍 发现 {total} 条建议</strong>
             {items.length > 0 && (
               <>
@@ -69,7 +69,7 @@ export function SuggestionGuardBar({ stats, onClick, className }: SuggestionGuar
             variant="default"
             size="sm"
             onClick={onClick}
-            className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 text-white flex-shrink-0"
           >
             查看建议
             <ChevronRight className="w-4 h-4 ml-1" />

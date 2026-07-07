@@ -191,7 +191,7 @@ export function EmbeddedHikingSegmentsPanel({
       ));
 
   return (
-    <Card className="border-emerald-100 shadow-sm">
+    <Card className="border-gate-allow-border shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div>

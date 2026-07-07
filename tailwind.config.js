@@ -19,38 +19,36 @@ export default {
         brand: '0.4em',
       },
       colors: {
-        // GateStatus 颜色（统一规范）
+        // GateStatus 颜色（对齐 gate-* CSS 变量）
         gate: {
           block: {
-            border: '#dc2626',    // red-600
-            text: '#b91c1c',      // red-700
-            bg: '#fef2f2',        // red-50
-            icon: '#dc2626',      // red-600
+            border: 'var(--gate-reject-border)',
+            text: 'var(--gate-reject-foreground)',
+            bg: 'var(--gate-reject)',
+            icon: 'var(--gate-reject-foreground)',
           },
           warn: {
-            border: '#d97706',    // amber-600
-            text: '#b45309',      // amber-700
-            bg: '#fffbeb',        // amber-50
-            icon: '#d97706',      // amber-600
+            border: 'var(--gate-confirm-border)',
+            text: 'var(--gate-confirm-foreground)',
+            bg: 'var(--gate-confirm)',
+            icon: 'var(--gate-confirm-foreground)',
           },
           pass: {
-            border: '#16a34a',    // green-600
-            text: '#15803d',      // green-700
-            bg: '#f0fdf4',        // green-50
-            icon: '#16a34a',      // green-600
+            border: 'var(--gate-allow-border)',
+            text: 'var(--gate-allow-foreground)',
+            bg: 'var(--gate-allow)',
+            icon: 'var(--gate-allow-foreground)',
           },
         },
-        // 信息性颜色（蓝色）
         info: {
-          date: '#2563eb',        // blue-600
-          link: '#2563eb',        // blue-600
+          date: 'var(--nara-glacier-foreground)',
+          link: 'var(--foreground)',
           transport: {
-            bg: '#eff6ff',        // blue-50
-            text: '#1e40af',      // blue-800
-            border: '#bfdbfe',    // blue-200
+            bg: 'var(--nara-glacier-muted)',
+            text: 'var(--nara-glacier-foreground)',
+            border: 'var(--nara-glacier-border)',
           },
         },
-        // 决策状态颜色（保留原有，用于兼容）
         'gate-allow': 'var(--gate-allow)',
         'gate-allow-foreground': 'var(--gate-allow-foreground)',
         'gate-allow-border': 'var(--gate-allow-border)',
@@ -63,7 +61,6 @@ export default {
         'gate-reject': 'var(--gate-reject)',
         'gate-reject-foreground': 'var(--gate-reject-foreground)',
         'gate-reject-border': 'var(--gate-reject-border)',
-        // 三人格颜色
         'persona-abu': 'var(--persona-abu)',
         'persona-abu-foreground': 'var(--persona-abu-foreground)',
         'persona-abu-accent': 'var(--persona-abu-accent)',
@@ -73,7 +70,6 @@ export default {
         'persona-neptune': 'var(--persona-neptune)',
         'persona-neptune-foreground': 'var(--persona-neptune-foreground)',
         'persona-neptune-accent': 'var(--persona-neptune-accent)',
-        // 行程状态颜色
         'trip-status-planning': 'var(--trip-status-planning)',
         'trip-status-planning-foreground': 'var(--trip-status-planning-foreground)',
         'trip-status-planning-border': 'var(--trip-status-planning-border)',
@@ -86,7 +82,6 @@ export default {
         'trip-status-cancelled': 'var(--trip-status-cancelled)',
         'trip-status-cancelled-foreground': 'var(--trip-status-cancelled-foreground)',
         'trip-status-cancelled-border': 'var(--trip-status-cancelled-border)',
-        // 预算状态颜色（克制、中性）
         'budget-safe': 'var(--budget-safe)',
         'budget-safe-foreground': 'var(--budget-safe-foreground)',
         'budget-safe-border': 'var(--budget-safe-border)',

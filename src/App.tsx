@@ -19,11 +19,18 @@ import UiTestExperienceDesignPage from './pages/UiTestExperienceDesign';
 import DashboardPage from './pages/Dashboard';
 import TripsPage from './pages/trips';
 import TripDetailPage from './pages/trips/[id]';
+import TripTravelStatusPage from './pages/trips/travel-status';
+import TripContextSnapshotPage from './pages/trips/context-snapshot';
+import InternalHarnessPage from './pages/internal/harness';
+import InternalTripContextInspectorRoute from './pages/internal/trip-context-inspector';
+import TripAutomationAuthorizationPage from './pages/trips/automation';
+import TripAiActivityLogPage from './pages/trips/ai-activity-log';
+import TripFeasibilityRepairOptionsPage from './pages/trips/feasibility-repair-options';
 import ActiveTripPage from './pages/trips/active';
 import ActiveTripReplayPage from './pages/trips/replay';
 import ActiveTripBackflowPage from './pages/trips/backflow';
 import NewTripPage from './pages/trips/new';
-import GenerateTripPage from './pages/trips/generate';
+import FromGuidePage from './pages/trips/from-guide';
 import TripBudgetPage from './pages/trips/budget';
 import TripSchedulePage from './pages/trips/schedule';
 import TripOptimizePage from './pages/trips/optimize';
@@ -43,7 +50,7 @@ import HotelsRecommendPage from './pages/places/hotels';
 import RouteDirectionsByCountryPage from './pages/route-directions/by-country';
 import RouteTemplatesPage from './pages/route-directions/templates';
 import RouteTemplateDetailPage from './pages/route-directions/templates/[id]';
-import PlanStudioPage from './pages/plan-studio';
+const PlanStudioPage = lazy(() => import('./pages/plan-studio'));
 import PlanVariantsPage from './pages/plan-studio/PlanVariantsPage';
 import SilentVotePage from './pages/plan-studio/SilentVotePage';
 import DecisionProfilingQuizPage from './pages/plan-studio/DecisionProfilingQuizPage';
@@ -105,9 +112,26 @@ import PublicOrganizationTrustProfilePage from './pages/trust/PublicOrganization
 import MemoryConsolePage from './features/memory/pages/MemoryConsolePage';
 import { ProfilePage, OdysseyIntakePage } from './features/odyssey-intake';
 import AgentPage from './pages/agent';
+import NaraPage from './pages/nara';
 import { FullJourneyMapPage } from '@/features/full-journey-map';
 import DecisionDraftPage from './pages/decision-draft';
-import PlanningAssistantV2Page from './pages/planning-assistant-v2';
+import {
+  ExploreHubRedirectPage,
+  ExploreConditionsPage,
+  ExplorePrinciplesPage,
+  ExploreRoutesEntryPage,
+  ExploreComparePage,
+  ExploreRouteDetailPage,
+  ExploreCheckRedirectPage,
+  ExploreDecisionPage,
+  ExploreContinuePage,
+} from '@/features/exploration/pages';
+import {
+  ExploreLegacyRedirect,
+  ExploreLegacyIssuesRedirect,
+} from '@/features/exploration/pages/ExploreLegacyRedirect';
+import ExplorationTravelContextLayout from '@/features/exploration/context/ExplorationTravelContextLayout';
+import TripContextShellLayout from '@/features/trip-context/context/TripContextShellLayout';
 import TrailsHubPage from './pages/trails';
 import TrailsExplorePage from './pages/trails/explore';
 import TrailDetailPage from './pages/trails/[id]';
@@ -118,6 +142,8 @@ import TrailPrepPage from './pages/trails/prep/[hikePlanId]';
 import TrailOnTrailPage from './pages/trails/on-trail/[hikePlanId]';
 import TrailReviewPage from './pages/trails/review/[hikePlanId]';
 import HikingLaugavegurDemoPage from './pages/demo/HikingLaugavegurDemo';
+import DecisionExecutionProposalDemoPage from './pages/demo/DecisionExecutionProposalDemo';
+import DecisionSpaceCheckerTabsDemoPage from './pages/demo/DecisionSpaceCheckerTabsDemo';
 import { clearLegacyOdysseyCompanionClientStorage } from '@/lib/legacy-companion-odyssey-cleanup';
 
 clearLegacyOdysseyCompanionClientStorage();
@@ -270,6 +296,8 @@ function App() {
         {/* UI Test Pages */}
         <Route path="/ui-test" element={<UiTestPage />} />
         <Route path="/ui-test/experience-design" element={<UiTestExperienceDesignPage />} />
+        <Route path="/ui-test/decision-execution-proposal" element={<DecisionExecutionProposalDemoPage />} />
+        <Route path="/ui-test/decision-space-checker-tabs" element={<DecisionSpaceCheckerTabsDemoPage />} />
 
         {/* 徒步融资 Demo（无登录） */}
         <Route path="/demo/hiking/laugavegur" element={<HikingLaugavegurDemoPage />} />
@@ -286,21 +314,60 @@ function App() {
           <Route index element={<DashboardPage />} />
           <Route path="trips" element={<TripsPage />} />
           <Route path="trips/new" element={<NewTripPage />} />
-          <Route path="trips/generate" element={<GenerateTripPage />} />
+          <Route path="trips/new/from-guide" element={<FromGuidePage />} />
+          <Route path="explore" element={<ExploreHubRedirectPage />} />
+          <Route path="explore/:scenarioId" element={<ExplorationTravelContextLayout />}>
+            <Route path="conditions" element={<ExploreConditionsPage />} />
+            <Route path="principles" element={<ExplorePrinciplesPage />} />
+            <Route path="routes" element={<ExploreRoutesEntryPage />} />
+            <Route path="compare" element={<ExploreComparePage />} />
+            <Route path="routes/:routeId" element={<ExploreRouteDetailPage />} />
+            <Route path="routes/:routeId/check" element={<ExploreCheckRedirectPage />} />
+            <Route path="decisions/:problemId" element={<ExploreDecisionPage />} />
+            <Route path="continue" element={<ExploreContinuePage />} />
+            <Route path="style" element={<ExploreLegacyRedirect to="routes" />} />
+            <Route path="recommend" element={<ExploreLegacyRedirect to="routes" />} />
+            <Route path="routes/:routeId/issues" element={<ExploreLegacyIssuesRedirect />} />
+          </Route>
           <Route path="trips/collected" element={<CollectedTripsPage />} />
           <Route path="trips/featured" element={<FeaturedTripsPage />} />
           <Route path="trips/optimize" element={<TripOptimizePage />} />
           <Route path="trips/tools/dyl-canvas" element={<DylCanvasPage />} />
           <Route path="trips/decision" element={<TripDecisionPage />} />
           <Route path="trips/what-if" element={<TripWhatIfPage />} />
-          <Route path="trips/:id/active" element={<ActiveTripPage />} />
-          <Route path="trips/:id/replay" element={<ActiveTripReplayPage />} />
-          <Route path="trips/:id/backflow" element={<ActiveTripBackflowPage />} />
-          <Route path="trips/:id" element={<TripDetailPage />} />
-          <Route path="trips/:id/budget" element={<TripBudgetPage />} />
-          <Route path="trips/:id/schedule" element={<TripSchedulePage />} />
-          <Route path="trips/:id/review" element={<TripReviewPage />} />
-          <Route path="plan-studio" element={<PlanStudioPage />} />
+          <Route path="internal/harness" element={<InternalHarnessPage />} />
+          <Route path="internal/trips/:id/context" element={<InternalTripContextInspectorRoute />} />
+          <Route path="trips/:id" element={<TripContextShellLayout />}>
+            <Route index element={<TripDetailPage />} />
+            <Route path="travel" element={<TripTravelStatusPage />} />
+            <Route path="context-snapshot" element={<TripContextSnapshotPage />} />
+            <Route path="automation" element={<TripAutomationAuthorizationPage />} />
+            <Route path="ai-activity-log" element={<TripAiActivityLogPage />} />
+            <Route
+              path="feasibility-report/issues/:issueId/repair-options"
+              element={<TripFeasibilityRepairOptionsPage />}
+            />
+            <Route path="active" element={<ActiveTripPage />} />
+            <Route path="replay" element={<ActiveTripReplayPage />} />
+            <Route path="backflow" element={<ActiveTripBackflowPage />} />
+            <Route path="budget" element={<TripBudgetPage />} />
+            <Route path="schedule" element={<TripSchedulePage />} />
+            <Route path="review" element={<TripReviewPage />} />
+          </Route>
+          <Route
+            path="plan-studio"
+            element={
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[50vh] items-center justify-center">
+                    <Spinner className="h-8 w-8" />
+                  </div>
+                }
+              >
+                <PlanStudioPage />
+              </Suspense>
+            }
+          />
           <Route path="journey-map" element={<FullJourneyMapPage />} />
           <Route path="trips/:tripId/silent-votes/:voteId" element={<SilentVotePage />} />
           <Route path="trips/:tripId/decision-profiling/quiz" element={<DecisionProfilingQuizPage />} />
@@ -309,7 +376,7 @@ function App() {
           <Route path="feasibility" element={<FeasibilityReportPage />} />
           <Route path="readiness" element={<ReadinessPage />} />
           <Route path="agent" element={<AgentPage />} />
-          <Route path="planning-assistant-v2" element={<PlanningAssistantV2Page />} />
+          <Route path="nara" element={<NaraPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="tripnara/odyssey" element={<OdysseyIntakePage />} />
           <Route path="tripnara/plaza" element={<Navigate to="/dashboard/trusted-projects" replace />} />
@@ -376,7 +443,7 @@ function App() {
           <Route path="trails/review/:hikePlanId" element={<TrailReviewPage />} />
           <Route path="trails/:id" element={<TrailDetailPage />} />
           <Route path="decision-cockpit" element={<Navigate to="/dashboard" replace />} />
-          <Route path="tripnara/explore" element={<Navigate to="/dashboard" replace />} />
+          <Route path="tripnara/explore" element={<Navigate to="/dashboard/explore" replace />} />
           <Route path="tripnara/intake-cafe" element={<Navigate to="/dashboard" replace />} />
           <Route path="tripnara/odyssey/plaza" element={<Navigate to="/dashboard/trusted-projects" replace />} />
           <Route path="tripnara/odyssey/tier/:tier" element={<Navigate to="/dashboard" replace />} />
@@ -403,7 +470,7 @@ function App() {
         <Route path="/companion/recruitments/new" element={<Navigate to="/dashboard/trusted-projects/new" replace />} />
         <Route path="/companion/clarify" element={<Navigate to="/dashboard" replace />} />
         <Route path="/companion/requests/:id" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/tripnara/explore" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/tripnara/explore" element={<Navigate to="/dashboard/explore" replace />} />
         <Route path="/tripnara/intake-cafe" element={<Navigate to="/dashboard" replace />} />
         <Route path="/tripnara/odyssey" element={<Navigate to="/dashboard/tripnara/odyssey" replace />} />
         <Route path="/tripnara/odyssey/plaza" element={<Navigate to="/dashboard/trusted-projects" replace />} />

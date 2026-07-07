@@ -25,14 +25,14 @@ export default function ProactiveNarrationPanel({
   return (
     <Card
       className={cn(
-        'border-sky-200/80 bg-sky-50/30 dark:bg-sky-950/10',
+        'border-border/80 bg-muted/15 dark:bg-muted/10',
         compact && 'shadow-none',
         className
       )}
     >
       <CardHeader className={cn('pb-2', compact && 'py-3')}>
         <CardTitle className={cn('flex items-center gap-2 text-base', compact && 'text-sm')}>
-          <Bell className="h-4 w-4 text-sky-600" />
+          <Bell className="h-4 w-4 text-muted-foreground" />
           {t('agent.proactiveNarration.title', { defaultValue: '主动提示' })}
         </CardTitle>
         <p className="text-xs text-muted-foreground">
@@ -45,9 +45,9 @@ export default function ProactiveNarrationPanel({
         {tips.map((tip) => (
           <div
             key={tip}
-            className="rounded-lg border border-sky-200/70 bg-card px-3 py-2 text-sm leading-snug"
+            className="rounded-lg border border-border/70 bg-card px-3 py-2 text-sm leading-snug"
           >
-            <Badge variant="outline" className="mb-1.5 text-[10px] border-sky-300 text-sky-800">
+            <Badge variant="outline" className="mb-1.5 text-[10px] border-border text-muted-foreground">
               {t('agent.proactiveNarration.tipBadge', { defaultValue: '建议' })}
             </Badge>
             <p>{tip}</p>
@@ -57,10 +57,10 @@ export default function ProactiveNarrationPanel({
         {researchHints.map((hint) => (
           <div
             key={`${hint.scope}|${hint.message}`}
-            className="rounded-lg border border-sky-200/70 bg-card px-3 py-2 text-sm leading-snug"
+            className="rounded-lg border border-border/70 bg-card px-3 py-2 text-sm leading-snug"
           >
             <div className="mb-1 flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className="text-[10px] border-sky-300 text-sky-800">
+              <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">
                 {t('agent.proactiveNarration.tipBadge', { defaultValue: '建议' })}
               </Badge>
               {hint.scope ? (

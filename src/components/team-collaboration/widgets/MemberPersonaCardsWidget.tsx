@@ -1,8 +1,10 @@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { personaMemberTagClasses } from '@/components/team-collaboration/persona-ui';
 import type { TeamTravelStyleItem } from '@/types/trip-decision-profiling';
-import { CollabWidgetCard } from './CollabWidgetCard';
+import { cn } from '@/lib/utils';
+import { workbenchCardFlat } from '@/components/plan-studio/workbench/workbench-ui';
 
 interface MemberPersonaCardsWidgetProps {
   members: TeamTravelStyleItem[];
@@ -16,85 +18,98 @@ function memberInitials(name: string): string {
 }
 
 function keywordChips(member: TeamTravelStyleItem): string[] {
-  if (member.coreDrivers?.length) return member.coreDrivers.slice(0, 4);
+  if (member.coreDrivers?.length) return member.coreDrivers.slice(0, 3);
   return member.compatibilityHints.slice(0, 3);
 }
 
 export function MemberPersonaCardsWidget({ members, loading }: MemberPersonaCardsWidgetProps) {
-  return (
-    <CollabWidgetCard title="成员画像" description="旅行风格与团队角色">
-      {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-36 rounded-lg" />
-          ))}
-        </div>
-      ) : members.length === 0 ? (
-        <p className="text-xs text-muted-foreground">成员完成调查后将显示画像卡片。</p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {members.map((member) => {
-            const confidencePct = member.confidence != null
-              ? Math.round(member.confidence * 100)
-              : null;
-            const chips = keywordChips(member);
-            const insight =
-              member.compatibilityHints[0] ??
-              member.teamRole ??
-              '完成调查后将生成画像洞察。';
+  if (loading) {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((index) => (
+          <Skeleton key={index} className="h-44 rounded-xl" />
+        ))}
+      </div>
+    );
+  }
 
-            return (
-              <article
-                key={member.userId}
-                className="rounded-lg border border-border/70 bg-muted/10 px-3 py-3"
+  if (members.length === 0) {
+    return (
+      <div className={cn(workbenchCardFlat, 'p-4')}>
+        <p className="text-xs text-muted-foreground">成员完成调查后将显示画像卡片。</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {members.map((member, index) => {
+        const confidencePct =
+          member.confidence != null ? Math.round(member.confidence * 100) : null;
+        const chips = keywordChips(member);
+        const insight =
+          member.compatibilityHints[0] ??
+          member.teamRole ??
+          '完成调查后将生成画像洞察。';
+        const tagClass = personaMemberTagClasses[index % personaMemberTagClasses.length];
+
+        return (
+          <article key={member.userId} className={cn(workbenchCardFlat, 'flex h-full flex-col p-3')}>
+            <div className="flex items-start gap-2.5">
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+                aria-hidden
               >
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-                    aria-hidden
-                  >
-                    {memberInitials(member.displayName)}
-                  </span>
-                  <p className="min-w-0 truncate text-sm font-semibold text-foreground">
+                {memberInitials(member.displayName)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-1">
+                  <p className="truncate text-sm font-semibold text-foreground">
                     {member.displayName}
                   </p>
+                  <Badge
+                    variant="outline"
+                    className={cn('shrink-0 text-[10px] font-normal', tagClass)}
+                  >
+                    {member.styleLabel}
+                  </Badge>
                 </div>
-                <Badge
-                  variant="secondary"
-                  className="mt-2 bg-primary/10 text-[10px] font-normal text-primary hover:bg-primary/10"
-                >
-                  {member.styleLabel}
-                </Badge>
-                {confidencePct != null ? (
-                  <div className="mt-2.5 space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>置信度</span>
-                      <span className="tabular-nums font-medium text-foreground">
-                        {confidencePct}%
-                      </span>
-                    </div>
-                    <Progress value={confidencePct} className="h-1" />
-                  </div>
-                ) : null}
-                {chips.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {chips.map((chip) => (
-                      <Badge
-                        key={chip}
-                        variant="outline"
-                        className="border-primary/25 bg-primary/5 text-[10px] font-normal text-primary"
-                      >
-                        {chip}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{insight}</p>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </CollabWidgetCard>
+              </div>
+            </div>
+            {confidencePct != null ? (
+              <div className="mt-3 space-y-1">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>置信度</span>
+                  <span className="tabular-nums font-medium text-foreground">
+                    {confidencePct}%
+                  </span>
+                </div>
+                <Progress value={confidencePct} className="h-1 bg-muted [&>div]:bg-primary" />
+              </div>
+            ) : null}
+            {chips.length > 0 ? (
+              <div className="mt-3">
+                <p className="mb-1.5 text-[10px] font-medium text-muted-foreground">关键词</p>
+                <div className="flex flex-wrap gap-1">
+                  {chips.map((chip) => (
+                    <Badge
+                      key={chip}
+                      variant="outline"
+                      className="border-border/80 bg-muted/30 text-[10px] font-normal text-muted-foreground"
+                    >
+                      {chip}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-auto pt-3">
+              <p className="mb-1 text-[10px] font-medium text-muted-foreground">画像洞察</p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">{insight}</p>
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }

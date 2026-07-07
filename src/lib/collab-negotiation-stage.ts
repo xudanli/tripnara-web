@@ -15,10 +15,10 @@ export interface NegotiationStageStep {
 
 export const NEGOTIATION_STAGE_STEPS: NegotiationStageStep[] = [
   { id: 'propose', label: '提出议题' },
-  { id: 'clarify_views', label: '澄清观点' },
-  { id: 'clarify_followup', label: '澄清追问' },
-  { id: 'optimize_options', label: '优化选项' },
-  { id: 'recommendation', label: '形成建议' },
+  { id: 'clarify_views', label: '观点陈述' },
+  { id: 'clarify_followup', label: '澄清与提问' },
+  { id: 'optimize_options', label: '方案优化' },
+  { id: 'recommendation', label: '达成建议' },
 ];
 
 export interface CollabNegotiationOption {

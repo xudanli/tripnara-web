@@ -43,8 +43,8 @@ const AMS_SENSITIVITY_CONFIG: Record<AMSSensitivity, {
     labelZh: '低敏感',
     descEn: 'Less susceptible to altitude sickness. Can ascend faster with proper acclimatization.',
     descZh: '对高原反应不敏感，适应后可较快提升海拔。',
-    color: 'text-green-700',
-    bgColor: 'bg-green-100',
+    color: 'text-gate-allow-foreground',
+    bgColor: 'bg-gate-allow',
   },
   MEDIUM: {
     labelEn: 'Medium Sensitivity',
@@ -59,17 +59,17 @@ const AMS_SENSITIVITY_CONFIG: Record<AMSSensitivity, {
     labelZh: '高敏感',
     descEn: 'More susceptible to altitude sickness. Requires slower ascent and extra rest days.',
     descZh: '对高原反应较敏感，需要更慢的爬升速度和更多休息日。',
-    color: 'text-red-700',
-    bgColor: 'bg-red-100',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
   },
 };
 
 /** 获取适应效率等级 */
 function getEfficiencyLevel(efficiency: number, isZh: boolean): { label: string; color: string } {
   if (efficiency >= 0.8) {
-    return { label: isZh ? '优秀' : 'Excellent', color: 'text-green-600' };
+    return { label: isZh ? '优秀' : 'Excellent', color: 'text-gate-allow-foreground' };
   } else if (efficiency >= 0.6) {
-    return { label: isZh ? '良好' : 'Good', color: 'text-blue-600' };
+    return { label: isZh ? '良好' : 'Good', color: 'text-muted-foreground' };
   } else if (efficiency >= 0.4) {
     return { label: isZh ? '一般' : 'Fair', color: 'text-yellow-600' };
   } else {
@@ -211,17 +211,17 @@ export function AcclimatizationCard({
           {/* 主要指标 */}
           <div className="grid gap-4 sm:grid-cols-2">
             {/* 已适应海拔 */}
-            <div className="p-3 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/50">
+            <div className="p-3 rounded-lg bg-gradient-to-br from-muted/15 to-muted/15/50">
               <div className="flex items-center gap-2 mb-1">
-                <Mountain className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-900">
+                <Mountain className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">
                   {isZh ? '已适应海拔' : 'Acclimatized Altitude'}
                 </span>
               </div>
-              <p className="text-2xl font-bold text-blue-700">
+              <p className="text-2xl font-bold text-muted-foreground">
                 {acclimatizedAltitudeM.toLocaleString()} m
               </p>
-              <p className="text-xs text-blue-600 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {isZh 
                   ? `建议下次最高睡眠海拔: ${(acclimatizedAltitudeM + recommendedAscent).toLocaleString()}m`
                   : `Recommended max sleep altitude: ${(acclimatizedAltitudeM + recommendedAscent).toLocaleString()}m`
@@ -230,15 +230,15 @@ export function AcclimatizationCard({
             </div>
             
             {/* 适应效率 */}
-            <div className="p-3 rounded-lg bg-gradient-to-br from-green-50 to-green-100/50">
+            <div className="p-3 rounded-lg bg-gradient-to-br from-gate-allow to-gate-allow/50">
               <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-900">
+                <TrendingUp className="w-4 h-4 text-gate-allow-foreground" />
+                <span className="text-sm font-medium text-gate-allow-foreground">
                   {isZh ? '适应效率' : 'Efficiency'}
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold text-green-700">
+                <p className="text-2xl font-bold text-gate-allow-foreground">
                   {Math.round(acclimatizationEfficiency * 100)}%
                 </p>
                 <span className={cn('text-sm', efficiencyInfo.color)}>
@@ -331,14 +331,14 @@ export function AcclimatizationCard({
           </div>
           
           {/* 建议提示 */}
-          <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="p-3 rounded-lg bg-muted/15 border border-border">
             <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-blue-800">
+                <p className="text-sm font-medium text-muted-foreground">
                   {isZh ? '适应建议' : 'Acclimatization Advice'}
                 </p>
-                <p className="text-xs text-blue-700 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {isZh 
                     ? `根据您的适应状态，建议单日睡眠海拔增益不超过 ${recommendedAscent}m。在 ${acclimatizedAltitudeM > 3000 ? '3000m以上' : '高海拔地区'}，每上升 1000m 建议安排 1-2 天适应。`
                     : `Based on your acclimatization status, recommended daily sleeping altitude gain should not exceed ${recommendedAscent}m. ${acclimatizedAltitudeM > 3000 ? 'Above 3000m' : 'At high altitude'}, schedule 1-2 rest days per 1000m gained.`
@@ -354,7 +354,7 @@ export function AcclimatizationCard({
       <AlertDialog open={showAMSAlert} onOpenChange={setShowAMSAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+            <AlertDialogTitle className="flex items-center gap-2 text-gate-reject-foreground">
               <AlertOctagon className="w-5 h-5" />
               {isZh ? '高原反应症状警告' : 'Altitude Sickness Warning'}
             </AlertDialogTitle>
@@ -386,7 +386,7 @@ export function AcclimatizationCard({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Mountain className="w-5 h-5 text-blue-600" />
+              <Mountain className="w-5 h-5 text-muted-foreground" />
               {isZh ? '什么是高海拔适应？' : 'What is Altitude Acclimatization?'}
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
@@ -399,9 +399,9 @@ export function AcclimatizationCard({
               <div className="space-y-2 text-sm">
                 <p><strong>{isZh ? '高反敏感度' : 'AMS Sensitivity'}：</strong></p>
                 <ul className="list-disc list-inside space-y-1 pl-2">
-                  <li><span className="text-green-600">{isZh ? '低敏感' : 'Low'}</span>: {isZh ? '对高反不敏感，适应较快' : 'Less susceptible, adapts faster'}</li>
+                  <li><span className="text-gate-allow-foreground">{isZh ? '低敏感' : 'Low'}</span>: {isZh ? '对高反不敏感，适应较快' : 'Less susceptible, adapts faster'}</li>
                   <li><span className="text-yellow-600">{isZh ? '中等敏感' : 'Medium'}</span>: {isZh ? '正常水平，遵循标准规则' : 'Normal level, follow standard rules'}</li>
-                  <li><span className="text-red-600">{isZh ? '高敏感' : 'High'}</span>: {isZh ? '易受高反影响，需更慢爬升' : 'More susceptible, needs slower ascent'}</li>
+                  <li><span className="text-gate-reject-foreground">{isZh ? '高敏感' : 'High'}</span>: {isZh ? '易受高反影响，需更慢爬升' : 'More susceptible, needs slower ascent'}</li>
                 </ul>
               </div>
             </AlertDialogDescription>

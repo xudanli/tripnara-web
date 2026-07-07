@@ -553,7 +553,7 @@ export const RESCUE_DIFFICULTY_CONFIG: Record<RescueDifficultyType, {
     labelZh: '极高',
     description: 'Requires specialized alpine rescue team, helicopter',
     descriptionZh: '需要专业高山救援队、直升机',
-    colorClass: 'bg-red-600 text-white',
+    colorClass: 'bg-gate-reject-foreground text-white',
     estimatedHours: { min: 24, max: 72 },
   },
   VERY_HIGH: {
@@ -561,7 +561,7 @@ export const RESCUE_DIFFICULTY_CONFIG: Record<RescueDifficultyType, {
     labelZh: '非常高',
     description: 'Requires professional rescue team',
     descriptionZh: '需要专业救援队',
-    colorClass: 'bg-red-500 text-white',
+    colorClass: 'bg-gate-reject-foreground text-white',
     estimatedHours: { min: 12, max: 24 },
   },
   HIGH: {
@@ -585,7 +585,7 @@ export const RESCUE_DIFFICULTY_CONFIG: Record<RescueDifficultyType, {
     labelZh: '低',
     description: 'Easy access for rescue',
     descriptionZh: '救援容易到达',
-    colorClass: 'bg-green-500 text-white',
+    colorClass: 'bg-gate-allow-foreground text-white',
     estimatedHours: { min: 0.5, max: 2 },
   },
 };

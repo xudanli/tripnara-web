@@ -189,14 +189,14 @@ export default function RegisterPage() {
 
           {/* Success Message */}
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm">
+            <div className="mb-4 p-3 bg-gate-allow border border-gate-allow-border text-gate-allow-foreground rounded-md text-sm">
               {success}
             </div>
           )}
 
           {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
+            <div className="mb-4 p-3 bg-gate-reject border border-gate-reject-border text-gate-reject-foreground rounded-md text-sm">
               {error}
             </div>
           )}
@@ -276,7 +276,7 @@ export default function RegisterPage() {
                   type="button"
                   onClick={handleResendCode}
                   disabled={countdown > 0 || loading}
-                  className="mt-2 text-sm text-blue-600 hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  className="mt-2 text-sm text-muted-foreground hover:text-muted-foreground disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
                   {t('register.resendCode')}
                 </button>
@@ -317,7 +317,7 @@ export default function RegisterPage() {
             {t('register.haveAccount')}{' '}
             <Link
               to="/login"
-              className="text-blue-600 hover:text-blue-700 underline"
+              className="text-muted-foreground hover:text-muted-foreground underline"
             >
               {t('register.loginLink')}
             </Link>

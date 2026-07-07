@@ -14,7 +14,7 @@ export interface PendingActionChipsProps {
 
 function riskBadgeClass(risk?: string): string {
   const r = (risk ?? '').toUpperCase();
-  if (r === 'HIGH' || r === 'CRITICAL') return 'border-red-300 bg-red-50 text-red-900';
+  if (r === 'HIGH' || r === 'CRITICAL') return 'border-gate-reject-border bg-gate-reject text-gate-reject-foreground';
   if (r === 'MEDIUM') return 'border-amber-300 bg-amber-50 text-amber-950';
   return 'border-border bg-muted/60';
 }

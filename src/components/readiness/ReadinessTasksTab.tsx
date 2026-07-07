@@ -188,7 +188,7 @@ function TaskRow({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-gate-reject-foreground"
+                  className="h-7 w-7 text-muted-foreground hover:text-error"
                   onClick={() => onDelete(task.id)}
                   aria-label={isZh ? '删除' : 'Delete'}
                 >
@@ -356,7 +356,7 @@ export default function ReadinessTasksTab({
         <div className="flex items-center gap-3">
           {tasks.length > 0 ? (
             <div className="flex min-w-0 max-w-[220px] flex-1 items-center gap-2">
-              <Progress value={progressPct} className="h-1.5 flex-1 [&>div]:bg-nara-glacier/70" />
+              <Progress value={progressPct} className="h-1.5 flex-1 [&>div]:bg-foreground/50" />
               <span className={cn(workbenchSecondaryMetric, 'shrink-0 text-xs')}>
                 {done}/{tasks.length}
               </span>

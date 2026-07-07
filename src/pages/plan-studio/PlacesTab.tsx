@@ -509,7 +509,7 @@ export default function PlacesTab({ tripId, onPlaceAdded }: PlacesTabProps) {
                           <h3 className="font-semibold">{place.nameCN || place.nameEN}</h3>
                           {place.rating && (
                             <div className="flex items-center gap-1">
-                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                              <Star className="w-4 h-4 fill-warning text-warning" />
                               <span className="text-sm font-medium">{place.rating.toFixed(1)}</span>
                             </div>
                           )}

@@ -11,7 +11,9 @@ const PIPELINE_STEPS = [
   { key: 'POI_SELECTION', label: '兴趣点选择' },
   { key: 'GATE_EVAL', label: '门禁评估' },
   { key: 'PLAN_GEN', label: '方案生成' },
+  { key: 'TRAVEL_COMPILE', label: 'CTRE 旅行编译' },
   { key: 'VERIFY', label: '可执行性验证' },
+  { key: 'REPAIR', label: '修复编排' },
   { key: 'NARRATE', label: '决策叙事' },
 ] as const;
 

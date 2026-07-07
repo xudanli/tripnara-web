@@ -49,10 +49,10 @@ export function InTripExperiencePulsePanel({
   const sorted = [...triggers].sort((a, b) => a.priority - b.priority);
 
   return (
-    <Card className={cn('col-span-12 border-violet-200/80', className)}>
+    <Card className={cn('col-span-12 border-border/80', className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-violet-600" aria-hidden />
+          <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden />
           体验微调查
           <Badge variant="secondary" className="text-[10px] ml-auto">
             {triggers.length} 待反馈
@@ -63,7 +63,7 @@ export function InTripExperiencePulsePanel({
         {sorted.map((trigger) => (
           <div key={trigger.triggerKey} className="rounded-lg border p-3 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-violet-800">{trigger.title}</span>
+              <span className="text-xs font-medium text-muted-foreground">{trigger.title}</span>
               <span className="text-[10px] text-muted-foreground">
                 {experienceTriggerTypeLabel(trigger.triggerType)}
               </span>

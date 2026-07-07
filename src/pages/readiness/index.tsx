@@ -34,6 +34,14 @@ import {
 import { AlertTriangle, CheckCircle2, Share2, Download, Eye, RefreshCw, Play, Wrench, Calendar, MapPin, MoreVertical, ExternalLink, Cloud, Shield, Route } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import {
+  assertReadinessApplyRepairAllowed,
+  formatLegacyApplyBlockedMessage,
+  isLegacyApplyBlockedError,
+  parseWriteChainBlockedFromThrown,
+  shouldRetryLegacyApply,
+} from '@/lib/effective-plan-write-chain.util';
+import { buildPlanStudioDecisionProblemPath } from '@/lib/plan-studio-decision-navigation.util';
 import type { TripDetail, EvidenceItem as TripEvidenceItem, EvidenceType } from '@/types/trip';
 import type { FetchEvidenceResponse } from '@/api/planning-workbench';
 import type { ReadinessData, Blocker } from '@/types/readiness';
@@ -1471,11 +1479,10 @@ export default function ReadinessPage() {
 
   const handleApplyFix = async (optionId: string) => {
     if (!tripId || !selectedBlockerId) return;
-    
+
     try {
-      // 调用 API 应用修复
+      assertReadinessApplyRepairAllowed({ blockerId: selectedBlockerId });
       await readinessApi.applyRepair(tripId, selectedBlockerId, optionId);
-      // 重新加载数据
       await loadData();
       setSelectedBlockerId(null);
       setSelectedRepairOptionId(null);
@@ -1487,13 +1494,23 @@ export default function ReadinessPage() {
       setMobileSheetOpen(false);
     } catch (err) {
       console.error('Failed to apply fix:', err);
-      // TODO: 显示错误提示
+      const blocked = parseWriteChainBlockedFromThrown(err);
+      if (!shouldRetryLegacyApply(err)) {
+        toast.error(formatLegacyApplyBlockedMessage(err), {
+          description: blocked?.details?.caller ? `来源：${blocked.details.caller}` : undefined,
+        });
+        if (isLegacyApplyBlockedError(err)) {
+          navigate(buildPlanStudioDecisionProblemPath(tripId, selectedBlockerId));
+        }
+        return;
+      }
+      toast.error(formatLegacyApplyBlockedMessage(err));
     }
   };
 
   const handlePreviewFix = (_optionId: string) => {
     if (!tripId) return;
-    navigate(`/dashboard/trips/${tripId}?tab=overview&highlight=${selectedBlockerId}`);
+    navigate(`/dashboard/trips/${tripId}?tab=timeline&highlight=${selectedBlockerId}`);
   };
 
   const handleStartExecute = () => {
@@ -1503,15 +1520,21 @@ export default function ReadinessPage() {
 
   const handleRunRepair = async () => {
     if (!tripId) return;
-    
+
     try {
-      // 调用 Neptune 自动修复
+      assertReadinessApplyRepairAllowed({ issueId: tripId });
       await readinessApi.autoRepair(tripId);
-      // 重新加载数据
       await loadData();
     } catch (err) {
       console.error('Failed to run auto repair:', err);
-      // TODO: 显示错误提示
+      if (!shouldRetryLegacyApply(err)) {
+        toast.error(formatLegacyApplyBlockedMessage(err));
+        if (isLegacyApplyBlockedError(err)) {
+          navigate(buildPlanStudioDecisionProblemPath(tripId, selectedBlockerId ?? tripId));
+        }
+        return;
+      }
+      toast.error(formatLegacyApplyBlockedMessage(err));
     }
   };
 
@@ -1771,7 +1794,7 @@ export default function ReadinessPage() {
                   {isNotReady && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-red-600">
+                      <DropdownMenuItem className="text-gate-reject-foreground">
                         <AlertTriangle className="h-4 w-4 mr-2" />
                         {t('dashboard.readiness.page.actions.forceStart')}
                       </DropdownMenuItem>
@@ -1784,14 +1807,14 @@ export default function ReadinessPage() {
 
           {/* Not Ready 状态下的 Top Blocker 横幅 */}
           {isNotReady && readinessData.blockers.length > 0 && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mt-4 p-3 bg-gate-reject border border-gate-reject-border rounded-lg">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <AlertTriangle className="h-5 w-5 text-gate-reject-foreground" />
                 <div className="flex-1">
-                  <div className="font-semibold text-red-900">
+                  <div className="font-semibold text-gate-reject-foreground">
                     {t('dashboard.readiness.page.topBlocker', { title: readinessData.blockers[0].title })}
                   </div>
-                  <div className="text-sm text-red-700">
+                  <div className="text-sm text-gate-reject-foreground">
                     {readinessData.blockers[0].impactScope}
                   </div>
                 </div>
@@ -1916,7 +1939,7 @@ export default function ReadinessPage() {
                             ))}
                             {/* 🆕 显示所有官方来源汇总 */}
                             {riskWarnings?.packSources && riskWarnings.packSources.length > 0 && (
-                              <Card className="border-blue-200 bg-blue-50/50">
+                              <Card className="border-border bg-muted/15">
                                 <CardContent className="p-4">
                                   <div className="space-y-2">
                                     <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -1944,7 +1967,7 @@ export default function ReadinessPage() {
                                                   href={source.canonicalUrl}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
-                                                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline mt-0.5"
+                                                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-muted-foreground hover:underline mt-0.5"
                                                 >
                                                   <ExternalLink className="w-3 h-3" />
                                                   <span className="truncate max-w-[200px]">{source.canonicalUrl}</span>
@@ -1975,7 +1998,7 @@ export default function ReadinessPage() {
                   ) : (
                     <Card>
                       <CardContent className="py-8 text-center">
-                        <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-2" />
+                        <CheckCircle2 className="h-12 w-12 text-gate-allow-foreground mx-auto mb-2" />
                         <p className="text-sm text-muted-foreground">{t('dashboard.readiness.page.noPotentialRisks')}</p>
                       </CardContent>
                     </Card>
@@ -1996,7 +2019,7 @@ export default function ReadinessPage() {
                   ) : (
                     <Card>
                       <CardContent className="py-8 text-center">
-                        <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-2" />
+                        <CheckCircle2 className="h-12 w-12 text-gate-allow-foreground mx-auto mb-2" />
                         <p className="text-sm text-muted-foreground">{t('dashboard.readiness.page.noBlockersFound')}</p>
                       </CardContent>
                     </Card>
@@ -2176,19 +2199,19 @@ export default function ReadinessPage() {
                             <div
                               key={finding.id}
                               className={`p-3 rounded-lg border ${
-                                findingType === 'blocker' ? 'bg-red-50 border-red-200' :
+                                findingType === 'blocker' ? 'bg-gate-reject border-gate-reject-border' :
                                 findingType === 'must' ? 'bg-amber-50 border-amber-200' :
                                 (findingType === 'should' || findingType === 'optional') ? 'bg-gray-50 border-gray-200' :
-                                'bg-blue-50 border-blue-200'
+                                'bg-muted/15 border-border'
                               }`}
                             >
                               <div className="flex items-start gap-2">
                                 <Badge 
                                   variant="outline" 
                                   className={`text-xs ${
-                                    finding.severity === 'high' ? 'border-red-400 text-red-600' :
+                                    finding.severity === 'high' ? 'border-gate-reject-border text-gate-reject-foreground' :
                                     finding.severity === 'medium' ? 'border-yellow-400 text-yellow-600' :
-                                    'border-blue-400 text-blue-600'
+                                    'border-border text-muted-foreground'
                                   }`}
                                 >
                                   {t(`dashboard.readiness.page.findingType.${findingType}`, findingType)}
@@ -2249,7 +2272,7 @@ export default function ReadinessPage() {
                             defaultValue: 'TripNARA 会根据路线长度、季节和地形，自动识别需要额外准备的场景。下方是提前准备建议，不是实时警报。',
                           })}
                           {trip?.startDate && getTripReadinessPhaseFromTrip(trip) === 'planning' && (
-                            <p className="mt-1.5 text-blue-700">
+                            <p className="mt-1.5 text-muted-foreground">
                               {getCapabilityPackPhaseHint(
                                 getTripReadinessPhaseFromTrip(trip),
                                 getDaysUntilTripStart(trip.startDate),
@@ -2308,14 +2331,14 @@ export default function ReadinessPage() {
                         
                         {/* 未触发任何能力包时的友好提示 */}
                         {evaluatedPacks.filter(p => p.triggered).length === 0 && (
-                          <div className="text-center py-6 bg-green-50 rounded-lg border border-green-100">
-                            <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                            <p className="text-sm font-medium text-green-700">
+                          <div className="text-center py-6 bg-gate-allow rounded-lg border border-gate-allow-border">
+                            <CheckCircle2 className="h-8 w-8 text-gate-allow-foreground mx-auto mb-2" />
+                            <p className="text-sm font-medium text-gate-allow-foreground">
                               {t('dashboard.readiness.page.noSpecialPreparation', { 
                                 defaultValue: '您的行程无需特殊准备' 
                               })}
                             </p>
-                            <p className="text-xs text-green-600 mt-1">
+                            <p className="text-xs text-gate-allow-foreground mt-1">
                               {t('dashboard.readiness.page.noSpecialPreparationHint', { 
                                 defaultValue: '当前行程不涉及高海拔、偏远地区、季节性道路等特殊场景' 
                               })}
@@ -2327,7 +2350,7 @@ export default function ReadinessPage() {
                       <div className="text-center py-8 text-muted-foreground">
                         {capabilityPacksError ? (
                           <>
-                            <p className="text-sm text-red-600 mb-2">⚠️ {capabilityPacksError}</p>
+                            <p className="text-sm text-gate-reject-foreground mb-2">⚠️ {capabilityPacksError}</p>
                             <p className="text-xs">请检查浏览器控制台查看详细错误信息</p>
                           </>
                         ) : (
@@ -2407,7 +2430,7 @@ export default function ReadinessPage() {
                           </div>
                           {/* 🆕 显示所有官方来源汇总 */}
                           {riskWarnings?.packSources && riskWarnings.packSources.length > 0 && (
-                            <Card className="border-blue-200 bg-blue-50/50 mt-4">
+                            <Card className="border-border bg-muted/15 mt-4">
                               <CardContent className="p-4">
                                 <div className="space-y-2">
                                   <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -2435,7 +2458,7 @@ export default function ReadinessPage() {
                                                 href={source.canonicalUrl}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline mt-0.5"
+                                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-muted-foreground hover:underline mt-0.5"
                                               >
                                                 <ExternalLink className="w-3 h-3" />
                                                 <span className="truncate max-w-[200px]">{source.canonicalUrl}</span>
@@ -2548,13 +2571,13 @@ export default function ReadinessPage() {
                               </div>
                             )}
                             {icelandInfo.weather.error && (
-                              <div className="text-sm text-red-500">
+                              <div className="text-sm text-gate-reject-foreground">
                                 天气数据加载失败: {icelandInfo.weather.error}
                               </div>
                             )}
                             {icelandInfo.weather.data && (
-                              <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg">
-                                <Cloud className="h-4 w-4 text-blue-600 mt-0.5" />
+                              <div className="flex items-start gap-2 p-2 bg-muted/15 rounded-lg">
+                                <Cloud className="h-4 w-4 text-muted-foreground mt-0.5" />
                                 <div className="flex-1">
                                   <div className="text-xs font-semibold text-gray-700 mb-1">高地天气预报</div>
                                   <div className="text-xs text-gray-600">
@@ -2577,7 +2600,7 @@ export default function ReadinessPage() {
                               </div>
                             )}
                             {icelandInfo.safety.error && (
-                              <div className="text-sm text-red-500">
+                              <div className="text-sm text-gate-reject-foreground">
                                 安全信息加载失败: {icelandInfo.safety.error}
                               </div>
                             )}
@@ -2619,7 +2642,7 @@ export default function ReadinessPage() {
                               </div>
                             )}
                             {icelandInfo.roadConditions.error && (
-                              <div className="text-sm text-red-500">
+                              <div className="text-sm text-gate-reject-foreground">
                                 路况信息加载失败: {icelandInfo.roadConditions.error}
                               </div>
                             )}
@@ -2826,7 +2849,7 @@ export default function ReadinessPage() {
                           </div>
                           <div className="space-y-1">
                             {coverageMapData.warningsBySeverity.high.slice(0, 5).map((gap) => (
-                              <div key={gap.id} className="text-sm p-2 bg-red-50 rounded">
+                              <div key={gap.id} className="text-sm p-2 bg-gate-reject rounded">
                                 <div className="font-medium">{gap.message}</div>
                                 {gap.affectedDays && gap.affectedDays.length > 0 && (
                                   <div className="text-xs text-muted-foreground mt-1">
@@ -2959,8 +2982,8 @@ export default function ReadinessPage() {
                 <div className="mb-4 p-3 bg-muted/50 rounded-lg flex items-center justify-between">
                   <span className="text-sm">{t('dashboard.readiness.page.currentScore', { defaultValue: '当前分数' })}</span>
                   <span className={`text-lg font-bold ${
-                    (dimensionScore || 0) >= 80 ? 'text-green-600' : 
-                    (dimensionScore || 0) >= 60 ? 'text-yellow-600' : 'text-red-600'
+                    (dimensionScore || 0) >= 80 ? 'text-gate-allow-foreground' : 
+                    (dimensionScore || 0) >= 60 ? 'text-yellow-600' : 'text-gate-reject-foreground'
                   }`}>
                     {dimensionScore || 0}%
                   </span>
@@ -2975,7 +2998,7 @@ export default function ReadinessPage() {
                     <div className="text-center py-6">
                       {isFullScore ? (
                         <>
-                          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                          <CheckCircle2 className="h-12 w-12 text-gate-allow-foreground mx-auto mb-3" />
                           <p className="text-sm text-muted-foreground">
                             {t('dashboard.readiness.page.dimensionPerfect', { defaultValue: '该维度表现完美！' })}
                           </p>
@@ -3037,19 +3060,19 @@ export default function ReadinessPage() {
                       <div
                       key={finding.id}
                       className={`p-3 rounded-lg border ${
-                        findingType === 'blocker' ? 'bg-red-50 border-red-200' :
+                        findingType === 'blocker' ? 'bg-gate-reject border-gate-reject-border' :
                         findingType === 'must' ? 'bg-amber-50 border-amber-200' :
                         (findingType === 'should' || findingType === 'optional') ? 'bg-gray-50 border-gray-200' :
-                        'bg-blue-50 border-blue-200'
+                        'bg-muted/15 border-border'
                       }`}
                     >
                       <div className="flex items-start gap-2">
                         <Badge 
                           variant="outline" 
                           className={`text-xs shrink-0 ${
-                            finding.severity === 'high' ? 'border-red-400 text-red-600' :
+                            finding.severity === 'high' ? 'border-gate-reject-border text-gate-reject-foreground' :
                             finding.severity === 'medium' ? 'border-yellow-400 text-yellow-600' :
-                            'border-blue-400 text-blue-600'
+                            'border-border text-muted-foreground'
                           }`}
                         >
                           {t(`dashboard.readiness.page.findingType.${findingType}`, findingType)}
@@ -3075,16 +3098,16 @@ export default function ReadinessPage() {
                     <div
                       key={risk.id}
                       className={`p-3 rounded-lg border ${
-                        risk.severity === 'high' ? 'bg-red-50 border-red-200' :
+                        risk.severity === 'high' ? 'bg-gate-reject border-gate-reject-border' :
                         risk.severity === 'medium' ? 'bg-yellow-50 border-yellow-200' :
-                        'bg-blue-50 border-blue-200'
+                        'bg-muted/15 border-border'
                       }`}
                     >
                       <div className="flex items-start gap-2">
                         <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${
-                          risk.severity === 'high' ? 'text-red-500' :
+                          risk.severity === 'high' ? 'text-gate-reject-foreground' :
                           risk.severity === 'medium' ? 'text-yellow-500' :
-                          'text-blue-500'
+                          'text-muted-foreground'
                         }`} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm">{risk.message}</p>

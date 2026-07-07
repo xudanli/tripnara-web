@@ -347,10 +347,10 @@ export default function TrailDetailPage() {
       </Card>
 
       {hasApiHikingDetail && (
-        <Alert className="mb-4 border-teal-200 bg-teal-50/50 dark:bg-teal-950/20">
-          <Info className="h-4 w-4 text-teal-700" />
-          <AlertTitle className="text-teal-900 dark:text-teal-100">徒步详情已加载</AlertTitle>
-          <AlertDescription className="text-teal-800 dark:text-teal-200">
+        <Alert className="mb-4 border-gate-allow-border bg-gate-allow/50 dark:bg-gate-allow/20">
+          <Info className="h-4 w-4 text-gate-allow-foreground" />
+          <AlertTitle className="text-gate-allow-foreground dark:text-gate-allow-foreground">徒步详情已加载</AlertTitle>
+          <AlertDescription className="text-gate-allow-foreground dark:text-gate-allow-foreground">
             数据来自{' '}
             <code className="text-xs">
               GET /route-directions/:id?longestHike={longestHike}
@@ -539,9 +539,9 @@ export default function TrailDetailPage() {
                 {hd?.hardGates?.length ? (
                   <div className="space-y-2 text-sm">
                     {hd.hardGates.map((g) => (
-                      <div key={g.id} className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="font-medium text-red-900">{g.titleZh}</div>
-                        <div className="text-red-700 mt-1">
+                      <div key={g.id} className="p-3 bg-gate-reject border border-gate-reject-border rounded-lg">
+                        <div className="font-medium text-gate-reject-foreground">{g.titleZh}</div>
+                        <div className="text-gate-reject-foreground mt-1">
                           {g.ruleZh}
                           {g.threshold ? ` (${g.threshold})` : ''}
                         </div>
@@ -833,10 +833,10 @@ export default function TrailDetailPage() {
                     {hd.alternatives.repairHints.map((h) => (
                       <div
                         key={`${h.scenario}-${h.titleZh}`}
-                        className="p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                        className="p-3 bg-muted/15 border border-border rounded-lg"
                       >
-                        <div className="font-medium text-blue-900">{h.titleZh}</div>
-                        <div className="text-blue-700 mt-1">{h.actionZh}</div>
+                        <div className="font-medium text-muted-foreground">{h.titleZh}</div>
+                        <div className="text-muted-foreground mt-1">{h.actionZh}</div>
                       </div>
                     ))}
                   </div>

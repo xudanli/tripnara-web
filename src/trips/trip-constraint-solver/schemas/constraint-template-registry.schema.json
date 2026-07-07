@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tripnara.dev/schemas/constraint-template-registry.schema.json",
+  "title": "ConstraintTemplateCatalog",
+  "description": "§3.10 · 旅行约束模板注册表 — catalog POST / 求解器 SSOT",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "hardCount",
+    "softCount",
+    "templateCount",
+    "solverRuleKinds",
+    "templates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "hardCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "softCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "templateCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "solverRuleKinds": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/solverRuleKind"
+      },
+      "uniqueItems": true
+    },
+    "templates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/templateEntry"
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "solverRuleKind": {
+      "type": "string",
+      "enum": [
+        "time_window",
+        "daily_count",
+        "time_budget",
+        "lodging_continuity",
+        "budget",
+        "route_shape",
+        "poi_preference",
+        "crowd_avoidance"
+      ]
+    },
+    "constraintType": {
+      "type": "string",
+      "enum": ["HARD", "SOFT"]
+    },
+    "sectionKey": {
+      "type": "string",
+      "enum": ["hard_must_satisfy", "soft_prefer"]
+    },
+    "hardCategory": {
+      "type": "string",
+      "enum": ["TIME", "BUDGET", "MEMBER", "RISK", "PLACE"]
+    },
+    "templateEntry": {
+      "type": "object",
+      "required": [
+        "templateId",
+        "constraintId",
+        "defaultName",
+        "defaultDescription",
+        "type",
+        "sectionKey",
+        "solverRuleKind",
+        "legacyPatchOnly"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "templateId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "constraintId": {
+          "type": "string",
+          "pattern": "^c_tpl_[a-z][a-z0-9_]*$"
+        },
+        "defaultName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defaultDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "$ref": "#/$defs/constraintType"
+        },
+        "sectionKey": {
+          "$ref": "#/$defs/sectionKey"
+        },
+        "category": {
+          "$ref": "#/$defs/hardCategory"
+        },
+        "defaultPriority": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "defaultIntensity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "solverRuleKind": {
+          "$ref": "#/$defs/solverRuleKind"
+        },
+        "legacyPatchOnly": {
+          "type": "boolean"
+        },
+        "canonicalWeightKey": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "HARD" }
+            }
+          },
+          "then": {
+            "required": ["category"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "SOFT" }
+            }
+          },
+          "then": {
+            "required": ["defaultPriority", "defaultIntensity"]
+          }
+        }
+      ]
+    }
+  }
+}

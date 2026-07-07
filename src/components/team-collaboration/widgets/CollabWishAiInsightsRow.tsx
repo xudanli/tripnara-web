@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronRight, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buildWishCategoryDistribution } from '@/lib/wish-category-distribution';
 import type { TeamWishItem, TripWishItem, WishSummary } from '@/types/trip-wishes';
-import { workbenchCard } from '@/components/plan-studio/workbench/workbench-ui';
+import { workbenchCardFlat } from '@/components/plan-studio/workbench/workbench-ui';
 import { cn } from '@/lib/utils';
 
 interface CollabWishAiInsightsRowProps {
@@ -17,7 +17,7 @@ interface CollabWishAiInsightsRowProps {
 
 const CLUSTER_CHIP_STYLES = [
   'border-primary/40 bg-primary/5 text-primary',
-  'border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300',
+  'border-gate-allow-border/40 bg-gate-allow-foreground/5 text-gate-allow-foreground dark:text-gate-allow-foreground',
   'border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-200',
 ];
 
@@ -66,7 +66,7 @@ export function CollabWishAiInsightsRow({
   return (
     <section className={cn('space-y-3', className)} aria-label="AI 洞察与建议">
       <div className="grid gap-3 lg:grid-cols-4">
-        <div className={cn(workbenchCard, 'flex flex-col p-4 lg:col-span-1')}>
+        <div className={cn(workbenchCardFlat, 'flex flex-col p-3 lg:col-span-1')}>
           <div className="mb-2 flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
             <h4 className="text-xs font-semibold text-foreground">相似心愿聚类</h4>
@@ -100,8 +100,8 @@ export function CollabWishAiInsightsRow({
 
         <div
           className={cn(
-            workbenchCard,
-            'flex flex-col p-4 lg:col-span-1',
+            workbenchCardFlat,
+            'flex flex-col p-3 lg:col-span-1',
             hasTension && 'border-gate-confirm-border/60',
           )}
         >
@@ -121,7 +121,7 @@ export function CollabWishAiInsightsRow({
           </Button>
         </div>
 
-        <div className={cn(workbenchCard, 'flex flex-col p-4 lg:col-span-1')}>
+        <div className={cn(workbenchCardFlat, 'flex flex-col p-3 lg:col-span-1')}>
           <div className="mb-2 flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             <h4 className="text-xs font-semibold text-foreground">对行程的影响</h4>
@@ -142,8 +142,8 @@ export function CollabWishAiInsightsRow({
 
         <div
           className={cn(
-            workbenchCard,
-            'flex flex-col justify-between bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 p-4 lg:col-span-1',
+            workbenchCardFlat,
+            'flex flex-col justify-between bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 p-3 lg:col-span-1',
           )}
         >
           <div>

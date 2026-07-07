@@ -88,8 +88,8 @@ export default function CascadeImpactCard({
           <CascadeImpactAlgebraMeta algebra={resolvedAlgebra} />
 
           {hint.userConfirmationRequired && hint.userConfirmationRequired.length > 0 ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50/80 px-2.5 py-2 dark:border-amber-900/50 dark:bg-amber-950/20">
-              <div className="flex items-start gap-1.5 text-xs font-medium text-amber-900 dark:text-amber-100">
+            <div className="rounded-md border border-border bg-muted/80 px-2.5 py-2 dark:border-border/50 dark:bg-muted/20">
+              <div className="flex items-start gap-1.5 text-xs font-medium text-warning dark:text-warning">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
                   {t('dashboard.readiness.cascade.userConfirmationTitle', {
@@ -97,12 +97,12 @@ export default function CascadeImpactCard({
                   })}
                 </span>
               </div>
-              <ul className="mt-1.5 space-y-1 pl-5 text-xs text-amber-800 dark:text-amber-200/90 list-disc">
+              <ul className="mt-1.5 space-y-1 pl-5 text-xs text-warning dark:text-warning/90 list-disc">
                 {hint.userConfirmationRequired.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
-              <p className="mt-1.5 text-[11px] text-amber-700/90 dark:text-amber-300/80">
+              <p className="mt-1.5 text-[11px] text-warning/90 dark:text-warning/80">
                 {t('dashboard.readiness.cascade.userConfirmationDisclaimer', {
                   defaultValue: '以上事项需您自行处理，TripNARA 不代订。',
                 })}

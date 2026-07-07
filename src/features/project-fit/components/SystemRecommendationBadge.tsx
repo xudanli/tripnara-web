@@ -4,9 +4,9 @@ import type { SystemRecommendation } from '@/types/project-fit';
 import { cn } from '@/lib/utils';
 
 const VARIANT: Record<SystemRecommendation, string> = {
-  APPROVE: 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300',
+  APPROVE: 'bg-gate-allow-foreground/10 text-gate-allow-foreground dark:text-gate-allow-foreground',
   CLARIFY: 'bg-amber-500/10 text-amber-800 dark:text-amber-300',
-  WAITLIST: 'bg-blue-500/10 text-blue-800 dark:text-blue-300',
+  WAITLIST: 'bg-muted/10 text-muted-foreground dark:text-muted-foreground',
   REJECT: 'bg-destructive/10 text-destructive',
 };
 

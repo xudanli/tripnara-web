@@ -256,7 +256,7 @@ export default function RouteDirectionsByCountryPage() {
       {error && !loading && (
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-600">
+            <div className="flex items-center gap-2 text-gate-reject-foreground">
               <AlertCircle className="h-5 w-5" />
               <span>{error}</span>
             </div>
@@ -271,7 +271,7 @@ export default function RouteDirectionsByCountryPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-semibold flex items-center gap-2">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
+                <CheckCircle2 className="h-6 w-6 text-gate-allow-foreground" />
                 激活的路线方向 ({activeDirections.length})
               </h2>
             </div>
@@ -335,7 +335,7 @@ export default function RouteDirectionsByCountryPage() {
                           {direction.seasonality.avoidMonths && direction.seasonality.avoidMonths.length > 0 && (
                             <div className="pl-6">
                               <span className="text-muted-foreground">禁忌月份: </span>
-                              <span className="text-red-600">{formatMonthRange(direction.seasonality.avoidMonths)}</span>
+                              <span className="text-gate-reject-foreground">{formatMonthRange(direction.seasonality.avoidMonths)}</span>
                             </div>
                           )}
                         </div>

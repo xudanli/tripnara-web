@@ -10,14 +10,14 @@ interface TravelSegmentIndicatorProps {
 
 // 交通方式配置
 const travelModeConfig: Record<TravelMode, { icon: string; label: string; color: string }> = {
-  DRIVING: { icon: '🚗', label: '驾车', color: 'text-blue-600 bg-blue-50 border-blue-200' },
-  WALKING: { icon: '🚶', label: '步行', color: 'text-green-600 bg-green-50 border-green-200' },
-  TRANSIT: { icon: '🚌', label: '公交', color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  TRAIN: { icon: '🚄', label: '高铁', color: 'text-indigo-600 bg-indigo-50 border-indigo-200' },
+  DRIVING: { icon: '🚗', label: '驾车', color: 'text-muted-foreground bg-muted border-border' },
+  WALKING: { icon: '🚶', label: '步行', color: 'text-success bg-muted border-border' },
+  TRANSIT: { icon: '🚌', label: '公交', color: 'text-muted-foreground bg-muted border-border' },
+  TRAIN: { icon: '🚄', label: '高铁', color: 'text-muted-foreground bg-muted border-border' },
   FLIGHT: { icon: '✈️', label: '飞机', color: 'text-muted-foreground bg-muted border-border' },
-  FERRY: { icon: '⛴️', label: '轮渡', color: 'text-cyan-600 bg-cyan-50 border-cyan-200' },
-  BICYCLE: { icon: '🚴', label: '骑行', color: 'text-lime-600 bg-lime-50 border-lime-200' },
-  TAXI: { icon: '🚕', label: '出租车', color: 'text-yellow-600 bg-yellow-50 border-yellow-200' },
+  FERRY: { icon: '⛴️', label: '轮渡', color: 'text-muted-foreground bg-muted border-border' },
+  BICYCLE: { icon: '🚴', label: '骑行', color: 'text-success bg-muted border-border' },
+  TAXI: { icon: '🚕', label: '出租车', color: 'text-warning bg-muted border-border' },
 };
 
 // 格式化距离
@@ -60,7 +60,7 @@ export function CrossDayTravelLeadIn({
       data-travel-timing-lead-in
       className={cn(
         'rounded-lg border border-border bg-muted/25 px-3 py-3 space-y-2 mb-3',
-        isStartTooEarly && 'border-gate-suggest-border bg-gate-suggest/20',
+        isStartTooEarly && 'border-border bg-muted/20',
         className,
       )}
     >
@@ -77,7 +77,7 @@ export function CrossDayTravelLeadIn({
           className={cn(
             'text-xs leading-relaxed rounded-md px-2.5 py-2 border',
             isStartTooEarly
-              ? 'border-gate-suggest-border bg-gate-suggest/30 text-gate-suggest-foreground'
+              ? 'border-border bg-muted/30 text-foreground'
               : 'border-border bg-muted/40 text-muted-foreground',
           )}
         >
@@ -116,7 +116,7 @@ export function CheckoutMorningLeadIn({
       data-travel-timing-lead-in
       className={cn(
         'rounded-lg border border-border bg-muted/25 px-3 py-3 space-y-2 mb-3',
-        isStartTooEarly && 'border-gate-suggest-border bg-gate-suggest/20',
+        isStartTooEarly && 'border-border bg-muted/20',
         className,
       )}
     >
@@ -138,7 +138,7 @@ export function CheckoutMorningLeadIn({
           className={cn(
             'text-xs leading-relaxed rounded-md px-2.5 py-2 border',
             isStartTooEarly
-              ? 'border-gate-suggest-border bg-gate-suggest/30 text-gate-suggest-foreground'
+              ? 'border-border bg-muted/30 text-foreground'
               : 'border-border bg-muted/40 text-muted-foreground',
           )}
         >
@@ -201,7 +201,7 @@ export function DayOneArrivalLeadIn({
     <div
       className={cn(
         'rounded-lg border border-border bg-muted/25 px-3 py-3 space-y-2 mb-3',
-        !isArrivalHub && 'border-gate-suggest-border bg-gate-suggest/20',
+        !isArrivalHub && 'border-border bg-muted/20',
         className,
       )}
     >
@@ -216,7 +216,7 @@ export function DayOneArrivalLeadIn({
           'text-xs leading-relaxed rounded-md px-2.5 py-2 border',
           isArrivalHub
             ? 'border-border bg-muted/40 text-muted-foreground'
-            : 'border-gate-suggest-border bg-gate-suggest/30 text-gate-suggest-foreground',
+            : 'border-border bg-muted/30 text-foreground',
         )}
       >
         {message}
@@ -237,7 +237,7 @@ export function DayOneArrivalLeadIn({
               className={cn(
                 'text-xs leading-relaxed rounded-md px-2.5 py-2 border',
                 departureTiming.isStartTooEarly
-                  ? 'border-gate-suggest-border bg-gate-suggest/30 text-gate-suggest-foreground'
+                  ? 'border-border bg-muted/30 text-foreground'
                   : 'border-border bg-muted/40 text-muted-foreground',
               )}
             >

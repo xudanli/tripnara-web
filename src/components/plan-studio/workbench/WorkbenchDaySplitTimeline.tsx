@@ -267,7 +267,7 @@ function BranchActivityCard({
           {intensity === '高强度体验' ? (
             <Badge
               variant="outline"
-              className="mt-1 rounded-full border-gate-confirm-border/60 bg-gate-confirm/10 px-1.5 py-0 text-[10px] font-normal text-gate-confirm-foreground hover:bg-gate-confirm/10"
+              className="mt-1 rounded-full border-border/60 bg-muted/10 px-1.5 py-0 text-[10px] font-normal text-warning hover:bg-muted/10"
             >
               <Flame className="mr-0.5 inline h-3 w-3" />
               {intensity}
@@ -348,7 +348,7 @@ function SharedTimelineRow({
         <div
           className={cn(
             'flex items-start justify-between gap-2',
-            isForkAnchor && 'rounded-lg border border-gate-suggest-border/40 bg-gate-suggest/10 px-2 py-1.5',
+            isForkAnchor && 'rounded-lg border border-border/40 bg-muted/10 px-2 py-1.5',
           )}
         >
           <div className="min-w-0 flex-1">
@@ -383,7 +383,7 @@ function SharedTimelineRow({
           {isForkAnchor ? (
             <Badge
               variant="outline"
-              className="shrink-0 rounded-full border-gate-suggest-border/45 bg-gate-suggest/12 px-2 py-0 text-[10px] font-normal text-gate-suggest-foreground"
+              className="shrink-0 rounded-full border-border/45 bg-muted/12 px-2 py-0 text-[10px] font-normal text-foreground"
             >
               分叉
             </Badge>
@@ -458,13 +458,13 @@ export function WorkbenchDaySplitTimeline({
 
   return (
     <div className={cn(workbenchSplitTimelineShell, 'flex min-h-[420px] flex-col overflow-hidden', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gate-suggest-border/30 bg-gate-suggest/8 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/30 bg-muted/8 px-4 py-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">
             Day {dayNumber}
             {dateLabel ? ` · ${dateLabel}` : ''} · {title}
           </h3>
-          <p className="mt-0.5 text-[10px] font-medium text-gate-suggest-foreground">并行分流预览</p>
+          <p className="mt-0.5 text-[10px] font-medium text-foreground">并行分流预览</p>
         </div>
         {stats?.satisfactionBadge ? (
           <Badge className={cn('rounded-full px-2 py-0 text-[10px] font-medium', workbenchFeasibilityBadge)}>
@@ -490,7 +490,7 @@ export function WorkbenchDaySplitTimeline({
           {stats.feasibility ? (
             <div>
               <p className="text-[10px] text-muted-foreground">整体可行度</p>
-              <p className={cn(workbenchSecondaryMetric, 'text-xs font-semibold text-nara-tundra-foreground')}>
+              <p className={cn(workbenchSecondaryMetric, 'text-xs font-semibold text-success')}>
                 {stats.feasibility}
               </p>
             </div>

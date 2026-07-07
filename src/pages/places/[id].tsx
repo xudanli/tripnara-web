@@ -47,9 +47,9 @@ export default function PlaceDetailPage() {
   if (error || !place) {
     return (
       <div className="p-6">
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <p className="text-red-800">{error || '地点不存在'}</p>
+            <p className="text-gate-reject-foreground">{error || '地点不存在'}</p>
             <Button onClick={() => navigate(-1)} className="mt-4" variant="outline">
               返回
             </Button>

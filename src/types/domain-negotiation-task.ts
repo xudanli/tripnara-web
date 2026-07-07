@@ -14,6 +14,14 @@ export interface DomainNegotiationTask {
   description?: string;
   /** 讨论中时关联的偏好轮次 ID */
   activeRoundId?: string | null;
+  /** P0 编排：决策问题来源 */
+  source?: 'decision_problem' | string;
+  problemId?: string;
+  decisionProblemId?: string;
+  resolutionId?: string;
+  actionPlanId?: string;
+  sourceConflictId?: string;
+  negotiationTaskId?: string;
   claimCount?: number;
   leaderDisplayName?: string;
   endorsementSummary?: string;

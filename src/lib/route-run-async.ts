@@ -18,7 +18,9 @@ export type RouteRunAsyncPhase =
   | 'INTAKE'
   | 'RESEARCH'
   | 'PLAN_GEN'
+  | 'TRAVEL_COMPILE'
   | 'VERIFY'
+  | 'REPAIR'
   | 'NARRATE'
   | (string & {});
 
@@ -52,7 +54,9 @@ const PHASE_DISPLAY: Record<string, string> = {
   POI_SELECTION: '兴趣点选择',
   GATE_EVAL: '门禁评估',
   PLAN_GEN: '方案生成',
+  TRAVEL_COMPILE: 'CTRE 旅行编译',
   VERIFY: '可执行性验证',
+  REPAIR: '修复编排',
   NARRATE: '决策叙事',
   DONE: '已完成',
 };

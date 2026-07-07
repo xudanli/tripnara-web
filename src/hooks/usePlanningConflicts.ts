@@ -5,15 +5,21 @@ import { decisionCheckerApi, DecisionCheckerApiError } from '@/api/decision-chec
 import { tripConstraintSolverApi } from '@/api/trip-constraint-solver';
 import { tripsApi } from '@/api/trips';
 import { computeGateExecuteStatus } from '@/lib/gate-execute';
-import { setDecisionCheckerDeferredReady, getDecisionCheckerDeferredSnapshot, discardStaleDecisionCheckerDeferred } from '@/lib/decision-checker-deferred.store';
+import { setDecisionCheckerDeferredReady, getDecisionCheckerDeferredSnapshot, discardStaleDecisionCheckerDeferred, clearDecisionCheckerDeferredStore } from '@/lib/decision-checker-deferred.store';
 import {
   DEFERRED_DEDICATED_PARALLEL_MS,
   DEFERRED_TASK_STALE_MS,
   PLANNING_CONFLICTS_BFF_SOFT_TIMEOUT_MS,
   shouldUsePlanningConflictsLegacyFallback,
 } from '@/lib/planning-conflicts-fallback.util';
-import { subscribeDebouncedConstraintsRevalidate } from '@/lib/plan-studio-constraints-events';
 import {
+  buildPlanningConflictsStaleRefetchKey,
+  resolvePlanningConflictsConstraintsVersion,
+  shouldRefetchPlanningConflictsForStaleVersion,
+} from '@/lib/planning-conflicts-stale.util';
+import {
+  alignConflictItemsWithMaxSegmentDistance,
+  alignDecisionCheckerWithMaxSegmentDistance,
   computePlanningConflictsInboxMetrics,
   enrichPlanningConflictItems,
   mergePlanningConflicts,
@@ -22,10 +28,12 @@ import {
   type PlanningConflictSummary,
   type PlanningConflictsInboxMetrics,
 } from '@/lib/planning-conflicts.util';
+import { subscribeDebouncedConstraintsRevalidate } from '@/lib/plan-studio-constraints-events';
 import {
   invalidateWorkbenchAfterConstraintChange,
   invalidateWorkbenchPlanningConflicts,
   useWorkbenchPlanningConflicts,
+  workbenchKeys,
 } from '@/pages/plan-studio/hooks/useWorkbenchData';
 import { useDecisionCheckerDeferred } from '@/hooks/useDecisionCheckerDeferred';
 import type { DecisionCheckerQuery, DecisionCheckerResponse } from '@/types/decision-checker';
@@ -126,6 +134,8 @@ export function usePlanningConflicts(
     includeDecisionChecker?: boolean;
     focusConflictId?: string | null;
     constraintsVersion?: number | null;
+    /** 当前 c_max_segment_distance（km），用于修正叙述里嵌入的旧阈值 */
+    maxSegmentDistanceKm?: number | null;
   },
 ): UsePlanningConflictsResult {
   const includeDecisionChecker = options?.includeDecisionChecker ?? true;
@@ -157,8 +167,10 @@ export function usePlanningConflicts(
     null,
   );
   const fallbackDecisionCheckerKeyRef = useRef<string | null>(null);
+  const staleVersionRefetchKeyRef = useRef<string | null>(null);
   const deferredDedicatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deferredStaleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevFocusConflictIdRef = useRef<string | null | undefined>(undefined);
 
   const bffFailedFallback =
     Boolean(tripId) &&
@@ -212,7 +224,7 @@ export function usePlanningConflicts(
   useEffect(() => {
     if (!tripId || !useLegacy) return;
 
-    const attemptKey = `${tripId}:${options?.focusConflictId ?? ''}`;
+    const attemptKey = `${tripId}:${options?.focusConflictId ?? ''}:${options?.constraintsVersion ?? ''}`;
     if (legacyAttemptedRef.current === attemptKey) return;
     legacyAttemptedRef.current = attemptKey;
 
@@ -257,10 +269,48 @@ export function usePlanningConflicts(
     return () => {
       cancelled = true;
     };
-  }, [tripId, useLegacy, options?.focusConflictId]);
+  }, [tripId, useLegacy, options?.focusConflictId, options?.constraintsVersion]);
+
+  /** BFF isStale + query cv 落后 → 刷新 constraints 列表并重拉 planning-conflicts */
+  useEffect(() => {
+    const bundle = bffQuery.data;
+    if (!tripId || useLegacy || !bundle) {
+      if (!bundle?.isStale) staleVersionRefetchKeyRef.current = null;
+      return;
+    }
+
+    const responseCv = resolvePlanningConflictsConstraintsVersion(bundle);
+    const queryCv = options?.constraintsVersion ?? null;
+    const needsRefetch = shouldRefetchPlanningConflictsForStaleVersion({
+      isStale: Boolean(bundle.isStale),
+      queryConstraintsVersion: queryCv,
+      responseConstraintsVersion: responseCv,
+    });
+    if (!needsRefetch) {
+      if (!bundle.isStale) staleVersionRefetchKeyRef.current = null;
+      return;
+    }
+
+    const refetchKey = buildPlanningConflictsStaleRefetchKey(tripId, queryCv, bundle);
+    if (staleVersionRefetchKeyRef.current === refetchKey) return;
+    staleVersionRefetchKeyRef.current = refetchKey;
+
+    void (async () => {
+      if (responseCv != null && (queryCv == null || responseCv > queryCv)) {
+        await queryClient.invalidateQueries({ queryKey: workbenchKeys.constraints(tripId) });
+      }
+      await invalidateWorkbenchPlanningConflicts(queryClient, tripId);
+    })();
+  }, [
+    tripId,
+    useLegacy,
+    bffQuery.data,
+    options?.constraintsVersion,
+    queryClient,
+  ]);
 
   const loadDedicatedDecisionChecker = useCallback(
-    (reason: 'legacy' | 'deferred-fail' | 'deferred-pending') => {
+    (reason: 'legacy' | 'deferred-fail' | 'deferred-pending' | 'focus-change') => {
       if (!tripId || !includeDecisionChecker) return;
 
       const loadKey = `${tripId}:${options?.focusConflictId ?? ''}:${options?.constraintsVersion ?? ''}:${reason}`;
@@ -273,7 +323,10 @@ export function usePlanningConflicts(
       void decisionCheckerApi
         .get(tripId, buildDecisionCheckerQuery(options?.focusConflictId, options?.constraintsVersion))
         .then((response) => {
-          const normalized = normalizeDecisionCheckerResponse(response, tripId);
+          const normalized = alignDecisionCheckerWithMaxSegmentDistance(
+            normalizeDecisionCheckerResponse(response, tripId),
+            options?.maxSegmentDistanceKm,
+          );
           setFallbackDecisionChecker(normalized);
           setFallbackDecisionCheckerError(null);
           if (!useLegacy) {
@@ -300,8 +353,33 @@ export function usePlanningConflicts(
       useLegacy,
       options?.focusConflictId,
       options?.constraintsVersion,
+      options?.maxSegmentDistanceKm,
     ],
   );
+
+  /** 切换 focusConflictId 时立即拉 dedicated decision-checker（不等 deferred 90s） */
+  useEffect(() => {
+    if (!tripId || !includeDecisionChecker || useLegacy) return;
+
+    const focus = options?.focusConflictId ?? null;
+    if (prevFocusConflictIdRef.current === undefined) {
+      prevFocusConflictIdRef.current = focus;
+      return;
+    }
+    if (prevFocusConflictIdRef.current === focus) return;
+    prevFocusConflictIdRef.current = focus;
+
+    clearDecisionCheckerDeferredStore(tripId);
+    fallbackDecisionCheckerKeyRef.current = null;
+    setFallbackDecisionChecker(null);
+    loadDedicatedDecisionChecker('focus-change');
+  }, [
+    tripId,
+    includeDecisionChecker,
+    useLegacy,
+    options?.focusConflictId,
+    loadDedicatedDecisionChecker,
+  ]);
 
   useEffect(() => {
     if (!tripId || !includeDecisionChecker) {
@@ -481,7 +559,10 @@ export function usePlanningConflicts(
       undefined;
     const decisionChecker =
       rawDecisionChecker && tripId
-        ? normalizeDecisionCheckerResponse(rawDecisionChecker, tripId)
+        ? alignDecisionCheckerWithMaxSegmentDistance(
+            normalizeDecisionCheckerResponse(rawDecisionChecker, tripId),
+            options?.maxSegmentDistanceKm,
+          )
         : rawDecisionChecker;
     const daySplits =
       decisionChecker?.daySplits ?? base.daySplits;
@@ -494,10 +575,17 @@ export function usePlanningConflicts(
           ? { ...base.decisionCheckerDeferred, status: 'ready' as const }
           : base.decisionCheckerDeferred,
     };
-  }, [bffQuery.data, deferredStore.decisionChecker, fallbackDecisionChecker, useLegacy, tripId]);
+  }, [bffQuery.data, deferredStore.decisionChecker, fallbackDecisionChecker, useLegacy, tripId, options?.maxSegmentDistanceKm]);
 
-  const bffItems = bundle ? enrichPlanningConflictItems(bundle.conflicts) : [];
-  const items = source === 'bff' ? bffItems : legacyItems;
+  const bffItems = bundle
+    ? alignConflictItemsWithMaxSegmentDistance(
+        enrichPlanningConflictItems(bundle.conflicts),
+        options?.maxSegmentDistanceKm,
+      )
+    : [];
+  const items = source === 'bff'
+    ? bffItems
+    : alignConflictItemsWithMaxSegmentDistance(legacyItems, options?.maxSegmentDistanceKm);
   const summary =
     source === 'bff' && bundle
       ? {

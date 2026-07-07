@@ -316,21 +316,21 @@ export default function EvidenceDrawer({
   const getRiskLevelDisplay = (level: RiskItem['level']) => {
     switch (level) {
       case 'high':
-        return { icon: '🔴', text: '高风险', color: 'text-red-600' };
+        return { icon: '🔴', text: '高风险', color: 'text-gate-reject-foreground' };
       case 'medium':
         return { icon: '🟠', text: '中风险', color: 'text-orange-600' };
       case 'low':
-        return { icon: '🟢', text: '低风险', color: 'text-green-600' };
+        return { icon: '🟢', text: '低风险', color: 'text-gate-allow-foreground' };
     }
   };
 
   // 获取决策结果显示
   const getDecisionResultDisplay = (action: string) => {
     if (action === 'ALLOW' || action === '允许' || action.toLowerCase().includes('allow')) {
-      return { icon: '✅', text: '无风险（Allow）', color: 'text-green-600' };
+      return { icon: '✅', text: '无风险（Allow）', color: 'text-gate-allow-foreground' };
     }
     if (action === 'REJECT' || action === '拒绝' || action.toLowerCase().includes('reject')) {
-      return { icon: '❌', text: '已拒绝（Reject）', color: 'text-red-600' };
+      return { icon: '❌', text: '已拒绝（Reject）', color: 'text-gate-reject-foreground' };
     }
     if (action === 'ADJUST' || action === '调整' || action.toLowerCase().includes('adjust')) {
       return { icon: '⚠️', text: '已调整（Adjust）', color: 'text-orange-600' };
@@ -560,10 +560,10 @@ export default function EvidenceDrawer({
                           <div className={cn(
                             'text-xs font-medium p-2 rounded',
                             item.level === 'high' 
-                              ? 'text-red-700 bg-red-50 border border-red-100' 
+                              ? 'text-gate-reject-foreground bg-gate-reject border border-gate-reject-border' 
                               : item.level === 'medium'
                               ? 'text-orange-700 bg-orange-50 border border-orange-100'
-                              : 'text-green-700 bg-green-50 border border-green-100'
+                              : 'text-gate-allow-foreground bg-gate-allow border border-gate-allow-border'
                           )}>
                             {personaInfo ? `${personaInfo.shortName}：` : ''}{item.reason}
                           </div>

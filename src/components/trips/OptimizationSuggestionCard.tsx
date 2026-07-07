@@ -37,9 +37,9 @@ export interface OptimizationSuggestionCardProps {
 }
 
 const PERSONA_ACCENT = {
-  abu: 'bg-blue-500',
-  drdre: 'bg-violet-500',
-  neptune: 'bg-emerald-500',
+  abu: 'bg-muted/150',
+  drdre: 'bg-muted/150',
+  neptune: 'bg-gate-allow-foreground',
   user_action: 'bg-slate-500',
 } as const;
 
@@ -145,7 +145,7 @@ export function OptimizationSuggestionCard({
                   </Badge>
                 ) : null}
                 {highPriority && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted/15 text-muted-foreground">
                     高优先级
                   </span>
                 )}

@@ -47,7 +47,7 @@ export function ReputationAssetsSection({ profile, className }: ReputationAssets
       )}
 
       {profile.safetyWarning && (
-        <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-200">
+        <div className="mt-4 rounded-lg border border-gate-reject-border/30 bg-gate-reject-foreground/10 px-3 py-2 text-sm text-gate-reject-foreground dark:text-gate-reject-foreground">
           {profile.safetyWarning}
         </div>
       )}

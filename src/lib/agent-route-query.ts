@@ -55,7 +55,7 @@ export function useAgentRouteQueryOptions() {
   return useMemo(() => parseAgentRouteSearchParams(searchParams), [searchParams]);
 }
 
-/** /dashboard/agent → /dashboard/plan-studio，保留 tripId 与调试/传感器参数 */
+/** /dashboard/agent → /dashboard/nara，保留 tripId 与调试/传感器参数 */
 export function buildPlanStudioUrlFromAgentSearchParams(params: URLSearchParams): string {
   const next = new URLSearchParams();
   const tripId = params.get('tripId');
@@ -68,7 +68,10 @@ export function buildPlanStudioUrlFromAgentSearchParams(params: URLSearchParams)
   const ctx = params.get('contextType') ?? params.get('context_type');
   if (ctx) next.set('contextType', ctx);
 
-  next.set('agentOpen', '1');
+  const assistantMessage = params.get('assistantMessage');
+  if (assistantMessage) next.set('assistantMessage', assistantMessage);
+  if (params.get('assistant') === 'open') next.set('assistant', 'open');
+
   const qs = next.toString();
-  return `/dashboard/plan-studio${qs ? `?${qs}` : ''}`;
+  return `/dashboard/nara${qs ? `?${qs}` : ''}`;
 }

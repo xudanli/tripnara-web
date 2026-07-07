@@ -208,7 +208,7 @@ function OntologyTechnicalRefsBody({ refs }: { refs: string[] }) {
       {ontologyAnchors.length > 0 ? (
         <ul className="space-y-2">
           {ontologyAnchors.map((item, i) => (
-            <li key={`oa-${i}`} className="pl-2 border-l-2 border-violet-400/50 space-y-0.5">
+            <li key={`oa-${i}`} className="pl-2 border-l-2 border-border/50 space-y-0.5">
               <div className="text-[11px] leading-snug text-foreground/90">
                 <span className="font-medium">{item.label}</span>
                 <span className="text-muted-foreground"> — {humanizeOntologyEvidenceDetail(item.detail)}</span>
@@ -256,7 +256,7 @@ function ReadinessTechnicalRefsBody({ refs }: { refs: string[] }) {
   return (
     <ul className="space-y-2">
       {refs.map((r, i) => (
-        <li key={i} className="pl-2 border-l-2 border-sky-400/50 space-y-0.5">
+        <li key={i} className="pl-2 border-l-2 border-border/50 space-y-0.5">
           <div className="text-[11px] leading-snug text-foreground/90">
             <span className="font-medium">准备度</span>
             <span className="text-muted-foreground"> — {formatReadinessTechnicalLine(r)}</span>
@@ -390,7 +390,7 @@ export function EvidenceRefsReadable({
       {readinessZh ? <ReadinessEvidenceZhCallout text={readinessZh} /> : null}
 
       {showReadinessMissingHint ? (
-        <div className="rounded-md bg-sky-50/50 px-2 py-1.5 border border-sky-200/60 text-[11px] text-muted-foreground leading-snug space-y-1.5">
+        <div className="rounded-md bg-muted/50 px-2 py-1.5 border border-border/60 text-[11px] text-muted-foreground leading-snug space-y-1.5">
           <p>
             本步摘要提到<strong className="text-foreground/90 font-medium">准备度</strong>
             ，但当前条目上<strong className="text-foreground/85">没有对接信号</strong>
@@ -403,7 +403,7 @@ export function EvidenceRefsReadable({
             <summary className="cursor-pointer text-primary/90 hover:underline select-none">
               对接 / 联调说明
             </summary>
-            <div className="mt-1.5 border-l-2 border-sky-300/60 pl-2 space-y-1.5 text-muted-foreground">
+            <div className="mt-1.5 border-l-2 border-border/60 pl-2 space-y-1.5 text-muted-foreground">
               <p>
                 编排应在 <code className="text-[9px]">decision_log[]</code> 上至少提供其一：非空的{' '}
                 <code className="text-[9px]">readiness_evidence_display_zh</code>，或在{' '}
@@ -434,7 +434,7 @@ export function EvidenceRefsReadable({
           <div className="text-[10px] font-medium text-muted-foreground mb-1">实时数据 / 工具</div>
           <ul className="space-y-1">
             {tools.map((item, i) => (
-              <li key={i} className="text-[11px] leading-snug text-foreground/90 pl-2 border-l-2 border-sky-400/50">
+              <li key={i} className="text-[11px] leading-snug text-foreground/90 pl-2 border-l-2 border-border/50">
                 {item.summary}
               </li>
             ))}

@@ -422,9 +422,9 @@ export default function TripOptimizePage() {
       )}
 
       {error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <p className="text-red-800">{error}</p>
+            <p className="text-gate-reject-foreground">{error}</p>
           </CardContent>
         </Card>
       )}
@@ -505,7 +505,7 @@ export default function TripOptimizePage() {
                       </Button>
                     </div>
                     {searchError && (
-                      <div className="text-sm text-red-600">{searchError}</div>
+                      <div className="text-sm text-gate-reject-foreground">{searchError}</div>
                     )}
                     {searchResults.length > 0 && (
                       <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -551,7 +551,7 @@ export default function TripOptimizePage() {
                     </Button>
                   </div>
                   {searchError && (
-                    <div className="text-sm text-red-600">{searchError}</div>
+                    <div className="text-sm text-gate-reject-foreground">{searchError}</div>
                   )}
                   {searchResults.length > 0 && (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -977,25 +977,25 @@ export default function TripOptimizePage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">兴趣分</div>
-                        <div className="text-lg font-semibold text-green-600">
+                        <div className="text-lg font-semibold text-gate-allow-foreground">
                           +{(optimizedResult.scoreBreakdown?.interestScore ?? 0)}
                         </div>
                       </div>
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">距离惩罚</div>
-                        <div className="text-lg font-semibold text-red-600">
+                        <div className="text-lg font-semibold text-gate-reject-foreground">
                           -{(optimizedResult.scoreBreakdown?.distancePenalty ?? 0).toFixed(1)}
                         </div>
                       </div>
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">疲劳惩罚</div>
-                        <div className="text-lg font-semibold text-red-600">
+                        <div className="text-lg font-semibold text-gate-reject-foreground">
                           -{(optimizedResult.scoreBreakdown?.tiredPenalty ?? 0).toFixed(1)}
                         </div>
                       </div>
                       <div className="p-3 border rounded-lg">
                         <div className="text-sm text-muted-foreground">聚类奖励</div>
-                        <div className="text-lg font-semibold text-green-600">
+                        <div className="text-lg font-semibold text-gate-allow-foreground">
                           +{(optimizedResult.scoreBreakdown?.clusteringBonus ?? 0).toFixed(1)}
                         </div>
                       </div>

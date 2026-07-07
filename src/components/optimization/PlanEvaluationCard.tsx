@@ -17,13 +17,13 @@ import {
 
 // 参考图1的雷达图样式：蓝色填充、顶点数值
 const RADAR_STYLE = {
-  stroke: '#3b82f6',
-  fill: '#3b82f6',
+  stroke: '#88C0D0',
+  fill: '#88C0D0',
   fillOpacity: 0.35,
   strokeWidth: 2,
   gridStroke: '#e5e7eb',
   tickFill: '#6b7280',
-  valueLabelFill: '#3b82f6',
+  valueLabelFill: '#88C0D0',
 };
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -144,8 +144,8 @@ function getBreakdownScore(
 /** 效用等级 Badge */
 function UtilityBadge({ value }: { value: number }) {
   const getLevel = (v: number) => {
-    if (v >= 0.8) return { label: '优秀', variant: 'default' as const, className: 'bg-green-500' };
-    if (v >= 0.6) return { label: '良好', variant: 'secondary' as const, className: 'bg-blue-500 text-white' };
+    if (v >= 0.8) return { label: '优秀', variant: 'default' as const, className: 'bg-gate-allow-foreground' };
+    if (v >= 0.6) return { label: '良好', variant: 'secondary' as const, className: 'bg-muted/150 text-white' };
     if (v >= 0.4) return { label: '一般', variant: 'outline' as const, className: 'bg-yellow-500 text-white' };
     return { label: '待优化', variant: 'destructive' as const, className: '' };
   };
@@ -242,7 +242,7 @@ function ComparisonIndicator({
   
   if (diff > 0) {
     return (
-      <div className="flex items-center gap-1 text-green-600">
+      <div className="flex items-center gap-1 text-gate-allow-foreground">
         <TrendingUp className="h-3 w-3" />
         <span className="text-xs">+{percentage}%</span>
       </div>
@@ -250,7 +250,7 @@ function ComparisonIndicator({
   }
   
   return (
-    <div className="flex items-center gap-1 text-red-600">
+    <div className="flex items-center gap-1 text-gate-reject-foreground">
       <TrendingDown className="h-3 w-3" />
       <span className="text-xs">-{percentage}%</span>
     </div>

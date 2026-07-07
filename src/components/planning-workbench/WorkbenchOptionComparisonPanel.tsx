@@ -87,9 +87,16 @@ function OptionCard({
           )}
         </div>
       </div>
-      {entry.summary && (
-        <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">{entry.summary}</p>
-      )}
+      {entry.tradeoffs?.length ? (
+        <ul className="mt-1.5 space-y-1">
+          {entry.tradeoffs.map((item, index) => (
+            <li key={index} className="flex gap-1.5 text-xs text-muted-foreground leading-relaxed">
+              <span className="shrink-0">·</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {entry.budget?.costDisplayValue && (
         <p className="mt-1.5 text-xs font-medium tabular-nums">{entry.budget.costDisplayValue}</p>
       )}

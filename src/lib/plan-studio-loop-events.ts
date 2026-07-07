@@ -33,3 +33,15 @@ export function openDecisionProfilingSurface(
     }),
   );
 }
+
+/** feasibility validate / POI 反馈后刷新 decision validation 读模型 */
+export function notifyDecisionValidationRefresh(
+  tripId: string,
+  detail?: { decisionId?: string },
+): void {
+  window.dispatchEvent(
+    new CustomEvent('plan-studio:decision-validation-refresh', {
+      detail: { tripId, ...detail },
+    }),
+  );
+}

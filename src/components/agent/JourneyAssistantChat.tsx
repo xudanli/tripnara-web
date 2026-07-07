@@ -83,10 +83,10 @@ interface JourneyAssistantChatProps {
  * 阶段配置
  */
 const PHASE_CONFIG: Record<JourneyPhase, { label: string; color: string; icon: React.ElementType }> = {
-  PRE_TRIP: { label: '出发准备', color: 'bg-blue-500', icon: Calendar },
+  PRE_TRIP: { label: '出发准备', color: 'bg-muted/150', icon: Calendar },
   DEPARTURE_DAY: { label: '出发日', color: 'bg-amber-500', icon: Plane },
-  ON_TRIP: { label: '旅途中', color: 'bg-green-500', icon: Compass },
-  RETURN_DAY: { label: '返程日', color: 'bg-purple-500', icon: Home },
+  ON_TRIP: { label: '旅途中', color: 'bg-gate-allow-foreground', icon: Compass },
+  RETURN_DAY: { label: '返程日', color: 'bg-muted/150', icon: Home },
   POST_TRIP: { label: '旅行结束', color: 'bg-gray-500', icon: CheckCircle2 },
 };
 
@@ -94,10 +94,10 @@ const PHASE_CONFIG: Record<JourneyPhase, { label: string; color: string; icon: R
  * 提醒优先级样式
  */
 const PRIORITY_STYLES = {
-  urgent: 'bg-red-100 border-red-300 text-red-800',
+  urgent: 'bg-gate-reject border-gate-reject-border text-gate-reject-foreground',
   high: 'bg-orange-100 border-orange-300 text-orange-800',
   medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-  low: 'bg-blue-100 border-blue-300 text-blue-800',
+  low: 'bg-muted/15 border-border text-muted-foreground',
 };
 
 /**
@@ -159,7 +159,7 @@ function StatusOverview({ state, currency = 'CNY' }: { state: JourneyState; curr
         
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="flex items-center gap-1 text-muted-foreground">
-            <CheckCircle2 className="w-3 h-3 text-green-500" />
+            <CheckCircle2 className="w-3 h-3 text-gate-allow-foreground" />
             已完成 {state.stats.completedActivities}/{state.stats.totalActivities}
           </div>
           <div className="flex items-center gap-1 text-muted-foreground">
@@ -178,9 +178,9 @@ function StatusOverview({ state, currency = 'CNY' }: { state: JourneyState; curr
 function TodaySchedule({ items }: { items: ScheduleItem[] }) {
   const statusColors = {
     upcoming: 'border-l-gray-300',
-    in_progress: 'border-l-green-500 bg-green-50',
+    in_progress: 'border-l-gate-allow-foreground bg-gate-allow',
     completed: 'border-l-gray-300 opacity-60',
-    cancelled: 'border-l-red-300 line-through opacity-50',
+    cancelled: 'border-l-gate-reject-border line-through opacity-50',
     modified: 'border-l-amber-500 bg-amber-50',
   };
 
@@ -220,7 +220,7 @@ function TodaySchedule({ items }: { items: ScheduleItem[] }) {
                 <span className="font-medium text-sm">{item.titleCN || item.title}</span>
               </div>
               {item.status === 'in_progress' && (
-                <Badge className="bg-green-500 text-xs">进行中</Badge>
+                <Badge className="bg-gate-allow-foreground text-xs">进行中</Badge>
               )}
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
@@ -317,9 +317,9 @@ function RemindersList({
  */
 function ExpertCitationsPanel({ citations }: { citations: ExpertCitation[] }) {
   const personaConfig: Record<string, { emoji: string; color: string; bgColor: string }> = {
-    'Abu': { emoji: '🐻‍❄️', color: 'text-blue-700', bgColor: 'bg-blue-50' },
+    'Abu': { emoji: '🐻‍❄️', color: 'text-muted-foreground', bgColor: 'bg-muted/15' },
     'Dr.Dre': { emoji: '🐕', color: 'text-amber-700', bgColor: 'bg-amber-50' },
-    'Neptune': { emoji: '🦦', color: 'text-teal-700', bgColor: 'bg-teal-50' },
+    'Neptune': { emoji: '🦦', color: 'text-gate-allow-foreground', bgColor: 'bg-gate-allow' },
   };
 
   return (
@@ -358,10 +358,10 @@ function ExpertCitationsPanel({ citations }: { citations: ExpertCitation[] }) {
  */
 function NarrativeSectionsPanel({ sections }: { sections: NarrativeSection[] }) {
   const sectionConfig: Record<string, { icon: React.ElementType; color: string; bgColor: string }> = {
-    summary: { icon: FileText, color: 'text-blue-600', bgColor: 'bg-blue-50' },
+    summary: { icon: FileText, color: 'text-muted-foreground', bgColor: 'bg-muted/15' },
     details: { icon: Info, color: 'text-gray-600', bgColor: 'bg-gray-50' },
     warnings: { icon: AlertTriangle, color: 'text-amber-600', bgColor: 'bg-amber-50' },
-    actions: { icon: Zap, color: 'text-green-600', bgColor: 'bg-green-50' },
+    actions: { icon: Zap, color: 'text-gate-allow-foreground', bgColor: 'bg-gate-allow' },
   };
 
   return (
@@ -395,9 +395,9 @@ function DegradationBanner({ degradation }: { degradation: DegradationInfo }) {
   if (!degradation.degraded) return null;
 
   const severityConfig = {
-    info: { icon: Info, color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+    info: { icon: Info, color: 'text-muted-foreground', bgColor: 'bg-muted/15', borderColor: 'border-border' },
     warning: { icon: AlertTriangle, color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
-    error: { icon: AlertTriangle, color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200' },
+    error: { icon: AlertTriangle, color: 'text-gate-reject-foreground', bgColor: 'bg-gate-reject', borderColor: 'border-gate-reject-border' },
   };
 
   const config = severityConfig[degradation.severity || 'info'];
@@ -523,7 +523,7 @@ function MessageBubble({
       {/* Avatar */}
       <div className={cn(
         "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-        isUser ? "bg-primary text-primary-foreground" : "bg-gradient-to-br from-emerald-500 to-teal-600 text-white"
+        isUser ? "bg-primary text-primary-foreground" : "bg-gradient-to-br from-gate-allow-foreground to-gate-allow-foreground text-white"
       )}>
         {isUser ? <User className="w-4 h-4" /> : <Compass className="w-4 h-4" />}
       </div>
@@ -878,7 +878,7 @@ export default function JourneyAssistantChat({
               {/* 加载指示器 */}
               {loading && (
                 <div className="flex gap-3 animate-in fade-in duration-200">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gate-allow-foreground to-gate-allow-foreground flex items-center justify-center">
                     <Compass className="w-4 h-4 text-white" />
                   </div>
                   <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-2.5 flex items-center gap-2">

@@ -41,7 +41,7 @@ export function jitterLngLat(base: LngLat, seed: number, spread = 0.35): LngLat 
 
 export function supplyPoiMarkerColor(subCategory: string): string {
   const c = subCategory.toUpperCase();
-  if (c.includes('HUT')) return '#2563eb';
+  if (c.includes('HUT')) return '#88C0D0';
   if (c.includes('RIVER')) return '#0891b2';
   if (c.includes('ROUTE_GATE')) return '#64748b';
   return '#0f172a';

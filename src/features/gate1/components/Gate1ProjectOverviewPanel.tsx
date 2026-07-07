@@ -182,7 +182,7 @@ export function Gate1ProjectOverviewPanel({ projectId }: Gate1ProjectOverviewPan
       </Card>
 
       {trustCardCount > 0 && (
-        <Card className="border-emerald-200/60 bg-emerald-50/30 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+        <Card className="border-gate-allow-border/60 bg-gate-allow/30 dark:border-gate-allow-border/40 dark:bg-gate-allow/20">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldCheck className="h-4 w-4" />

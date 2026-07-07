@@ -70,9 +70,9 @@ export default function EvidenceSuggestionsCard({
 
   // 优先级配置
   const priorityConfig = {
-    HIGH: { className: 'bg-red-50 text-red-700 border-red-300', icon: AlertCircle },
-    MEDIUM: { className: 'bg-amber-50 text-amber-700 border-amber-200', icon: AlertTriangle },
-    LOW: { className: 'bg-blue-50 text-blue-700 border-blue-200', icon: CheckCircle2 },
+    HIGH: { className: 'bg-muted text-error border-border', icon: AlertCircle },
+    MEDIUM: { className: 'bg-muted text-warning border-border', icon: AlertTriangle },
+    LOW: { className: 'bg-muted text-muted-foreground border-border', icon: CheckCircle2 },
   };
 
   // 格式化时间
@@ -127,17 +127,17 @@ export default function EvidenceSuggestionsCard({
       <CardContent className="space-y-4">
         {/* 一键批量获取建议（高优先级） */}
         {bulkFetchSuggestion && onBulkFetch && (
-          <div className={cn('p-4 rounded-lg border-2', cardVariants.evidence, 'bg-gradient-to-r from-blue-50 to-amber-50 border-blue-300')}>
+          <div className={cn('p-4 rounded-lg border-2', cardVariants.evidence, 'bg-muted border-border')}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 space-y-2">
                 <div className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-blue-600" />
+                  <Zap className="h-5 w-5 text-muted-foreground" />
                   <span className="text-sm font-semibold text-foreground">
                     {t('dashboard.readiness.evidence.suggestions.bulkFetch', {
                       defaultValue: '一键批量获取',
                     })}
                   </span>
-                  <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-300">
+                  <Badge variant="outline" className="text-[10px] bg-muted text-error border-border">
                     HIGH
                   </Badge>
                 </div>
@@ -167,7 +167,7 @@ export default function EvidenceSuggestionsCard({
                 size="sm"
                 onClick={() => onBulkFetch(bulkFetchSuggestion.evidenceTypes, bulkFetchSuggestion.affectedPoiIds)}
                 disabled={loading}
-                className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                className="h-9 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 {loading ? (
                   <>

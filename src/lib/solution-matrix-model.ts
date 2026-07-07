@@ -27,7 +27,10 @@ export interface SolutionMatrixColumn {
   optionId: string;
   label: string;
   isRecommended: boolean;
+  /** 门控违规等约束提示 */
   caveat?: string;
+  /** 方案取舍（来自 options[].tradeoffs[]） */
+  tradeoffs?: string[];
   gateLabel?: string;
 }
 
@@ -102,18 +105,17 @@ function resolveRowDisplayValue(
   return formatSolutionScore(rawValue);
 }
 
-function buildCaveat(
-  entry: OptionComparisonEntry,
-  gateDelta: KernelGateOptionDelta | undefined,
-): string | undefined {
+function buildCaveat(gateDelta: KernelGateOptionDelta | undefined): string | undefined {
   if (gateDelta?.violationCount && gateDelta.violationCount > 0) {
     const types = gateDelta.violationTypes?.slice(0, 2).join('、');
     return types ? `存在 ${gateDelta.violationCount} 项约束问题（${types}）` : `存在 ${gateDelta.violationCount} 项约束问题`;
   }
-  const summary = entry.summary?.trim();
-  if (summary && summary.length <= 80) return summary;
-  if (summary) return `${summary.slice(0, 77)}…`;
   return undefined;
+}
+
+function resolveTradeoffs(entry: OptionComparisonEntry): string[] | undefined {
+  const items = entry.tradeoffs?.map((item) => item.trim()).filter(Boolean);
+  return items?.length ? items : undefined;
 }
 
 export function buildSolutionMatrixModel(
@@ -155,7 +157,8 @@ export function buildSolutionMatrixModel(
       optionId: entry.optionId,
       label: resolveOptionLabel(entry, index),
       isRecommended: entry.optionId === recommendedId,
-      caveat: buildCaveat(entry, gateDelta),
+      caveat: buildCaveat(gateDelta),
+      tradeoffs: resolveTradeoffs(entry),
       gateLabel,
     };
   });

@@ -23,14 +23,14 @@ export interface DecisionNodeProps {
 
 // 决策类型图标颜色映射（使用设计 Token）
 const DECISION_TYPE_COLORS: Record<string, string> = {
-  'transport-decision': 'text-blue-600 dark:text-blue-400',
-  'pace-decision': 'text-green-600 dark:text-green-400',
-  'poi-selection': 'text-purple-600 dark:text-purple-400',
+  'transport-decision': 'text-muted-foreground dark:text-muted-foreground',
+  'pace-decision': 'text-gate-allow-foreground dark:text-gate-allow-foreground',
+  'poi-selection': 'text-muted-foreground dark:text-muted-foreground',
   'accommodation-decision': 'text-orange-600 dark:text-orange-400',
   'timing-decision': 'text-yellow-600 dark:text-yellow-400',
-  'budget-decision': 'text-red-600 dark:text-red-400',
+  'budget-decision': 'text-gate-reject-foreground dark:text-gate-reject-foreground',
   'safety-decision': 'text-pink-600 dark:text-pink-400',
-  'preference-decision': 'text-indigo-600 dark:text-indigo-400',
+  'preference-decision': 'text-muted-foreground dark:text-muted-foreground',
   'other': 'text-gray-600 dark:text-gray-400',
 };
 

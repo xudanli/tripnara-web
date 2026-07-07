@@ -86,7 +86,7 @@ export function CausalInsightPanel({
   }
 
   return (
-    <Card className={cn('border-violet-200/60', className)}>
+    <Card className={cn('border-border/60', className)}>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="text-base">因果洞察</CardTitle>

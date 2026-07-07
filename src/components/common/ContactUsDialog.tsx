@@ -250,14 +250,14 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
 
           {/* 错误提示 */}
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground">
               {error}
             </div>
           )}
 
           {/* 成功提示 */}
           {success && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+            <div className="rounded-lg border border-gate-allow-border bg-gate-allow p-3 text-sm text-gate-allow-foreground">
               {t('contactUs.sendSuccess', { defaultValue: '消息发送成功！我们会尽快回复您。' })}
             </div>
           )}
@@ -284,7 +284,7 @@ export function ContactUsDialog({ open, onOpenChange }: ContactUsDialogProps) {
                 className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center">
+                <div className="w-6 h-6 rounded-full bg-muted/150 flex items-center justify-center">
                   <span className="text-white text-xs font-bold">D</span>
                 </div>
                 <span className="text-sm">Discord</span>

@@ -57,22 +57,17 @@ export function getRiskScoreConfig(score: number): RiskScoreConfig {
  * 风险评分配置表
  * 颜色值完全匹配体验设计文档 v1.0 的规范
  * 
- * 文档要求：
- * - 0-30: #4CAF50 (绿色), 背景 #E8F5E9
- * - 31-45: #9CCC65 (浅绿-黄绿), 背景 #F1F8E9
- * - 46-60: #FFC107 (黄色), 背景 #FFF9C4
- * - 61-75: #FF9800 (橙黄), 背景 #FFF3E0
- * - 76-90: #FF6F00 (橙色), 背景 #FFE0B2
- * - 91-100: #F44336 (红色), 背景 #FFEBEE
+ * 端点色对齐 gate token：
+ * - 0-45: gate-allow（绿）
+ * - 91-100: gate-reject（红）
  */
 export const RISK_SCORE_CONFIGS: Record<RiskScoreLevel, RiskScoreConfig> = {
   'very-low': {
     level: 'very-low',
     label: '低风险',
-    // 使用文档指定的精确颜色值
-    color: 'text-[#4CAF50]',
-    bgColor: 'bg-[#E8F5E9]',
-    borderColor: 'border-[#C8E6C9]',
+    color: 'text-success',
+    bgColor: 'bg-muted',
+    borderColor: 'border-gate-allow-border',
     icon: 'check',
     min: 0,
     max: 30,
@@ -80,9 +75,9 @@ export const RISK_SCORE_CONFIGS: Record<RiskScoreLevel, RiskScoreConfig> = {
   'low-medium': {
     level: 'low-medium',
     label: '中低风险',
-    color: 'text-[#9CCC65]',
-    bgColor: 'bg-[#F1F8E9]',
-    borderColor: 'border-[#DCEDC8]',
+    color: 'text-success',
+    bgColor: 'bg-muted',
+    borderColor: 'border-gate-allow-border',
     icon: 'check',
     min: 31,
     max: 45,
@@ -90,9 +85,9 @@ export const RISK_SCORE_CONFIGS: Record<RiskScoreLevel, RiskScoreConfig> = {
   'medium': {
     level: 'medium',
     label: '中等风险',
-    color: 'text-[#FFC107]',
-    bgColor: 'bg-[#FFF9C4]',
-    borderColor: 'border-[#FFF59D]',
+    color: 'text-warning',
+    bgColor: 'bg-muted',
+    borderColor: 'border-border',
     icon: 'alert-triangle',
     min: 46,
     max: 60,
@@ -100,10 +95,9 @@ export const RISK_SCORE_CONFIGS: Record<RiskScoreLevel, RiskScoreConfig> = {
   'medium-high': {
     level: 'medium-high',
     label: '中高风险',
-    color: 'text-[#FF9800]',
-    bgColor: 'bg-[#FFF3E0]',
-    // 边框颜色：基于主色 #FF9800 的浅色变体，避免与高风险背景色 #FFE0B2 重复
-    borderColor: 'border-[#FFB74D]',
+    color: 'text-warning',
+    bgColor: 'bg-muted',
+    borderColor: 'border-border',
     icon: 'alert-triangle',
     min: 61,
     max: 75,
@@ -111,9 +105,9 @@ export const RISK_SCORE_CONFIGS: Record<RiskScoreLevel, RiskScoreConfig> = {
   'high': {
     level: 'high',
     label: '高风险',
-    color: 'text-[#FF6F00]',
-    bgColor: 'bg-[#FFE0B2]',
-    borderColor: 'border-[#FFCC80]',
+    color: 'text-error',
+    bgColor: 'bg-muted',
+    borderColor: 'border-border',
     icon: 'alert-triangle',
     min: 76,
     max: 90,
@@ -121,9 +115,9 @@ export const RISK_SCORE_CONFIGS: Record<RiskScoreLevel, RiskScoreConfig> = {
   'very-high': {
     level: 'very-high',
     label: '极高风险',
-    color: 'text-[#F44336]',
-    bgColor: 'bg-[#FFEBEE]',
-    borderColor: 'border-[#FFCDD2]',
+    color: 'text-error',
+    bgColor: 'bg-muted',
+    borderColor: 'border-border',
     icon: 'alert-triangle',
     min: 91,
     max: 100,

@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { cn } from '@/lib/utils';
 import { getMapboxAccessToken } from '@/lib/mapbox-token';
+import { SEMANTIC_BLUE_HEX, SEMANTIC_GREEN_HEX, SEMANTIC_RED_HEX } from '@/lib/semantic-colors';
 import { buildOfflineBasemapStyle } from '@/lib/offline-basemap-style';
 import {
   EMPTY_TILE_DATA_URL,
@@ -11,6 +12,7 @@ import {
   warmOfflineTilesForBounds,
 } from '@/lib/offline-tile-blob-cache';
 import type { LngLat } from '@/lib/map-geo';
+import { coerceLngLatLine } from '@/features/exploration/lib/route-map.util';
 import type { TileManifest } from '@/types/hiking-offline';
 import type { OfflineTileFormat } from '@/types/trail-offline';
 
@@ -44,7 +46,7 @@ export interface MapboxTrailMapProps {
   mapStyle?: MapboxMapStyle;
   lineColor?: string;
   lineWidth?: number;
-  /** 已记录 GPS 轨迹（如 #2563eb） */
+  /** 已记录 GPS 轨迹（如 #88C0D0） */
   recordedLineCoordinates?: LngLat[];
   recordedLineColor?: string;
   /** 当前位置（执行页 GPS） */
@@ -70,10 +72,10 @@ export function MapboxTrailMap({
   zoom,
   fitBounds = true,
   mapStyle = 'outdoors',
-  lineColor = '#0f766e',
+  lineColor = SEMANTIC_GREEN_HEX,
   lineWidth = 4,
   recordedLineCoordinates,
-  recordedLineColor = '#2563eb',
+  recordedLineColor = SEMANTIC_BLUE_HEX,
   currentPosition,
   onMarkerClick,
   emptyMessage,
@@ -81,6 +83,8 @@ export function MapboxTrailMap({
   useOfflineBasemap = false,
 }: MapboxTrailMapProps) {
   const token = getMapboxAccessToken();
+  const routeLine = coerceLngLatLine(lineCoordinates);
+  const recordedLine = coerceLngLatLine(recordedLineCoordinates);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -93,11 +97,15 @@ export function MapboxTrailMap({
   const gpsLayerId = `trail-gps-line-${instanceId}`;
 
   const hasGeometry =
-    (lineCoordinates?.length ?? 0) >= 2 ||
-    (recordedLineCoordinates?.length ?? 0) >= 2 ||
+    (routeLine?.length ?? 0) >= 2 ||
+    (recordedLine?.length ?? 0) >= 2 ||
     markers.length > 0;
 
   const offlineStyleActive = Boolean(useOfflineBasemap && offlineBasemap?.packKey);
+
+  /** 避免 markers/line 更新时重建 map（会触发 Style is not done loading） */
+  const viewPropsRef = useRef({ center, lineCoordinates: routeLine, markers, zoom });
+  viewPropsRef.current = { center, lineCoordinates: routeLine, markers, zoom };
 
   const refreshOfflineTileBlobs = useCallback(
     async (map: mapboxgl.Map) => {
@@ -124,10 +132,9 @@ export function MapboxTrailMap({
 
     mapboxgl.accessToken = token;
 
+    const { center: c, lineCoordinates: lines, markers: ms, zoom: z } = viewPropsRef.current;
     const defaultCenter: LngLat =
-      center ??
-      lineCoordinates?.[0] ??
-      (markers[0] ? [markers[0].lng, markers[0].lat] : [0, 20]);
+      c ?? lines?.[0] ?? (ms[0] ? [ms[0].lng, ms[0].lat] : [-19.0, 64.5]);
 
     const style =
       offlineStyleActive && offlineBasemap
@@ -143,7 +150,7 @@ export function MapboxTrailMap({
       container: containerRef.current,
       style,
       center: defaultCenter,
-      zoom: zoom ?? (lineCoordinates && lineCoordinates.length > 1 ? 8 : 5),
+      zoom: z ?? (lines && lines.length > 1 ? 8 : 6),
       attributionControl: false,
       transformRequest: (url, resourceType) => {
         if (resourceType === 'Tile' && isOfflineTileUrl(url)) {
@@ -163,18 +170,22 @@ export function MapboxTrailMap({
     });
 
     const onMapReady = () => {
+      if (mapRef.current !== mb) return;
       setReady(true);
       if (offlineStyleActive) void refreshOfflineTileBlobs(mb);
     };
 
-    mb.on('load', onMapReady);
+    mb.once('load', onMapReady);
     mb.on('moveend', () => {
       if (offlineStyleActive) void refreshOfflineTileBlobs(mb);
     });
 
     return () => {
+      mb.off('load', onMapReady);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
+      currentMarkerRef.current?.remove();
+      currentMarkerRef.current = null;
       mb.remove();
       mapRef.current = null;
       setReady(false);
@@ -185,91 +196,100 @@ export function MapboxTrailMap({
     offlineStyleActive,
     offlineBasemap,
     refreshOfflineTileBlobs,
-    center,
-    lineCoordinates,
-    markers,
-    zoom,
   ]);
 
   useEffect(() => {
     const mb = mapRef.current;
     if (!mb || !ready) return;
 
-    if (mb.getLayer(routeLayerId)) mb.removeLayer(routeLayerId);
-    if (mb.getSource(routeSourceId)) mb.removeSource(routeSourceId);
-    if (mb.getLayer(gpsLayerId)) mb.removeLayer(gpsLayerId);
-    if (mb.getSource(gpsSourceId)) mb.removeSource(gpsSourceId);
+    const syncLayers = () => {
+      if (!mapRef.current || mapRef.current !== mb || !mb.isStyleLoaded()) return;
 
-    if (lineCoordinates && lineCoordinates.length >= 2) {
-      mb.addSource(routeSourceId, {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: lineCoordinates,
+      if (mb.getLayer(routeLayerId)) mb.removeLayer(routeLayerId);
+      if (mb.getSource(routeSourceId)) mb.removeSource(routeSourceId);
+      if (mb.getLayer(gpsLayerId)) mb.removeLayer(gpsLayerId);
+      if (mb.getSource(gpsSourceId)) mb.removeSource(gpsSourceId);
+
+      if (routeLine && routeLine.length >= 2) {
+        mb.addSource(routeSourceId, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: routeLine,
+            },
           },
-        },
-      });
-      mb.addLayer({
-        id: routeLayerId,
-        type: 'line',
-        source: routeSourceId,
-        paint: {
-          'line-color': lineColor,
-          'line-width': lineWidth,
-          'line-opacity': 0.9,
-        },
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-      });
-    }
-
-    if (recordedLineCoordinates && recordedLineCoordinates.length >= 2) {
-      mb.addSource(gpsSourceId, {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: recordedLineCoordinates,
+        });
+        mb.addLayer({
+          id: routeLayerId,
+          type: 'line',
+          source: routeSourceId,
+          paint: {
+            'line-color': lineColor,
+            'line-width': lineWidth,
+            'line-opacity': 0.9,
           },
-        },
-      });
-      mb.addLayer({
-        id: gpsLayerId,
-        type: 'line',
-        source: gpsSourceId,
-        paint: {
-          'line-color': recordedLineColor,
-          'line-width': 3,
-          'line-opacity': 0.95,
-          'line-dasharray': [2, 1],
-        },
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-      });
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+        });
+      }
+
+      if (recordedLine && recordedLine.length >= 2) {
+        mb.addSource(gpsSourceId, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: recordedLine,
+            },
+          },
+        });
+        mb.addLayer({
+          id: gpsLayerId,
+          type: 'line',
+          source: gpsSourceId,
+          paint: {
+            'line-color': recordedLineColor,
+            'line-width': 3,
+            'line-opacity': 0.95,
+            'line-dasharray': [2, 1],
+          },
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+        });
+      }
+
+      if (fitBounds && hasGeometry) {
+        const seed =
+          routeLine?.[0] ??
+          recordedLine?.[0] ??
+          (markers[0] ? [markers[0].lng, markers[0].lat] : [0, 20]);
+        const bounds = new mapboxgl.LngLatBounds(seed as LngLat, seed as LngLat);
+        routeLine?.forEach((c) => bounds.extend(c));
+        recordedLine?.forEach((c) => bounds.extend(c));
+        markers.forEach((m) => bounds.extend([m.lng, m.lat]));
+        if (currentPosition) bounds.extend([currentPosition.lng, currentPosition.lat]);
+        mb.fitBounds(bounds, { padding: 56, maxZoom: 13, duration: 0 });
+      } else if (center) {
+        mb.setCenter(center);
+        if (zoom != null) mb.setZoom(zoom);
+      }
+    };
+
+    syncLayers();
+    if (!mb.isStyleLoaded()) {
+      mb.once('load', syncLayers);
     }
 
-    if (fitBounds && hasGeometry) {
-      const seed =
-        lineCoordinates?.[0] ??
-        recordedLineCoordinates?.[0] ??
-        (markers[0] ? [markers[0].lng, markers[0].lat] : [0, 20]);
-      const bounds = new mapboxgl.LngLatBounds(seed, seed);
-      lineCoordinates?.forEach((c) => bounds.extend(c));
-      recordedLineCoordinates?.forEach((c) => bounds.extend(c));
-      markers.forEach((m) => bounds.extend([m.lng, m.lat]));
-      if (currentPosition) bounds.extend([currentPosition.lng, currentPosition.lat]);
-      mb.fitBounds(bounds, { padding: 56, maxZoom: 13, duration: 0 });
-    } else if (center) {
-      mb.setCenter(center);
-      if (zoom != null) mb.setZoom(zoom);
-    }
+    return () => {
+      mb.off('load', syncLayers);
+    };
   }, [
     ready,
-    lineCoordinates,
-    recordedLineCoordinates,
+    routeLine,
+    recordedLine,
     recordedLineColor,
     currentPosition,
     markers,
@@ -296,14 +316,14 @@ export function MapboxTrailMap({
         el = document.createElement('div');
         el.className =
           'h-3 w-3 rounded-full border-2 border-white shadow-md cursor-pointer';
-        el.style.backgroundColor = m.color ?? '#0f766e';
+        el.style.backgroundColor = m.color ?? SEMANTIC_GREEN_HEX;
       }
       if (m.label) el.title = m.label;
       if (onMarkerClick) {
         el.addEventListener('click', () => onMarkerClick(m.id));
       }
 
-      const marker = new mapboxgl.Marker({ element: el })
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([m.lng, m.lat])
         .addTo(mb);
       markersRef.current.push(marker);
@@ -318,7 +338,7 @@ export function MapboxTrailMap({
     if (!currentPosition) return;
     const el = document.createElement('div');
     el.className =
-      'h-4 w-4 rounded-full border-2 border-white bg-blue-600 shadow-lg ring-4 ring-blue-400/40';
+      'h-4 w-4 rounded-full border-2 border-white bg-nara-glacier-foreground shadow-lg ring-4 ring-nara-glacier-border/40';
     el.title = '当前位置';
     currentMarkerRef.current = new mapboxgl.Marker({ element: el })
       .setLngLat([currentPosition.lng, currentPosition.lat])

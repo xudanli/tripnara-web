@@ -104,7 +104,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-green-600" />
+              <RefreshCw className="w-4 h-4 text-gate-allow-foreground" />
               {t('tripViews.neptune.fixQueue')}
             </CardTitle>
             {repairs.length > 0 && (
@@ -119,7 +119,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
         <CardContent className="space-y-3">
           {repairs.length === 0 ? (
             <div className="py-12 text-center">
-              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-600" />
+              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-gate-allow-foreground" />
               <div className="text-sm font-medium text-gray-900 mb-1">{t('tripViews.neptune.noFixesNeeded')}</div>
               <div className="text-xs text-muted-foreground">所有行程项状态良好，无需修复</div>
             </div>
@@ -135,7 +135,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                    <RefreshCw className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                    <RefreshCw className="w-4 h-4 text-gate-allow-foreground flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
                         <Badge variant="outline" className="text-xs">
@@ -225,7 +225,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
                               {t('tripViews.neptune.lock')}
                             </Badge>
                           ) : isReplaceable ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 text-xs">
+                            <Badge variant="outline" className="bg-gate-allow text-gate-allow-foreground text-xs">
                               {t('tripViews.neptune.replaceable')}
                             </Badge>
                           ) : isSkippable ? (
@@ -295,7 +295,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
         <SheetContent side="right" className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-green-600" />
+              <RefreshCw className="w-5 h-5 text-gate-allow-foreground" />
               {t('tripViews.neptune.alternativeCandidates')}
             </SheetTitle>
             <SheetDescription>
@@ -379,7 +379,7 @@ export default function NeptuneView({ trip, neptuneData, onItemClick, onRepairAp
         <SheetContent side="right" className="w-full sm:max-w-2xl">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-green-600" />
+              <RefreshCw className="w-5 h-5 text-gate-allow-foreground" />
               修复详情
             </SheetTitle>
             <SheetDescription>Before / After 对比</SheetDescription>

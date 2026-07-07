@@ -37,7 +37,7 @@ export function InTripAnchorBar({ snapshot, loading, className, onTeamFrictionCl
         className,
       )}
     >
-      <Lock className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+      <Lock className="h-3.5 w-3.5 shrink-0 text-gate-allow-foreground" aria-hidden />
       <span className="font-medium text-foreground">已锁定</span>
       <span>
         {formatCurrency(budget.total, budget.currency)}

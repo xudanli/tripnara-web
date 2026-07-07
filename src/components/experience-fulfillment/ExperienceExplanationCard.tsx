@@ -108,12 +108,12 @@ export function ExperienceExplanationCardView({
         )}
 
         {data.planBHints.length > 0 && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-1.5">
-            <p className="text-xs font-medium text-blue-900 flex items-center gap-1.5">
+          <div className="rounded-lg border border-border bg-muted/15 p-3 space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
               <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
               备选方案
             </p>
-            <ul className="text-sm text-blue-950 space-y-1">
+            <ul className="text-sm text-muted-foreground space-y-1">
               {data.planBHints.map((h, i) => (
                 <li key={i}>{h}</li>
               ))}

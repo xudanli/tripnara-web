@@ -148,22 +148,22 @@ export function AutoOptimizeDialog({
         {showPreview && previewResult ? (
           <div className="space-y-4">
             {/* 预览结果 */}
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h3 className="text-sm font-semibold mb-2 text-blue-900">预览结果</h3>
+            <div className="p-4 bg-muted/15 rounded-lg border border-border">
+              <h3 className="text-sm font-semibold mb-2 text-muted-foreground">预览结果</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-blue-700">将应用的建议数量</span>
-                  <span className="font-medium text-blue-900">{previewResult.appliedCount}</span>
+                  <span className="text-muted-foreground">将应用的建议数量</span>
+                  <span className="font-medium text-muted-foreground">{previewResult.appliedCount}</span>
                 </div>
                 {previewResult.impact?.metrics && (
-                  <div className="mt-3 pt-3 border-t border-blue-200">
-                    <p className="text-xs text-blue-600 mb-2">预期影响：</p>
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="text-xs text-muted-foreground mb-2">预期影响：</p>
                     {previewResult.impact.metrics.fatigue !== undefined && (
                       <div className="flex items-center justify-between text-xs">
                         <span>疲劳指数</span>
                         <span className={cn(
                           'font-medium',
-                          previewResult.impact.metrics.fatigue < 0 ? 'text-green-600' : 'text-red-600'
+                          previewResult.impact.metrics.fatigue < 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                         )}>
                           {previewResult.impact.metrics.fatigue > 0 ? '+' : ''}
                           {previewResult.impact.metrics.fatigue}
@@ -175,7 +175,7 @@ export function AutoOptimizeDialog({
                         <span>缓冲时间</span>
                         <span className={cn(
                           'font-medium',
-                          previewResult.impact.metrics.buffer > 0 ? 'text-green-600' : 'text-red-600'
+                          previewResult.impact.metrics.buffer > 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                         )}>
                           {previewResult.impact.metrics.buffer > 0 ? '+' : ''}
                           {previewResult.impact.metrics.buffer} 分钟
@@ -187,7 +187,7 @@ export function AutoOptimizeDialog({
                         <span>费用变化</span>
                         <span className={cn(
                           'font-medium',
-                          previewResult.impact.metrics.cost < 0 ? 'text-green-600' : 'text-red-600'
+                          previewResult.impact.metrics.cost < 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                         )}>
                           {previewResult.impact.metrics.cost > 0 ? '+' : ''}
                           {formatCurrency(Math.abs(previewResult.impact.metrics.cost), currency)}
@@ -208,17 +208,17 @@ export function AutoOptimizeDialog({
                   className={cn(
                     'p-3 rounded-lg border text-sm',
                     suggestion.applied
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-red-50 border-red-200'
+                      ? 'bg-gate-allow border-gate-allow-border'
+                      : 'bg-gate-reject border-gate-reject-border'
                   )}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         {suggestion.applied ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />
                         ) : (
-                          <AlertTriangle className="w-4 h-4 text-red-600" />
+                          <AlertTriangle className="w-4 h-4 text-gate-reject-foreground" />
                         )}
                         <span className="font-medium">{suggestion.title}</span>
                         <Badge variant="destructive" className="text-xs">
@@ -226,7 +226,7 @@ export function AutoOptimizeDialog({
                         </Badge>
                       </div>
                       {suggestion.error && (
-                        <p className="text-xs text-red-600 mt-1">{suggestion.error}</p>
+                        <p className="text-xs text-gate-reject-foreground mt-1">{suggestion.error}</p>
                       )}
                     </div>
                   </div>
@@ -242,10 +242,10 @@ export function AutoOptimizeDialog({
               {suggestions.map((suggestion) => (
                 <div
                   key={suggestion.id}
-                  className="p-3 rounded-lg border border-red-200 bg-red-50"
+                  className="p-3 rounded-lg border border-gate-reject-border bg-gate-reject"
                 >
                   <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 text-gate-reject-foreground mt-0.5" />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm">{suggestion.title}</span>

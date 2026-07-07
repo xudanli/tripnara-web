@@ -133,7 +133,7 @@ export default function CascadeImpactTab({
       {hints.length > 0 ? (
         <>
           {usedMock && READINESS_CASCADE_MOCK_ENABLED ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+            <p className="text-xs text-warning dark:text-warning">
               {t('dashboard.readiness.cascade.mockBanner', {
                 defaultValue: '开发 mock 数据（VITE_READINESS_CASCADE_MOCK=true）',
               })}

@@ -135,7 +135,7 @@ export default function Header() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleLogout}
-                  className="cursor-pointer text-red-600 focus:text-red-600"
+                  className="cursor-pointer text-gate-reject-foreground focus:text-gate-reject-foreground"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>{t('header.logout')}</span>

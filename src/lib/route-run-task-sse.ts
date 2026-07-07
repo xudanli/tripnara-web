@@ -13,6 +13,7 @@ import {
 import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
 import type { RouteAndRunTaskSsePayload } from '@/types/route-and-run-task-sse';
 import { applyEmotionalContextFromSsePayload } from '@/lib/emotional-context-ui';
+import { applyCtreCompilationFromTaskPayload } from '@/lib/ctre-compile-progress-sync';
 
 declare global {
   interface Window {
@@ -141,6 +142,7 @@ export async function subscribeRouteAndRunTaskStream(
 
         const payload = JSON.parse(data) as RouteAndRunTaskSsePayload;
         applyEmotionalContextFromSsePayload(payload);
+        applyCtreCompilationFromTaskPayload(payload);
         options.onPayload(payload);
 
         if (payload.type === 'RESULT' || payload.type === 'ERROR') {

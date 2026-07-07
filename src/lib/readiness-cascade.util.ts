@@ -57,9 +57,9 @@ export function getCascadeRiskLevelStyles(level: CascadeRiskLevel): {
   switch (level) {
     case 'CRITICAL':
       return {
-        badge: 'bg-red-100 text-red-800 border-red-200',
-        border: 'border-l-red-500',
-        dot: 'bg-red-500',
+        badge: 'bg-muted text-error border-border',
+        border: 'border-l-gate-reject-foreground',
+        dot: 'bg-muted-foreground',
       };
     case 'HIGH':
       return {

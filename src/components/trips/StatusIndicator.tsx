@@ -13,12 +13,12 @@ export function StatusIndicator({ status, className }: { status: UIStatus; class
         return {
           icon: (
             <div className="relative w-4 h-4">
-              <div className="absolute inset-0 rounded-full bg-blue-500 animate-pulse" />
-              <div className="absolute inset-1 rounded-full bg-blue-300" />
+              <div className="absolute inset-0 rounded-full bg-muted/150 animate-pulse" />
+              <div className="absolute inset-1 rounded-full bg-border" />
             </div>
           ),
           text: 'AI 正在思考…',
-          color: 'text-blue-600',
+          color: 'text-muted-foreground',
         };
       case 'browsing':
         return {
@@ -40,15 +40,15 @@ export function StatusIndicator({ status, className }: { status: UIStatus; class
         };
       case 'awaiting_consent':
         return {
-          icon: <div className="w-4 h-4 rounded-full bg-red-500" />,
+          icon: <div className="w-4 h-4 rounded-full bg-gate-reject-foreground" />,
           text: '需要授权才能继续',
-          color: 'text-red-600',
+          color: 'text-gate-reject-foreground',
         };
       case 'awaiting_confirmation':
         return {
-          icon: <div className="w-4 h-4 rounded-full bg-red-500" />,
+          icon: <div className="w-4 h-4 rounded-full bg-gate-reject-foreground" />,
           text: '需要确认才能继续',
-          color: 'text-red-600',
+          color: 'text-gate-reject-foreground',
         };
       case 'awaiting_user_input':
         return {
@@ -58,15 +58,15 @@ export function StatusIndicator({ status, className }: { status: UIStatus; class
         };
       case 'done':
         return {
-          icon: <CheckCircle2 className="w-4 h-4 text-green-600" />,
+          icon: <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />,
           text: '完成',
-          color: 'text-green-600',
+          color: 'text-gate-allow-foreground',
         };
       case 'failed':
         return {
-          icon: <XCircle className="w-4 h-4 text-red-600" />,
+          icon: <XCircle className="w-4 h-4 text-gate-reject-foreground" />,
           text: '失败（可重试）',
-          color: 'text-red-600',
+          color: 'text-gate-reject-foreground',
         };
       default:
         return null;

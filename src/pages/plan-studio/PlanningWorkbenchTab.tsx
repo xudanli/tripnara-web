@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { PlannerThinkingLoading } from '@/components/common/PlannerThinkingLoading';
+import { WorkbenchCtreProgressBand } from '@/features/agent/ctre';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -30,6 +31,8 @@ import {
 } from '@/components/ui/collapsible';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { planningWorkbenchApi, pickWorkbenchOptionComparison } from '@/api/planning-workbench';
+import { enrichPlanningWorkbenchExecuteRequest } from '@/lib/enrich-planning-workbench-travel-compiler';
+import { useWorkbenchCtreTaskStore } from '@/store/workbenchCtreTaskStore';
 import { publishPlanStudioComparison, usePlanStudioCompareStore } from '@/store/planStudioCompareStore';
 import { pickPlanStateKernelDebug } from '@/lib/planning-workbench-kernel-debug';
 import type {
@@ -45,6 +48,8 @@ import { tripsApi } from '@/api/trips';
 import { demApi } from '@/api/dem';
 import type { GetElevationProfileResponse, Coordinate } from '@/api/dem';
 import type { TripDetail, PlanBudgetEvaluationResponse } from '@/types/trip';
+import { PlanContentStateBadge } from '@/features/trip-context';
+import { resolveWorkbenchPlanContentState } from '@/features/trip-context/lib/plan-content-state.util';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
@@ -536,7 +541,7 @@ export default function PlanningWorkbenchTab({
           ? await resolveScheduleRevisionForExecute()
           : resolveExecuteScheduleRevision(trip, initialTrip);
 
-      const payload = {
+      const payload = enrichPlanningWorkbenchExecuteRequest({
         context,
         tripId,
         existingPlanState: planStateForRequest,
@@ -549,22 +554,30 @@ export default function PlanningWorkbenchTab({
           ...(typeof scheduleRevision === 'number' ? { scheduleRevision } : {}),
           ...(user?.id ? { userId: user.id } : {}),
         },
-      };
+      });
 
       const useAsync = extras?.preferAsync !== false && userAction === 'generate';
       let response: ExecutePlanningWorkbenchResponse;
 
       if (useAsync) {
         try {
+          useWorkbenchCtreTaskStore.getState().reset();
           const { taskId } = await planningWorkbenchApi.executeAsync(payload);
           response = await planningWorkbenchApi.pollExecuteTask(taskId, {
             onStatus: (task) => {
+              useWorkbenchCtreTaskStore.getState().syncFromTaskStatus(taskId, task);
               if (!manageLoading) return;
               setLoadingStage(
-                task.status === 'RUNNING' ? '生成中…' : '等待调度…',
+                task.currentStage?.trim() ||
+                  task.stage?.trim() ||
+                  task.progress?.current?.trim() ||
+                  (task.status === 'RUNNING' ? '生成中…' : '等待调度…'),
               );
             },
           });
+          useWorkbenchCtreTaskStore
+            .getState()
+            .syncFromExecuteResult(response.uiOutput?.ctre);
         } catch (asyncErr) {
           if (!isPlanningWorkbenchAsyncUnavailable(asyncErr)) throw asyncErr;
           if (manageLoading) setLoadingStage('执行规划操作…');
@@ -1023,6 +1036,7 @@ export default function PlanningWorkbenchTab({
                 className="min-w-0 px-0 py-0"
                 textClassName="text-sm font-medium text-foreground"
               />
+              <WorkbenchCtreProgressBand tripId={tripId} active={loading} />
               <p className="text-xs text-muted-foreground">请稍候，这可能需要一些时间</p>
               <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div className="absolute inset-y-0 w-1/3 animate-pulse rounded-full bg-primary/50" />
@@ -1132,6 +1146,12 @@ export default function PlanningWorkbenchTab({
           <div className="max-w-5xl mx-auto">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <PlanContentStateBadge
+                  state={resolveWorkbenchPlanContentState(
+                    false,
+                    effectiveGateStatus === 'NEED_CONFIRM',
+                  )}
+                />
                 <Badge variant="outline" className="font-mono text-xs">
                   方案 v{result.planState.plan_version}
                 </Badge>
@@ -1190,7 +1210,7 @@ export default function PlanningWorkbenchTab({
                     className={cn(
                       'flex-1 sm:flex-initial',
                       (needsInlineConfirmation || effectiveGateStatus === 'NEED_CONFIRM') &&
-                        'border-amber-500 text-amber-900 hover:bg-amber-50'
+                        'border-border text-foreground hover:bg-muted/30'
                     )}
                     title={
                       submitBlockedByGate
@@ -1259,10 +1279,10 @@ export default function PlanningWorkbenchTab({
       {result && workbenchGuidance && (
         <Alert
           className={cn(
-            workbenchGuidance.tone === 'success' && 'border-green-200 bg-green-50/60',
-            workbenchGuidance.tone === 'warning' && 'border-amber-200 bg-amber-50/60',
-            workbenchGuidance.tone === 'danger' && 'border-red-200 bg-red-50/60',
-            workbenchGuidance.tone === 'info' && 'border-blue-200 bg-blue-50/60'
+            workbenchGuidance.tone === 'success' && 'border-border bg-muted/15',
+            workbenchGuidance.tone === 'warning' && 'border-border bg-muted/15',
+            workbenchGuidance.tone === 'danger' && 'border-border bg-muted/15',
+            workbenchGuidance.tone === 'info' && 'border-border bg-muted/12'
           )}
         >
           <AlertTitle className="text-sm font-semibold">{workbenchGuidance.title}</AlertTitle>
@@ -1393,16 +1413,13 @@ export default function PlanningWorkbenchTab({
                 <Card className={cn(
                   embedMode ? 'border shadow-sm' : 'border-4 shadow-xl',
                   'relative overflow-hidden',
-                  isAllow && 'border-green-500 bg-green-50/30',
-                  isNeedConfirm && 'border-amber-500 bg-amber-50/30',
-                  isReject && 'border-red-500 bg-red-50/30'
+                  isAllow && 'border-border bg-muted/12',
+                  isNeedConfirm && 'border-border bg-muted/12',
+                  isReject && 'border-border bg-muted/12'
                 )}>
                   {/* 装饰性背景 */}
                   <div className={cn(
-                    'absolute top-0 right-0 w-40 h-40 opacity-10 rounded-full -mr-20 -mt-20',
-                    isAllow && 'bg-green-500',
-                    isNeedConfirm && 'bg-amber-500',
-                    isReject && 'bg-red-500'
+                    'absolute top-0 right-0 w-40 h-40 opacity-5 rounded-full -mr-20 -mt-20 bg-muted-foreground',
                   )} />
                   
                   <CardHeader className="relative z-10">
@@ -1436,9 +1453,9 @@ export default function PlanningWorkbenchTab({
                               <li key={index} className="text-xs text-foreground flex items-start gap-2">
                                 <span className={cn(
                                   'mt-1',
-                                  isAllow && 'text-green-600',
-                                  isNeedConfirm && 'text-amber-600',
-                                  isReject && 'text-red-600'
+                                  isAllow && 'text-success',
+                                  isNeedConfirm && 'text-warning',
+                                  isReject && 'text-error'
                                 )}>•</span>
                                 <span>{step}</span>
                               </li>
@@ -1808,13 +1825,13 @@ export default function PlanningWorkbenchTab({
                           </div>
                         )}
                         {icelandInfo.weather.error && (
-                          <div className="text-sm text-red-500">
+                          <div className="text-sm text-error">
                             天气数据加载失败: {icelandInfo.weather.error}
                           </div>
                         )}
                         {icelandInfo.weather.data && (
-                          <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg">
-                            <Cloud className="h-4 w-4 text-blue-600 mt-0.5" />
+                          <div className="flex items-start gap-2 p-2 rounded-lg border border-border/50 bg-muted">
+                            <Cloud className="h-4 w-4 text-muted-foreground mt-0.5" />
                             <div className="flex-1">
                               <div className="text-xs font-semibold text-gray-700 mb-1">高地天气预报</div>
                               <div className="text-xs text-gray-600">
@@ -1835,13 +1852,13 @@ export default function PlanningWorkbenchTab({
                           </div>
                         )}
                         {icelandInfo.safety.error && (
-                          <div className="text-sm text-red-500">
+                          <div className="text-sm text-error">
                             安全信息加载失败: {icelandInfo.safety.error}
                           </div>
                         )}
                         {icelandInfo.safety.data && icelandInfo.safety.data.alerts.length > 0 && (
-                          <div className="flex items-start gap-2 p-2 bg-yellow-50 rounded-lg">
-                            <Shield className="h-4 w-4 text-yellow-600 mt-0.5" />
+                          <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/15 p-2">
+                            <Shield className="mt-0.5 h-4 w-4 text-muted-foreground" />
                             <div className="flex-1">
                               <div className="text-xs font-semibold text-gray-700 mb-1">安全警报</div>
                               <div className="space-y-1">
@@ -1877,14 +1894,14 @@ export default function PlanningWorkbenchTab({
                           </div>
                         )}
                         {icelandInfo.roadConditions.error && (
-                          <div className="text-sm text-red-500">
+                          <div className="text-sm text-error">
                             路况信息加载失败: {icelandInfo.roadConditions.error}
                           </div>
                         )}
                         {icelandInfo.roadConditions.data &&
                           icelandInfo.roadConditions.data.fRoads.length > 0 && (
-                            <div className="flex items-start gap-2 p-2 bg-orange-50 rounded-lg">
-                              <Route className="h-4 w-4 text-orange-600 mt-0.5" />
+                            <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/15 p-2">
+                              <Route className="mt-0.5 h-4 w-4 text-muted-foreground" />
                               <div className="flex-1">
                                 <div className="text-xs font-semibold text-gray-700 mb-1">F路路况</div>
                                 <div className="space-y-1">
@@ -1905,8 +1922,8 @@ export default function PlanningWorkbenchTab({
                                       <span
                                         className={cn(
                                           'text-gray-700',
-                                          road.status === 'closed' && 'text-red-600',
-                                          road.status === 'caution' && 'text-yellow-600'
+                                          road.status === 'closed' && 'text-error',
+                                          road.status === 'caution' && 'text-warning'
                                         )}
                                       >
                                         {road.status === 'closed'
@@ -1968,15 +1985,15 @@ export default function PlanningWorkbenchTab({
                   
                   {/* NEED_CONFIRM 状态：确认点已在主界面展示 */}
                   {needsInlineConfirmation && !allConfirmationsChecked && (
-                    <Alert className="border-amber-200 bg-amber-50/60">
-                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                      <AlertDescription className="text-sm text-amber-900">
+                    <Alert className="border-border/60 bg-muted/15">
+                      <AlertTriangle className="h-4 w-4 text-warning" />
+                      <AlertDescription className="text-sm text-foreground">
                         请先在「确认点清单」中勾选全部确认项后再提交。
                       </AlertDescription>
                     </Alert>
                   )}
                   {needsInlineConfirmation && allConfirmationsChecked && (
-                    <p className="text-sm text-green-700">已完成风险确认，可以继续提交。</p>
+                    <p className="text-sm text-success">已完成风险确认，可以继续提交。</p>
                   )}
                   
                   {/* SUGGEST_REPLACE 状态：显示建议替换提示 */}
@@ -2003,9 +2020,9 @@ export default function PlanningWorkbenchTab({
                 </>
               )}
               {embedMode && needsInlineConfirmation && !allConfirmationsChecked && (
-                <Alert className="border-amber-200 bg-amber-50/60">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <AlertDescription className="text-sm text-amber-900">
+                <Alert className="border-border/60 bg-muted/15">
+                  <AlertTriangle className="h-4 w-4 text-warning" />
+                  <AlertDescription className="text-sm text-foreground">
                     请返回主界面，在确认点清单中勾选全部项后再提交。
                   </AlertDescription>
                 </Alert>
@@ -2380,7 +2397,7 @@ export default function PlanningWorkbenchTab({
                       <div className="absolute left-[9px] top-6 bottom-0 w-0.5 bg-border" />
                     )}
                     {/* 时间点标记 */}
-                    <div className="absolute left-0 w-[18px] h-[18px] rounded-full border-2 bg-background border-blue-300">
+                    <div className="absolute left-0 w-[18px] h-[18px] rounded-full border-2 bg-background border-border">
                       <Skeleton className="w-full h-full rounded-full" />
                     </div>
                     {/* 内容区域 */}
@@ -3066,10 +3083,10 @@ function PlanPreviewContent(props: {
       {budgetEvaluation && (
         <Card className={cn(
           'border-l-4',
-          budgetEvaluation.budgetEvaluation.verdict === 'ALLOW' && 'border-l-green-500',
-          budgetEvaluation.budgetEvaluation.verdict === 'NEED_ADJUST' && 'border-l-yellow-500',
-          budgetEvaluation.budgetEvaluation.verdict === 'REJECT' && 'border-l-red-500',
-          !budgetEvaluation.budgetEvaluation.verdict && 'border-l-blue-500'
+          budgetEvaluation.budgetEvaluation.verdict === 'ALLOW' && 'border-l-gate-allow-foreground',
+          budgetEvaluation.budgetEvaluation.verdict === 'NEED_ADJUST' && 'border-l-gate-confirm-border',
+          budgetEvaluation.budgetEvaluation.verdict === 'REJECT' && 'border-l-gate-reject-foreground',
+          !budgetEvaluation.budgetEvaluation.verdict && 'border-l-border'
         )}>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -3077,9 +3094,9 @@ function PlanPreviewContent(props: {
                 <CardTitle className="text-lg flex items-center gap-2">
                   <AlertTriangle className={cn(
                     'w-5 h-5',
-                    budgetEvaluation.budgetEvaluation.verdict === 'ALLOW' && 'text-green-600',
-                    budgetEvaluation.budgetEvaluation.verdict === 'NEED_ADJUST' && 'text-yellow-600',
-                    budgetEvaluation.budgetEvaluation.verdict === 'REJECT' && 'text-red-600'
+                    budgetEvaluation.budgetEvaluation.verdict === 'ALLOW' && 'text-success',
+                    budgetEvaluation.budgetEvaluation.verdict === 'NEED_ADJUST' && 'text-warning',
+                    budgetEvaluation.budgetEvaluation.verdict === 'REJECT' && 'text-error'
                   )} />
                   预算评估结果
                 </CardTitle>
@@ -3208,13 +3225,13 @@ function PlanPreviewContent(props: {
             {budgetEvaluation.budgetEvaluation.violations && budgetEvaluation.budgetEvaluation.violations.length > 0 && (
               <div className="space-y-2">
                 <h5 className="text-sm font-semibold flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600" />
+                  <AlertTriangle className="w-4 h-4 text-error" />
                   违规项
                 </h5>
                 {budgetEvaluation.budgetEvaluation.violations.map((violation, i) => (
-                  <div key={i} className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
-                    <div className="font-medium text-red-900 mb-1">{violation.category}</div>
-                    <div className="text-red-700">
+                  <div key={i} className="p-3 bg-muted border border-border rounded-lg text-sm">
+                    <div className="font-medium text-error mb-1">{violation.category}</div>
+                    <div className="text-error">
                       超出 {formatCurrency(violation.exceeded, currency)} ({violation.percentage.toFixed(1)}%)
                     </div>
                   </div>
@@ -3226,14 +3243,14 @@ function PlanPreviewContent(props: {
             {budgetEvaluation.budgetEvaluation.recommendations && budgetEvaluation.budgetEvaluation.recommendations.length > 0 && (
               <div className="space-y-2">
                 <h5 className="text-sm font-semibold flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-600" />
+                  <Sparkles className="w-4 h-4 text-muted-foreground" />
                   优化建议
                 </h5>
                 {budgetEvaluation.budgetEvaluation.recommendations.map((rec, i) => (
-                  <div key={i} className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-                    <div className="font-medium text-blue-900 mb-1">{rec.action}</div>
-                    <div className="text-blue-700 mb-1">{rec.impact}</div>
-                    <div className="text-blue-600 font-medium">
+                  <div key={i} className="p-3 border border-border bg-muted/12 rounded-lg text-sm">
+                    <div className="font-medium text-foreground mb-1">{rec.action}</div>
+                    <div className="text-muted-foreground mb-1">{rec.impact}</div>
+                    <div className="font-mono-brand text-muted-foreground font-medium">
                       预计节省: {formatCurrency(rec.estimatedSavings, currency)}
                     </div>
                   </div>
@@ -3476,15 +3493,15 @@ function ExecutabilityValidation({ planState }: { planState: any }) {
             {evidenceRefs.slice(0, 6).map((evidence: any, index: number) => (
               <div
                 key={index}
-                className="p-2 bg-green-50 border border-green-200 rounded text-xs"
+                className="p-2 bg-muted border border-border rounded text-xs"
               >
                 <div className="flex items-center gap-1 mb-1">
-                  <CheckCircle2 className="w-3 h-3 text-green-600" />
-                  <span className="font-medium text-green-900">
+                  <CheckCircle2 className="w-3 h-3 text-success" />
+                  <span className="font-medium text-success">
                     {evidence.type || '验证项'}
                   </span>
                 </div>
-                <p className="text-green-700">
+                <p className="text-success">
                   {evidence.description || evidence.source || '已验证'}
                 </p>
               </div>
@@ -3497,8 +3514,8 @@ function ExecutabilityValidation({ planState }: { planState: any }) {
           )}
         </div>
       ) : (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs text-blue-900">
+        <div className="p-3 border border-border bg-muted/12 rounded-lg">
+          <p className="text-xs text-foreground">
             <strong>可执行性验证：</strong>
             方案提交后，系统将验证交通班次、开放时间、预订链接等可执行性要素。
             您可以在行程详情中查看完整的验证结果。
@@ -3552,7 +3569,7 @@ function PlanComparison({
       {difference !== 0 && (
         <div className={cn(
           "p-3 rounded-lg border",
-          difference > 0 ? "bg-green-50 border-green-200" : "bg-orange-50 border-orange-200"
+          difference > 0 ? "bg-muted/12 border-border" : "bg-muted/12 border-border"
         )}>
           <p className="text-xs">
             {difference > 0 ? (
@@ -3575,8 +3592,8 @@ function PlanComparison({
       )}
 
       {difference === 0 && planItemCount > 0 && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs text-blue-900">
+        <div className="p-3 border border-border bg-muted/12 rounded-lg">
+          <p className="text-xs text-foreground">
             方案行程项数量与当前行程相同，但内容可能有调整。提交方案后可在行程详情中查看具体变更。
           </p>
         </div>
@@ -3615,10 +3632,10 @@ function PlanSummaryCard({
   // 难度评估（基于累计爬升）
   const getDifficulty = () => {
     if (totalAscent === 0) return { label: '-', color: 'text-muted-foreground' };
-    if (totalAscent < 500) return { label: '简单', color: 'text-green-600' };
-    if (totalAscent < 1000) return { label: '中等', color: 'text-blue-600' };
-    if (totalAscent < 2000) return { label: '困难', color: 'text-orange-600' };
-    return { label: '极难', color: 'text-red-600' };
+    if (totalAscent < 500) return { label: '简单', color: 'text-success' };
+    if (totalAscent < 1000) return { label: '中等', color: 'text-muted-foreground' };
+    if (totalAscent < 2000) return { label: '困难', color: 'text-warning' };
+    return { label: '极难', color: 'text-error' };
   };
   
   const difficulty = getDifficulty();
@@ -3636,15 +3653,15 @@ function PlanSummaryCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {itemCount === 0 && days > 0 && (
-          <Alert className="border-amber-200 bg-amber-50/50 py-2">
-            <AlertDescription className="text-xs text-amber-900">
+          <Alert className="border-border/60 bg-muted/15 py-2">
+            <AlertDescription className="text-xs text-muted-foreground">
               方案骨架已生成，具体行程项待填充。可通过「调整方案」补充后再提交。
             </AlertDescription>
           </Alert>
         )}
         {isSegmentPlan && itemCount > 0 && (
-          <Alert className="border-blue-200 bg-blue-50/50 py-2">
-            <AlertDescription className="text-xs text-blue-900">
+          <Alert className="border-border/60 bg-muted/15 py-2">
+            <AlertDescription className="text-xs text-foreground">
               已生成 {itemCount} 段路线骨架，详细 POI 可在提交后继续完善。
             </AlertDescription>
           </Alert>
@@ -4026,10 +4043,10 @@ function DEMTerrainAndFatigueView({
               {demEvidence.slice(0, 3).map((evidence: any, index: number) => (
                 <div
                   key={index}
-                  className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs"
+                  className="p-3 border border-border bg-muted rounded-lg text-xs"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-blue-900">
+                    <span className="font-medium text-foreground">
                       {evidence.segmentId || evidence.id || `证据 ${index + 1}`}
                     </span>
                     {evidence.violation && evidence.violation !== 'NONE' && (
@@ -4042,9 +4059,9 @@ function DEMTerrainAndFatigueView({
                     )}
                   </div>
                   {evidence.explanation && (
-                    <p className="text-blue-700 mt-1">{evidence.explanation}</p>
+                    <p className="text-muted-foreground mt-1">{evidence.explanation}</p>
                   )}
-                  <div className="grid grid-cols-3 gap-2 mt-2 text-blue-600">
+                  <div className="grid grid-cols-3 gap-2 mt-2 font-mono-brand text-muted-foreground">
                     {evidence.cumulativeAscent !== undefined && (
                       <div>
                         <span className="text-muted-foreground">爬升: </span>
@@ -4077,12 +4094,12 @@ function DEMTerrainAndFatigueView({
 
         {/* 风险提示 */}
         {(maxSlope > 20 || totalAscent > 2000 || fatigueScore > 100) && (
-          <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+          <div className="p-3 border border-border bg-muted/12 rounded-lg">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+              <AlertTriangle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-xs font-medium text-orange-900 mb-1">地形风险提示</p>
-                <ul className="text-xs text-orange-700 space-y-1">
+                <p className="text-xs font-medium text-foreground mb-1">地形风险提示</p>
+                <ul className="text-xs text-muted-foreground space-y-1">
                   {maxSlope > 20 && (
                     <li>• 最大坡度 {maxSlope.toFixed(1)}% 较高，请注意体力消耗</li>
                   )}
@@ -4099,8 +4116,8 @@ function DEMTerrainAndFatigueView({
         )}
 
         {/* 提示信息 */}
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs text-blue-900">
+        <div className="p-3 border border-border bg-muted/12 rounded-lg">
+          <p className="text-xs text-foreground">
             <strong>DEM 地形数据：</strong>
             系统基于数字高程模型（DEM）分析路线的物理可行性。
             提交方案后可在行程详情中查看完整的地形剖面图和体力消耗曲线。
@@ -4217,7 +4234,7 @@ function PlanComparisonView({
                     {metric.difference !== 0 && (
                       <span className={cn(
                         "text-xs",
-                        metric.difference > 0 ? "text-green-600" : "text-orange-600"
+                        metric.difference > 0 ? "text-success" : "text-error"
                       )}>
                         {metric.difference > 0 ? '+' : ''}{metric.difference}
                       </span>
@@ -4394,9 +4411,9 @@ function PlanComparisonView({
                 key={index}
                 className={cn(
                   "p-3 rounded-lg border",
-                  diff.impact === 'high' ? "bg-red-50 border-red-200" :
-                  diff.impact === 'medium' ? "bg-orange-50 border-orange-200" :
-                  "bg-blue-50 border-blue-200"
+                  diff.impact === 'high' ? "bg-muted/15 border-border" :
+                  diff.impact === 'medium' ? "bg-muted/12 border-border" :
+                  "bg-muted/30 border-border/70"
                 )}
               >
                 <div className="flex items-start justify-between mb-1">
@@ -4433,19 +4450,19 @@ function PlanComparisonView({
           <h4 className="text-sm font-semibold mb-3">对比摘要</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {compareResult.summary.bestBudget && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="p-3 border border-border bg-muted/15 rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">最佳预算</p>
                 <p className="font-medium">{compareResult.summary.bestBudget}</p>
               </div>
             )}
             {compareResult.summary.bestRoute && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="p-3 border border-border/70 bg-muted/25 rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">最佳路线</p>
                 <p className="font-medium">{compareResult.summary.bestRoute}</p>
               </div>
             )}
             {compareResult.summary.bestTime && (
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="p-3 border border-border/70 bg-muted/25 rounded-lg">
                 <p className="text-xs text-muted-foreground mb-1">最佳时间</p>
                 <p className="font-medium">{compareResult.summary.bestTime}</p>
               </div>
@@ -4468,8 +4485,8 @@ function PlanComparisonView({
       )}
 
       {/* 提示信息 */}
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs text-blue-900">
+      <div className="p-3 border border-border bg-muted/12 rounded-lg">
+        <p className="text-xs text-foreground">
           <strong>提示：</strong>
           点击方案列标题或卡片可以选中方案，然后点击"应用选中方案"按钮切换到该方案。
           {plans.length === 1 && ' 当前只有一个方案，建议先生成多个方案后再进行对比。'}

@@ -4,6 +4,7 @@ import type { ConstraintListEntry } from '@/components/plan-studio/workbench/con
 import {
   attachCheckIssuesToEntries,
   canPatchConstraint,
+  canShowConstraintEdit,
   isOfficialRuleConstraint,
   isOfficialReadonlyConstraint,
   isWorldFeasibilityConstraint,
@@ -85,9 +86,9 @@ describe('constraint-console-partition.util', () => {
   });
 
   it('blocks patch for locked and official rules', () => {
-    expect(canPatchConstraint(entry({ id: 'x', kind: 'hard', label: 'x', icon: Car, locked: true }))).toBe(false);
+    expect(canShowConstraintEdit(entry({ id: 'x', kind: 'hard', label: 'x', icon: Car, locked: true }))).toBe(false);
     expect(
-      canPatchConstraint(
+      canShowConstraintEdit(
         entry({
           id: 'rule',
           kind: 'external',
@@ -98,7 +99,8 @@ describe('constraint-console-partition.util', () => {
         }),
       ),
     ).toBe(false);
-    expect(canPatchConstraint(entry({ id: 'y', kind: 'soft', label: 'y', icon: Car }))).toBe(true);
+    expect(canShowConstraintEdit(entry({ id: 'y', kind: 'soft', label: 'y', icon: Car, sliderValue: 50 }))).toBe(false);
+    expect(canShowConstraintEdit(entry({ id: 'earliest_departure', kind: 'hard', label: 't', icon: Car }))).toBe(true);
   });
 
   it('attaches check issue ids using api constraint id', () => {
@@ -109,6 +111,79 @@ describe('constraint-console-partition.util', () => {
       { id: 'issue-1', constraintId: TRIP_CONSTRAINT_LEGACY_IDS.TRAVELERS },
     ]);
     expect(next[0]?.checkIssueId).toBe('issue-1');
+  });
+
+  it('prefers decisionProblemId for conflict click', () => {
+    const items = [
+      entry({ id: 'travelers', kind: 'hard', label: '人数', icon: Car }),
+    ];
+    const next = attachCheckIssuesToEntries(items, [
+      {
+        id: 'issue-1',
+        decisionProblemId: 'dp-99',
+        constraintId: TRIP_CONSTRAINT_LEGACY_IDS.TRAVELERS,
+        allowRelaxation: false,
+      },
+    ]);
+    expect(next[0]?.checkIssueId).toBe('dp-99');
+    expect(next[0]?.allowRelaxation).toBe(false);
+  });
+
+  it('attaches check issues via relatedConstraintIds for c_official_*', () => {
+    const items = [
+      entry({
+        id: 'c_official_is_froad_2wd',
+        kind: 'external',
+        label: 'F 路',
+        icon: Route,
+        sourceType: 'OFFICIAL_RULE',
+        readOnly: true,
+      }),
+    ];
+    const next = attachCheckIssuesToEntries(items, [
+      {
+        id: 'issue-froad',
+        relatedConstraintIds: ['c_official_is_froad_2wd'],
+        allowRelaxation: false,
+      },
+    ]);
+    expect(next[0]?.checkIssueId).toBe('issue-froad');
+    expect(next[0]?.allowRelaxation).toBe(false);
+  });
+
+  it('marks sacrificed soft constraints without duplicate schedule violation', () => {
+    const items = [
+      entry({
+        id: 'lunch_time_window',
+        kind: 'soft',
+        label: '午餐窗口',
+        icon: Car,
+        sliderValue: 25,
+      }),
+    ];
+    const next = attachCheckIssuesToEntries(
+      items,
+      [
+        {
+          id: 'sched-lunch',
+          constraintId: 'c_tpl_lunch_time_window',
+          severity: 'suggest_adjust',
+          message: '午餐未落在窗口内',
+        },
+        {
+          id: 'tradeoff-lunch',
+          issueKind: 'soft_tradeoff',
+          sacrificed: true,
+          constraintId: 'c_tpl_lunch_time_window',
+          message: '为保留更高优先级项，午餐窗口已放宽',
+        },
+      ],
+      { sacrificedConstraintIds: ['c_tpl_lunch_time_window'] },
+    );
+    expect(next[0]?.softSacrificed).toBe(true);
+    expect(next[0]?.statusLabel).toBe('已取舍');
+    expect(next[0]?.checkIssueId).toBe('tradeoff-lunch');
+    expect(next[0]?.hasConflict).toBe(false);
   });
 
   it('builds help tooltip from description and official readonly hint', () => {

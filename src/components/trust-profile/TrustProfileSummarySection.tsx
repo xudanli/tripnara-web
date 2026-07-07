@@ -53,7 +53,7 @@ export function TrustProfileSummarySection({ userId, className }: TrustProfileSu
             <VerificationBadges verification={profile.verification} />
 
             {profile.professional?.isVerifiedProfessional && (
-              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm">
+              <div className="rounded-lg border border-gate-allow-border/20 bg-gate-allow-foreground/5 px-3 py-2 text-sm">
                 <Badge className="mb-1">Professional 已认证</Badge>
                 {profile.professional.bio && (
                   <p className="text-muted-foreground">{profile.professional.bio}</p>

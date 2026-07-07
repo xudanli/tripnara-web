@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
+import { buildTripTravelStatusPath } from '@/lib/travel-status-navigation.util';
 import type { TripListItem, TripStatus } from '@/types/trip';
 import Logo from '@/components/common/Logo';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -37,13 +38,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, Route, MapPin, Heart, ChevronDown, ChevronRight, User, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Share2, Edit, MoreVertical, RefreshCw, Users, Trash2, CreditCard, Bell, Mountain, MessageCircle, Shield, BadgeCheck } from 'lucide-react';
+import { Plus, Route, MapPin, Heart, ChevronDown, ChevronRight, User, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Share2, Edit, MoreVertical, RefreshCw, Users, Trash2, CreditCard, Bell, Mountain, MessageCircle, Shield, BadgeCheck, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 import { getTripHikingProfile } from '@/lib/trip-hiking';
 import { parseHikingSegments } from '@/lib/hiking-segments';
 import { hikingPhaseSidebarLine } from '@/lib/hiking-phase';
 import { useTripEmbeddedSidebarStore } from '@/store/tripEmbeddedSidebarStore';
+import { DeleteTripDialog } from '@/components/trips/DeleteTripDialog';
 
 interface MainSidebarProps {
   className?: string;
@@ -91,6 +93,9 @@ export default function MainSidebar({ className }: MainSidebarProps) {
   const [hoveredTripId, setHoveredTripId] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [contactUsOpen, setContactUsOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [tripToDelete, setTripToDelete] = useState<TripListItem | null>(null);
+  const [deletingTrip, setDeletingTrip] = useState(false);
   
   // 加载所有行程
   const loadTrips = async () => {
@@ -173,42 +178,50 @@ export default function MainSidebar({ className }: MainSidebarProps) {
     navigate(`/dashboard/trips/${tripId}`, { state: { openCollaboratorsDialog: true } });
   };
   
-  // 处理删除
-  const handleDelete = async (trip: TripListItem) => {
+  // 打开删除确认弹窗
+  const handleDelete = (trip: TripListItem) => {
     if (!trip.destination) {
-      console.error('Trip destination is missing');
       toast.error('无法删除：行程目的地信息缺失');
       return;
     }
-    
-    const confirmText = prompt(`请输入目的地国家代码 "${trip.destination}" 来确认删除：`);
-    if (!confirmText || confirmText.trim().toUpperCase() !== trip.destination.toUpperCase()) {
-      if (confirmText !== null) {
-        toast.error(`确认文字不匹配。请输入目的地国家代码"${trip.destination}"来确认删除。`);
-      }
-      return;
-    }
-    
+    setTripToDelete(trip);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteTrip = async (confirmText: string) => {
+    if (!tripToDelete) return;
     try {
-      await tripsApi.delete(trip.id, confirmText.trim());
-      
-      // 删除成功后重新加载行程列表
+      setDeletingTrip(true);
+      await tripsApi.delete(tripToDelete.id, confirmText);
+
       const trips = await tripsApi.getAll();
       setAllTrips(trips);
-      
-      // 从收藏列表中移除
+
       const newCollectedIds = new Set(collectedTripIds);
-      newCollectedIds.delete(trip.id);
+      newCollectedIds.delete(tripToDelete.id);
       setCollectedTripIds(newCollectedIds);
       localStorage.setItem('collectedTripIds', JSON.stringify(Array.from(newCollectedIds)));
-      
-      const collected = trips.filter(t => newCollectedIds.has(t.id));
+
+      const collected = trips.filter((t) => newCollectedIds.has(t.id));
       setCollectedTrips(collected);
-      
+
+      if (location.pathname === `/dashboard/trips/${tripToDelete.id}`) {
+        navigate('/dashboard/trips');
+      }
+
+      setDeleteDialogOpen(false);
+      setTripToDelete(null);
       toast.success('行程已删除');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to delete trip:', err);
-      toast.error(err.response?.data?.error?.message || err.message || '删除行程失败');
+      const message =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error
+              ?.message
+          : undefined;
+      toast.error(message || (err instanceof Error ? err.message : '删除行程失败'));
+    } finally {
+      setDeletingTrip(false);
     }
   };
   
@@ -256,7 +269,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
   // 处理行程点击：规划中 → 规划工作台；进行中 → 行中执行页；其余 → 详情
   const handleTripClick = (tripId: string, status?: TripStatus) => {
     if (status === 'PLANNING') {
-      navigate(`/dashboard/plan-studio?tripId=${tripId}`);
+      navigate(buildTripTravelStatusPath(tripId));
     } else if (status === 'IN_PROGRESS') {
       navigate(`/dashboard/execute?tripId=${tripId}`);
     } else {
@@ -311,7 +324,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             <button
               onClick={() => handleNavClick('/dashboard')}
               className="flex items-center justify-center hover:opacity-80 transition-opacity"
-              title="返回首页（自然语言创建行程）"
+              title="返回首页"
             >
               <Logo variant="icon" size={40} color="#111827" />
             </button>
@@ -339,7 +352,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
                 "flex items-center justify-center transition-opacity absolute inset-0",
                 isLogoHovered ? "opacity-0 pointer-events-none" : "opacity-100"
               )}
-              title="返回首页（自然语言创建行程）"
+              title="返回首页"
             >
               <Logo variant="icon" size={40} color="#111827" />
             </button>
@@ -364,15 +377,28 @@ export default function MainSidebar({ className }: MainSidebarProps) {
       <ScrollArea className="flex-1 min-h-0">
         <div className="py-1">
           {/* 导航菜单项 */}
-          {/* 新行程 - 直接跳转到自然语言创建页面 */}
+          {/* 新行程 — 创建入口（探索规划 / 攻略导入等） */}
           <NavItem
             icon={Plus}
             label="新行程"
-            onClick={() => handleNavClick('/dashboard')}
-            active={isActive('/dashboard') && !isActive('/dashboard/trips') && !isActive('/dashboard/plan-studio') && !isActive('/dashboard/trusted-projects')}
+            onClick={() => handleNavClick('/dashboard/trips/new')}
+            active={
+              isActive('/dashboard/trips/new') ||
+              isActive('/dashboard/trips/new/from-guide') ||
+              location.pathname.includes('/dashboard/explore')
+            }
             collapsed={collapsed}
           />
           
+          {/* Nara 对话 */}
+          <NavItem
+            icon={Sparkles}
+            label="Nara 对话"
+            onClick={() => handleNavClick('/dashboard/nara')}
+            active={isActive('/dashboard/nara')}
+            collapsed={collapsed}
+          />
+
           {/* 我的行程 */}
           <NavItem
             icon={MapPin}
@@ -633,7 +659,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
                   handleLogout();
                   setUserMenuOpen(false);
                 }}
-                className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                className="cursor-pointer text-gate-reject-foreground focus:text-gate-reject-foreground focus:bg-gate-reject"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>退出登录</span>
@@ -660,6 +686,28 @@ export default function MainSidebar({ className }: MainSidebarProps) {
       
       {/* 联系我们对话框 */}
       <ContactUsDialog open={contactUsOpen} onOpenChange={setContactUsOpen} />
+
+      <DeleteTripDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setTripToDelete(null);
+        }}
+        destination={tripToDelete?.destination ?? ''}
+        tripLabel={tripToDelete ? getTripDisplayName(tripToDelete) : undefined}
+        impact={
+          tripToDelete
+            ? {
+                totalDays: tripToDelete.days?.length,
+                hikePlanCount: parseHikingSegments(tripToDelete.metadata?.hikingSegments).filter(
+                  (s) => s.hikePlanId,
+                ).length,
+              }
+            : undefined
+        }
+        deleting={deletingTrip}
+        onConfirm={confirmDeleteTrip}
+      />
     </aside>
   );
 }
@@ -973,7 +1021,7 @@ function TripListItem({
                   e.stopPropagation();
                   onDelete(trip);
                 }}
-                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                className="text-gate-reject-foreground focus:text-gate-reject-foreground focus:bg-gate-reject"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 删除

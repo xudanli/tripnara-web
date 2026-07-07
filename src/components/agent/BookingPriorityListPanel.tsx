@@ -35,8 +35,8 @@ export interface BookingPriorityListPanelProps {
 
 const URGENCY_STYLES: Record<string, { badge: string; row: string }> = {
   CRITICAL: {
-    badge: 'border-red-500/40 bg-red-50 text-red-950 dark:bg-red-950/35 dark:text-red-100',
-    row: 'border-red-500/35 bg-red-50/50 dark:bg-red-950/20',
+    badge: 'border-gate-reject-border/40 bg-gate-reject text-gate-reject-foreground dark:bg-gate-reject/35 dark:text-gate-reject-foreground',
+    row: 'border-gate-reject-border/35 bg-gate-reject/50 dark:bg-gate-reject/20',
   },
   HIGH: {
     badge: 'border-orange-500/40 bg-orange-50 text-orange-950 dark:bg-orange-950/30 dark:text-orange-100',
@@ -144,7 +144,7 @@ function PriorityItemRow({
           <p
             className={cn(
               'mt-1 text-xs tabular-nums',
-              remaining <= 0 ? 'font-medium text-red-700 dark:text-red-300' : 'text-muted-foreground'
+              remaining <= 0 ? 'font-medium text-gate-reject-foreground dark:text-gate-reject-foreground' : 'text-muted-foreground'
             )}
           >
             {remaining <= 0 ? (
@@ -219,11 +219,11 @@ export function BookingPriorityListPanel({
   if (!list.items.length) return null;
 
   return (
-    <Card className={cn('border-red-500/20 bg-card/60', className)}>
+    <Card className={cn('border-gate-reject-border/20 bg-card/60', className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <AlertTriangle
-            className={cn('h-4 w-4', criticalCount > 0 ? 'text-red-600' : 'text-amber-600')}
+            className={cn('h-4 w-4', criticalCount > 0 ? 'text-gate-reject-foreground' : 'text-amber-600')}
             aria-hidden
           />
           预订优先级

@@ -82,27 +82,27 @@ export default function TaskProgressDialog({
   const statusConfig = {
     PENDING: {
       icon: Loader2,
-      iconClassName: 'text-blue-600 animate-spin',
+      iconClassName: 'text-muted-foreground animate-spin',
       label: t('dashboard.readiness.task.status.pending', { defaultValue: '等待中' }),
-      badgeClassName: 'bg-blue-50 text-blue-700 border-blue-200',
+      badgeClassName: 'bg-muted text-muted-foreground border-border',
     },
     RUNNING: {
       icon: Loader2,
-      iconClassName: 'text-blue-600 animate-spin',
+      iconClassName: 'text-muted-foreground animate-spin',
       label: t('dashboard.readiness.task.status.running', { defaultValue: '执行中' }),
-      badgeClassName: 'bg-blue-50 text-blue-700 border-blue-200',
+      badgeClassName: 'bg-muted text-muted-foreground border-border',
     },
     COMPLETED: {
       icon: CheckCircle2,
-      iconClassName: 'text-green-600',
+      iconClassName: 'text-success',
       label: t('dashboard.readiness.task.status.completed', { defaultValue: '已完成' }),
-      badgeClassName: 'bg-green-50 text-green-700 border-green-200',
+      badgeClassName: 'bg-muted text-success border-border',
     },
     FAILED: {
       icon: XCircle,
-      iconClassName: 'text-red-600',
+      iconClassName: 'text-error',
       label: t('dashboard.readiness.task.status.failed', { defaultValue: '失败' }),
-      badgeClassName: 'bg-red-50 text-red-700 border-red-200',
+      badgeClassName: 'bg-muted text-error border-border',
     },
     CANCELLED: {
       icon: XCircle,
@@ -202,14 +202,14 @@ export default function TaskProgressDialog({
 
           {/* 错误信息 */}
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <div className="p-3 rounded-lg bg-muted border border-border">
               <div className="flex items-start gap-2">
-                <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                <XCircle className="h-4 w-4 text-error flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-red-900">
+                  <p className="text-sm font-medium text-error">
                     {t('dashboard.readiness.task.error', { defaultValue: '任务执行失败' })}
                   </p>
-                  <p className="text-xs text-red-700 mt-1">{error}</p>
+                  <p className="text-xs text-error mt-1">{error}</p>
                 </div>
               </div>
             </div>
@@ -217,14 +217,14 @@ export default function TaskProgressDialog({
 
           {/* 完成结果 */}
           {result && status === 'COMPLETED' && (
-            <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+            <div className="p-3 rounded-lg bg-muted border border-border">
               <div className="flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
                 <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium text-green-900">
+                  <p className="text-sm font-medium text-success">
                     {t('dashboard.readiness.task.success', { defaultValue: '任务完成' })}
                   </p>
-                  <div className="text-xs text-green-700 space-y-0.5">
+                  <div className="text-xs text-success space-y-0.5">
                     <p>
                       {t('dashboard.readiness.task.processedPlaces', {
                         defaultValue: '已处理地点',

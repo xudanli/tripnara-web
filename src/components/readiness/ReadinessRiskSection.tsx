@@ -68,13 +68,13 @@ export default function ReadinessRiskSection({
           </h3>
           <div className="flex items-center gap-1.5">
             {mitigationProgress && mitigationProgress.remaining > 0 ? (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 tabular-nums">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-warning border border-border tabular-nums">
                 {isZh
                   ? `${mitigationProgress.remaining} 项待办`
                   : `${mitigationProgress.remaining} pending`}
               </span>
             ) : mitigationProgress && mitigationProgress.total > 0 ? (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-success border border-border">
                 {isZh ? '任务已完成' : 'Tasks done'}
               </span>
             ) : null}
@@ -91,12 +91,12 @@ export default function ReadinessRiskSection({
         {(severityCounts.high > 0 || severityCounts.medium > 0) && (
           <div className="flex flex-wrap gap-1.5 pt-0.5">
             {severityCounts.high > 0 && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-error border border-border">
                 {isZh ? `高 ${severityCounts.high}` : `High ${severityCounts.high}`}
               </span>
             )}
             {severityCounts.medium > 0 && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-warning border border-border">
                 {isZh ? `中 ${severityCounts.medium}` : `Medium ${severityCounts.medium}`}
               </span>
             )}
@@ -198,7 +198,7 @@ export default function ReadinessRiskSection({
                             href={source.canonicalUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-sm text-blue-700 hover:text-blue-800 hover:underline mt-1"
+                            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-muted-foreground hover:underline mt-1"
                           >
                             <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                             <span className="truncate">{source.canonicalUrl}</span>

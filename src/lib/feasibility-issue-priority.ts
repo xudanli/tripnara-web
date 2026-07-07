@@ -6,6 +6,14 @@ import type {
   FeasibilityIssuePriority,
   FeasibilityVerdictStatus,
 } from '@/types/trip-feasibility-report';
+import {
+  isEnforcedHardConstraintIssueKind,
+  resolveFeasibilitySignalsForHardConstraint,
+} from '@/lib/trip-constraint-hard-enforcement.util';
+import {
+  isDestinationRuleFeasibilityIssue,
+  resolveFeasibilitySignalsForDestinationRule,
+} from '@/lib/trip-constraint-destination-rule.util';
 
 const PRIORITY_RANK: Record<FeasibilityIssuePriority, number> = {
   must_handle: 3,
@@ -61,7 +69,28 @@ export function mapConflictPriority(input: {
   severity?: 'high' | 'medium' | 'low' | 'HIGH' | 'MEDIUM' | 'LOW' | null;
   anchors?: FeasibilityIssueAnchorsDto;
   issueKind?: FeasibilityIssueKind;
+  constraintId?: string | null;
+  relatedConstraintIds?: string[] | null;
 }): FeasibilityIssuePriority | null {
+  if (input.issueKind && isEnforcedHardConstraintIssueKind(input.issueKind)) {
+    const signals = resolveFeasibilitySignalsForHardConstraint({ issueKind: input.issueKind });
+    if (signals) return signals.priority;
+  }
+
+  if (
+    isDestinationRuleFeasibilityIssue({
+      issueKind: input.issueKind,
+      constraintId: input.constraintId,
+      relatedConstraintIds: input.relatedConstraintIds,
+    })
+  ) {
+    const destSignals = resolveFeasibilitySignalsForDestinationRule({
+      constraintId: input.constraintId,
+      relatedConstraintIds: input.relatedConstraintIds,
+    });
+    if (destSignals) return destSignals.priority;
+  }
+
   const conflictType = input.conflictType?.toUpperCase();
   if (conflictType === 'CLOSURE_RISK' || conflictType === 'TRANSPORT_INSUFFICIENT') {
     return 'must_handle';
@@ -90,6 +119,7 @@ export function resolveFindingPriority(finding: ScoreFinding): FeasibilityIssueP
       severity: finding.severity,
       anchors: finding.anchors,
       issueKind: finding.issueKind,
+      relatedConstraintIds: finding.relatedConstraintIds,
     }),
   );
 }
@@ -103,6 +133,7 @@ export function resolveIssuePriority(issue: FeasibilityIssueDto): FeasibilityIss
       severity: issue.severity,
       anchors: issue.anchors,
       issueKind: issue.issueKind,
+      relatedConstraintIds: issue.relatedConstraintIds,
     }),
   );
 }

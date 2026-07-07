@@ -106,7 +106,7 @@ export default function CascadeConfirmDialog({
             type="button"
             variant="outline"
             disabled={loading}
-            className="border-blue-200 text-blue-700 hover:bg-blue-50"
+            className="border-border text-muted-foreground hover:bg-muted/15"
             onClick={onConfirmNone}
           >
             {t('itinerary.cascadeConfirm.none', { defaultValue: '只调整当前项' })}

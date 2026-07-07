@@ -1,6 +1,11 @@
 import apiClient from './client';
 import { getRepairOptions as fetchIssueRepairOptions } from '@/api/feasibility-repair';
 import { tripsApi } from '@/api/trips';
+import {
+  assertExecutionApplyRecommendationAllowed,
+  assertFeasibilityApplyRepairAllowed,
+  coerceWriteChainBlockedError,
+} from '@/lib/effective-plan-write-chain.util';
 import { inTripExecutionApi } from '@/api/in-trip-execution';
 import { realtimeApi } from '@/api/optimization-v2';
 import type { FeasibilityRepairOptionsResponse } from '@/types/feasibility-repair';
@@ -11,13 +16,19 @@ import type {
   FeasibilityReportValidateOptions,
   FeasibilityValidateScope,
 } from '@/types/trip-feasibility-report';
-import type { TripExecutionAdvisoryDto } from '@/types/trip-execution-advisory';
+import type {
+  ApplyExecutionRecommendationRequest,
+  ApplyExecutionRecommendationResponse,
+  TripExecutionAdvisoryDto,
+} from '@/types/trip-execution-advisory';
 import { buildTripFeasibilityReport, finalizeAdapterFeasibilityReport } from '@/lib/trip-feasibility-report.adapter';
 import { normalizeFeasibilityReport } from '@/lib/feasibility-issue-dedupe';
 import { enrichFeasibilityReportAccommodation } from '@/lib/feasibility-day-accommodation';
 import { normalizeFeasibilityReportExtensions } from '@/lib/feasibility-report-normalize';
 import { normalizeFeasibilityReportFromApi } from '@/lib/feasibility-dimension-display';
+import { applyGatewayFeasibilityProjection } from '@/lib/gateway-feasibility-projection.util';
 import { buildTripExecutionAdvisory } from '@/lib/trip-execution-advisory.adapter';
+import { normalizeTripExecutionAdvisory } from '@/lib/normalize-trip-execution-advisory.util';
 import { readinessApi } from '@/api/readiness';
 
 interface SuccessResponse<T> {
@@ -64,14 +75,35 @@ function throwIfConstraintSolverError(err: unknown): void {
   const code = apiError?.code;
   if (
     code === 'EXECUTION_ADVISORY_NOT_IN_TRIP' ||
-    code === 'EXECUTION_ADVISORY_DISABLED'
+    code === 'EXECUTION_ADVISORY_DISABLED' ||
+    code === 'RECOMMENDATION_NOT_FOUND' ||
+    code === 'RECOMMENDATION_EXPIRED' ||
+    code === 'RECOMMENDATION_NO_OP' ||
+    code === 'WRITE_CHAIN_BLOCKED'
   ) {
+    if (code === 'WRITE_CHAIN_BLOCKED') {
+      throw coerceWriteChainBlockedError(err);
+    }
     throw new TripConstraintSolverApiError(
-      code,
-      apiError?.message ?? code,
+      code!,
+      apiError?.message ?? code!,
       apiError?.details,
     );
   }
+}
+
+function throwIfApplyRecommendationFailed(response: { data: ApiResponseWrapper<unknown> }): void {
+  if (response?.data?.success) return;
+  const apiError = (response.data as ErrorResponse).error;
+  const code = apiError?.code ?? 'UNKNOWN_ERROR';
+  if (code === 'WRITE_CHAIN_BLOCKED') {
+    throw coerceWriteChainBlockedError({ response: { data: response.data } });
+  }
+  throw new TripConstraintSolverApiError(
+    code,
+    apiError?.message ?? '应用推荐方案失败',
+    apiError?.details,
+  );
 }
 
 function toValidateScopeBody(
@@ -114,7 +146,8 @@ async function fetchExecutionAdvisoryFromBff(tripId: string): Promise<TripExecut
     const response = await apiClient.get<ApiResponseWrapper<TripExecutionAdvisoryDto>>(
       `/trips/${tripId}/in-trip/execution-advisory`,
     );
-    return unwrapData(response);
+    const data = unwrapData(response);
+    return data ? normalizeTripExecutionAdvisory(data) : null;
   } catch (err) {
     throwIfConstraintSolverError(err);
     if (isNotImplemented(err)) return null;
@@ -141,9 +174,10 @@ async function finalizeFeasibilityReport(
   raw?: Record<string, unknown> | null,
 ): Promise<TripFeasibilityReportDto> {
   const fromApi = normalizeFeasibilityReportFromApi(report, raw);
+  const projected = applyGatewayFeasibilityProjection(fromApi);
   const enriched = await enrichFeasibilityReportAccommodation(
     tripId,
-    normalizeFeasibilityReport(fromApi),
+    normalizeFeasibilityReport(projected),
   );
   return normalizeFeasibilityReportExtensions(enriched, raw);
 }
@@ -249,6 +283,8 @@ export const tripConstraintSolverApi = {
     issueId: string,
     optionId: string,
   ): Promise<{ success: boolean; message?: string }> => {
+    assertFeasibilityApplyRepairAllowed({ id: issueId });
+
     try {
       const response = await apiClient.post<
         ApiResponseWrapper<{ success: boolean; message?: string }>
@@ -272,6 +308,36 @@ export const tripConstraintSolverApi = {
     if (fromBff) return fromBff;
     return buildExecutionAdvisoryFallback(tripId, options?.tripState);
   },
+
+  /** 行中：应用 execution-advisory 推荐方案（T-04） */
+  applyExecutionRecommendation: async (
+    tripId: string,
+    recommendationId: string,
+    body: ApplyExecutionRecommendationRequest,
+  ): Promise<ApplyExecutionRecommendationResponse> => {
+    assertExecutionApplyRecommendationAllowed({ tripId, recommendationId });
+    try {
+      const response = await apiClient.post<
+        ApiResponseWrapper<ApplyExecutionRecommendationResponse>
+      >(
+        `/trips/${tripId}/in-trip/execution-advisory/recommendations/${encodeURIComponent(recommendationId)}/apply`,
+        body,
+      );
+      throwIfApplyRecommendationFailed(response);
+      const data = unwrapData(response);
+      if (!data) {
+        throw new TripConstraintSolverApiError('UNKNOWN_ERROR', '应用推荐方案失败');
+      }
+      return {
+        ...data,
+        executionAdvisory: normalizeTripExecutionAdvisory(data.executionAdvisory),
+      };
+    } catch (err) {
+      if (err instanceof TripConstraintSolverApiError) throw err;
+      throwIfConstraintSolverError(err);
+      throw coerceWriteChainBlockedError(err);
+    }
+  },
 };
 
 export function isExecutionAdvisoryDisabledError(err: unknown): boolean {
@@ -280,6 +346,14 @@ export function isExecutionAdvisoryDisabledError(err: unknown): boolean {
 
 export function isExecutionAdvisoryNotInTripError(err: unknown): boolean {
   return err instanceof TripConstraintSolverApiError && err.code === 'EXECUTION_ADVISORY_NOT_IN_TRIP';
+}
+
+export function isExecutionRecommendationExpiredError(err: unknown): boolean {
+  return err instanceof TripConstraintSolverApiError && err.code === 'RECOMMENDATION_EXPIRED';
+}
+
+export function isExecutionRecommendationNotFoundError(err: unknown): boolean {
+  return err instanceof TripConstraintSolverApiError && err.code === 'RECOMMENDATION_NOT_FOUND';
 }
 
 export type { FeasibilityValidateScope };

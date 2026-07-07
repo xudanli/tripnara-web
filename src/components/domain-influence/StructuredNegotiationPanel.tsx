@@ -15,6 +15,12 @@ import {
   domainPanelShell,
   negotiationStatusClass,
 } from './domain-influence-ui';
+import {
+  workbenchCardFlat,
+  workbenchListItemIdle,
+  workbenchListItemSelected,
+} from '@/components/plan-studio/workbench/workbench-ui';
+import { findNegotiationTaskForSelection } from '@/lib/collab-negotiation-selection.util';
 import { PreferenceRoundDiscussionPanel } from './PreferenceRoundDiscussionPanel';
 import { VoiceGuardBanner } from './VoiceGuardBanner';
 
@@ -32,10 +38,8 @@ function TaskListItem({
       type="button"
       onClick={onSelect}
       className={cn(
-        'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
-        selected
-          ? 'border-foreground/20 bg-muted/40'
-          : 'border-border/80 hover:bg-muted/25',
+        'w-full text-left',
+        selected ? workbenchListItemSelected : workbenchListItemIdle,
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -69,6 +73,8 @@ interface StructuredNegotiationPanelProps {
   initialRoundId?: string | null;
   /** 深链传入的领域，用于刷新后恢复左侧任务选中 */
   initialRoundDomain?: string | null;
+  /** 协作中心决策队列 · 精确选中 negotiation task id */
+  initialNegotiationTaskId?: string | null;
   /** 弹窗/深链场景：允许同步 roundId 到 URL（不要求 tab=team） */
   allowUrlSync?: boolean;
   /** 协作中心布局：隐藏左侧任务列表，仅展示讨论主舞台 */
@@ -85,15 +91,13 @@ function findTaskForRound(
   tasks: DomainNegotiationTask[],
   roundId: string | null | undefined,
   roundDomain: string | null | undefined,
+  negotiationTaskId?: string | null,
 ): DomainNegotiationTask | undefined {
-  if (roundDomain) {
-    const byDomain = tasks.find((t) => t.domain === roundDomain);
-    if (byDomain) return byDomain;
-  }
-  if (roundId) {
-    return tasks.find((t) => t.activeRoundId === roundId);
-  }
-  return undefined;
+  return findNegotiationTaskForSelection(tasks, {
+    negotiationTaskId,
+    roundId,
+    roundDomain,
+  });
 }
 
 export function StructuredNegotiationPanel({
@@ -101,6 +105,7 @@ export function StructuredNegotiationPanel({
   className,
   initialRoundId,
   initialRoundDomain,
+  initialNegotiationTaskId,
   allowUrlSync = false,
   hideTaskList = false,
   collabStage = false,
@@ -118,14 +123,21 @@ export function StructuredNegotiationPanel({
   const isCollabCenterActive =
     searchParams.get('collab') === '1' || searchParams.get('tab') === 'team';
   const canSyncRoundToUrl = allowUrlSync || isCollabCenterActive;
+  const isCollabQueueDriven = hideTaskList && collabStage;
+  const urlRoundId = initialRoundId ?? searchParams.get('roundId');
+  const urlRoundDomain = initialRoundDomain ?? searchParams.get('roundDomain');
+  const urlNegotiationTaskId =
+    initialNegotiationTaskId ?? searchParams.get('negotiationTaskId');
 
-  const syncRoundToUrl = (roundId: string | null, domain?: string | null) => {
+  const syncRoundToUrl = (roundId: string | null, domain?: string | null, taskId?: string | null) => {
     if (!canSyncRoundToUrl) return;
     const next = new URLSearchParams(searchParams);
     if (roundId) next.set('roundId', roundId);
     else next.delete('roundId');
     if (domain) next.set('roundDomain', domain);
     else next.delete('roundDomain');
+    if (taskId) next.set('negotiationTaskId', taskId);
+    else next.delete('negotiationTaskId');
     setSearchParams(next, { replace: true });
   };
 
@@ -134,7 +146,9 @@ export function StructuredNegotiationPanel({
 
     const roundId = initialRoundId ?? searchParams.get('roundId');
     const roundDomain = initialRoundDomain ?? searchParams.get('roundDomain');
-    const match = findTaskForRound(tasks, roundId, roundDomain);
+    const negotiationTaskId =
+      initialNegotiationTaskId ?? searchParams.get('negotiationTaskId');
+    const match = findTaskForRound(tasks, roundId, roundDomain, negotiationTaskId);
 
     if (match) {
       setSelectedId(match.id);
@@ -159,7 +173,7 @@ export function StructuredNegotiationPanel({
       );
       restoredFromUrlRef.current = true;
     }
-  }, [initialRoundId, initialRoundDomain, tasks, searchParams, canSyncRoundToUrl]);
+  }, [initialRoundId, initialRoundDomain, initialNegotiationTaskId, tasks, searchParams, canSyncRoundToUrl]);
 
   useEffect(() => {
     const onSelectRound = (event: Event) => {
@@ -168,37 +182,56 @@ export function StructuredNegotiationPanel({
       void refetch();
       if (!detail.roundId) return;
       setFocusedRoundId(detail.roundId);
-      const match = findTaskForRound(tasks, detail.roundId, detail.domain ?? null);
+      const match = findTaskForRound(tasks, detail.roundId, detail.domain ?? null, null);
       if (match) {
         setSelectedId(match.id);
-        syncRoundToUrl(detail.roundId, match.domain);
+        syncRoundToUrl(detail.roundId, match.domain, match.id);
       }
     };
     window.addEventListener('plan-studio:select-preference-round', onSelectRound);
     return () => window.removeEventListener('plan-studio:select-preference-round', onSelectRound);
   }, [tripId, tasks, refetch, searchParams, setSearchParams]);
 
-  const selectedTask = useMemo(
-    () => tasks.find((t) => t.id === selectedId) ?? tasks[0] ?? null,
-    [tasks, selectedId],
-  );
+  const selectedTask = useMemo(() => {
+    if (isCollabQueueDriven) {
+      const match = findTaskForRound(
+        tasks,
+        urlRoundId,
+        urlRoundDomain,
+        urlNegotiationTaskId,
+      );
+      if (match) return match;
+    }
+    return tasks.find((t) => t.id === selectedId) ?? tasks[0] ?? null;
+  }, [
+    tasks,
+    selectedId,
+    isCollabQueueDriven,
+    urlRoundId,
+    urlRoundDomain,
+    urlNegotiationTaskId,
+  ]);
 
-  const activeRoundId =
-    selectedTask?.status === 'in_discussion'
-      ? (focusedRoundId ?? selectedTask?.activeRoundId ?? null)
-      : null;
+  const activeRoundId = useMemo(() => {
+    if (!selectedTask || selectedTask.status !== 'in_discussion') return null;
+    if (isCollabQueueDriven) {
+      return urlRoundId ?? selectedTask.activeRoundId ?? null;
+    }
+    return focusedRoundId ?? selectedTask.activeRoundId ?? null;
+  }, [selectedTask, isCollabQueueDriven, urlRoundId, focusedRoundId]);
 
   useEffect(() => {
+    if (isCollabQueueDriven) return;
     if (!focusedRoundId && selectedTask?.activeRoundId) {
       setFocusedRoundId(selectedTask.activeRoundId);
     }
-  }, [selectedTask?.activeRoundId, focusedRoundId]);
+  }, [isCollabQueueDriven, selectedTask?.activeRoundId, focusedRoundId]);
 
   const handleSelectTask = (task: DomainNegotiationTask) => {
     setSelectedId(task.id);
     const roundId = task.status === 'in_discussion' ? (task.activeRoundId ?? null) : null;
     setFocusedRoundId(roundId);
-    syncRoundToUrl(roundId, task.domain);
+    syncRoundToUrl(roundId, task.domain, task.id);
     if (task.status === 'in_discussion' && !task.activeRoundId) {
       void refetch();
     }
@@ -210,16 +243,17 @@ export function StructuredNegotiationPanel({
   }, [selectedTask?.id, selectedTask?.status, selectedTask?.activeRoundId, refetch]);
 
   useEffect(() => {
+    if (isCollabQueueDriven) return;
     if (!selectedTask?.activeRoundId) return;
     setFocusedRoundId((prev) => prev ?? selectedTask.activeRoundId ?? null);
-  }, [selectedTask?.activeRoundId]);
+  }, [isCollabQueueDriven, selectedTask?.activeRoundId]);
 
   useEffect(() => {
-    if (!canSyncRoundToUrl) return;
+    if (!canSyncRoundToUrl || isCollabQueueDriven) return;
     if (!selectedTask || !activeRoundId) return;
     if (searchParams.get('roundId') === activeRoundId) return;
-    syncRoundToUrl(activeRoundId, selectedTask.domain);
-  }, [canSyncRoundToUrl, selectedTask, activeRoundId, searchParams, setSearchParams]);
+    syncRoundToUrl(activeRoundId, selectedTask.domain, selectedTask.id);
+  }, [canSyncRoundToUrl, isCollabQueueDriven, selectedTask, activeRoundId, searchParams, setSearchParams]);
 
   if (isLoading) {
     return (
@@ -268,38 +302,40 @@ export function StructuredNegotiationPanel({
   }
 
   return (
-    <section className={cn(domainPanelShell, className)}>
-      <div className={cn(domainPanelHeader, 'flex items-center justify-between gap-2')}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border/80 bg-muted/40">
-            <Handshake className="h-4 w-4 text-muted-foreground" />
+    <section className={cn(collabStage ? workbenchCardFlat : domainPanelShell, className)}>
+      {!isCollabQueueDriven ? (
+        <div className={cn(domainPanelHeader, 'flex items-center justify-between gap-2')}>
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border/80 bg-muted/40">
+              <Handshake className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold tracking-tight">结构化协商</h3>
+              <p className="text-xs text-muted-foreground">Round Robin 偏好分享 · 中/高交叉领域</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-semibold tracking-tight">结构化协商</h3>
-            <p className="text-xs text-muted-foreground">Round Robin 偏好分享 · 中/高交叉领域</p>
-          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            <RefreshCw className={cn('mr-1 h-3.5 w-3.5', isFetching && 'animate-spin')} />
+            刷新
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 text-xs"
-          disabled={isFetching}
-          onClick={() => void refetch()}
-        >
-          <RefreshCw className={cn('mr-1 h-3.5 w-3.5', isFetching && 'animate-spin')} />
-          刷新
-        </Button>
-      </div>
+      ) : null}
 
-      <div className={cn('px-5 pt-4', hideTaskList && 'pt-0')}>
+      <div className={cn(isCollabQueueDriven ? 'px-4 pt-3' : 'px-5 pt-4', hideTaskList && !isCollabQueueDriven && 'pt-0')}>
         <VoiceGuardBanner tripId={tripId} />
       </div>
 
       <div
         className={cn(
-          'gap-4 p-5 pt-3',
-          hideTaskList ? 'block' : 'grid lg:grid-cols-[minmax(200px,260px)_1fr]',
+          isCollabQueueDriven ? 'p-4 pt-2' : 'gap-4 p-5 pt-3',
+          hideTaskList && !isCollabQueueDriven ? 'block' : !isCollabQueueDriven ? 'grid lg:grid-cols-[minmax(200px,260px)_1fr]' : 'block',
         )}
       >
         {!hideTaskList ? (
@@ -323,6 +359,8 @@ export function StructuredNegotiationPanel({
               task={selectedTask}
               roundId={activeRoundId}
               onRequestTaskRefresh={() => void refetch()}
+              onRefresh={() => void refetch()}
+              refreshing={isFetching}
               collabStage={collabStage}
               onStartVote={onStartVote}
               onGenerateCompromise={onGenerateCompromise}

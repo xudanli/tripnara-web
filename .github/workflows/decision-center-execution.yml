@@ -1,0 +1,66 @@
+# DC-FE-RELEASE-GATE — Decision Center 执行态 V1.6.2
+# 前端 mock harness（不替代后端 BFF 仓库的 harness:blockers / harness:replay）
+name: Decision Center Execution Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+concurrency:
+  group: decision-center-execution-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-semantic-colors:
+    name: check:semantic-colors
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Semantic color gate (no install)
+        run: bash scripts/check-semantic-colors.sh
+
+  harness-blockers:
+    name: harness:blockers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run decision-center execution harness
+        run: npm run harness:blockers
+
+  harness-replay:
+    name: harness:replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run idempotent replay gate (DC-FE-015)
+        run: npm run harness:replay

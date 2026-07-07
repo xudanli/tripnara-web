@@ -22,7 +22,7 @@ function statusToneClasses(tone: FeasibilityTravelTimingViewModel['statusTone'])
     case 'tight':
       return 'border-gate-suggest-border/80 bg-gate-suggest/15 text-muted-foreground';
     case 'missing_times':
-      return 'border-gate-confirm-border bg-gate-confirm/30 text-gate-confirm-foreground';
+      return 'border-border bg-muted/30 text-warning';
     default:
       return 'border-border bg-muted/40 text-muted-foreground';
   }

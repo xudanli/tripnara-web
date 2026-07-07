@@ -4,6 +4,7 @@ import { TravelPersonaRadar } from './TravelPersonaRadar';
 import { TripStatusCTA } from './TripStatusCTA';
 import { useGyroscopeTilt } from '../hooks/useGyroscopeTilt';
 import { tripIntentLabel } from '../lib/trip-intent';
+import { SEMANTIC_BLUE_HEX } from '@/lib/semantic-colors';
 import type { OdysseyIdentityCard, OdysseyProfileCardUi } from '@/types/odyssey-intake';
 
 interface TravelPersonaCardProps {
@@ -30,7 +31,7 @@ export function TravelPersonaCard({
   const gyroEnabled = ui?.gyroscopeEnabled ?? true;
   const { ref, onMouseMove, onMouseLeave } = useGyroscopeTilt(gyroEnabled);
   const { theme } = card;
-  const accent = theme.accentColor ?? '#38bdf8';
+  const accent = theme.accentColor ?? SEMANTIC_BLUE_HEX;
   const intentOptions = ui?.tripIntentTagOptions ?? [];
   const currentIntentLabel = tripIntentLabel(selectedTripIntentTag, intentOptions);
 

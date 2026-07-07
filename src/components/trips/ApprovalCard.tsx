@@ -30,9 +30,9 @@ const riskLevelIcons: Record<RiskLevel, typeof AlertTriangle> = {
 
 // 状态颜色配置
 const statusColors: Record<ApprovalStatus, string> = {
-  [ApprovalStatus.PENDING]: 'bg-blue-100 text-blue-800 border-blue-200',
-  [ApprovalStatus.APPROVED]: 'bg-green-100 text-green-800 border-green-200',
-  [ApprovalStatus.REJECTED]: 'bg-red-100 text-red-800 border-red-200',
+  [ApprovalStatus.PENDING]: 'bg-muted/15 text-muted-foreground border-border',
+  [ApprovalStatus.APPROVED]: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border',
+  [ApprovalStatus.REJECTED]: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border',
   [ApprovalStatus.EXPIRED]: 'bg-gray-100 text-gray-800 border-gray-200',
   [ApprovalStatus.CANCELLED]: 'bg-gray-100 text-gray-800 border-gray-200',
 };

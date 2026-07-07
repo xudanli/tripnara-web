@@ -5,34 +5,46 @@ import {
 } from './itinerary-place-display.util';
 
 describe('itinerary-place-display.util', () => {
-  it('resolvePlaceDisplayName reads displayName only', () => {
+  it('resolvePlaceDisplayName prefers nameCN over displayName', () => {
     expect(
       resolvePlaceDisplayName({
         displayName: 'Sólheimajökull 冰川',
         nameCN: '索尔黑马冰川',
         nameEN: 'Sólheimajökull',
       } as never),
-    ).toBe('Sólheimajökull 冰川');
+    ).toBe('索尔黑马冰川');
     expect(
       resolvePlaceDisplayName({
-        nameCN: '索尔黑马冰川',
-        nameEN: 'Sólheimajökull',
+        displayName: 'Geysir 间歇泉',
+        nameEN: 'Geysir',
       } as never),
-    ).toBeUndefined();
+    ).toBe('Geysir 间歇泉');
+    expect(
+      resolvePlaceDisplayName({
+        nameEN: 'Geysir',
+      } as never),
+    ).toBe('Geysir');
   });
 
-  it('resolveItineraryItemPlaceDisplayName prefers placeName then Place.displayName', () => {
+  it('resolveItineraryItemPlaceDisplayName prefers Place.nameCN over placeName', () => {
     expect(
       resolveItineraryItemPlaceDisplayName({
         placeName: ' 凯夫拉维克机场 ',
-        Place: { displayName: 'Keflavík Airport' } as never,
+        Place: { displayName: 'Keflavík Airport', nameCN: '凯夫拉维克国际机场', nameEN: 'Keflavík' } as never,
       }),
-    ).toBe('凯夫拉维克机场');
+    ).toBe('凯夫拉维克国际机场');
 
     expect(
       resolveItineraryItemPlaceDisplayName({
-        Place: { displayName: 'Geysir 间歇泉', nameEN: 'Geysir' } as never,
+        placeName: '间歇泉',
+        Place: { displayName: 'Geysir 间歇泉', nameCN: '盖歇尔间歇泉', nameEN: 'Geysir' } as never,
       }),
-    ).toBe('Geysir 间歇泉');
+    ).toBe('盖歇尔间歇泉');
+
+    expect(
+      resolveItineraryItemPlaceDisplayName({
+        placeName: ' 凯夫拉维克机场 ',
+      }),
+    ).toBe('凯夫拉维克机场');
   });
 });

@@ -145,37 +145,37 @@ export default function PersonaCard({
                     className={cn(
                       'p-3 rounded-lg border transition-colors',
                       isNeptune 
-                        ? 'bg-purple-50 border-purple-200 hover:border-purple-300'
-                        : 'bg-blue-50 border-blue-200',
-                      isApplied && 'bg-green-50 border-green-200'
+                        ? 'bg-muted border-border hover:border-border'
+                        : 'bg-muted border-border',
+                      isApplied && 'bg-muted border-gate-allow-border'
                     )}
                   >
                     <div className="flex items-start gap-2">
                       <ArrowRight className={cn(
                         'w-4 h-4 mt-0.5 flex-shrink-0',
-                        isNeptune ? 'text-purple-600' : 'text-blue-600',
-                        isApplied && 'text-green-600'
+                        isNeptune ? 'text-muted-foreground' : 'text-muted-foreground',
+                        isApplied && 'text-success'
                       )} />
                       <div className="flex-1">
                         <p className={cn(
                           'text-sm font-medium',
-                          isNeptune ? 'text-purple-900' : 'text-blue-900',
-                          isApplied && 'text-green-900'
+                          isNeptune ? 'text-muted-foreground' : 'text-muted-foreground',
+                          isApplied && 'text-success'
                         )}>
                           {rec.action}
                         </p>
                         <p className={cn(
                           'text-xs mt-1',
-                          isNeptune ? 'text-purple-700' : 'text-blue-700',
-                          isApplied && 'text-green-700'
+                          isNeptune ? 'text-muted-foreground' : 'text-muted-foreground',
+                          isApplied && 'text-success'
                         )}>
                           {rec.reason}
                         </p>
                         {rec.impact && (
                           <p className={cn(
                             'text-xs mt-1 italic',
-                            isNeptune ? 'text-purple-600' : 'text-blue-600',
-                            isApplied && 'text-green-600'
+                            isNeptune ? 'text-muted-foreground' : 'text-muted-foreground',
+                            isApplied && 'text-success'
                           )}>
                             影响：{rec.impact}
                           </p>
@@ -185,7 +185,7 @@ export default function PersonaCard({
                         {canApply && (
                           <div className="mt-2 flex justify-end">
                             {isApplied ? (
-                              <span className="text-xs text-green-600 flex items-center gap-1">
+                              <span className="text-xs text-success flex items-center gap-1">
                                 <CheckCircle2 className="w-3 h-3" />
                                 已应用
                               </span>
@@ -195,7 +195,7 @@ export default function PersonaCard({
                                 variant="outline"
                                 className={cn(
                                   'h-7 text-xs',
-                                  'border-purple-300 text-purple-700 hover:bg-purple-100'
+                                  'border-border text-muted-foreground hover:bg-muted'
                                 )}
                                 disabled={isDisabled}
                                 onClick={() => handleApplyRecommendation(rec, index)}

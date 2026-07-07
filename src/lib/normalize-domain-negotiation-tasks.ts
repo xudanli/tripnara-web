@@ -78,6 +78,13 @@ export function normalizeDomainNegotiationTask(raw: unknown): DomainNegotiationT
           : null,
     description: typeof r.description === 'string' ? r.description : undefined,
     activeRoundId: typeof activeRoundRaw === 'string' ? activeRoundRaw : null,
+    source: asString(r.source),
+    problemId: asString(r.problemId ?? r.problem_id ?? r.decisionProblemId ?? r.decision_problem_id),
+    decisionProblemId: asString(r.decisionProblemId ?? r.decision_problem_id ?? r.problemId ?? r.problem_id),
+    sourceConflictId: asString(r.sourceConflictId ?? r.source_conflict_id),
+    negotiationTaskId: asString(r.negotiationTaskId ?? r.negotiation_task_id),
+    resolutionId: asString(r.resolutionId ?? r.resolution_id),
+    actionPlanId: asString(r.actionPlanId ?? r.action_plan_id),
     claimCount: typeof r.claimCount === 'number' ? r.claimCount : typeof r.claim_count === 'number' ? r.claim_count : undefined,
     leaderDisplayName:
       typeof r.leaderDisplayName === 'string'

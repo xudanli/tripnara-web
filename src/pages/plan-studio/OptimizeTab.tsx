@@ -285,21 +285,21 @@ export default function OptimizeTab({ tripId }: OptimizeTabProps) {
           </p>
           
           {/* 引导提示：前往决策评估 Tab */}
-          <Card className="bg-blue-50 border-blue-200">
+          <Card className="bg-muted border-border">
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-900 mb-1">
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
                     {t('planStudio.optimizeTab.workbenchHint.title')}
                   </p>
-                  <p className="text-xs text-blue-700 mb-3">
+                  <p className="text-xs text-muted-foreground mb-3">
                     {t('planStudio.optimizeTab.workbenchHint.description')}
                   </p>
                   <Button
                     onClick={handleGoToWorkbench}
                     variant="outline"
                     size="sm"
-                    className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                    className="border-border text-muted-foreground hover:bg-muted"
                   >
                     {t('planStudio.optimizeTab.workbenchHint.action')}
                     <ArrowRight className="w-3 h-3 ml-1.5" />

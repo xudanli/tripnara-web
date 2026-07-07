@@ -8,28 +8,28 @@ interface MbtiSelfSelectStepProps {
   onSelect: (type: MbtiType) => void;
 }
 
-/** 16personalities 四 temperament 标准色 · 紫/绿/蓝/黄人组 */
+/** 四 temperament · 绿/蓝收敛到 nara，紫改冰川蓝，黄保留琥珀 */
 const QUADRANT_CARD: Record<
   MbtiQuadrant,
   { surface: string; active: string; glow: string; label: string }
 > = {
   NT: {
-    surface: 'border-violet-300/40 bg-gradient-to-br from-[#A78BFA] via-[#8860D0] to-[#5B21B6]',
-    active: 'border-violet-100 ring-violet-200/80 shadow-violet-400/25',
-    glow: 'shadow-[0_0_14px_rgba(136,96,208,0.55)]',
-    label: '紫人 · 分析家',
+    surface: 'border-nara-glacier-border/40 bg-gradient-to-br from-[#88C0D0]/90 via-[#88C0D0] to-[#3D6570]',
+    active: 'border-nara-glacier-border ring-nara-glacier-border/80 shadow-nara-glacier/25',
+    glow: 'shadow-[0_0_14px_rgba(136,192,208,0.55)]',
+    label: '分析家',
   },
   NF: {
-    surface: 'border-emerald-300/40 bg-gradient-to-br from-[#4DB88A] via-[#33A474] to-[#15803d]',
-    active: 'border-emerald-100 ring-emerald-200/80 shadow-emerald-400/25',
-    glow: 'shadow-[0_0_14px_rgba(51,164,116,0.5)]',
-    label: '绿人 · 外交家',
+    surface: 'border-gate-allow-border/40 bg-gradient-to-br from-[#5E7D5B]/90 via-[#5E7D5B] to-[#3D5239]',
+    active: 'border-gate-allow-border ring-gate-allow-border/80 shadow-gate-allow/25',
+    glow: 'shadow-[0_0_14px_rgba(94,125,91,0.5)]',
+    label: '外交家',
   },
   SJ: {
-    surface: 'border-sky-300/40 bg-gradient-to-br from-[#5AADCC] via-[#4298B4] to-[#1e40af]',
-    active: 'border-sky-100 ring-sky-200/80 shadow-sky-400/25',
-    glow: 'shadow-[0_0_14px_rgba(66,152,180,0.5)]',
-    label: '蓝人 · 守护者',
+    surface: 'border-nara-glacier-border/40 bg-gradient-to-br from-[#88C0D0]/80 via-[#6BA8B8] to-[#3D6570]',
+    active: 'border-nara-glacier-border ring-nara-glacier-border/80 shadow-nara-glacier/25',
+    glow: 'shadow-[0_0_14px_rgba(136,192,208,0.5)]',
+    label: '守护者',
   },
   SP: {
     surface: 'border-amber-300/40 bg-gradient-to-br from-[#F0BD62] via-[#E2A343] to-[#c2410c]',

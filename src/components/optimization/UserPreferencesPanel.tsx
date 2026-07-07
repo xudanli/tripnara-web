@@ -87,13 +87,13 @@ const DIMENSION_DESCRIPTIONS: Record<keyof ObjectiveFunctionWeights, string> = {
 };
 
 const DIMENSION_COLORS: Record<keyof ObjectiveFunctionWeights, string> = {
-  safety: 'text-red-600',
+  safety: 'text-gate-reject-foreground',
   experienceDensity: 'text-amber-600',
-  philosophyAlignment: 'text-purple-600',
-  timeSlack: 'text-blue-600',
+  philosophyAlignment: 'text-muted-foreground',
+  timeSlack: 'text-muted-foreground',
   fatigueRisk: 'text-orange-600',
-  weatherRisk: 'text-cyan-600',
-  budgetOverrun: 'text-green-600',
+  weatherRisk: 'text-muted-foreground',
+  budgetOverrun: 'text-gate-allow-foreground',
   pacingVariance: 'text-pink-600',
 };
 

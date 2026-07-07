@@ -4,8 +4,10 @@ import {
   filterPlanningConflictsByViewMode,
   isPlanningConflictInboxItem,
   mergePlanningConflicts,
+  resolvePlanningConflictGateStatus,
   summarizePlanningConflicts,
 } from '@/lib/planning-conflicts.util';
+import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
 import type { PlanStudioConflict } from '@/types/trip';
 import type { FeasibilityIssueDto } from '@/types/trip-feasibility-report';
 
@@ -98,5 +100,49 @@ describe('planning conflicts inbox view', () => {
     expect(metrics.scheduleOnlyCount).toBe(1);
     expect(metrics.mustCount).toBe(1);
     expect(metrics.optimizableCount).toBe(0);
+  });
+});
+
+describe('resolvePlanningConflictGateStatus', () => {
+  function conflict(partial: Partial<PlanningConflictItem>): PlanningConflictItem {
+    return {
+      id: 'c1',
+      title: '标题',
+      message: '说明',
+      priority: 'suggest_adjust',
+      category: 'schedule',
+      categoryLabel: '日程',
+      source: 'feasibility',
+      issue: issue({}),
+      ...partial,
+    };
+  }
+
+  it('maps buffer tightness to NEED_CONFIRM', () => {
+    expect(
+      resolvePlanningConflictGateStatus(
+        conflict({ title: '交通缓冲偏紧', message: '两段行程间隔不足' }),
+      ),
+    ).toBe('NEED_CONFIRM');
+  });
+
+  it('maps road closure to REJECT', () => {
+    expect(
+      resolvePlanningConflictGateStatus(
+        conflict({
+          priority: 'must_handle',
+          category: 'transport',
+          title: 'F208 北段已封闭',
+        }),
+      ),
+    ).toBe('REJECT');
+  });
+
+  it('maps suggest_adjust to SUGGEST_REPLACE', () => {
+    expect(
+      resolvePlanningConflictGateStatus(
+        conflict({ priority: 'suggest_adjust', title: '节奏偏紧' }),
+      ),
+    ).toBe('SUGGEST_REPLACE');
   });
 });

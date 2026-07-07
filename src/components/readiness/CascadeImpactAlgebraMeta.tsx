@@ -33,7 +33,7 @@ export default function CascadeImpactAlgebraMeta({
   return (
     <div
       className={cn(
-        'space-y-1.5 rounded-md border border-violet-200/60 bg-violet-50/50 px-2 py-1.5 text-[11px] text-violet-900/90 dark:border-violet-900/40 dark:bg-violet-950/20 dark:text-violet-100/90',
+        'space-y-1.5 rounded-md border border-border/60 bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground/90 dark:border-border/40 dark:bg-muted/20 dark:text-muted-foreground/90',
         className
       )}
     >
@@ -50,14 +50,14 @@ export default function CascadeImpactAlgebraMeta({
             {t('dashboard.readiness.cascade.confidence', { defaultValue: '置信度' })}
           </span>
           <div
-            className="h-1.5 min-w-[4rem] flex-1 overflow-hidden rounded-full bg-violet-200/70 dark:bg-violet-900/50"
+            className="h-1.5 min-w-[4rem] flex-1 overflow-hidden rounded-full bg-muted/70 dark:bg-muted/50"
             role="progressbar"
             aria-valuenow={Math.round(confidence * 100)}
             aria-valuemin={0}
             aria-valuemax={100}
           >
             <div
-              className="h-full rounded-full bg-violet-600 dark:bg-violet-400 transition-all"
+              className="h-full rounded-full bg-muted-foreground dark:bg-muted-foreground transition-all"
               style={{ width: `${Math.round(confidence * 100)}%` }}
             />
           </div>

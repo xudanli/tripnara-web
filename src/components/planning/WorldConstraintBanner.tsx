@@ -23,7 +23,7 @@ export function WorldConstraintBanner({ materialization, className }: WorldConst
   return (
     <Alert
       className={cn(
-        'border-emerald-500/45 bg-emerald-50/80 text-emerald-950 [&>svg]:text-emerald-700',
+        'border-gate-allow-border/45 bg-gate-allow/80 text-gate-allow-foreground [&>svg]:text-gate-allow-foreground',
         className
       )}
     >

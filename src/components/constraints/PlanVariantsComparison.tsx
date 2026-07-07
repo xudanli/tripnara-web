@@ -58,7 +58,7 @@ export default function PlanVariantsComparison({
             className={cn(
               'cursor-pointer transition-all hover:shadow-lg',
               variant.feasibility.isValid
-                ? 'border-green-300'
+                ? 'border-gate-allow-border'
                 : 'border-yellow-300'
             )}
             onClick={() => onSelect?.(variant)}
@@ -118,7 +118,7 @@ export default function PlanVariantsComparison({
                   <div>天数：{variant.planSummary.days} 天</div>
                   <div>活动数：{variant.planSummary.totalActivities} 个</div>
                   {variant.feasibility.violations > 0 && (
-                    <div className="text-red-600">
+                    <div className="text-gate-reject-foreground">
                       违规项：{variant.feasibility.violations} 个
                     </div>
                   )}
@@ -139,10 +139,10 @@ export default function PlanVariantsComparison({
                         className={cn(
                           'text-xs p-2 rounded',
                           warning.severity === 'high' 
-                            ? 'bg-red-50 text-red-700 border border-red-200'
+                            ? 'bg-gate-reject text-gate-reject-foreground border border-gate-reject-border'
                             : warning.severity === 'medium'
                             ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            : 'bg-muted/15 text-muted-foreground border border-border'
                         )}
                       >
                         <div className="font-medium mb-0.5">{warning.type}</div>

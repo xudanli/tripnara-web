@@ -146,8 +146,8 @@ export function FitnessTrendCard({
             <Spinner className="w-8 h-8" />
           </div>
         ) : error ? (
-          <div className="p-4 bg-red-50 rounded-lg text-center">
-            <p className="text-sm text-red-600">加载趋势数据失败</p>
+          <div className="p-4 bg-gate-reject rounded-lg text-center">
+            <p className="text-sm text-gate-reject-foreground">加载趋势数据失败</p>
             <Button 
               variant="outline" 
               size="sm" 

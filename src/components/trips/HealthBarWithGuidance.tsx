@@ -57,7 +57,7 @@ export default function HealthBarWithGuidance({
       
       return {
         status: '非常稳定',
-        statusColor: 'text-green-600',
+        statusColor: 'text-gate-allow-foreground',
         statusIcon: '🟢',
         summary: '行程状态良好',
         nextStep: needsBudget
@@ -90,7 +90,7 @@ export default function HealthBarWithGuidance({
       
       return {
         status: '需要优化',
-        statusColor: 'text-red-600',
+        statusColor: 'text-gate-reject-foreground',
         statusIcon: '🔴',
         summary: `${lowestMetric.name}偏低，建议优先处理`,
         nextStep: tripStatus === 'PLANNING'
@@ -196,9 +196,9 @@ export default function HealthBarWithGuidance({
 
   // 行程评分等级（用户视角）
   const getScoreLevel = () => {
-    if (overallHealth >= 90) return { label: '优秀', color: 'text-green-600' };
+    if (overallHealth >= 90) return { label: '优秀', color: 'text-gate-allow-foreground' };
     if (overallHealth >= 70) return { label: '良好', color: 'text-yellow-600' };
-    return { label: '待优化', color: 'text-red-600' };
+    return { label: '待优化', color: 'text-gate-reject-foreground' };
   };
   const scoreLevel = getScoreLevel();
 
@@ -206,10 +206,10 @@ export default function HealthBarWithGuidance({
     switch (color) {
       case 'green':
         return {
-          text: 'text-green-600',
-          bg: 'bg-green-50',
-          border: 'border-green-200',
-          icon: 'text-green-600',
+          text: 'text-gate-allow-foreground',
+          bg: 'bg-gate-allow',
+          border: 'border-gate-allow-border',
+          icon: 'text-gate-allow-foreground',
         };
       case 'yellow':
         return {
@@ -220,10 +220,10 @@ export default function HealthBarWithGuidance({
         };
       case 'red':
         return {
-          text: 'text-red-600',
-          bg: 'bg-red-50',
-          border: 'border-red-200',
-          icon: 'text-red-600',
+          text: 'text-gate-reject-foreground',
+          bg: 'bg-gate-reject',
+          border: 'border-gate-reject-border',
+          icon: 'text-gate-reject-foreground',
         };
       default:
         return {
@@ -326,7 +326,7 @@ export default function HealthBarWithGuidance({
           </div>
           
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
-            <div className="absolute inset-0 bg-gradient-to-r from-red-500 via-orange-500 via-yellow-500 via-lime-500 to-green-500" />
+            <div className="absolute inset-0 bg-gradient-to-r from-gate-reject-foreground via-orange-500 via-yellow-500 via-lime-500 to-gate-allow-foreground" />
             <div 
               className="absolute top-0 right-0 h-full bg-white/90 transition-all duration-300"
               style={{ width: `${100 - overallHealth}%` }}

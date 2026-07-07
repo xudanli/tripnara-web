@@ -207,7 +207,7 @@ export default function WebsiteNavbar() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={handleLogout}
-                      className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                      className="cursor-pointer text-gate-reject-foreground focus:text-gate-reject-foreground focus:bg-gate-reject"
                     >
                       {t('nav.logout')}
                     </DropdownMenuItem>

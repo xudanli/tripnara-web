@@ -23,7 +23,7 @@ function WeightDeltaRow({ label, delta }: { label: string; delta?: number }) {
   return (
     <span className="text-xs">
       {label}{' '}
-      <span className={cn('font-medium', delta > 0 ? 'text-emerald-700' : 'text-rose-700')}>
+      <span className={cn('font-medium', delta > 0 ? 'text-gate-allow-foreground' : 'text-rose-700')}>
         {weightDeltaLabel(delta)}
       </span>
     </span>
@@ -61,11 +61,11 @@ export function InTripExperienceWeightPanel({
   if (!hasDeltas && history.length === 0) return null;
 
   return (
-    <Card className={cn('col-span-12 border-sky-200/80', className)}>
+    <Card className={cn('col-span-12 border-border/80', className)}>
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
           <CardTitle className="text-base flex items-center gap-2 flex-1">
-            <SlidersHorizontal className="h-4 w-4 text-sky-600" aria-hidden />
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden />
             明日推荐权重调整
           </CardTitle>
           {unreadCount > 0 && (
@@ -83,7 +83,7 @@ export function InTripExperienceWeightPanel({
             <WeightDeltaRow label="餐饮品质" delta={current.diningQualityDelta} />
             <WeightDeltaRow label="博物馆密度" delta={current.museumDensityDelta} />
             {current.bufferDayInserted && (
-              <span className="text-xs font-medium text-sky-700">已插入缓冲日</span>
+              <span className="text-xs font-medium text-muted-foreground">已插入缓冲日</span>
             )}
           </div>
           {current.appliedAt && (

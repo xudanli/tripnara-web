@@ -81,7 +81,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
   const getRiskBadgeColor = (level: string) => {
     switch (level) {
       case 'HIGH':
-        return 'bg-red-100 text-red-800 border-red-300';
+        return 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border';
       case 'MEDIUM':
         return 'bg-orange-100 text-orange-800 border-orange-300';
       case 'LOW':
@@ -149,9 +149,9 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
 
       {/* 🆕 无风险时的友好提示 */}
       {normalizedStatus === 'ALLOW' && violations.length === 0 && Object.keys(riskMap).length === 0 && (
-        <Card className="border-green-200 bg-green-50/50">
+        <Card className="border-gate-allow-border bg-gate-allow/50">
           <CardContent className="py-12 text-center">
-            <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-green-600" />
+            <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-gate-allow-foreground" />
             <div className="text-sm font-medium text-gray-900 mb-1">{t('tripViews.abu.allItemsGood')}</div>
             <div className="text-xs text-muted-foreground">{t('tripViews.abu.noFixNeeded')}</div>
           </CardContent>
@@ -163,7 +163,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="w-4 h-4 text-red-600" />
+              <Shield className="w-4 h-4 text-gate-reject-foreground" />
               {t('tripViews.abu.redlineSummary.title')}
             </CardTitle>
             <CardDescription className="text-xs">{t('tripViews.abu.redlineSummary.description')}</CardDescription>
@@ -172,7 +172,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
             {violations.slice(0, 3).map((violation) => (
               <div
                 key={violation.id}
-                className="p-3 border border-red-200 bg-red-50/50 rounded-lg cursor-pointer hover:bg-red-100/50 transition-colors"
+                className="p-3 border border-gate-reject-border bg-gate-reject/50 rounded-lg cursor-pointer hover:bg-gate-reject/50 transition-colors"
                 onClick={() => {
                   // 定位到对应的行程项
                   const firstDay = violation.affectedDays[0];
@@ -323,7 +323,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
         <SheetContent side="right" className="w-full sm:max-w-lg">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-red-600" />
+              <Shield className="w-5 h-5 text-gate-reject-foreground" />
               {t('tripViews.abu.riskDetails.title')}
             </SheetTitle>
             <SheetDescription>
@@ -365,13 +365,13 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
 
                   if (itemViolations.length === 0 && itemRisk.level === 'NONE') {
                     return (
-                      <Card className="border-green-200 bg-green-50">
+                      <Card className="border-gate-allow-border bg-gate-allow">
                         <CardContent className="pt-6">
-                          <div className="flex items-center gap-2 text-green-800">
+                          <div className="flex items-center gap-2 text-gate-allow-foreground">
                             <CheckCircle2 className="w-5 h-5" />
                             <span className="font-medium">{t('tripViews.abu.noRisk.title')}</span>
                           </div>
-                          <div className="text-sm text-green-700 mt-2">
+                          <div className="text-sm text-gate-allow-foreground mt-2">
                             {t('tripViews.abu.noRisk.description')}
                           </div>
                         </CardContent>
@@ -382,7 +382,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                   return (
                     <div className="space-y-4">
                       {itemRisk.level !== 'NONE' && (
-                        <Card className="border-red-300 bg-red-50">
+                        <Card className="border-gate-reject-border bg-gate-reject">
                           <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
                               <Badge variant="destructive">
@@ -405,7 +405,7 @@ export default function AbuView({ trip, abuData, onItemClick }: AbuViewProps) {
                       {itemViolations.map((violation) => (
                         <Card
                           key={violation.id}
-                          className="border-red-300 bg-red-50"
+                          className="border-gate-reject-border bg-gate-reject"
                         >
                           <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">

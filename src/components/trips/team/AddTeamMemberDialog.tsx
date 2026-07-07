@@ -155,8 +155,8 @@ export default function AddTeamMemberDialog({
           </div>
 
           {foundMember ? (
-            <Alert className="border-emerald-200 bg-emerald-50/80 dark:bg-emerald-950/20">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <Alert className="border-gate-allow-border bg-gate-allow/80 dark:bg-gate-allow/20">
+              <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
               <AlertDescription className="text-sm">
                 找到用户 <span className="font-medium">{foundMember.displayName}</span>
                 {lookupState?.preferencesLoaded

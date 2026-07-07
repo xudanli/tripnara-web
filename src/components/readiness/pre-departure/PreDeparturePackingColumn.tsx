@@ -185,7 +185,7 @@ export default function PreDeparturePackingColumn({
                   </span>
                 </div>
                 <div className="flex items-center gap-2 pl-9">
-                  <Progress value={cat.pct} className="h-1.5 flex-1 [&>div]:bg-nara-glacier/70" />
+                  <Progress value={cat.pct} className="h-1.5 flex-1 [&>div]:bg-foreground/50" />
                   <span className={cn(workbenchSecondaryMetric, 'w-8 text-right text-[10px]')}>
                     {cat.pct}%
                   </span>

@@ -103,7 +103,7 @@ export function ReplaceItineraryItemDialog({
         {!result ? (
           <div className="space-y-4 py-4">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4" />
                   {error}
@@ -188,9 +188,9 @@ export function ReplaceItineraryItemDialog({
           </div>
         ) : (
           <div className="space-y-4 py-4">
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-              <div className="font-medium text-green-800 mb-2">{t('dialogs.replaceItineraryItem.foundReplacement')}</div>
-              <div className="text-sm text-green-700">
+            <div className="rounded-lg border border-gate-allow-border bg-gate-allow p-4">
+              <div className="font-medium text-gate-allow-foreground mb-2">{t('dialogs.replaceItineraryItem.foundReplacement')}</div>
+              <div className="text-sm text-gate-allow-foreground">
                 <div className="mb-1">
                   <strong>{t('dialogs.replaceItineraryItem.newPlace')}</strong> Place ID {result.newItem.placeId}
                 </div>

@@ -347,11 +347,11 @@ export default function BusinessHoursCard({
   // 如果没有解析到数据，显示原始描述
   if (!hoursData || !dailyHours) {
     return (
-      <Card className={cn('border-l-4 border-l-blue-500', className)}>
+      <Card className={cn('border-l-4 border-l-border', className)}>
         <CardContent className="p-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-600" />
+              <Calendar className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium">营业时间</span>
               {day && (
                 <Badge variant="outline" className="text-xs">
@@ -373,11 +373,11 @@ export default function BusinessHoursCard({
   }
 
   return (
-    <Card className={cn('border-l-4 border-l-blue-500', className)}>
+    <Card className={cn('border-l-4 border-l-border', className)}>
       <CardContent className="p-4 space-y-3">
         {/* 标题行 */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Calendar className="w-4 h-4 text-blue-600" />
+          <Calendar className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-medium">营业时间</span>
           {severity && (
             <Badge
@@ -420,7 +420,7 @@ export default function BusinessHoursCard({
                 key={index}
                 className={cn(
                   'flex items-center justify-between text-xs',
-                  item.isToday && 'font-medium text-blue-700'
+                  item.isToday && 'font-medium text-muted-foreground'
                 )}
               >
                 <span className="flex items-center gap-2">
@@ -448,8 +448,8 @@ export default function BusinessHoursCard({
           <div className="flex items-center gap-2 pt-2 border-t">
             {currentStatus.isOpen ? (
               <>
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
-                <span className="text-xs text-green-700">
+                <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />
+                <span className="text-xs text-gate-allow-foreground">
                   实时状态：营业中
                 </span>
               </>

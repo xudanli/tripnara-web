@@ -49,13 +49,13 @@ export function HardTrekTrailPlanTimeline({
             key={seg.day}
             className={cn(
               'rounded-xl border px-3 py-3',
-              !seg.suitable && 'border-red-500/40 bg-red-500/5'
+              !seg.suitable && 'border-gate-reject-border/40 bg-gate-reject-foreground/5'
             )}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-muted-foreground">Day {seg.day}</span>
               {!seg.suitable && (
-                <span className="text-[10px] font-medium text-red-600">超标</span>
+                <span className="text-[10px] font-medium text-gate-reject-foreground">超标</span>
               )}
             </div>
             <p className="mt-1 text-sm font-semibold">{seg.theme}</p>
@@ -66,7 +66,7 @@ export function HardTrekTrailPlanTimeline({
               {seg.distanceKm} km · ↑{seg.ascentM} m
             </p>
             {seg.noteZh && (
-              <p className="mt-1 text-[11px] text-red-700 dark:text-red-400">{seg.noteZh}</p>
+              <p className="mt-1 text-[11px] text-gate-reject-foreground dark:text-gate-reject-foreground">{seg.noteZh}</p>
             )}
           </div>
         ))}

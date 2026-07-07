@@ -183,7 +183,7 @@ export default function InsightsPage() {
 
                   <div>
                     <h3 className="font-medium mb-3 flex items-center gap-2">
-                      <Heart className="h-4 w-4 text-red-500" />
+                      <Heart className="h-4 w-4 text-gate-reject-foreground" />
                       最值回忆点
                     </h3>
                     <div className="space-y-2">

@@ -33,10 +33,10 @@ interface TripCostSummaryCardProps {
 }
 
 const COST_CATEGORY_COLORS: Record<CostCategory, string> = {
-  ACCOMMODATION: 'bg-blue-100 text-blue-800',
-  TRANSPORTATION: 'bg-green-100 text-green-800',
+  ACCOMMODATION: 'bg-muted/15 text-muted-foreground',
+  TRANSPORTATION: 'bg-gate-allow text-gate-allow-foreground',
   FOOD: 'bg-orange-100 text-orange-800',
-  ACTIVITIES: 'bg-purple-100 text-purple-800',
+  ACTIVITIES: 'bg-muted/15 text-muted-foreground',
   SHOPPING: 'bg-pink-100 text-pink-800',
   OTHER: 'bg-gray-100 text-gray-800',
 };
@@ -78,7 +78,7 @@ export function TripCostSummaryCard({ tripId, className }: TripCostSummaryCardPr
       <Card className={className}>
         <CardContent className="py-8">
           <div className="flex flex-col items-center justify-center text-center">
-            <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+            <AlertCircle className="w-8 h-8 text-gate-reject-foreground mb-2" />
             <p className="text-sm text-muted-foreground mb-4">{summaryError}</p>
             <Button variant="outline" size="sm" onClick={loadSummary}>
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -97,9 +97,9 @@ export function TripCostSummaryCard({ tripId, className }: TripCostSummaryCardPr
   const varianceStatus = summary.variance.status;
   const varianceColor =
     varianceStatus === 'OVER_BUDGET'
-      ? 'text-red-600'
+      ? 'text-gate-reject-foreground'
       : varianceStatus === 'UNDER_BUDGET'
-      ? 'text-green-600'
+      ? 'text-gate-allow-foreground'
       : 'text-gray-600';
 
   const VarianceIcon =
@@ -186,12 +186,12 @@ export function TripCostSummaryCard({ tripId, className }: TripCostSummaryCardPr
 
         {/* 支付状态 */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-lg border p-3 bg-green-50">
+          <div className="rounded-lg border p-3 bg-gate-allow">
             <div className="flex items-center gap-2 mb-1">
-              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />
               <p className="text-xs text-muted-foreground">已支付</p>
             </div>
-            <p className="text-lg font-semibold text-green-700">
+            <p className="text-lg font-semibold text-gate-allow-foreground">
               {formatCost(summary.totalPaid, summary.currency)}
             </p>
           </div>
@@ -253,7 +253,7 @@ export function TripCostSummaryCard({ tripId, className }: TripCostSummaryCardPr
                       <span className="text-muted-foreground w-16">实际费用</span>
                       <div className="flex-1 bg-gray-200 rounded-full h-2">
                         <div
-                          className="bg-blue-600 h-2 rounded-full"
+                          className="bg-muted-foreground h-2 rounded-full"
                           style={{ width: `${actualPercent}%` }}
                         />
                       </div>

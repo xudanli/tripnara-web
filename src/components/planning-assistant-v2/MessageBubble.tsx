@@ -15,6 +15,7 @@ import type { ChatMessage } from '@/hooks/useChatV2';
 import { MCPDataDisplay } from './MCPDataDisplay';
 import { OrchestrationProgressCard } from './OrchestrationProgressCard';
 import { PlanningPipelineProgress } from '@/components/agent/PlanningPipelineProgress';
+import { RouteRunCtreProgressBand } from '@/features/agent/ctre';
 import { GuardianAssistantBlock } from '@/components/guardian';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -219,7 +220,10 @@ export function MessageBubble({
         </div>
 
         {!isUser && message.asyncTaskPending ? (
-          <PlanningPipelineProgress compact className="mt-2" />
+          <div className="mt-2 space-y-2">
+            <PlanningPipelineProgress compact />
+            <RouteRunCtreProgressBand compact />
+          </div>
         ) : null}
 
         {!isUser && message.guardianPresentation ? (

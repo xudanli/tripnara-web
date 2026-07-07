@@ -109,7 +109,7 @@ export function CollaboratorsDialog({ tripId, open, onOpenChange }: Collaborator
 
         <div className="space-y-4 py-4">
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground">
               {error}
             </div>
           )}
@@ -200,7 +200,7 @@ export function CollaboratorsDialog({ tripId, open, onOpenChange }: Collaborator
                               variant="ghost"
                               size="icon"
                               onClick={() => handleRemoveCollaborator(collaborator)}
-                              className="text-red-500 hover:text-red-700"
+                              className="text-gate-reject-foreground hover:text-gate-reject-foreground"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>

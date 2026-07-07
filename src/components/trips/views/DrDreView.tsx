@@ -780,9 +780,9 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
 
       {/* 🆕 如果没有有问题的项，显示友好提示（仅在确实没有问题且tripMetrics存在时） */}
       {hasNoProblems && (
-        <Card className="border-green-200 bg-green-50/50">
+        <Card className="border-gate-allow-border bg-gate-allow/50">
           <CardContent className="py-12 text-center">
-            <Activity className="w-12 h-12 mx-auto mb-3 text-green-600" />
+            <Activity className="w-12 h-12 mx-auto mb-3 text-gate-allow-foreground" />
             <div className="text-sm font-medium text-gray-900 mb-1">所有行程项节奏良好</div>
             <div className="text-xs text-muted-foreground">无需调整，行程安排合理 ✨</div>
           </CardContent>
@@ -791,9 +791,9 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
 
       {/* 🆕 如果tripMetrics加载失败，显示失败提示 */}
       {tripMetricsLoadFailed && (
-        <Card className="border-red-200 bg-red-50/50">
+        <Card className="border-gate-reject-border bg-gate-reject/50">
           <CardContent className="py-12 text-center">
-            <Activity className="w-12 h-12 mx-auto mb-3 text-red-600" />
+            <Activity className="w-12 h-12 mx-auto mb-3 text-gate-reject-foreground" />
             <div className="text-sm font-medium text-gray-900 mb-1">节奏数据加载失败</div>
             <div className="text-xs text-muted-foreground">无法获取节奏分析数据，请检查网络连接或稍后重试</div>
           </CardContent>
@@ -874,7 +874,7 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
                           key={item.id}
                           className={cn(
                             "flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors",
-                            hasHighSeverity && "border-red-200 bg-red-50/30"
+                            hasHighSeverity && "border-gate-reject-border bg-gate-reject/30"
                           )}
                         >
                           <div className="flex-shrink-0 pt-0.5">
@@ -919,7 +919,7 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
                                     className={cn(
                                       "text-xs px-2 py-0.5 rounded",
                                       problem.severity === 'HIGH' 
-                                        ? "bg-red-100 text-red-700 border border-red-200" 
+                                        ? "bg-gate-reject text-gate-reject-foreground border border-gate-reject-border" 
                                         : "bg-orange-50 text-orange-700 border border-orange-200"
                                     )}
                                   >
@@ -946,7 +946,7 @@ export default function DrDreView({ trip, drDreData, tripMetrics, tripMetricsLoa
                               {itemMetrics.effort !== undefined && itemMetrics.effort > 0 && (
                                 <div className="flex items-center gap-1 text-xs">
                                   <Activity className="w-3 h-3 text-muted-foreground" />
-                                  <span className={isOverThreshold(itemMetrics.effort, 70) ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                                  <span className={isOverThreshold(itemMetrics.effort, 70) ? 'text-gate-reject-foreground font-medium' : 'text-muted-foreground'}>
                                     疲劳{itemMetrics.effort.toFixed(1)}
                                   </span>
                                 </div>

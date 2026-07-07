@@ -87,16 +87,16 @@ function getStageConfig(stage: DecisionStage) {
         label: '理解',
         description: '深入了解选项，对比分析',
         icon: AlertTriangle,
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-50',
+        color: 'text-muted-foreground',
+        bgColor: 'bg-muted',
       };
     case 'judge':
       return {
         label: '判断',
         description: '做出最终决策',
         icon: CheckCircle2,
-        color: 'text-green-600',
-        bgColor: 'bg-green-50',
+        color: 'text-success',
+        bgColor: 'bg-muted',
       };
   }
 }
@@ -250,13 +250,13 @@ export function DecisionFunnel({
                   {selectedOption.details.whyConsider &&
                     selectedOption.details.whyConsider.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium text-green-600 mb-2">
+                        <h4 className="text-sm font-medium text-success mb-2">
                           但为什么推荐考虑？
                         </h4>
                         <ul className="space-y-1">
                           {selectedOption.details.whyConsider.map((reason, index) => (
                             <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                              <span className="text-green-500 mt-0.5">└─</span>
+                              <span className="text-success mt-0.5">└─</span>
                               <span>{reason}</span>
                             </li>
                           ))}
@@ -297,7 +297,7 @@ export function DecisionFunnel({
                         className={cn(
                           'h-full transition-all',
                           selectedOption.matchScore >= 90
-                            ? 'bg-green-500'
+                            ? 'bg-muted-foreground'
                             : selectedOption.matchScore >= 70
                             ? 'bg-yellow-500'
                             : 'bg-orange-500'
@@ -343,11 +343,11 @@ export function DecisionFunnel({
   // 判断阶段：确认对话框
   if (stage === 'judge' && selectedOption) {
     return (
-      <Card className={cn('border-2 border-gate-confirm-border', className)}>
+      <Card className={cn('border-2 border-border', className)}>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-gate-confirm-foreground" />
+              <CheckCircle2 className="w-5 h-5 text-warning" />
               确认你的选择
             </CardTitle>
             <Badge variant="outline" className={cn(stageConfig.color, stageConfig.bgColor)}>

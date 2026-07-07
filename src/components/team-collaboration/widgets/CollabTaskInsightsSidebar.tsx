@@ -2,6 +2,10 @@ import { useMemo } from 'react';
 import { AlertTriangle, Sparkles, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import {
+  isCollaborativeTaskAssigned,
+  resolveCollaborativeTaskAssigneeLabel,
+} from '@/lib/collab-task-assignee.util';
 import { cn } from '@/lib/utils';
 import type { CollaborativeTaskView } from '@/types/collaborative-task-flywheel';
 import { CollabWidgetCard } from './CollabWidgetCard';
@@ -15,7 +19,7 @@ function buildLoadMap(tasks: CollaborativeTaskView[]): Map<string, number> {
   const map = new Map<string, number>();
   for (const task of tasks) {
     if (task.status === 'confirmed') continue;
-    const label = task.assigneeLabel ?? '未分配';
+    const label = resolveCollaborativeTaskAssigneeLabel(task) ?? '未分配';
     map.set(label, (map.get(label) ?? 0) + 1);
   }
   return map;
@@ -31,7 +35,7 @@ export function CollabTaskInsightsSidebar({
   const loads = [...loadMap.entries()].sort((a, b) => b[1] - a[1]);
 
   const maxLoad = loads[0]?.[1] ?? 1;
-  const unassigned = pending.find((t) => !t.assigneeLabel);
+  const unassigned = pending.find((t) => !isCollaborativeTaskAssigned(t));
   const lightest = loads.filter(([name]) => name !== '未分配').at(-1);
 
   const aiSuggestion =

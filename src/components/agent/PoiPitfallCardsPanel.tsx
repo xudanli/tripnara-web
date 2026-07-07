@@ -11,9 +11,9 @@ export interface PoiPitfallCardsPanelProps {
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
-  info: 'border-sky-500/25 bg-sky-50/40 dark:bg-sky-950/20',
+  info: 'border-border/25 bg-muted/15 dark:bg-muted/15',
   warn: 'border-amber-500/30 bg-amber-50/45 dark:bg-amber-950/25',
-  block: 'border-red-500/30 bg-red-50/45 dark:bg-red-950/25',
+  block: 'border-gate-reject-border/30 bg-gate-reject/45 dark:bg-gate-reject/25',
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -23,9 +23,9 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 function SeverityIcon({ severity }: { severity?: string }) {
-  if (severity === 'block') return <ShieldAlert className="h-3.5 w-3.5 text-red-600" aria-hidden />;
+  if (severity === 'block') return <ShieldAlert className="h-3.5 w-3.5 text-gate-reject-foreground" aria-hidden />;
   if (severity === 'warn') return <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden />;
-  return <Info className="h-3.5 w-3.5 text-sky-600" aria-hidden />;
+  return <Info className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />;
 }
 
 function cardTitle(card: PoiPitfallCard): string {

@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { assertReadinessApplyRepairAllowed, EFFECTIVE_PLAN_WRITE_CHAIN_REQUIRED, NON_CANONICAL_APPLY_DEPRECATED, parseWriteChainBlockedError, EffectivePlanWriteChainRequiredError, NonCanonicalApplyDeprecatedError } from '@/lib/effective-plan-write-chain.util';
 import type {
   RepairOption,
 } from '@/types/readiness';
@@ -29,6 +30,7 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
+    details?: unknown;
   };
 }
 
@@ -40,6 +42,23 @@ function handleResponse<T>(response: { data: ApiResponseWrapper<T> }): T {
     throw new Error('无效的API响应：响应数据为空');
   }
   if (!response.data.success) {
+    const parsed = parseWriteChainBlockedError(response.data);
+    if (parsed?.code === NON_CANONICAL_APPLY_DEPRECATED) {
+      throw new NonCanonicalApplyDeprecatedError(
+        undefined,
+        undefined,
+        parsed.details,
+        parsed.message,
+      );
+    }
+    if (parsed?.code === EFFECTIVE_PLAN_WRITE_CHAIN_REQUIRED) {
+      throw new EffectivePlanWriteChainRequiredError(
+        undefined,
+        undefined,
+        parsed.details,
+        parsed.message,
+      );
+    }
     throw new Error(response.data.error?.message || '请求失败');
   }
   // 防御性检查：确保 data 字段存在
@@ -945,6 +964,7 @@ export const readinessApi = {
     blockerId: string,
     optionId: string
   ): Promise<{ success: boolean; message?: string }> => {
+    assertReadinessApplyRepairAllowed({ blockerId });
     const response = await apiClient.post<ApiResponseWrapper<{ success: boolean; message?: string }>>(
       '/readiness/apply-repair',
       { tripId, blockerId, optionId }
@@ -957,6 +977,7 @@ export const readinessApi = {
    * POST /readiness/auto-repair
    */
   autoRepair: async (tripId: string): Promise<{ success: boolean; message?: string }> => {
+    assertReadinessApplyRepairAllowed({ issueId: tripId });
     const response = await apiClient.post<ApiResponseWrapper<{ success: boolean; message?: string }>>(
       '/readiness/auto-repair',
       { tripId }

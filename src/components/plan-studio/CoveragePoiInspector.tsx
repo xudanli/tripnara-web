@@ -31,9 +31,9 @@ const COVERAGE_STATUS_LABELS: Record<PoiCoverageStatus, string> = {
 };
 
 const COVERAGE_STATUS_CLASS: Record<PoiCoverageStatus, string> = {
-  covered: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  partial: 'bg-amber-100 text-amber-800 border-amber-200',
-  uncovered: 'bg-red-100 text-red-800 border-red-200',
+  covered: 'bg-muted text-success border-border',
+  partial: 'bg-muted text-warning border-border',
+  uncovered: 'bg-muted text-error border-border',
 };
 
 const EVIDENCE_LABELS: Record<EvidenceType, string> = {
@@ -53,10 +53,10 @@ const EVIDENCE_STATUS_LABELS: Record<EvidenceStatus, string> = {
 };
 
 const EVIDENCE_STATUS_CLASS: Record<EvidenceStatus, string> = {
-  fetched: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  missing: 'bg-amber-50 text-amber-800 border-amber-200',
-  fetching: 'bg-blue-50 text-blue-800 border-blue-200',
-  failed: 'bg-red-50 text-red-800 border-red-200',
+  fetched: 'bg-muted text-success border-border',
+  missing: 'bg-muted text-warning border-border',
+  fetching: 'bg-muted text-muted-foreground border-border',
+  failed: 'bg-muted text-error border-border',
 };
 
 const POI_TYPE_LABELS: Record<string, string> = {
@@ -177,7 +177,7 @@ export default function CoveragePoiInspector({
               {segment.hazards.map((hazard) => (
                 <div
                   key={`${hazard.type}-${hazard.message}`}
-                  className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                  className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-warning"
                 >
                   {hazard.message}
                 </div>
@@ -209,7 +209,7 @@ export default function CoveragePoiInspector({
       <Card className={cn('h-full', className)}>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertTriangle className="h-4 w-4 text-warning" />
             覆盖缺口
           </CardTitle>
         </CardHeader>
@@ -313,7 +313,7 @@ export default function CoveragePoiInspector({
             <p className="text-xs font-medium text-muted-foreground mb-1.5">缺失证据</p>
             <div className="flex flex-wrap gap-1.5">
               {poi.missingEvidence.map((evidence) => (
-                <Badge key={evidence} variant="outline" className="text-xs text-amber-800 border-amber-300">
+                <Badge key={evidence} variant="outline" className="text-xs text-warning border-border">
                   {EVIDENCE_LABELS[evidence] ?? evidence}
                 </Badge>
               ))}

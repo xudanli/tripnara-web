@@ -60,7 +60,7 @@ export function CollaboratorAvatar({
         workbenchCollaboratorAvatarSurface,
         highlight === 'none' && 'border-background ring-0',
         highlight === 'current' && 'border-primary ring-2 ring-primary/30',
-        highlight === 'spoken' && 'border-gate-allow-border ring-0',
+        highlight === 'spoken' && 'border-border ring-0',
         className,
       )}
       title={label}

@@ -56,7 +56,7 @@ function ApplyPledgeBlock({
   const toneClass =
     tone === 'amber'
       ? 'border-amber-500/25 bg-amber-500/8 text-amber-950 dark:text-amber-100'
-      : 'border-sky-500/25 bg-sky-500/8 text-sky-950 dark:text-sky-100';
+      : 'border-border/25 bg-muted/150/8 text-muted-foreground dark:text-muted-foreground';
 
   return (
     <div className={cn('space-y-1.5 rounded-md border p-2', toneClass)}>

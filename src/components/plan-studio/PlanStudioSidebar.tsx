@@ -648,7 +648,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
         <Card>
           <CardHeader className="pb-3 border-b">
             <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-              <Shield className="w-5 h-5 text-red-600" />
+              <Shield className="w-5 h-5 text-error" />
               {t('planStudio.sidebar.abu.gatingStatus')}
             </CardTitle>
           </CardHeader>
@@ -901,10 +901,10 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
           </CardHeader>
           <CardContent className="space-y-2">
             {abuAlerts.length === 0 ? (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-center">
-                <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto mb-2" />
-                <div className="text-green-800 font-medium">一切准备就绪 ✅</div>
-                <div className="text-xs text-green-600 mt-1">当前无风险项</div>
+              <div className="p-4 bg-muted border border-border rounded-lg text-sm text-center">
+                <CheckCircle2 className="w-5 h-5 text-success mx-auto mb-2" />
+                <div className="text-success font-medium">一切准备就绪 ✅</div>
+                <div className="text-xs text-success mt-1">当前无风险项</div>
             </div>
             ) : (
               Object.entries(groupedAlerts).map(([source, sourceAlerts]) => {
@@ -918,9 +918,9 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
                 const overallSeverity = hasWarning ? 'warning' : hasInfo ? 'info' : 'success';
                 
                 const bgColor = 
-                  overallSeverity === 'warning' ? 'bg-red-50 border-red-200 text-red-800' :
-                  overallSeverity === 'info' ? 'bg-[#FFF9E6] border-[#FFE699] text-yellow-800' : // 使用淡黄色背景
-                  'bg-green-50 border-green-200 text-green-800';
+                  overallSeverity === 'warning' ? 'bg-muted border-border text-error' :
+                  overallSeverity === 'info' ? 'bg-muted border-border text-muted-foreground' :
+                  'bg-muted border-border text-success';
                 
                 // 合并所有 alerts 的消息
                 const combinedMessage = sourceAlerts.map(a => a.message).join('；');
@@ -930,7 +930,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
                 
                 return (
                   <div key={source} className={`p-3 border rounded text-sm ${bgColor}`}>
-                    <div className="font-medium text-blue-600 mb-1">{getSourceName(source)}</div>
+                    <div className="font-medium text-muted-foreground mb-1">{getSourceName(source)}</div>
                     <div className="font-medium">{combinedTitle}</div>
                     <div className="text-xs mt-1 opacity-80">{combinedMessage}</div>
             </div>
@@ -969,9 +969,9 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
             {/* 显示操作结果 */}
             {operationResult && (
               <div className={`p-3 border rounded text-sm ${
-                operationResult.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
-                operationResult.type === 'warning' ? 'bg-[#FFF9E6] border-[#FFE699] text-yellow-800' : // 使用淡黄色背景
-                'bg-blue-50 border-blue-200 text-blue-800'
+                operationResult.type === 'success' ? 'bg-muted border-border text-success' :
+                operationResult.type === 'warning' ? 'bg-muted border-border text-warning' :
+                'bg-muted border-border text-muted-foreground'
               }`}>
                 <div className="font-medium">
                   {operationResult.type === 'success' ? '✓' : operationResult.type === 'warning' ? '⚠' : 'ℹ'} 
@@ -982,16 +982,16 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
             )}
             {/* 如果没有操作结果且没有 issues，才显示 noAlerts */}
             {!operationResult && allIssues.length === 0 ? (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-center">
-                <CheckCircle2 className="w-5 h-5 text-green-600 mx-auto mb-2" />
-                <div className="text-green-800 font-medium">一切准备就绪 ✅</div>
-                <div className="text-xs text-green-600 mt-1">当前无风险项</div>
+              <div className="p-4 bg-muted border border-border rounded-lg text-sm text-center">
+                <CheckCircle2 className="w-5 h-5 text-success mx-auto mb-2" />
+                <div className="text-success font-medium">一切准备就绪 ✅</div>
+                <div className="text-xs text-success mt-1">当前无风险项</div>
               </div>
             ) : allIssues.length > 0 ? (
               allIssues.map((issue, index) => {
                 const bgColor = 
-                  issue.severity === 'HIGH' ? 'bg-orange-50 border-orange-200 text-orange-800' :
-                  issue.severity === 'MEDIUM' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+                  issue.severity === 'HIGH' ? 'bg-muted border-border text-error' :
+                  issue.severity === 'MEDIUM' ? 'bg-muted border-border text-muted-foreground' :
                   'bg-gray-50 border-gray-200 text-gray-800';
                 
                 return (
@@ -1022,15 +1022,15 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
             {hasSuggestions ? (
               // 显示从 API 获取的实际修复建议
               neptuneReplacements.map((replacement, index) => (
-                <div key={index} className="p-3 bg-green-50 border border-green-200 rounded text-sm">
-                  <div className="font-medium text-green-800">
+                <div key={index} className="p-3 bg-muted border border-border rounded text-sm">
+                  <div className="font-medium text-success">
                     {t('planStudio.sidebar.neptune.replaceSuggestion')}
                   </div>
-              <div className="text-xs text-green-600 mt-1">
+              <div className="text-xs text-success mt-1">
                     {replacement.explanation || replacement.reason || t('planStudio.sidebar.neptune.replaceSuggestionDesc')}
                   </div>
                   {replacement.validation && (
-                    <div className="text-xs text-green-500 mt-1">
+                    <div className="text-xs text-success mt-1">
                       {t('planStudio.sidebar.neptune.validation')}: {replacement.validation.safetyCheck}
               </div>
                   )}
@@ -1140,11 +1140,11 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
     
     // 根据状态设置卡片边框颜色
     const borderColorClass = gateStatus === 'BLOCK' 
-      ? 'border-l-4 border-l-red-500'
+      ? 'border-l-4 border-l-gate-reject-foreground'
       : gateStatus === 'WARN'
-      ? 'border-l-4 border-l-amber-500'
+      ? 'border-l-4 border-l-warning'
       : gateStatus === 'PASS'
-      ? 'border-l-4 border-l-green-500'
+      ? 'border-l-4 border-l-gate-allow-foreground'
       : '';
     
     return (
@@ -1160,10 +1160,10 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
             <CardTitle className="flex items-center gap-2 text-lg font-semibold">
               <ClipboardCheck className={cn(
                 'w-5 h-5',
-                gateStatus === 'BLOCK' ? 'text-red-600' :
-                gateStatus === 'WARN' ? 'text-amber-600' :
-                gateStatus === 'PASS' ? 'text-green-600' :
-                'text-blue-600'
+                gateStatus === 'BLOCK' ? 'text-error' :
+                gateStatus === 'WARN' ? 'text-warning' :
+                gateStatus === 'PASS' ? 'text-success' :
+                'text-muted-foreground'
               )} />
               {t('planStudio.sidebar.readiness.title')}
             </CardTitle>
@@ -1204,14 +1204,14 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className={cn(
                   'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                  readinessSummary.totalBlockers > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'
+                  readinessSummary.totalBlockers > 0 ? 'bg-muted text-error' : 'bg-gray-50 text-gray-600'
                 )}>
                   <span className="font-medium">{readinessSummary.totalBlockers}</span>
                   <span>阻塞</span>
                 </div>
                 <div className={cn(
                   'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                  readinessSummary.totalMust > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'
+                  readinessSummary.totalMust > 0 ? 'bg-muted text-warning' : 'bg-gray-50 text-gray-600'
                 )}>
                   <span className="font-medium">{readinessSummary.totalMust}</span>
                   <span>必须</span>
@@ -1222,7 +1222,7 @@ export default function PlanStudioSidebar({ tripId, onOpenReadinessDrawer }: Pla
                 </div>
                 <div className={cn(
                   'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                  readinessSummary.risks > 0 ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-600'
+                  readinessSummary.risks > 0 ? 'bg-muted text-warning' : 'bg-muted text-muted-foreground'
                 )}>
                   <span className="font-medium">{readinessSummary.risks}</span>
                   <span>风险</span>

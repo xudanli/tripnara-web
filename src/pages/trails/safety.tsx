@@ -48,7 +48,7 @@ export default function TrailsSafetyPage() {
 
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-          <Shield className="h-8 w-8 text-red-600" />
+          <Shield className="h-8 w-8 text-gate-reject-foreground" />
           安全中心
         </h1>
         <p className="text-muted-foreground">
@@ -63,8 +63,8 @@ export default function TrailsSafetyPage() {
             <Card key={s.title}>
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-red-50">
-                    <Icon className="h-5 w-5 text-red-700" />
+                  <div className="p-2 rounded-lg bg-gate-reject">
+                    <Icon className="h-5 w-5 text-gate-reject-foreground" />
                   </div>
                   <div>
                     <CardTitle className="text-lg">{s.title}</CardTitle>

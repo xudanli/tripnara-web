@@ -36,7 +36,7 @@ export function ClarificationQuestionCard({
   className,
 }: ClarificationQuestionCardProps) {
   const requiredMark = question.required ? (
-    <span className="text-red-500 ml-1" aria-hidden="true">
+    <span className="text-gate-reject-foreground ml-1" aria-hidden="true">
       *
     </span>
   ) : null;
@@ -164,7 +164,7 @@ export function ClarificationQuestionCard({
       <CardContent className="space-y-2">
         {renderInput()}
         {error ? (
-          <p className="text-sm text-red-500" role="alert">
+          <p className="text-sm text-gate-reject-foreground" role="alert">
             {error}
           </p>
         ) : null}

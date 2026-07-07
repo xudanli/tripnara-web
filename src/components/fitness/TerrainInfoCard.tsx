@@ -52,26 +52,26 @@ interface TerrainInfoCardProps {
 /** 将疲劳系数转换为用户友好的文字 */
 function getFatigueLabel(factor: number, isZh: boolean): { label: string; color: string } {
   if (factor <= 1.0) {
-    return { label: isZh ? '正常' : 'Normal', color: 'text-green-600' };
+    return { label: isZh ? '正常' : 'Normal', color: 'text-gate-allow-foreground' };
   } else if (factor <= 1.3) {
     return { label: isZh ? '稍高' : 'Slightly Higher', color: 'text-yellow-600' };
   } else if (factor <= 1.6) {
     return { label: isZh ? '较高' : 'Higher', color: 'text-orange-600' };
   } else {
-    return { label: isZh ? '很高' : 'Very High', color: 'text-red-600' };
+    return { label: isZh ? '很高' : 'Very High', color: 'text-gate-reject-foreground' };
   }
 }
 
 /** 将速度乘数转换为用户友好的文字 */
 function getSpeedLabel(multiplier: number, isZh: boolean): { label: string; color: string } {
   if (multiplier >= 0.9) {
-    return { label: isZh ? '正常' : 'Normal', color: 'text-green-600' };
+    return { label: isZh ? '正常' : 'Normal', color: 'text-gate-allow-foreground' };
   } else if (multiplier >= 0.7) {
     return { label: isZh ? '较慢' : 'Slower', color: 'text-yellow-600' };
   } else if (multiplier >= 0.55) {
     return { label: isZh ? '缓慢' : 'Slow', color: 'text-orange-600' };
   } else {
-    return { label: isZh ? '很慢' : 'Very Slow', color: 'text-red-600' };
+    return { label: isZh ? '很慢' : 'Very Slow', color: 'text-gate-reject-foreground' };
   }
 }
 
@@ -187,13 +187,13 @@ export function TerrainInfoCard({
         {characteristics.bestSeasons && characteristics.bestSeasons.length > 0 && (
           <div className={cn(
             'flex items-center gap-2 p-2 rounded-lg',
-            isCurrentBestSeason ? 'bg-green-50' : 'bg-yellow-50',
+            isCurrentBestSeason ? 'bg-gate-allow' : 'bg-yellow-50',
             compact && 'p-1.5'
           )}>
             <Calendar className={cn(
               'shrink-0',
               compact ? 'w-3.5 h-3.5' : 'w-4 h-4',
-              isCurrentBestSeason ? 'text-green-600' : 'text-yellow-600'
+              isCurrentBestSeason ? 'text-gate-allow-foreground' : 'text-yellow-600'
             )} />
             <div>
               <p className={cn('font-medium', compact ? 'text-xs' : 'text-sm')}>
@@ -201,7 +201,7 @@ export function TerrainInfoCard({
               </p>
               <p className={cn(
                 compact ? 'text-xs' : 'text-sm',
-                isCurrentBestSeason ? 'text-green-600' : 'text-yellow-600'
+                isCurrentBestSeason ? 'text-gate-allow-foreground' : 'text-yellow-600'
               )}>
                 {characteristics.bestSeasons.map(m => getMonthName(m, isZh)).join(', ')}
               </p>

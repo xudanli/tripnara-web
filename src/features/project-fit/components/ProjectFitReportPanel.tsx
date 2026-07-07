@@ -48,7 +48,7 @@ export function ProjectFitReportPanel({ report, role = 'applicant' }: ProjectFit
               >
                 <div className="flex items-start gap-2">
                   {item.passed ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-gate-allow-foreground" />
                   ) : (
                     <AlertCircle className="mt-0.5 h-4 w-4 text-destructive" />
                   )}

@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { SEMANTIC_GREEN_HEX } from '@/lib/semantic-colors';
 import {
   Search,
   MapPin,
@@ -141,7 +142,7 @@ export default function TrailsExplorePage() {
         lng,
         lat,
         label: coords?.label || trail.nameCN || trail.name,
-        color: '#0f766e',
+        color: SEMANTIC_GREEN_HEX,
       };
     });
   }, [filteredTrails]);

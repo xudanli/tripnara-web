@@ -53,7 +53,7 @@ function StravaConnectionItem() {
               {isLoading ? (
                 <Spinner className="w-4 h-4" />
               ) : isConnected ? (
-                <Badge variant="outline" className="text-green-600 border-green-200">
+                <Badge variant="outline" className="text-gate-allow-foreground border-gate-allow-border">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
                   已连接
                 </Badge>
@@ -171,10 +171,10 @@ export function WearableConnectionCard({ className }: WearableConnectionCardProp
             <ComingSoonProviderItem provider="GARMIN" />
             <ComingSoonProviderItem provider="APPLE_HEALTH" />
             {hasStravaConnected && <WearableEstimateCard />}
-            <div className="p-4 bg-blue-50 rounded-lg">
+            <div className="p-4 bg-muted/15 rounded-lg">
               <div className="flex gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 shrink-0" />
-                <p className="text-sm text-blue-700">连接运动设备后，系统将分析您的真实运动数据，更准确地评估体能水平。</p>
+                <AlertCircle className="w-5 h-5 text-muted-foreground shrink-0" />
+                <p className="text-sm text-muted-foreground">连接运动设备后，系统将分析您的真实运动数据，更准确地评估体能水平。</p>
               </div>
             </div>
           </>

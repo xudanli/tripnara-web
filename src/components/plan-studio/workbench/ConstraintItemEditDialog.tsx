@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { tripBudgetApi } from '@/api/trip-budget';
 import { tripsApi } from '@/api/trips';
-import { tripConstraintsApi } from '@/api/trip-constraints';
 import { useWorkbenchBudgetProfile, workbenchKeys } from '@/pages/plan-studio/hooks/useWorkbenchData';
 import { saveConstraintTimeRange, saveConstraintDailyDrive, saveConstraintAccommodation, saveConstraintTravelers, saveConstraintTransport, type ConstraintTransportValue } from '@/lib/planning-constraint-edit-meta';
 import {
@@ -15,6 +14,8 @@ import {
   showConstraintSaveSuccess,
   applyConstraintListItemSave,
   updateSoftConstraintPriority,
+  saveCatalogHardConstraint,
+  patchTripConstraintItem,
 } from '@/lib/constraint-console.service';
 import { useTripConstraints } from '@/hooks/useTripConstraints';
 import type { ConstraintPendingKey, PlanningConstraintsSummary } from '@/types/planning-constraints';
@@ -32,6 +33,13 @@ import {
   isSoftConstraintId,
   type MustGoPlaceSummary,
 } from './constraint-console-view.util';
+import { buildHardConstraintMetadata } from '@/lib/constraint-metadata.util';
+import {
+  buildMemberOptionsFromContract,
+  buildRouteSegmentOptionsFromTrip,
+} from '@/lib/constraint-scope-options.util';
+import { getHardConstraintTemplate } from './constraint-templates';
+import { Lock } from 'lucide-react';
 
 export interface ConstraintItemEditDialogProps {
   tripId: string;
@@ -88,6 +96,16 @@ export function ConstraintItemEditDialog({
   const { softPrefs, apiList, reload } = tripConstraints;
   const serviceCtx = useMemo(() => serviceContextFromApiList(apiList), [apiList]);
 
+  const memberOptions = useMemo(
+    () => buildMemberOptionsFromContract(apiList?.contract?.teamGovernance, trip),
+    [apiList?.contract?.teamGovernance, trip],
+  );
+
+  const routeSegmentOptions = useMemo(
+    () => buildRouteSegmentOptionsFromTrip(trip),
+    [trip],
+  );
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -141,6 +159,32 @@ export function ConstraintItemEditDialog({
 
   const draft = draftOverride ?? serverDraft;
 
+  const selectedEntry = useMemo(() => {
+    if (!constraintId) return null;
+    return (
+      tripConstraints.hardItems.find((item) => item.id === constraintId) ??
+      tripConstraints.softItems.find((item) => item.id === constraintId) ??
+      null
+    );
+  }, [constraintId, tripConstraints.hardItems, tripConstraints.softItems]);
+
+  const editHardMetadata = useMemo(() => {
+    if (!draft || draft.type === 'SOFT' || isSoftConstraintId(draft.id)) return null;
+    const entry =
+      selectedEntry ??
+      ({
+        id: draft.id,
+        kind: 'hard' as const,
+        label: draft.name,
+        icon: getHardConstraintTemplate(draft.id)?.icon ?? Lock,
+      });
+    return buildHardConstraintMetadata({
+      entry,
+      apiConstraint: selectedApiConstraint,
+      draft,
+    });
+  }, [draft, selectedEntry, selectedApiConstraint]);
+
   const handleDraftChange = useCallback(
     (patch: Partial<ConstraintEditorDraft>) => {
       setDraftOverride((prev) => {
@@ -176,7 +220,7 @@ export function ConstraintItemEditDialog({
       setSaveError(null);
       onOpenChange(false);
       showConstraintSaveSuccess(successMessage);
-      onSaved?.();
+      void Promise.resolve(onSaved?.()).catch(() => undefined);
     };
 
     if (draft.id === 'time_range' && trip) {
@@ -264,13 +308,12 @@ export function ConstraintItemEditDialog({
       setSaving(true);
       try {
         const change = draftToPreviewChange(draft);
-        await tripConstraintsApi.patch(
+        await patchTripConstraintItem(
           tripId,
           TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE,
-          {
-            ...change.patch,
-            constraintsVersion: serviceCtx.constraintsVersion,
-          },
+          change.patch,
+          serviceCtx,
+          { queryClient },
         );
         finishSave('单段最长行驶距离已保存');
       } catch (err) {
@@ -368,7 +411,7 @@ export function ConstraintItemEditDialog({
         draft.priority >= 7 ? ('高' as const) : draft.priority >= 4 ? ('中' as const) : ('低' as const);
       setSaving(true);
       try {
-        await updateSoftConstraintPriority(tripId, draft.id, priority, serviceCtx);
+        await updateSoftConstraintPriority(tripId, draft.id, priority, serviceCtx, { queryClient });
         onSoftPrefsChanged?.();
         finishSave('软偏好已保存');
       } catch (err) {
@@ -377,6 +420,21 @@ export function ConstraintItemEditDialog({
         setSaving(false);
       }
       return;
+    }
+
+    if (draft.type === 'HARD') {
+      setSaving(true);
+      try {
+        const saved = await saveCatalogHardConstraint(tripId, draft, serviceCtx, { queryClient });
+        if (saved) {
+          finishSave('硬约束已保存');
+          return;
+        }
+      } catch (err) {
+        handleConstraintApiError(err, err instanceof Error ? err.message : '保存失败');
+      } finally {
+        setSaving(false);
+      }
     }
 
     finishSave('约束已保存');
@@ -403,9 +461,8 @@ export function ConstraintItemEditDialog({
     const label = softPrefs.find((p) => p.id === draft.id)?.label ?? '软偏好';
     void (async () => {
       try {
-        await removeSoftConstraint(tripId, draft.id, serviceCtx);
+        await removeSoftConstraint(tripId, draft.id, serviceCtx, { queryClient });
         onSoftPrefsChanged?.();
-        await reload();
         toast.success(`已移除「${label}」`);
         onOpenChange(false);
         onSaved?.();
@@ -432,6 +489,10 @@ export function ConstraintItemEditDialog({
       saving={saving}
       errorMessage={saveError}
       budgetUsage={budgetProfile?.actuals?.totalEstimated ?? null}
+      hardMetadata={editHardMetadata}
+      tripDayCount={trip?.TripDay?.length ?? summary?.timeRange.dayCount ?? 7}
+      memberOptions={memberOptions}
+      routeSegmentOptions={routeSegmentOptions}
     />
   );
 }

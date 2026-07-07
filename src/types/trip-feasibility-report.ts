@@ -30,6 +30,8 @@ export interface FeasibilityProofAtomDto {
   observedAt?: string;
   validUntil?: string;
   ruleId?: string;
+  /** trace / 去重用；展示字段勿用（NestJS FeasibilityProofDto.semanticKey） */
+  semanticKey?: string;
   confidence?: number;
   evidenceType?: string;
   conclusion?: string;
@@ -96,6 +98,9 @@ export type FeasibilityIssueKind =
   | 'team_friction'
   | 'team_fatigue'
   | 'itinerary_structure'
+  | 'daily_drive'
+  | 'no_night_drive'
+  | 'budget'
   | 'generic';
 
 export interface FeasibilityIssueAnchorsDto {
@@ -138,8 +143,20 @@ export interface FeasibilityIssueUiHintsDto {
   };
 }
 
+export type FeasibilityResolutionMode =
+  | 'DIRECT_EDIT'
+  | 'AUTO_FIX'
+  | 'EVIDENCE_REFRESH'
+  | 'COLLABORATION'
+  | 'DECISION_REQUIRED';
+
 export interface FeasibilityIssueDto {
   id: string;
+  /** 冲突点击时 GET /decision-problems/:id；缺省与 id 相同 */
+  decisionProblemId?: string;
+  linkedDecisionProblemId?: string | null;
+  resolutionMode?: FeasibilityResolutionMode;
+  escalationReason?: string | null;
   priority: FeasibilityIssuePriority;
   category: FeasibilityDimensionKey | string;
   title: string;
@@ -155,6 +172,8 @@ export interface FeasibilityIssueDto {
   proofs?: FeasibilityProofAtomDto[];
   actionRequired?: string;
   severity: 'high' | 'medium' | 'low';
+  /** 关联约束 id（OFFICIAL_RULE · c_official_* / c_official_poi_* 与卡片 judgmentRule 同源） */
+  relatedConstraintIds?: string[];
 }
 
 export interface FeasibilityDayAccommodationDto {

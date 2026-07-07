@@ -146,8 +146,8 @@ export function TripFeedbackDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
           <div className="flex flex-col items-center justify-center py-8 space-y-4">
-            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
-              <Check className="w-8 h-8 text-green-600" />
+            <div className="w-16 h-16 rounded-full bg-gate-allow flex items-center justify-center">
+              <Check className="w-8 h-8 text-gate-allow-foreground" />
             </div>
             <p className="text-lg font-medium text-center">
               {successMessage || '感谢您的反馈！'}

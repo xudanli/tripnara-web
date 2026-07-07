@@ -505,8 +505,8 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   if (error || !budget) {
     return (
       <div className="p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-800">{error || '预算信息不存在'}</p>
+        <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-4">
+          <p className="text-gate-reject-foreground">{error || '预算信息不存在'}</p>
         </div>
       </div>
     );
@@ -517,8 +517,8 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
   if (error || !budget) {
     return (
       <div className="p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-800">{error || '预算信息不存在'}</p>
+        <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-4">
+          <p className="text-gate-reject-foreground">{error || '预算信息不存在'}</p>
         </div>
       </div>
     );
@@ -824,7 +824,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                           <span>{format(new Date(day.date), 'yyyy-MM-dd')}</span>
                           <div className="flex items-center gap-4">
                             <span className="text-muted-foreground">预算: {formatCurrency(day.budget ?? 0, currency)}</span>
-                            <span className={(day.spent ?? 0) > (day.budget ?? 0) ? 'text-red-600' : 'text-green-600'}>
+                            <span className={(day.spent ?? 0) > (day.budget ?? 0) ? 'text-gate-reject-foreground' : 'text-gate-allow-foreground'}>
                               实际: {formatCurrency(day.spent ?? 0, currency)}
                             </span>
                             <span className="text-muted-foreground">
@@ -895,7 +895,7 @@ export default function TripBudgetPage({ tripId: propTripId, embedded = false }:
                     <CardTitle>超支率</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className={`text-3xl font-bold ${statistics.overspendRate > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    <div className={`text-3xl font-bold ${statistics.overspendRate > 0 ? 'text-gate-reject-foreground' : 'text-gate-allow-foreground'}`}>
                       {statistics.overspendRate > 0 ? '+' : ''}
                       {(statistics.overspendRate * 100).toFixed(1)}%
                     </div>

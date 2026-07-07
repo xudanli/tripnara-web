@@ -44,11 +44,11 @@ export default function PlanSuggestionsPanel({
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'blocker':
-        return 'bg-red-50 text-red-700 border-red-200';
+        return 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border';
       case 'warn':
         return 'bg-yellow-50 text-yellow-700 border-yellow-200';
       case 'info':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
+        return 'bg-muted/15 text-muted-foreground border-border';
       default:
         return 'bg-gray-50 text-gray-700 border-gray-200';
     }
@@ -104,7 +104,7 @@ export default function PlanSuggestionsPanel({
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground text-center py-4">
-            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-green-500" />
+            <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-gate-allow-foreground" />
             <p>暂无建议，行程状态良好！</p>
           </div>
         </CardContent>

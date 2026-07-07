@@ -293,9 +293,9 @@ function HighlightBlock({
   
   const typeConfig = {
     info: {
-      bg: 'bg-blue-50',
-      border: 'border-blue-200',
-      text: 'text-blue-900',
+      bg: 'bg-muted/15',
+      border: 'border-border',
+      text: 'text-muted-foreground',
       icon: Info,
     },
     warning: {
@@ -305,9 +305,9 @@ function HighlightBlock({
       icon: AlertTriangle,
     },
     success: {
-      bg: 'bg-green-50',
-      border: 'border-green-200',
-      text: 'text-green-900',
+      bg: 'bg-gate-allow',
+      border: 'border-gate-allow-border',
+      text: 'text-gate-allow-foreground',
       icon: CheckCircle2,
     },
   };
@@ -435,16 +435,16 @@ function WhyRecommendedBlock({ block, className }: { block: PlannerResponseBlock
       : [];
 
   return (
-    <Card className={cn('w-full border border-blue-100 bg-blue-50/30 mb-3', className)}>
+    <Card className={cn('w-full border border-border bg-muted/15 mb-3', className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          <Lightbulb className="w-4 h-4 text-blue-600" />
+          <Lightbulb className="w-4 h-4 text-muted-foreground" />
           {block.title ?? '为什么推荐这样安排'}
         </CardTitle>
         {(block.overallLabel || block.overallSummary) && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {block.overallLabel && (
-              <Badge variant="outline" className="text-xs border-blue-200 bg-white text-blue-800">
+              <Badge variant="outline" className="text-xs border-border bg-white text-muted-foreground">
                 {block.overallLabel}
               </Badge>
             )}
@@ -459,7 +459,7 @@ function WhyRecommendedBlock({ block, className }: { block: PlannerResponseBlock
           <ul className="space-y-1.5">
             {bullets.map((line, i) => (
               <li key={i} className="text-sm flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
                 <span>{line}</span>
               </li>
             ))}

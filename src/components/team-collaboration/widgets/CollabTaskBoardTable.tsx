@@ -11,6 +11,12 @@ import {
   type CollabTaskFilter,
 } from '@/lib/collab-task-filters';
 import {
+  COLLAB_TASK_ASSIGNEE_SCOPES,
+  isCollaborativeTaskAssigned,
+  resolveCollaborativeTaskAssigneeLabel,
+  type CollabTaskAssigneeScope,
+} from '@/lib/collab-task-assignee.util';
+import {
   workbenchCard,
   workbenchSegmentIdle,
   workbenchSegmentSelected,
@@ -42,6 +48,9 @@ interface CollabTaskBoardTableProps {
   tasks: CollaborativeTaskView[];
   filter: CollabTaskFilter;
   onFilterChange: (filter: CollabTaskFilter) => void;
+  assigneeScope?: CollabTaskAssigneeScope;
+  assigneeCounts?: Record<CollabTaskAssigneeScope, number>;
+  onAssigneeScopeChange?: (scope: CollabTaskAssigneeScope) => void;
   className?: string;
 }
 
@@ -49,6 +58,9 @@ export function CollabTaskBoardTable({
   tasks,
   filter,
   onFilterChange,
+  assigneeScope = 'all',
+  assigneeCounts,
+  onAssigneeScopeChange,
   className,
 }: CollabTaskBoardTableProps) {
   const counts = useMemo(() => countTasksByFilter(tasks), [tasks]);
@@ -60,41 +72,74 @@ export function CollabTaskBoardTable({
 
   return (
     <section className={cn(workbenchCard, 'p-4', className)} aria-label="任务看板">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">任务看板</h3>
-        <div
-          className="flex flex-wrap gap-1"
-          role="tablist"
-          aria-label="任务筛选"
-        >
-          {COLLAB_TASK_FILTERS.map((f) => {
-            const selected = filter === f.value;
-            const count = counts[f.value];
-            return (
-              <button
-                key={f.value}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                className={cn(
-                  'inline-flex min-h-[32px] items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] transition-colors',
-                  selected ? workbenchSegmentSelected : workbenchSegmentIdle,
-                )}
-                onClick={() => onFilterChange(f.value)}
-              >
-                {f.label}
-                <span
+      <div className="mb-3 flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">任务看板</h3>
+          <div
+            className="flex flex-wrap gap-1"
+            role="tablist"
+            aria-label="任务筛选"
+          >
+            {COLLAB_TASK_FILTERS.map((f) => {
+              const selected = filter === f.value;
+              const count = counts[f.value];
+              return (
+                <button
+                  key={f.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
                   className={cn(
-                    'tabular-nums',
-                    selected ? 'opacity-90' : 'text-muted-foreground',
+                    'inline-flex min-h-[32px] items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] transition-colors',
+                    selected ? workbenchSegmentSelected : workbenchSegmentIdle,
                   )}
+                  onClick={() => onFilterChange(f.value)}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+                  {f.label}
+                  <span
+                    className={cn(
+                      'tabular-nums',
+                      selected ? 'opacity-90' : 'text-muted-foreground',
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+        {onAssigneeScopeChange ? (
+          <div className="flex flex-wrap gap-1" role="tablist" aria-label="负责人筛选">
+            {COLLAB_TASK_ASSIGNEE_SCOPES.map((scope) => {
+              const selected = assigneeScope === scope.value;
+              const count = assigneeCounts?.[scope.value] ?? 0;
+              return (
+                <button
+                  key={scope.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  className={cn(
+                    'inline-flex min-h-[28px] items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] transition-colors',
+                    selected ? workbenchSegmentSelected : workbenchSegmentIdle,
+                  )}
+                  onClick={() => onAssigneeScopeChange(scope.value)}
+                >
+                  {scope.label}
+                  <span
+                    className={cn(
+                      'tabular-nums',
+                      selected ? 'opacity-90' : 'text-muted-foreground',
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
 
       {filtered.length === 0 ? (
@@ -116,6 +161,8 @@ export function CollabTaskBoardTable({
             <tbody>
               {filtered.map((task) => {
                 const priority = taskPriority(task);
+                const assigneeLabel = resolveCollaborativeTaskAssigneeLabel(task);
+                const assigned = isCollaborativeTaskAssigned(task);
                 return (
                   <tr key={task.id} className="border-b border-border/40 last:border-0">
                     <td className="py-2.5 pr-3">
@@ -130,10 +177,10 @@ export function CollabTaskBoardTable({
                       </Badge>
                     </td>
                     <td className="py-2.5 pr-3">
-                      {task.assigneeLabel ? (
+                      {assigned && assigneeLabel ? (
                         <div className="flex items-center gap-1.5">
-                          <CollaboratorAvatar displayName={task.assigneeLabel} size="xs" />
-                          <span>{task.assigneeLabel}</span>
+                          <CollaboratorAvatar displayName={assigneeLabel} size="xs" />
+                          <span>{assigneeLabel}</span>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">未分配</span>

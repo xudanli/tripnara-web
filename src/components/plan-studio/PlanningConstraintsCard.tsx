@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
+import { WorkbenchConfirmPanel } from '@/components/plan-studio/workbench/WorkbenchConfirmPanel';
 import {
   formatConstraintDateRange,
   formatConstraintTravelMode,
@@ -53,6 +54,8 @@ export interface PlanningConstraintsCardProps {
   onEditConstraint: (key: ConstraintPendingKey) => void;
   onConfirm?: () => void;
   onOpenConflicts?: () => void;
+  /** 规划待办链接文案（默认「查看规划待办 →」；BFF 可用时为「去决策 →」） */
+  planningActionsLabel?: string;
   /** 冲突态：滚动至松弛建议条（PRD §16.2） */
   onScrollToRelaxation?: () => void;
   planningInboxCount?: number;
@@ -93,13 +96,13 @@ function statusBadge(
   switch (status) {
     case 'confirmed':
       return (
-        <Badge variant="outline" className={cn(base, 'border-gate-allow-border text-gate-allow-foreground')}>
+        <Badge variant="outline" className={cn(base, 'border-border text-success')}>
           已确认
         </Badge>
       );
     case 'need_confirm':
       return (
-        <Badge variant="outline" className={cn(base, 'border-gate-suggest-border text-gate-suggest-foreground')}>
+        <Badge variant="outline" className={cn(base, 'border-border text-foreground')}>
           待确认
         </Badge>
       );
@@ -109,7 +112,7 @@ function statusBadge(
           variant="outline"
           role={onConflictClick ? 'button' : undefined}
           tabIndex={onConflictClick ? 0 : undefined}
-          className={cn(base, 'border-amber-300 text-amber-800', conflictInteractive)}
+          className={cn(base, 'border-border text-warning', conflictInteractive)}
           onClick={
             onConflictClick
               ? (event) => {
@@ -146,9 +149,9 @@ function flexibilityBadgeClass(level: ConstraintFlexibilityLevel) {
   const base = 'h-4 px-1.5 text-[9px] font-medium cursor-pointer hover:opacity-80';
   switch (level) {
     case 'soft':
-      return cn(base, 'border-sky-300 text-sky-800 dark:text-sky-200');
+      return cn(base, 'border-border text-muted-foreground dark:text-muted-foreground');
     case 'negotiable':
-      return cn(base, 'border-gate-suggest-border text-gate-suggest-foreground');
+      return cn(base, 'border-border text-foreground');
     default:
       return cn(base, 'text-muted-foreground');
   }
@@ -245,7 +248,7 @@ function ConstraintCell({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-5 px-1 text-[10px] text-gate-suggest-foreground opacity-0 group-hover:opacity-100"
+            className="h-5 px-1 text-[10px] text-foreground opacity-0 group-hover:opacity-100"
             onClick={(event) => {
               event.stopPropagation();
               onEdit();
@@ -285,6 +288,7 @@ export function PlanningConstraintsCard({
   onEditConstraint,
   onConfirm,
   onOpenConflicts,
+  planningActionsLabel = '查看规划待办 →',
   onScrollToRelaxation,
   planningInboxCount = 0,
   deferToPlanningInbox = false,
@@ -297,6 +301,7 @@ export function PlanningConstraintsCard({
 }: PlanningConstraintsCardProps) {
   const isSideColumn = layoutColumn === 'start';
   const [expanded, setExpanded] = useState(!compact);
+  const [reconfirmSignedOff, setReconfirmSignedOff] = useState(false);
   const { levels: flexibilityLevels, cycleFlexibility } = useConstraintFlexibility(tripId);
   const pace = useMemo(() => resolvePaceLabel(trip), [trip]);
 
@@ -324,6 +329,23 @@ export function PlanningConstraintsCard({
     deferToPlanningInbox,
     planningInboxCount,
   ]);
+
+  useEffect(() => {
+    if (!summary?.needsReconfirm) setReconfirmSignedOff(false);
+  }, [summary?.needsReconfirm]);
+
+  const reconfirmItems = useMemo(
+    () =>
+      summary?.needsReconfirm
+        ? [
+            '我已核对时间范围是否与当前行程一致',
+            '我已核对预算上限是否仍符合预期',
+            '我已核对出行人数与协作成员',
+            '我已核对基础交通方式与约束',
+          ]
+        : [],
+    [summary?.needsReconfirm],
+  );
 
   const headline = useMemo(() => {
     if (!summary) return '加载约束…';
@@ -378,6 +400,7 @@ export function PlanningConstraintsCard({
 
   const accent = resolveConstraintsAccent(summary);
   const showConfirmInHeader = summary.allReady && onConfirm && !summary.isUserConfirmed;
+  const reconfirmBlocked = summary.needsReconfirm && !reconfirmSignedOff;
   const showInboxLink = planningInboxCount > 0 && onOpenConflicts;
   const showCompactInline =
     compact && !expanded && summary.isUserConfirmed && !summary.needsReconfirm;
@@ -444,7 +467,7 @@ export function PlanningConstraintsCard({
               type="button"
               size="sm"
               className="h-7 rounded-full px-3 text-xs shadow-sm"
-              disabled={confirming}
+              disabled={confirming || reconfirmBlocked}
               onClick={() => onConfirm?.()}
             >
               {confirming ? '确认中…' : '确认约束'}
@@ -456,9 +479,13 @@ export function PlanningConstraintsCard({
 
       <PlanningDetailsPanel open={expanded}>
         {summary.needsReconfirm ? (
-          <p className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-2.5 py-2 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-            您曾确认过行程约束，但之后有修改。请核对下方四项后再次确认。
-          </p>
+          <WorkbenchConfirmPanel
+            status="NEED_CONFIRM"
+            riskExplanation="您曾确认过行程约束，但之后有修改。请核对下方四项并逐项签收后再确认。"
+            confirmations={reconfirmItems}
+            onAllConfirmedChange={setReconfirmSignedOff}
+            className="border-0 shadow-none"
+          />
         ) : null}
         <div
           className={cn(
@@ -544,7 +571,7 @@ export function PlanningConstraintsCard({
                   className="h-auto p-0 text-[11px] font-medium"
                   onClick={onOpenConflicts}
                 >
-                  打开可执行证明 →
+                  {planningActionsLabel}
                 </Button>
               ) : null}
             </div>

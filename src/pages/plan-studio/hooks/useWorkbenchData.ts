@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { tripBudgetApi } from '@/api/trip-budget';
 import { tripConstraintsApi } from '@/api/trip-constraints';
 import { tripWishesApi } from '@/api/trip-wishes';
@@ -20,6 +20,9 @@ import type { WishSummary } from '@/types/trip-wishes';
 import type { Collaborator, TripDetail } from '@/types/trip';
 
 const STALE_MS = 30_000;
+
+/** 切换 focusConflictId 时丢弃旧 deferred task，避免复用其它天的 decision-checker 快照 */
+const lastPlanningConflictsFetchFocusByTrip = new Map<string, string | null>();
 
 export interface WorkbenchPlanningConflictsQueryOpts {
   includeDecisionChecker?: boolean;
@@ -70,6 +73,13 @@ async function fetchWorkbenchPlanningConflicts(
   queryOpts: WorkbenchPlanningConflictsQueryOpts,
 ): Promise<PlanningConflictsResponse> {
   const includeDecisionChecker = queryOpts.includeDecisionChecker ?? true;
+  const focus = queryOpts.focusConflictId ?? null;
+  const prevFocus = lastPlanningConflictsFetchFocusByTrip.get(tripId);
+  if (prevFocus !== undefined && prevFocus !== focus) {
+    clearDecisionCheckerDeferredStore(tripId);
+  }
+  lastPlanningConflictsFetchFocusByTrip.set(tripId, focus);
+
   discardStaleDecisionCheckerDeferred(tripId);
   const activeTaskId = getActiveDecisionCheckerTaskId(tripId);
 
@@ -123,6 +133,8 @@ export function useWorkbenchPlanningConflicts(
     queryFn: () => fetchWorkbenchPlanningConflicts(tripId!, queryOpts),
     enabled,
     staleTime: STALE_MS,
+    /** 切换 focusConflictId（按天联动）时保留上一帧，避免整页 loading 闪烁 */
+    placeholderData: keepPreviousData,
   });
 }
 

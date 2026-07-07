@@ -26,6 +26,8 @@ import {
 import { GuardianViolationsAuditBlock } from '@/components/agent/GuardianViolationsAuditBlock';
 import { GateConstraintSinkAnchor } from '@/features/planning/components/GateConstraintSinkAnchor';
 import type { ConstraintSinkUiAnchorV1 } from '@/contracts/memory-console-ui-state.v1';
+import { DecisionLedgerDecisionLinks } from '@/components/decision-problems/DecisionLedgerDecisionLinks';
+import type { DecisionLedgerCausalityView } from '@/lib/decision-ledger-causality.util';
 
 export type { OrchestrationUiState, OrchestrationResult } from '@/api/agent';
 
@@ -57,6 +59,9 @@ interface OrchestrationProgressCardProps {
   explainGuardianMirror?: RouteRunExplainGuardianMirror | null;
   /** constraint_sink 依据行（与 ledger_healing 独立） */
   constraintSinkAnchor?: ConstraintSinkUiAnchorV1 | null;
+  /** observability.ledger_healing + decision_ledger_causality */
+  decisionLedgerCausality?: DecisionLedgerCausalityView | null;
+  onOpenDecisionRecord?: (decisionId: string, ledgerNodeId?: string) => void;
   onOpenEvidenceDrawer?: (opts: { tab: 'memory'; highlightPatchId?: string }) => void;
   /** 用户页：步骤名等枚举显示中文；调试页勿传或传 false */
   preferZhLabels?: boolean;
@@ -86,6 +91,8 @@ export function OrchestrationProgressCard({
   orchestrationResult,
   explainGuardianMirror,
   constraintSinkAnchor,
+  decisionLedgerCausality,
+  onOpenDecisionRecord,
   onOpenEvidenceDrawer,
   preferZhLabels = false,
 }: OrchestrationProgressCardProps) {
@@ -121,7 +128,12 @@ export function OrchestrationProgressCard({
     (guardianView.verifyAuditViolations?.length ?? 0) > 0;
   const hasGateSection = hasGuardianStructured || legacyHasSurface;
   const hasConstraintSink = Boolean(constraintSinkAnchor);
-  const hasContent = hasUiState || hasGateSection || hasConstraintSink;
+  const hasLedgerCausality = Boolean(
+    decisionLedgerCausality &&
+      (decisionLedgerCausality.links.length > 0 ||
+        Object.keys(decisionLedgerCausality.ledgerNodeToDecisionId).length > 0),
+  );
+  const hasContent = hasUiState || hasGateSection || hasConstraintSink || hasLedgerCausality;
 
   const engineBadge =
     guardianView.source === 'llm_debate' && guardianView.is_simulated === false
@@ -223,7 +235,7 @@ export function OrchestrationProgressCard({
                         <span
                           className={cn(
                             'shrink-0 text-[11px]',
-                            ok ? 'text-green-600' : 'text-red-600'
+                            ok ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                           )}
                         >
                           {ok ? '成功' : '失败'}
@@ -416,7 +428,7 @@ export function OrchestrationProgressCard({
                     </ul>
                   ) : null}
                   {legacyGate.recommendations && legacyGate.recommendations.length > 0 ? (
-                    <ul className="list-disc list-inside text-blue-700/90">
+                    <ul className="list-disc list-inside text-muted-foreground">
                       {legacyGate.recommendations.map((w, i) => (
                         <li key={`r-${i}`}>{w}</li>
                       ))}
@@ -434,6 +446,17 @@ export function OrchestrationProgressCard({
             <GateConstraintSinkAnchor
               anchor={constraintSinkAnchor}
               onOpenEvidenceDrawer={onOpenEvidenceDrawer}
+            />
+          ) : null}
+          {hasLedgerCausality ? (
+            <DecisionLedgerDecisionLinks
+              causality={decisionLedgerCausality}
+              onOpenDecision={
+                onOpenDecisionRecord
+                  ? (decisionId, ledgerNodeId) => onOpenDecisionRecord(decisionId, ledgerNodeId)
+                  : undefined
+              }
+              className="border-t border-border/60 pt-2"
             />
           ) : null}
         </div>

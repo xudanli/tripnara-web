@@ -420,7 +420,7 @@ export default function ContextSidebar({
               </CardHeader>
               <CardContent>
                 <div className="text-sm mb-2">
-                  <span className="font-medium text-red-600">{blockers}</span> 个阻塞项需要处理
+                  <span className="font-medium text-gate-reject-foreground">{blockers}</span> 个阻塞项需要处理
                 </div>
                 <Button
                   variant="outline"

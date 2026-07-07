@@ -55,14 +55,14 @@ function StoryCoverIllustration({ type, className = '' }: { type: 'iceland' | 'n
         />
         <path
           d="M 40 150 L 60 130 L 80 140 L 100 110 L 120 125 L 140 100 L 160 115"
-          stroke="#16a34a"
+          stroke="#5E7D5B"
           strokeWidth="2"
           strokeDasharray="4 4"
           fill="none"
           opacity="0.6"
         />
-        <circle cx="60" cy="130" r="3" fill="#16a34a" />
-        <circle cx="120" cy="125" r="3" fill="#16a34a" />
+        <circle cx="60" cy="130" r="3" fill="#5E7D5B" />
+        <circle cx="120" cy="125" r="3" fill="#5E7D5B" />
       </svg>
     );
   }
@@ -75,7 +75,7 @@ function StoryCoverIllustration({ type, className = '' }: { type: 'iceland' | 'n
         <circle cx="110" cy="80" r="16" stroke="#333" strokeWidth="2" fill="#fefce8" />
         <circle cx="130" cy="110" r="14" stroke="#333" strokeWidth="2" fill="#f8f9fa" />
         <circle cx="90" cy="120" r="12" stroke="#333" strokeWidth="2" fill="#fefce8" />
-        <path d="M 70 108 L 90 120 L 110 96 L 130 110" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 4" />
+        <path d="M 70 108 L 90 120 L 110 96 L 130 110" stroke="#5E7D5B" strokeWidth="2" strokeDasharray="4 4" />
         <path d="M 40 160 L 160 160" stroke="#666" strokeWidth="2" opacity="0.3" />
       </svg>
     );

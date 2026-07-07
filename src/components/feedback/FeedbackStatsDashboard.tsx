@@ -66,7 +66,7 @@ export default function FeedbackStatsDashboard({
     return (
       <Card className={className}>
         <CardContent className="py-6">
-          <div className="text-center text-red-600">
+          <div className="text-center text-gate-reject-foreground">
             <p>{error}</p>
             <Button
               variant="outline"
@@ -140,42 +140,42 @@ export default function FeedbackStatsDashboard({
 
           {/* 平均评分 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="p-4 bg-muted/15 rounded-lg border border-border">
               <div className="flex items-center gap-2 mb-2">
-                <Star className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-900">平均满意度</span>
+                <Star className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">平均满意度</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-blue-900">
+                <p className="text-3xl font-bold text-muted-foreground">
                   {stats.averageSatisfaction.toFixed(1)}
                 </p>
-                <span className="text-sm text-blue-700">/ 5.0</span>
+                <span className="text-sm text-muted-foreground">/ 5.0</span>
               </div>
               <div className="mt-2">
-                <div className="w-full bg-blue-200 rounded-full h-2">
+                <div className="w-full bg-muted/15 rounded-full h-2">
                   <div
-                    className="bg-blue-600 h-2 rounded-full transition-all"
+                    className="bg-muted-foreground h-2 rounded-full transition-all"
                     style={{ width: `${(stats.averageSatisfaction / 5) * 100}%` }}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="p-4 bg-gate-allow rounded-lg border border-gate-allow-border">
               <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-900">平均计划质量</span>
+                <TrendingUp className="w-4 h-4 text-gate-allow-foreground" />
+                <span className="text-sm font-medium text-gate-allow-foreground">平均计划质量</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold text-green-900">
+                <p className="text-3xl font-bold text-gate-allow-foreground">
                   {stats.averagePlanQuality.toFixed(1)}
                 </p>
-                <span className="text-sm text-green-700">/ 5.0</span>
+                <span className="text-sm text-gate-allow-foreground">/ 5.0</span>
               </div>
               <div className="mt-2">
-                <div className="w-full bg-green-200 rounded-full h-2">
+                <div className="w-full bg-gate-allow rounded-full h-2">
                   <div
-                    className="bg-green-600 h-2 rounded-full transition-all"
+                    className="bg-gate-allow-foreground h-2 rounded-full transition-all"
                     style={{ width: `${(stats.averagePlanQuality / 5) * 100}%` }}
                   />
                 </div>

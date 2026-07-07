@@ -22,9 +22,9 @@ interface RepairOptionCardProps {
 
 // 🎨 统一颜色 Token（符合 TripNARA 克制原则）
 const impactColors = {
-  high: 'bg-red-50 text-red-700 border-red-200', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
-  medium: 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
-  low: 'bg-green-50 text-green-700 border-green-200', // ✅ 修复：使用 bg-green-50 而不是 bg-green-100
+  high: 'bg-muted text-error border-border', // ✅ 修复：使用 bg-muted 而不是 bg-muted
+  medium: 'bg-muted text-warning border-border', // ✅ 修复：使用 bg-muted 而不是 bg-yellow-100
+  low: 'bg-muted text-success border-border', // ✅ 修复：使用 bg-muted 而不是 bg-muted
 };
 
 export default function RepairOptionCard({
@@ -95,7 +95,7 @@ export default function RepairOptionCard({
                   </span>
                   <span className={cn(
                     'font-medium',
-                    option.changes.time.startsWith('+') ? 'text-orange-600' : 'text-green-600'
+                    option.changes.time.startsWith('+') ? 'text-warning' : 'text-success'
                   )}>
                     {option.changes.time}
                   </span>
@@ -108,7 +108,7 @@ export default function RepairOptionCard({
                   </span>
                   <span className={cn(
                     'font-medium',
-                    option.changes.distance.startsWith('+') ? 'text-orange-600' : 'text-green-600'
+                    option.changes.distance.startsWith('+') ? 'text-warning' : 'text-success'
                   )}>
                     {option.changes.distance}
                   </span>
@@ -121,7 +121,7 @@ export default function RepairOptionCard({
                   </span>
                   <span className={cn(
                     'font-medium',
-                    option.changes.elevation.startsWith('+') ? 'text-orange-600' : 'text-green-600'
+                    option.changes.elevation.startsWith('+') ? 'text-warning' : 'text-success'
                   )}>
                     {option.changes.elevation}
                   </span>
@@ -134,7 +134,7 @@ export default function RepairOptionCard({
                   </span>
                   <span className={cn(
                     'font-medium',
-                    option.changes.risk === '下降' ? 'text-green-600' : 'text-red-600'
+                    option.changes.risk === '下降' ? 'text-success' : 'text-error'
                   )}>
                     {option.changes.risk}
                   </span>
@@ -184,7 +184,7 @@ export default function RepairOptionCard({
           {isSelected && (
             <div className="flex flex-col gap-2 pt-2 border-t">
               {applyDisabled && applyDisabledReason ? (
-                <p className="text-[11px] text-amber-800 dark:text-amber-200">{applyDisabledReason}</p>
+                <p className="text-[11px] text-warning dark:text-warning">{applyDisabledReason}</p>
               ) : null}
               <div className="flex gap-2">
               <Button

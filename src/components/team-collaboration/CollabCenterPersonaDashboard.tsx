@@ -24,6 +24,7 @@ import { MemberPersonaCardsWidget } from './widgets/MemberPersonaCardsWidget';
 import { FrictionMatrixCompactWidget } from './widgets/FrictionMatrixCompactWidget';
 import { HighRiskAlertsWidget } from './widgets/HighRiskAlertsWidget';
 import { PersonaMoneyDnaWidget } from './widgets/PersonaMoneyDnaWidget';
+import { PersonaMemberPropensityWidget } from './widgets/PersonaMemberPropensityWidget';
 import { CollabSplitConsensusWidget } from './widgets/CollabSplitConsensusWidget';
 
 interface CollabCenterPersonaDashboardProps {
@@ -121,9 +122,6 @@ export function CollabCenterPersonaDashboard({
   const frictionSummary = compatibility
     ? `团队整体方向一致，但在预算分配与行程节奏上存在差异。预算重叠 ${compatibility.budgetOverlapPct}% · 节奏同步 ${compatibility.paceSyncPct}%`
     : '完成团队调查后可查看摩擦分与合拍度。';
-  const frictionCoefficient = compatibility
-    ? Math.round(100 - compatibility.styleSimilarityPct)
-    : undefined;
 
   if (onboardingLoading && frictionLoading) {
     return (
@@ -137,19 +135,21 @@ export function CollabCenterPersonaDashboard({
   return (
     <div className={cn('space-y-4', className)}>
       <div className={collabDashboardGrid}>
-        <div className={collabDashboardSpan({ md: 6, lg: 6 })}>
+        <div className={collabDashboardSpan({ md: 6, lg: 8 })}>
           <TeamFrictionScoreWidget
             score={frictionScore}
             bandLabel={compatibility?.bandLabel ?? '中度摩擦'}
             summary={frictionSummary}
             updatedAt={formatFrictionUpdatedAt(friction?.computedAt)}
+            memberCount={friction?.memberCount}
             onViewDetail={() => navigateToFrictionDecision('budget')}
           />
         </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 6 })}>
+        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
           <DecisionStyleSurveyWidget
             onboarding={onboarding}
             memberCount={friction?.memberCount}
+            completedAt={formatFrictionUpdatedAt(friction?.computedAt)}
             reusing={reusing}
             onStartQuiz={openQuiz}
             onReuseProfile={() => void reuse().then(() => reload())}
@@ -160,21 +160,20 @@ export function CollabCenterPersonaDashboard({
           <MemberPersonaCardsWidget members={travelStyles} loading={teamStylesLoading} />
         </div>
 
-        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
-          <PersonaMoneyDnaWidget
-            tripId={tripId}
-            teamMoneyDna={moneyDna}
-            frictionCoefficientPct={frictionCoefficient}
-          />
+        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
+          <PersonaMoneyDnaWidget tripId={tripId} teamMoneyDna={moneyDna} />
         </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
+        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
+          <PersonaMemberPropensityWidget teamMoneyDna={moneyDna} />
+        </div>
+        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
           <FrictionMatrixCompactWidget
             pairs={friction?.frictionMatrix ?? []}
             onDomainClick={navigateToFrictionDecision}
             onViewDetail={() => navigateToFrictionDecision('pace')}
           />
         </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
+        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
           <CollabSplitConsensusWidget
             data={splitConsensus}
             quizCompleted={onboarding?.quizCompleted ?? false}
@@ -195,6 +194,7 @@ export function CollabCenterPersonaDashboard({
             quizCompleted={onboarding?.quizCompleted ?? false}
             splitConsensus={splitConsensus}
             teamCompletionRate={onboarding?.teamCompletionRate ?? 0}
+            memberCount={friction?.memberCount}
             onStartQuiz={openQuiz}
             onConfirmSplit={scrollToSplitDetail}
             onAlertClick={handleAlertClick}

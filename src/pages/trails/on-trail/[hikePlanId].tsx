@@ -246,7 +246,7 @@ export default function OnTrailLivePage() {
               离线
             </Badge>
           ) : (
-            <Badge variant="outline" className="bg-green-50">
+            <Badge variant="outline" className="bg-gate-allow">
               <Wifi className="h-3 w-3 mr-1" />
               在线
             </Badge>
@@ -402,10 +402,10 @@ export default function OnTrailLivePage() {
         {/* 右侧：风险、节奏、修复卡片 */}
         <div className="space-y-4">
           {/* 风险卡（Abu） */}
-          <Card className="border-red-200">
+          <Card className="border-gate-reject-border">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-600" />
+                <AlertTriangle className="h-4 w-4 text-gate-reject-foreground" />
                 <CardTitle className="text-base">风险监控</CardTitle>
               </div>
             </CardHeader>
@@ -416,7 +416,7 @@ export default function OnTrailLivePage() {
                     key={risk.id}
                     className={`p-3 rounded-lg border ${
                       risk.severity === 'critical'
-                        ? 'bg-red-50 border-red-200'
+                        ? 'bg-gate-reject border-gate-reject-border'
                         : risk.severity === 'high'
                         ? 'bg-orange-50 border-orange-200'
                         : 'bg-yellow-50 border-yellow-200'
@@ -465,10 +465,10 @@ export default function OnTrailLivePage() {
           </Card>
 
           {/* 节奏卡（Dr.Dre） */}
-          <Card className="border-blue-200">
+          <Card className="border-border">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-blue-600" />
+                <Clock className="h-4 w-4 text-muted-foreground" />
                 <CardTitle className="text-base">节奏控制</CardTitle>
               </div>
             </CardHeader>
@@ -496,7 +496,7 @@ export default function OnTrailLivePage() {
                           className={`h-full ${
                             trailState.paceStatus.currentPace >=
                             trailState.paceStatus.plannedPace
-                              ? 'bg-green-500'
+                              ? 'bg-gate-allow-foreground'
                               : 'bg-yellow-500'
                           }`}
                           style={{
@@ -511,20 +511,20 @@ export default function OnTrailLivePage() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="text-sm font-medium text-blue-900 mb-1">
+                  <div className="p-3 bg-muted/15 border border-border rounded-lg">
+                    <div className="text-sm font-medium text-muted-foreground mb-1">
                       缓冲剩余
                     </div>
-                    <div className="text-lg font-bold text-blue-700">
+                    <div className="text-lg font-bold text-muted-foreground">
                       {formatTime(trailState.paceStatus.bufferRemainingMin)}
                     </div>
                   </div>
                   {trailState.paceStatus.latestTurnaroundTime && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <div className="text-sm font-medium text-red-900 mb-1">
+                    <div className="p-3 bg-gate-reject border border-gate-reject-border rounded-lg">
+                      <div className="text-sm font-medium text-gate-reject-foreground mb-1">
                         最晚折返时间
                       </div>
-                      <div className="text-lg font-bold text-red-700">
+                      <div className="text-lg font-bold text-gate-reject-foreground">
                         {trailState.paceStatus.latestTurnaroundTime}
                       </div>
                     </div>
@@ -539,10 +539,10 @@ export default function OnTrailLivePage() {
           </Card>
 
           {/* 修复卡（Neptune） */}
-          <Card className="border-purple-200">
+          <Card className="border-border">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <RotateCcw className="h-4 w-4 text-purple-600" />
+                <RotateCcw className="h-4 w-4 text-muted-foreground" />
                 <CardTitle className="text-base">修复建议</CardTitle>
               </div>
             </CardHeader>
@@ -638,7 +638,7 @@ export default function OnTrailLivePage() {
                   toast.info(isRecording ? '停止录音' : '开始录音');
                 }}
               >
-                <Mic className={`h-3 w-3 mr-1 ${isRecording ? 'text-red-500' : ''}`} />
+                <Mic className={`h-3 w-3 mr-1 ${isRecording ? 'text-gate-reject-foreground' : ''}`} />
                 {isRecording ? '停止录音' : '语音备注'}
               </Button>
               {trailState.events.length > 0 && (

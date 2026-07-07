@@ -28,9 +28,9 @@ type Level = CapabilityPackChecklistItem['level'];
 const LEVEL_ORDER: Level[] = ['blocker', 'must', 'should', 'optional'];
 
 const levelCardClass: Record<Level, string> = {
-  blocker: 'bg-red-50 border-red-200',
-  must: 'bg-orange-50 border-orange-200',
-  should: 'bg-yellow-50 border-yellow-200',
+  blocker: 'bg-muted border-border',
+  must: 'bg-muted border-border',
+  should: 'bg-muted border-border',
   optional: 'bg-gray-50 border-gray-200',
 };
 

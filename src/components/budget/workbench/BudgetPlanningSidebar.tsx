@@ -157,7 +157,7 @@ export function BudgetPlanningSidebar({
     {
       key: 'structure',
       icon: BarChart3,
-      iconSurface: 'bg-nara-glacier-muted text-nara-glacier-foreground',
+      iconSurface: 'bg-muted/15 text-muted-foreground',
       title: isZh ? '结构预算' : 'Structure budget',
       subtitle: isZh ? '按类别分配上限' : 'Allocation limit by category',
       onClick: onOpenStructure,

@@ -64,10 +64,10 @@ export function HikingSegmentDayCard({
       : null;
 
   return (
-    <Card className="border-l-4 border-l-emerald-500 shadow-sm">
+    <Card className="border-l-4 border-l-gate-allow-foreground shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Mountain className="h-4 w-4 text-emerald-700" />
+          <Mountain className="h-4 w-4 text-gate-allow-foreground" />
           <CardTitle className="text-base">
             徒步 · {dayLabel}
             {theme ? (
@@ -83,7 +83,7 @@ export function HikingSegmentDayCard({
             </Badge>
           ) : null}
           {plan?.status === 'in_progress' ? (
-            <Badge className="bg-blue-600 text-xs">行中</Badge>
+            <Badge className="bg-muted-foreground text-xs">行中</Badge>
           ) : null}
         </div>
         {statsLine ? (

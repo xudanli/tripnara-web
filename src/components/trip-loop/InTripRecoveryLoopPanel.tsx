@@ -70,7 +70,7 @@ export function InTripRecoveryLoopPanel({
   const primaryLabel = ui.primaryAction?.label ?? '采用调整';
 
   return (
-    <Card className={cn('border-l-4 border-l-sky-500', className)}>
+    <Card className={cn('border-l-4 border-l-border', className)}>
       <CardContent className="pt-4 space-y-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{ui.headline}</h2>
@@ -99,7 +99,7 @@ export function InTripRecoveryLoopPanel({
             icon={<Sparkles className="h-3.5 w-3.5" aria-hidden />}
             title="建议怎么做"
             body={ui.layers.action}
-            accent="bg-sky-50/80 border-sky-200/80"
+            accent="bg-muted/20 border-border/80"
           />
         </div>
 

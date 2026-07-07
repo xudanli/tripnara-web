@@ -9,7 +9,7 @@ export function profilingPanelHeader() {
 }
 
 export function frictionLevelBarClass(level: 'green' | 'yellow' | 'red') {
-  if (level === 'green') return 'bg-emerald-500';
+  if (level === 'green') return 'bg-gate-allow-foreground';
   if (level === 'yellow') return 'bg-amber-400';
-  return 'bg-red-500';
+  return 'bg-gate-reject-foreground';
 }

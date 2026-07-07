@@ -11,7 +11,9 @@
 import { cn } from '@/lib/utils';
 import {
   getGateStatusClasses,
+  getGateStatusSubtleClasses,
   getGateStatusIcon,
+  getGateStatusIconClass,
   getGateStatusLabel,
   normalizeGateStatus,
   type GateStatus,
@@ -38,6 +40,10 @@ export interface GateStatusBannerProps {
    * 尺寸
    */
   size?: 'sm' | 'md' | 'lg';
+  /**
+   * solid = 饱和底（Banner 默认）；subtle = 克制描边 + 浅底（工作台）
+   */
+  variant?: 'solid' | 'subtle';
 }
 
 /**
@@ -51,6 +57,7 @@ export function GateStatusBanner({
   className,
   showIcon = true,
   size = 'md',
+  variant = 'solid',
 }: GateStatusBannerProps) {
   // 标准化状态（支持旧状态映射）
   const normalizedStatus = normalizeGateStatus(status);
@@ -58,7 +65,11 @@ export function GateStatusBanner({
   // 获取状态配置
   const Icon = getGateStatusIcon(normalizedStatus);
   const label = getGateStatusLabel(normalizedStatus);
-  const statusClasses = getGateStatusClasses(normalizedStatus);
+  const statusClasses =
+    variant === 'subtle'
+      ? getGateStatusSubtleClasses(normalizedStatus)
+      : getGateStatusClasses(normalizedStatus);
+  const iconClass = getGateStatusIconClass(normalizedStatus);
   
   // 尺寸样式
   const sizeClasses = {
@@ -84,7 +95,7 @@ export function GateStatusBanner({
       role="status"
       aria-label={`决策状态: ${label}`}
     >
-      {showIcon && <Icon className={iconSizeClasses[size]} />}
+      {showIcon && <Icon className={cn(iconSizeClasses[size], iconClass)} />}
       <span>{label}</span>
       {message && (
         <span className="opacity-90 font-normal ml-1">{message}</span>

@@ -58,7 +58,7 @@ export function TrailOfflineDownloadButton({
         {downloading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : isDownloaded ? (
-          <Check className="h-4 w-4 text-green-600" />
+          <Check className="h-4 w-4 text-gate-allow-foreground" />
         ) : (
           <Download className="h-4 w-4" />
         )}

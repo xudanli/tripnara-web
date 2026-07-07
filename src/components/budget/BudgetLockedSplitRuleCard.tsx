@@ -18,14 +18,14 @@ export function BudgetLockedSplitRuleCard({
   return (
     <div
       className={cn(
-        'rounded-md border border-emerald-200/80 bg-emerald-50/40 dark:bg-emerald-950/20 px-3 py-3 space-y-2',
+        'rounded-md border border-gate-allow-border/80 bg-gate-allow/40 dark:bg-gate-allow/20 px-3 py-3 space-y-2',
         className,
       )}
     >
       <div className="flex items-start gap-2">
-        <Lock className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+        <Lock className="h-4 w-4 shrink-0 text-gate-allow-foreground mt-0.5" />
         <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
+          <p className="text-xs font-medium text-gate-allow-foreground dark:text-gate-allow-foreground">
             {isZh ? '团队分摊已锁定（决策画像）' : 'Team split locked (Decision Profiling)'}
           </p>
           <div className="grid gap-1.5 text-xs">
@@ -51,7 +51,7 @@ export function BudgetLockedSplitRuleCard({
             </div>
           </div>
           {display.detailLines.length > 0 ? (
-            <ul className="text-[11px] text-muted-foreground space-y-0.5 border-t border-emerald-200/50 pt-2">
+            <ul className="text-[11px] text-muted-foreground space-y-0.5 border-t border-gate-allow-border/50 pt-2">
               {display.detailLines.map((line) => (
                 <li key={line}>· {line}</li>
               ))}

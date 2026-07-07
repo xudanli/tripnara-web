@@ -40,12 +40,12 @@ export default function Insights({ insights, onVote, onSaveAnchor }: InsightsPro
   );
 
   const categoryConfig: Record<InsightCategory, { label: string; icon: any; color: string }> = {
-    highlight: { label: '高光', icon: CheckCircle2, color: 'text-green-600' },
+    highlight: { label: '高光', icon: CheckCircle2, color: 'text-gate-allow-foreground' },
     friction: { label: '摩擦点', icon: AlertTriangle, color: 'text-orange-600' },
-    decision: { label: '决策质量', icon: TrendingUp, color: 'text-blue-600' },
-    rhythm: { label: '节奏画像', icon: Clock, color: 'text-purple-600' },
+    decision: { label: '决策质量', icon: TrendingUp, color: 'text-muted-foreground' },
+    rhythm: { label: '节奏画像', icon: Clock, color: 'text-muted-foreground' },
     cost: { label: '成本', icon: DollarSign, color: 'text-yellow-600' },
-    safety: { label: '安全', icon: Shield, color: 'text-red-600' },
+    safety: { label: '安全', icon: Shield, color: 'text-gate-reject-foreground' },
   };
 
   const tabs = Object.keys(categoryConfig) as InsightCategory[];

@@ -86,7 +86,7 @@ export function dimensionScoreAccent(score: number): string {
 export function dimensionScoreLabel(score: number): string {
   if (score >= 80) return 'text-foreground';
   if (score >= 60) return 'text-gate-suggest-foreground';
-  return 'text-gate-reject-foreground';
+  return 'text-error';
 }
 
 export function verdictAccentBorder(status: FeasibilityVerdictStatus): string {
@@ -129,9 +129,9 @@ export function priorityAccentBorder(priority: FeasibilityIssuePriority): string
 }
 
 export function scoreBarClass(score: number): string {
-  if (score >= 80) return 'bg-gate-allow-border';
+  if (score >= 80) return 'bg-muted-border';
   if (score >= 60) return 'bg-gate-suggest-border';
-  return 'bg-gate-reject-border';
+  return 'bg-muted-border';
 }
 
 export function issueCountBadgeClasses(status: 'ok' | 'warning' | 'blocked', selected?: boolean): string {
@@ -139,11 +139,11 @@ export function issueCountBadgeClasses(status: 'ok' | 'warning' | 'blocked', sel
   if (!selected) return 'bg-muted text-muted-foreground';
   switch (gate) {
     case 'ALLOW':
-      return 'bg-gate-allow text-gate-allow-foreground border border-gate-allow-border';
+      return 'bg-muted text-success border border-gate-allow-border';
     case 'SUGGEST_REPLACE':
       return 'bg-gate-suggest text-gate-suggest-foreground border border-gate-suggest-border';
     case 'REJECT':
-      return 'bg-gate-reject text-gate-reject-foreground border border-gate-reject-border';
+      return 'bg-muted text-error border border-border';
     default:
       return 'bg-muted text-muted-foreground';
   }

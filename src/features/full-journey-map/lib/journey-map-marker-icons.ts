@@ -1,5 +1,10 @@
 import type { PoiType } from '@/api/readiness';
 import type { JourneyActivity, JourneyLayerKind, JourneyMarkerIcon } from '../types';
+import {
+  SEMANTIC_BLUE_HEX,
+  SEMANTIC_GREEN_HEX,
+  SEMANTIC_RED_HEX,
+} from '@/lib/semantic-colors';
 
 /** 地图标记 icon 类型（对齐高保真 · 彩色圆底 + 白色 pictogram） */
 export type { JourneyMarkerIcon } from '../types';
@@ -19,10 +24,10 @@ export const POI_TYPE_MARKER_VISUAL: Record<
   { icon: JourneyMarkerIcon; bg: string; size: number; label: string }
 > = {
   city: { icon: 'city', bg: '#475569', size: 36, label: '城市' },
-  attraction: { icon: 'sightseeing', bg: '#0d9488', size: 38, label: '景点' },
+  attraction: { icon: 'sightseeing', bg: SEMANTIC_GREEN_HEX, size: 38, label: '景点' },
   hotel: { icon: 'accommodation', bg: '#475569', size: 34, label: '住宿' },
   restaurant: { icon: 'dining', bg: '#ea580c', size: 34, label: '餐饮' },
-  transport: { icon: 'transport', bg: '#0284c7', size: 32, label: '交通' },
+  transport: { icon: 'transport', bg: SEMANTIC_BLUE_HEX, size: 32, label: '交通' },
   other: { icon: 'default', bg: '#64748b', size: 32, label: '其他' },
 };
 
@@ -48,18 +53,18 @@ export function resolvePoiTypeMarkerVisual(
 
 /** 活动 / 分流等扩展标记（非 coverage POI 类型） */
 const MARKER_PALETTE: Record<JourneyMarkerIcon, { bg: string; size: number }> = {
-  hiking: { bg: '#0f766e', size: 40 },
+  hiking: { bg: SEMANTIC_GREEN_HEX, size: 40 },
   dining: { bg: '#ea580c', size: 34 },
   coffee: { bg: '#f97316', size: 36 },
   accommodation: { bg: '#475569', size: 34 },
-  camera: { bg: '#16a34a', size: 34 },
+  camera: { bg: SEMANTIC_GREEN_HEX, size: 34 },
   parking: { bg: '#78716c', size: 30 },
-  sightseeing: { bg: '#0d9488', size: 38 },
-  waterfall: { bg: '#0ea5e9', size: 36 },
-  transport: { bg: '#0284c7', size: 32 },
-  meeting: { bg: '#0f766e', size: 32 },
+  sightseeing: { bg: SEMANTIC_GREEN_HEX, size: 38 },
+  waterfall: { bg: SEMANTIC_BLUE_HEX, size: 36 },
+  transport: { bg: SEMANTIC_BLUE_HEX, size: 32 },
+  meeting: { bg: SEMANTIC_GREEN_HEX, size: 32 },
   city: { bg: '#475569', size: 36 },
-  warning: { bg: '#dc2626', size: 30 },
+  warning: { bg: SEMANTIC_RED_HEX, size: 30 },
   default: { bg: '#64748b', size: 32 },
 };
 

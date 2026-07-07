@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 
 /** 协作中心 Dashboard 12 列栅格 */
 export const collabDashboardGrid =
-  'grid grid-cols-1 gap-4 md:grid-cols-6 lg:grid-cols-12';
+  'grid grid-cols-1 items-stretch gap-3 md:grid-cols-6 md:gap-4 lg:grid-cols-12';
 
 export function collabDashboardSpan(
   cols: { md?: number; lg: number },

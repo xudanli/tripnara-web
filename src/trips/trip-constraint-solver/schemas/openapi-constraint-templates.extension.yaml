@@ -1,0 +1,42 @@
+# §3.10 OpenAPI 扩展 — 挂到 CreateTripConstraintDto / Nest Swagger
+#
+# Nest: @ApiExtension('x-constraint-template-catalog', './schemas/constraint-template-registry.json')
+# 或 $ref 指向 catalog JSON
+
+CreateTripConstraintDto:
+  type: object
+  properties:
+    name:
+      type: string
+    type:
+      type: string
+      enum: [HARD, SOFT, EXTERNAL]
+    category:
+      type: string
+    source:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [USER, OFFICIAL_RULE, SYSTEM]
+        templateId:
+          type: string
+          description: 须在 constraint-template-registry 中且 legacyPatchOnly=false
+          x-constraint-template-ref: '#/components/x-constraint-templates/{templateId}'
+      required: [type]
+    value:
+      type: object
+    priority:
+      type: number
+      description: SOFT 默认 priority；求解器 weight = priority / 10
+    constraintsVersion:
+      type: integer
+  x-constraint-templates:
+    $ref: './constraint-template-registry.json#/templates'
+
+components:
+  x-constraint-templates:
+    description: 由 exportConstraintTemplateCatalog() 导出的 31 条 catalog 模板
+    externalDocs:
+      description: JSON Schema
+      url: './constraint-template-registry.schema.json'

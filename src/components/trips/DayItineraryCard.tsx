@@ -17,11 +17,14 @@ import type { Suggestion } from '@/types/suggestion';
 import { tripsApi } from '@/api/trips';
 import { formatCurrency as formatCurrencyAmount } from '@/utils/format';
 import { EmptyStateCard } from '@/components/ui/empty-state-images';
+import { ExecutionStatusBadge } from '@/components/trip-world-state';
+import type { DayExecutabilityView } from '@/lib/day-executability.util';
 
 interface DayItineraryCardProps {
   day: TripDay;
   dayIndex: number;
   dayMetrics?: DayMetricsResponse;
+  dayExecutability?: DayExecutabilityView;
   suggestions: Suggestion[];
   onViewItinerary?: () => void;
   onViewSuggestions?: () => void;
@@ -37,6 +40,7 @@ export default function DayItineraryCard({
   day,
   dayIndex,
   dayMetrics,
+  dayExecutability,
   suggestions,
   onViewItinerary,
   onViewSuggestions,
@@ -107,10 +111,10 @@ export default function DayItineraryCard({
 
   const healthStatus = healthScore
     ? healthScore >= 80
-      ? { label: '可执行', color: 'text-green-600', bg: 'bg-green-50' }
+      ? { label: '可执行', color: 'text-gate-allow-foreground', bg: 'bg-gate-allow' }
       : healthScore >= 60
       ? { label: '需注意', color: 'text-yellow-600', bg: 'bg-yellow-50' }
-      : { label: '有风险', color: 'text-red-600', bg: 'bg-red-50' }
+      : { label: '有风险', color: 'text-gate-reject-foreground', bg: 'bg-gate-reject' }
     : null;
 
   // 风险等级
@@ -119,10 +123,10 @@ export default function DayItineraryCard({
   const hasMediumRisk = dayConflicts.some((c) => c.severity === 'MEDIUM');
   // const riskLevel = hasHighRisk ? '高' : hasMediumRisk ? '中' : '低'; // 未使用
   const riskColor = hasHighRisk
-    ? 'text-red-600 bg-red-50'
+    ? 'text-gate-reject-foreground bg-gate-reject'
     : hasMediumRisk
     ? 'text-yellow-600 bg-yellow-50'
-    : 'text-green-600 bg-green-50';
+    : 'text-gate-allow-foreground bg-gate-allow';
 
   // 节奏判断
   const getPacingLabel = () => {
@@ -147,6 +151,9 @@ export default function DayItineraryCard({
             {/* P0 - 主要信息：Day 和日期（更紧凑） */}
             <div className="flex items-center gap-2 mb-2">
               <div className="text-lg sm:text-xl font-bold text-foreground">Day {dayIndex + 1}</div>
+              {dayExecutability ? (
+                <ExecutionStatusBadge label={dayExecutability.label} status={dayExecutability.status} />
+              ) : null}
               <div className="text-sm text-muted-foreground font-medium">
                 {format(new Date(day.date), 'yyyy.MM.dd')}
               </div>
@@ -190,9 +197,9 @@ export default function DayItineraryCard({
               const usagePercent = Math.min((dayBudget.spent / dayBudget.budget) * 100, 100);
               const isOverBudget = dayBudget.spent > dayBudget.budget;
               const statusColor = isOverBudget ? 'budget-critical' : usagePercent >= 80 ? 'budget-warning' : 'budget-safe';
-              const textColor = isOverBudget ? 'text-red-700' : usagePercent >= 80 ? 'text-amber-700' : 'text-green-700';
-              const bgColor = isOverBudget ? 'bg-red-50/80' : usagePercent >= 80 ? 'bg-amber-50/80' : 'bg-green-50/80';
-              const borderColor = isOverBudget ? 'border-red-200/60' : usagePercent >= 80 ? 'border-amber-200/60' : 'border-green-200/60';
+              const textColor = isOverBudget ? 'text-gate-reject-foreground' : usagePercent >= 80 ? 'text-amber-700' : 'text-gate-allow-foreground';
+              const bgColor = isOverBudget ? 'bg-gate-reject/80' : usagePercent >= 80 ? 'bg-amber-50/80' : 'bg-gate-allow/80';
+              const borderColor = isOverBudget ? 'border-gate-reject-border/60' : usagePercent >= 80 ? 'border-amber-200/60' : 'border-gate-allow-border/60';
               
               return (
                 <div className={cn('mb-3 p-3 rounded-xl border', bgColor, borderColor, 'shadow-sm')}>
@@ -208,16 +215,16 @@ export default function DayItineraryCard({
                   <Progress
                     value={usagePercent}
                     className={cn('h-2 mb-2 rounded-full', {
-                      'bg-green-100': statusColor === 'budget-safe',
+                      'bg-gate-allow': statusColor === 'budget-safe',
                       'bg-amber-100': statusColor === 'budget-warning',
-                      'bg-red-100': statusColor === 'budget-critical',
+                      'bg-gate-reject': statusColor === 'budget-critical',
                     })}
                   />
                   {isOverBudget && onViewBudget && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full h-7 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-100/50 transition-colors"
+                      className="w-full h-7 text-xs font-medium text-gate-reject-foreground hover:text-gate-reject-foreground hover:bg-gate-reject/50 transition-colors"
                       onClick={onViewBudget}
                     >
                       查看预算详情
@@ -275,9 +282,9 @@ export default function DayItineraryCard({
           ) : (
             healthStatus && healthScore !== null && (
               <div className={cn('px-3 py-1.5 rounded-lg text-right border-2', healthStatus.bg, {
-                'border-green-200': healthScore >= 80,
+                'border-gate-allow-border': healthScore >= 80,
                 'border-yellow-200': healthScore >= 60 && healthScore < 80,
-                'border-red-200': healthScore < 60,
+                'border-gate-reject-border': healthScore < 60,
               })}>
                 <div className="text-xs text-muted-foreground mb-0.5 font-medium">健康指数</div>
                 <div className={cn('text-base font-bold', healthStatus.color)}>

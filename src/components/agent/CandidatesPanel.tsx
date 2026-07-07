@@ -21,11 +21,11 @@ function statusTone(status?: VerificationStatus): 'pass' | 'warn' | 'block' | 'n
 function toneBadgeClass(tone: ReturnType<typeof statusTone>) {
   switch (tone) {
     case 'pass':
-      return 'bg-green-50 text-green-700 border-green-200';
+      return 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border';
     case 'warn':
       return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'block':
-      return 'bg-red-50 text-red-700 border-red-200';
+      return 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border';
     default:
       return 'bg-muted text-foreground/80 border-border';
   }
@@ -138,7 +138,7 @@ export default function CandidatesPanel({ candidates, alternatives, className, d
                                   <Badge
                                     key={`h-${tag}`}
                                     variant="outline"
-                                    className="text-[10px] border-red-300 text-red-800 bg-red-50"
+                                    className="text-[10px] border-gate-reject-border text-gate-reject-foreground bg-gate-reject"
                                   >
                                     {tag.startsWith('HARD') ? tag : `HARD·${tag}`}
                                   </Badge>

@@ -164,8 +164,8 @@ export default function TripSchedulePage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-800">{error}</p>
+        <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-4">
+          <p className="text-gate-reject-foreground">{error}</p>
           <Button onClick={loadSchedule} className="mt-4" variant="outline">
             重试
           </Button>

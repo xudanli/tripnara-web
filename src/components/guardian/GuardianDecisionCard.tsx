@@ -87,7 +87,7 @@ export function GuardianDecisionCard({
       className={cn(
         'border-2',
         hardBlock
-          ? 'border-red-200 bg-red-50/40'
+          ? 'border-gate-reject-border bg-gate-reject/40'
           : 'border-slate-200 bg-slate-50/30',
         className,
       )}
@@ -140,7 +140,7 @@ export function GuardianDecisionCard({
         ) : null}
 
         {hardBlock ? (
-          <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <div className="flex items-start gap-2 rounded-md border border-gate-reject-border bg-gate-reject px-3 py-2 text-sm text-gate-reject-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <span>存在不可忽略的安全/合规风险，请修改方案后再继续。</span>
           </div>

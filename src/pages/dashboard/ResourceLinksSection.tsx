@@ -13,7 +13,7 @@ export default function ResourceLinksSection() {
       description: '搜索和浏览地点',
       icon: <MapPin className="w-5 h-5" />,
       route: '/dashboard/places',
-      color: 'text-blue-600',
+      color: 'text-muted-foreground',
     },
     {
       id: 'hotels',
@@ -21,7 +21,7 @@ export default function ResourceLinksSection() {
       description: '浏览和搜索酒店',
       icon: <Hotel className="w-5 h-5" />,
       route: '/dashboard/hotels',
-      color: 'text-green-600',
+      color: 'text-gate-allow-foreground',
     },
     {
       id: 'trails',
@@ -29,7 +29,7 @@ export default function ResourceLinksSection() {
       description: '探索徒步路线',
       icon: <Route className="w-5 h-5" />,
       route: '/dashboard/trails',
-      color: 'text-purple-600',
+      color: 'text-muted-foreground',
     },
     {
       id: 'route-directions',

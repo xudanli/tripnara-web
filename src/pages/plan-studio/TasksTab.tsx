@@ -23,6 +23,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useReadinessPreparationTasks } from '@/hooks/useReadinessPreparationTasks';
 import { countTaskProgress } from '@/lib/readiness-preparation-tasks';
 import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
+import type { UsePlanningConflictsResult } from '@/hooks/usePlanningConflicts';
+import type { DecisionCenterOverview, DecisionProblemSummary } from '@/types/decision-problem';
+import type { UnifiedDecisionActivePacks } from '@/types/unified-decision';
+import PlanningConflictsPanel from '@/components/plan-studio/PlanningConflictsPanel';
+import { DecisionCenterOverviewPanel } from '@/components/decision-problems';
+import { countOpenDecisionProblems } from '@/lib/decision-center.util';
 import { cn } from '@/lib/utils';
 import {
   workbenchPanelHeader,
@@ -44,18 +50,37 @@ interface TasksTabProps {
   /** 深链打开详情抽屉：``tasks`` | ``packing`` | ``bookings`` */
   initialSubTab?: PreDepartureSubTab;
   planningConflicts?: PlanningConflictItem[];
+  planningConflictsResult?: UsePlanningConflictsResult;
   conflictsLoading?: boolean;
+  decisionProblems?: DecisionProblemSummary[];
+  decisionCenterOverview?: DecisionCenterOverview | null;
+  decisionCenterOverviewLoading?: boolean;
+  activePacks?: UnifiedDecisionActivePacks | null;
+  useDecisionProblemsBff?: boolean;
+  onOpenDecisionProblem?: (problemId: string) => void;
   onOpenFeasibility?: (issueId?: string | null) => void;
   onGoToSchedule?: (itemId?: string) => void;
+  onViewDecision?: (decisionId: string) => void;
+  /** 深链滚动到完整规划待办 */
+  focusPlanningInbox?: boolean;
 }
 
 export default function TasksTab({
   tripId,
   initialSubTab = 'tasks',
   planningConflicts = [],
+  planningConflictsResult,
   conflictsLoading = false,
+  decisionProblems,
+  decisionCenterOverview,
+  decisionCenterOverviewLoading,
+  activePacks,
+  useDecisionProblemsBff = false,
+  onOpenDecisionProblem,
   onOpenFeasibility,
   onGoToSchedule,
+  onViewDecision,
+  focusPlanningInbox = false,
 }: TasksTabProps) {
   const { i18n } = useTranslation();
   const isZh = i18n.language.startsWith('zh');
@@ -138,6 +163,12 @@ export default function TasksTab({
     };
   }, [tripId]);
 
+  useEffect(() => {
+    if (!focusPlanningInbox) return;
+    const el = document.getElementById('plan-studio-planning-inbox');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [focusPlanningInbox, conflictsLoading]);
+
   const handleConflict = useCallback(
     (conflictId: string) => {
       onOpenFeasibility?.(conflictId);
@@ -194,9 +225,43 @@ export default function TasksTab({
           <PreDepartureBlockersPanel
             items={planningConflicts}
             loading={conflictsLoading}
+            decisionProblems={decisionProblems}
             onHandleConflict={onOpenFeasibility ? handleConflict : undefined}
+            onOpenDecisionProblem={onOpenDecisionProblem}
             onOpenFeasibility={onOpenFeasibility ? () => onOpenFeasibility() : undefined}
           />
+
+          {planningConflictsResult ? (
+            <section id="plan-studio-planning-inbox" className="scroll-mt-4 space-y-3">
+              {useDecisionProblemsBff ? (
+                <DecisionCenterOverviewPanel
+                  tripId={tripId}
+                  overview={decisionCenterOverview}
+                  loading={decisionCenterOverviewLoading}
+                  activePacks={activePacks}
+                  openProblemCount={countOpenDecisionProblems(
+                    decisionProblems ?? [],
+                    decisionCenterOverview?.recentDecisions,
+                  )}
+                  onViewDecision={onViewDecision}
+                />
+              ) : null}
+              <PlanningConflictsPanel
+                tripId={tripId}
+                trip={trip}
+                conflicts={planningConflictsResult}
+                decisionProblems={decisionProblems}
+                onOpenDecisionProblem={onOpenDecisionProblem}
+                onNavigateToSchedule={
+                  onGoToSchedule
+                    ? (detail) => {
+                        onGoToSchedule(detail.highlightItemIds?.[0]);
+                      }
+                    : undefined
+                }
+              />
+            </section>
+          ) : null}
         </div>
       </div>
 

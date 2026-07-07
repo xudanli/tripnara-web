@@ -44,12 +44,12 @@ export function BookingCheckoutBundlePanel({
   const disclaimer = disclaimerZh?.trim() || bundle.disclaimer_zh?.trim();
 
   return (
-    <Card className={cn('border-violet-500/25 bg-violet-50/20 dark:bg-violet-950/15', className)}>
+    <Card className={cn('border-border/25 bg-muted/15 dark:bg-muted/15/15', className)}>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-violet-700 dark:text-violet-300" aria-hidden />
+              <Receipt className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" aria-hidden />
               锁价结算单
             </CardTitle>
             <CardDescription className="text-xs mt-1">
@@ -64,8 +64,8 @@ export function BookingCheckoutBundlePanel({
               className={cn(
                 'text-[10px] gap-1 h-6 tabular-nums',
                 remainingSec <= 60
-                  ? 'border-red-500/40 bg-red-50 text-red-950 dark:bg-red-950/35'
-                  : 'border-violet-500/35 bg-violet-50/80 dark:bg-violet-950/30'
+                  ? 'border-gate-reject-border/40 bg-gate-reject text-gate-reject-foreground dark:bg-gate-reject/35'
+                  : 'border-border/35 bg-muted/20 dark:bg-muted/15'
               )}
             >
               <Clock className="h-3 w-3" aria-hidden />
@@ -76,7 +76,7 @@ export function BookingCheckoutBundlePanel({
         {totalLabel ? (
           <div className="mt-2 flex items-center gap-2">
             {showLockedTotal ? (
-              <Lock className="h-4 w-4 text-emerald-600 shrink-0" aria-hidden />
+              <Lock className="h-4 w-4 text-gate-allow-foreground shrink-0" aria-hidden />
             ) : null}
             <span className="text-sm font-semibold tabular-nums text-foreground">
               组合总价 {totalLabel}
@@ -84,7 +84,7 @@ export function BookingCheckoutBundlePanel({
             {showLockedTotal ? (
               <Badge
                 variant="outline"
-                className="text-[10px] h-5 border-emerald-500/40 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35"
+                className="text-[10px] h-5 border-gate-allow-border/40 bg-gate-allow text-gate-allow-foreground dark:bg-gate-allow/35"
               >
                 已锁价
               </Badge>

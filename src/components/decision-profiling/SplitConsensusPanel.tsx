@@ -112,8 +112,8 @@ export function SplitConsensusPanel({
       ) : null}
 
       {locked ? (
-        <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-2 text-sm">
-          <Lock className="h-4 w-4 text-emerald-600 shrink-0" />
+        <div className="flex items-center gap-2 rounded-md border border-gate-allow-border bg-gate-allow/50 dark:bg-gate-allow/20 px-3 py-2 text-sm">
+          <Lock className="h-4 w-4 text-gate-allow-foreground shrink-0" />
           <span>
             已锁定：<strong>{SPLIT_MODE_LABELS[data.lockedMode ?? activeMode]}</strong>
             ，规则已同步至预算 Tab「付款与记账」

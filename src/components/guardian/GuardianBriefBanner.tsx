@@ -38,7 +38,7 @@ export function GuardianBriefBanner({
       className={cn(
         'rounded-lg border px-3 py-2.5',
         hardBlock
-          ? 'border-red-200 bg-red-50/80'
+          ? 'border-gate-reject-border bg-gate-reject/80'
           : 'border-amber-200/80 bg-amber-50/50',
         className,
       )}
@@ -55,7 +55,7 @@ export function GuardianBriefBanner({
               {presentation.headline}
             </span>
             {hardBlock ? (
-              <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" />
+              <AlertTriangle className="h-3.5 w-3.5 text-gate-reject-foreground shrink-0" />
             ) : null}
           </div>
           <ul className="space-y-0.5">

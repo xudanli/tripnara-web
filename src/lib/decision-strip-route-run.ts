@@ -24,7 +24,17 @@ function parseOptionComparison(raw: unknown): OptionComparison | undefined {
         .map((item) => {
           const entry = asRecord(item);
           const id = entry?.optionId ?? entry?.option_id;
-          return typeof id === 'string' ? { optionId: id } : null;
+          if (typeof id !== 'string') return null;
+          const tradeoffsRaw = entry?.tradeoffs;
+          const tradeoffs = Array.isArray(tradeoffsRaw)
+            ? tradeoffsRaw
+                .map((t) => (typeof t === 'string' ? t.trim() : ''))
+                .filter(Boolean)
+            : undefined;
+          return {
+            optionId: id,
+            ...(tradeoffs?.length ? { tradeoffs } : {}),
+          };
         })
         .filter((x): x is { optionId: string } => x != null)
     : undefined;

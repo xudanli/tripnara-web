@@ -1,6 +1,6 @@
 /**
  * 决策状态系统工具函数
- * 
+ *
  * 统一管理 TripNARA 的四态裁决系统：
  * - ALLOW: 通过
  * - NEED_CONFIRM: 需确认
@@ -20,64 +20,56 @@ export type GateStatus = 'ALLOW' | 'NEED_CONFIRM' | 'SUGGEST_REPLACE' | 'REJECT'
  */
 export type LegacyGateStatus = 'PASSED' | 'PASS' | 'WARN' | 'BLOCKED' | 'BLOCK' | 'ADJUST' | 'REPLACE';
 
+const GATE_STATUS_SURFACE = 'bg-card text-foreground border-border';
+const GATE_STATUS_SUBTLE_SURFACE = 'bg-muted/30 text-foreground border-border/70';
+
 /**
  * 将旧的状态映射到新的标准状态
- * 
- * @param status 旧的状态字符串
- * @returns 标准化的 GateStatus
  */
 export function normalizeGateStatus(status: string): GateStatus {
   const upper = status.toUpperCase().trim();
-  
-  // 映射到 ALLOW
+
   if (upper === 'PASSED' || upper === 'PASS' || upper === 'ALLOW') {
     return 'ALLOW';
   }
-  
-  // 映射到 NEED_CONFIRM
+
   if (upper === 'WARN' || upper === 'NEED_CONFIRM' || upper === 'NEED_CONFIRMATION') {
     return 'NEED_CONFIRM';
   }
-  
-  // 映射到 REJECT
+
   if (upper === 'BLOCKED' || upper === 'BLOCK' || upper === 'REJECT') {
     return 'REJECT';
   }
-  
-  // 映射到 SUGGEST_REPLACE
+
   if (upper === 'SUGGEST_REPLACE' || upper === 'REPLACE' || upper === 'ADJUST') {
     return 'SUGGEST_REPLACE';
   }
-  
-  // 默认返回 NEED_CONFIRM（最安全的选择）
+
   return 'NEED_CONFIRM';
 }
 
-/**
- * 获取状态样式类名（使用设计 Token）
- * 
- * @param status 决策状态
- * @returns Tailwind 类名字符串
- */
-export function getGateStatusClasses(status: GateStatus): string {
+/** 裁决 Icon 语义色（仅 Icon / 小圆点） */
+export function getGateStatusIconClass(status: GateStatus): string {
   switch (status) {
     case 'ALLOW':
-      return 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border';
+      return 'text-success';
     case 'NEED_CONFIRM':
-      return 'bg-gate-confirm text-gate-confirm-foreground border-gate-confirm-border';
+      return 'text-warning';
     case 'SUGGEST_REPLACE':
-      return 'bg-gate-suggest text-gate-suggest-foreground border-gate-suggest-border';
+      return 'text-muted-foreground';
     case 'REJECT':
-      return 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border';
+      return 'text-error';
   }
 }
 
-/**
- * 获取状态图标组件
- * 
- * @param status 决策状态
- * @returns Lucide 图标组件
- */
+export function getGateStatusSubtleClasses(_status: GateStatus): string {
+  return GATE_STATUS_SUBTLE_SURFACE;
+}
+
+export function getGateStatusClasses(_status: GateStatus): string {
+  return GATE_STATUS_SURFACE;
+}
+
 export function getGateStatusIcon(status: GateStatus): LucideIcon {
   switch (status) {
     case 'ALLOW':
@@ -91,12 +83,6 @@ export function getGateStatusIcon(status: GateStatus): LucideIcon {
   }
 }
 
-/**
- * 获取状态标签文本（中文）
- * 
- * @param status 决策状态
- * @returns 状态标签文本
- */
 export function getGateStatusLabel(status: GateStatus): string {
   switch (status) {
     case 'ALLOW':
@@ -110,12 +96,6 @@ export function getGateStatusLabel(status: GateStatus): string {
   }
 }
 
-/**
- * 获取状态标签文本（英文）
- * 
- * @param status 决策状态
- * @returns 状态标签文本（英文）
- */
 export function getGateStatusLabelEn(status: GateStatus): string {
   switch (status) {
     case 'ALLOW':
@@ -129,23 +109,15 @@ export function getGateStatusLabelEn(status: GateStatus): string {
   }
 }
 
-/**
- * 状态配置对象（包含所有信息）
- */
 export interface GateStatusConfig {
   status: GateStatus;
   icon: LucideIcon;
   label: string;
   labelEn: string;
   className: string;
+  iconClassName: string;
 }
 
-/**
- * 获取完整的状态配置
- * 
- * @param status 决策状态
- * @returns 完整的状态配置对象
- */
 export function getGateStatusConfig(status: GateStatus): GateStatusConfig {
   return {
     status,
@@ -153,5 +125,6 @@ export function getGateStatusConfig(status: GateStatus): GateStatusConfig {
     label: getGateStatusLabel(status),
     labelEn: getGateStatusLabelEn(status),
     className: getGateStatusClasses(status),
+    iconClassName: getGateStatusIconClass(status),
   };
 }

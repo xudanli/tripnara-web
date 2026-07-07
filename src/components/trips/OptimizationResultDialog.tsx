@@ -78,15 +78,15 @@ export function OptimizationResultDialog({
   }, [tripId, open]);
   const getMetricIcon = (value: number | undefined) => {
     if (value === undefined) return null;
-    if (value > 0) return <TrendingUp className="w-4 h-4 text-green-600" />;
-    if (value < 0) return <TrendingDown className="w-4 h-4 text-red-600" />;
+    if (value > 0) return <TrendingUp className="w-4 h-4 text-gate-allow-foreground" />;
+    if (value < 0) return <TrendingDown className="w-4 h-4 text-gate-reject-foreground" />;
     return <Minus className="w-4 h-4 text-gray-400" />;
   };
 
   const getMetricColor = (value: number | undefined) => {
     if (value === undefined) return 'text-gray-600';
-    if (value > 0) return 'text-green-600';
-    if (value < 0) return 'text-red-600';
+    if (value > 0) return 'text-gate-allow-foreground';
+    if (value < 0) return 'text-gate-reject-foreground';
     return 'text-gray-600';
   };
 
@@ -95,7 +95,7 @@ export function OptimizationResultDialog({
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <CheckCircle2 className="w-5 h-5 text-gate-allow-foreground" />
             优化完成
           </DialogTitle>
           <DialogDescription>
@@ -106,12 +106,12 @@ export function OptimizationResultDialog({
         <div className="space-y-6">
           {/* 优化结果摘要 */}
           {result.impact?.metrics && (
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-              <h3 className="text-sm font-semibold mb-3 text-green-900">优化结果</h3>
+            <div className="p-4 bg-gate-allow rounded-lg border border-gate-allow-border">
+              <h3 className="text-sm font-semibold mb-3 text-gate-allow-foreground">优化结果</h3>
               <div className="space-y-2">
                 {result.impact.metrics.fatigue !== undefined && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-green-700">疲劳指数</span>
+                    <span className="text-gate-allow-foreground">疲劳指数</span>
                     <div className="flex items-center gap-2">
                       {getMetricIcon(result.impact.metrics.fatigue)}
                       <span className={cn('font-medium', getMetricColor(result.impact.metrics.fatigue))}>
@@ -123,7 +123,7 @@ export function OptimizationResultDialog({
                 )}
                 {result.impact.metrics.buffer !== undefined && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-green-700">缓冲时间</span>
+                    <span className="text-gate-allow-foreground">缓冲时间</span>
                     <div className="flex items-center gap-2">
                       {getMetricIcon(result.impact.metrics.buffer)}
                       <span className={cn('font-medium', getMetricColor(result.impact.metrics.buffer))}>
@@ -135,7 +135,7 @@ export function OptimizationResultDialog({
                 )}
                 {result.impact.metrics.cost !== undefined && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-green-700">费用变化</span>
+                    <span className="text-gate-allow-foreground">费用变化</span>
                     <div className="flex items-center gap-2">
                       {getMetricIcon(result.impact.metrics.cost)}
                       <span className={cn('font-medium', getMetricColor(result.impact.metrics.cost))}>
@@ -159,15 +159,15 @@ export function OptimizationResultDialog({
                   className={cn(
                     'p-3 rounded-lg border text-sm',
                     suggestion.applied
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-red-50 border-red-200'
+                      ? 'bg-gate-allow border-gate-allow-border'
+                      : 'bg-gate-reject border-gate-reject-border'
                   )}
                 >
                   <div className="flex items-start gap-2">
                     {suggestion.applied ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5" />
+                      <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground mt-0.5" />
                     ) : (
-                      <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5" />
+                      <AlertTriangle className="w-4 h-4 text-gate-reject-foreground mt-0.5" />
                     )}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -180,7 +180,7 @@ export function OptimizationResultDialog({
                         </Badge>
                       </div>
                       {suggestion.error && (
-                        <p className="text-xs text-red-600 mt-1">{suggestion.error}</p>
+                        <p className="text-xs text-gate-reject-foreground mt-1">{suggestion.error}</p>
                       )}
                     </div>
                   </div>

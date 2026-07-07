@@ -185,17 +185,17 @@ export function getFeasibilityIssueIcon(issue: FeasibilityIssueDto): LucideIcon 
 export function getFeasibilityIssueIconColorClasses(issue: FeasibilityIssueDto): string {
   switch (resolveFeasibilityIssueVisualCategory(issue)) {
     case 'team_fit':
-      return 'text-violet-600 dark:text-violet-400';
+      return 'text-muted-foreground dark:text-muted-foreground';
     case 'itinerary_completeness':
       return 'text-amber-600 dark:text-amber-400';
     case 'schedule':
-      return 'text-blue-600 dark:text-blue-400';
+      return 'text-muted-foreground dark:text-muted-foreground';
     case 'transport':
       return 'text-slate-600 dark:text-slate-400';
     case 'booking':
-      return 'text-emerald-600 dark:text-emerald-400';
+      return 'text-success dark:text-success';
     case 'environment':
-      return 'text-sky-600 dark:text-sky-400';
+      return 'text-muted-foreground dark:text-muted-foreground';
     default:
       return 'text-muted-foreground';
   }

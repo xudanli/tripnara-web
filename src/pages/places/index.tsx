@@ -288,7 +288,7 @@ export default function PlacesPage() {
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
+            <div className="p-3 bg-gate-reject border border-gate-reject-border rounded-md text-gate-reject-foreground text-sm">
               {error}
             </div>
           )}

@@ -162,7 +162,7 @@ export default function DestinationInsightsCard({
               <Route className="w-4 h-4" />
               路线信息
             </h4>
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="p-3 bg-muted/15 dark:bg-muted/15 rounded-lg border border-border dark:border-border">
               <p className="text-sm">{insights.insights.routeInsights.answer}</p>
               <div className="mt-2">
                 <Badge variant="outline" className="text-xs">

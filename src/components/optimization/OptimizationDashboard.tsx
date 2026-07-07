@@ -372,8 +372,8 @@ export function OptimizationDashboard({
                 {!optimized.plan ? (
                   <Card>
                     <CardContent className="py-6 text-center">
-                      <div className="w-8 h-8 mx-auto rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-2">
-                        <RefreshCw className="w-4 h-4 text-green-600" />
+                      <div className="w-8 h-8 mx-auto rounded-full bg-gate-allow dark:bg-gate-allow/30 flex items-center justify-center mb-2">
+                        <RefreshCw className="w-4 h-4 text-gate-allow-foreground" />
                       </div>
                       <p className="font-medium text-sm">当前计划已较优</p>
                       <p className="text-xs text-muted-foreground">无需额外优化</p>

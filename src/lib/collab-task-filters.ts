@@ -28,6 +28,7 @@ export function parseCollabTaskFilter(raw: string | null): CollabTaskFilter {
 
 /** 任务领域分类（供筛选 Chips 使用） */
 export function classifyCollaborativeTask(task: CollaborativeTaskView): Exclude<CollabTaskFilter, 'all'> {
+  if (task.isSubTask || task.templateId.startsWith('decision_subtask:')) return 'decision';
   if (PREP_TEMPLATE_IDS.has(task.templateId)) return 'prep';
 
   const blob = `${task.templateId} ${task.title} ${task.description ?? ''}`.toLowerCase();

@@ -66,5 +66,9 @@ export function useTripExecutionAdvisory(
     return () => window.clearInterval(id);
   }, [tripId, enabled, options?.pollIntervalMs, reload]);
 
-  return { data, loading, error, disabled, notInTrip, reload };
+  const setAdvisory = useCallback((next: TripExecutionAdvisoryDto | null) => {
+    setData(next);
+  }, []);
+
+  return { data, loading, error, disabled, notInTrip, reload, setAdvisory };
 }

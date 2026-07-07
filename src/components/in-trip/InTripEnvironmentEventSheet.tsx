@@ -227,10 +227,10 @@ export function InTripEnvironmentEventSheet({
             )}
 
             {detail.resolution && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+              <div className="rounded-lg border border-gate-allow-border bg-gate-allow p-3 text-sm text-gate-allow-foreground">
                 <p className="font-medium">已锁定方案</p>
                 {detail.resolvedAt && (
-                  <p className="text-xs mt-1 text-emerald-700">
+                  <p className="text-xs mt-1 text-gate-allow-foreground">
                     {new Date(detail.resolvedAt).toLocaleString('zh-CN')}
                   </p>
                 )}

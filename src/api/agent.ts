@@ -50,7 +50,14 @@ export interface ConversationContext {
    * 由前端注入的上下文类型，例如 `active_trip_summary`。
    * 后端可在 route_and_run 时结合 `user_id` + `trip_id` 拉取行程洞察 / 记忆层。
    */
-  context_type?: string;
+  /**
+   * RFC-003 Travel Context 接地（assistant view / route_and_run 对齐 revision）
+   */
+  travel_context?: {
+    context_id?: string;
+    revision?: number;
+    stage?: string;
+  };
 }
 
 /**
@@ -137,6 +144,11 @@ export interface AgentOptions {
    * 异步大一统：`OFF` 完全同步（默认）；`AUTO` 重规划时 HTTP 202 + 轮询；`FORCE` 立即后台任务。
    */
   async_mode?: 'OFF' | 'AUTO' | 'FORCE';
+  /**
+   * 启用 CTRE（Canonical Travel Resolution Engine / Travel Compiler）。
+   * 后端 `TRAVEL_COMPILER_ENABLED=true` 时也可生效；SSE `TRAVEL_COMPILE` 阶段推送 `ctre_compilation`。
+   */
+  enable_travel_compiler?: boolean;
   /**
    * 客户端已知的最新 DSO 版本（上次成功 `explain.kernel_explainability.dso_version`）。
    * 写类 route_and_run 建议携带；与 plan_version 无关。

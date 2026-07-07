@@ -23,10 +23,15 @@ function profilingPendingCount(onboarding: {
 export function useCollabPendingCount(
   tripId: string | null | undefined,
   wishSummary?: WishSummary | null,
+  enabled = true,
 ) {
-  const { data: negotiationTasks = [] } = useDomainNegotiationTasks(tripId ?? undefined);
-  const { items: votes } = useSilentVoteList(tripId);
-  const { data: profiling } = useDecisionProfilingOnboarding(tripId);
+  const active = enabled && Boolean(tripId);
+  const { data: negotiationTasks = [] } = useDomainNegotiationTasks(
+    active ? (tripId ?? undefined) : undefined,
+    active,
+  );
+  const { items: votes } = useSilentVoteList(tripId, active);
+  const { data: profiling } = useDecisionProfilingOnboarding(tripId, active);
 
   return useMemo(() => {
     let count = 0;

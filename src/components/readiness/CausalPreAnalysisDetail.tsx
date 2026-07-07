@@ -29,14 +29,14 @@ export default function CausalPreAnalysisDetail({
   if (affected.length === 0) return null;
 
   return (
-    <div className={cn('rounded-md border border-violet-200/50 bg-background/60', className)}>
+    <div className={cn('rounded-md border border-border/50 bg-background/60', className)}>
       <button
         type="button"
         className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-xs"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
       >
-        <span className="flex items-center gap-1.5 font-medium text-violet-900 dark:text-violet-100">
+        <span className="flex items-center gap-1.5 font-medium text-muted-foreground dark:text-muted-foreground">
           <GitBranch className="h-3.5 w-3.5" />
           {t('dashboard.readiness.cascade.impactChain', {
             defaultValue: '影响链详情',
@@ -48,7 +48,7 @@ export default function CausalPreAnalysisDetail({
         />
       </button>
       {expanded ? (
-        <ul className="space-y-2 border-t border-violet-200/40 px-2.5 py-2">
+        <ul className="space-y-2 border-t border-border/40 px-2.5 py-2">
           {affected.map((item, index) => (
             <AffectedChainItem key={`${item.entityRef.id}-${index}`} item={item} isZh={isZh} />
           ))}

@@ -236,30 +236,30 @@ export default function ScheduleCarRentalStatusBar({
   return (
     <div
       className={cn(
-        'rounded-lg border border-sky-200 bg-gradient-to-r from-sky-50/90 to-white px-4 py-3 flex flex-wrap items-center justify-between gap-3',
+        'rounded-lg border border-border bg-gradient-to-r from-muted/15 to-white px-4 py-3 flex flex-wrap items-center justify-between gap-3',
         className,
       )}
       data-tour="schedule-car-rental-status"
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <Car className="h-5 w-5 text-sky-700 shrink-0" />
+        <Car className="h-5 w-5 text-muted-foreground shrink-0" />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-sky-950">自驾租车</p>
-          <p className="text-xs text-sky-800/80 mt-0.5 truncate">{subtitle}</p>
+          <p className="text-sm font-medium text-muted-foreground">自驾租车</p>
+          <p className="text-xs text-muted-foreground/80 mt-0.5 truncate">{subtitle}</p>
         </div>
         <Badge
           variant="outline"
           className={cn(
             'text-xs shrink-0',
-            displayStatus === 'confirmed' && 'border-emerald-300 text-emerald-800',
-            displayStatus === 'quoted' && 'border-sky-300 text-sky-900',
-            displayStatus === 'need_booking' && 'border-amber-300 text-amber-900',
+            displayStatus === 'confirmed' && 'border-border text-success',
+            displayStatus === 'quoted' && 'border-border text-muted-foreground',
+            displayStatus === 'need_booking' && 'border-border text-warning',
             displayStatus === 'unavailable' && 'border-slate-300 text-slate-700',
           )}
         >
           {statusMeta.label}
         </Badge>
-        {searching ? <Spinner className="h-4 w-4 text-sky-600" /> : null}
+        {searching ? <Spinner className="h-4 w-4 text-muted-foreground" /> : null}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
@@ -268,7 +268,7 @@ export default function ScheduleCarRentalStatusBar({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-8 text-xs text-sky-800"
+            className="h-8 text-xs text-muted-foreground"
             disabled={searching}
             onClick={() => void runSearch()}
           >
@@ -280,7 +280,7 @@ export default function ScheduleCarRentalStatusBar({
           <Button
             type="button"
             size="sm"
-            className="bg-sky-700 hover:bg-sky-800 h-8"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 h-8"
             disabled={searching && primaryCta.label === '查报价'}
             onClick={primaryCta.action}
           >

@@ -87,9 +87,9 @@ export default function PipelineSection({ activeTrip }: PipelineSectionProps) {
   const getStatusIcon = (status: PipelineStage['status']) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle2 className="w-5 h-5 text-green-600" />;
+        return <CheckCircle2 className="w-5 h-5 text-gate-allow-foreground" />;
       case 'in-progress':
-        return <Clock className="w-5 h-5 text-blue-600 animate-pulse" />;
+        return <Clock className="w-5 h-5 text-muted-foreground animate-pulse" />;
       case 'risk':
         return <AlertCircle className="w-5 h-5 text-amber-600" />;
       default:
@@ -101,13 +101,13 @@ export default function PipelineSection({ activeTrip }: PipelineSectionProps) {
     switch (status) {
       case 'completed':
         return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+          <Badge variant="outline" className="bg-gate-allow text-gate-allow-foreground border-gate-allow-border">
             ✓
           </Badge>
         );
       case 'in-progress':
         return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+          <Badge variant="outline" className="bg-muted/15 text-muted-foreground border-border">
             进行中
           </Badge>
         );
@@ -189,8 +189,8 @@ export default function PipelineSection({ activeTrip }: PipelineSectionProps) {
                 key={stage.id}
                 className={cn(
                   'flex items-start gap-4 p-4 rounded-lg border transition-all',
-                  stage.status === 'in-progress' && 'bg-blue-50 border-blue-200',
-                  stage.status === 'completed' && 'bg-green-50/50 border-green-200',
+                  stage.status === 'in-progress' && 'bg-muted/15 border-border',
+                  stage.status === 'completed' && 'bg-gate-allow/50 border-gate-allow-border',
                   stage.status === 'risk' && 'bg-amber-50 border-amber-200',
                   stage.status === 'pending' && 'bg-gray-50 border-gray-200',
                   route && 'cursor-pointer hover:shadow-md'

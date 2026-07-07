@@ -1,6 +1,32 @@
+const FALLBACK_LOCALE = 'zh-CN';
+const FALLBACK_CURRENCY = 'CNY';
+
+function resolveLocale(locale?: string): string {
+  const candidate =
+    locale?.trim() ||
+    (typeof navigator !== 'undefined' ? navigator.language?.trim() : '') ||
+    FALLBACK_LOCALE;
+  try {
+    new Intl.NumberFormat(candidate).format(0);
+    return candidate;
+  } catch {
+    return FALLBACK_LOCALE;
+  }
+}
+
+function resolveCurrency(currency?: string): string {
+  const code = (currency?.trim() || FALLBACK_CURRENCY).toUpperCase();
+  try {
+    new Intl.NumberFormat(FALLBACK_LOCALE, { style: 'currency', currency: code }).format(0);
+    return code;
+  } catch {
+    return FALLBACK_CURRENCY;
+  }
+}
+
 export const formatDate = (date: string | Date, locale?: string): string => {
   const d = typeof date === 'string' ? new Date(date) : date;
-  const defaultLocale = locale || navigator.language || 'zh-CN';
+  const defaultLocale = resolveLocale(locale);
   return d.toLocaleDateString(defaultLocale, {
     year: 'numeric',
     month: 'long',
@@ -22,14 +48,14 @@ export const formatDayDate = (date: string | Date | undefined): string => {
 
 export const formatCurrency = (
   amount: number, 
-  currency: string = 'CNY', 
+  currency: string = FALLBACK_CURRENCY, 
   locale?: string
 ): string => {
-  // 使用浏览器默认locale，如果没有提供
-  const defaultLocale = locale || navigator.language || 'zh-CN';
+  const defaultLocale = resolveLocale(locale);
+  const safeCurrency = resolveCurrency(currency);
   return new Intl.NumberFormat(defaultLocale, {
     style: 'currency',
-    currency,
+    currency: safeCurrency,
   }).format(amount);
 };
 

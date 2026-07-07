@@ -23,19 +23,19 @@ const quickStarts = [
     icon: Users,
     label: '家庭出游',
     prompt: '想带父母和孩子一起出去玩，有什么适合的地方？',
-    color: 'text-blue-600',
+    color: 'text-muted-foreground',
   },
   {
     icon: Compass,
     label: '探险之旅',
     prompt: '想去探险，体验一些刺激的户外活动',
-    color: 'text-green-600',
+    color: 'text-gate-allow-foreground',
   },
   {
     icon: Globe,
     label: '说走就走',
     prompt: '我想去旅行',
-    color: 'text-purple-600',
+    color: 'text-muted-foreground',
   },
 ];
 
@@ -48,7 +48,7 @@ export function WelcomeScreen({ onStart, className }: WelcomeScreenProps) {
       )}
     >
       {/* Logo */}
-      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mb-6 animate-in zoom-in-50 fade-in duration-500">
+      <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-6 animate-in zoom-in-50 fade-in duration-500">
         <Sparkles className="w-10 h-10 text-white" />
       </div>
 

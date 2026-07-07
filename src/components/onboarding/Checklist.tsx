@@ -76,7 +76,7 @@ export default function Checklist({
               >
                 <div className="flex-shrink-0">
                   {isCompleted ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <CheckCircle2 className="h-5 w-5 text-gate-allow-foreground" />
                   ) : (
                     <div className="h-5 w-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
                       <span className="text-xs font-medium text-gray-400">{stepNumber}</span>

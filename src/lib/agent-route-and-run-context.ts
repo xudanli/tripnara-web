@@ -112,6 +112,11 @@ export type BuildRouteAndRunConversationContextParams = {
   timezone?: string;
   /** 有绑定行程时传 `active_trip_summary`，配合 `trip_id` 触发服务端摘要/记忆 */
   contextType?: string;
+  travelContext?: {
+    contextId: string;
+    revision: number;
+    stage?: string;
+  };
 };
 
 export function buildRouteAndRunConversationContext(
@@ -129,5 +134,14 @@ export function buildRouteAndRunConversationContext(
     ...(params.locale ? { locale: params.locale } : {}),
     ...(params.timezone ? { timezone: params.timezone } : {}),
     ...(params.contextType?.trim() ? { context_type: params.contextType.trim() } : {}),
+    ...(params.travelContext?.contextId
+      ? {
+          travel_context: {
+            context_id: params.travelContext.contextId,
+            revision: params.travelContext.revision,
+            ...(params.travelContext.stage ? { stage: params.travelContext.stage } : {}),
+          },
+        }
+      : {}),
   };
 }

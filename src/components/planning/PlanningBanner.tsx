@@ -32,7 +32,7 @@ export function PlanningBanner({ guards, className }: PlanningBannerProps) {
           ? 'border-amber-500/50 bg-gradient-to-r from-amber-50 to-amber-50/30 text-amber-950 [&>svg]:text-amber-700'
           : isWarning
             ? 'border-amber-500/40 bg-amber-50 text-amber-950 [&>svg]:text-amber-700'
-            : 'border-sky-500/40 bg-sky-50 text-sky-950 [&>svg]:text-sky-700',
+            : 'border-border/40 bg-muted/15 text-muted-foreground [&>svg]:text-muted-foreground',
         className
       )}
     >

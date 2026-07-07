@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateSilentVote } from '@/hooks/useSilentVotes';
 import type { CreateSilentVoteOptionInput } from '@/types/silent-votes';
+import type { SilentVoteCreateDraft } from '@/lib/decision-space-vote.util';
 
 interface OptionDraft {
   id: string;
@@ -26,6 +27,8 @@ interface SilentVoteCreateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (voteId: string) => void;
+  /** 决策空间等场景预填表单 */
+  draft?: SilentVoteCreateDraft | null;
 }
 
 function defaultOptions(): OptionDraft[] {
@@ -40,6 +43,7 @@ export function SilentVoteCreateDialog({
   open,
   onOpenChange,
   onCreated,
+  draft,
 }: SilentVoteCreateDialogProps) {
   const { creating, createManual } = useCreateSilentVote(tripId);
   const [title, setTitle] = useState('方案选择');
@@ -53,6 +57,25 @@ export function SilentVoteCreateDialog({
     setAutoOpen(true);
     setOptions(defaultOptions());
   };
+
+  useEffect(() => {
+    if (!open) return;
+    if (!draft) {
+      resetForm();
+      return;
+    }
+    setTitle(draft.title?.trim() || '方案选择');
+    setQuestion(draft.question?.trim() || '请匿名选择更倾向的方案');
+    setAutoOpen(draft.autoOpen ?? true);
+    setOptions(
+      draft.options?.length && draft.options.length >= 2
+        ? draft.options.map((option, index) => ({
+            id: option.id || `opt-${index + 1}`,
+            label: option.label,
+          }))
+        : defaultOptions(),
+    );
+  }, [open, draft]);
 
   const updateOption = (index: number, label: string) => {
     setOptions((prev) => prev.map((opt, i) => (i === index ? { ...opt, label } : opt)));

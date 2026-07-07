@@ -6,12 +6,15 @@ import { useCollabOverview } from '@/hooks/useCollabOverview';
 import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
 import { mergeCollabDeepLink } from '@/lib/collab-center-navigation';
 import { trackCollabVoteStart } from '@/utils/collab-center-analytics';
-import { workbenchCard } from '@/components/plan-studio/workbench/workbench-ui';
+import { workbenchCardFlat } from '@/components/plan-studio/workbench/workbench-ui';
 import { cn } from '@/lib/utils';
 import type { DomainNegotiationTask } from '@/types/domain-negotiation-task';
+import { resolveNegotiationTaskId } from '@/lib/collab-negotiation-selection.util';
+import { filterDomainInfluenceNegotiationTasks } from '@/lib/collab-collaborative-task-display.util';
 import { CollabDecisionStatsRow } from '../widgets/CollabDecisionStatsRow';
 import { CollabAiSuggestionsPanel } from '../widgets/CollabAiSuggestionsPanel';
 import { CollabDecisionQueuePanel } from '../widgets/CollabDecisionQueuePanel';
+import { CollabDecisionFollowUpQueuePanel } from '../widgets/CollabDecisionFollowUpQueuePanel';
 import { NegotiationSummaryWidget } from '../widgets/NegotiationSummaryWidget';
 import { collabDashboardGrid, collabDashboardSpan } from '../collab-dashboard-layout';
 
@@ -22,26 +25,26 @@ interface CollabCenterDecisionsTabProps {
 
 function resolveSelectedTaskId(
   tasks: DomainNegotiationTask[],
+  negotiationTaskId: string | null,
   roundId: string | null,
   roundDomain: string | null,
 ): string | null {
-  if (roundDomain) {
-    const byDomain = tasks.find((t) => t.domain === roundDomain);
-    if (byDomain) return byDomain.id;
-  }
-  if (roundId) {
-    const byRound = tasks.find((t) => t.activeRoundId === roundId);
-    if (byRound) return byRound.id;
-  }
-  return tasks.find((t) => t.status !== 'consensus_reached')?.id ?? null;
+  return resolveNegotiationTaskId(tasks, { negotiationTaskId, roundId, roundDomain });
 }
 
 export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDecisionsTabProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const roundId = searchParams.get('roundId');
   const roundDomain = searchParams.get('roundDomain');
+  const negotiationTaskId = searchParams.get('negotiationTaskId');
   const voteIdParam = searchParams.get('voteId');
-  const { decisionStats, votes, negotiationTasks, loading } = useCollabOverview(tripId);
+  const { decisionStats, votes, negotiationTasks, decisionFollowUps, loading } =
+    useCollabOverview(tripId);
+
+  const domainNegotiationTasks = useMemo(
+    () => filterDomainInfluenceNegotiationTasks(negotiationTasks),
+    [negotiationTasks],
+  );
   const { openAssistant, sendAssistantMessage } = useAssistantSidebar();
   const voteSectionRef = useRef<HTMLElement>(null);
   const stageSectionRef = useRef<HTMLDivElement>(null);
@@ -50,14 +53,15 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
   const openVote = votes.find((v) => v.status === 'open');
 
   const selectedTaskId = useMemo(
-    () => resolveSelectedTaskId(negotiationTasks, roundId, roundDomain),
-    [negotiationTasks, roundId, roundDomain],
+    () => resolveSelectedTaskId(domainNegotiationTasks, negotiationTaskId, roundId, roundDomain),
+    [domainNegotiationTasks, negotiationTaskId, roundId, roundDomain],
   );
 
   const handleSelectQueueTask = useCallback(
     (task: DomainNegotiationTask) => {
       const next = mergeCollabDeepLink(searchParams, {
         collabTab: 'decisions',
+        negotiationTaskId: task.id,
         roundId: task.status === 'in_discussion' ? (task.activeRoundId ?? null) : null,
         roundDomain: task.domain,
       });
@@ -70,8 +74,8 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
   );
 
   const activeTask = useMemo(
-    () => negotiationTasks.find((t) => t.id === selectedTaskId) ?? null,
-    [negotiationTasks, selectedTaskId],
+    () => domainNegotiationTasks.find((t) => t.id === selectedTaskId) ?? null,
+    [domainNegotiationTasks, selectedTaskId],
   );
 
   const discussTopic = openVote?.title ?? activeTask?.title ?? '团队协商';
@@ -119,12 +123,19 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
 
       <div className={collabDashboardGrid}>
         <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
-          <CollabDecisionQueuePanel
-            tasks={negotiationTasks}
-            selectedTaskId={selectedTaskId}
-            loading={loading}
-            onSelectTask={handleSelectQueueTask}
-          />
+          <div className="space-y-4">
+            <CollabDecisionFollowUpQueuePanel
+              tripId={tripId}
+              tasks={decisionFollowUps}
+              loading={loading}
+            />
+            <CollabDecisionQueuePanel
+              tasks={domainNegotiationTasks}
+              selectedTaskId={selectedTaskId}
+              loading={loading}
+              onSelectTask={handleSelectQueueTask}
+            />
+          </div>
         </div>
 
         <div ref={stageSectionRef} className={collabDashboardSpan({ md: 6, lg: 5 })}>
@@ -132,6 +143,7 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
             tripId={tripId}
             initialRoundId={roundId}
             initialRoundDomain={roundDomain}
+            initialNegotiationTaskId={negotiationTaskId}
             hideTaskList
             collabStage
             onStartVote={() => {
@@ -164,11 +176,11 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
         </div>
 
         <div className={collabDashboardSpan({ md: 6, lg: 6 })}>
-          <NegotiationSummaryWidget tasks={negotiationTasks} />
+          <NegotiationSummaryWidget tasks={domainNegotiationTasks} />
         </div>
 
         <div className={collabDashboardSpan({ md: 6, lg: 6 })}>
-          <section ref={voteSectionRef} className={cn(workbenchCard, 'h-full p-4')}>
+          <section ref={voteSectionRef} className={cn(workbenchCardFlat, 'h-full p-4')}>
             <h3 className="mb-3 text-sm font-semibold tracking-tight text-foreground">团队投票</h3>
             <SilentVoteListPanel
               tripId={tripId}

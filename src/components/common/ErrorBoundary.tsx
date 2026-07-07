@@ -32,39 +32,20 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div
-          style={{
-            padding: '2rem',
-            textAlign: 'center',
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>
-            Something went wrong
-          </h1>
-          <p style={{ color: '#666', marginBottom: '2rem' }}>
+        <div className="flex min-h-screen flex-col items-center justify-center p-8 text-center">
+          <h1 className="mb-4 text-3xl font-semibold">Something went wrong</h1>
+          <p className="mb-8 text-muted-foreground">
             {this.state.error
               ? resolveHttpErrorUserMessage(this.state.error, 'An unexpected error occurred')
               : 'An unexpected error occurred'}
           </p>
           <button
+            type="button"
             onClick={() => {
               this.setState({ hasError: false, error: undefined });
               window.location.reload();
             }}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: '#007bff',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '1rem',
-            }}
+            className="cursor-pointer rounded-md bg-primary px-6 py-3 text-base text-primary-foreground hover:bg-primary/90"
           >
             Reload Page
           </button>

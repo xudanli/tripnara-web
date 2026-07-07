@@ -250,7 +250,7 @@ export default function SidebarNavigation({
                           variant={item.key === 'readiness' ? 'destructive' : 'secondary'}
                           className={cn(
                             'text-xs h-5 min-w-[20px] flex items-center justify-center',
-                            item.key === 'readiness' && 'bg-red-500 hover:bg-red-500'
+                            item.key === 'readiness' && 'bg-gate-reject-foreground hover:bg-gate-reject-foreground'
                           )}
                         >
                           {item.badge}
@@ -362,7 +362,7 @@ export default function SidebarNavigation({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleLogout}
-                className="cursor-pointer text-red-600 focus:text-red-600"
+                className="cursor-pointer text-gate-reject-foreground focus:text-gate-reject-foreground"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>{t('header.logout')}</span>

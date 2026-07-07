@@ -149,14 +149,14 @@ export function AdjustTimeDialog({
 
         <div className="space-y-4 py-4">
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2">
+            <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {/* 智能时间调整提示 */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 flex items-start gap-2">
+          <div className="rounded-lg border border-border bg-muted/15 p-3 text-sm text-muted-foreground flex items-start gap-2">
             <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>
               {t('dialogs.adjustTime.infoMessage')}
@@ -177,7 +177,7 @@ export function AdjustTimeDialog({
                   <ul className="space-y-1 text-sm text-muted-foreground">
                     {previewResult.appliedChanges.map((change, index) => (
                       <li key={index} className="flex items-start gap-2">
-                        <CheckCircle2 className="h-4 w-4 mt-0.5 text-green-600 flex-shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 mt-0.5 text-gate-allow-foreground flex-shrink-0" />
                         <span>{change.description}</span>
                       </li>
                     ))}
@@ -197,7 +197,7 @@ export function AdjustTimeDialog({
                           <div className="text-muted-foreground">{t('dialogs.adjustTime.fatigue')}</div>
                           <div className={cn(
                             'font-semibold',
-                            previewResult.impact.metrics.fatigue < 0 ? 'text-green-600' : 'text-red-600'
+                            previewResult.impact.metrics.fatigue < 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                           )}>
                             {previewResult.impact.metrics.fatigue > 0 ? '+' : ''}
                             {previewResult.impact.metrics.fatigue}
@@ -209,7 +209,7 @@ export function AdjustTimeDialog({
                           <div className="text-muted-foreground">{t('dialogs.adjustTime.bufferTime')}</div>
                           <div className={cn(
                             'font-semibold',
-                            previewResult.impact.metrics.buffer > 0 ? 'text-green-600' : 'text-red-600'
+                            previewResult.impact.metrics.buffer > 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                           )}>
                             {previewResult.impact.metrics.buffer > 0 ? '+' : ''}
                             {previewResult.impact.metrics.buffer} {t('dialogs.adjustTime.minutes')}
@@ -221,7 +221,7 @@ export function AdjustTimeDialog({
                           <div className="text-muted-foreground">{t('dialogs.adjustTime.costChange')}</div>
                           <div className={cn(
                             'font-semibold',
-                            previewResult.impact.metrics.cost < 0 ? 'text-green-600' : 'text-red-600'
+                            previewResult.impact.metrics.cost < 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                           )}>
                             {previewResult.impact.metrics.cost > 0 ? '+' : ''}
                             {formatCurrency(Math.abs(previewResult.impact.metrics.cost), currency)}
@@ -239,9 +239,9 @@ export function AdjustTimeDialog({
                           key={risk.id}
                           className={cn(
                             'text-xs p-2 rounded',
-                            risk.severity === 'blocker' && 'bg-red-50 text-red-800',
+                            risk.severity === 'blocker' && 'bg-gate-reject text-gate-reject-foreground',
                             risk.severity === 'warn' && 'bg-yellow-50 text-yellow-800',
-                            risk.severity === 'info' && 'bg-blue-50 text-blue-800'
+                            risk.severity === 'info' && 'bg-muted/15 text-muted-foreground'
                           )}
                         >
                           {risk.title}

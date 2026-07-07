@@ -6,9 +6,9 @@ const QUADRANT_CARD_THEMES: Record<
   MbtiQuadrant,
   { gradientFrom: string; gradientTo: string; accentColor: string }
 > = {
-  NT: { gradientFrom: '#1C2E24', gradientTo: '#0f1a14', accentColor: '#4ade80' },
+  NT: { gradientFrom: '#1C2E24', gradientTo: '#0f1a14', accentColor: '#5E7D5B' },
   NF: { gradientFrom: '#D97746', gradientTo: '#f5e6d3', accentColor: '#fb923c' },
-  SP: { gradientFrom: '#0A0A0A', gradientTo: '#0c1a3a', accentColor: '#38bdf8' },
+  SP: { gradientFrom: '#0A0A0A', gradientTo: '#0c1a3a', accentColor: '#88C0D0' },
   SJ: { gradientFrom: '#2C3539', gradientTo: '#5c4d3c', accentColor: '#a8a29e' },
 };
 

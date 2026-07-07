@@ -3,7 +3,14 @@ import {
   buildPlanStudioDecisionProfilingUrl,
   type DecisionProfilingSurface,
 } from '@/lib/decision-profiling-navigation';
+import {
+  resolveFeasibilityIssueActionByResolutionMode,
+} from '@/lib/feasibility-resolution-mode.util';
 import { resolveFeasibilityIssueVisualCategory } from '@/lib/feasibility-issue-display';
+import {
+  isEnforcedHardConstraintIssueKind,
+  resolveConstraintUiIdsForEnforcementIssueKind,
+} from '@/lib/trip-constraint-hard-enforcement.util';
 import type { FeasibilityIssueDto } from '@/types/trip-feasibility-report';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
 
@@ -17,6 +24,8 @@ export type FeasibilityIssueActionSurface =
   | 'feasibility_repair'
   | 'road_class_repair'
   | 'refresh_evidence'
+  | 'decision_space'
+  | 'collaboration_center'
   | 'issue_detail';
 
 export interface FeasibilityIssueActionTarget {
@@ -93,6 +102,9 @@ export function resolveFeasibilityIssueActionTarget(
   tripId: string,
   options?: { preferPlanStudio?: boolean },
 ): FeasibilityIssueActionTarget {
+  const byMode = resolveFeasibilityIssueActionByResolutionMode(issue, tripId);
+  if (byMode) return byMode;
+
   const preferPlanStudio = options?.preferPlanStudio ?? false;
   const profilingUrl = (surface: DecisionProfilingSurface, step?: DecisionProfilingStep) =>
     preferPlanStudio
@@ -130,6 +142,30 @@ export function resolveFeasibilityIssueActionTarget(
     return {
       ...profilingTarget(tripId, 'hub', '打开决策画像'),
       href: profilingUrl('hub'),
+    };
+  }
+
+  if (issue.issueKind && isEnforcedHardConstraintIssueKind(issue.issueKind)) {
+    const constraintId =
+      resolveConstraintUiIdsForEnforcementIssueKind(issue.issueKind)[0] ?? issue.issueKind;
+    const params = new URLSearchParams({
+      tripId,
+      tab: 'schedule',
+      view: 'constraints',
+      constraintId,
+    });
+    const label =
+      issue.issueKind === 'budget'
+        ? '调整预算约束'
+        : issue.issueKind === 'no_night_drive'
+          ? '调整不夜驾约束'
+          : '调整驾驶上限';
+    return {
+      surface: 'decision_space',
+      label,
+      href: `/dashboard/plan-studio?${params.toString()}`,
+      issueId: issue.id,
+      categoryFilter: resolveFeasibilityIssueVisualCategory(issue),
     };
   }
 

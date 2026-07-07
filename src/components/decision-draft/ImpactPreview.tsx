@@ -110,9 +110,9 @@ export default function ImpactPreview({
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     {impact.confidence_change > 0 ? (
-                      <TrendingUp className="w-4 h-4 text-green-500" />
+                      <TrendingUp className="w-4 h-4 text-gate-allow-foreground" />
                     ) : (
-                      <TrendingDown className="w-4 h-4 text-red-500" />
+                      <TrendingDown className="w-4 h-4 text-gate-reject-foreground" />
                     )}
                     置信度变化
                   </CardTitle>
@@ -121,7 +121,7 @@ export default function ImpactPreview({
                   <div
                     className={cn(
                       'text-2xl font-bold',
-                      impact.confidence_change > 0 ? 'text-green-500' : 'text-red-500'
+                      impact.confidence_change > 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                     )}
                   >
                     {impact.confidence_change > 0 ? '+' : ''}

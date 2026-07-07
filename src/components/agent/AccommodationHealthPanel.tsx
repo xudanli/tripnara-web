@@ -25,8 +25,8 @@ const STATUS_STYLES: Record<
   { segment: string; dot: string; label: string }
 > = {
   booked: {
-    segment: 'bg-emerald-500 border-emerald-600/40',
-    dot: 'bg-emerald-500',
+    segment: 'bg-gate-allow-foreground border-gate-allow-border/40',
+    dot: 'bg-gate-allow-foreground',
     label: '已订',
   },
   missing: {
@@ -40,8 +40,8 @@ const STATUS_STYLES: Record<
     label: '需留意',
   },
   critical: {
-    segment: 'bg-red-500 border-red-600/50',
-    dot: 'bg-red-600',
+    segment: 'bg-gate-reject-foreground border-gate-reject-border/50',
+    dot: 'bg-gate-reject-foreground',
     label: '异常',
   },
 };
@@ -149,7 +149,7 @@ export function AccommodationHealthPanel({
         </div>
         <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
           <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+            <span className="h-2 w-2 rounded-full bg-gate-allow-foreground" aria-hidden />
             已订
           </span>
           <span className="inline-flex items-center gap-1">
@@ -161,7 +161,7 @@ export function AccommodationHealthPanel({
             需留意
           </span>
           <span className="inline-flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-red-600" aria-hidden />
+            <AlertTriangle className="h-3 w-3 text-gate-reject-foreground" aria-hidden />
             异常
           </span>
         </div>

@@ -103,13 +103,13 @@ interface WorkbenchState {
 function PhaseIndicator({ phase }: { phase: WorkbenchPhase }) {
   const config: Record<WorkbenchPhase, { label: string; color: string; icon: React.ElementType }> = {
     idle: { label: '待优化', color: 'bg-gray-100 text-gray-700', icon: Info },
-    evaluating: { label: '评估中', color: 'bg-blue-100 text-blue-700', icon: BarChart3 },
+    evaluating: { label: '评估中', color: 'bg-muted/15 text-muted-foreground', icon: BarChart3 },
     optimizing: { label: '优化中', color: 'bg-amber-100 text-amber-700', icon: Zap },
-    comparing: { label: '对比中', color: 'bg-purple-100 text-purple-700', icon: GitCompare },
+    comparing: { label: '对比中', color: 'bg-muted/15 text-muted-foreground', icon: GitCompare },
     assessing: { label: '风险评估', color: 'bg-orange-100 text-orange-700', icon: AlertTriangle },
-    negotiating: { label: '协商中', color: 'bg-emerald-100 text-emerald-700', icon: Shield },
-    complete: { label: '完成', color: 'bg-green-100 text-green-700', icon: CheckCircle2 },
-    error: { label: '错误', color: 'bg-red-100 text-red-700', icon: XCircle },
+    negotiating: { label: '协商中', color: 'bg-gate-allow text-gate-allow-foreground', icon: Shield },
+    complete: { label: '完成', color: 'bg-gate-allow text-gate-allow-foreground', icon: CheckCircle2 },
+    error: { label: '错误', color: 'bg-gate-reject text-gate-reject-foreground', icon: XCircle },
   };
   
   const { label, color, icon: Icon } = config[phase];
@@ -149,7 +149,7 @@ function ScoreSummary({
             <p className="text-xs text-muted-foreground">优化后</p>
             <p className={cn(
               'text-2xl font-bold tabular-nums',
-              decreased ? 'text-amber-600' : 'text-green-600'
+              decreased ? 'text-amber-600' : 'text-gate-allow-foreground'
             )}>
               {Math.round(optimized * 100)}
             </p>
@@ -162,7 +162,7 @@ function ScoreSummary({
                 'gap-1',
                 decreased
                   ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400'
-                  : 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400'
+                  : 'bg-gate-allow text-gate-allow-foreground dark:bg-gate-allow/30 dark:text-gate-allow-foreground'
               )}
             >
               <TrendingUp className={cn('h-3 w-3', decreased && 'rotate-180')} />
@@ -502,7 +502,7 @@ export function OptimizationWorkbench({
           
           {state.phase === 'error' && (
             <div className="space-y-3">
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+              <div className="p-3 rounded-lg bg-gate-reject border border-gate-reject-border text-gate-reject-foreground text-sm">
                 {state.error?.message || '优化过程中发生错误'}
               </div>
               <Button

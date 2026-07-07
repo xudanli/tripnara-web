@@ -637,7 +637,7 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                     {packingList.summary.totalItems}
                   </span>{' '}
                   {t('dashboard.readiness.page.packingList.totalItems')} ·{' '}
-                  <span className={cn(workbenchSecondaryMetric, 'font-semibold text-nara-tundra-foreground')}>
+                  <span className={cn(workbenchSecondaryMetric, 'font-semibold text-gate-allow-foreground')}>
                     {packingList.summary.checkedItems}
                   </span>{' '}
                   {t('dashboard.readiness.page.packingList.checked')}
@@ -805,7 +805,7 @@ export default function PackingListTab({ tripId, trip }: PackingListTabProps) {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="h-6 px-2 text-muted-foreground hover:text-gate-reject-foreground"
+                                  className="h-6 px-2 text-muted-foreground hover:text-error"
                                   onClick={() => handleDeleteManualItem(item.id)}
                                 >
                                   <Trash2 className="h-3 w-3" />

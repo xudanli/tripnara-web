@@ -45,8 +45,8 @@ export function InTripHandoffChecklist({
 
   if (error) {
     return (
-      <div className={cn('rounded-lg border border-red-200 bg-red-50 p-3 space-y-2', className)}>
-        <p className="text-sm text-red-800">{error}</p>
+      <div className={cn('rounded-lg border border-gate-reject-border bg-gate-reject p-3 space-y-2', className)}>
+        <p className="text-sm text-gate-reject-foreground">{error}</p>
         {onRefresh && (
           <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" />
@@ -66,11 +66,11 @@ export function InTripHandoffChecklist({
   return (
     <div className={cn('space-y-3', className)}>
       {verify.ready ? (
-        <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" aria-hidden />
+        <div className="flex items-start gap-2 rounded-lg border border-gate-allow-border bg-gate-allow p-3">
+          <CheckCircle2 className="h-5 w-5 text-gate-allow-foreground shrink-0 mt-0.5" aria-hidden />
           <div>
-            <p className="text-sm font-medium text-emerald-900">行前移交已就绪</p>
-            <p className="text-xs text-emerald-700 mt-0.5">
+            <p className="text-sm font-medium text-gate-allow-foreground">行前移交已就绪</p>
+            <p className="text-xs text-gate-allow-foreground mt-0.5">
               预算、分摊与行程锚点已齐全，可以开始旅行。
             </p>
           </div>

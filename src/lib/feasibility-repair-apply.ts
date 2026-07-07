@@ -1,5 +1,10 @@
 import { applyRepair } from '@/api/feasibility-repair';
 import { itineraryItemsApi } from '@/api/trips';
+import {
+  assertFeasibilityApplyRepairAllowed,
+  formatLegacyApplyBlockedMessage,
+  isLegacyApplyBlockedError,
+} from '@/lib/effective-plan-write-chain.util';
 import { isPlanClassAction } from '@/lib/feasibility-repair-plan-class';
 import { shouldOpenReservationEvidenceModal } from '@/lib/poi-access-reservation-evidence.util';
 import type { FeasibilityIssueDto, FeasibilityRepairOptionDto } from '@/types/trip-feasibility-report';
@@ -32,19 +37,9 @@ export function resolveRevalidateScope(
   return { issueId: issue.id };
 }
 
-function readRepairErrorCode(data: unknown): string | undefined {
-  if (!data || typeof data !== 'object') return undefined;
-  const record = data as Record<string, unknown>;
-  const err = record.error;
-  if (err && typeof err === 'object') {
-    const nested = err as Record<string, unknown>;
-    if (typeof nested.errorCode === 'string') return nested.errorCode;
-    if (typeof nested.code === 'string') return nested.code;
-  }
-  if (typeof record.errorCode === 'string') return record.errorCode;
-  if (typeof record.code === 'string') return record.code;
-  return undefined;
-}
+import {
+  readFeasibilityRepairErrorCode,
+} from '@/lib/effective-plan-write-chain.util';
 
 function readRepairErrorMessage(data: unknown): string | undefined {
   if (!data || typeof data !== 'object') return undefined;
@@ -56,8 +51,11 @@ function readRepairErrorMessage(data: unknown): string | undefined {
 
 /** apply-repair / preview-repair 409 SCHEDULE_CONFLICT 等 → 用户可读文案 */
 export function formatFeasibilityRepairApplyError(err: unknown): string {
+  if (isLegacyApplyBlockedError(err)) {
+    return formatLegacyApplyBlockedMessage(err);
+  }
   if (isAxiosError(err) && err.response?.status === 409) {
-    const code = readRepairErrorCode(err.response.data);
+    const code = readFeasibilityRepairErrorCode(err.response.data);
     const message = readRepairErrorMessage(err.response.data);
     if (code === 'SCHEDULE_CONFLICT') {
       return (
@@ -96,6 +94,8 @@ export async function applyFeasibilityRepairOption(
     throw new Error('请先上传预约凭证（确认号），不要直接应用该修复项');
   }
 
+  assertFeasibilityApplyRepairAllowed(issue);
+
   try {
     const res = await applyRepair(tripId, issue.id, {
       optionId: option.id,
@@ -107,6 +107,7 @@ export async function applyFeasibilityRepairOption(
     }
     return;
   } catch (err) {
+    if (isLegacyApplyBlockedError(err)) throw err;
     if (
       option.actionType === 'adjust_time' &&
       option.payload?.itemId &&

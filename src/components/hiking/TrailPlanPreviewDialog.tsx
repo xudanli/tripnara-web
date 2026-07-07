@@ -72,7 +72,7 @@ export function TrailPlanPreviewDialog({
               <Spinner className="h-7 w-7" />
             </div>
           )}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-gate-reject-foreground">{error}</p>}
           {!loading && !error && plan && (
             <HardTrekTrailPlanTimeline
               plan={plan}

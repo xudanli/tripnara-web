@@ -334,11 +334,11 @@ export default function ExplanationPanel({
                             <span>{call.skill_name}</span>
                             <div className="flex items-center gap-2">
                               {call.success ? (
-                                <Badge variant="outline" className="bg-green-500">
+                                <Badge variant="outline" className="bg-gate-allow-foreground">
                                   成功
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-red-500">
+                                <Badge variant="outline" className="bg-gate-reject-foreground">
                                   失败
                                 </Badge>
                               )}

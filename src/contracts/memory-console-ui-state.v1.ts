@@ -24,6 +24,8 @@ export const MEMORY_CONSOLE_UI_DEFAULT_ZH = {
     '删除后，后续规划将不再自动应用这条偏好更新。',
   section_export_title: '导出数据',
   section_export_button: '导出 JSON',
+  section_decision_ledger_causality_title: '决策账本关联',
+  section_decision_ledger_link_row: 'Ledger 节点 → 用户决策',
   gate_sink_anchor_label: '依据：对话偏好',
   gate_sink_hydrate_hint: '记忆约束已注入本次规划',
   gate_sink_override_hint: '本次请求覆盖了部分记忆偏好',
@@ -38,7 +40,13 @@ export const MEMORY_CONSOLE_UI_DEFAULT_ZH = {
   } as Record<string, string>,
 } as const;
 
-export type MemoryConsoleSectionId = 'l1' | 'l0' | 'l2' | 'trip_patches' | 'export';
+export type MemoryConsoleSectionId =
+  | 'l1'
+  | 'l0'
+  | 'l2'
+  | 'trip_patches'
+  | 'decision_ledger_causality'
+  | 'export';
 
 export type MemoryConsoleUiSection = {
   id: MemoryConsoleSectionId;
@@ -86,14 +94,16 @@ export function deriveMemoryConsoleUiStateV1(
 ): MemoryConsoleUiStateV1 {
   const l1 = payload?.l1;
   const l0 = payload?.l0;
-  const l2 = payload?.l2 ?? [];
+  const l2 = payload?.l2 ?? payload?.l2_recent ?? [];
   const tripPatches = payload?.trip?.constraint_patches ?? [];
-  const tripId = payload?.trip?.trip_id;
+  const tripId = payload?.trip?.trip_id ?? payload?.decision_ledger_causality?.trip_id;
+  const ledgerLinks = payload?.decision_ledger_causality?.links ?? [];
 
   const hasL1 = Boolean(l1 && Object.keys(l1).filter((k) => k !== 'client_acknowledged').length > 0);
   const hasL0 = Boolean(l0 && Object.keys(l0).length > 0);
   const hasL2 = l2.length > 0;
   const showTripPatches = Boolean(tripId && tripPatches.length >= 0);
+  const showLedgerCausality = ledgerLinks.length > 0;
 
   const sections: MemoryConsoleUiSection[] = [
     {
@@ -117,6 +127,12 @@ export function deriveMemoryConsoleUiStateV1(
       title_zh: MEMORY_CONSOLE_UI_DEFAULT_ZH.section_trip_patches_title,
       visible: showTripPatches,
       badge_count: tripPatches.length || undefined,
+    },
+    {
+      id: 'decision_ledger_causality',
+      title_zh: MEMORY_CONSOLE_UI_DEFAULT_ZH.section_decision_ledger_causality_title,
+      visible: showLedgerCausality,
+      badge_count: ledgerLinks.length || undefined,
     },
     {
       id: 'export',

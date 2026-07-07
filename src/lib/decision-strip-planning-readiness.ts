@@ -44,10 +44,20 @@ export function resolvePlanningReadinessPresentation(input: {
   inbox: PlanningConflictsInboxMetrics;
   budgetGate?: BudgetGateStatus | null;
   trip?: TripDetail | null;
-  /** Plan Studio 已展示 PlanningConstraintsCard 时，Strip 不再重复 budget/team 提醒 */
-  deferConstraintTopicsToCard?: boolean;
+  /** BFF 有待决 decision-problem 时，Strip CTA 文案改为「去决策」 */
+  useDecisionProblemsBff?: boolean;
+  openDecisionProblemCount?: number;
 }): PlanningReadinessPresentation | null {
-  const { gateExecute, items, inbox, budgetGate, trip, deferConstraintTopicsToCard } = input;
+  const {
+    gateExecute,
+    items,
+    inbox,
+    budgetGate,
+    trip,
+    deferConstraintTopicsToCard,
+    useDecisionProblemsBff,
+    openDecisionProblemCount = 0,
+  } = input;
   const deferConstraints = deferConstraintTopicsToCard ?? false;
   const hasExperience = hasExperienceIntentMetadata(trip?.metadata);
   const regretPending = gateExecute.reasons.some((r) => r.code === 'experience_regret_unconfirmed');
@@ -115,7 +125,11 @@ export function resolvePlanningReadinessPresentation(input: {
     primaryCta = { type: 'open_team', label: '对齐团队节奏' };
   } else {
     headline = `出发前还有 ${inbox.inboxCount} 项待办`;
-    primaryCta = { type: 'open_conflicts', label: '打开可执行证明' };
+    const preferDecisionSpace = Boolean(useDecisionProblemsBff && openDecisionProblemCount > 0);
+    primaryCta = {
+      type: 'open_conflicts',
+      label: preferDecisionSpace ? '去决策' : '查看规划待办',
+    };
   }
 
   const sublineParts = chips.filter((chip) => !headline.includes(chip.replace(/^\d+\s项/, '').trim()));

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import { toast } from 'sonner';
 import { GripVertical, Clock } from 'lucide-react';
 import { formatScheduleTimeRange } from '@/lib/itinerary-item-card-format';
 import { guardStructuralEditOrToast } from '@/lib/world-model-guards';
+import { handleWriteChainBlockedError, notifyDirectWriteBlocked } from '@/lib/write-chain-blocked-ui.util';
 import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
 import { cn } from '@/lib/utils';
 
@@ -47,6 +49,7 @@ export function ReorderScheduleDialog({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
   const { worldModelGuards, canEditStructure } = useWorldModelGuards();
   const structureLocked = !canEditStructure;
 
@@ -108,6 +111,7 @@ export function ReorderScheduleDialog({
 
   const handleSubmit = async () => {
     if (!guardStructuralEditOrToast(worldModelGuards)) return;
+    if (notifyDirectWriteBlocked({ tripId, navigate })) return;
     // 检查顺序是否改变
     const orderChanged = reorderedItems.some((item, index) => {
       const originalItem = items[index];
@@ -144,9 +148,11 @@ export function ReorderScheduleDialog({
         onSuccess(result);
       }
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to reorder:', err);
-      toast.error(err?.message || '重新排序失败，请重试');
+      if (handleWriteChainBlockedError(err, { tripId, navigate })) return;
+      const message = err instanceof Error ? err.message : '重新排序失败，请重试';
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

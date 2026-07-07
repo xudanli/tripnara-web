@@ -16,18 +16,23 @@ import type { ConsultationDashboardPayload, ConsultationRiskLevel } from '@/type
 import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
 import { parseIntentModeFromSuggestedPayload, type RouteRunIntentModeOption } from '@/lib/suggested-operations';
 import { toast } from 'sonner';
+import {
+  SEMANTIC_BLUE_HEX,
+  SEMANTIC_GREEN_HEX,
+  SEMANTIC_RED_HEX,
+} from '@/lib/semantic-colors';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
 
 const ACCENT = {
-  blue: '#2563EB',
-  cyan: '#67E8F9',
+  blue: SEMANTIC_BLUE_HEX,
+  cyan: SEMANTIC_BLUE_HEX,
   slate: '#0F172A',
   amber: '#F59E0B',
-  red: '#EF4444',
-  green: '#22C55E',
+  red: SEMANTIC_RED_HEX,
+  green: SEMANTIC_GREEN_HEX,
 };
 
 const CHART_COLORS = [
@@ -49,11 +54,11 @@ function levelToTone(level?: ConsultationRiskLevel): 'green' | 'amber' | 'red' |
 function toneClass(tone: 'green' | 'amber' | 'red' | 'slate'): string {
   switch (tone) {
     case 'green':
-      return 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30';
+      return 'bg-gate-allow-foreground/15 text-gate-allow-foreground dark:text-gate-allow-foreground border-gate-allow-border/30';
     case 'amber':
       return 'bg-amber-500/15 text-amber-950 dark:text-amber-100 border-amber-500/35';
     case 'red':
-      return 'bg-red-500/15 text-red-900 dark:text-red-100 border-red-500/35';
+      return 'bg-gate-reject-foreground/15 text-gate-reject-foreground dark:text-gate-reject-foreground border-gate-reject-border/35';
     default:
       return 'bg-slate-500/10 text-slate-800 dark:text-slate-200 border-slate-500/20';
   }
@@ -62,8 +67,8 @@ function toneClass(tone: 'green' | 'amber' | 'red' | 'slate'): string {
 function summaryCardToneClass(tone?: string): string {
   const t = String(tone ?? '').toLowerCase();
   if (t === 'warning' || t === 'amber') return 'border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20';
-  if (t === 'danger' || t === 'negative') return 'border-red-500/40 bg-red-50/40 dark:bg-red-950/25';
-  if (t === 'positive' || t === 'success') return 'border-emerald-500/40 bg-emerald-50/40 dark:bg-emerald-950/20';
+  if (t === 'danger' || t === 'negative') return 'border-gate-reject-border/40 bg-gate-reject/40 dark:bg-gate-reject/25';
+  if (t === 'positive' || t === 'success') return 'border-gate-allow-border/40 bg-gate-allow/40 dark:bg-gate-allow/20';
   return 'border-border/80 bg-card/60';
 }
 
@@ -189,7 +194,7 @@ function ConsultationRouteMap({ map, className }: ConsultationRouteMapProps) {
       <Card className={cn('overflow-hidden border-dashed', className)}>
         <CardHeader className="py-3 pb-0">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-blue-600" />
+            <MapPin className="h-4 w-4 text-muted-foreground" />
             路线地图
           </CardTitle>
         </CardHeader>
@@ -209,10 +214,10 @@ function ConsultationRouteMap({ map, className }: ConsultationRouteMapProps) {
   }
 
   return (
-    <Card className={cn('overflow-hidden border-blue-500/15 shadow-sm', className)}>
+    <Card className={cn('overflow-hidden border-border/15 shadow-sm', className)}>
       <CardHeader className="py-3 pb-0">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-blue-600" />
+          <MapPin className="h-4 w-4 text-muted-foreground" />
           路线地图
         </CardTitle>
       </CardHeader>
@@ -302,7 +307,7 @@ export function ConsultationDashboard({
         'space-y-4 rounded-2xl border p-4 shadow-sm',
         isFallbackOrigin
           ? 'border-border/70 bg-muted/25 dark:bg-muted/10'
-          : 'border-blue-500/20 bg-gradient-to-b from-sky-50/60 to-background dark:from-sky-950/25 dark:to-background',
+          : 'border-border/20 bg-gradient-to-b from-muted/15/60 to-background dark:from-muted/15/25 dark:to-background',
         className
       )}
     >
@@ -341,7 +346,7 @@ export function ConsultationDashboard({
             )}
           >
             <Sparkles
-              className={cn('shrink-0', isFallbackOrigin ? 'h-4 w-4 text-muted-foreground' : 'h-5 w-5 text-blue-600')}
+              className={cn('shrink-0', isFallbackOrigin ? 'h-4 w-4 text-muted-foreground' : 'h-5 w-5 text-muted-foreground')}
             />
             行程咨询摘要
           </h3>
@@ -392,9 +397,9 @@ export function ConsultationDashboard({
                     <div
                       className={cn(
                         'h-full rounded-full transition-all',
-                        tone === 'red' && 'bg-red-500',
+                        tone === 'red' && 'bg-gate-reject-foreground',
                         tone === 'amber' && 'bg-amber-500',
-                        tone === 'green' && 'bg-emerald-500',
+                        tone === 'green' && 'bg-gate-allow-foreground',
                         tone === 'slate' && 'bg-slate-400'
                       )}
                       style={{ width: `${Math.min(100, Math.max(8, pct))}%` }}
@@ -440,16 +445,16 @@ export function ConsultationDashboard({
               return (
                 <Card
                   key={`${r.title}-${idx}`}
-                  className={cn('overflow-hidden border', tone === 'red' && 'border-red-300/60 bg-red-50/30 dark:bg-red-950/20')}
+                  className={cn('overflow-hidden border', tone === 'red' && 'border-gate-reject-border/60 bg-gate-reject/30 dark:bg-gate-reject/20')}
                 >
                   <CardHeader className="py-2.5 pb-1 space-y-0">
                     <div className="flex items-start gap-2">
                       <AlertTriangle
                         className={cn(
                           'h-4 w-4 shrink-0 mt-0.5',
-                          tone === 'red' && 'text-red-600',
+                          tone === 'red' && 'text-gate-reject-foreground',
                           tone === 'amber' && 'text-amber-600',
-                          tone === 'green' && 'text-emerald-600'
+                          tone === 'green' && 'text-gate-allow-foreground'
                         )}
                       />
                       <div className="min-w-0 flex-1">
@@ -472,8 +477,8 @@ export function ConsultationDashboard({
                       </ul>
                     ) : null}
                     {r.suggestions && r.suggestions.length > 0 ? (
-                      <div className="rounded-lg bg-emerald-500/10 px-2.5 py-2 text-emerald-950 dark:text-emerald-100">
-                        <p className="text-[10px] font-medium uppercase text-emerald-800/90 dark:text-emerald-200/90">
+                      <div className="rounded-lg bg-gate-allow-foreground/10 px-2.5 py-2 text-gate-allow-foreground dark:text-gate-allow-foreground">
+                        <p className="text-[10px] font-medium uppercase text-gate-allow-foreground/90 dark:text-gate-allow-foreground/90">
                           建议
                         </p>
                         <ul className="mt-1 list-disc pl-4 space-y-0.5">
@@ -501,7 +506,7 @@ export function ConsultationDashboard({
             {dashboard.daily_plan.map((day, di) => (
               <div key={di} className="relative">
                 <div className="mb-2 flex items-baseline gap-2">
-                  <Calendar className="h-4 w-4 text-blue-600 shrink-0" />
+                  <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span className="text-sm font-semibold">
                     {day.title
                       ? day.title
@@ -514,10 +519,10 @@ export function ConsultationDashboard({
                   ) : null}
                 </div>
                 {day.segments && day.segments.length > 0 ? (
-                  <div className="ml-1 border-l-2 border-blue-500/25 pl-4 space-y-3">
+                  <div className="ml-1 border-l-2 border-border/25 pl-4 space-y-3">
                     {day.segments.map((seg, si) => (
                       <div key={si} className="relative">
-                        <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-blue-500 bg-background" />
+                        <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-border bg-background" />
                         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                           {seg.time ? (
                             <span className="text-[11px] font-mono text-muted-foreground flex items-center gap-1">
@@ -650,7 +655,7 @@ export function ConsultationDashboard({
         <div className="flex flex-wrap gap-2 pt-1">
           <Button
             type="button"
-            className="rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-white shadow-sm"
             disabled={!!chatSending || !!clarificationSubmitDisabled}
             onClick={handlePrimaryCta}
           >

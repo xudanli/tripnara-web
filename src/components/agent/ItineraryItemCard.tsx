@@ -190,8 +190,8 @@ export function ItineraryItemCard({ model, className, showPlaceLink, safetyUi }:
         <h4 className="text-[15px] font-semibold leading-snug text-foreground sm:text-base">{model.title}</h4>
 
         {model.suggestedPoiSearchQueries !== undefined ? (
-          <div className="rounded-md border border-sky-500/25 bg-sky-500/[0.06] px-2.5 py-2 dark:bg-sky-950/30">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-sky-900 dark:text-sky-200">
+          <div className="rounded-md border border-border/25 bg-muted/150/[0.06] px-2.5 py-2 dark:bg-muted/15">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground dark:text-muted-foreground">
               <Search className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
               <span>建议检索（REST · single_poi_catalog_multi_day）</span>
             </div>

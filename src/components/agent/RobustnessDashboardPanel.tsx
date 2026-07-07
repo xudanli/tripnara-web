@@ -35,7 +35,7 @@ export interface RobustnessDashboardPanelProps {
 }
 
 const BOTTLENECK_TONE: Record<string, string> = {
-  PHYSICAL_BLOCK: 'bg-sky-500/15 text-sky-900 border-sky-500/35 dark:text-sky-100',
+  PHYSICAL_BLOCK: 'bg-muted/150/15 text-muted-foreground border-border/35 dark:text-muted-foreground',
   EMOTIONAL_EXPLOSION: 'bg-orange-500/15 text-orange-950 border-orange-500/35 dark:text-orange-100',
   TIME_CRUNCH: 'bg-amber-500/15 text-amber-950 border-amber-500/35 dark:text-amber-100',
 };
@@ -142,14 +142,14 @@ export function RobustnessDashboardPanel({
               <div className="flex h-2 rounded-full overflow-hidden bg-muted">
                 {alignment.physical_weight != null ? (
                   <div
-                    className="bg-sky-500/80"
+                    className="bg-muted/150/80"
                     style={{ width: `${Math.round(alignment.physical_weight * 100)}%` }}
                     title={`物理 ${formatRobustnessPercent(alignment.physical_weight)}`}
                   />
                 ) : null}
                 {alignment.organizational_weight != null ? (
                   <div
-                    className="bg-violet-500/80"
+                    className="bg-muted/150/80"
                     style={{ width: `${Math.round(alignment.organizational_weight * 100)}%` }}
                     title={`组织 ${formatRobustnessPercent(alignment.organizational_weight)}`}
                   />

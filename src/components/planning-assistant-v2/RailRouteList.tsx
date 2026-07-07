@@ -183,7 +183,7 @@ export function RailRouteList({
                       ) : trainLegs.length > 0 ? (
                         <Badge
                           variant="secondary"
-                          className="text-xs shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                          className="text-xs shrink-0 bg-gate-allow text-gate-allow-foreground dark:bg-gate-allow/40 dark:text-gate-allow-foreground"
                         >
                           直达
                         </Badge>

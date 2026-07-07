@@ -374,7 +374,7 @@ export default function PrepCenterPage() {
         <Card className="mb-4">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <CalendarClock className="h-4 w-4 text-teal-700" />
+              <CalendarClock className="h-4 w-4 text-gate-allow-foreground" />
               出发安排
             </CardTitle>
             <CardDescription>
@@ -467,7 +467,7 @@ export default function PrepCenterPage() {
           </div>
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-teal-600 transition-all"
+              className="h-full bg-gate-allow-foreground transition-all"
               style={{
                 width: `${(prepProgress.doneCount / prepProgress.total) * 100}%`,
               }}
@@ -505,7 +505,7 @@ export default function PrepCenterPage() {
                   </CardDescription>
                 </div>
                 {prepComplete.checklistComplete ? (
-                  <Badge variant="default" className="bg-green-500">
+                  <Badge variant="default" className="bg-gate-allow-foreground">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     必需品已备齐
                   </Badge>
@@ -534,7 +534,7 @@ export default function PrepCenterPage() {
                         {prepCategoryLabel(category.category)}
                       </h3>
                       {categoryChecked ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
                       ) : (
                         <Badge variant="outline" className="text-xs">
                           缺少 {missingRequired.length} 项
@@ -579,12 +579,12 @@ export default function PrepCenterPage() {
               })}
 
               {!prepComplete.checklistComplete && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center gap-2 text-red-900 font-medium mb-1">
+                <div className="p-4 bg-gate-reject border border-gate-reject-border rounded-lg">
+                  <div className="flex items-center gap-2 text-gate-reject-foreground font-medium mb-1">
                     <AlertTriangle className="h-4 w-4" />
                     关键装备缺失
                   </div>
-                  <p className="text-sm text-red-700">
+                  <p className="text-sm text-gate-reject-foreground">
                     缺少必需装备可能触发 Abu 的风险提示，请确保所有必需物品已准备。
                   </p>
                 </div>
@@ -603,7 +603,7 @@ export default function PrepCenterPage() {
                   <CardDescription>需要预约、费用、链接</CardDescription>
                 </div>
                 {permitsCompleteUi ? (
-                  <Badge variant="default" className="bg-green-500">
+                  <Badge variant="default" className="bg-gate-allow-foreground">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     已获取
                   </Badge>
@@ -781,12 +781,12 @@ export default function PrepCenterPage() {
             <CardContent className="space-y-4">
               {isDownloaded && localPack ? (
                 <div className="space-y-4">
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-900 font-medium mb-2">
+                  <div className="p-4 bg-gate-allow border border-gate-allow-border rounded-lg">
+                    <div className="flex items-center gap-2 text-gate-allow-foreground font-medium mb-2">
                       <CheckCircle2 className="h-4 w-4" />
                       已下载 · {localPack.nameCN}
                     </div>
-                    <div className="text-sm text-green-700 space-y-1">
+                    <div className="text-sm text-gate-allow-foreground space-y-1">
                       <div>
                         版本 {localPack.meta?.version ?? localPack.version} · checksum{' '}
                         <code className="text-xs">{localPack.checksum.slice(0, 12)}…</code>
@@ -805,18 +805,18 @@ export default function PrepCenterPage() {
                     <h3 className="font-semibold mb-2">包含内容</h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
                         <span>
                           轨迹 {localPack.lineCoordinates.length} 点 · 补给{' '}
                           {localPack.markers.length} 处
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
                         <span>日分段 {localPack.daySkeleton.length} 天</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
                         <span>
                           撤退点{' '}
                           {localPack.hikingDetail?.alternatives?.exitPoints?.length ?? 0} 个
@@ -824,7 +824,7 @@ export default function PrepCenterPage() {
                       </div>
                       {localPack.vectorTileManifest ? (
                         <div className="flex items-center gap-2 text-muted-foreground">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
                           <span className="text-sm">
                             含 Mapbox 矢量清单（
                             {localPack.vectorTileManifest.tiles.provider}）
@@ -833,7 +833,7 @@ export default function PrepCenterPage() {
                       ) : null}
                       {localPack.tileCache && localPack.tileCache.tileCount > 0 ? (
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
                           <span>
                             离线底图 {localPack.tileCache.tileCount} 张瓦片（
                             {localPack.tileCache.format === 'vector' ? '矢量' : '栅格'} ·{' '}

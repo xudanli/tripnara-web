@@ -70,6 +70,53 @@ export function normalizeCollaborativeTaskView(raw: unknown): CollaborativeTaskV
         : typeof r.milestone_id === 'string'
           ? r.milestone_id
           : null,
+    resolutionId:
+      typeof r.resolutionId === 'string'
+        ? r.resolutionId
+        : typeof r.resolution_id === 'string'
+          ? r.resolution_id
+          : undefined,
+    actionPlanId:
+      typeof r.actionPlanId === 'string'
+        ? r.actionPlanId
+        : typeof r.action_plan_id === 'string'
+          ? r.action_plan_id
+          : undefined,
+    decisionProblemId:
+      typeof r.decisionProblemId === 'string'
+        ? r.decisionProblemId
+        : typeof r.decision_problem_id === 'string'
+          ? r.decision_problem_id
+          : typeof r.problemId === 'string'
+            ? r.problemId
+            : undefined,
+    isSubTask: r.isSubTask === true || r.is_sub_task === true,
+    source:
+      typeof r.source === 'string'
+        ? r.source
+        : typeof r.taskSource === 'string'
+          ? r.taskSource
+          : typeof r.task_source === 'string'
+            ? r.task_source
+            : undefined,
+    problemTitle:
+      typeof r.problemTitle === 'string'
+        ? r.problemTitle
+        : typeof r.problem_title === 'string'
+          ? r.problem_title
+          : null,
+    subTaskKind:
+      typeof r.subTaskKind === 'string'
+        ? r.subTaskKind
+        : typeof r.sub_task_kind === 'string'
+          ? r.sub_task_kind
+          : null,
+    subTaskStatus:
+      typeof r.subTaskStatus === 'string'
+        ? r.subTaskStatus
+        : typeof r.sub_task_status === 'string'
+          ? r.sub_task_status
+          : null,
     behaviorLog: normalizeBehaviorLog(r.behaviorLog ?? r.behavior_log),
   };
 }

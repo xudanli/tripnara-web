@@ -73,9 +73,9 @@ const DECISION_CONFIG: Record<NegotiationDecision, {
     label: '批准',
     labelEn: 'Approved',
     icon: CheckCircle,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-200',
+    color: 'text-gate-allow-foreground',
+    bgColor: 'bg-gate-allow',
+    borderColor: 'border-gate-allow-border',
     description: '计划通过所有守护者审核',
   },
   APPROVE_WITH_CONDITIONS: {
@@ -91,18 +91,18 @@ const DECISION_CONFIG: Record<NegotiationDecision, {
     label: '拒绝',
     labelEn: 'Rejected',
     icon: XCircle,
-    color: 'text-red-600',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-200',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
+    borderColor: 'border-gate-reject-border',
     description: '计划存在重大问题，建议修改',
   },
   NEEDS_HUMAN: {
     label: '需人工决策',
     labelEn: 'Human Review',
     icon: HelpCircle,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-200',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted/15',
+    borderColor: 'border-border',
     description: '存在复杂权衡，需要用户做出选择',
   },
 };
@@ -112,24 +112,24 @@ const GUARDIAN_CONFIG = {
     name: 'Abu',
     nameCN: '安全守护者',
     icon: Shield,
-    color: 'text-red-500',
-    bgColor: 'bg-red-50',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
     description: '负责安全约束检查',
   },
   dre: {
     name: 'Dr.Dre',
     nameCN: '节奏守护者',
     icon: Activity,
-    color: 'text-blue-500',
-    bgColor: 'bg-blue-50',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted/15',
     description: '负责行程节奏调整',
   },
   neptune: {
     name: 'Neptune',
     nameCN: '修复守护者',
     icon: Wrench,
-    color: 'text-purple-500',
-    bgColor: 'bg-purple-50',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted/15',
     description: '负责问题修复和替代方案',
   },
 };
@@ -180,10 +180,10 @@ function ConsensusIndicator({ level, compact }: { level: number; compact?: boole
   const percentage = Number.isNaN(v) ? 0 : Math.round(Math.max(0, Math.min(1, v)) * 100);
   
   const getColor = () => {
-    if (level >= 0.8) return 'bg-green-500';
-    if (level >= 0.6) return 'bg-blue-500';
+    if (level >= 0.8) return 'bg-gate-allow-foreground';
+    if (level >= 0.6) return 'bg-muted/150';
     if (level >= 0.4) return 'bg-yellow-500';
-    return 'bg-red-500';
+    return 'bg-gate-reject-foreground';
   };
 
   const getLabel = () => {
@@ -229,13 +229,13 @@ function VotingResult({
   return (
     <div className={cn('flex flex-wrap items-center text-sm', compact ? 'gap-2' : 'gap-3')}>
       <div className="flex items-center gap-1">
-        <ThumbsUp className={cn('text-green-500', compact ? 'h-3 w-3' : 'h-4 w-4')} />
-        <span className="font-medium text-green-600">{approve}</span>
+        <ThumbsUp className={cn('text-gate-allow-foreground', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+        <span className="font-medium text-gate-allow-foreground">{approve}</span>
         <span className="text-muted-foreground">赞成</span>
       </div>
       <div className="flex items-center gap-1">
-        <ThumbsDown className={cn('text-red-500', compact ? 'h-3 w-3' : 'h-4 w-4')} />
-        <span className="font-medium text-red-600">{reject}</span>
+        <ThumbsDown className={cn('text-gate-reject-foreground', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+        <span className="font-medium text-gate-reject-foreground">{reject}</span>
         <span className="text-muted-foreground">反对</span>
       </div>
       <div className="flex items-center gap-1">
@@ -324,9 +324,9 @@ const CONCERN_TYPE_CONFIG: Record<
   'weather' | 'pace' | 'safety' | 'other',
   { icon: React.ElementType; label: string; color: string; dimension: string; impactHint: string }
 > = {
-  weather: { icon: CloudRain, label: '天气', color: 'text-blue-600', dimension: '安全', impactHint: '采纳后可降低天气风险、提升安全分' },
+  weather: { icon: CloudRain, label: '天气', color: 'text-muted-foreground', dimension: '安全', impactHint: '采纳后可降低天气风险、提升安全分' },
   pace: { icon: Activity, label: '节奏', color: 'text-amber-600', dimension: '节奏', impactHint: '采纳后可缓解疲劳、提升节奏分' },
-  safety: { icon: Shield, label: '安全', color: 'text-red-600', dimension: '安全', impactHint: '采纳后可提升安全分' },
+  safety: { icon: Shield, label: '安全', color: 'text-gate-reject-foreground', dimension: '安全', impactHint: '采纳后可提升安全分' },
   other: { icon: AlertTriangle, label: '建议', color: 'text-muted-foreground', dimension: '修复', impactHint: '采纳后可优化体验与路线结构' },
 };
 
@@ -578,7 +578,7 @@ export function NegotiationResultCard({
             className={cn(
               'mb-3 rounded-lg border px-3 py-2 text-sm',
               hardBlocked
-                ? 'border-red-200 bg-red-50 text-red-900'
+                ? 'border-gate-reject-border bg-gate-reject text-gate-reject-foreground'
                 : 'border-amber-200 bg-amber-50 text-amber-950',
             )}
           >
@@ -752,7 +752,7 @@ export function NegotiationResultCard({
               <AccordionItem value="human-decisions">
                 <AccordionTrigger className="text-sm">
                   <span className="flex items-center gap-2">
-                    <HelpCircle className="h-4 w-4 text-blue-500" />
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
                     需人类决策的点 ({result.humanDecisionPoints.length})
                   </span>
                 </AccordionTrigger>
@@ -761,9 +761,9 @@ export function NegotiationResultCard({
                     {result.humanDecisionPoints.map((point, i) => (
                       <li 
                         key={i} 
-                        className="flex items-start gap-2 p-2 rounded bg-blue-50 text-sm"
+                        className="flex items-start gap-2 p-2 rounded bg-muted/15 text-sm"
                       >
-                        <HelpCircle className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                        <HelpCircle className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                         <span>{point}</span>
                       </li>
                     ))}

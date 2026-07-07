@@ -46,7 +46,7 @@ export default function SchemaOrgDiscoveryPanel({
   return (
     <Card
       className={cn(
-        'border-emerald-200/80 bg-emerald-50/20 dark:bg-emerald-950/10',
+        'border-gate-allow-border/80 bg-gate-allow/20 dark:bg-gate-allow/10',
         compact && 'shadow-none',
         className
       )}
@@ -54,7 +54,7 @@ export default function SchemaOrgDiscoveryPanel({
       <CardHeader className={cn('pb-2', compact && 'py-3')}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <CardTitle className={cn('flex items-center gap-2 text-base', compact && 'text-sm')}>
-            <Braces className="h-4 w-4 text-emerald-600" />
+            <Braces className="h-4 w-4 text-gate-allow-foreground" />
             {t('agent.schemaOrgDiscovery.title', { defaultValue: 'Schema.org 发现层' })}
             <Badge variant="outline" className="text-[10px] font-normal">
               {t('agent.schemaOrgDiscovery.debugBadge', { defaultValue: 'SEO / 导出' })}
@@ -96,7 +96,7 @@ export default function SchemaOrgDiscoveryPanel({
                       href={entity.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="truncate text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                      className="truncate text-gate-allow-foreground underline-offset-2 hover:underline dark:text-gate-allow-foreground"
                     >
                       {entity.url}
                     </a>

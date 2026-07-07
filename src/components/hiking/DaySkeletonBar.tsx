@@ -9,7 +9,7 @@ interface DaySkeletonBarProps {
 
 function verdictClass(verdict: string | undefined): string {
   if (verdict === 'over_limit') {
-    return 'border-red-500/50 bg-red-500/5 text-red-700 dark:text-red-400';
+    return 'border-gate-reject-border/50 bg-gate-reject-foreground/5 text-gate-reject-foreground dark:text-gate-reject-foreground';
   }
   if (verdict === 'stretch') {
     return 'border-amber-500/50 bg-amber-500/5 text-amber-800 dark:text-amber-400';

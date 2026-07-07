@@ -110,13 +110,14 @@ export function WishFreeForm({ tripId, onSubmit, submitting, collabMode = false 
   const busy = submitting || optimizing || transcribing;
 
   return (
-    <div className="space-y-4">
+    <div className={cn(collabMode ? 'flex h-full min-h-0 flex-col gap-2.5' : 'space-y-4')}>
       <WishCategorySelect
         tripId={tripId}
         value={category}
         onChange={setCategory}
         disabled={busy}
         label={collabMode ? '心愿领域' : undefined}
+        compact={collabMode}
       />
 
       <div className="space-y-2">
@@ -169,7 +170,8 @@ export function WishFreeForm({ tripId, onSubmit, submitting, collabMode = false 
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, 300))}
           placeholder="例如：想在雷克雅未克吃一次网红热狗…"
-          className="min-h-[100px] resize-none"
+          className={cn('resize-none', collabMode ? 'min-h-[56px]' : 'min-h-[100px]')}
+          rows={collabMode ? 2 : undefined}
           disabled={busy}
           maxLength={300}
         />
@@ -220,10 +222,10 @@ export function WishFreeForm({ tripId, onSubmit, submitting, collabMode = false 
         )}
       </div>
 
-      <div className="space-y-2">
+      <div className={cn(collabMode ? 'space-y-1' : 'space-y-2')}>
         <Label className={wishLabel}>{collabMode ? '可见模式' : '可见范围'}</Label>
         {collabMode ? (
-          <WishVisibilityCards value={visibility} onChange={setVisibility} disabled={busy} />
+          <WishVisibilityCards value={visibility} onChange={setVisibility} disabled={busy} compact />
         ) : (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <WishVisibilityToggle value={visibility} onChange={setVisibility} />
@@ -233,7 +235,8 @@ export function WishFreeForm({ tripId, onSubmit, submitting, collabMode = false 
 
       <Button
         type="button"
-        className="w-full gap-1.5"
+        className={cn('w-full gap-1.5', collabMode && 'mt-auto h-8 shrink-0 text-xs')}
+        size={collabMode ? 'sm' : 'default'}
         onClick={() => void handleSubmit()}
         disabled={busy}
       >

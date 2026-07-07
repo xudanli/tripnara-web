@@ -2,6 +2,12 @@ import { AlertTriangle, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
+import type { DecisionProblemSummary } from '@/types/decision-problem';
+import { resolveDecisionProblemForConflict } from '@/lib/planning-conflicts-decision.util';
+import {
+  primaryEnforcementBadgeClass,
+  primaryEnforcementLabel,
+} from '@/lib/decision-problem-display.util';
 import { cn } from '@/lib/utils';
 import {
   workbenchCard,
@@ -15,7 +21,9 @@ import {
 interface PreDepartureBlockersPanelProps {
   items: PlanningConflictItem[];
   loading?: boolean;
+  decisionProblems?: DecisionProblemSummary[];
   onHandleConflict?: (conflictId: string) => void;
+  onOpenDecisionProblem?: (problemId: string) => void;
   onOpenFeasibility?: () => void;
   className?: string;
 }
@@ -29,7 +37,9 @@ function priorityLabel(priority: PlanningConflictItem['priority']): string {
 export default function PreDepartureBlockersPanel({
   items,
   loading = false,
+  decisionProblems,
   onHandleConflict,
+  onOpenDecisionProblem,
   onOpenFeasibility,
   className,
 }: PreDepartureBlockersPanelProps) {
@@ -49,7 +59,7 @@ export default function PreDepartureBlockersPanel({
     <section className={cn(workbenchPreDepartureBlockersShell, className)}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-gate-reject-foreground" />
+          <AlertTriangle className="h-4 w-4 text-error" />
           <h3 className={workbenchPanelTitle}>
             可执行证明阻塞项 ({blockers.length})
           </h3>
@@ -64,6 +74,7 @@ export default function PreDepartureBlockersPanel({
 
       <ul className="space-y-2">
         {blockers.slice(0, 5).map((item) => {
+          const matchedProblem = resolveDecisionProblemForConflict(item, decisionProblems ?? []);
           const dayLabel =
             item.affectedDays?.length === 1
               ? `Day ${item.affectedDays[0]}`
@@ -85,10 +96,14 @@ export default function PreDepartureBlockersPanel({
                     variant="outline"
                     className={cn(
                       'rounded px-1.5 py-0 text-[10px] font-semibold',
-                      workbenchDecisionCheckerBadgeClass('danger'),
+                      matchedProblem
+                        ? primaryEnforcementBadgeClass(matchedProblem.primaryEnforcement)
+                        : workbenchDecisionCheckerBadgeClass('danger'),
                     )}
                   >
-                    {priorityLabel(item.priority)}
+                    {matchedProblem
+                      ? primaryEnforcementLabel(matchedProblem.primaryEnforcement)
+                      : priorityLabel(item.priority)}
                   </Badge>
                   {dayLabel ? (
                     <span className="text-[10px] text-muted-foreground">{dayLabel}</span>
@@ -100,7 +115,15 @@ export default function PreDepartureBlockersPanel({
                   <p className="line-clamp-2 text-xs text-muted-foreground">{item.message}</p>
                 ) : null}
               </div>
-              {onHandleConflict ? (
+              {matchedProblem && onOpenDecisionProblem ? (
+                <Button
+                  size="sm"
+                  className={cn('h-8 shrink-0 rounded-lg text-xs', workbenchPrimaryAction)}
+                  onClick={() => onOpenDecisionProblem(matchedProblem.id)}
+                >
+                  去决策
+                </Button>
+              ) : onHandleConflict ? (
                 <Button
                   size="sm"
                   className={cn('h-8 shrink-0 rounded-lg text-xs', workbenchPrimaryAction)}

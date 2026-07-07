@@ -112,33 +112,25 @@ function getRiskLevelConfig(level?: ConfirmationItem['riskLevel']) {
     case 'critical':
       return {
         icon: AlertTriangle,
-        color: 'text-red-600',
-        bg: 'bg-red-50',
-        border: 'border-red-200',
+        className: 'border-border/60 bg-muted/10 text-error',
         label: '严重风险',
       };
     case 'high':
       return {
         icon: AlertTriangle,
-        color: 'text-orange-600',
-        bg: 'bg-orange-50',
-        border: 'border-orange-200',
+        className: 'border-border/50 bg-muted/8 text-error',
         label: '高风险',
       };
     case 'medium':
       return {
         icon: AlertTriangle,
-        color: 'text-yellow-600',
-        bg: 'bg-yellow-50',
-        border: 'border-yellow-200',
+        className: 'border-border/50 bg-muted/8 text-warning',
         label: '中等风险',
       };
     case 'low':
       return {
         icon: CheckCircle2,
-        color: 'text-blue-600',
-        bg: 'bg-blue-50',
-        border: 'border-blue-200',
+        className: 'border-gate-allow-border/50 bg-muted/8 text-success',
         label: '低风险',
       };
     default:
@@ -190,11 +182,11 @@ export function ConfirmPanel({
   };
 
   return (
-    <Card className={cn('border-2 border-gate-confirm-border', className)}>
+    <Card className={cn('border-2 border-border', className)}>
       <CardHeader className="pb-4">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-gate-confirm-foreground" />
+            <Shield className="w-5 h-5 text-warning" />
             <CardTitle className="text-lg">{title}</CardTitle>
           </div>
           <CardDescription>{description}</CardDescription>
@@ -209,8 +201,8 @@ export function ConfirmPanel({
       <CardContent className="space-y-4">
         {/* 风险解释 */}
         {riskExplanation && (
-          <Alert className="bg-gate-confirm/30 border-gate-confirm-border">
-            <AlertTriangle className="h-4 w-4 text-gate-confirm-foreground" />
+          <Alert className="bg-muted/30 border-border">
+            <AlertTriangle className="h-4 w-4 text-warning" />
             <AlertDescription className="text-sm">
               <p className="font-medium mb-1">风险说明</p>
               <p>{riskExplanation}</p>
@@ -235,9 +227,9 @@ export function ConfirmPanel({
                   className={cn(
                     'flex items-start gap-3 p-3 rounded-md border transition-colors',
                     isChecked 
-                      ? 'bg-muted/30 border-gate-confirm-border' 
+                      ? 'bg-muted/30 border-border' 
                       : 'bg-background border-border',
-                    isRequired && !isChecked && 'border-gate-confirm-border/50'
+                    isRequired && !isChecked && 'border-border/50'
                   )}
                 >
                   <Checkbox
@@ -258,17 +250,18 @@ export function ConfirmPanel({
                       >
                         {item.title}
                         {isRequired && (
-                          <span className="text-gate-confirm-foreground ml-1">*</span>
+                          <span className="text-warning ml-1">*</span>
                         )}
                       </Label>
                       {riskConfig && (
-                        <div className={cn(
-                          'flex items-center gap-1 px-2 py-0.5 rounded text-xs border flex-shrink-0',
-                          riskConfig.bg,
-                          riskConfig.border
-                        )}>
-                          <riskConfig.icon className={cn('w-3 h-3', riskConfig.color)} />
-                          <span className={riskConfig.color}>{riskConfig.label}</span>
+                        <div
+                          className={cn(
+                            'flex shrink-0 items-center gap-1 rounded border px-2 py-0.5 text-xs',
+                            riskConfig.className,
+                          )}
+                        >
+                          <riskConfig.icon className="h-3 w-3" />
+                          <span>{riskConfig.label}</span>
                         </div>
                       )}
                     </div>

@@ -106,7 +106,7 @@ export function ShareTrailDialog({
 
         <div className="space-y-4 py-4">
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground">
               {error}
             </div>
           )}
@@ -129,14 +129,14 @@ export function ShareTrailDialog({
                     title="复制链接"
                   >
                     {copied ? (
-                      <Check className="h-4 w-4 text-green-600" />
+                      <Check className="h-4 w-4 text-gate-allow-foreground" />
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
               </div>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+              <div className="rounded-lg border border-border bg-muted/15 p-3 text-sm text-muted-foreground">
                 <p className="font-medium">
                   权限：{permission === 'VIEW' ? '仅查看' : '可编辑'}
                 </p>
@@ -145,7 +145,7 @@ export function ShareTrailDialog({
                     过期时间：{new Date(expiresAt).toLocaleString('zh-CN')}
                   </p>
                 ) : (
-                  <p className="mt-1 text-blue-700">未设置过期时间</p>
+                  <p className="mt-1 text-muted-foreground">未设置过期时间</p>
                 )}
               </div>
             </div>

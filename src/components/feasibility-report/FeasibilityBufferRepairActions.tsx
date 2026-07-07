@@ -8,7 +8,8 @@ import {
 } from '@/lib/feasibility-buffer-repair.util';
 import type { FeasibilityIssueDto } from '@/types/trip-feasibility-report';
 import type { TripDetail } from '@/types/trip';
-import { cn } from '@/lib/utils';
+import { FeasibilityWriteChainRedirectHint } from '@/components/feasibility-report/FeasibilityWriteChainRedirectHint';
+import { shouldBlockDirectFeasibilityApplyRepair } from '@/lib/effective-plan-write-chain.util';
 
 export interface FeasibilityBufferRepairActionsProps {
   tripId: string;
@@ -34,6 +35,17 @@ export default function FeasibilityBufferRepairActions({
   );
 
   if (!isBufferOrTravelRepairIssue(issue)) return null;
+
+  if (shouldBlockDirectFeasibilityApplyRepair()) {
+    return (
+      <FeasibilityWriteChainRedirectHint
+        tripId={tripId}
+        issue={issue}
+        compact={compact}
+        className={className}
+      />
+    );
+  }
 
   const btnClass = compact ? 'h-7 text-[11px]' : 'h-8 text-xs';
   const insertPrimary = prefersInsertBufferDayPrimary(issue);

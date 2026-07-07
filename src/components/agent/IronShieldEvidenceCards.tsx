@@ -30,27 +30,27 @@ function bundleTone(status?: VerificationStatus): 'pass' | 'warn' | 'block' | 'n
 function toneBadgeClass(tone: 'pass' | 'warn' | 'block' | 'neutral' | 'info') {
   switch (tone) {
     case 'pass':
-      return 'bg-green-50 text-green-700 border-green-200';
+      return 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border';
     case 'warn':
       return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'block':
-      return 'bg-red-50 text-red-700 border-red-200';
+      return 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border';
     case 'info':
-      return 'bg-blue-50 text-blue-800 border-blue-200';
+      return 'bg-muted/15 text-muted-foreground border-border';
     default:
       return 'bg-muted text-foreground/80 border-border';
   }
 }
 
 function BundleIcon({ tone }: { tone: ReturnType<typeof bundleTone> }) {
-  if (tone === 'pass') return <ShieldCheck className="h-4 w-4 text-green-700" />;
+  if (tone === 'pass') return <ShieldCheck className="h-4 w-4 text-gate-allow-foreground" />;
   if (tone === 'warn') return <ShieldQuestion className="h-4 w-4 text-amber-700" />;
-  if (tone === 'block') return <ShieldAlert className="h-4 w-4 text-red-700" />;
+  if (tone === 'block') return <ShieldAlert className="h-4 w-4 text-gate-reject-foreground" />;
   return <FileText className="h-4 w-4 text-muted-foreground" />;
 }
 
 function SoftBadgeIcon({ tone }: { tone: 'info' | 'warning' }) {
-  if (tone === 'info') return <Info className="h-4 w-4 text-blue-600" />;
+  if (tone === 'info') return <Info className="h-4 w-4 text-muted-foreground" />;
   return <ShieldQuestion className="h-4 w-4 text-amber-700" />;
 }
 

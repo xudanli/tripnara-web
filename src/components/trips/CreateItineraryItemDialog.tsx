@@ -374,15 +374,15 @@ export function CreateItineraryItemDialog({
             {validationResult && validationResult.errors.length > 0 && (
               <div className="space-y-2">
                 {validationResult.errors.map((err, idx) => (
-                  <div key={idx} className="rounded-lg bg-red-50 border border-red-200 p-3">
+                  <div key={idx} className="rounded-lg bg-gate-reject border border-gate-reject-border p-3">
                     <div className="flex items-start gap-2">
-                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <AlertCircle className="w-5 h-5 text-gate-reject-foreground flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-red-800">{formatValidationMessage(err.message, err.details)}</p>
+                        <p className="text-sm font-medium text-gate-reject-foreground">{formatValidationMessage(err.message, err.details)}</p>
                         {err.suggestions && err.suggestions.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {err.suggestions.map((suggestion: any, sIdx: number) => (
-                              <p key={sIdx} className="text-xs text-red-700">
+                              <p key={sIdx} className="text-xs text-gate-reject-foreground">
                                 💡 {suggestion.description}
                               </p>
                             ))}
@@ -441,10 +441,10 @@ export function CreateItineraryItemDialog({
             {validationResult && validationResult.infos.length > 0 && (
               <div className="space-y-2">
                 {validationResult.infos.map((info, idx) => (
-                  <div key={idx} className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                  <div key={idx} className="rounded-lg bg-muted/15 border border-border p-3">
                     <div className="flex items-start gap-2">
-                      <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-blue-800">{formatValidationMessage(info.message, info.details)}</p>
+                      <Info className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-muted-foreground">{formatValidationMessage(info.message, info.details)}</p>
                     </div>
                   </div>
                 ))}
@@ -481,7 +481,7 @@ export function CreateItineraryItemDialog({
 
             {/* 错误提示：校验错误在 validationResult 中展示，此处展示 API/创建失败等错误 */}
             {error && (!validationResult || validationResult.errors.length === 0) && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-start gap-2">
+              <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-3 text-sm text-gate-reject-foreground flex items-start gap-2">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <span>{formatValidationMessage(error)}</span>
               </div>
@@ -655,8 +655,8 @@ export function CreateItineraryItemDialog({
 
               {/* ✅ 住宿类型：显示入住/退房时间 */}
               {formData.type === 'MEAL_ANCHOR' && (
-                <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
-                  <div className="flex items-center gap-2 text-sm text-blue-700">
+                <div className="rounded-lg border border-border bg-muted/15 p-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Hotel className="w-4 h-4" />
                     <span>提示：预约用餐通常需要提前预订，建议关联具体餐厅地点</span>
                   </div>

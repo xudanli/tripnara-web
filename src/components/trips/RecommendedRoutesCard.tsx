@@ -28,10 +28,10 @@ export default function RecommendedRoutesCard({
   // 根据难度匹配度确定颜色
   const getDifficultyColor = (match: string) => {
     if (match.includes('完美') || match.includes('完美匹配')) {
-      return 'bg-green-100 text-green-700 border-green-300';
+      return 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border';
     }
     if (match.includes('良好') || match.includes('良好匹配')) {
-      return 'bg-blue-100 text-blue-700 border-blue-300';
+      return 'bg-muted/15 text-muted-foreground border-border';
     }
     if (match.includes('一般') || match.includes('一般匹配')) {
       return 'bg-amber-100 text-amber-700 border-amber-300';

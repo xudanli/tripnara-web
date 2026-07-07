@@ -10,6 +10,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   useTripPlannerAssistant, 
   type PlannerMessage,
@@ -79,6 +80,7 @@ import { usePlanStudioAssistant, type SelectedContext, type PendingSuggestion } 
 import { tripsApi } from '@/api/trips';
 import { tripPlannerApi } from '@/api/trip-planner';
 import { toast } from 'sonner';
+import { handleWriteChainBlockedError, notifyDirectWriteBlocked } from '@/lib/write-chain-blocked-ui.util';
 import { GapDisplayControl } from './GapDisplayControl';
 import { GapList } from './GapList';
 
@@ -377,14 +379,14 @@ function SelectedItemCard({ context }: { context: SelectedContext }) {
   
   // 类型映射
   const typeLabels: Record<string, { label: string; emoji: string; color: string }> = {
-    'ATTRACTION': { label: '景点', emoji: '🏛️', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    'ATTRACTION': { label: '景点', emoji: '🏛️', color: 'bg-muted/15 text-muted-foreground border-border' },
     'RESTAURANT': { label: '餐厅', emoji: '🍽️', color: 'bg-orange-50 text-orange-700 border-orange-200' },
     'CAFE': { label: '咖啡', emoji: '☕', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-    'HOTEL': { label: '住宿', emoji: '🏨', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    'HOTEL': { label: '住宿', emoji: '🏨', color: 'bg-muted/15 text-muted-foreground border-border' },
     'SHOPPING': { label: '购物', emoji: '🛍️', color: 'bg-pink-50 text-pink-700 border-pink-200' },
     'TRANSIT': { label: '交通', emoji: '🚌', color: 'bg-slate-50 text-slate-700 border-slate-200' },
     'MEAL_ANCHOR': { label: '用餐', emoji: '🍴', color: 'bg-orange-50 text-orange-700 border-orange-200' },
-    'ACTIVITY': { label: '活动', emoji: '🎯', color: 'bg-green-50 text-green-700 border-green-200' },
+    'ACTIVITY': { label: '活动', emoji: '🎯', color: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border' },
   };
   
   const typeInfo = typeLabels[context.itemType || ''] || { label: '地点', emoji: '📍', color: 'bg-slate-50 text-slate-700 border-slate-200' };
@@ -571,7 +573,7 @@ function ChecklistContent({ content }: { content: ChecklistRichContent }) {
                   <Checkbox
                     checked={item.checked}
                     onCheckedChange={() => handleToggle(item.id)}
-                    className="data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
+                    className="data-[state=checked]:bg-gate-allow-foreground data-[state=checked]:border-gate-allow-border"
                   />
                   <span className={cn(
                     "text-sm flex-1",
@@ -607,6 +609,7 @@ function POIListContent({
   sessionId?: string | null;
   onAddToItinerary?: () => void;
 }) {
+  const navigate = useNavigate();
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
   // 🆕 POI 详情弹窗状态
   const [selectedPoi, setSelectedPoi] = useState<POIRecommendation | null>(null);
@@ -621,6 +624,8 @@ function POIListContent({
       console.warn('[POIListContent] tripId 或 sessionId 缺失，无法添加');
       return;
     }
+
+    if (notifyDirectWriteBlocked({ tripId, navigate })) return;
     
     setAddingIds(prev => new Set(prev).add(suggestion.id));
     
@@ -643,9 +648,11 @@ function POIListContent({
       
       toast.success('已添加到行程');
       onAddToItinerary?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[POIListContent] 添加失败:', error);
-      toast.error(error.message || '添加失败，请重试');
+      if (handleWriteChainBlockedError(error, { tripId, navigate })) return;
+      const message = error instanceof Error ? error.message : '添加失败，请重试';
+      toast.error(message);
     } finally {
       setAddingIds(prev => {
         const next = new Set(prev);
@@ -825,7 +832,7 @@ function POIListContent({
           <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-blue-500" />
+                <MapPin className="h-5 w-5 text-muted-foreground" />
                 {selectedPoi?.nameCN || selectedPoi?.name}
               </DialogTitle>
               <DialogDescription>
@@ -1435,13 +1442,13 @@ function FormattedMessage({ content, itemNameMap }: { content: string; itemNameM
                       className={cn(
                         "px-3 py-2 rounded-lg border text-[12px]",
                         route.isBest 
-                          ? "bg-blue-50 border-blue-200" 
+                          ? "bg-muted/15 border-border" 
                           : "bg-slate-50 border-slate-200"
                       )}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-slate-700">
-                          {i + 1}. {route.isBest && <span className="text-blue-600">⭐</span>} {route.strategy}
+                          {i + 1}. {route.isBest && <span className="text-muted-foreground">⭐</span>} {route.strategy}
                         </span>
                       </div>
                       <p className="text-slate-600 leading-relaxed">{route.description}</p>
@@ -1525,7 +1532,7 @@ function QuickCommandsBar({
     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200">
       <span className={cn(
         "text-[10px] font-medium flex-shrink-0 mr-1",
-        hasPlaceContext || hasDayContext ? "text-blue-500" : "text-slate-400"
+        hasPlaceContext || hasDayContext ? "text-muted-foreground" : "text-slate-400"
       )}>
         {labelPrefix}
       </span>
@@ -1537,7 +1544,7 @@ function QuickCommandsBar({
           className={cn(
             "flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-150",
             hasPlaceContext || hasDayContext 
-              ? "bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 hover:border-blue-300"
+              ? "bg-muted/15 text-muted-foreground border border-border hover:bg-muted/15 hover:border-border"
               : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 hover:border-slate-300 hover:text-slate-700",
             "active:scale-95",
             "disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1585,21 +1592,21 @@ function ContextStatusBar({
   ] : [];
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200/60 p-2.5 mb-2">
+    <div className="bg-gradient-to-r from-muted/15 to-muted/15 rounded-lg border border-border/60 p-2.5 mb-2">
       {/* 当前上下文 */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-5 h-5 rounded bg-blue-500 flex items-center justify-center">
+        <div className="w-5 h-5 rounded bg-muted/150 flex items-center justify-center">
           <MapPin className="w-3 h-3 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium text-blue-800 truncate">
+          <div className="text-xs font-medium text-muted-foreground truncate">
             {placeName ? (
               <>
-                <span className="text-blue-500">Day {dayIndex}</span>
-                <span className="mx-1 text-blue-300">›</span>
+                <span className="text-muted-foreground">Day {dayIndex}</span>
+                <span className="mx-1 text-muted-foreground">›</span>
                 <span>{placeName}</span>
                 {itemType && (
-                  <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-100 text-[10px] text-blue-600">
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded bg-muted/15 text-[10px] text-muted-foreground">
                     {typeLabels[itemType] || itemType}
                   </span>
                 )}
@@ -1607,9 +1614,9 @@ function ContextStatusBar({
             ) : (
               <>
                 <span>正在查看：</span>
-                <span className="text-blue-600">第 {dayIndex} 天</span>
+                <span className="text-muted-foreground">第 {dayIndex} 天</span>
                 {date && (
-                  <span className="ml-1 text-blue-400 text-[10px]">
+                  <span className="ml-1 text-muted-foreground text-[10px]">
                     ({format(new Date(date), 'M月d日')})
                   </span>
                 )}
@@ -1625,7 +1632,7 @@ function ContextStatusBar({
           <button
             key={idx}
             onClick={() => onAskAbout(action.action)}
-            className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/80 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-colors"
+            className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/80 text-muted-foreground border border-border hover:bg-muted/15 hover:border-border transition-colors"
           >
             {action.label}
           </button>
@@ -1664,12 +1671,12 @@ function PendingSuggestionsPanel({
   };
 
   return (
-    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200/60 p-2.5 mb-2">
+    <div className="bg-gradient-to-r from-gate-allow to-gate-allow rounded-lg border border-gate-allow-border/60 p-2.5 mb-2">
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
+        <div className="w-5 h-5 rounded bg-gate-allow-foreground flex items-center justify-center">
           <Sparkles className="w-3 h-3 text-white" />
         </div>
-        <span className="text-xs font-medium text-emerald-800">
+        <span className="text-xs font-medium text-gate-allow-foreground">
           NARA 的建议 ({suggestions.length})
         </span>
       </div>
@@ -1678,7 +1685,7 @@ function PendingSuggestionsPanel({
         {suggestions.map((suggestion) => (
           <div 
             key={suggestion.id}
-            className="bg-white/80 rounded-lg border border-emerald-200 p-2"
+            className="bg-white/80 rounded-lg border border-gate-allow-border p-2"
           >
             <div className="flex items-start gap-2">
               {/* 图标 */}
@@ -1714,7 +1721,7 @@ function PendingSuggestionsPanel({
                 <button
                   onClick={() => onApply(suggestion.id)}
                   disabled={loading}
-                  className="px-2 py-1 rounded text-[10px] font-medium bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+                  className="px-2 py-1 rounded text-[10px] font-medium bg-gate-allow-foreground text-white hover:bg-gate-allow-foreground disabled:opacity-50 transition-colors"
                 >
                   ➕ 添加
                 </button>
@@ -1756,10 +1763,10 @@ function GapHighlightCard({
     label: string;
   }> = {
     CRITICAL: {
-      borderColor: 'border-l-red-500',
-      bgColor: 'bg-red-50/50',
+      borderColor: 'border-l-gate-reject-foreground',
+      bgColor: 'bg-gate-reject/50',
       icon: <AlertTriangle className="w-4 h-4" />,
-      iconColor: 'text-red-500',
+      iconColor: 'text-gate-reject-foreground',
       label: '需关注',
     },
     SUGGESTED: {
@@ -1770,10 +1777,10 @@ function GapHighlightCard({
       label: '建议',
     },
     OPTIONAL: {
-      borderColor: 'border-l-blue-500',
-      bgColor: 'bg-blue-50/50',
+      borderColor: 'border-l-border',
+      bgColor: 'bg-muted/15',
       icon: <Info className="w-4 h-4" />,
-      iconColor: 'text-blue-500',
+      iconColor: 'text-muted-foreground',
       label: '可选',
     },
   };
@@ -1916,15 +1923,15 @@ function ____DetectedGapsPanel({ gaps }: { gaps: DetectedGap[] }) {
   // 缺口类型配置
   const gapConfig: Record<string, { emoji: string; label: string; color: string }> = {
     MEAL: { emoji: '🍽️', label: '用餐', color: 'text-orange-600 bg-orange-50 border-orange-200' },
-    HOTEL: { emoji: '🏨', label: '住宿', color: 'text-purple-600 bg-purple-50 border-purple-200' },
-    TRANSPORT: { emoji: '🚌', label: '交通', color: 'text-blue-600 bg-blue-50 border-blue-200' },
-    ACTIVITY: { emoji: '🎯', label: '活动', color: 'text-green-600 bg-green-50 border-green-200' },
+    HOTEL: { emoji: '🏨', label: '住宿', color: 'text-muted-foreground bg-muted/15 border-border' },
+    TRANSPORT: { emoji: '🚌', label: '交通', color: 'text-muted-foreground bg-muted/15 border-border' },
+    ACTIVITY: { emoji: '🎯', label: '活动', color: 'text-gate-allow-foreground bg-gate-allow border-gate-allow-border' },
     FREE_TIME: { emoji: '⏰', label: '空闲', color: 'text-slate-600 bg-slate-50 border-slate-200' },
   };
   
   // 严重程度配置
   const severityConfig: Record<string, { badge: string; icon: string }> = {
-    CRITICAL: { badge: 'bg-red-100 text-red-700 border-red-200', icon: '❗' },
+    CRITICAL: { badge: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border', icon: '❗' },
     SUGGESTED: { badge: 'bg-amber-100 text-amber-700 border-amber-200', icon: '💡' },
     OPTIONAL: { badge: 'bg-slate-100 text-slate-600 border-slate-200', icon: '💭' },
   };
@@ -2011,11 +2018,11 @@ function PendingChangesPanel({
   
   // 修改类型映射
   const changeTypeLabels: Record<string, { label: string; color: string }> = {
-    add: { label: '添加', color: 'bg-green-50 text-green-700 border-green-200' },
-    remove: { label: '删除', color: 'bg-red-50 text-red-700 border-red-200' },
-    modify: { label: '修改', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-    reorder: { label: '调整顺序', color: 'bg-purple-50 text-purple-700 border-purple-200' },
-    update: { label: '更新', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    add: { label: '添加', color: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border' },
+    remove: { label: '删除', color: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border' },
+    modify: { label: '修改', color: 'bg-muted/15 text-muted-foreground border-border' },
+    reorder: { label: '调整顺序', color: 'bg-muted/15 text-muted-foreground border-border' },
+    update: { label: '更新', color: 'bg-muted/15 text-muted-foreground border-border' },
   };
   
   const getChangeTypeInfo = (type: string) => {
@@ -2063,7 +2070,7 @@ function PendingChangesPanel({
             size="sm"
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 bg-green-600 hover:bg-green-700"
+            className="flex-1 bg-gate-allow-foreground hover:bg-gate-allow-foreground"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -2386,7 +2393,7 @@ function MessageBubble({
         "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
         isUser
           ? "bg-slate-200"
-          : "bg-gradient-to-br from-slate-700 to-slate-900"
+          : "bg-gradient-to-br from-slate-700 to-muted"
       )}>
         {isUser ? (
           <User className="w-4 h-4 text-slate-600" />
@@ -2996,7 +3003,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
       {compact && (
         <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-muted flex items-center justify-center">
               <MessageCircle className="w-4 h-4 text-white" />
             </div>
             <div>
@@ -3112,7 +3119,7 @@ const TripPlannerAssistant = forwardRef<TripPlannerAssistantRef, TripPlannerAssi
 
       {/* 错误提示 */}
       {error && (
-        <div className="mx-4 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+        <div className="mx-4 mb-2 px-3 py-2 bg-gate-reject border border-gate-reject-border rounded-lg text-sm text-gate-reject-foreground">
           {error}
         </div>
       )}

@@ -43,9 +43,9 @@ export function PresentedItineraryItemInsight({
       onClick={(e) => e.stopPropagation()}
     >
       {hasInspiration && (
-        <div className="px-2.5 py-2 bg-gradient-to-br from-slate-50/90 to-violet-50/40 border-b border-slate-100">
+        <div className="px-2.5 py-2 bg-gradient-to-br from-slate-50/90 to-muted/15/40 border-b border-slate-100">
           <div className="flex items-start gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-violet-600 shrink-0 mt-0.5" aria-hidden />
+            <Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" aria-hidden />
             <div className="min-w-0 space-y-1">
               {inspiration.poeticLine?.trim() && (
                 <p className="text-muted-foreground italic leading-snug">{inspiration.poeticLine}</p>

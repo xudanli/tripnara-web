@@ -97,9 +97,9 @@ export default function WelcomeModal({ open, onClose, onComplete }: WelcomeModal
                       <div
                         className={cn(
                           'p-3 rounded-full',
-                          exp.color === 'red' && 'bg-red-100 text-red-700',
+                          exp.color === 'red' && 'bg-gate-reject text-gate-reject-foreground',
                           exp.color === 'orange' && 'bg-orange-100 text-orange-700',
-                          exp.color === 'green' && 'bg-green-100 text-green-700'
+                          exp.color === 'green' && 'bg-gate-allow text-gate-allow-foreground'
                         )}
                       >
                         <Icon className="h-6 w-6" />

@@ -26,13 +26,13 @@ export const CERTAINTY_LEVEL_LABELS: Record<UserCertaintyLevel, string> = {
 export function certaintyLevelClasses(level: UserCertaintyLevel): string {
   switch (level) {
     case 'EXCELLENT_CONDITIONS':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+      return 'border-gate-allow-border bg-muted text-success';
     case 'SUITABLE':
-      return 'border-blue-200 bg-blue-50 text-blue-800';
+      return 'border-border bg-muted text-muted-foreground';
     case 'UNCERTAIN':
       return 'border-amber-200 bg-amber-50 text-amber-800';
     case 'NOT_RECOMMENDED':
-      return 'border-red-200 bg-red-50 text-red-800';
+      return 'border-border bg-muted text-error';
   }
 }
 
@@ -50,11 +50,11 @@ export function loadLevelLabel(load: LoadLevel): string {
 export function loadLevelClasses(load: LoadLevel): string {
   switch (load) {
     case 'light':
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return 'bg-muted text-success border-gate-allow-border';
     case 'moderate':
       return 'bg-amber-50 text-amber-700 border-amber-200';
     case 'heavy':
-      return 'bg-red-50 text-red-700 border-red-200';
+      return 'bg-muted text-error border-border';
   }
 }
 

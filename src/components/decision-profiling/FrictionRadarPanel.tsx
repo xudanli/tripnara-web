@@ -55,7 +55,7 @@ function FrictionPairRow({
             <div key={cell.domain} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span>{FRICTION_DOMAIN_LABELS[cell.domain]}</span>
-                <span className={cn('font-medium', cell.level === 'red' ? 'text-red-600' : '')}>
+                <span className={cn('font-medium', cell.level === 'red' ? 'text-gate-reject-foreground' : '')}>
                   {FRICTION_LEVEL_TEXT[cell.level]}
                 </span>
               </div>
@@ -137,12 +137,12 @@ export function FrictionRadarPanel({ tripId, enabled = true }: FrictionRadarPane
 
       {data.highRiskAlerts.length > 0 ? (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-red-600 flex items-center gap-1">
+          <p className="text-xs font-medium text-gate-reject-foreground flex items-center gap-1">
             <AlertTriangle className="h-3.5 w-3.5" />
             高风险预警
           </p>
           {data.highRiskAlerts.map((alert) => (
-            <div key={alert.id} className="rounded-md border border-red-200/80 bg-red-50/50 dark:bg-red-950/20 px-3 py-2.5 space-y-1">
+            <div key={alert.id} className="rounded-md border border-gate-reject-border/80 bg-gate-reject/50 dark:bg-gate-reject/20 px-3 py-2.5 space-y-1">
               <p className="text-sm font-medium">
                 {alert.domainLabel} · {alert.memberAName} vs {alert.memberBName}
               </p>

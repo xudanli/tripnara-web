@@ -21,7 +21,7 @@ export function gate1TrustConfidenceLabel(level: Gate1TrustConfidenceLevel): str
 export function trustConfidenceToneClass(level: Gate1TrustConfidenceLevel): string {
   switch (level) {
     case 'HIGH':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100';
+      return 'border-gate-allow-border bg-muted text-success dark:border-gate-allow-border dark:bg-muted dark:text-success';
     case 'MEDIUM':
       return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100';
     case 'LOW':

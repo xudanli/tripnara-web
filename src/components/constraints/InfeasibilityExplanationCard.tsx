@@ -19,10 +19,10 @@ export default function InfeasibilityExplanationCard({
   if (explanation.feasible) return null;
 
   return (
-    <Card className={cn('border-red-300 bg-red-50', className)}>
+    <Card className={cn('border-gate-reject-border bg-gate-reject', className)}>
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
-          <XCircle className="w-5 h-5 text-red-600" />
+          <XCircle className="w-5 h-5 text-gate-reject-foreground" />
           方案不可行
         </CardTitle>
         <CardDescription>{explanation.summary}</CardDescription>
@@ -31,14 +31,14 @@ export default function InfeasibilityExplanationCard({
         {explanation.reasons.map((reason, index) => (
           <div
             key={index}
-            className="p-3 bg-white rounded-lg border border-red-200"
+            className="p-3 bg-white rounded-lg border border-gate-reject-border"
           >
             <div className="flex items-start gap-2 mb-2">
               <Badge variant="destructive">{reason.constraint}</Badge>
               <div className="flex-1">
-                <p className="font-medium text-red-900">{reason.description}</p>
+                <p className="font-medium text-gate-reject-foreground">{reason.description}</p>
                 {reason.affected_activities.length > 0 && (
-                  <p className="text-xs text-red-700 mt-1">
+                  <p className="text-xs text-gate-reject-foreground mt-1">
                     受影响活动：{reason.affected_activities.length} 个
                   </p>
                 )}
@@ -53,7 +53,7 @@ export default function InfeasibilityExplanationCard({
                       key={sugIndex}
                       variant="outline"
                       size="sm"
-                      className="w-full justify-start text-left h-auto py-2 border-red-200 text-red-700 hover:bg-red-100"
+                      className="w-full justify-start text-left h-auto py-2 border-gate-reject-border text-gate-reject-foreground hover:bg-gate-reject"
                       onClick={() => onFix?.(reason)}
                     >
                       <Sparkles className="w-4 h-4 mr-2" />

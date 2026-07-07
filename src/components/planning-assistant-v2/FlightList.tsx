@@ -219,7 +219,7 @@ export function FlightList({
                           {transferCount}次中转
                         </Badge>
                       ) : hasDetail ? (
-                        <Badge variant="secondary" className="text-xs shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        <Badge variant="secondary" className="text-xs shrink-0 bg-gate-allow text-gate-allow-foreground dark:bg-gate-allow/40 dark:text-gate-allow-foreground">
                           直飞
                         </Badge>
                       ) : null}

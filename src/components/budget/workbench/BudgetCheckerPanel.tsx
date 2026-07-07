@@ -501,7 +501,7 @@ function BudgetEvidenceSection({
               <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{item.body}</p>
             ) : null}
             {item.source ? (
-              <p className="mt-1 text-[10px] text-nara-glacier-foreground">{item.source}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">{item.source}</p>
             ) : null}
           </li>
         ))}

@@ -320,9 +320,9 @@ export default function DecisionPage() {
       </div>
 
       {error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <p className="text-red-800">{error}</p>
+            <p className="text-gate-reject-foreground">{error}</p>
           </CardContent>
         </Card>
       )}
@@ -410,13 +410,13 @@ export default function DecisionPage() {
         <TabsContent value="safety" className="space-y-4">
           {safetyResult ? (
             <>
-              <Card className={safetyResult.allowed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
+              <Card className={safetyResult.allowed ? 'border-gate-allow-border bg-gate-allow' : 'border-gate-reject-border bg-gate-reject'}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     {safetyResult.allowed ? (
-                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      <CheckCircle2 className="w-5 h-5 text-gate-allow-foreground" />
                     ) : (
-                      <XCircle className="w-5 h-5 text-red-600" />
+                      <XCircle className="w-5 h-5 text-gate-reject-foreground" />
                     )}
                     Abu 安全校验结果
                   </CardTitle>
@@ -437,7 +437,7 @@ export default function DecisionPage() {
                           {safetyResult.violations.map((violation, idx) => (
                             <div key={idx} className="p-3 border rounded-lg">
                               <div className="flex items-center gap-2 mb-1">
-                                <AlertTriangle className="w-4 h-4 text-red-600" />
+                                <AlertTriangle className="w-4 h-4 text-gate-reject-foreground" />
                                 <span className="font-medium">
                                   {violation.explanation || violation.reason || '违规项'}
                                 </span>
@@ -529,7 +529,7 @@ export default function DecisionPage() {
         {/* Dr.Dre: 节奏调整结果 */}
         <TabsContent value="pacing" className="space-y-4">
           {pacingResult ? (
-            <Card className={pacingResult.success ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}>
+            <Card className={pacingResult.success ? 'border-gate-allow-border bg-gate-allow' : 'border-yellow-200 bg-yellow-50'}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="w-5 h-5" />
@@ -619,7 +619,7 @@ export default function DecisionPage() {
         {/* Neptune: 节点替换结果 */}
         <TabsContent value="replace" className="space-y-4">
           {replaceResult ? (
-            <Card className={replaceResult.success ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}>
+            <Card className={replaceResult.success ? 'border-gate-allow-border bg-gate-allow' : 'border-yellow-200 bg-yellow-50'}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <RefreshCw className="w-5 h-5" />

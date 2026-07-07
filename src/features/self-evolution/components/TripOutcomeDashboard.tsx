@@ -71,7 +71,7 @@ export function TripOutcomeDashboard({ outcome, className }: TripOutcomeDashboar
 
       <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
         <h4 className="text-sm font-medium text-foreground">期望差距</h4>
-        <p className={cn('mt-1 text-sm', exceeded ? 'text-emerald-600' : 'text-amber-600')}>
+        <p className={cn('mt-1 text-sm', exceeded ? 'text-gate-allow-foreground' : 'text-amber-600')}>
           {exceeded
             ? `超出预期 ${gapPct.toFixed(0)}%`
             : `低于预期 ${gapPct.toFixed(0)}%`}
@@ -87,7 +87,7 @@ export function TripOutcomeDashboard({ outcome, className }: TripOutcomeDashboar
             {(outcome.groupAggregation.aggregatedScore * 100).toFixed(0)}%
           </p>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="border-emerald-200 text-emerald-700">
+            <Badge variant="outline" className="border-gate-allow-border text-gate-allow-foreground">
               满意 {outcome.groupAggregation.satisfiedMembers.length} 人
             </Badge>
             {outcome.groupAggregation.unsatisfiedMembers.length > 0 && (

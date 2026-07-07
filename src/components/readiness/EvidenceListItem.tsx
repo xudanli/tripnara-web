@@ -53,17 +53,17 @@ const statusConfig: Record<EvidenceStatus, { label: string; icon: typeof CheckCi
   new: {
     label: '新证据',
     icon: Clock,
-    className: 'bg-blue-50 text-blue-700 border-blue-200',
+    className: 'bg-muted text-muted-foreground border-border',
   },
   acknowledged: {
     label: '已确认',
     icon: Eye,
-    className: 'bg-amber-50 text-amber-700 border-amber-200',
+    className: 'bg-muted text-warning border-border',
   },
   resolved: {
     label: '已解决',
     icon: CheckCircle2,
-    className: 'bg-green-50 text-green-700 border-green-200',
+    className: 'bg-muted text-success border-border',
   },
   dismissed: {
     label: '已忽略',
@@ -92,15 +92,15 @@ export default function EvidenceListItem({
   const confidenceConfig = {
     high: {
       label: 'High',
-      className: 'bg-green-50 text-green-700 border-green-200',
+      className: 'bg-muted text-success border-border',
     },
     medium: {
       label: 'Medium',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
+      className: 'bg-muted text-warning border-border',
     },
     low: {
       label: 'Low',
-      className: 'bg-red-50 text-red-700 border-red-200',
+      className: 'bg-muted text-error border-border',
     },
   };
 
@@ -225,9 +225,9 @@ export default function EvidenceListItem({
                 <div className="flex items-center gap-1">
                   <span className={cn(
                     'w-2 h-2 rounded-full',
-                    evidence.freshness.freshnessStatus === 'FRESH' && 'bg-green-500',
-                    evidence.freshness.freshnessStatus === 'STALE' && 'bg-amber-500',
-                    evidence.freshness.freshnessStatus === 'EXPIRED' && 'bg-red-500'
+                    evidence.freshness.freshnessStatus === 'FRESH' && 'bg-muted-foreground',
+                    evidence.freshness.freshnessStatus === 'STALE' && 'bg-muted0',
+                    evidence.freshness.freshnessStatus === 'EXPIRED' && 'bg-muted-foreground'
                   )} />
                   <span>
                     {evidence.freshness.freshnessStatus === 'FRESH' && '数据新鲜'}
@@ -242,9 +242,9 @@ export default function EvidenceListItem({
                 <div className="flex items-center gap-1">
                   <span className={cn(
                     'text-xs font-medium',
-                    evidence.qualityScore.level === 'HIGH' && 'text-green-700',
-                    evidence.qualityScore.level === 'MEDIUM' && 'text-amber-700',
-                    evidence.qualityScore.level === 'LOW' && 'text-red-700'
+                    evidence.qualityScore.level === 'HIGH' && 'text-success',
+                    evidence.qualityScore.level === 'MEDIUM' && 'text-warning',
+                    evidence.qualityScore.level === 'LOW' && 'text-error'
                   )}>
                     质量: {Math.round(evidence.qualityScore.overallScore * 100)}%
                   </span>

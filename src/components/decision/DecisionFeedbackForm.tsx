@@ -65,7 +65,7 @@ export function DecisionFeedbackForm({
     return (
       <Card className={cn('w-full', className)}>
         <CardContent className="flex flex-col items-center justify-center py-8">
-          <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
+          <CheckCircle2 className="h-12 w-12 text-gate-allow-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">感谢您的反馈</h3>
           <p className="text-sm text-muted-foreground text-center">
             您的反馈将帮助我们提供更好的推荐

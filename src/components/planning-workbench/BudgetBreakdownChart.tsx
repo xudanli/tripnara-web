@@ -194,9 +194,9 @@ export function BudgetBreakdownChart({
             <span className="text-muted-foreground">预算使用率</span>
             <span className={cn(
               'font-semibold',
-              usagePercentage >= 100 ? 'text-red-600' : 
+              usagePercentage >= 100 ? 'text-error' : 
               usagePercentage >= 80 ? 'text-amber-600' : 
-              'text-green-600'
+              'text-success'
             )}>
               {usagePercentage.toFixed(0)}%
             </span>

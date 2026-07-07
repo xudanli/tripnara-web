@@ -4,6 +4,12 @@ import { useDecisionProfilingOnboarding, useFrictionRadar } from '@/hooks/useDec
 import { useSilentVoteList } from '@/hooks/useSilentVotes';
 import { useTripWishSummary } from '@/hooks/useTripWishes';
 import { useCollaborativeTasks } from '@/features/match-square/hooks/useCollaborativeTasks';
+import { useTripDecisionFollowUpTasks } from '@/hooks/useTripDecisionFollowUpTasks';
+import {
+  filterDecisionFollowUpTasks,
+  partitionCollaborativeTasks,
+  resolveCollaborativeTasksForDisplay,
+} from '@/lib/collab-task-partition.util';
 import { buildTeamHealth } from '@/lib/collab-team-health';
 import type { DomainNegotiationTask } from '@/types/domain-negotiation-task';
 import type { SilentVoteDetail } from '@/types/silent-votes';
@@ -97,7 +103,28 @@ export function useCollabOverview(tripId: string | undefined) {
   const { summary: wishSummary, loading: wishLoading } = useTripWishSummary(tripId);
   const { data: collabTasks, isLoading: tasksLoading } = useCollaborativeTasks(tripId);
 
-  const flywheelTasks = collabTasks?.tasks ?? collabTasks?.flywheel?.tasks ?? [];
+  const unifiedTasks = useMemo(
+    () => collabTasks?.tasks ?? collabTasks?.flywheel?.tasks ?? [],
+    [collabTasks?.tasks, collabTasks?.flywheel?.tasks],
+  );
+
+  const needsFallbackFollowUps = useMemo(
+    () => filterDecisionFollowUpTasks(unifiedTasks).length === 0,
+    [unifiedTasks],
+  );
+
+  const { data: fallbackFollowUpTasks = [], isLoading: decisionFollowUpsLoading } =
+    useTripDecisionFollowUpTasks(tripId, { enabled: needsFallbackFollowUps });
+
+  const flywheelTasks = useMemo(
+    () => resolveCollaborativeTasksForDisplay(unifiedTasks, fallbackFollowUpTasks),
+    [unifiedTasks, fallbackFollowUpTasks],
+  );
+
+  const { decisionFollowUps, domainNegotiations } = useMemo(
+    () => partitionCollaborativeTasks(flywheelTasks),
+    [flywheelTasks],
+  );
   const pendingFlywheel = flywheelTasks.filter((t) => t.status === 'pending');
 
   const pendingItems = useMemo(
@@ -149,7 +176,13 @@ export function useCollabOverview(tripId: string | undefined) {
   );
 
   const loading =
-    negotiationLoading || votesLoading || onboardingLoading || frictionLoading || wishLoading || tasksLoading;
+    negotiationLoading ||
+    votesLoading ||
+    onboardingLoading ||
+    frictionLoading ||
+    wishLoading ||
+    tasksLoading ||
+    (needsFallbackFollowUps && decisionFollowUpsLoading);
 
   return {
     loading,
@@ -163,6 +196,8 @@ export function useCollabOverview(tripId: string | undefined) {
     votes,
     wishSummary,
     flywheelTasks,
+    decisionFollowUps,
+    domainNegotiations,
     pendingFlywheel,
     friction,
   };

@@ -165,7 +165,7 @@ export default function TripReviewPage() {
               )}
             </Button>
             {error && (
-              <div className="mt-4 text-red-600 text-sm">{error}</div>
+              <div className="mt-4 text-gate-reject-foreground text-sm">{error}</div>
             )}
           </CardContent>
         </Card>
@@ -235,7 +235,7 @@ export default function TripReviewPage() {
 
         {/* Error Display */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <div className="mb-4 p-4 bg-gate-reject border border-gate-reject-border rounded-lg text-gate-reject-foreground">
             {error}
           </div>
         )}
@@ -411,10 +411,10 @@ function KPIPill({
   color: 'green' | 'blue' | 'orange' | 'red';
 }) {
   const colorClasses = {
-    green: 'text-green-600 bg-green-50',
-    blue: 'text-blue-600 bg-blue-50',
+    green: 'text-gate-allow-foreground bg-gate-allow',
+    blue: 'text-muted-foreground bg-muted/15',
     orange: 'text-orange-600 bg-orange-50',
-    red: 'text-red-600 bg-red-50',
+    red: 'text-gate-reject-foreground bg-gate-reject',
   };
 
   return (

@@ -3,7 +3,7 @@ import { collaborativeTasksApi } from '@/api/collaborative-tasks';
 import { tripDomainInfluenceApi } from '@/api/trip-domain-influence';
 import { reconcileNegotiationTasksWithDomainClaims } from '@/lib/reconcile-negotiation-tasks-with-claims';
 
-export function useDomainNegotiationTasks(tripId: string | undefined) {
+export function useDomainNegotiationTasks(tripId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ['trips', tripId, 'collaborative-tasks', 'negotiation'],
     queryFn: async () => {
@@ -16,7 +16,7 @@ export function useDomainNegotiationTasks(tripId: string | undefined) {
       }
       return reconcileNegotiationTasksWithDomainClaims(res.negotiationTasks, snapshot);
     },
-    enabled: Boolean(tripId),
+    enabled: Boolean(tripId) && enabled,
     staleTime: 15_000,
   });
 }

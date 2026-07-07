@@ -159,20 +159,20 @@ export default function ChecklistSection({
       if (item.constraintType === 'legal_blocker') {
         return {
           icon: Scale, // 法律图标
-          iconClassName: 'text-red-700',
+          iconClassName: 'text-error',
           badgeLabel: t('dashboard.readiness.page.constraintType.legal_blocker', { defaultValue: '法律要求' }),
         };
       } else if (item.constraintType === 'safety_blocker') {
         return {
           icon: Shield, // 安全图标
-          iconClassName: 'text-red-600',
+          iconClassName: 'text-error',
           badgeLabel: t('dashboard.readiness.page.constraintType.safety_blocker', { defaultValue: '安全要求' }),
         };
       }
       // 默认使用 AlertCircle
       return {
         icon: AlertCircle,
-        iconClassName: 'text-red-600',
+        iconClassName: 'text-error',
         badgeLabel: t('dashboard.readiness.page.constraintType.blocker', { defaultValue: '阻塞项' }),
       };
     }
@@ -182,14 +182,14 @@ export default function ChecklistSection({
       if (item.constraintType === 'strong_recommendation') {
         return {
           icon: Star, // 推荐图标
-          iconClassName: 'text-amber-700',
+          iconClassName: 'text-warning',
           badgeLabel: t('dashboard.readiness.page.constraintType.strong_recommendation', { defaultValue: '强烈建议' }),
         };
       }
       // 默认使用 AlertTriangle
       return {
         icon: AlertTriangle,
-        iconClassName: 'text-amber-600',
+        iconClassName: 'text-warning',
         badgeLabel: t('dashboard.readiness.page.constraintType.must', { defaultValue: '必须项' }),
       };
     }
@@ -200,36 +200,36 @@ export default function ChecklistSection({
   const levelConfig = {
     blocker: {
       icon: AlertCircle, // 默认图标，会被 getConstraintTypeConfig 覆盖
-      iconClassName: 'text-red-600',
+      iconClassName: 'text-error',
       iconSize: 'h-6 w-6', // 🎯 阻塞项：更大的图标
-      badgeClassName: 'bg-red-50 text-red-700 border-red-300 border-2', // 🎯 阻塞项：更粗的边框
+      badgeClassName: 'bg-muted text-error border-border border-2', // 🎯 阻塞项：更粗的边框
       badgeLabel: '阻塞项',
-      cardBorder: 'border-l-4 border-red-600', // 🎯 阻塞项：左侧红色粗边框
-      cardBg: 'bg-red-50/50', // 🎯 阻塞项：更明显的背景
+      cardBorder: 'border-l-4 border-border', // 🎯 阻塞项：左侧红色粗边框
+      cardBg: 'bg-muted/50', // 🎯 阻塞项：更明显的背景
     },
     must: {
       icon: AlertTriangle,
-      iconClassName: 'text-amber-600',
+      iconClassName: 'text-warning',
       iconSize: 'h-5 w-5',
-      badgeClassName: 'bg-red-600 text-white border-red-600 font-medium',
+      badgeClassName: 'bg-muted-foreground text-white border-border font-medium',
       badgeLabel: isZh ? '必须' : 'Required',
       cardBorder: '',
       cardBg: 'bg-white',
     },
     should: {
       icon: CheckCircle2,
-      iconClassName: 'text-amber-600',
+      iconClassName: 'text-warning',
       iconSize: 'h-5 w-5',
-      badgeClassName: 'bg-amber-50 text-amber-700 border-amber-200',
+      badgeClassName: 'bg-muted text-warning border-border',
       badgeLabel: 'Should',
       cardBorder: '',
       cardBg: 'bg-white',
     },
     optional: {
       icon: Info,
-      iconClassName: 'text-blue-600',
+      iconClassName: 'text-muted-foreground',
       iconSize: 'h-5 w-5',
-      badgeClassName: 'bg-blue-50 text-blue-700 border-blue-200',
+      badgeClassName: 'bg-muted text-muted-foreground border-border',
       badgeLabel: 'Optional',
       cardBorder: '',
       cardBg: 'bg-white',
@@ -319,7 +319,7 @@ export default function ChecklistSection({
       <>
         {level === 'must' && hideSectionHeader && !completed ? (
           <div className="flex items-center gap-2 mb-0.5">
-            <Badge className="text-[10px] px-1.5 py-0 bg-red-600 text-white border-0">
+            <Badge className="text-[10px] px-1.5 py-0 bg-muted-foreground text-white border-0">
               {isZh ? '必须' : 'Required'}
             </Badge>
             {!taskOnlyMode && titleVariant === 'safety' ? (
@@ -335,7 +335,7 @@ export default function ChecklistSection({
             return (
               <div className="flex items-center gap-2 mb-2">
                 <ConstraintIcon className={cn('h-4 w-4', constraintConfig.iconClassName)} />
-                <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-300">
+                <Badge variant="outline" className="text-[10px] bg-muted text-error border-border">
                   {constraintConfig.badgeLabel}
                 </Badge>
               </div>
@@ -434,7 +434,7 @@ export default function ChecklistSection({
                 <Badge
                   key={idx}
                   variant="outline"
-                  className="text-xs bg-amber-50 text-amber-700 border-amber-200"
+                  className="text-xs bg-muted text-warning border-border"
                 >
                   {label}
                 </Badge>
@@ -453,7 +453,7 @@ export default function ChecklistSection({
                 <Badge
                   key={actIndex}
                   variant="outline"
-                  className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                  className="text-xs bg-muted text-muted-foreground border-border"
                 >
                   {activity}
                 </Badge>
@@ -486,7 +486,7 @@ export default function ChecklistSection({
                           className="mt-0.5"
                         />
                       ) : (
-                        <span className="text-amber-600 mt-0.5">•</span>
+                        <span className="text-warning mt-0.5">•</span>
                       )}
                       <span
                         className={cn(
@@ -522,7 +522,7 @@ export default function ChecklistSection({
                         className="mt-0.5"
                       />
                     ) : (
-                      <span className="text-amber-600 mt-0.5">•</span>
+                      <span className="text-warning mt-0.5">•</span>
                     )}
                     <span
                       className={cn(
@@ -647,7 +647,7 @@ export default function ChecklistSection({
           'space-y-2 p-4 border rounded-xl shadow-sm',
           completed && 'opacity-80 bg-slate-50/80',
           level === 'blocker'
-            ? 'border-l-4 border-red-600 bg-red-50/30 border-r border-t border-b border-slate-200'
+            ? 'border-l-4 border-border bg-muted/30 border-r border-t border-b border-slate-200'
             : level === 'must'
               ? 'border border-slate-200 bg-white'
               : 'border border-slate-200 bg-white',
@@ -677,7 +677,7 @@ export default function ChecklistSection({
       return (
         <details
           key={checkKey}
-          className="rounded-lg border border-l-2 border-l-amber-300 border-gray-200 bg-white overflow-hidden group"
+          className="rounded-lg border border-l-2 border-l-warning border-gray-200 bg-white overflow-hidden group"
           open={index === (pendingItems[0]?.index ?? -1)}
         >
           <summary className="flex items-start gap-2.5 p-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden hover:bg-slate-50/80">
@@ -713,7 +713,7 @@ export default function ChecklistSection({
                 onClick={() => setShowCompleted((v) => !v)}
               >
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success" />
                   {isZh ? `已完成 (${completedItems.length})` : `Completed (${completedItems.length})`}
                 </span>
                 <span>{showCompleted ? (isZh ? '收起' : 'Hide') : isZh ? '展开' : 'Show'}</span>
@@ -770,7 +770,7 @@ export default function ChecklistSection({
           ) : null}
           <span className={cn(
             'text-sm font-normal',
-            level === 'blocker' ? 'text-red-700 font-semibold' : 'text-muted-foreground'
+            level === 'blocker' ? 'text-error font-semibold' : 'text-muted-foreground'
           )}>
             {checkable && items.length > 0
               ? isZh
@@ -779,7 +779,7 @@ export default function ChecklistSection({
               : `(${items.length})`}
           </span>
           {checkable && completedItems.length > 0 ? (
-            <span className="text-xs text-emerald-700 font-normal">
+            <span className="text-xs text-success font-normal">
               {isZh ? `${completedItems.length} 已完成` : `${completedItems.length} done`}
             </span>
           ) : null}
@@ -799,7 +799,7 @@ export default function ChecklistSection({
                 onClick={() => setShowCompleted((v) => !v)}
               >
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success" />
                   {isZh ? `已完成 (${completedItems.length})` : `Completed (${completedItems.length})`}
                 </span>
                 <span>{showCompleted ? (isZh ? '收起' : 'Hide') : isZh ? '展开' : 'Show'}</span>

@@ -195,7 +195,7 @@ export function FlightInventorySnapshotPanel({ snapshot, className }: FlightInve
                     return (
                       <Card
                         key={`offer-${legIdx}-${offerIdx}`}
-                        className="border-l-4 border-l-sky-500/70 bg-background/80 shadow-none"
+                        className="border-l-4 border-l-border bg-background/80 shadow-none"
                       >
                         <CardContent className="space-y-2 px-3 py-2.5">
                           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -288,7 +288,7 @@ export function FlightInventorySnapshotPanel({ snapshot, className }: FlightInve
       ) : null}
 
       {lines.length > 0 ? (
-        <ul className="list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-foreground marker:text-sky-600/80">
+        <ul className="list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-foreground marker:text-muted-foreground/80">
           {lines.map((line, i) => (
             <li key={`flight-line-${i}`} className="whitespace-pre-wrap">
               {line}

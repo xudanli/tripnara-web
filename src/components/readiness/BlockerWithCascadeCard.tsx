@@ -36,15 +36,15 @@ export default function BlockerWithCascadeCard({
   const severityConfig = {
     critical: {
       label: 'Critical',
-      className: 'bg-red-50 text-red-700 border-red-200',
+      className: 'bg-muted text-error border-border',
     },
     high: {
       label: 'High',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
+      className: 'bg-muted text-warning border-border',
     },
     medium: {
       label: 'Medium',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
+      className: 'bg-muted text-warning border-border',
     },
   };
 
@@ -58,8 +58,8 @@ export default function BlockerWithCascadeCard({
     <Card
       className={cn(
         'transition-all',
-        blocker.severity === 'critical' && 'border-red-200',
-        blocker.severity === 'high' && 'border-amber-200',
+        blocker.severity === 'critical' && 'border-border',
+        blocker.severity === 'high' && 'border-border',
         className
       )}
     >
@@ -70,9 +70,9 @@ export default function BlockerWithCascadeCard({
               <AlertTriangle
                 className={cn(
                   'h-4 w-4',
-                  blocker.severity === 'critical' && 'text-red-600',
-                  blocker.severity === 'high' && 'text-amber-600',
-                  blocker.severity === 'medium' && 'text-amber-600'
+                  blocker.severity === 'critical' && 'text-error',
+                  blocker.severity === 'high' && 'text-warning',
+                  blocker.severity === 'medium' && 'text-warning'
                 )}
               />
               <h3 className="font-semibold text-sm">{blocker.title}</h3>
@@ -109,8 +109,8 @@ export default function BlockerWithCascadeCard({
         </div>
 
         {cascadeHints.length > 0 ? (
-          <div className="space-y-2 border-l-2 border-violet-300/70 pl-3 ml-1">
-            <p className="text-[11px] font-medium text-violet-800 dark:text-violet-200">
+          <div className="space-y-2 border-l-2 border-border/70 pl-3 ml-1">
+            <p className="text-[11px] font-medium text-muted-foreground dark:text-muted-foreground">
               {t('dashboard.readiness.cascade.nestedUnderBlocker', {
                 defaultValue: '可能影响',
               })}

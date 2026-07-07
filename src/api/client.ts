@@ -1,7 +1,15 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { CONFIG } from '@/constants/config';
 import { setLastAgentRequestId } from '@/lib/agent-request-context';
-import { mapDecisionEngineUserMessage } from '@/lib/decision-engine-error-map';
+import {
+  mapDecisionEngineUserMessage,
+} from '@/lib/decision-engine-error-map';
+import {
+  EffectivePlanWriteChainRequiredError,
+  NON_CANONICAL_APPLY_DEPRECATED,
+  NonCanonicalApplyDeprecatedError,
+  parseWriteChainBlockedError,
+} from '@/lib/effective-plan-write-chain.util';
 import {
   parsePlanningWorkbenchError,
   planningWorkbenchErrorToUserMessage,
@@ -34,23 +42,26 @@ declare global {
 // 1. window.__CONFIG__.apiBaseUrl (从 /config.js 动态加载)
 // 2. VITE_API_BASE_URL 环境变量
 // 3. 默认使用同域 /api（推荐，避免 Mixed Content，需要 Nginx 反代）
+const win = typeof globalThis !== 'undefined' ? globalThis.window : undefined;
 const runtimeBase =
-  window.__CONFIG__?.apiBaseUrl ||
-  window._CONFIG__?.apiBaseUrl ||
-  (window as any).__CONFIG__?.apiBaseUrl ||
-  (window as any)._CONFIG__?.apiBaseUrl; // 防御不同写法
+  win?.__CONFIG__?.apiBaseUrl ||
+  win?._CONFIG__?.apiBaseUrl ||
+  (win as Window & { __CONFIG__?: { apiBaseUrl?: string } })?.__CONFIG__?.apiBaseUrl ||
+  (win as Window & { _CONFIG__?: { apiBaseUrl?: string } })?._CONFIG__?.apiBaseUrl;
 
 // ✅ 默认用同域 /api，避免 Mixed Content
 // 这样前端在 https://tripnara.com 下请求会变成 https://tripnara.com/api/...
 const baseURL = runtimeBase || import.meta.env.VITE_API_BASE_URL || '/api';
 
 // 调试日志：显示最终使用的 baseURL
-console.log('[API Client] 初始化配置:', {
-  windowConfig: window.__CONFIG__ ?? window._CONFIG__,
-  runtimeBase,
-  viteEnv: import.meta.env.VITE_API_BASE_URL,
-  finalBaseURL: baseURL,
-});
+if (typeof win !== 'undefined') {
+  console.log('[API Client] 初始化配置:', {
+    windowConfig: win.__CONFIG__ ?? win._CONFIG__,
+    runtimeBase,
+    viteEnv: import.meta.env.VITE_API_BASE_URL,
+    finalBaseURL: baseURL,
+  });
+}
 
 const apiClient = axios.create({
   baseURL,
@@ -319,6 +330,31 @@ apiClient.interceptors.response.use(
         }
         
         const isDecision = response.config.tripnaraApiKind === 'decision_engine';
+        const writeChainBlocked = parseWriteChainBlockedError(response.data);
+        if (writeChainBlocked) {
+          const typed =
+            writeChainBlocked.code === NON_CANONICAL_APPLY_DEPRECATED
+              ? new NonCanonicalApplyDeprecatedError(
+                  undefined,
+                  undefined,
+                  writeChainBlocked.details,
+                  writeChainBlocked.message,
+                )
+              : new EffectivePlanWriteChainRequiredError(
+                  undefined,
+                  undefined,
+                  writeChainBlocked.details,
+                  writeChainBlocked.message,
+                );
+          (typed as TripnaraHttpError).response = {
+            status: response.status,
+            data: response.data,
+          };
+          (typed as TripnaraHttpError).config = response.config;
+          attachTripnaraDiagnostics(typed as TripnaraHttpError, response.config);
+          return Promise.reject(typed);
+        }
+
         const displayMessage = isDecision
           ? mapDecisionEngineUserMessage(errorCode, errorMessage)
           : errorMessage;

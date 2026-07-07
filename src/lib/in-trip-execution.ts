@@ -102,11 +102,11 @@ export function vulnerabilitySeverityLabel(severity: VulnerabilitySeverity): str
 export function vulnerabilitySeverityClasses(severity: VulnerabilitySeverity): string {
   switch (severity) {
     case 'green':
-      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      return 'bg-muted text-success border-gate-allow-border';
     case 'yellow':
       return 'bg-amber-100 text-amber-800 border-amber-200';
     case 'red':
-      return 'bg-red-100 text-red-800 border-red-200';
+      return 'bg-muted text-error border-border';
   }
 }
 
@@ -126,13 +126,13 @@ export function thermometerLevelLabel(level: ThermometerLevel): string {
 export function thermometerLevelClasses(level: ThermometerLevel): string {
   switch (level) {
     case 'green':
-      return 'bg-emerald-500';
+      return 'bg-muted-foreground';
     case 'yellow':
       return 'bg-amber-400';
     case 'orange':
       return 'bg-orange-500';
     case 'red':
-      return 'bg-red-500';
+      return 'bg-muted-foreground';
   }
 }
 

@@ -2,24 +2,33 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-export type PlanningHeaderAccent = 'neutral' | 'success' | 'warning' | 'attention' | 'info' | 'blocked';
+export type PlanningHeaderAccent =
+  | 'neutral'
+  | 'success'
+  | 'warning'
+  | 'attention'
+  | 'info'
+  | 'blocked'
+  | 'danger';
 
 const ACCENT_CLASS: Record<PlanningHeaderAccent, string> = {
   neutral: 'border-l-border/80 bg-gradient-to-r from-muted/30 to-transparent',
   success: 'border-l-gate-allow-border bg-gradient-to-r from-gate-allow/15 via-gate-allow/5 to-transparent',
-  warning: 'border-l-amber-400/90 bg-gradient-to-r from-amber-50/80 via-amber-50/30 to-transparent dark:from-amber-950/30',
+  warning: 'border-l-gate-confirm-border bg-gradient-to-r from-gate-confirm/12 via-gate-confirm/5 to-transparent',
   attention: 'border-l-gate-suggest-border bg-gradient-to-r from-gate-suggest/12 via-gate-suggest/5 to-transparent',
-  info: 'border-l-sky-300/90 bg-gradient-to-r from-sky-50/70 via-sky-50/20 to-transparent dark:from-sky-950/25',
-  blocked: 'border-l-amber-500/90 bg-gradient-to-r from-amber-50/70 via-amber-50/20 to-transparent dark:from-amber-950/25',
+  info: 'border-l-border/70 bg-gradient-to-r from-muted/20 via-muted/8 to-transparent',
+  blocked: 'border-l-gate-confirm-border bg-gradient-to-r from-gate-confirm/12 via-gate-confirm/5 to-transparent',
+  danger: 'border-l-gate-reject-border bg-gradient-to-r from-gate-reject/12 via-gate-reject/5 to-transparent',
 };
 
 const ICON_TONE_CLASS: Record<PlanningHeaderAccent, string> = {
   neutral: 'bg-muted/70 text-muted-foreground ring-border/60',
-  success: 'bg-gate-allow/20 text-gate-allow-foreground ring-gate-allow-border/50',
-  warning: 'bg-amber-100/80 text-amber-800 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-200',
-  attention: 'bg-gate-suggest/15 text-gate-suggest-foreground ring-gate-suggest-border/50',
-  info: 'bg-sky-100/70 text-sky-800 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-200',
-  blocked: 'bg-amber-100/80 text-amber-800 ring-amber-200/70 dark:bg-amber-950/40 dark:text-amber-200',
+  success: 'bg-muted/20 text-success ring-gate-allow-border/50',
+  warning: 'bg-muted/15 text-warning ring-gate-confirm-border/50',
+  attention: 'bg-muted/15 text-foreground ring-gate-suggest-border/50',
+  info: 'bg-muted/50 text-muted-foreground ring-border/55',
+  blocked: 'bg-muted/15 text-warning ring-gate-confirm-border/50',
+  danger: 'bg-muted/15 text-error ring-gate-reject-border/50',
 };
 
 export function PlanningHeaderShell({
@@ -148,7 +157,7 @@ export function PlanningMetaChip({
       className={cn(
         'inline-flex max-w-[11rem] items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[11px] font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]',
         tone === 'success' &&
-          'border-gate-allow-border/60 bg-gate-allow/10 text-gate-allow-foreground',
+          'border-border/60 bg-muted/10 text-success',
         tone === 'muted' && 'border-border/60 bg-background/70 text-muted-foreground',
         tone === 'neutral' && 'border-border/50 bg-muted/35 text-foreground/80',
       )}
@@ -257,11 +266,11 @@ export function resolveConstraintsAccent(summary: {
 export function resolveStripAccent(tone: 'error' | 'blocked' | 'compare' | 'running' | 'info'): PlanningHeaderAccent {
   switch (tone) {
     case 'error':
-      return 'blocked';
+      return 'danger';
     case 'blocked':
       return 'blocked';
     case 'compare':
-      return 'info';
+      return 'attention';
     case 'running':
       return 'neutral';
     default:

@@ -126,7 +126,7 @@ export function InTripTodayPanel({
 
   return (
     <Card className={cn('col-span-12 overflow-hidden', className)}>
-      <CardHeader className="pb-3 border-b bg-gradient-to-r from-slate-50 to-sky-50/80">
+      <CardHeader className="pb-3 border-b bg-gradient-to-r from-slate-50 to-muted/15/80">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <CardTitle className="text-lg font-semibold">
@@ -162,7 +162,7 @@ export function InTripTodayPanel({
       <CardContent className="pt-4 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-lg border p-3 flex items-start gap-2">
-            <Cloud className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" aria-hidden />
+            <Cloud className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" aria-hidden />
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground">天气</p>
               <p className="text-sm font-medium truncate">{data.weather.summary}</p>
@@ -181,9 +181,9 @@ export function InTripTodayPanel({
             <div
               className={cn(
                 'h-2.5 w-2.5 rounded-full shrink-0 mt-1',
-                data.vulnerability.severity === 'green' && 'bg-emerald-500',
+                data.vulnerability.severity === 'green' && 'bg-gate-allow-foreground',
                 data.vulnerability.severity === 'yellow' && 'bg-amber-400',
-                data.vulnerability.severity === 'red' && 'bg-red-500',
+                data.vulnerability.severity === 'red' && 'bg-gate-reject-foreground',
               )}
               aria-hidden
             />

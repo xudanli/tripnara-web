@@ -3,7 +3,16 @@
  */
 import { dedupeFeasibilityIssues } from '@/lib/feasibility-issue-dedupe';
 import { resolveFeasibilityIssueVisualCategory } from '@/lib/feasibility-issue-display';
+import { resolveFeasibilitySignalsForHardConstraint } from '@/lib/trip-constraint-hard-enforcement.util';
+import {
+  isDestinationRuleFeasibilityIssue,
+  resolveFeasibilitySignalsForDestinationRule,
+} from '@/lib/trip-constraint-destination-rule.util';
 import { isLunchValidationConflict } from '@/lib/plan-studio-conflict-filters';
+import {
+  refreshRoadClassTransportMessage,
+} from '@/lib/trip-constraints.adapter';
+import type { DecisionCheckerResponse } from '@/types/decision-checker';
 import type { PlanStudioConflict } from '@/types/trip';
 import type {
   PlanningConflictCategory,
@@ -15,6 +24,7 @@ import type {
   FeasibilityIssueDto,
   FeasibilityIssuePriority,
 } from '@/types/trip-feasibility-report';
+import type { GateStatus } from '@/lib/gate-status';
 
 export type { PlanningConflictCategory, PlanningConflictSource };
 
@@ -112,16 +122,32 @@ function visualCategoryToPlanningCategory(visual: string): PlanningConflictCateg
 function fromFeasibilityIssue(issue: FeasibilityIssueDto): PlanningConflictItem {
   const visual = resolveFeasibilityIssueVisualCategory(issue);
   const category = visualCategoryToPlanningCategory(visual);
+  const enforced = resolveFeasibilitySignalsForHardConstraint({ issueKind: issue.issueKind });
+  const destinationEnforced = isDestinationRuleFeasibilityIssue({
+    issueKind: issue.issueKind,
+    relatedConstraintIds: issue.relatedConstraintIds,
+  })
+    ? resolveFeasibilitySignalsForDestinationRule({
+        relatedConstraintIds: issue.relatedConstraintIds,
+      })
+    : null;
+  const signals = enforced ?? destinationEnforced;
+  const priority =
+    signals?.priority ??
+    issue.priority ??
+    'suggest_adjust';
   return {
     id: issue.id,
     source: 'feasibility',
-    priority: issue.priority ?? 'suggest_adjust',
+    priority,
     category,
     categoryLabel: CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other,
     title: issue.title ?? issue.message ?? issue.id,
     message: issue.message ?? issue.actionRequired ?? '',
     affectedDays: issue.affectedDays,
-    issue,
+    issue: signals
+      ? { ...issue, priority, severity: signals.severity }
+      : issue,
   };
 }
 
@@ -273,4 +299,140 @@ export function isLongDistanceTransportConflict(item: PlanningConflictItem): boo
   if (item.issue?.issueKind === 'road_class') return true;
   const text = `${item.title} ${item.message}`;
   return /超长距离|>\s*\d+\s*km|超过\s*\d+\s*km/i.test(text);
+}
+
+/** 将叙述中的 (>Nkm) 等与当前单段上限约束对齐（N 来自 c_max_segment_distance，非写死 250） */
+export function alignConflictItemsWithMaxSegmentDistance(
+  items: PlanningConflictItem[],
+  maxSegmentDistanceKm?: number | null,
+): PlanningConflictItem[] {
+  if (maxSegmentDistanceKm == null || !Number.isFinite(maxSegmentDistanceKm)) {
+    return items;
+  }
+  const refresh = (text: string | undefined) =>
+    refreshRoadClassTransportMessage(text, maxSegmentDistanceKm);
+  return items.map((item) => {
+    if (!isLongDistanceTransportConflict(item)) return item;
+    const message = refresh(item.message);
+    const title = refresh(item.title);
+    if (message === item.message && title === item.title && !item.issue) return item;
+    return {
+      ...item,
+      title,
+      message,
+      issue: item.issue
+        ? {
+            ...item.issue,
+            message: refresh(item.issue.message),
+            title: refresh(item.issue.title),
+          }
+        : item.issue,
+    };
+  });
+}
+
+/** 决策检查器嵌入快照：road_class 主冲突与证据叙述与 c_max_segment_distance 对齐 */
+export function alignDecisionCheckerWithMaxSegmentDistance(
+  dc: DecisionCheckerResponse,
+  maxSegmentDistanceKm?: number | null,
+): DecisionCheckerResponse {
+  if (maxSegmentDistanceKm == null || !Number.isFinite(maxSegmentDistanceKm)) {
+    return dc;
+  }
+  const refresh = (text: string | undefined) =>
+    refreshRoadClassTransportMessage(text, maxSegmentDistanceKm);
+
+  const primary = dc.overview?.conflict?.primary;
+  const judgmentExplanation = dc.evidence?.judgmentExplanation;
+  const ifUnchanged = dc.counterfactual?.ifUnchanged;
+
+  const nextPrimary = primary
+    ? {
+        ...primary,
+        title: refresh(primary.title),
+        message: refresh(primary.message),
+      }
+    : primary;
+
+  const nextIfUnchanged =
+    ifUnchanged?.points?.length
+      ? {
+          ...ifUnchanged,
+          points: ifUnchanged.points.map((point) => refresh(point) ?? point),
+          recommendation: ifUnchanged.recommendation
+            ? refresh(ifUnchanged.recommendation)
+            : ifUnchanged.recommendation,
+        }
+      : ifUnchanged;
+
+  if (
+    nextPrimary === primary &&
+    !judgmentExplanation &&
+    nextIfUnchanged === ifUnchanged
+  ) {
+    return dc;
+  }
+
+  return {
+    ...dc,
+    overview: {
+      ...dc.overview,
+      conflict: {
+        ...dc.overview.conflict,
+        primary: nextPrimary,
+      },
+    },
+    evidence: judgmentExplanation
+      ? {
+          ...dc.evidence,
+          judgmentExplanation: refresh(judgmentExplanation),
+        }
+      : dc.evidence,
+    counterfactual: nextIfUnchanged
+      ? { ...dc.counterfactual, ifUnchanged: nextIfUnchanged }
+      : dc.counterfactual,
+  };
+}
+
+/** 规划冲突 → 四态裁决（工作台 Banner / 日级提示） */
+export function resolvePlanningConflictGateStatus(item: PlanningConflictItem): GateStatus {
+  const blob = [
+    item.title,
+    item.message,
+    item.issue?.title,
+    item.issue?.message,
+    item.issue?.description,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  if (/缓冲偏紧|缓冲不足|缓冲偏短|时间窗偏紧|buffer/i.test(blob)) {
+    return 'NEED_CONFIRM';
+  }
+
+  if (/封闭|不可达|已关闭|阻断|无法通行|not.?executable/i.test(blob)) {
+    return 'REJECT';
+  }
+
+  switch (item.priority) {
+    case 'must_handle':
+      if (item.category === 'schedule' && /缓冲|到达|衔接|时间/.test(blob)) {
+        return 'NEED_CONFIRM';
+      }
+      return 'REJECT';
+    case 'suggest_adjust':
+      return 'SUGGEST_REPLACE';
+    case 'pending_confirm':
+      return 'NEED_CONFIRM';
+    default:
+      return 'NEED_CONFIRM';
+  }
+}
+
+/** 工作台顶栏冲突条：取最高优先级项 */
+export function resolveTopPlanningConflictBanner(
+  items: PlanningConflictItem[],
+): PlanningConflictItem | null {
+  if (!items.length) return null;
+  return items[0] ?? null;
 }

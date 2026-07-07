@@ -182,22 +182,22 @@ export function MetricExplanationDialog({
   const getLevelBadge = (level: 'excellent' | 'good' | 'needsImprovement') => {
     switch (level) {
       case 'excellent':
-        return <Badge className="bg-green-100 text-green-800 border-green-200">优秀</Badge>;
+        return <Badge className="bg-gate-allow text-gate-allow-foreground border-gate-allow-border">优秀</Badge>;
       case 'good':
         return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">良好</Badge>;
       case 'needsImprovement':
-        return <Badge className="bg-red-100 text-red-800 border-red-200">需改进</Badge>;
+        return <Badge className="bg-gate-reject text-gate-reject-foreground border-gate-reject-border">需改进</Badge>;
     }
   };
 
   const getLevelColor = (level: 'excellent' | 'good' | 'needsImprovement') => {
     switch (level) {
       case 'excellent':
-        return 'text-green-600';
+        return 'text-gate-allow-foreground';
       case 'good':
         return 'text-yellow-600';
       case 'needsImprovement':
-        return 'text-red-600';
+        return 'text-gate-reject-foreground';
     }
   };
 
@@ -286,7 +286,7 @@ export function MetricExplanationDialog({
                 <div className="relative mb-4">
                   <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-100">
                     {/* 渐变背景：从红色到绿色 */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-gate-reject-foreground via-yellow-500 to-gate-allow-foreground" />
                     
                     {/* 🆕 当前分数指示器 */}
                     {explanation.currentState?.score !== undefined && (
@@ -333,24 +333,24 @@ export function MetricExplanationDialog({
                       <div className={cn(
                         'flex items-center justify-between p-3 rounded-lg border-2 transition-all',
                         isActive 
-                          ? 'bg-green-50 border-green-300 shadow-sm' 
-                          : 'bg-green-50/50 border-green-100'
+                          ? 'bg-gate-allow border-gate-allow-border shadow-sm' 
+                          : 'bg-gate-allow/50 border-gate-allow-border'
                       )}>
                         <div className="flex items-center gap-2">
                           <div className={cn(
                             'w-2 h-2 rounded-full',
-                            isActive ? 'bg-green-600' : 'bg-green-300'
+                            isActive ? 'bg-gate-allow-foreground' : 'bg-gate-allow-border'
                           )} />
-                          <span className={cn('text-sm font-medium', isActive && 'text-green-900')}>
+                          <span className={cn('text-sm font-medium', isActive && 'text-gate-allow-foreground')}>
                             优秀
                           </span>
                           {isActive && (
-                            <Badge variant="outline" className="text-xs border-green-300 text-green-700 bg-green-100">
+                            <Badge variant="outline" className="text-xs border-gate-allow-border text-gate-allow-foreground bg-gate-allow">
                               当前
                             </Badge>
                           )}
                         </div>
-                        <span className={cn('text-sm font-medium', isActive && 'text-green-900')}>
+                        <span className={cn('text-sm font-medium', isActive && 'text-gate-allow-foreground')}>
                           {explanation.idealRange.excellent.min}% - {explanation.idealRange.excellent.max}%
                         </span>
                       </div>
@@ -395,24 +395,24 @@ export function MetricExplanationDialog({
                       <div className={cn(
                         'flex items-center justify-between p-3 rounded-lg border-2 transition-all',
                         isActive 
-                          ? 'bg-red-50 border-red-300 shadow-sm' 
-                          : 'bg-red-50/50 border-red-100'
+                          ? 'bg-gate-reject border-gate-reject-border shadow-sm' 
+                          : 'bg-gate-reject/50 border-gate-reject-border'
                       )}>
                         <div className="flex items-center gap-2">
                           <div className={cn(
                             'w-2 h-2 rounded-full',
-                            isActive ? 'bg-red-600' : 'bg-red-300'
+                            isActive ? 'bg-gate-reject-foreground' : 'bg-gate-reject-border'
                           )} />
-                          <span className={cn('text-sm font-medium', isActive && 'text-red-900')}>
+                          <span className={cn('text-sm font-medium', isActive && 'text-gate-reject-foreground')}>
                             需改进
                           </span>
                           {isActive && (
-                            <Badge variant="outline" className="text-xs border-red-300 text-red-700 bg-red-100">
+                            <Badge variant="outline" className="text-xs border-gate-reject-border text-gate-reject-foreground bg-gate-reject">
                               当前
                             </Badge>
                           )}
                         </div>
-                        <span className={cn('text-sm font-medium', isActive && 'text-red-900')}>
+                        <span className={cn('text-sm font-medium', isActive && 'text-gate-reject-foreground')}>
                           {explanation.idealRange.needsImprovement.min}% - {explanation.idealRange.needsImprovement.max}%
                         </span>
                       </div>

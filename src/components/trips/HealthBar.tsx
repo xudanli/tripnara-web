@@ -14,9 +14,9 @@ interface HealthBarProps {
 export default function HealthBar({ executable, buffer, risk, cost, className, onMetricClick }: HealthBarProps) {
   const getHealthColor = (value: number, reverse = false) => {
     const score = reverse ? 100 - value : value;
-    if (score >= 80) return 'text-green-600';
+    if (score >= 80) return 'text-gate-allow-foreground';
     if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    return 'text-gate-reject-foreground';
   };
 
   const getHealthIcon = (value: number, reverse = false) => {
@@ -48,7 +48,7 @@ export default function HealthBar({ executable, buffer, risk, cost, className, o
             </div>
             <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
               {/* 渐变背景 */}
-              <div className="absolute inset-0 bg-gradient-to-r from-red-500 via-orange-500 via-yellow-500 via-lime-500 to-green-500" />
+              <div className="absolute inset-0 bg-gradient-to-r from-gate-reject-foreground via-orange-500 via-yellow-500 via-lime-500 to-gate-allow-foreground" />
               {/* 进度指示器（白色遮罩，从右向左） */}
               <div 
                 className="absolute top-0 right-0 h-full bg-white/90 transition-all duration-300"

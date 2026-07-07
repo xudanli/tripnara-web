@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Sheet,
@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
 import type { TripDetail } from '@/types/trip';
-import type { PersonaAlert } from '@/types/trip';
 import { workbenchPanelHeader, workbenchPanelTitle } from './workbench-ui';
 
 const ScheduleTab = lazy(() => import('@/pages/plan-studio/ScheduleTab'));
@@ -20,7 +19,8 @@ export interface WorkbenchScheduleSheetProps {
   tripId: string;
   trip?: TripDetail | null;
   refreshKey?: number;
-  personaAlerts?: PersonaAlert[];
+  /** 打开后滚动定位到指定天（0-based） */
+  focusDayIndex?: number;
   onScheduleChanged?: () => void;
 }
 
@@ -31,7 +31,7 @@ export function WorkbenchScheduleSheet({
   tripId,
   trip,
   refreshKey = 0,
-  personaAlerts,
+  focusDayIndex,
   onScheduleChanged,
 }: WorkbenchScheduleSheetProps) {
   const handleOpenChange = (next: boolean) => {
@@ -40,6 +40,18 @@ export function WorkbenchScheduleSheet({
     }
     onOpenChange(next);
   };
+
+  useEffect(() => {
+    if (!open || focusDayIndex == null || focusDayIndex < 0) return;
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('plan-studio:scroll-schedule-day', {
+          detail: { dayIndex: focusDayIndex },
+        }),
+      );
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [open, focusDayIndex, refreshKey]);
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -63,7 +75,6 @@ export function WorkbenchScheduleSheet({
                 tripId={tripId}
                 initialTrip={trip}
                 refreshKey={refreshKey}
-                personaAlerts={personaAlerts}
               />
             </Suspense>
           ) : null}

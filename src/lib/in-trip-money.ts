@@ -13,13 +13,13 @@ export const IN_TRIP_MONEY_CATEGORIES = [
 export const IN_TRIP_CURRENCY_OPTIONS = ['CNY', 'ISK', 'USD', 'EUR', 'GBP', 'JPY'] as const;
 
 export function bucketUsageBarClass(usagePercent: number): string {
-  if (usagePercent >= 100) return 'bg-red-500';
+  if (usagePercent >= 100) return 'bg-muted-foreground';
   if (usagePercent >= 85) return 'bg-amber-400';
-  return 'bg-emerald-500';
+  return 'bg-muted-foreground';
 }
 
 export function bucketUsageTextClass(usagePercent: number): string {
-  if (usagePercent >= 100) return 'text-red-700';
+  if (usagePercent >= 100) return 'text-error';
   if (usagePercent >= 85) return 'text-amber-700';
   return 'text-muted-foreground';
 }
@@ -40,9 +40,9 @@ export function nudgeTypeLabel(type: NudgeType): string {
 export function nudgeTypeClasses(type: NudgeType): string {
   switch (type) {
     case 'progress_bar':
-      return 'border-sky-200 bg-sky-50 text-sky-900';
+      return 'border-border bg-muted text-muted-foreground';
     case 'reference_point':
-      return 'border-violet-200 bg-violet-50 text-violet-900';
+      return 'border-border bg-muted text-muted-foreground';
     case 'cooling_off':
       return 'border-amber-200 bg-amber-50 text-amber-900';
     case 'fomo_hedge':

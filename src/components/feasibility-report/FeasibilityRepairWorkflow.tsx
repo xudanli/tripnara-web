@@ -1,6 +1,10 @@
 import { useEffect } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { DecisionExecutionStatusPanel } from '@/components/decision-problems/DecisionExecutionStatusPanel';
+import { DecisionNeedsRepairBanner } from '@/components/decision-problems/DecisionNeedsRepairBanner';
 import { useFeasibilityRepairWorkflow } from '@/hooks/useFeasibilityRepairWorkflow';
 import { filterFeasibilityRepairOptionsForTrip } from '@/lib/feasibility-repair-apply';
 import CascadeImpactPanel from '@/components/readiness/CascadeImpactPanel';
@@ -10,6 +14,7 @@ import { FeasibilityRepairOptionCard } from './feasibility-ui';
 import { FeasibilityRepairPreviewPanel } from './FeasibilityRepairPreviewPanel';
 import { FeasibilityRepairDeferredChoose } from './FeasibilityRepairDeferredChoose';
 import { isSyntheticPlanBRepairOption } from '@/lib/feasibility-proof-plan-b';
+import { resolveDecisionProblemId } from '@/lib/decision-problem-enforcement.util';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -29,6 +34,8 @@ export interface FeasibilityRepairWorkflowProps {
   onOptionsLoaded?: (options: FeasibilityRepairOptionDto[]) => void;
   optionsLoading?: boolean;
   onNavigateToSchedule?: () => void;
+  onViewDecision?: (decisionId: string) => void;
+  onRefreshEvidence?: () => void;
   className?: string;
 }
 
@@ -46,12 +53,15 @@ export function FeasibilityRepairWorkflow({
   onOptionsLoaded,
   optionsLoading: optionsLoadingProp,
   onNavigateToSchedule,
+  onViewDecision,
+  onRefreshEvidence,
   className,
 }: FeasibilityRepairWorkflowProps) {
   const { user } = useAuth();
   const workflow = useFeasibilityRepairWorkflow({
     tripId,
     issueId: issue.id,
+    decisionProblemId: resolveDecisionProblemId(issue),
     repairIssueId: repairIssueId ?? issue.id,
     initialOptions: optionsProp,
     onApplied,
@@ -86,7 +96,9 @@ export function FeasibilityRepairWorkflow({
   const handleConfirm = async () => {
     try {
       await workflow.confirmApply();
-      toast.success('已应用修复');
+      if (workflow.optionsSource !== 'decision-problems') {
+        toast.success('已应用修复');
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : '应用修复失败';
       toast.error(message.length > 120 ? `${message.slice(0, 120)}…` : message);
@@ -207,6 +219,36 @@ export function FeasibilityRepairWorkflow({
               }}
             />
           ) : null}
+          {workflow.decisionPreview?.acknowledgementRequired?.length ? (
+            <div className="space-y-2 rounded-lg border p-3 mx-1">
+              <p className="text-xs font-medium">请确认以下事项</p>
+              {workflow.decisionPreview.acknowledgementRequired.map((item: string) => (
+                <div key={item} className="flex items-start gap-2">
+                  <Checkbox
+                    id={`feasibility-ack-${item}`}
+                    checked={workflow.decisionAcknowledgement.includes(item)}
+                    onCheckedChange={(checked) =>
+                      workflow.toggleDecisionAcknowledgement(item, checked === true)
+                    }
+                  />
+                  <Label htmlFor={`feasibility-ack-${item}`} className="text-xs font-normal leading-snug">
+                    {item}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {workflow.isApplyReady && workflow.resolutionId ? (
+            <div className="mx-1 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+              <p className="text-xs font-medium text-foreground">结论已提交</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                确认后将写入 Plan Gate / 时间轴。
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground/80">
+                resolutionId · <span className="font-mono">{workflow.resolutionId}</span>
+              </p>
+            </div>
+          ) : null}
           {workflow.selectedOptionId && workflow.preview ? (
             <div className="space-y-2 pt-1">
               {workflow.cascadeHints.length > 0 ? (
@@ -241,6 +283,40 @@ export function FeasibilityRepairWorkflow({
                     ? `${workflow.applyError.slice(0, 240)}…`
                     : workflow.applyError}
                 </p>
+              ) : null}
+              {workflow.phase === 'done' &&
+              workflow.optionsSource === 'decision-problems' &&
+              workflow.executionClassification ? (
+                <>
+                  <DecisionNeedsRepairBanner
+                    variant={workflow.executionClassification.variant}
+                    failureMessage={
+                      workflow.executionStatus?.postApplyCoherence?.failureMessage
+                    }
+                    needsRepair={workflow.executionClassification.needsRepair}
+                    onContinueRepair={workflow.reset}
+                  />
+                  <DecisionExecutionStatusPanel
+                    status={workflow.executionStatus}
+                    variant={workflow.executionClassification.variant}
+                    effectiveDecisionId={
+                      workflow.executionClassification.effectiveDecisionId ??
+                      workflow.lastDecisionResult?.effectiveDecisionId ??
+                      workflow.lastDecisionResult?.decision.id
+                    }
+                    onViewDecision={onViewDecision}
+                    onRefreshEvidence={onRefreshEvidence}
+                    onContinueRepair={workflow.reset}
+                    onReselectOption={workflow.reset}
+                    onRetry={() => void handleConfirm()}
+                  />
+                  {workflow.executionClassification.variant === 'error_rolled_back' &&
+                  workflow.lastDecisionResult?.decision.tripVersionBefore ? (
+                    <p className="text-[11px] text-muted-foreground px-0.5">
+                      行程版本已回滚至 {workflow.lastDecisionResult.decision.tripVersionBefore}
+                    </p>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : null}

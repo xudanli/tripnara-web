@@ -54,7 +54,7 @@ export function InTripPostTripSummaryPanel({
     <Card className={className}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-violet-600" aria-hidden />
+          <Sparkles className="h-5 w-5 text-muted-foreground" aria-hidden />
           行后体验总结
         </CardTitle>
         <CardDescription>
@@ -63,9 +63,9 @@ export function InTripPostTripSummaryPanel({
       </CardHeader>
       <CardContent className="space-y-6">
         {data.experienceFulfillmentReview && (
-          <section className="rounded-lg border border-violet-200 bg-violet-50/30 p-4 space-y-3">
+          <section className="rounded-lg border border-border bg-muted/15 p-4 space-y-3">
             <h3 className="text-sm font-medium flex items-center gap-2">
-              <Target className="h-4 w-4 text-violet-600" aria-hidden />
+              <Target className="h-4 w-4 text-muted-foreground" aria-hidden />
               体验兑现回顾
             </h3>
             <p className="text-sm leading-relaxed">{data.experienceFulfillmentReview.summaryZh}</p>

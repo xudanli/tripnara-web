@@ -91,7 +91,7 @@ function DifferenceIndicator({
   
   if (diff > 0) {
     return (
-      <div className="flex items-center gap-1 text-green-600">
+      <div className="flex items-center gap-1 text-gate-allow-foreground">
         <ArrowUp className={cn('h-4 w-4', size === 'large' && 'h-5 w-5')} />
         {showLabel && (
           <span className={cn('font-medium', size === 'large' && 'text-lg')}>
@@ -103,7 +103,7 @@ function DifferenceIndicator({
   }
   
   return (
-    <div className="flex items-center gap-1 text-red-600">
+    <div className="flex items-center gap-1 text-gate-reject-foreground">
       <ArrowDown className={cn('h-4 w-4', size === 'large' && 'h-5 w-5')} />
       {showLabel && (
         <span className={cn('font-medium', size === 'large' && 'text-lg')}>
@@ -133,7 +133,7 @@ function WinnerBadge({
   
   if (winner === planLabel) {
     return (
-      <Badge className="bg-green-500">
+      <Badge className="bg-gate-allow-foreground">
         <Trophy className="h-3 w-3 mr-1" />
         胜出
       </Badge>
@@ -168,7 +168,7 @@ function DimensionComparisonRow({
             {/* 方案 A 分数 */}
             <div className={cn(
               'flex items-center gap-2',
-              winner === 'A' && 'font-semibold text-green-600'
+              winner === 'A' && 'font-semibold text-gate-allow-foreground'
             )}>
               <span className="text-lg tabular-nums">{percentA}%</span>
               {winner === 'A' && <Check className="h-4 w-4" />}
@@ -182,7 +182,7 @@ function DimensionComparisonRow({
             {/* 方案 B 分数 */}
             <div className={cn(
               'flex items-center justify-end gap-2',
-              winner === 'B' && 'font-semibold text-green-600'
+              winner === 'B' && 'font-semibold text-gate-allow-foreground'
             )}>
               {winner === 'B' && <Check className="h-4 w-4" />}
               <span className="text-lg tabular-nums">{percentB}%</span>
@@ -224,13 +224,13 @@ function TotalScoreComparison({
       <div className={cn(
         'text-center p-4 rounded-xl border-2 transition-all',
         winner === 'A' 
-          ? 'border-green-500 bg-green-50' 
+          ? 'border-gate-allow-border bg-gate-allow' 
           : 'border-muted bg-muted/30'
       )}>
         <p className="text-sm text-muted-foreground mb-1">{labelA}</p>
         <p className={cn(
           'text-4xl font-bold tabular-nums',
-          winner === 'A' ? 'text-green-600' : ''
+          winner === 'A' ? 'text-gate-allow-foreground' : ''
         )}>
           {percentA}
         </p>
@@ -247,13 +247,13 @@ function TotalScoreComparison({
       <div className={cn(
         'text-center p-4 rounded-xl border-2 transition-all',
         winner === 'B' 
-          ? 'border-green-500 bg-green-50' 
+          ? 'border-gate-allow-border bg-gate-allow' 
           : 'border-muted bg-muted/30'
       )}>
         <p className="text-sm text-muted-foreground mb-1">{labelB}</p>
         <p className={cn(
           'text-4xl font-bold tabular-nums',
-          winner === 'B' ? 'text-green-600' : ''
+          winner === 'B' ? 'text-gate-allow-foreground' : ''
         )}>
           {percentB}
         </p>
@@ -292,7 +292,7 @@ function DimensionBarChart({
                 <div 
                   className={cn(
                     'h-full transition-all',
-                    data.winner === 'A' ? 'bg-green-500' : 'bg-blue-400'
+                    data.winner === 'A' ? 'bg-gate-allow-foreground' : 'bg-muted-foreground'
                   )}
                   style={{ width: `${scaleA}%`, marginLeft: 'auto' }}
                 />
@@ -301,7 +301,7 @@ function DimensionBarChart({
                 <div 
                   className={cn(
                     'h-full transition-all',
-                    data.winner === 'B' ? 'bg-green-500' : 'bg-orange-400'
+                    data.winner === 'B' ? 'bg-gate-allow-foreground' : 'bg-orange-400'
                   )}
                   style={{ width: `${scaleB}%` }}
                 />
@@ -449,7 +449,7 @@ export function PlanComparisonView({
           {/* 表头 */}
           <div className="grid grid-cols-[1fr,auto,1fr] gap-4 items-center py-2 px-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-blue-400" />
+              <div className="w-3 h-3 rounded bg-muted-foreground" />
               {labelA}
             </div>
             <div>维度</div>
@@ -514,7 +514,7 @@ export function PlanComparisonView({
           'p-4 rounded-lg',
           comparison.preferredPlan === 'EQUAL' 
             ? 'bg-gray-50 border border-gray-200'
-            : 'bg-green-50 border border-green-200'
+            : 'bg-gate-allow border border-gate-allow-border'
         )}>
           <div className="flex items-center gap-2">
             {comparison.preferredPlan === 'EQUAL' ? (
@@ -524,8 +524,8 @@ export function PlanComparisonView({
               </>
             ) : (
               <>
-                <Trophy className="h-5 w-5 text-green-600" />
-                <p className="font-medium text-green-700">
+                <Trophy className="h-5 w-5 text-gate-allow-foreground" />
+                <p className="font-medium text-gate-allow-foreground">
                   推荐选择「{comparison.preferredPlan === 'A' ? labelA : labelB}」
                 </p>
               </>

@@ -82,9 +82,9 @@ export default function ConfirmPanel({
       case 'NEED_CONFIRM':
         return {
           icon: AlertCircle,
-          iconColor: 'text-gate-confirm-foreground',
-          bgColor: 'bg-gate-confirm',
-          borderColor: 'border-gate-confirm-border',
+          iconColor: 'text-warning',
+          bgColor: 'bg-muted',
+          borderColor: 'border-border',
           title: '需要确认',
           description: '请阅读风险说明，并在签收确认中勾选全部项',
         };
@@ -100,9 +100,9 @@ export default function ConfirmPanel({
       case 'REJECT':
         return {
           icon: Shield,
-          iconColor: 'text-gate-reject-foreground',
-          bgColor: 'bg-gate-reject',
-          borderColor: 'border-gate-reject-border',
+          iconColor: 'text-error',
+          bgColor: 'bg-muted',
+          borderColor: 'border-border',
           title: '拒绝执行',
           description: '此方案存在严重风险，不建议执行。请查看替代方案',
         };
@@ -186,10 +186,10 @@ export default function ConfirmPanel({
               </p>
             )}
             {allConfirmed && (
-              <div className="p-3 bg-gate-allow/10 border border-gate-allow-border rounded-lg">
+              <div className="p-3 bg-muted/10 border border-gate-allow-border rounded-lg">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-gate-allow-foreground" />
-                  <p className="text-sm text-gate-allow-foreground">
+                  <AlertCircle className="w-4 h-4 text-success" />
+                  <p className="text-sm text-success">
                     已确认所有确认点，可以继续提交方案
                   </p>
                 </div>

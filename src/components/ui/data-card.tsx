@@ -79,7 +79,7 @@ export function DataCard({
       className={cn(
         'transition-all hover:shadow-md',
         // 推荐标记：更克制的视觉表现（符合"Clarity over Charm"原则）
-        recommended && 'ring-1 ring-[#4CAF50]/30 bg-[#E8F5E9]/30',
+        recommended && 'ring-1 ring-gate-allow-border/30 bg-muted/30',
         className
       )}
     >
@@ -92,7 +92,7 @@ export function DataCard({
             )}
           </div>
           {recommended && (
-            <Badge className="bg-[#4CAF50] text-white border border-[#4CAF50]/20">
+            <Badge className="bg-muted-foreground text-primary-foreground border border-gate-allow-border/20">
               推荐
             </Badge>
           )}
@@ -143,7 +143,7 @@ export function DataCard({
                   className={cn(
                     'h-full transition-all',
                     matchScore >= 90
-                      ? 'bg-green-500'
+                      ? 'bg-muted-foreground'
                       : matchScore >= 70
                       ? 'bg-yellow-500'
                       : 'bg-orange-500'

@@ -43,9 +43,9 @@ const SEVERITY_ORDER: Record<HealthIssue['severity'], number> = {
 };
 
 const SEVERITY_BADGE: Record<HealthIssue['severity'], string> = {
-  blocker: 'bg-red-100 text-red-800 border-red-200',
-  warn: 'bg-amber-100 text-amber-900 border-amber-200',
-  info: 'bg-blue-100 text-blue-800 border-blue-200',
+  blocker: 'bg-muted text-error border-border',
+  warn: 'bg-muted text-warning border-border',
+  info: 'bg-muted text-muted-foreground border-border',
 };
 
 const SEVERITY_LABEL: Record<HealthIssue['severity'], string> = {

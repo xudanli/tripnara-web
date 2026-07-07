@@ -96,14 +96,14 @@ function ConstraintCard({ constraint }: { constraint: DetailedExplanation['const
   const statusConfig = {
     satisfied: {
       icon: <CheckCircle2 className="h-4 w-4" />,
-      bg: 'bg-green-100',
-      text: 'text-green-600',
+      bg: 'bg-gate-allow',
+      text: 'text-gate-allow-foreground',
       label: '已满足',
     },
     violated: {
       icon: <XCircle className="h-4 w-4" />,
-      bg: 'bg-red-100',
-      text: 'text-red-600',
+      bg: 'bg-gate-reject',
+      text: 'text-gate-reject-foreground',
       label: '未满足',
     },
     not_applicable: {
@@ -137,9 +137,9 @@ function ConstraintCard({ constraint }: { constraint: DetailedExplanation['const
 function RiskSection({ riskAssessment }: { riskAssessment: DetailedExplanation['riskAssessment'] }) {
   const levelConfig = {
     low: {
-      bg: 'bg-green-100',
-      text: 'text-green-700',
-      border: 'border-green-200',
+      bg: 'bg-gate-allow',
+      text: 'text-gate-allow-foreground',
+      border: 'border-gate-allow-border',
       label: '低风险',
     },
     medium: {
@@ -149,9 +149,9 @@ function RiskSection({ riskAssessment }: { riskAssessment: DetailedExplanation['
       label: '中等风险',
     },
     high: {
-      bg: 'bg-red-100',
-      text: 'text-red-700',
-      border: 'border-red-200',
+      bg: 'bg-gate-reject',
+      text: 'text-gate-reject-foreground',
+      border: 'border-gate-reject-border',
       label: '高风险',
     },
   };
@@ -195,7 +195,7 @@ function RecommendationSection({ recommendation }: { recommendation: DetailedExp
           <ul className="space-y-1">
             {recommendation.reasoning.map((reason, idx) => (
               <li key={idx} className="text-sm flex items-start gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground mt-0.5 shrink-0" />
                 <span>{reason}</span>
               </li>
             ))}

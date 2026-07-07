@@ -18,9 +18,9 @@ export type TripPersonaHealthRowProps = {
 };
 
 const STATUS_TONE_CLASS: Record<NonNullable<TripPersonaHealthRowProps['statusTone']>, string> = {
-  success: 'text-green-700 dark:text-green-400',
-  info: 'text-amber-800 dark:text-amber-300',
-  warning: 'text-red-700 dark:text-red-400',
+  success: 'text-success dark:text-success',
+  info: 'text-muted-foreground',
+  warning: 'text-error dark:text-error',
 };
 
 export function TripPersonaHealthRow({

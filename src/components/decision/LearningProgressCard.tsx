@@ -47,7 +47,7 @@ const dimensionConfig: Record<keyof PreferencesWeights, { label: string; icon: R
   safety: {
     label: '安全',
     icon: <Shield className="h-4 w-4" />,
-    color: 'text-green-500',
+    color: 'text-gate-allow-foreground',
   },
   experienceDensity: {
     label: '体验密度',
@@ -57,12 +57,12 @@ const dimensionConfig: Record<keyof PreferencesWeights, { label: string; icon: R
   philosophyAlignment: {
     label: '哲学契合',
     icon: <Compass className="h-4 w-4" />,
-    color: 'text-purple-500',
+    color: 'text-muted-foreground',
   },
   timeSlack: {
     label: '时间余量',
     icon: <Clock className="h-4 w-4" />,
-    color: 'text-blue-500',
+    color: 'text-muted-foreground',
   },
   fatigueRisk: {
     label: '疲劳风险',
@@ -72,12 +72,12 @@ const dimensionConfig: Record<keyof PreferencesWeights, { label: string; icon: R
   weatherRisk: {
     label: '天气风险',
     icon: <Cloud className="h-4 w-4" />,
-    color: 'text-cyan-500',
+    color: 'text-muted-foreground',
   },
   budgetOverrun: {
     label: '预算超支',
     icon: <Wallet className="h-4 w-4" />,
-    color: 'text-emerald-500',
+    color: 'text-gate-allow-foreground',
   },
   pacingVariance: {
     label: '节奏波动',

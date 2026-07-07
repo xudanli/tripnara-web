@@ -38,7 +38,7 @@ export interface OpenWorldDiscoveryPanelProps {
 type BusyAction = 'mark_verified' | 'discard_stub';
 
 const PRIORITY_STYLES: Record<string, string> = {
-  P0: 'border-red-500/35 bg-red-50/45 dark:bg-red-950/20',
+  P0: 'border-gate-reject-border/35 bg-gate-reject/45 dark:bg-gate-reject/20',
   P1: 'border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20',
 };
 
@@ -73,9 +73,9 @@ function VerificationTaskRow({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
             {isDone ? (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" aria-hidden />
+              <CheckCircle2 className="h-3.5 w-3.5 text-gate-allow-foreground shrink-0" aria-hidden />
             ) : priority === 'P0' ? (
-              <ShieldAlert className="h-3.5 w-3.5 text-red-600 shrink-0" aria-hidden />
+              <ShieldAlert className="h-3.5 w-3.5 text-gate-reject-foreground shrink-0" aria-hidden />
             ) : (
               <Sparkles className="h-3.5 w-3.5 text-amber-600 shrink-0" aria-hidden />
             )}
@@ -92,7 +92,7 @@ function VerificationTaskRow({
               variant={isDone ? 'secondary' : 'outline'}
               className={cn(
                 'text-[10px] h-5',
-                isDone && 'border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                isDone && 'border-gate-allow-border/30 text-gate-allow-foreground dark:text-gate-allow-foreground'
               )}
             >
               {statusLabel(task.status)}
@@ -236,7 +236,7 @@ export function OpenWorldDiscoveryPanel({
             {pendingCount > 0 ? ` · 待办 ${pendingCount}` : ''}
           </span>
           {localDiscovery.intentional_slack_summary_zh ? (
-            <span className="block rounded-md border border-dashed border-sky-500/30 bg-sky-50/40 px-2 py-1.5 text-foreground/85 leading-relaxed dark:bg-sky-950/20">
+            <span className="block rounded-md border border-dashed border-border/30 bg-muted/15 px-2 py-1.5 text-foreground/85 leading-relaxed dark:bg-muted/15">
               {localDiscovery.intentional_slack_summary_zh}
             </span>
           ) : null}

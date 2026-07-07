@@ -20,8 +20,22 @@ import {
   type SoftPreferenceItem,
   type SoftPreferencePriority,
 } from '@/components/plan-studio/workbench/constraint-console-view.util';
-import { getSoftConstraintTemplate, getHardConstraintTemplate } from '@/components/plan-studio/workbench/constraint-templates';
+import { getSoftConstraintTemplate, getHardConstraintTemplate, isCatalogHardTemplate, isCatalogSoftTemplate } from '@/components/plan-studio/workbench/constraint-templates';
+import { coerceDisplayText } from '@/lib/coerce-display-text.util';
+import {
+  decimalHoursToTimeString,
+  formatConstraintPreviewChangeValue,
+  isCatalogHardToggleTemplate,
+} from '@/lib/constraint-catalog-editor.util';
+import {
+  mergeScopeBindingIntoValue,
+  readScopeBindingFromDraft,
+  scopeBindingToApiScope,
+} from '@/lib/constraint-scope.util';
 import { formatConstraintTravelMode } from '@/lib/planning-constraints.util';
+import { buildAffectedDayDetailsFromStructuredImpact } from '@/lib/constraint-preview-schedule.util';
+import { enrichListEntryWithMetadata, ensureHardConstraintMetadataOnEntries } from '@/lib/constraint-metadata.util';
+import { enrichListEntryWithDestinationRule } from '@/lib/destination-rules.util';
 import type {
   CreateTripConstraintDto,
   PatchTripConstraintDto,
@@ -31,6 +45,7 @@ import type {
   TripConstraintPreviewImpactData,
   TripConstraintsListResponse,
 } from '@/types/trip-constraints';
+import type { ConstraintTemplate } from '@/components/plan-studio/workbench/constraint-templates';
 import { TRIP_CONSTRAINT_LEGACY_IDS } from '@/types/trip-constraints';
 import {
   isOfficialRuleConstraint,
@@ -49,6 +64,8 @@ export const UI_TO_API_CONSTRAINT_ID: Record<string, string> = {
   planning_policy: TRIP_CONSTRAINT_LEGACY_IDS.PLANNING_POLICY,
   road_restrictions: TRIP_CONSTRAINT_LEGACY_IDS.WORLD_FEASIBILITY,
   max_segment_distance: TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE,
+  daily_drive: TRIP_CONSTRAINT_LEGACY_IDS.MAX_DAILY_DRIVE,
+  no_night_drive: TRIP_CONSTRAINT_LEGACY_IDS.NO_NIGHT_DRIVE,
 };
 
 const API_TO_UI_CONSTRAINT_ID: Record<string, string> = Object.fromEntries(
@@ -57,20 +74,26 @@ const API_TO_UI_CONSTRAINT_ID: Record<string, string> = Object.fromEntries(
 
 export function uiConstraintIdToApi(uiId: string): string {
   if (uiId.startsWith('c_')) return uiId;
+  if (isCatalogHardTemplate(uiId)) return `c_tpl_${uiId}`;
+  if (isCatalogSoftTemplate(uiId)) return `c_tpl_${uiId}`;
   return UI_TO_API_CONSTRAINT_ID[uiId] ?? uiId;
 }
 
 export function apiConstraintIdToUi(apiId: string): string {
+  if (apiId.startsWith('c_tpl_')) return apiId.slice(6);
   return API_TO_UI_CONSTRAINT_ID[apiId] ?? apiId;
 }
 
-/** 解析单段最长行驶距离约束（c_max_segment_distance） */
-export function parseMaxSegmentDistance(
+/**
+ * 从已存在的 c_max_segment_distance 约束读取上限（km）。
+ * 无约束或无法解析时返回 null — 不假定国家默认，供冲突展示/对齐使用。
+ */
+export function readMaxSegmentDistanceKmFromConstraint(
   constraint?: TripConstraint | null,
-): { maxKm: number; warnKm?: number } {
-  if (!constraint) return { maxKm: 250 };
+): number | null {
+  if (!constraint) return null;
   const raw = constraint.value;
-  if (typeof raw === 'number' && Number.isFinite(raw)) return { maxKm: raw };
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
   if (raw && typeof raw === 'object') {
     const v = raw as Record<string, unknown>;
     const max =
@@ -79,19 +102,65 @@ export function parseMaxSegmentDistance(
         : typeof v.value === 'number'
           ? v.value
           : undefined;
-    const warn =
-      typeof v.warnSegmentDistanceKm === 'number' ? v.warnSegmentDistanceKm : undefined;
-    if (max != null) return { maxKm: max, warnKm: warn };
+    if (max != null && Number.isFinite(max)) return max;
   }
   if (typeof raw === 'string') {
     const n = parseFloat(raw);
-    if (Number.isFinite(n)) return { maxKm: n };
+    if (Number.isFinite(n)) return n;
   }
+  return null;
+}
+
+/** 解析单段最长行驶距离约束（c_max_segment_distance）；无记录时用冰岛国家默认 250km（仅约束编辑 UI） */
+export function parseMaxSegmentDistance(
+  constraint?: TripConstraint | null,
+): { maxKm: number; warnKm?: number } {
+  const explicit = readMaxSegmentDistanceKmFromConstraint(constraint);
+  if (explicit != null) {
+    const warn =
+      constraint?.value && typeof constraint.value === 'object'
+        ? (constraint.value as Record<string, unknown>).warnSegmentDistanceKm
+        : undefined;
+    return {
+      maxKm: explicit,
+      warnKm: typeof warn === 'number' && Number.isFinite(warn) ? warn : undefined,
+    };
+  }
+  if (!constraint) return { maxKm: 250 };
   return { maxKm: 250 };
 }
 
 export function isMaxSegmentDistanceConstraintId(id: string): boolean {
   return id === 'max_segment_distance' || id === TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE;
+}
+
+/**
+ * road_class 叙述兜底：将 message 中 (>Nkm) 与当前 c_max_segment_distance 对齐。
+ * 后端部署 `longDistanceHighMessage` 后前端应直接展示 BFF 文案；此函数仅作过渡兜底。
+ */
+export function refreshRoadClassTransportMessage(
+  text: string | undefined | null,
+  maxSegmentDistanceKm: number | undefined | null,
+): string {
+  return syncUltraLongDriveThresholdInText(text, maxSegmentDistanceKm ?? undefined);
+}
+
+/**
+ * 可行性/冲突叙述里常嵌入旧阈值（如冰岛默认 250km）；与当前 c_max_segment_distance 对齐展示。
+ */
+export function syncUltraLongDriveThresholdInText(
+  text: string | undefined | null,
+  maxKm: number | undefined,
+): string {
+  if (!text || maxKm == null || !Number.isFinite(maxKm)) return text ?? '';
+  const km = Math.round(maxKm);
+  if (!/超长距离|long_distance|road_class/i.test(text) && !/[（(]\s*>\s*\d+/i.test(text)) {
+    return text;
+  }
+  return text.replace(
+    /(超长距离行驶\s*[（(]\s*>\s*)(\d+(?:\.\d+)?)(\s*km\s*[）)])/gi,
+    `$1${km}$3`,
+  );
 }
 
 export function isApiManagedSoftId(id: string): boolean {
@@ -171,8 +240,53 @@ function resolveConstraintIcon(constraint: TripConstraint): LucideIcon {
   }
 }
 
+function looksLikeIsoDateString(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T/.test(value.trim());
+}
+
+function formatIsoDateRangeString(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  const parts = trimmed.split(/\s*[—–-]\s*/);
+  if (
+    parts.length === 2 &&
+    looksLikeIsoDateString(parts[0]!) &&
+    looksLikeIsoDateString(parts[1]!)
+  ) {
+    return formatConstraintDateRangeParts(parts[0]!, parts[1]!, 0).replace(/（— 天）$/, '');
+  }
+  if (looksLikeIsoDateString(trimmed)) {
+    try {
+      return new Date(trimmed).toLocaleDateString('zh-CN', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function formatConstraintDateRangeParts(
+  startDate: string,
+  endDate: string,
+  dayCount: number,
+): string {
+  try {
+    const fmt = (iso: string) =>
+      new Date(iso).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    return `${fmt(startDate)} – ${fmt(endDate)}（${dayCount || '—'} 天）`;
+  } catch {
+    return `${startDate} – ${endDate}`;
+  }
+}
+
 function formatConstraintDisplayValue(constraint: TripConstraint): string | undefined {
-  if (constraint.displayValue?.trim()) return constraint.displayValue.trim();
+  if (constraint.displayValue?.trim()) {
+    const formattedDisplay = formatIsoDateRangeString(constraint.displayValue.trim());
+    return formattedDisplay ?? constraint.displayValue.trim();
+  }
 
   if (isMaxSegmentDistanceConstraintId(constraint.id)) {
     const { maxKm } = parseMaxSegmentDistance(constraint);
@@ -195,6 +309,10 @@ function formatConstraintDisplayValue(constraint: TripConstraint): string | unde
 
   if (typeof constraint.value === 'object' && constraint.value != null) {
     const v = constraint.value as Record<string, unknown>;
+    if (typeof v.startDate === 'string' && typeof v.endDate === 'string') {
+      const dayCount = typeof v.dayCount === 'number' ? v.dayCount : 0;
+      return formatConstraintDateRangeParts(v.startDate, v.endDate, dayCount);
+    }
     if (typeof v.dayCount === 'number') return `${v.dayCount} 天`;
     if (typeof v.memberCount === 'number') return `${v.memberCount} 人`;
     if (typeof v.count === 'number') return `${v.count} 人`;
@@ -204,6 +322,10 @@ function formatConstraintDisplayValue(constraint: TripConstraint): string | unde
   }
 
   if (typeof constraint.value === 'string' || typeof constraint.value === 'number') {
+    if (typeof constraint.value === 'string') {
+      const formatted = formatIsoDateRangeString(constraint.value);
+      if (formatted) return formatted;
+    }
     return constraint.unit ? `${constraint.value} ${constraint.unit}` : String(constraint.value);
   }
   return undefined;
@@ -286,7 +408,7 @@ export function tripConstraintToListEntry(constraint: TripConstraint): Constrain
   });
   const conflict = constraint.hasConflict === true || cardTone === 'danger';
 
-  return {
+  const baseEntry: ConstraintListEntry = {
     id: uiId,
     kind,
     label: resolveConstraintListLabel(constraint),
@@ -297,7 +419,8 @@ export function tripConstraintToListEntry(constraint: TripConstraint): Constrain
     allowRelaxation: officialRule ? false : constraint.allowRelaxation,
     category: constraint.category,
     sourceType: constraint.source?.type,
-    description: constraint.description,
+    sectionKey: officialRule ? 'readonly_official' : constraint.sectionKey,
+    description: coerceDisplayText(constraint.description),
     updatedAt: constraint.updatedAt,
     verificationStatus: constraint.verificationStatus,
     lastVerifiedAt: constraint.lastVerifiedAt,
@@ -310,7 +433,7 @@ export function tripConstraintToListEntry(constraint: TripConstraint): Constrain
           ? '冲突'
           : constraint.status === 'CONFLICTED'
             ? '冲突'
-            : '正常'
+            : undefined
         : kind === 'external'
           ? constraint.status === 'CONFLICTED'
             ? '有变更'
@@ -323,6 +446,22 @@ export function tripConstraintToListEntry(constraint: TripConstraint): Constrain
         ? 'warning'
         : 'neutral',
   };
+
+  if (officialRule) {
+    return enrichListEntryWithDestinationRule(baseEntry, constraint);
+  }
+  if (kind === 'hard') {
+    return enrichListEntryWithMetadata(baseEntry, constraint);
+  }
+  if (kind === 'soft') {
+    const template = getSoftConstraintTemplate(uiId);
+    return {
+      ...baseEntry,
+      description:
+        coerceDisplayText(constraint.description) || template?.description,
+    };
+  }
+  return baseEntry;
 }
 
 export function softPreferencesFromTripConstraints(items: TripConstraint[]): SoftPreferenceItem[] {
@@ -358,7 +497,9 @@ export function mergeApiListWithClientEntries(
   softItems: ConstraintListEntry[];
   externalItems: ConstraintListEntry[];
 } {
-  const apiHard = api.items.filter((c) => c.type === 'HARD').map(tripConstraintToListEntry);
+  const apiHard = api.items
+    .filter((c) => c.type === 'HARD' && !isOfficialRuleConstraint(c))
+    .map(tripConstraintToListEntry);
   const apiSoft = api.items.filter((c) => c.type === 'SOFT').map(tripConstraintToListEntry);
   const apiExternal = api.items
     .filter((c) => c.type === 'EXTERNAL' || isOfficialRuleConstraint(c) || isWorldFeasibilityConstraint(c))
@@ -372,7 +513,10 @@ export function mergeApiListWithClientEntries(
   };
 
   return {
-    hardItems: mergeById(apiHard, client.hardItems),
+    hardItems: ensureHardConstraintMetadataOnEntries(
+      mergeById(apiHard, client.hardItems),
+      api.items,
+    ),
     softItems: apiSoft.length > 0 ? apiSoft : client.softItems,
     externalItems: apiExternal,
   };
@@ -380,42 +524,51 @@ export function mergeApiListWithClientEntries(
 
 export function draftToPreviewChange(draft: ConstraintEditorDraft): TripConstraintPreviewChange {
   const constraintId = uiConstraintIdToApi(draft.id);
+  const scopeBinding = readScopeBindingFromDraft(draft);
   const patch: PatchTripConstraintDto = {
     priority: draft.priority,
     locked: draft.locked,
+    scope: scopeBindingToApiScope(scopeBinding),
   };
 
+  const embedScope = (value: unknown) => mergeScopeBindingIntoValue(value, scopeBinding);
+
   if (draft.type === 'SOFT') {
-    patch.value = { intensity: draft.targetValue, priority: draft.priority };
+    patch.value = embedScope({ intensity: draft.targetValue, priority: draft.priority });
     patch.unit = 'score';
   } else if (draft.id === 'budget') {
-    patch.value = draft.targetValue;
+    patch.value = embedScope(draft.targetValue);
     patch.unit = draft.currency ?? 'CNY';
   } else if (draft.id === 'time_range') {
-    patch.value = {
+    patch.value = embedScope({
       startDate: draft.startDate,
       endDate: draft.endDate,
       dayCount: draft.targetValue,
-    };
+    });
     patch.unit = 'day';
   } else if (draft.id === 'daily_drive') {
-    patch.value = draft.targetValue;
+    patch.value = embedScope(draft.targetValue);
     patch.unit = 'hour';
   } else if (isMaxSegmentDistanceConstraintId(draft.id)) {
-    patch.value = draft.targetValue;
+    patch.value = embedScope(draft.targetValue);
     patch.unit = 'km';
     if (draft.toleranceMode === 'allow_over' && draft.toleranceMinutes > 0) {
       patch.tolerance = draft.toleranceMinutes;
     }
   } else if (draft.id === 'accommodation') {
-    patch.value = draft.targetValue;
+    patch.value = embedScope(draft.targetValue);
     patch.unit = 'star';
+  } else if (isCatalogHardTemplate(draft.id)) {
+    patch.value = embedScope(buildCatalogHardConstraintValue(draft.id, draft));
   } else {
-    patch.value = draft.targetValue;
+    patch.value = embedScope(draft.targetValue);
     patch.unit = draft.targetUnit;
   }
 
   if (draft.name.trim()) patch.name = draft.name.trim();
+  if (isCatalogHardTemplate(draft.id) && isCatalogHardToggleTemplate(draft.id)) {
+    patch.enabled = draft.enabled !== false;
+  }
   if (draft.reason.trim()) {
     patch.value =
       typeof patch.value === 'object' && patch.value != null
@@ -426,11 +579,22 @@ export function draftToPreviewChange(draft: ConstraintEditorDraft): TripConstrai
   return { constraintId, patch };
 }
 
+function sanitizePreviewUserText(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  if (/assess\s*读模型/i.test(trimmed) || /轻量变更已接入/i.test(trimmed)) {
+    return '变更已纳入可行性评估，确认后将重新检查是否走得通';
+  }
+  return trimmed;
+}
+
 export function mapPreviewImpactToUi(
   data: TripConstraintPreviewImpactData,
   _empty: ConstraintImpactPreview = EMPTY_CONSTRAINT_IMPACT_PREVIEW,
 ): ConstraintImpactPreview {
-  const budgetRows =
+  const structured = data.structuredImpact;
+
+  let budgetRows =
     data.budgetDelta?.rows?.map((row) => ({
       label: row.label,
       delta: row.delta,
@@ -440,12 +604,48 @@ export function mapPreviewImpactToUi(
       ? [{ label: '总预算', delta: data.budgetDelta.total, currency: data.budgetDelta.currency ?? 'CNY' }]
       : []);
 
-  const feasibilityBeforeRaw = readFeasibilityScore(data.feasibilityBefore, data.assessBefore);
-  const feasibilityAfterRaw =
-    readFeasibilityScore(data.feasibilityAfter, data.assessAfter) ??
-    (feasibilityBeforeRaw != null && data.executeabilityDelta?.scoreDelta != null
-      ? Math.max(0, Math.min(100, feasibilityBeforeRaw + data.executeabilityDelta.scoreDelta))
-      : undefined);
+  if (structured?.budget && (structured.budget.deltaAmount != null || structured.budget.deltaPct != null)) {
+    const rows = [...budgetRows];
+    if (structured.budget.deltaAmount != null) {
+      rows.unshift({
+        label: structured.budget.deltaPct != null ? `总预算 (+${structured.budget.deltaPct}%)` : '总预算',
+        delta: structured.budget.deltaAmount,
+        currency: structured.budget.currency ?? 'CNY',
+      });
+    }
+    budgetRows = rows;
+  }
+
+  let feasibilityBeforeRaw = readFeasibilityScore(data.feasibilityBefore, data.assessBefore);
+  let feasibilityAfterRaw = readFeasibilityScore(data.feasibilityAfter, data.assessAfter);
+  let executeabilityDelta = data.executeabilityDelta;
+
+  if (structured?.executeability) {
+    if (structured.executeability.scoreBefore != null) {
+      feasibilityBeforeRaw = structured.executeability.scoreBefore;
+    }
+    if (structured.executeability.scoreAfter != null) {
+      feasibilityAfterRaw = structured.executeability.scoreAfter;
+    }
+    if (structured.executeability.scoreDelta != null) {
+      executeabilityDelta = {
+        ...executeabilityDelta,
+        scoreDelta: structured.executeability.scoreDelta,
+      };
+    }
+  }
+
+  if (
+    feasibilityAfterRaw == null &&
+    feasibilityBeforeRaw != null &&
+    executeabilityDelta?.scoreDelta != null
+  ) {
+    feasibilityAfterRaw = Math.max(
+      0,
+      Math.min(100, feasibilityBeforeRaw + executeabilityDelta.scoreDelta),
+    );
+  }
+
   const feasibilityBefore =
     feasibilityBeforeRaw != null ? normalizeFeasibilityScore(feasibilityBeforeRaw, 0) : 0;
   const feasibilityAfter =
@@ -472,46 +672,202 @@ export function mapPreviewImpactToUi(
     }
   }
 
+  const structuredBullets = (structured?.summaryBullets ?? [])
+    .map(coerceDisplayText)
+    .filter((line): line is string => Boolean(line))
+    .map(sanitizePreviewUserText);
+  const recommendationList = (data.recommendations ?? [])
+    .map(coerceDisplayText)
+    .filter((line): line is string => Boolean(line))
+    .map(sanitizePreviewUserText);
+  const mergedRecommendations = [
+    ...new Set(
+      recommendationList.filter((line) => !structuredBullets.includes(line)),
+    ),
+  ];
+
+  const rawDiffBullets = (data.diffBullets ?? [])
+    .map(coerceDisplayText)
+    .filter((line): line is string => Boolean(line));
   const diffBullets =
-    data.diffBullets?.length
-      ? [...data.diffBullets, ...conflictDeltaBullets]
-      : conflictDeltaBullets.length
-        ? conflictDeltaBullets
-        : data.recommendations?.length
-          ? data.recommendations
-          : [];
+    structuredBullets.length > 0
+      ? [...structuredBullets, ...conflictDeltaBullets]
+      : rawDiffBullets.length > 0
+        ? [...rawDiffBullets, ...conflictDeltaBullets]
+        : conflictDeltaBullets;
 
   const recommendation =
-    data.recommendation ??
-    data.recommendations?.[0] ??
-    (data.refreshType === 'deep' ? '建议查看完整冲突检测与修复选项。' : '');
+    sanitizePreviewUserText(
+      coerceDisplayText(data.recommendation) ??
+        structuredBullets[0] ??
+        mergedRecommendations[0] ??
+        (data.refreshType === 'deep' ? '建议查看完整冲突检测与修复选项。' : '') ??
+        '',
+    ) || undefined;
 
-  const affected = normalizeAffectedDays(data.affectedDays, []);
+  let affected = normalizeAffectedDays(data.affectedDays, []);
+  if (structured?.schedule?.daysNeedingSplit?.length) {
+    affected = structured.schedule.daysNeedingSplit.map((dayNumber, index) => ({
+      dayNumber,
+      tone: (index === 0 ? 'major' : 'minor') as 'major' | 'minor',
+    }));
+  }
+
+  const affectedItemIds =
+    data.affectedItemIds?.length
+      ? [...data.affectedItemIds]
+      : structured?.schedule?.poisToRelocate
+          ?.map((poi) => poi.itemId)
+          .filter((id): id is string => Boolean(id));
+
   const majorCount = affected.filter((d) => d.tone === 'major').length;
   const minorCount = affected.filter((d) => d.tone === 'minor').length;
 
+  let adjustmentSummary = coerceDisplayText(data.adjustmentSummary);
+  if (!adjustmentSummary && structured?.schedule) {
+    const parts: string[] = [];
+    if (structured.schedule.daysNeedingSplit?.length) {
+      parts.push(`${structured.schedule.daysNeedingSplit.length} 天可能需拆分`);
+    }
+    if (structured.schedule.extraLodgingNights) {
+      parts.push(`预计增加 ${structured.schedule.extraLodgingNights} 晚住宿`);
+    }
+    if (structured.schedule.poisToRelocate?.length) {
+      parts.push(`${structured.schedule.poisToRelocate.length} 个景点可能需要移动或移除`);
+    }
+    if (parts.length) adjustmentSummary = parts.join(' · ');
+  }
+
   return {
     affectedDays: affected,
+    affectedDayDetails: buildAffectedDayDetailsFromStructuredImpact({
+      affectedDays: affected,
+      structuredImpact: structured,
+    } as ConstraintImpactPreview),
+    affectedItemIds: affectedItemIds?.length ? affectedItemIds : undefined,
     adjustmentSummary:
-      data.adjustmentSummary ??
+      adjustmentSummary ??
       (affected.length > 0
         ? `${majorCount} 处主要调整，${minorCount} 处次要调整${conflictSummary ? ` · ${conflictSummary}` : ''}`
         : conflictSummary ?? '暂无显著日程影响'),
     planLabel: data.planLabel ?? (data.refreshType === 'deep' ? '深度预览' : '即时预览'),
     planNeedsAdjust:
       data.planNeedsAdjust ??
-      (data.conflictsBefore?.mustHandle != null && data.conflictsBefore.mustHandle > 0
+      (executeabilityDelta?.scoreDelta != null && executeabilityDelta.scoreDelta < -5
         ? true
-        : typeof data.feasibilityAfter === 'object' &&
-            (data.feasibilityAfter as { canStartExecute?: boolean }).canStartExecute === false
+        : data.conflictsBefore?.mustHandle != null && data.conflictsBefore.mustHandle > 0
           ? true
-          : false),
+          : typeof data.feasibilityAfter === 'object' &&
+              (data.feasibilityAfter as { canStartExecute?: boolean }).canStartExecute === false
+            ? true
+            : false),
     feasibilityBefore,
     feasibilityAfter,
+    executeabilityDelta,
     budgetRows,
     diffBullets,
     recommendation,
+    recommendations: mergedRecommendations.length ? mergedRecommendations : undefined,
+    conflictsBefore: data.conflictsBefore,
+    conflictsAfter: data.conflictsAfter,
+    suggestedFollowUp: coerceDisplayText(data.suggestedFollowUp),
+    refreshType: data.refreshType,
+    structuredImpact: structured
+      ? {
+          ...structured,
+          constraintChanges: structured.constraintChanges?.map((change) => {
+            const before = formatConstraintPreviewChangeValue(change.before, change.unit);
+            const after = formatConstraintPreviewChangeValue(change.after, change.unit);
+            const formatted = before != null || after != null;
+            return {
+              ...change,
+              before: before ?? change.before,
+              after: after ?? change.after,
+              unit: formatted ? undefined : change.unit,
+            };
+          }),
+        }
+      : undefined,
   };
+}
+
+function formatHourValueToTime(value: number): string {
+  return decimalHoursToTimeString(value);
+}
+
+/** catalog 硬约束 PATCH value（与 BFF template registry 对齐） */
+export function buildCatalogHardConstraintValue(
+  templateId: string,
+  draft: Pick<ConstraintEditorDraft, 'targetValue' | 'targetUnit' | 'currency'>,
+): unknown {
+  switch (templateId) {
+    case 'earliest_departure':
+    case 'latest_end':
+    case 'child_nap_time':
+      return { time: formatHourValueToTime(draft.targetValue) };
+    case 'max_daily_activity':
+    case 'required_rest':
+      return { hours: draft.targetValue };
+    case 'activity_budget':
+    case 'budget_overrun_tolerance':
+      return { amount: draft.targetValue, currency: draft.currency ?? 'CNY' };
+    case 'elderly_walk_limit':
+      return { maxKm: draft.targetValue };
+    case 'fixed_appointments':
+      return { count: draft.targetValue };
+    case 'accessibility':
+    case 'motion_sickness':
+      return {
+        enabled: draft.enabled !== false,
+        ...(draft.reason.trim() ? { notes: draft.reason.trim() } : {}),
+      };
+    case 'no_unpaved_road':
+    case 'no_bad_weather':
+    case 'no_high_risk_activity':
+    case 'no_unverified_route':
+      return { enabled: draft.enabled !== false };
+    default:
+      return draft.targetValue;
+  }
+}
+
+export function buildCreateHardConstraintDto(input: {
+  template: ConstraintTemplate;
+  constraintsVersion?: number;
+}): CreateTripConstraintDto {
+  if (!isCatalogHardTemplate(input.template.id)) {
+    throw new Error(`LEGACY_CONSTRAINT_USE_PATCH:${input.template.id}`);
+  }
+  const category =
+    input.template.category === 'RISK'
+      ? 'SAFETY'
+      : input.template.category === 'PLACE'
+        ? 'PLACE'
+        : input.template.category ?? 'CUSTOM';
+  return {
+    name: input.template.label,
+    category,
+    type: 'HARD',
+    source: { type: 'USER', templateId: input.template.id },
+    constraintsVersion: input.constraintsVersion,
+  };
+}
+
+export function findApiHardConstraintByTemplateId(
+  items: TripConstraint[] | undefined,
+  templateId: string,
+): TripConstraint | undefined {
+  if (!items?.length) return undefined;
+  const apiId = uiConstraintIdToApi(templateId);
+  return items.find(
+    (item) =>
+      item.type === 'HARD' &&
+      (item.id === apiId ||
+        item.id === templateId ||
+        item.id === `c_tpl_${templateId}` ||
+        apiConstraintIdToUi(item.id) === templateId ||
+        item.source?.templateId === templateId),
+  );
 }
 
 export function buildCreateSoftConstraintDto(input: {
@@ -548,7 +904,20 @@ export function patchFromSoftPriority(
   };
 }
 
-export function resolveSoftIdForApi(uiId: string): string {
+export function resolveSoftIdForApi(
+  uiId: string,
+  items?: TripConstraint[],
+): string {
+  if (items?.length) {
+    const match = items.find(
+      (c) =>
+        c.type === 'SOFT' &&
+        (c.id === uiId ||
+          apiConstraintIdToUi(c.id) === uiId ||
+          c.source?.templateId === uiId),
+    );
+    if (match) return match.id;
+  }
   return uiConstraintIdToApi(uiId);
 }
 

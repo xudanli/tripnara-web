@@ -11,6 +11,9 @@ import { L1PreferencesSection } from '@/features/memory/components/L1Preferences
 import { L0ProfileSection } from '@/features/memory/components/L0ProfileSection';
 import { L2DecisionsSection } from '@/features/memory/components/L2DecisionsSection';
 import { TripConstraintPatchesSection } from '@/features/memory/components/TripConstraintPatchesSection';
+import { DecisionLedgerDecisionLinks } from '@/components/decision-problems/DecisionLedgerDecisionLinks';
+import { useOpenDecisionRecordNavigation } from '@/hooks/useOpenDecisionRecordNavigation';
+import { parseMemoryConsoleDecisionLedgerCausality } from '@/lib/decision-ledger-causality.util';
 import { MemoryExportSection } from '@/features/memory/components/MemoryExportSection';
 import { resolveMemoryConsoleErrorUi } from '@/lib/memory-console-errors';
 import { toast } from 'sonner';
@@ -21,10 +24,11 @@ import { LifeEventModal, MemoryTimeline } from '@/features/self-evolution';
 export default function MemoryConsolePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [lifeEventOpen, setLifeEventOpen] = useState(false);
-  const selfEvolutionEnabled = isSelfEvolutionEnabled();
   const [searchParams] = useSearchParams();
   const tripId = searchParams.get('trip_id') ?? undefined;
+  const { openByLedgerNode } = useOpenDecisionRecordNavigation(tripId);
+  const [lifeEventOpen, setLifeEventOpen] = useState(false);
+  const selfEvolutionEnabled = isSelfEvolutionEnabled();
 
   const enabled = isMemoryConsoleEnabled();
   const {
@@ -43,6 +47,11 @@ export default function MemoryConsolePage() {
   const sectionOrder = useMemo(
     () => new Map(ui.sections.map((s, i) => [s.id, i])),
     [ui.sections]
+  );
+
+  const decisionLedgerCausality = useMemo(
+    () => parseMemoryConsoleDecisionLedgerCausality(data?.decision_ledger_causality),
+    [data?.decision_ledger_causality],
   );
 
   const handleMemoryError = (err: unknown) => {
@@ -177,6 +186,16 @@ export default function MemoryConsolePage() {
                     } catch (e) {
                       handleMemoryError(e);
                     }
+                  }}
+                />
+              ) : null}
+
+              {sectionOrder.has('decision_ledger_causality') && decisionLedgerCausality ? (
+                <DecisionLedgerDecisionLinks
+                  causality={decisionLedgerCausality}
+                  title={MEMORY_CONSOLE_UI_DEFAULT_ZH.section_decision_ledger_causality_title}
+                  onOpenDecision={(decisionId, ledgerNodeId) => {
+                    void openByLedgerNode(ledgerNodeId, decisionLedgerCausality, decisionId);
                   }}
                 />
               ) : null}

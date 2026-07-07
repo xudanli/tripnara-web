@@ -167,8 +167,8 @@ export default function CollectedTripsPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-800">{error}</p>
+        <div className="rounded-lg border border-gate-reject-border bg-gate-reject p-4">
+          <p className="text-gate-reject-foreground">{error}</p>
           <Button onClick={loadCollectedTrips} className="mt-4" variant="outline">
             重试
           </Button>
@@ -188,12 +188,12 @@ export default function CollectedTripsPage() {
 
       {/* 功能限制提示 */}
       {collectedTripIds.size === 0 && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-border bg-muted/15">
           <CardContent className="py-4">
             <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <Info className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-sm text-blue-800">
+                <p className="text-sm text-muted-foreground">
                   由于后端接口限制，收藏列表功能暂时通过本地状态管理。
                   您可以在"我的行程"页面收藏行程，收藏状态会保存在本地。
                 </p>
@@ -208,7 +208,7 @@ export default function CollectedTripsPage() {
           <CardContent className="py-12">
             <Empty>
               <EmptyMedia>
-                <TripPlanning size={280} color="#6b7280" />
+                <TripPlanning size={280} className="text-muted-foreground" />
               </EmptyMedia>
               <EmptyHeader>
                 <EmptyTitle>还没有收藏</EmptyTitle>
@@ -243,7 +243,7 @@ export default function CollectedTripsPage() {
                         variant="ghost"
                         size="icon"
                         onClick={(e) => handleUncollect(trip.id, e)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-gate-reject-foreground hover:text-gate-reject-foreground"
                         disabled={uncollectingTripId === trip.id}
                       >
                         <Trash2 className="w-4 h-4" />

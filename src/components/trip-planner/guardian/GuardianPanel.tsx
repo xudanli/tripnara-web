@@ -137,12 +137,12 @@ const PERSONA_CONFIG: Record<GuardianPersona, {
 
 const SEVERITY_CONFIG = {
   success: {
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    badge: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border',
     icon: CheckCircle2,
     label: '通过',
   },
   info: {
-    badge: 'bg-blue-50 text-blue-700 border-blue-200',
+    badge: 'bg-muted/15 text-muted-foreground border-border',
     icon: Info,
     label: '建议',
   },
@@ -152,7 +152,7 @@ const SEVERITY_CONFIG = {
     label: '警告',
   },
   error: {
-    badge: 'bg-red-50 text-red-700 border-red-200',
+    badge: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border',
     icon: XCircle,
     label: '风险',
   },
@@ -165,9 +165,9 @@ const SEVERITY_CONFIG = {
  */
 function FatigueBar({ level }: { level: number }) {
   const getColor = (l: number) => {
-    if (l > 80) return { bg: 'bg-red-500', text: 'text-red-600', emoji: '🔴' };
+    if (l > 80) return { bg: 'bg-gate-reject-foreground', text: 'text-gate-reject-foreground', emoji: '🔴' };
     if (l > 60) return { bg: 'bg-amber-500', text: 'text-amber-600', emoji: '🟡' };
-    return { bg: 'bg-emerald-500', text: 'text-emerald-600', emoji: '🟢' };
+    return { bg: 'bg-gate-allow-foreground', text: 'text-gate-allow-foreground', emoji: '🟢' };
   };
 
   const { bg, text, emoji } = getColor(level);
@@ -502,7 +502,7 @@ export function GuardianAllClearBanner({
 }) {
   return (
     <div className={cn(
-      "flex items-center gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-100 animate-in fade-in duration-300",
+      "flex items-center gap-3 p-3 rounded-lg bg-gate-allow border border-gate-allow-border animate-in fade-in duration-300",
       className
     )}>
       {/* 三人格头像 - 全部显示成功状态 */}
@@ -510,7 +510,7 @@ export function GuardianAllClearBanner({
         {(['Abu', 'DrDre', 'Neptune'] as GuardianPersona[]).map((persona) => (
           <div
             key={persona}
-            className="w-7 h-7 rounded-full bg-white border-2 border-emerald-100 flex items-center justify-center"
+            className="w-7 h-7 rounded-full bg-white border-2 border-gate-allow-border flex items-center justify-center"
           >
             <span className="text-sm">{PERSONA_INFO[persona].emoji}</span>
           </div>
@@ -520,10 +520,10 @@ export function GuardianAllClearBanner({
       {/* 成功文案 */}
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <span className="text-sm font-medium text-emerald-700">当前方案已通过顾问团评估</span>
+          <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />
+          <span className="text-sm font-medium text-gate-allow-foreground">当前方案已通过顾问团评估</span>
         </div>
-        <p className="text-xs text-emerald-600/80 mt-0.5">
+        <p className="text-xs text-gate-allow-foreground/80 mt-0.5">
           安全、节奏、替代方案均无需调整
         </p>
       </div>

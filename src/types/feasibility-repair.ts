@@ -94,6 +94,8 @@ export type RepairDrawerPhase =
   | 'preview_loading'
   | 'preview_ready'
   | 'preview_deferred'
+  | 'submitting_resolution'
+  | 'apply_ready'
   | 'applying'
   | 'apply_deferred'
   | 'done';

@@ -20,8 +20,8 @@ export default function TrailsHubPage() {
       description: '搜索和筛选适合你的徒步路线',
       icon: Search,
       path: '/dashboard/trails/explore',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
+      color: 'text-muted-foreground',
+      bgColor: 'bg-muted/15',
     },
     {
       key: 'saved',
@@ -29,8 +29,8 @@ export default function TrailsHubPage() {
       description: '查看已保存和离线下载的路线',
       icon: Bookmark,
       path: '/dashboard/trails/saved',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
+      color: 'text-muted-foreground',
+      bgColor: 'bg-muted/15',
     },
     {
       key: 'my-hikes',
@@ -38,8 +38,8 @@ export default function TrailsHubPage() {
       description: '计划中 / 执行中 / 已完成的徒步',
       icon: MapPin,
       path: '/dashboard/trails/my-hikes',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
+      color: 'text-gate-allow-foreground',
+      bgColor: 'bg-gate-allow',
     },
     {
       key: 'safety',
@@ -47,8 +47,8 @@ export default function TrailsHubPage() {
       description: '装备清单 / 风险策略 / 个人能力档案',
       icon: Shield,
       path: '/dashboard/trails/safety',
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
+      color: 'text-gate-reject-foreground',
+      bgColor: 'bg-gate-reject',
     },
   ];
 

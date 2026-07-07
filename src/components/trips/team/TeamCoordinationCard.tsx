@@ -43,7 +43,7 @@ export default function TeamCoordinationCard({
       <CardContent className="space-y-4">
         {isSolo ? (
           <div className="flex items-start gap-3 rounded-lg bg-muted/40 px-4 py-3">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-5 w-5 text-gate-allow-foreground shrink-0 mt-0.5" />
             <div className="space-y-2 min-w-0">
               <p className="text-sm font-medium">单人行程，您说了算</p>
               {onGoToPlan ? (

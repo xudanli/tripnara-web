@@ -146,10 +146,10 @@ export function OptimizationExplainBlock({
                 </TableHeader>
                 <TableBody>
                   {chosen ? (
-                    <TableRow className="bg-emerald-50/50 dark:bg-emerald-950/20">
+                    <TableRow className="bg-gate-allow/50 dark:bg-gate-allow/20">
                       <TableCell className="py-2 text-[11px] font-medium">{chosen}</TableCell>
                       <TableCell className="py-2">
-                        <Badge className="text-[10px] bg-emerald-600 hover:bg-emerald-600">已选用</Badge>
+                        <Badge className="text-[10px] bg-gate-allow-foreground hover:bg-gate-allow-foreground">已选用</Badge>
                       </TableCell>
                       <TableCell className="py-2 text-[11px] text-muted-foreground">—</TableCell>
                     </TableRow>
@@ -160,7 +160,7 @@ export function OptimizationExplainBlock({
                     return (
                       <TableRow
                         key={p.id}
-                        className={cn(infeasible && 'bg-red-50/40 dark:bg-red-950/15')}
+                        className={cn(infeasible && 'bg-gate-reject/40 dark:bg-gate-reject/15')}
                       >
                         <TableCell className="py-2 text-[11px] font-medium">{p.id}</TableCell>
                         <TableCell className="py-2">
@@ -169,7 +169,7 @@ export function OptimizationExplainBlock({
                             className={cn(
                               'text-[10px]',
                               infeasible
-                                ? 'border-red-300 text-red-800 bg-red-50'
+                                ? 'border-gate-reject-border text-gate-reject-foreground bg-gate-reject'
                                 : 'text-muted-foreground'
                             )}
                           >

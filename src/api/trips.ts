@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { assertConflictsResolveAllowed } from '@/lib/effective-plan-write-chain.util';
 import type {
   GetScheduleTimelineParams,
   ScheduleTimelineFetchResult,
@@ -224,6 +225,8 @@ import type {
   CalculateDayTravelResponse,
   FixDatesResponse,
 } from '@/types/trip';
+import type { TripListPageQuery, TripListPageResponse } from '@/types/trip-list';
+import { normalizeTripListPageResponse } from '@/lib/normalize-trip-list';
 import type {
   SuggestionListResponse,
   SuggestionStats,
@@ -312,6 +315,24 @@ export const tripsApi = {
   getAll: async (): Promise<TripListItem[]> => {
     const response = await apiClient.get<ApiResponseWrapper<TripListItem[]>>('/trips');
     return handleResponse(response);
+  },
+
+  /**
+   * 行程列表页 BFF（卡片摘要 + listSummary）
+   * GET /trips/list — 404 时降级为 GET /trips
+   */
+  getListPage: async (query?: TripListPageQuery): Promise<TripListPageResponse> => {
+    try {
+      const response = await apiClient.get<ApiResponseWrapper<TripListPageResponse>>('/trips/list', {
+        params: query,
+      });
+      return normalizeTripListPageResponse(handleResponse(response));
+    } catch (err) {
+      if (!isEndpointNotFound(err)) throw err;
+      const response = await apiClient.get<ApiResponseWrapper<TripListItem[]>>('/trips');
+      const trips = handleResponse(response);
+      return normalizeTripListPageResponse({ trips, total: trips.length });
+    }
   },
 
   /**
@@ -695,6 +716,8 @@ export const tripsApi = {
   /**
    * 获取行程当前状态
    * GET /trips/:id/state
+   *
+   * 行中导航 SSOT：`nextStop.Place.latitude` / `longitude`（服务端按行程时区计算，无需传 `now`）
    */
   getState: async (id: string, now?: string): Promise<TripState> => {
     const response = await apiClient.get<ApiResponseWrapper<TripState>>(`/trips/${id}/state`, {
@@ -1635,6 +1658,7 @@ export const tripsApi = {
     id: string,
     data: ResolveConflictsRequest = {}
   ): Promise<ResolveConflictsResponse> => {
+    assertConflictsResolveAllowed(data);
     const response = await apiClient.post<ApiResponseWrapper<ResolveConflictsResponse>>(
       `/trips/${id}/conflicts/resolve`,
       data

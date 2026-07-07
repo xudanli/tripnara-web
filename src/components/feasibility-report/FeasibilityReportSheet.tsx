@@ -24,6 +24,7 @@ interface FeasibilityReportSheetProps {
   onNavigateToSchedule?: (
     detail: import('@/lib/plan-studio-schedule-navigation').PlanStudioScheduleNavigateDetail,
   ) => void;
+  onViewDecision?: (decisionId: string) => void;
 }
 
 export function FeasibilityReportSheet({
@@ -32,6 +33,7 @@ export function FeasibilityReportSheet({
   onOpenChange,
   initialIssueId,
   onNavigateToSchedule,
+  onViewDecision,
 }: FeasibilityReportSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -54,6 +56,7 @@ export function FeasibilityReportSheet({
               onOpenChange(false);
               onNavigateToSchedule?.(detail);
             }}
+            onViewDecision={onViewDecision}
           />
         </div>
       </SheetContent>

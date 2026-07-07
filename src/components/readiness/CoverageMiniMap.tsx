@@ -17,6 +17,7 @@ import {
   COVERAGE_GAP_COLORS,
   COVERAGE_POI_COLORS,
   COVERAGE_SEGMENT_COLORS,
+  SEMANTIC_BLUE_HEX,
 } from '@/lib/coverage-map-colors';
 import { useTranslation } from 'react-i18next';
 
@@ -297,7 +298,7 @@ export default function CoverageMiniMap({
         height: ${isSelected ? 34 : 28}px;
         border-radius: 50%;
         background-color: ${POI_COLORS[poi.coverageStatus]};
-        border: ${isSelected ? '4px solid #0ea5e9' : '3px solid white'};
+        border: ${isSelected ? `4px solid ${SEMANTIC_BLUE_HEX}` : '3px solid white'};
         box-shadow: ${isSelected ? '0 0 0 3px rgba(14,165,233,0.35), 0 2px 8px rgba(0,0,0,0.35)' : '0 2px 6px rgba(0,0,0,0.3)'};
         cursor: pointer;
         display: flex;
@@ -466,7 +467,7 @@ export default function CoverageMiniMap({
                   </>
                 ) : error ? (
                   <>
-                    <AlertCircle className="h-8 w-8 text-amber-500" />
+                    <AlertCircle className="h-8 w-8 text-warning" />
                     <div className="text-sm text-muted-foreground">{error}</div>
                     <div className="text-xs text-muted-foreground">
                       {t('readiness.mapDataPending', '后端接口开发中，敬请期待')}
@@ -525,28 +526,28 @@ export default function CoverageMiniMap({
         {data?.summary && (
           <div className="p-3 border-t grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 text-success" />
               <div>
                 <div className="text-xs text-muted-foreground">{t('readiness.coveredPois', '已覆盖 POI')}</div>
                 <div className="font-medium">{data.summary.coveredPois}/{data.summary.totalPois}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              <AlertTriangle className="h-4 w-4 text-warning" />
               <div>
                 <div className="text-xs text-muted-foreground">{t('readiness.partialPois', '部分覆盖')}</div>
                 <div className="font-medium">{data.summary.partialPois}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertCircle className="h-4 w-4 text-error" />
               <div>
                 <div className="text-xs text-muted-foreground">{t('readiness.uncoveredPois', '未覆盖')}</div>
                 <div className="font-medium">{data.summary.uncoveredPois}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-orange-500" />
+              <MapPin className="h-4 w-4 text-warning" />
               <div>
                 <div className="text-xs text-muted-foreground">{t('readiness.totalGaps', '总缺口')}</div>
                 <div className="font-medium">{data.summary.totalGaps}</div>
@@ -603,7 +604,7 @@ export default function CoverageMiniMap({
         {/* 全覆盖提示 - 仅在有数据且无缺口时显示 */}
         {data?.gaps && data.gaps.length === 0 && (
           <div className="p-4 border-t text-center">
-            <div className="flex items-center justify-center gap-2 text-green-600">
+            <div className="flex items-center justify-center gap-2 text-success">
               <CheckCircle2 className="h-5 w-5" />
               <span className="text-sm font-medium">
                 {t('readiness.fullCoverage', '所有路段和 POI 都有证据覆盖')}

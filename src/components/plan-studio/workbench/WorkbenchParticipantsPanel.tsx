@@ -5,7 +5,7 @@ import {
   CollaboratorAvatarFromRecord,
   collaboratorDisplayName,
 } from './CollaboratorAvatar';
-import { workbenchCard, workbenchPanelTitle } from './workbench-ui';
+import { workbenchCard, workbenchLinkClass, workbenchPanelTitle } from './workbench-ui';
 
 export interface WorkbenchParticipantsPanelProps {
   tripId: string;
@@ -48,7 +48,7 @@ export function WorkbenchParticipantsPanel({
           <button
             type="button"
             onClick={onClick}
-            className="text-[11px] font-medium text-primary hover:underline"
+            className={cn('text-[11px]', workbenchLinkClass)}
           >
             管理
           </button>

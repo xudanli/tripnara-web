@@ -24,15 +24,15 @@ const STATUS_META: Record<
 > = {
   confirmed: {
     label: '已确认',
-    className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    className: 'border-border bg-muted text-success',
   },
   pending: {
     label: '待确认',
-    className: 'border-amber-200 bg-amber-50 text-amber-800',
+    className: 'border-border bg-muted text-warning',
   },
   required: {
     label: '需预订',
-    className: 'border-red-200 bg-red-50 text-red-800',
+    className: 'border-border bg-muted text-error',
   },
   not_needed: {
     label: '无需预订',

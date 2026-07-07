@@ -60,7 +60,7 @@ export function BudgetProgress({
       bgClass: 'bg-muted',
       textClass: 'text-foreground',
       icon: CheckCircle2,
-      iconClass: 'text-green-600',
+      iconClass: 'text-success',
     },
     warning: {
       progressClass: 'bg-amber-500',
@@ -71,10 +71,10 @@ export function BudgetProgress({
     },
     danger: {
       progressClass: 'bg-destructive',
-      bgClass: 'bg-red-100',
-      textClass: 'text-red-700',
+      bgClass: 'bg-muted',
+      textClass: 'text-error',
       icon: XCircle,
-      iconClass: 'text-red-600',
+      iconClass: 'text-error',
     },
   };
 
@@ -116,7 +116,7 @@ export function BudgetProgress({
             {formatCurrency(spent, currency)} / {formatCurrency(total, currency)}
           </span>
           <span className={cn(
-            remaining < 0 ? 'text-red-600 font-medium' : 'text-muted-foreground'
+            remaining < 0 ? 'text-error font-medium' : 'text-muted-foreground'
           )}>
             {remaining >= 0 
               ? `剩余 ${formatCurrency(remaining, currency)}`
@@ -135,7 +135,7 @@ export function BudgetProgress({
       )}
       
       {status === 'danger' && (
-        <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
+        <div className="flex items-center gap-1.5 text-xs text-error bg-muted px-2 py-1 rounded">
           <XCircle className="w-3 h-3" />
           <span>预算已超支，建议调整方案</span>
         </div>

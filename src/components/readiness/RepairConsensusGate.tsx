@@ -25,20 +25,20 @@ export default function RepairConsensusGate({
   return (
     <div
       className={cn(
-        'rounded-lg border border-amber-300/80 bg-amber-50/80 px-3 py-3 dark:border-amber-800 dark:bg-amber-950/30',
+        'rounded-lg border border-border/80 bg-muted/80 px-3 py-3 dark:border-border dark:bg-muted/30',
         className
       )}
       role="alert"
     >
       <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning dark:text-warning" />
         <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+          <p className="text-sm font-medium text-warning dark:text-warning">
             {t('dashboard.readiness.repair.consensusBlockedTitle', {
               defaultValue: '三人格暂未达成共识',
             })}
           </p>
-          <p className="text-xs text-amber-800/90 dark:text-amber-200/90 leading-relaxed">
+          <p className="text-xs text-warning/90 dark:text-warning/90 leading-relaxed">
             {t('dashboard.readiness.repair.consensusBlockedBody', {
               defaultValue:
                 '当前修复方向存在明显分歧，系统不会自动执行。请仔细阅读各方立场后，自行确认是否继续。',

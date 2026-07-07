@@ -140,10 +140,10 @@ export default function MyHikesPage() {
       {Array.from(groupedByTab[currentTab].entries()).map(([tripId, tripPlans]) => {
         const trip = tripById.get(tripId);
         return (
-          <Card key={tripId} className="border-emerald-200/60">
+          <Card key={tripId} className="border-gate-allow-border/60">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-emerald-700" />
+                <MapPin className="h-4 w-4 text-gate-allow-foreground" />
                 {trip?.name || trip?.destination || '关联行程'}
               </CardTitle>
               <CardDescription>

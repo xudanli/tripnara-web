@@ -59,7 +59,7 @@ export function InTripSplitPanel({
     <Card className={cn('col-span-12', className)}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-violet-600" aria-hidden />
+          <GitBranch className="h-4 w-4 text-muted-foreground" aria-hidden />
           {SPLIT_UI_COPY.proposeTitle}
         </CardTitle>
         <Button
@@ -80,7 +80,7 @@ export function InTripSplitPanel({
           <button
             type="button"
             onClick={() => onSelectSession(activeSession.id)}
-            className="w-full rounded-lg border border-violet-200 bg-violet-50/50 p-3 text-left hover:bg-violet-50 transition-colors"
+            className="w-full rounded-lg border border-border bg-muted/15 p-3 text-left hover:bg-muted/15 transition-colors"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">探索进行中</span>

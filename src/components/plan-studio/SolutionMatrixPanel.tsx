@@ -15,6 +15,7 @@ import {
   trackSolutionMatrixExpandPanel,
   trackSolutionMatrixImpression,
 } from '@/utils/plan-studio-solution-matrix-analytics';
+import { workbenchAccentIconClass } from './workbench/workbench-ui';
 import {
   PlanningDetailsPanel,
   PlanningExpandToggle,
@@ -67,7 +68,7 @@ function SolutionMatrixTable({
                   >
                     <div className="flex items-center gap-1.5">
                       {column.isRecommended ? (
-                        <Star className="h-3 w-3 shrink-0 text-primary fill-primary/30" aria-hidden />
+                        <Star className={cn('h-3 w-3 shrink-0 fill-muted-foreground/20', workbenchAccentIconClass)} aria-hidden />
                       ) : null}
                       <span className="truncate">{column.label}</span>
                     </div>
@@ -150,7 +151,7 @@ function SolutionMatrixCarousel({
       </div>
       <div className="rounded-lg border border-border/70 bg-muted/20 p-3 space-y-2">
         <div className="flex items-center gap-2">
-          {column.isRecommended ? <Star className="h-3.5 w-3.5 text-primary" /> : null}
+          {column.isRecommended ? <Star className={cn('h-3.5 w-3.5', workbenchAccentIconClass)} /> : null}
           <span className="text-sm font-medium">{column.label}</span>
           {column.gateLabel ? (
             <Badge variant="outline" className="text-[9px]">
@@ -175,6 +176,16 @@ function SolutionMatrixCarousel({
         </dl>
         {column.caveat ? (
           <p className="text-[11px] text-muted-foreground leading-snug">{column.caveat}</p>
+        ) : null}
+        {column.tradeoffs?.length ? (
+          <ul className="space-y-0.5">
+            {column.tradeoffs.map((item, index) => (
+              <li key={index} className="text-[11px] text-muted-foreground leading-snug flex gap-1.5">
+                <span className="shrink-0">·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         ) : null}
       </div>
     </div>
@@ -293,7 +304,7 @@ export function SolutionMatrixPanel({
             </div>
           ) : null}
           {model.divergesFromLlm ? (
-            <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
+            <div className="mb-3 flex items-start gap-2 rounded-md border border-border/80 bg-muted/60 px-3 py-2 text-xs text-foreground">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
               <p>
                 {t('planStudio.solutionMatrix.kernelDivergence', {
@@ -330,11 +341,21 @@ export function SolutionMatrixPanel({
 
           {!isMobile
             ? matrix.model.columns.map((column) =>
-                column.caveat ? (
-                  <p key={column.optionId} className="mt-2 text-[11px] text-muted-foreground">
+                column.caveat || column.tradeoffs?.length ? (
+                  <div key={column.optionId} className="mt-2 text-[11px] text-muted-foreground">
                     <span className="font-medium text-foreground/80">{column.label}：</span>
-                    {column.caveat}
-                  </p>
+                    {column.caveat ? <p className="mt-0.5">{column.caveat}</p> : null}
+                    {column.tradeoffs?.length ? (
+                      <ul className={cn('space-y-0.5', column.caveat ? 'mt-1' : 'mt-0.5')}>
+                        {column.tradeoffs.map((item, index) => (
+                          <li key={index} className="flex gap-1.5">
+                            <span className="shrink-0">·</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                 ) : null,
               )
             : null}

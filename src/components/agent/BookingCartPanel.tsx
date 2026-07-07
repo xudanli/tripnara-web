@@ -83,7 +83,7 @@ const STATE_BADGE: Partial<
     icon: ShoppingCart,
   },
   optimized: {
-    className: 'border-emerald-500/35 bg-emerald-50/80 text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100',
+    className: 'border-gate-allow-border/35 bg-gate-allow/80 text-gate-allow-foreground dark:bg-gate-allow/30 dark:text-gate-allow-foreground',
     icon: CheckCircle2,
   },
   over_budget: {
@@ -91,11 +91,11 @@ const STATE_BADGE: Partial<
     icon: AlertTriangle,
   },
   ready_to_checkout: {
-    className: 'border-sky-500/35 bg-sky-50/80 text-sky-950 dark:bg-sky-950/30 dark:text-sky-100',
+    className: 'border-border/35 bg-muted/20 text-muted-foreground dark:bg-muted/15 dark:text-muted-foreground',
     icon: CheckCircle2,
   },
   checkout_submitted: {
-    className: 'border-violet-500/35 bg-violet-50/80 text-violet-950 dark:bg-violet-950/30 dark:text-violet-100',
+    className: 'border-border/35 bg-muted/20 text-muted-foreground dark:bg-muted/15 dark:text-muted-foreground',
     icon: CheckCircle2,
   },
 };
@@ -404,7 +404,7 @@ export function BookingCartPanel({
                   className={cn(
                     'flex flex-col gap-2 rounded-lg border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between transition-colors',
                     selected
-                      ? 'border-emerald-500/45 bg-emerald-50/35 dark:bg-emerald-950/20'
+                      ? 'border-gate-allow-border/45 bg-gate-allow/35 dark:bg-gate-allow/20'
                       : 'border-border/70 bg-muted/15',
                     apiEnabled && !submitted && !disabled && !busy && 'cursor-pointer hover:bg-muted/25'
                   )}
@@ -418,7 +418,7 @@ export function BookingCartPanel({
                       {selected ? (
                         <Badge
                           variant="secondary"
-                          className="text-[10px] h-5 border-emerald-600/30 bg-emerald-100/90 text-emerald-950 dark:bg-emerald-950/50 dark:text-emerald-100"
+                          className="text-[10px] h-5 border-gate-allow-border/30 bg-gate-allow/90 text-gate-allow-foreground dark:bg-gate-allow/50 dark:text-gate-allow-foreground"
                         >
                           已预选
                         </Badge>

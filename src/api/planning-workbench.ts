@@ -1,5 +1,7 @@
 import apiClient from './client';
 import { normalizeBudgetProfile } from '@/lib/trip-budget-normalize';
+import { normalizePlanGateDraftDiff, normalizePlanGateFeasibility, normalizePlanGatePreTripTasks, normalizePlanGateReadiness, pickPlanGateFromUiOutput } from '@/lib/normalize-plan-gate.util';
+import { normalizeWorkbenchCtreUi, extractWorkbenchCtreFromTaskStatus } from '@/features/agent/ctre/workbench-helpers';
 import {
   formatPlanningWorkbenchErrorForDisplay,
   mapPlanningWorkbenchUserMessage,
@@ -106,10 +108,14 @@ export interface ExecutePlanningWorkbenchRequest {
   selectedOptionId?: string;
   /** adjust：节奏反馈（后端 400 MISSING_PACE_FEEDBACK 若缺失） */
   paceFeedback?: PaceFeedback;
-  /** commit：用户勾选的 confirmations 审计 */
-  confirmedItems?: string[];
+  /** commit：用户勾选的 confirmations 审计（legacy 字符串或 planGate confirmationId） */
+  confirmedItems?: string[] | import('@/types/plan-gate').PlanGateConfirmedItemPayload[];
+  /** commit：全量/部分物化选项 */
+  options?: CommitPlanOptions;
   /** compare / commit（服务端未缓存方案集时） */
   skeletonOptions?: PlanSkeletonSet;
+  /** 启用 CTRE + Decision Kernel VERIFY⇄REPAIR（§11.14；generate/commit/adjust + tripId） */
+  enable_travel_compiler?: boolean;
   /** 内部扩展（tripRunId、userId、异步进度等），一般无需传 */
   metadata?: ExecutePlanningWorkbenchMetadata;
 }
@@ -298,6 +304,8 @@ export interface OptionComparisonEntry {
   label?: string;
   /** 各维度 0–100 分；cost 越低越省（≈ budgetUsagePercent） */
   scores?: Record<string, number>;
+  /** 方案取舍说明（BFF 结构化字段，优先于 summary） */
+  tradeoffs?: string[];
   /** 可能含 [Kernel Gate: ... dominant_cid=...] */
   summary?: string;
   budget?: OptionComparisonBudget;
@@ -437,6 +445,10 @@ export interface UIOutput {
   decisionContext?: WorkbenchDecisionContext;
   /** 预算摘要（evaluated=false 时可引导 lazy evaluate） */
   budgetPreview?: WorkbenchBudgetPreview;
+  /** Plan Gate 主投影（验证 / 提交资格 / 待确认项） */
+  planGate?: import('@/types/plan-gate').PlanGateUiOutput;
+  /** Workbench CTRE + Decision Kernel VERIFY⇄REPAIR（仅 enable_travel_compiler） */
+  ctre?: import('@/features/agent/ctre/types').WorkbenchCtreUiOutput;
 }
 
 /**
@@ -486,6 +498,13 @@ export interface ExecuteAsyncTaskResponse {
     current?: string;
     estimatedRemainingTime?: number;
   };
+  /** Plan Gate 异步生成五步流水线 */
+  pipelineSteps?: import('@/types/plan-gate').PlanGatePipelineStep[];
+  stage?: string;
+  /** Workbench CTRE / Kernel 阶段文案（92–94%） */
+  currentStage?: string;
+  /** 从 result.uiOutput.ctre 投影；COMPLETED 前可能为空 */
+  ctre?: import('@/features/agent/ctre/types').WorkbenchCtreUiOutput;
 }
 
 /**
@@ -628,6 +647,8 @@ export interface ComparePlansResponse {
   }>;
   differences: PlanDifference[];
   summary: CompareSummary;
+  /** planIds[0] 为基线、planIds[1] 为草案的结构化 diff */
+  draftDiff?: import('@/types/plan-gate').PlanGateDraftDiff;
 }
 
 /**
@@ -803,6 +824,8 @@ export function normalizeWorkbenchUiOutput(raw: unknown): UIOutput {
       : undefined,
     decisionContext: normalizeWorkbenchDecisionContext(r.decisionContext ?? r.decision_context),
     budgetPreview: normalizeWorkbenchBudgetPreview(r.budgetPreview ?? r.budget_preview),
+    planGate: pickPlanGateFromUiOutput(r),
+    ctre: normalizeWorkbenchCtreUi(r.ctre) ?? undefined,
   };
 }
 
@@ -857,6 +880,14 @@ function normalizeWorkbenchDecisionContext(raw: unknown): WorkbenchDecisionConte
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function normalizeStringArray(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+  return items.length ? items : undefined;
 }
 
 function normalizeKernelGateEval(raw: unknown): KernelGateEval | undefined {
@@ -1013,6 +1044,7 @@ export function normalizeOptionComparison(raw: unknown): OptionComparison | unde
                   .filter(([, v]) => Number.isFinite(v)),
               )
             : undefined;
+          const tradeoffs = normalizeStringArray(entry.tradeoffs);
           const summary = entry.summary;
           const label = entry.label;
           const budget = normalizeOptionComparisonBudget(entry.budget);
@@ -1020,6 +1052,7 @@ export function normalizeOptionComparison(raw: unknown): OptionComparison | unde
             optionId,
             ...(typeof label === 'string' ? { label } : {}),
             ...(scores && Object.keys(scores).length ? { scores } : {}),
+            ...(tradeoffs ? { tradeoffs } : {}),
             ...(typeof summary === 'string' ? { summary } : {}),
             ...(budget ? { budget } : {}),
           } satisfies OptionComparisonEntry;
@@ -1104,6 +1137,23 @@ export function normalizeExecutePlanningWorkbenchResponse(
   };
 }
 
+function normalizeExecuteAsyncTaskStatus(
+  status: ExecuteAsyncTaskResponse,
+): ExecuteAsyncTaskResponse {
+  const result = status.result
+    ? normalizeExecutePlanningWorkbenchResponse(status.result)
+    : undefined;
+  const ctre =
+    extractWorkbenchCtreFromTaskStatus({ ...status, result }) ??
+    result?.uiOutput?.ctre ??
+    undefined;
+  return {
+    ...status,
+    result,
+    ...(ctre ? { ctre } : {}),
+  };
+}
+
 /** 合并 uiOutput.confirmations（后端 humanize）与人格侧确认项（去重保序） */
 export function mergeWorkbenchConfirmations(
   result: Pick<ExecutePlanningWorkbenchResponse, 'planState' | 'uiOutput'>
@@ -1148,12 +1198,14 @@ function normalizeTripWorkbench(raw: TripWorkbench): TripWorkbench {
 }
 
 function normalizeComparePlansResponse(raw: ComparePlansResponse): ComparePlansResponse {
+  const draftDiff = normalizePlanGateDraftDiff(raw.draftDiff);
   return {
     ...raw,
     plans: raw.plans.map((p) => ({
       ...p,
       uiOutput: normalizeWorkbenchUiOutput(p.uiOutput),
     })),
+    ...(draftDiff ? { draftDiff } : {}),
   };
 }
 
@@ -1467,9 +1519,9 @@ export const planningWorkbenchApi = {
 
       const body = response.data;
       if (body && typeof body === 'object' && 'success' in body && body.success) {
-        return body.data;
+        return normalizeExecuteAsyncTaskStatus(body.data);
       }
-      return body as ExecuteAsyncTaskResponse;
+      return normalizeExecuteAsyncTaskStatus(body as ExecuteAsyncTaskResponse);
     } catch (error: unknown) {
       rethrowPlanningWorkbenchError(error);
     }
@@ -1687,6 +1739,90 @@ export const planningWorkbenchApi = {
       } else {
         throw new Error(error.message || '获取工作台数据失败，请稍后重试');
       }
+    }
+  },
+
+  /**
+   * Plan Gate 空态就绪检查
+   * GET /api/planning-workbench/trips/:tripId/plan-gate/readiness
+   */
+  getPlanGateReadiness: async (
+    tripId: string,
+  ): Promise<import('@/types/plan-gate').PlanGateReadinessResponse> => {
+    try {
+      const response = await apiClient.get<
+        ApiResponseWrapper<import('@/types/plan-gate').PlanGateReadinessResponse>
+      >(`/planning-workbench/trips/${tripId}/plan-gate/readiness`, { timeout: 15000 });
+      const wrapped = handleResponse(response);
+      return normalizePlanGateReadiness(wrapped);
+    } catch (error: unknown) {
+      rethrowPlanningWorkbenchError(error);
+    }
+  },
+
+  /**
+   * 方案 diff（基线 vs 草案）
+   * GET /api/planning-workbench/plans/:planId/diff?baselinePlanId=xxx
+   */
+  getPlanDiff: async (
+    draftPlanId: string,
+    baselinePlanId: string,
+  ): Promise<import('@/types/plan-gate').PlanGateDraftDiff> => {
+    try {
+      const response = await apiClient.get<
+        ApiResponseWrapper<import('@/types/plan-gate').PlanGateDraftDiff>
+      >(`/planning-workbench/plans/${draftPlanId}/diff`, {
+        params: { baselinePlanId },
+        timeout: 30000,
+      });
+      const wrapped = handleResponse(response);
+      return normalizePlanGateDraftDiff(wrapped) ?? {};
+    } catch (error: unknown) {
+      rethrowPlanningWorkbenchError(error);
+    }
+  },
+
+  /**
+   * Plan Gate 行前任务列表
+   * GET /api/planning-workbench/trips/:tripId/plan-gate/pre-trip-tasks?planId=可选
+   */
+  getPlanGatePreTripTasks: async (
+    tripId: string,
+    planId?: string,
+  ): Promise<import('@/types/plan-gate').PlanGatePreTripTasksResponse> => {
+    try {
+      const response = await apiClient.get<
+        ApiResponseWrapper<import('@/types/plan-gate').PlanGatePreTripTasksResponse>
+      >(`/planning-workbench/trips/${tripId}/plan-gate/pre-trip-tasks`, {
+        params: planId ? { planId } : undefined,
+        timeout: 15000,
+      });
+      const wrapped = handleResponse(response);
+      return normalizePlanGatePreTripTasks(wrapped) ?? { total: 0, highPriority: 0, tasks: [] };
+    } catch (error: unknown) {
+      rethrowPlanningWorkbenchError(error);
+    }
+  },
+
+  /**
+   * Plan Gate 可执行性分数（基线报告 + 草案估算）
+   * GET /api/planning-workbench/trips/:tripId/plan-gate/feasibility?planId=
+   */
+  getPlanGateFeasibility: async (
+    tripId: string,
+    planId?: string,
+  ): Promise<import('@/types/plan-gate').PlanGateFeasibilityApiResponse> => {
+    try {
+      const response = await apiClient.get<
+        ApiResponseWrapper<import('@/types/plan-gate').PlanGateFeasibilityApiResponse>
+      >(`/planning-workbench/trips/${tripId}/plan-gate/feasibility`, {
+        params: planId ? { planId } : undefined,
+        timeout: 15000,
+      });
+      const wrapped = handleResponse(response);
+      return normalizePlanGateFeasibility(wrapped) ?? {};
+    } catch (error: unknown) {
+      rethrowPlanningWorkbenchError(error);
     }
   },
 

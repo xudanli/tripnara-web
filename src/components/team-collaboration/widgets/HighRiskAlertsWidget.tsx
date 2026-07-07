@@ -25,21 +25,21 @@ function severityLabel(level: HighRiskAlert['level']): '高' | '中' | '低' {
 
 export function HighRiskAlertsWidget({ alerts, onAlertClick }: HighRiskAlertsWidgetProps) {
   return (
-    <CollabWidgetCard title="潜在摩擦点" description="点击行跳转协作决策并预选议题">
+    <CollabWidgetCard title="潜在摩擦点与建议">
       {alerts.length === 0 ? (
         <p className="text-xs text-muted-foreground">暂无高风险摩擦点。</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-xs">
+          <table className="w-full min-w-[680px] text-xs">
             <thead>
               <tr className="border-b border-border/60 text-left text-muted-foreground">
-                <th className="pb-2 pr-2 font-medium w-8">#</th>
+                <th className="w-8 pb-2 pr-2 font-medium">#</th>
                 <th className="pb-2 pr-3 font-medium">摩擦点</th>
                 <th className="pb-2 pr-3 font-medium">严重度</th>
                 <th className="pb-2 pr-3 font-medium">影响维度</th>
                 <th className="pb-2 pr-3 font-medium">表现</th>
                 <th className="pb-2 pr-3 font-medium">建议缓解方案</th>
-                <th className="pb-2 w-8 font-medium" aria-hidden />
+                <th className="w-6 pb-2 font-medium" aria-hidden />
               </tr>
             </thead>
             <tbody>
@@ -49,9 +49,9 @@ export function HighRiskAlertsWidget({ alerts, onAlertClick }: HighRiskAlertsWid
                     <button
                       type="button"
                       className={cn(
-                        'grid min-h-[44px] w-full grid-cols-[28px_minmax(88px,14%)_minmax(56px,10%)_minmax(72px,12%)_1fr_minmax(0,22%)_28px] items-start gap-x-2 text-left transition-colors',
+                        'grid min-h-[40px] w-full grid-cols-[24px_minmax(72px,12%)_minmax(48px,8%)_minmax(64px,10%)_1fr_minmax(96px,18%)_20px] items-start gap-x-2 text-left transition-colors',
                         workbenchListItemIdle,
-                        'border-0 px-2.5 py-2 hover:bg-muted/40',
+                        'border-0 px-2 py-2 hover:bg-muted/40',
                       )}
                       onClick={() => onAlertClick?.(alert)}
                     >
@@ -74,7 +74,7 @@ export function HighRiskAlertsWidget({ alerts, onAlertClick }: HighRiskAlertsWid
                         {frictionImpactDimension(alert)}
                       </span>
                       <span className="py-0.5 text-muted-foreground">{alert.summary}</span>
-                      <span className="hidden py-0.5 text-muted-foreground lg:inline">
+                      <span className="py-0.5 text-muted-foreground">
                         {alert.recommendedStrategy}
                       </span>
                       <span className="flex items-center justify-end self-center text-muted-foreground/60">

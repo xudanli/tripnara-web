@@ -27,7 +27,7 @@ export function normalizePremiumStressQuestions(
       title: q.title || fb?.title || '',
       scenario: q.scenario || fb?.scenario || '',
       wallpaperGradient:
-        q.wallpaperGradient ?? fb?.wallpaperGradient ?? WALLPAPER_GRADIENT_BY_ORDER[index] ?? 'from-slate-950 to-slate-900',
+        q.wallpaperGradient ?? fb?.wallpaperGradient ?? WALLPAPER_GRADIENT_BY_ORDER[index] ?? 'from-slate-950 to-muted',
       options: (q.options?.length ? q.options : fb?.options ?? []).map((opt, optIndex) => {
         const fbOpt = fb?.options.find((o) => o.id === opt.id) ?? fb?.options[optIndex];
         return {
@@ -95,7 +95,7 @@ export function rebuildQuestionsForScoring(questionIds: string[]): PremiumStress
         order: index + 1,
         title: '',
         scenario: '',
-        wallpaperGradient: WALLPAPER_GRADIENT_BY_ORDER[index] ?? 'from-slate-950 to-slate-900',
+        wallpaperGradient: WALLPAPER_GRADIENT_BY_ORDER[index] ?? 'from-slate-950 to-muted',
         options: [],
       };
     }

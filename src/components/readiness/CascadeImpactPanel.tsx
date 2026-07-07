@@ -60,11 +60,11 @@ export default function CascadeImpactPanel({
   const triggerLabel = formatCascadeTriggerLabel(summary.triggerFactType, isZh);
 
   return (
-    <Card id={id} className={cn('border-violet-200/80 bg-violet-50/30 dark:bg-violet-950/10', className)}>
+    <Card id={id} className={cn('border-border/80 bg-muted/30 dark:bg-muted/10', className)}>
       <CardHeader className={cn('pb-2', compact && 'py-3')}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <CardTitle className={cn('flex items-center gap-2 text-base', compact && 'text-sm')}>
-            <GitBranch className="h-4 w-4 text-violet-600" />
+            <GitBranch className="h-4 w-4 text-muted-foreground" />
             {t('dashboard.readiness.cascade.title', { defaultValue: '级联影响' })}
             {modeLabel ? (
               <span className="text-xs font-normal text-muted-foreground">· {modeLabel}</span>

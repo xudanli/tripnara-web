@@ -56,7 +56,7 @@ export default function GuardianNegotiationPanel({
   return (
     <Card
       className={cn(
-        'border-indigo-200/80 bg-indigo-50/20 dark:bg-indigo-950/10 w-full min-w-0 overflow-visible',
+        'border-border/80 bg-muted/20 dark:bg-muted/10 w-full min-w-0 overflow-visible',
         embedded && 'border-0 bg-transparent shadow-none',
         className
       )}
@@ -65,7 +65,7 @@ export default function GuardianNegotiationPanel({
         <CardHeader className={cn('pb-2', compact && 'py-3')}>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <CardTitle className={cn('flex items-center gap-2 text-base', compact && 'text-sm')}>
-              <Users className="h-4 w-4 text-indigo-600" />
+              <Users className="h-4 w-4 text-muted-foreground" />
               <span>{panelTitle}</span>
               {scopeBadge ? (
                 <Badge variant="secondary" className="text-[10px] h-5 font-normal">
@@ -88,7 +88,7 @@ export default function GuardianNegotiationPanel({
             <p className="text-xs text-muted-foreground mt-1">{negotiation.summary}</p>
           ) : null}
           {isMock ? (
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">
+            <p className="text-[11px] text-warning dark:text-warning mt-1">
               {t('dashboard.readiness.cascade.mockBanner', {
                 defaultValue: '开发 mock 数据（VITE_READINESS_CASCADE_MOCK=true）',
               })}

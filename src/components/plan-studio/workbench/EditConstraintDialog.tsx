@@ -1,6 +1,6 @@
 import {
   Dialog,
-  DialogContent,
+  SheetLayerDialogContent,
 } from '@/components/ui/dialog';
 import { ConstraintEditorPanel, type ConstraintEditorPanelProps } from './ConstraintEditorPanel';
 
@@ -20,7 +20,7 @@ export function EditConstraintDialog({
 }: EditConstraintDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl gap-0 overflow-hidden p-0">
+      <SheetLayerDialogContent className="max-h-[85vh] max-w-2xl gap-0 overflow-hidden p-0">
         <ConstraintEditorPanel
           {...panelProps}
           inDialog
@@ -28,7 +28,7 @@ export function EditConstraintDialog({
           onCancel={() => onOpenChange(false)}
           className="max-h-[85vh]"
         />
-      </DialogContent>
+      </SheetLayerDialogContent>
     </Dialog>
   );
 }

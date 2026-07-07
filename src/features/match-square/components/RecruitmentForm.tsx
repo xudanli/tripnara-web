@@ -451,7 +451,7 @@ export function RecruitmentForm({ initial, autoFill, onSubmit, isSubmitting }: R
   return (
     <form onSubmit={submit} className="space-y-5">
       {boundTemplateEntry && (
-        <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 px-4 py-3 text-sm">
+        <div className="rounded-xl border border-border/25 bg-muted/150/5 px-4 py-3 text-sm">
           <p className="font-medium text-foreground">🗺️ {boundTemplateEntry.titleZh}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             已绑定路线模板 · {boundTemplateEntry.durationDays} 日 · 里程碑与拼图槽位已按模板约束预填

@@ -17,6 +17,7 @@ import { enrichRouteAndRunRequestWithPlanningSessionAsync } from '@/lib/enrich-r
 import { enrichRouteAndRunRequestWithMatchSquareParty } from '@/lib/match-square-route-and-run';
 import { enrichRouteAndRunRequestWithDsoVersion } from '@/lib/trip-dso-version';
 import { enrichRouteAndRunRequestWithEmotionalMetadata } from '@/lib/enrich-route-and-run-emotional-metadata';
+import { enrichRouteAndRunRequestWithTravelCompiler } from '@/lib/enrich-route-and-run-travel-compiler';
 import { markPlanningTaskProcessing } from '@/lib/sync-planning-task-store';
 import { syncPlanningTaskFromPollSnapshot } from '@/lib/sync-planning-task-store';
 
@@ -79,8 +80,10 @@ export async function executeRouteAndRun(
       : { ...request.options },
   });
   const withParty = enrichRouteAndRunRequestWithMatchSquareParty(withSession);
-  const payload = enrichRouteAndRunRequestWithEmotionalMetadata(
-    enrichRouteAndRunRequestWithDsoVersion(withParty)
+  const payload = enrichRouteAndRunRequestWithTravelCompiler(
+    enrichRouteAndRunRequestWithEmotionalMetadata(
+      enrichRouteAndRunRequestWithDsoVersion(withParty),
+    ),
   );
 
   if (import.meta.env.DEV && !payload.options?.client_session_id?.trim()) {

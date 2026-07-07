@@ -19,6 +19,8 @@ interface SilentVoteHubDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   showTrigger?: boolean;
+  /** 深链或决策空间传入：打开后自动展开该投票 */
+  initialVoteId?: string | null;
 }
 
 /** 规划工作台右上角：按需打开团队投票（非常驻团队 Tab 区块） */
@@ -28,6 +30,7 @@ export function SilentVoteHubDialog({
   open,
   onOpenChange,
   showTrigger = true,
+  initialVoteId,
 }: SilentVoteHubDialogProps) {
   const { items } = useSilentVoteList(tripId);
   const openVotes = items.filter((v) => v.status === 'open');
@@ -68,6 +71,7 @@ export function SilentVoteHubDialog({
         <SilentVoteListPanel
           tripId={tripId}
           showCreate
+          initialVoteId={open ? initialVoteId : null}
           className="border-0 shadow-none rounded-none"
         />
       </DialogContent>

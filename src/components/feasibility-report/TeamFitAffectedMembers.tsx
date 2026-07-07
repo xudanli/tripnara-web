@@ -28,7 +28,7 @@ export default function TeamFitAffectedMembers({
           key={chip.id}
           variant="outline"
           className={cn(
-            'font-normal border-violet-200 bg-violet-50/60 text-violet-900 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100',
+            'font-normal border-border bg-muted/60 text-muted-foreground dark:border-border dark:bg-muted/30 dark:text-muted-foreground',
             compact ? 'text-[10px] h-5 px-1.5' : 'text-[11px] h-5',
           )}
         >

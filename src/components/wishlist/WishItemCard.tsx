@@ -50,7 +50,7 @@ function planStatusBadge(
   if (includedInPlan && wish.agentEligible) {
     return {
       label: '部分纳入',
-      className: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+      className: 'border-border/30 bg-muted/10 text-muted-foreground dark:text-muted-foreground',
     };
   }
   if (includedInPlan) {
@@ -91,6 +91,54 @@ export function WishItemCard({
     : WISH_VISIBILITY_LABELS[wish.visibility as WishVisibility];
 
   const statusBadge = collabLayout ? planStatusBadge(wish, includedInPlan) : null;
+
+  if (collabLayout && !teamWallView) {
+    return (
+      <article
+        className={cn(
+          'group rounded-lg border border-border/70 bg-card px-3 py-2 transition-colors hover:bg-muted/15',
+          highlighted && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
+          className,
+        )}
+      >
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="shrink-0 font-medium">{headerLabel}</span>
+          <span className="text-border/80">·</span>
+          <span className="min-w-0 truncate">{categoryLabelFor(wish)}</span>
+          {SourceIcon ? <SourceIcon className="h-3 w-3 shrink-0" aria-hidden /> : null}
+          {statusBadge ? (
+            <Badge
+              variant="outline"
+              className={cn('ml-auto h-5 shrink-0 px-1.5 text-[10px] font-normal', statusBadge.className)}
+            >
+              {statusBadge.label}
+            </Badge>
+          ) : (
+            <span className="ml-auto shrink-0" aria-hidden />
+          )}
+        </div>
+
+        <div className="mt-1 flex items-start gap-2">
+          <p className="min-w-0 flex-1 line-clamp-2 text-xs leading-snug text-foreground">{wish.text}</p>
+          <div className="flex shrink-0 items-center gap-1 pt-0.5">
+            <WishImportanceDots value={importanceLevel(wish.importance)} />
+            {!teamWallView && onDelete ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                onClick={onDelete}
+                aria-label="删除心愿"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article
@@ -142,16 +190,7 @@ export function WishItemCard({
           {wish.text}
         </p>
 
-        {collabLayout ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <WishImportanceDots value={importanceLevel(wish.importance)} />
-            <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
-              {categoryLabelFor(wish)}
-            </Badge>
-          </div>
-        ) : null}
-
-        {!teamWallView && onVisibilityChange && !collabLayout ? (
+        {!teamWallView && onVisibilityChange ? (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <span className="text-[11px] text-muted-foreground">可见范围</span>
             <WishVisibilityToggle

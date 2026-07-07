@@ -12,14 +12,14 @@ export function VerifiedAssetBadge({ label, className }: VerifiedAssetBadgeProps
     <span
       className={cn(
         'relative inline-flex items-center gap-1 overflow-hidden rounded-full',
-        'border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5',
-        'text-xs font-medium text-emerald-700 dark:text-emerald-300',
+        'border border-gate-allow-border/30 bg-gate-allow-foreground/10 px-2.5 py-0.5',
+        'text-xs font-medium text-gate-allow-foreground dark:text-gate-allow-foreground',
         className
       )}
       aria-label={`${label}，已通过平台授信验证`}
     >
       <span
-        className="pointer-events-none absolute inset-0 select-none text-[8px] font-bold uppercase tracking-widest text-emerald-600/10 dark:text-emerald-400/10"
+        className="pointer-events-none absolute inset-0 select-none text-[8px] font-bold uppercase tracking-widest text-gate-allow-foreground/10 dark:text-gate-allow-foreground/10"
         aria-hidden
         style={{
           backgroundImage:

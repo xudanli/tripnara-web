@@ -393,15 +393,15 @@ export const TREND_TYPE_CONFIG: Record<TrendType, TrendConfig> = {
     type: 'IMPROVING',
     label: '体能正在提升',
     icon: '↗️',
-    colorClass: 'text-green-600',
-    bgColorClass: 'bg-green-50',
+    colorClass: 'text-gate-allow-foreground',
+    bgColorClass: 'bg-gate-allow',
   },
   STABLE: {
     type: 'STABLE',
     label: '体能保持稳定',
     icon: '➡️',
-    colorClass: 'text-blue-600',
-    bgColorClass: 'bg-blue-50',
+    colorClass: 'text-muted-foreground',
+    bgColorClass: 'bg-muted/15',
   },
   DECLINING: {
     type: 'DECLINING',
@@ -467,19 +467,19 @@ export const TIMELINE_EVENT_CONFIG: Record<TimelineEventType, TimelineEventConfi
     type: 'TRIP_FEEDBACK',
     label: '行程反馈',
     icon: '📝',
-    colorClass: 'text-blue-600',
+    colorClass: 'text-muted-foreground',
   },
   CALIBRATION: {
     type: 'CALIBRATION',
     label: '体能校准',
     icon: '🎯',
-    colorClass: 'text-green-600',
+    colorClass: 'text-gate-allow-foreground',
   },
   QUESTIONNAIRE: {
     type: 'QUESTIONNAIRE',
     label: '问卷提交',
     icon: '📋',
-    colorClass: 'text-purple-600',
+    colorClass: 'text-muted-foreground',
   },
 };
 
@@ -525,9 +525,9 @@ export const ANOMALY_SEVERITY_CONFIG: Record<AnomalySeverity, {
 }> = {
   HIGH: {
     label: '严重',
-    colorClass: 'text-red-700',
-    bgColorClass: 'bg-red-50',
-    borderClass: 'border-red-200',
+    colorClass: 'text-gate-reject-foreground',
+    bgColorClass: 'bg-gate-reject',
+    borderClass: 'border-gate-reject-border',
   },
   MEDIUM: {
     label: '中等',

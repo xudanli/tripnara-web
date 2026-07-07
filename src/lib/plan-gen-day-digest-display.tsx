@@ -298,7 +298,7 @@ export function PlanGenDayDigestExtras({ log }: { log: DecisionLogEntry }) {
   if (!days.length) return null;
 
   return (
-    <details className="mt-1 rounded-md border border-sky-100/90 bg-muted/20 text-[11px] dark:border-sky-900/40">
+    <details className="mt-1 rounded-md border border-border/90 bg-muted/20 text-[11px] dark:border-border/40">
       <summary className="cursor-pointer px-2 py-1.5 font-medium text-muted-foreground select-none hover:text-foreground">
         按天明细 ({days.length} 天)
       </summary>

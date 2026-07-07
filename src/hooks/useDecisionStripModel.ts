@@ -77,10 +77,13 @@ export function useDecisionStripModel(
   options?: {
     planningReadiness?: PlanningReadinessPresentation | null;
     planningInboxCount?: number;
+    /** 首屏延后 persona / workbench 对比请求，减轻与 conflicts 并发 */
+    deferRemoteFetch?: boolean;
   },
 ): DecisionStripModel {
   const planningReadiness = options?.planningReadiness ?? null;
   const planningInboxCount = options?.planningInboxCount ?? 0;
+  const deferRemoteFetch = options?.deferRemoteFetch ?? false;
   const worldModelGuards = useWorldModelGuardsStore((s) => s.worldModelGuards);
   const explainOptimization = useWorldModelGuardsStore((s) => s.explainOptimization);
   const decisionCockpit = useWorldModelGuardsStore((s) => s.decisionCockpit);
@@ -106,10 +109,32 @@ export function useDecisionStripModel(
 
   const reload = useCallback(() => setReloadToken((n) => n + 1), []);
 
+  const [remoteFetchEnabled, setRemoteFetchEnabled] = useState(!deferRemoteFetch);
+
   useEffect(() => {
+    if (!deferRemoteFetch) {
+      setRemoteFetchEnabled(true);
+      return;
+    }
     if (!tripId) {
-      setPersonaAlerts([]);
-      setRemoteComparison(undefined);
+      setRemoteFetchEnabled(false);
+      return;
+    }
+    const enable = () => setRemoteFetchEnabled(true);
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(enable, { timeout: 2000 });
+      return () => cancelIdleCallback(id);
+    }
+    const timer = window.setTimeout(enable, 1200);
+    return () => window.clearTimeout(timer);
+  }, [tripId, deferRemoteFetch]);
+
+  useEffect(() => {
+    if (!tripId || !remoteFetchEnabled) {
+      if (!tripId) {
+        setPersonaAlerts([]);
+        setRemoteComparison(undefined);
+      }
       return;
     }
 
@@ -140,7 +165,7 @@ export function useDecisionStripModel(
     return () => {
       cancelled = true;
     };
-  }, [tripId, reloadToken]);
+  }, [tripId, reloadToken, remoteFetchEnabled]);
 
   useEffect(() => {
     if (cachedComparison) setRemoteComparison(cachedComparison);

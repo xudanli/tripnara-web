@@ -11,8 +11,8 @@ export interface PersonaTheme {
 export const PERSONA_QUADRANT_THEMES: Record<MbtiQuadrant, PersonaTheme> = {
   NT: {
     gradient: 'from-[#1C2E24] via-[#0f1a14] to-[#1a2e22]',
-    accent: '#4ade80',
-    shimmer: 'rgba(74, 222, 128, 0.35)',
+    accent: '#5E7D5B',
+    shimmer: 'rgba(94, 125, 91, 0.35)',
     label: '理性主义',
   },
   NF: {
@@ -23,8 +23,8 @@ export const PERSONA_QUADRANT_THEMES: Record<MbtiQuadrant, PersonaTheme> = {
   },
   SP: {
     gradient: 'from-[#0A0A0A] via-[#111827] to-[#0c1a3a]',
-    accent: '#38bdf8',
-    shimmer: 'rgba(56, 189, 248, 0.4)',
+    accent: '#88C0D0',
+    shimmer: 'rgba(136, 192, 208, 0.4)',
     label: '感官探索',
   },
   SJ: {

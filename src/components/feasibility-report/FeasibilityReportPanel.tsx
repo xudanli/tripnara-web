@@ -12,11 +12,17 @@ import { resolveFeasibilityIssueActionTarget } from '@/lib/feasibility-issue-act
 import {
   notifyFeasibilityReportReload,
   notifyLoopReadinessChanged,
+  notifyDecisionValidationRefresh,
   openDecisionProfilingSurface,
 } from '@/lib/plan-studio-loop-events';
 import { feasibilityDimensionLabel } from '@/lib/feasibility-dimension-display';
 import { useTripFeasibilityReport } from '@/hooks/useTripFeasibilityReport';
-import { getRepairOptions } from '@/api/feasibility-repair';
+import {
+  fetchConflictEnforcement,
+  loadDecisionProblemOptions,
+  mapDecisionOptionsToRepairOptions,
+  resolveDecisionProblemId,
+} from '@/lib/constraint-conflict-repair-flow';
 import { tripsApi } from '@/api/trips';
 import type { TripDetail } from '@/types/trip';
 import {
@@ -76,6 +82,8 @@ interface FeasibilityReportPanelProps {
   initialIssueId?: string | null;
   /** 跳转到时间轴（关闭 Sheet 后由父级处理） */
   onNavigateToSchedule?: (detail: import('@/lib/plan-studio-schedule-navigation').PlanStudioScheduleNavigateDetail) => void;
+  /** DC-FE-010 — replay 查看原决策 */
+  onViewDecision?: (decisionId: string) => void;
 }
 
 function issueConfirmHint(issue: FeasibilityIssueDto): string | null {
@@ -139,6 +147,7 @@ export function FeasibilityReportPanel({
   embedded,
   initialIssueId,
   onNavigateToSchedule,
+  onViewDecision,
 }: FeasibilityReportPanelProps) {
   const navigate = useNavigate();
   const { data, loading, error, revalidateFull, revalidateScope, reload } =
@@ -418,16 +427,30 @@ export function FeasibilityReportPanel({
   const handleLoadRepairs = async (issue: FeasibilityIssueDto) => {
     try {
       setRepairLoading(true);
+      const decisionProblemId = resolveDecisionProblemId(issue);
+      const { isHard } = await fetchConflictEnforcement(decisionProblemId, tripId);
+      setSelectedIssueId(issue.id);
+      if (!isHard) {
+        return;
+      }
       const repairIssueId = resolveFeasibilityRepairIssueId(issue, data?.issues ?? []);
-      const res = await getRepairOptions(tripId, repairIssueId);
+      const loaded = await loadDecisionProblemOptions({
+        tripId,
+        problemId: decisionProblemId,
+        fallbackIssueId: repairIssueId,
+      });
+      const resOptions =
+        loaded.source === 'decision-problems'
+          ? mapDecisionOptionsToRepairOptions(loaded.options)
+          : loaded.options;
       const tripForRepairs = travelTimingTrip ?? tripDetail;
-      const filtered = filterFeasibilityRepairOptionsForTrip(res.options, tripForRepairs, issue);
+      const filtered = filterFeasibilityRepairOptionsForTrip(resOptions, tripForRepairs, issue);
       setRepairOptionsByIssue((prev) => ({ ...prev, [issue.id]: filtered }));
       setSelectedIssueId(issue.id);
       if (
         filtered.length === 0 &&
         isUltraLongDriveIssue(issue, travelTimingView) &&
-        res.options.length > 0
+        resOptions.length > 0
       ) {
         toast.message('暂无可用拆段方案', {
           description: `${repairIssueId} 仅返回非结构性选项，请确认后端 road_class repair-options 已部署`,
@@ -500,6 +523,10 @@ export function FeasibilityReportPanel({
       case 'feasibility_repair':
         void handleLoadRepairs(issue);
         break;
+      case 'decision_space':
+      case 'collaboration_center':
+        if (target.href) navigate(target.href);
+        break;
       default:
         break;
     }
@@ -555,6 +582,7 @@ export function FeasibilityReportPanel({
         });
         notifyFeasibilityReportReload(tripId);
         notifyLoopReadinessChanged(tripId);
+        notifyDecisionValidationRefresh(tripId);
       } else {
         toast.error('重新验证未成功', {
           description: '请检查网络或稍后重试；若后端未部署 validate 接口会静默回退本地报告。',
@@ -770,6 +798,10 @@ export function FeasibilityReportPanel({
                       ),
                     );
                   }}
+                  onViewDecision={onViewDecision}
+                  onRefreshEvidence={() =>
+                    void revalidateScope({ issueId: selectedIssue.id })
+                  }
                 />
               )}
 

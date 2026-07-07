@@ -102,11 +102,11 @@ export function GapList({
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'CRITICAL':
-        return 'bg-red-50 border-red-200 text-red-800';
+        return 'bg-gate-reject border-gate-reject-border text-gate-reject-foreground';
       case 'SUGGESTED':
         return 'bg-yellow-50 border-yellow-200 text-yellow-800';
       case 'OPTIONAL':
-        return 'bg-blue-50 border-blue-200 text-blue-800';
+        return 'bg-muted/15 border-border text-muted-foreground';
       default:
         return 'bg-gray-50 border-gray-200 text-gray-800';
     }
@@ -145,8 +145,8 @@ export function GapList({
     <div className="space-y-3">
       {/* 批量操作栏 */}
       {selectedGaps.length > 0 && (
-        <div className="flex items-center justify-between p-2 bg-blue-50 rounded-lg border border-blue-200">
-          <span className="text-sm text-blue-800">
+        <div className="flex items-center justify-between p-2 bg-muted/15 rounded-lg border border-border">
+          <span className="text-sm text-muted-foreground">
             已选择 {selectedGaps.length} 个缺口
           </span>
           <div className="flex gap-2">
@@ -193,7 +193,7 @@ export function GapList({
               key={gap.id}
               className={cn(
                 'transition-all',
-                isSelected && 'ring-2 ring-blue-500',
+                isSelected && 'ring-2 ring-border',
                 getSeverityColor(gap.severity)
               )}
             >

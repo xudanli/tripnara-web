@@ -15,7 +15,6 @@ import {
   writeAgentSidebarWidth,
 } from '@/lib/agent-sidebar-layout';
 import { AssistantSidebarProvider } from '@/contexts/AssistantSidebarContext';
-import { NLConversationProvider } from '@/contexts/NLConversationContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsLgUp, useIsMobile } from '@/hooks/use-mobile';
 import { tripsApi } from '@/api/trips';
@@ -169,7 +168,7 @@ export default function DashboardLayout() {
     }
     
     // 行程详情页（仅当路径为有效行程 ID 时，排除 optimize/new/generate 等）
-    if (activeTripId && tripIdMatch && !path.includes('/trips/new') && !path.includes('/trips/generate')) {
+    if (activeTripId && tripIdMatch && !path.includes('/trips/new')) {
       return 'trip_detail_page';
     }
     
@@ -215,8 +214,7 @@ export default function DashboardLayout() {
 
   return (
     <DrawerContext.Provider value={drawerContextValue}>
-      <NLConversationProvider>
-        <DashboardLayoutInner
+      <DashboardLayoutInner
           drawerOpen={drawerOpen}
           setDrawerOpen={setDrawerOpen}
           drawerTab={drawerTab}
@@ -239,7 +237,6 @@ export default function DashboardLayout() {
           isDashboardPage={isDashboardPage}
           isMobile={isMobile}
         />
-      </NLConversationProvider>
     </DrawerContext.Provider>
   );
 }
@@ -299,10 +296,12 @@ function DashboardLayoutInner({
   const [assistantWidth, setAssistantWidth] = useState(() => readAgentSidebarWidth());
   const isLgUp = useIsLgUp();
   const isImmersiveJourneyMap = location.pathname.includes('/journey-map');
+  const isNaraConversationPage = location.pathname.includes('/nara');
   const showAssistantArea =
     (location.pathname.includes('/plan-studio') || location.pathname.includes('/execute')) &&
     !isDashboardPage &&
-    !isImmersiveJourneyMap;
+    !isImmersiveJourneyMap &&
+    !isNaraConversationPage;
   const useDesktopAssistantLayout = showAssistantArea && !isMobile && isLgUp;
 
   const handleAssistantPanelResize = useCallback(
@@ -355,7 +354,11 @@ function DashboardLayoutInner({
                   <main
                     className={cn(
                       'flex h-full min-h-0 flex-1 flex-col',
-                      isImmersiveJourneyMap ? 'overflow-hidden' : 'overflow-y-auto overscroll-y-contain pb-16 lg:pb-0',
+                      isImmersiveJourneyMap
+                        ? 'overflow-hidden'
+                        : isNaraConversationPage
+                          ? 'overflow-hidden'
+                          : 'overflow-y-auto overscroll-y-contain pb-16 lg:pb-0',
                     )}
                   >
                     <Outlet />
@@ -376,7 +379,11 @@ function DashboardLayoutInner({
                 <main
                   className={cn(
                     'flex min-h-0 flex-1 flex-col',
-                    isImmersiveJourneyMap ? 'h-full overflow-hidden' : 'overflow-y-auto overscroll-y-contain pb-16 lg:pb-0',
+                    isImmersiveJourneyMap
+                      ? 'h-full overflow-hidden'
+                      : isNaraConversationPage
+                        ? 'h-full overflow-hidden'
+                        : 'overflow-y-auto overscroll-y-contain pb-16 lg:pb-0',
                   )}
                 >
                   <Outlet />

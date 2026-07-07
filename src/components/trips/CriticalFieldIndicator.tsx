@@ -48,14 +48,14 @@ export default function CriticalFieldIndicator({
           <div className={cn('flex items-center gap-1 cursor-help', className)}>
             {isCritical ? (
               <>
-                <AlertTriangle className="h-3 w-3 text-red-500" />
-                <span className="text-xs text-red-600 font-medium">
+                <AlertTriangle className="h-3 w-3 text-gate-reject-foreground" />
+                <span className="text-xs text-gate-reject-foreground font-medium">
                   必填（安全相关）
                 </span>
-                <HelpCircle className="h-3 w-3 text-red-500 opacity-70" />
+                <HelpCircle className="h-3 w-3 text-gate-reject-foreground opacity-70" />
               </>
             ) : required ? (
-              <span className="text-xs text-red-500">*</span>
+              <span className="text-xs text-gate-reject-foreground">*</span>
             ) : null}
           </div>
         </TooltipTrigger>

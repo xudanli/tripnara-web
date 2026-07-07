@@ -295,8 +295,8 @@ export default function VersionViewer({
                     </div>
                   ) : (
                     versionDiff.decision_steps_added.map((step) => (
-                      <div key={step.id} className="p-3 border rounded-lg bg-green-50 dark:bg-green-950">
-                        <div className="font-medium text-green-900 dark:text-green-100">
+                      <div key={step.id} className="p-3 border rounded-lg bg-gate-allow dark:bg-gate-allow">
+                        <div className="font-medium text-gate-allow-foreground dark:text-gate-allow-foreground">
                           + {step.title}
                         </div>
                         <div className="text-sm text-muted-foreground mt-1">
@@ -314,8 +314,8 @@ export default function VersionViewer({
                     </div>
                   ) : (
                     versionDiff.decision_steps_removed.map((step) => (
-                      <div key={step.id} className="p-3 border rounded-lg bg-red-50 dark:bg-red-950">
-                        <div className="font-medium text-red-900 dark:text-red-100">
+                      <div key={step.id} className="p-3 border rounded-lg bg-gate-reject dark:bg-gate-reject">
+                        <div className="font-medium text-gate-reject-foreground dark:text-gate-reject-foreground">
                           - {step.title}
                         </div>
                         <div className="text-sm text-muted-foreground mt-1">

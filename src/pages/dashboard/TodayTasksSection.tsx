@@ -84,7 +84,7 @@ export default function TodayTasksSection({ activeTrip }: TodayTasksSectionProps
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high':
-        return 'border-red-200 bg-red-50';
+        return 'border-gate-reject-border bg-gate-reject';
       case 'medium':
         return 'border-yellow-200 bg-yellow-50';
       case 'low':

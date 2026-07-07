@@ -28,9 +28,9 @@ export const FRICTION_DOMAIN_LABELS: Record<FrictionDomain, string> = {
 };
 
 export const FRICTION_LEVEL_CLASSES: Record<FrictionLevel, string> = {
-  green: 'bg-emerald-500/80',
+  green: 'bg-muted-foreground/80',
   yellow: 'bg-amber-400/90',
-  red: 'bg-red-500/90',
+  red: 'bg-muted-foreground/90',
 };
 
 export const FRICTION_LEVEL_TEXT: Record<FrictionLevel, string> = {
@@ -40,9 +40,9 @@ export const FRICTION_LEVEL_TEXT: Record<FrictionLevel, string> = {
 };
 
 export const COMPATIBILITY_BAND_CLASSES: Record<CompatibilityBand, string> = {
-  high: 'text-emerald-600',
+  high: 'text-success',
   needs_negotiation: 'text-amber-600',
-  high_risk: 'text-red-600',
+  high_risk: 'text-error',
 };
 
 export const SPLIT_MODE_LABELS: Record<SplitMechanismMode, string> = {

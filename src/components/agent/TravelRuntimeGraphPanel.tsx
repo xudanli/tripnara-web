@@ -24,13 +24,13 @@ export interface TravelRuntimeGraphPanelProps {
 function nodeStatusClass(status: string | undefined): string {
   const s = (status ?? '').toUpperCase();
   if (s.includes('BLOCK') || s.includes('CRITICAL')) {
-    return 'border-red-300 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/30';
+    return 'border-gate-reject-border bg-gate-reject text-gate-reject-foreground dark:border-gate-reject-border/50 dark:bg-gate-reject/30';
   }
   if (s.includes('AFFECT') || s.includes('WARN')) {
     return 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30';
   }
   if (s.includes('ABSORB') || s.includes('BUFFER')) {
-    return 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30';
+    return 'border-border bg-muted/15 text-muted-foreground dark:border-border/50 dark:bg-muted/15';
   }
   return 'border-border/70 bg-muted/20 text-foreground';
 }
@@ -82,7 +82,7 @@ export default function TravelRuntimeGraphPanel({
     <div className="flex w-full items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
         <CardTitle className={cn('flex flex-wrap items-center gap-2 text-base', compact && 'text-sm')}>
-          <GitGraph className="h-4 w-4 text-indigo-600" />
+          <GitGraph className="h-4 w-4 text-muted-foreground" />
           {t('agent.travelRuntimeGraph.title', { defaultValue: '影响传播' })}
           {debugMode ? (
             <Badge variant="outline" className="text-[10px] font-normal">
@@ -112,7 +112,7 @@ export default function TravelRuntimeGraphPanel({
   return (
     <Card
       className={cn(
-        'border-indigo-200/80 bg-indigo-50/20 dark:bg-indigo-950/10',
+        'border-border/80 bg-muted/15 dark:bg-muted/10',
         compact && 'shadow-none',
         className
       )}
@@ -133,9 +133,9 @@ export default function TravelRuntimeGraphPanel({
       {expanded ? (
         <CardContent className={cn('space-y-3 border-t', compact ? 'pt-3 pb-3' : 'pt-0')}>
           {graph.trigger ? (
-            <div className="rounded-md border border-indigo-200/70 bg-card px-3 py-2">
+            <div className="rounded-md border border-border/70 bg-card px-3 py-2">
               <div className="flex items-start gap-2">
-                <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600" />
+                <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 space-y-1">
                   <p className="text-xs font-medium text-foreground">
                     {t('agent.travelRuntimeGraph.trigger', { defaultValue: '触发' })}
@@ -207,7 +207,7 @@ export default function TravelRuntimeGraphPanel({
                     <span className="mx-1 text-foreground/70">→</span>
                     {resolveTravelRuntimeNodeLabel(edge.to, graph.nodes)}
                     {edge.kind ? (
-                      <span className="ml-1 text-[10px] text-indigo-700 dark:text-indigo-300">
+                      <span className="ml-1 text-[10px] text-muted-foreground dark:text-muted-foreground">
                         [{edge.kind}]
                       </span>
                     ) : null}

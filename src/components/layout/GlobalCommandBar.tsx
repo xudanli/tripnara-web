@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import type { RouteAndRunRequest } from '@/api/agent';
 import { invokeRouteAndRun } from '@/lib/invoke-route-and-run';
 import { PlanningPipelineProgress } from '@/components/agent/PlanningPipelineProgress';
+import { RouteRunCtreProgressBand } from '@/features/agent/ctre';
 import { usePlanningTaskStore } from '@/store/planningTaskStore';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -217,8 +218,9 @@ export default function GlobalCommandBar({
               )}
             />
             {(loading || planningTaskBusy) && (
-              <div className="absolute left-0 right-0 top-full z-50 mt-1 px-1">
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 px-1 space-y-1">
                 <PlanningPipelineProgress compact />
+                <RouteRunCtreProgressBand compact />
               </div>
             )}
             {input.trim() && (
@@ -240,7 +242,7 @@ export default function GlobalCommandBar({
           {/* 通知 */}
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
+            <span className="absolute top-1 right-1 h-2 w-2 bg-gate-reject-foreground rounded-full" />
           </Button>
 
           {/* 用户菜单 */}
@@ -315,7 +317,7 @@ export default function GlobalCommandBar({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleLogout}
-                  className="cursor-pointer text-red-600 focus:text-red-600"
+                  className="cursor-pointer text-gate-reject-foreground focus:text-gate-reject-foreground"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>{t('globalCommandBar.logout')}</span>

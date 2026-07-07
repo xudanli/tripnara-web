@@ -40,7 +40,7 @@ export function formatEmotionPolarity(polarity: number): string {
 }
 
 export function emotionPolarityClasses(polarity: number): string {
-  if (polarity >= 0.15) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+  if (polarity >= 0.15) return 'text-success bg-muted border-gate-allow-border';
   if (polarity > -0.15) return 'text-slate-700 bg-slate-50 border-slate-200';
   return 'text-rose-700 bg-rose-50 border-rose-200';
 }

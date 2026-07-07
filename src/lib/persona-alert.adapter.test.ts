@@ -28,6 +28,32 @@ describe('persona-alert.adapter (M2)', () => {
     expect(alert?.presentation?.supportingLines?.[0]?.text).toBe('节奏也偏紧');
     expect(alert?.metadata?.deepLink).toEqual({ type: 'feasibility', issueId: 'issue-1' });
   });
+
+  it('normalizes metadata.tradeoffDimensions with contextualNarrative', () => {
+    const alert = normalizePersonaAlert({
+      id: 'a2',
+      persona: 'ABU',
+      title: '安全提醒',
+      explanation: '短摘要',
+      severity: 'warning',
+      created_at: '2026-01-01T00:00:00Z',
+      metadata: {
+        audience: 'user',
+        tradeoff_dimensions: [
+          {
+            dimension: 'SAFETY',
+            direction: 'WORSEN',
+            explanation: '规则未核验',
+            contextual_narrative: 'Day 2 黑沙滩规则已 14 天未更新。',
+          },
+        ],
+      },
+    });
+
+    expect(alert?.metadata?.tradeoffDimensions?.[0]?.contextualNarrative).toBe(
+      'Day 2 黑沙滩规则已 14 天未更新。',
+    );
+  });
 });
 
 describe('resolveTripPersonaAlerts', () => {

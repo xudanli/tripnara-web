@@ -175,13 +175,13 @@ export default function GoogleAccountButton({
   // 生成头像背景色（基于邮箱）
   const getAvatarColor = (email: string) => {
     const colors = [
-      'bg-purple-500',
-      'bg-blue-500',
-      'bg-green-500',
+      'bg-muted/150',
+      'bg-muted/150',
+      'bg-gate-allow-foreground',
       'bg-yellow-500',
       'bg-pink-500',
-      'bg-indigo-500',
-      'bg-red-500',
+      'bg-muted/150',
+      'bg-gate-reject-foreground',
     ];
     const index = email.charCodeAt(0) % colors.length;
     return colors[index];

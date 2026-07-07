@@ -210,9 +210,9 @@ export function JourneyMapActivityDetailPanel({
                     className={cn(
                       'h-5 text-[10px] font-normal',
                       placeView.hoursBadge.tone === 'open' &&
-                        'border-emerald-200 bg-emerald-50 text-emerald-700',
+                        'border-gate-allow-border bg-gate-allow text-gate-allow-foreground',
                       placeView.hoursBadge.tone === 'closed' &&
-                        'border-red-200 bg-red-50 text-red-700',
+                        'border-gate-reject-border bg-gate-reject text-gate-reject-foreground',
                     )}
                   >
                     {placeView.hoursBadge.label}

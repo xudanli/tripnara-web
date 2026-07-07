@@ -51,7 +51,7 @@ export function InTripCausalInsightCard({
   return (
     <div className={cn('space-y-2', className)}>
       {!hasInsight && showPlanningHint && !model.hasSession ? (
-        <p className="rounded-md border border-dashed border-violet-200/80 bg-violet-50/40 px-3 py-2 text-xs text-muted-foreground dark:bg-violet-950/20">
+        <p className="rounded-md border border-dashed border-border/80 bg-muted/15 px-3 py-2 text-xs text-muted-foreground dark:bg-muted/15">
           完成规划工作台或徒步 generate-plan 后，可在此查看因果预测；环境事件锁定后将自动对比实况。
         </p>
       ) : null}
@@ -62,7 +62,7 @@ export function InTripCausalInsightCard({
             'rounded-md px-3 py-2 text-xs',
             model.lastTelemetry?.path === 'skipped' || model.lastTelemetry?.path === 'failed'
               ? 'border border-amber-200/70 bg-amber-50/50 text-amber-900 dark:bg-amber-950/20'
-              : 'border border-emerald-200/70 bg-emerald-50/40 text-emerald-900 dark:bg-emerald-950/20',
+              : 'border border-gate-allow-border/70 bg-gate-allow/40 text-gate-allow-foreground dark:bg-gate-allow/20',
           )}
         >
           {telemetryNote}

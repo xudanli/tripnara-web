@@ -1,6 +1,17 @@
-import { ChevronRight } from 'lucide-react';
+import {
+  Activity,
+  BedDouble,
+  ChevronRight,
+  Shield,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  personaFooterLinkClass,
+  personaSectionMinHeight,
+} from '@/components/team-collaboration/persona-ui';
 import { aggregateFrictionByDomain } from '@/lib/collab-friction-domains';
 import { frictionLevelBarClass } from '@/components/decision-profiling/decision-profiling-ui';
 import type { FrictionDomain, FrictionMatrixPair } from '@/types/trip-decision-profiling';
@@ -14,6 +25,22 @@ interface FrictionMatrixCompactWidgetProps {
   onViewDetail?: () => void;
 }
 
+const DOMAIN_ICONS: Partial<Record<FrictionDomain, typeof Wallet>> = {
+  budget: Wallet,
+  pace: Activity,
+  accommodation: BedDouble,
+  activities: Users,
+  group_decision: Shield,
+};
+
+const DOMAIN_DISPLAY_LABELS: Partial<Record<FrictionDomain, string>> = {
+  budget: '预算重叠度',
+  pace: '节奏同步',
+  accommodation: '舒适度门槛',
+  activities: '体验导向',
+  group_decision: '风险态度',
+};
+
 function severityChipClass(level: 'green' | 'yellow' | 'red'): string {
   if (level === 'red') return workbenchSoftPriorityClass('高');
   if (level === 'yellow') return workbenchSoftPriorityClass('中');
@@ -22,7 +49,7 @@ function severityChipClass(level: 'green' | 'yellow' | 'red'): string {
 
 function severityShortLabel(level: 'green' | 'yellow' | 'red'): string {
   if (level === 'red') return '较高摩擦';
-  if (level === 'yellow') return '中摩擦';
+  if (level === 'yellow') return '中等摩擦';
   return '较低摩擦';
 }
 
@@ -36,12 +63,13 @@ export function FrictionMatrixCompactWidget({
   return (
     <CollabWidgetCard
       title="团队摩擦矩阵"
-      action={
+      className={cn('h-full', personaSectionMinHeight)}
+      footer={
         onViewDetail ? (
           <Button
             type="button"
             variant="link"
-            className="h-auto p-0 text-[10px] text-primary"
+            className={cn(personaFooterLinkClass, 'h-auto p-0')}
             onClick={onViewDetail}
           >
             查看摩擦详情
@@ -53,45 +81,50 @@ export function FrictionMatrixCompactWidget({
       {domains.length === 0 ? (
         <p className="text-xs text-muted-foreground">完成团队调查后生成摩擦矩阵。</p>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="space-y-3">
           {domains.map((row) => {
             const clickable = Boolean(onDomainClick) && row.level !== 'green';
             const Tag = clickable ? 'button' : 'div';
-            const barWidth = row.level === 'green' ? 30 : row.level === 'yellow' ? 60 : 90;
+            const Icon = DOMAIN_ICONS[row.domain] ?? Activity;
+            const label = DOMAIN_DISPLAY_LABELS[row.domain] ?? row.label;
+            const barWidth = Math.min(100, Math.max(12, Math.round(row.score)));
 
             return (
               <li key={row.domain}>
                 <Tag
                   type={clickable ? 'button' : undefined}
                   className={cn(
-                    'flex w-full items-center gap-2 text-left',
+                    'block w-full text-left',
                     clickable &&
-                      'rounded-md px-1 py-0.5 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   )}
                   onClick={clickable ? () => onDomainClick?.(row.domain) : undefined}
                   disabled={!clickable}
                 >
-                  <span className="w-14 shrink-0 text-xs font-medium text-foreground">
-                    {row.label}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'shrink-0 text-[10px] font-normal',
-                      severityChipClass(row.level),
-                    )}
-                  >
-                    {severityShortLabel(row.level)}
-                  </Badge>
-                  <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className="flex items-center gap-1.5">
+                    <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
+                      {label}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'shrink-0 px-1.5 text-[9px] font-normal',
+                        severityChipClass(row.level),
+                      )}
+                    >
+                      {severityShortLabel(row.level)}
+                    </Badge>
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                      {Math.round(row.score)}/100
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
                     <div
                       className={cn('h-full rounded-full', frictionLevelBarClass(row.level))}
                       style={{ width: `${barWidth}%` }}
                     />
                   </div>
-                  <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
-                    {Math.round(row.score)}
-                  </span>
                 </Tag>
               </li>
             );

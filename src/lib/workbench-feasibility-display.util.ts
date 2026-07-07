@@ -11,21 +11,21 @@ export function resolveWorkbenchFeasibilityGrade(score: number): {
 export function workbenchFeasibilityRingColor(tone: 'good' | 'fair' | 'poor'): string {
   switch (tone) {
     case 'good':
-      return 'stroke-emerald-500';
+      return 'stroke-gate-allow-foreground';
     case 'fair':
-      return 'stroke-amber-500';
+      return 'stroke-gate-confirm-foreground';
     default:
-      return 'stroke-red-500';
+      return 'stroke-gate-reject-foreground';
   }
 }
 
 export function workbenchFeasibilityGradeClass(tone: 'good' | 'fair' | 'poor'): string {
   switch (tone) {
     case 'good':
-      return 'text-emerald-600';
+      return 'text-success';
     case 'fair':
-      return 'text-amber-600';
+      return 'text-warning';
     default:
-      return 'text-red-600';
+      return 'text-error';
   }
 }

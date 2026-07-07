@@ -40,6 +40,7 @@ import {
   resolveFeasibilityIssueAction,
 } from '@/lib/feasibility-issue-display';
 import { resolveFeasibilityIssueActionTarget } from '@/lib/feasibility-issue-action';
+import { filterFeasibilityIssuesForActionableInbox } from '@/lib/feasibility-resolution-mode.util';
 import { issueMatchesCategory } from '@/lib/feasibility-issue-focus';
 import {
   resolveFeasibilityIssueDayLabel,
@@ -285,7 +286,7 @@ export function FeasibilityReportCompactBar({
       role="status"
     >
       {report.isStale && (
-        <div className="flex items-center gap-2 border-b border-gate-confirm-border/60 bg-gate-confirm/25 px-3 py-1.5 text-[11px] text-gate-confirm-foreground">
+        <div className="flex items-center gap-2 border-b border-border/60 bg-muted/25 px-3 py-1.5 text-[11px] text-warning">
           <Clock className="h-3 w-3 shrink-0" />
           <span className="leading-snug">
             行程已变更，报告已过期 — 建议先重新验证
@@ -369,8 +370,9 @@ export function FeasibilityPriorityIssueQueue({
   maxItems?: number;
 }) {
   const topIssues = useMemo(() => {
-    const must = issues.filter((i) => i.priority === 'must_handle');
-    const pool = must.length > 0 ? must : issues;
+    const actionable = filterFeasibilityIssuesForActionableInbox(issues);
+    const must = actionable.filter((i) => i.priority === 'must_handle');
+    const pool = must.length > 0 ? must : actionable;
     return pool.slice(0, maxItems);
   }, [issues, maxItems]);
 
@@ -832,7 +834,7 @@ export function FeasibilitySummaryChips({
   return (
     <div className={cn('flex flex-wrap gap-2', className)}>
       {mustHandle > 0 && (
-        <span className="inline-flex items-center gap-1 rounded-md border border-gate-reject-border bg-gate-reject px-2 py-0.5 text-[11px] font-medium text-gate-reject-foreground">
+        <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-error">
           {mustHandle} 必须处理
         </span>
       )}
@@ -842,7 +844,7 @@ export function FeasibilitySummaryChips({
         </span>
       )}
       {pendingConfirm > 0 && (
-        <span className="inline-flex items-center gap-1 rounded-md border border-gate-confirm-border bg-gate-confirm px-2 py-0.5 text-[11px] font-medium text-gate-confirm-foreground">
+        <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-warning">
           {pendingConfirm} 需确认
         </span>
       )}
@@ -920,7 +922,7 @@ export function FeasibilityDayAccommodationBadge({
       <span
         className={cn(
           'shrink-0 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium',
-          'border border-gate-allow-border bg-gate-allow/15 text-muted-foreground max-w-[9rem]',
+          'border border-gate-allow-border bg-muted/15 text-muted-foreground max-w-[9rem]',
           className,
         )}
       >
@@ -1226,6 +1228,9 @@ export function FeasibilityIssueDetailHeader({
     (actionTarget.surface === 'feasibility_repair' ||
       actionTarget.surface === 'road_class_repair' ||
       actionTarget.surface === 'refresh_evidence' ||
+      actionTarget.surface === 'decision_space' ||
+      actionTarget.surface === 'collaboration_center' ||
+      actionTarget.surface === 'schedule_edit' ||
       actionTarget.surface === 'friction_radar' ||
       actionTarget.surface === 'split_consensus' ||
       actionTarget.surface === 'decision_profiling_quiz' ||
@@ -1276,12 +1281,17 @@ export function FeasibilityIssueDetailHeader({
           <p
             className={cn(
               'text-xs leading-relaxed rounded-md border px-3 py-2',
-              'bg-gate-confirm/50 text-gate-confirm-foreground border-gate-confirm-border',
+              'bg-muted/50 text-warning border-border',
             )}
           >
             {confirmHint}
           </p>
         )}
+        {issue.resolutionMode === 'DECISION_REQUIRED' ? (
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            此类取舍请在决策空间处理；apply 后可回到此页重新验证。
+          </p>
+        ) : null}
         {actionTarget ? (
           useButton ? (
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onAction}>
@@ -1373,7 +1383,7 @@ export function FeasibilityStaleNotice({
     <div
       className={cn(
         'rounded-lg border px-3.5 py-2.5 text-xs flex items-start gap-2.5',
-        'bg-gate-confirm/40 text-gate-confirm-foreground border-gate-confirm-border',
+        'bg-muted/40 text-warning border-border',
       )}
     >
       <Clock className="h-3.5 w-3.5 shrink-0 mt-0.5" />

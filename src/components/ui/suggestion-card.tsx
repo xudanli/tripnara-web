@@ -75,7 +75,7 @@ function getSeverityConfig(severity: Suggestion['severity']) {
     case 'blocker':
       return {
         icon: AlertTriangle,
-        badge: 'bg-red-100 text-red-800 border-red-200',
+        badge: 'bg-muted text-error border-border',
         label: '阻塞',
       };
     case 'warn':
@@ -87,7 +87,7 @@ function getSeverityConfig(severity: Suggestion['severity']) {
     case 'info':
       return {
         icon: Info,
-        badge: 'bg-blue-100 text-blue-800 border-blue-200',
+        badge: 'bg-muted text-muted-foreground border-border',
         label: '信息',
       };
     default:

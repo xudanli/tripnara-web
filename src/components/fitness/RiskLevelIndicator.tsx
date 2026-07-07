@@ -44,7 +44,7 @@ const RISK_LEVEL_CONFIG: Record<TerrainRiskLevel, {
     descEn: 'Safe for most hikers with basic preparation',
     descZh: '适合大多数徒步者，仅需基本准备',
     icon: Shield,
-    colors: 'bg-green-100 text-green-700 border-green-300',
+    colors: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border',
   },
   MEDIUM: {
     labelEn: 'Medium Risk',
@@ -68,7 +68,7 @@ const RISK_LEVEL_CONFIG: Record<TerrainRiskLevel, {
     descEn: 'Expert level only. Life-threatening conditions possible.',
     descZh: '仅限专家级别。可能存在生命危险。',
     icon: AlertOctagon,
-    colors: 'bg-red-100 text-red-700 border-red-300',
+    colors: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border',
     pulseClass: 'animate-pulse',
   },
 };
@@ -172,17 +172,17 @@ export function CriticalRiskBanner({
     <div 
       className={cn(
         'flex items-center gap-3 p-4 rounded-lg',
-        'bg-red-50 border-2 border-red-300',
+        'bg-gate-reject border-2 border-gate-reject-border',
         'animate-pulse',
         className
       )}
     >
-      <AlertOctagon className="w-6 h-6 text-red-600 shrink-0" />
+      <AlertOctagon className="w-6 h-6 text-gate-reject-foreground shrink-0" />
       <div className="flex-1">
-        <p className="font-semibold text-red-800">
+        <p className="font-semibold text-gate-reject-foreground">
           {isZh ? '极高风险警告' : 'Critical Risk Warning'}
         </p>
-        <p className="text-sm text-red-700">
+        <p className="text-sm text-gate-reject-foreground">
           {isZh 
             ? '此路段存在严重安全风险，仅建议具有专业技能和装备的人员通过。'
             : 'This section poses serious safety risks. Only recommended for personnel with professional skills and equipment.'
@@ -192,7 +192,7 @@ export function CriticalRiskBanner({
       {onDismiss && (
         <button 
           onClick={onDismiss}
-          className="text-red-600 hover:text-red-800 text-sm font-medium"
+          className="text-gate-reject-foreground hover:text-gate-reject-foreground text-sm font-medium"
         >
           {isZh ? '我了解风险' : 'I understand the risks'}
         </button>

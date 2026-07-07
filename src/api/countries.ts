@@ -186,6 +186,7 @@ export const countriesApi = {
    * - 基础字段（isoCode, nameCN, nameEN, updatedAt）
    * - 货币和支付字段（currencyCode, currencyName, exchangeRateToCNY, exchangeRateToUSD, paymentType, paymentInfo）
    * - JSON字段（powerInfo, emergency, visaForCN, complianceInfo, travelCulture）
+   * - coverImageUrl：目的地默认封面（POI 图为空时 BFF / 列表页兜底，与 CoverImageService 同源）
    * 
    * @param countryCode 国家代码（ISO 3166-1 alpha-2），例如：JP, CN, US
    * @returns 完整的国家档案信息

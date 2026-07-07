@@ -1294,7 +1294,7 @@ export function EnhancedAddItineraryItemDialog({
                                   const openingHours = place.metadata?.openingHours || (place as any).openingHours;
                                   const formattedHours = formatOpeningHours(openingHours, tripDay.date);
                                   return formattedHours ? (
-                                    <span className="flex items-center gap-1 text-emerald-600">
+                                    <span className="flex items-center gap-1 text-gate-allow-foreground">
                                       <Clock className="w-3 h-3" />
                                       {formattedHours}
                                     </span>
@@ -1403,18 +1403,18 @@ export function EnhancedAddItineraryItemDialog({
 
                 {/* 已选地点信息 */}
                 {selectedPlace && (
-                  <Card className="bg-blue-50 border-blue-200">
+                  <Card className="bg-muted/15 border-border">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <MapPin className="h-4 w-4 text-blue-600" />
-                            <span className="font-semibold text-blue-900">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-semibold text-muted-foreground">
                               {selectedPlace.nameCN || selectedPlace.nameEN}
                             </span>
                           </div>
                           {selectedPlace.address && (
-                            <p className="text-xs text-blue-700 ml-6">
+                            <p className="text-xs text-muted-foreground ml-6">
                               {selectedPlace.address}
                             </p>
                           )}
@@ -1424,7 +1424,7 @@ export function EnhancedAddItineraryItemDialog({
                           variant="ghost"
                           size="sm"
                           onClick={handleBackToBrowse}
-                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                          className="text-muted-foreground hover:text-muted-foreground hover:bg-muted/15"
                         >
                           <X className="w-4 h-4" />
                         </Button>
@@ -1691,7 +1691,7 @@ export function EnhancedAddItineraryItemDialog({
 
                 {/* 错误提示 */}
                 {error && (
-                  <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-md">
+                  <div className="text-sm text-gate-reject-foreground bg-gate-reject px-3 py-2 rounded-md">
                     {error}
                   </div>
                 )}

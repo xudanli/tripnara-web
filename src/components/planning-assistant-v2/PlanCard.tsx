@@ -25,8 +25,8 @@ const paceLabels: Record<string, string> = {
 };
 
 const paceColors: Record<string, string> = {
-  relaxed: 'bg-green-100 text-green-700',
-  moderate: 'bg-blue-100 text-blue-700',
+  relaxed: 'bg-gate-allow text-gate-allow-foreground',
+  moderate: 'bg-muted/15 text-muted-foreground',
   intensive: 'bg-orange-100 text-orange-700',
 };
 

@@ -17,15 +17,15 @@ export default function BlockerCard({ blocker, onFix, className }: BlockerCardPr
   const severityConfig = {
     critical: {
       label: 'Critical',
-      className: 'bg-red-50 text-red-700 border-red-200', // ✅ 修复：使用 bg-red-50 而不是 bg-red-100
+      className: 'bg-muted text-error border-border', // ✅ 修复：使用 bg-muted 而不是 bg-muted
     },
     high: {
       label: 'High',
-      className: 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-orange-100
+      className: 'bg-muted text-warning border-border', // ✅ 修复：使用 bg-muted 而不是 bg-orange-100
     },
     medium: {
       label: 'Medium',
-      className: 'bg-amber-50 text-amber-700 border-amber-200', // ✅ 修复：使用 bg-amber-50 而不是 bg-yellow-100
+      className: 'bg-muted text-warning border-border', // ✅ 修复：使用 bg-muted 而不是 bg-yellow-100
     },
   };
 
@@ -35,8 +35,8 @@ export default function BlockerCard({ blocker, onFix, className }: BlockerCardPr
     <Card
       className={cn(
         'cursor-pointer transition-all hover:shadow-md',
-        blocker.severity === 'critical' && 'border-red-200', // ✅ 修复：统一使用 border-red-200
-        blocker.severity === 'high' && 'border-amber-200', // ✅ 修复：统一使用 border-amber-200
+        blocker.severity === 'critical' && 'border-border', // ✅ 修复：统一使用 border-border
+        blocker.severity === 'high' && 'border-border', // ✅ 修复：统一使用 border-border
         className
       )}
       onClick={() => onFix(blocker.id)}
@@ -48,9 +48,9 @@ export default function BlockerCard({ blocker, onFix, className }: BlockerCardPr
               <AlertTriangle
                 className={cn(
                   'h-4 w-4',
-                  blocker.severity === 'critical' && 'text-red-600',
-                  blocker.severity === 'high' && 'text-amber-600', // ✅ 修复：统一使用 amber-600
-                  blocker.severity === 'medium' && 'text-amber-600' // ✅ 修复：统一使用 amber-600
+                  blocker.severity === 'critical' && 'text-error',
+                  blocker.severity === 'high' && 'text-warning', // ✅ 修复：统一使用 amber-600
+                  blocker.severity === 'medium' && 'text-warning' // ✅ 修复：统一使用 amber-600
                 )}
               />
               <h3 className="font-semibold text-sm">{blocker.title}</h3>

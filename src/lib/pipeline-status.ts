@@ -82,18 +82,19 @@ export function getPipelineStatusLabel(stageStatus: PipelineStageStatus): string
 }
 
 /**
- * 获取 Pipeline 进度条颜色类名
- * 
- * @param stageStatus Pipeline 阶段状态
- * @returns Tailwind 类名字符串（仅背景色）
+ * 获取 Pipeline 进度条填充色（轨道见 workbenchProgressTrack）
  */
 export function getPipelineProgressColor(stageStatus: PipelineStageStatus): string {
-  const gateStatus = mapPipelineStatusToGateStatus(stageStatus);
-  // 使用决策状态的背景色，但只取背景部分
-  const classes = getGateStatusClasses(gateStatus);
-  // 提取 bg- 开头的类名
-  const bgClass = classes.split(' ').find(cls => cls.startsWith('bg-'));
-  return bgClass || 'bg-gray-500';
+  switch (stageStatus) {
+    case 'risk':
+      return 'bg-gate-confirm-foreground';
+    case 'in-progress':
+    case 'completed':
+      return 'bg-foreground';
+    case 'pending':
+    default:
+      return 'bg-muted-foreground/60';
+  }
 }
 
 /**

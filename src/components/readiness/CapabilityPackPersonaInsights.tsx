@@ -159,9 +159,9 @@ export default function CapabilityPackPersonaInsights({
       case 'BLOCK':
         return <Badge variant="destructive" className="text-xs">需要处理</Badge>;
       case 'WARN':
-        return <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-700">需要注意</Badge>;
+        return <Badge variant="outline" className="text-xs border-border text-warning">需要注意</Badge>;
       case 'PASS':
-        return <Badge variant="outline" className="text-xs border-green-500 text-green-700">通过</Badge>;
+        return <Badge variant="outline" className="text-xs border-border text-success">通过</Badge>;
     }
   };
 
@@ -178,14 +178,14 @@ export default function CapabilityPackPersonaInsights({
         {/* Abu 卡片 */}
         <Card className={cn(
           'border-2',
-          abuInsights.verdict === 'BLOCK' ? 'border-red-300 bg-red-50/30' :
-          abuInsights.verdict === 'WARN' ? 'border-yellow-300 bg-yellow-50/30' :
+          abuInsights.verdict === 'BLOCK' ? 'border-border bg-muted/30' :
+          abuInsights.verdict === 'WARN' ? 'border-border bg-muted/30' :
           'border-gray-200'
         )}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600" />
+                <Shield className="w-5 h-5 text-muted-foreground" />
                 <CardTitle className="text-sm font-semibold">Abu</CardTitle>
               </div>
               {hasAbuContent && getVerdictBadge(abuInsights.verdict)}
@@ -203,7 +203,7 @@ export default function CapabilityPackPersonaInsights({
                       <div key={idx} className="flex items-start gap-2 text-xs">
                         <AlertTriangle className={cn(
                           'w-3 h-3 mt-0.5 shrink-0',
-                          rule.level === 'blocker' ? 'text-red-600' : 'text-orange-600'
+                          rule.level === 'blocker' ? 'text-error' : 'text-warning'
                         )} />
                         <div>
                           <span className="font-medium">{rule.message}</span>
@@ -220,7 +220,7 @@ export default function CapabilityPackPersonaInsights({
                     </p>
                     {abuInsights.hazards.map((hazard, idx) => (
                       <div key={idx} className="flex items-start gap-2 text-xs">
-                        <AlertTriangle className="w-3 h-3 mt-0.5 text-red-600 shrink-0" />
+                        <AlertTriangle className="w-3 h-3 mt-0.5 text-error shrink-0" />
                         <span>{hazard.summary}</span>
                       </div>
                     ))}
@@ -238,13 +238,13 @@ export default function CapabilityPackPersonaInsights({
         {/* Dr.Dre 卡片 */}
         <Card className={cn(
           'border-2',
-          dreInsights.verdict === 'WARN' ? 'border-yellow-300 bg-yellow-50/30' :
+          dreInsights.verdict === 'WARN' ? 'border-border bg-muted/30' :
           'border-gray-200'
         )}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-purple-600" />
+                <Activity className="w-5 h-5 text-muted-foreground" />
                 <CardTitle className="text-sm font-semibold">Dr.Dre</CardTitle>
               </div>
               {hasDreContent && getVerdictBadge(dreInsights.verdict)}
@@ -260,7 +260,7 @@ export default function CapabilityPackPersonaInsights({
                   <div className="space-y-1">
                     {dreInsights.rules.map((rule, idx) => (
                       <div key={idx} className="flex items-start gap-2 text-xs">
-                        <Clock className="w-3 h-3 mt-0.5 text-purple-600 shrink-0" />
+                        <Clock className="w-3 h-3 mt-0.5 text-muted-foreground shrink-0" />
                         <div>
                           <span className="font-medium">{rule.message}</span>
                           <span className="text-muted-foreground ml-1">({rule.packName})</span>
@@ -276,7 +276,7 @@ export default function CapabilityPackPersonaInsights({
                     </p>
                     {dreInsights.adjustments.map((adj, idx) => (
                       <div key={idx} className="flex items-start gap-2 text-xs">
-                        <ChevronRight className="w-3 h-3 mt-0.5 text-purple-600 shrink-0" />
+                        <ChevronRight className="w-3 h-3 mt-0.5 text-muted-foreground shrink-0" />
                         <span>{adj.message}</span>
                       </div>
                     ))}
@@ -296,11 +296,11 @@ export default function CapabilityPackPersonaInsights({
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-teal-600" />
+                <RefreshCw className="w-5 h-5 text-success" />
                 <CardTitle className="text-sm font-semibold">Neptune</CardTitle>
               </div>
               {hasNeptuneContent && (
-                <Badge variant="outline" className="text-xs border-teal-500 text-teal-700">
+                <Badge variant="outline" className="text-xs border-border text-success">
                   {t('dashboard.readiness.page.hasSuggestions', { defaultValue: '有建议' })}
                 </Badge>
               )}
@@ -316,7 +316,7 @@ export default function CapabilityPackPersonaInsights({
                   <div className="space-y-1">
                     {neptuneInsights.rules.map((rule, idx) => (
                       <div key={idx} className="flex items-start gap-2 text-xs">
-                        <Route className="w-3 h-3 mt-0.5 text-teal-600 shrink-0" />
+                        <Route className="w-3 h-3 mt-0.5 text-success shrink-0" />
                         <div>
                           <span className="font-medium">{rule.message}</span>
                           <span className="text-muted-foreground ml-1">({rule.packName})</span>
@@ -332,7 +332,7 @@ export default function CapabilityPackPersonaInsights({
                     </p>
                     {neptuneInsights.alternatives.map((alt, idx) => (
                       <div key={idx} className="flex items-start gap-2 text-xs">
-                        <ChevronRight className="w-3 h-3 mt-0.5 text-teal-600 shrink-0" />
+                        <ChevronRight className="w-3 h-3 mt-0.5 text-success shrink-0" />
                         <span>{alt.message}</span>
                       </div>
                     ))}

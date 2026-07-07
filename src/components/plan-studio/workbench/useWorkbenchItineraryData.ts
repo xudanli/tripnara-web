@@ -2,24 +2,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { tripsApi, itineraryItemsApi } from '@/api/trips';
-import { readinessApi, type CoverageMapResponse } from '@/api/readiness';
 import { loadTripDayTravelInfoMapCached } from '@/lib/itinerary-travel-info';
 import {
   applyScheduleTimelineToMaps,
   isScheduleTimelineUnavailable,
 } from '@/lib/schedule-timeline-apply';
 import { sortItineraryItemsForDisplay } from '@/lib/itinerary-item-sort';
-import { extractHmFromWindow, formatDurationBetweenWindows } from '@/lib/itinerary-item-card-format';
+import { extractHmFromWindow } from '@/lib/itinerary-item-card-format';
 import { getItineraryItemTypeDisplay, isItineraryItemType } from '@/lib/itinerary-item-type-display';
 import type {
   DayMetricsResponse,
   DayTravelInfoResponse,
   ItineraryItemDetail,
+  ItineraryItemType,
   TripDetail,
 } from '@/types/trip';
 import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
 import type { LucideIcon } from 'lucide-react';
-import { Car } from 'lucide-react';
+import { Car, ShoppingBag, User } from 'lucide-react';
 import {
   formatItinerarySplitGroupLabel,
   itinerarySplitPhaseLabel,
@@ -31,6 +31,8 @@ import {
   formatWorkbenchDistanceKm,
   formatWorkbenchDurationMinutes,
   resolveWorkbenchTimelineItemTitle,
+  routeStopsFromTrip,
+  shouldShowWorkbenchSplitGroupLabel,
 } from './workbench-format.util';
 
 export interface WorkbenchTimelineEntry {
@@ -48,7 +50,11 @@ export interface WorkbenchTimelineEntry {
 export interface WorkbenchConflictLine {
   id: string;
   icon: LucideIcon;
+  /** 短标题（如「交通缓冲偏紧」） */
   label: string;
+  /** 补充说明（如距离/时长） */
+  detail?: string;
+  severity?: 'hard' | 'soft';
   delta?: string;
   actionLabel?: string;
   onAction?: () => void;
@@ -78,6 +84,68 @@ function normalizeDayDate(date: string): string {
   return date.includes('T') ? date.split('T')[0]! : date;
 }
 
+function parseHmToMinutes(hm: string): number | null {
+  const match = hm.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function durationMinutesBetweenWindows(start?: string, end?: string): number | undefined {
+  const startHm = extractHmFromWindow(start);
+  const endHm = extractHmFromWindow(end);
+  if (!startHm || !endHm) return undefined;
+  const startMinutes = parseHmToMinutes(startHm);
+  const endMinutes = parseHmToMinutes(endHm);
+  if (startMinutes == null || endMinutes == null) return undefined;
+  let diff = endMinutes - startMinutes;
+  if (diff < 0) diff += 24 * 60;
+  if (diff <= 0 || diff > 36 * 60) return undefined;
+  return diff;
+}
+
+function resolveWorkbenchTimelineIcon(
+  typeKey: ItineraryItemType,
+  display: ReturnType<typeof getItineraryItemTypeDisplay>,
+  highlight?: boolean,
+): LucideIcon {
+  if (typeKey === 'REST') return User;
+  if (typeKey === 'TRANSIT') return Car;
+  if (typeKey === 'ACTIVITY' && highlight) return ShoppingBag;
+  return display.icon;
+}
+
+function buildWorkbenchTimelineSubtitle(input: {
+  typeKey: ItineraryItemType;
+  display: ReturnType<typeof getItineraryItemTypeDisplay>;
+  startTime?: string;
+  endTime?: string;
+  travelBits: string[];
+}): string {
+  const { typeKey, display, startTime, endTime, travelBits } = input;
+
+  if (travelBits.length > 0) {
+    return travelBits.join(' · ');
+  }
+
+  const stayMinutes = durationMinutesBetweenWindows(startTime, endTime);
+  const duration =
+    stayMinutes != null ? formatWorkbenchDurationMinutes(stayMinutes) : undefined;
+
+  if (typeKey === 'REST') {
+    return duration ? `休息 · 拍照 · ${duration}` : '休息 · 拍照';
+  }
+  if (typeKey === 'ACTIVITY') {
+    return duration ? `游览 · ${duration}` : '游览';
+  }
+  if (duration) {
+    return `${display.shortLabel} · ${duration}`;
+  }
+  return display.shortLabel;
+}
+
 function buildTimelineEntries(
   items: ItineraryItemDetail[],
   travelInfo?: DayTravelInfoResponse | null,
@@ -96,7 +164,6 @@ function buildTimelineEntries(
     const noteBody = stripSplitPlanNoteLines(item.note);
     const placeName = resolveWorkbenchTimelineItemTitle(item);
 
-    const durationLabel = formatDurationBetweenWindows(item.startTime, item.endTime);
     const segment = travelInfo?.segments?.find(
       (s) => s.toItemId === item.id || s.fromItemId === item.id,
     );
@@ -104,26 +171,37 @@ function buildTimelineEntries(
     if (segment?.distance) travelBits.push(formatWorkbenchDistanceKm(segment.distance / 1000));
     if (segment?.duration) {
       travelBits.push(formatWorkbenchDurationMinutes(segment.duration));
-    } else if (durationLabel) {
-      travelBits.push(durationLabel.replace(/小时/g, 'h ').replace(/分钟/g, 'm'));
     }
 
-    const subtitle =
-      travelBits.length > 0
-        ? travelBits.join(' · ')
-        : durationLabel
-          ? `${display.shortLabel} · ${durationLabel}`
-          : display.shortLabel;
+    const stayMinutes = durationMinutesBetweenWindows(item.startTime, item.endTime);
+    const highlight =
+      typeKey === 'REST' ||
+      noteBody.includes('住宿') ||
+      (typeKey === 'ACTIVITY' && stayMinutes != null && stayMinutes >= 90);
+
+    const subtitle = buildWorkbenchTimelineSubtitle({
+      typeKey,
+      display,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      travelBits,
+    });
+
+    const splitLabel = splitMarker ? formatItinerarySplitGroupLabel(splitMarker) : undefined;
+    const showSplitLabel = shouldShowWorkbenchSplitGroupLabel(splitLabel);
 
     entries.push({
       id: item.id,
       timeLabel,
       title: placeName,
       subtitle,
-      icon: display.icon,
-      highlight: typeKey === 'REST' || noteBody.includes('住宿'),
-      splitGroupLabel: splitMarker ? formatItinerarySplitGroupLabel(splitMarker) : undefined,
-      splitPhaseLabel: splitMarker ? itinerarySplitPhaseLabel(splitMarker.phase) ?? undefined : undefined,
+      icon: resolveWorkbenchTimelineIcon(typeKey, display, highlight),
+      highlight,
+      splitGroupLabel: showSplitLabel ? splitLabel : undefined,
+      splitPhaseLabel:
+        showSplitLabel && splitMarker
+          ? itinerarySplitPhaseLabel(splitMarker.phase) ?? undefined
+          : undefined,
     });
   }
 
@@ -134,11 +212,44 @@ function conflictsForDay(
   items: PlanningConflictItem[],
   dayNumber: number,
 ): PlanningConflictItem[] {
+  const seen = new Set<string>();
   return items.filter((item) => {
     const days = item.affectedDays ?? item.issue?.affectedDays;
-    if (!days?.length) return item.priority === 'must_handle';
-    return days.includes(dayNumber);
+    const matchesDay = days?.length ? days.includes(dayNumber) : item.priority === 'must_handle';
+    if (!matchesDay) return false;
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
   });
+}
+
+function normalizeConflictText(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** 规划冲突与 metrics 冲突描述相同时视为重复（保留先出现的条目） */
+export function isDuplicateWorkbenchConflictLine(
+  existing: WorkbenchConflictLine,
+  candidate: WorkbenchConflictLine,
+): boolean {
+  const labelA = normalizeConflictText(existing.label);
+  const labelB = normalizeConflictText(candidate.label);
+  if (labelA !== labelB) return false;
+
+  const detailA = normalizeConflictText(existing.detail ?? '');
+  const detailB = normalizeConflictText(candidate.detail ?? '');
+  if (!detailA || !detailB) return true;
+  if (detailA === detailB) return true;
+  return detailA.includes(detailB) || detailB.includes(detailA);
+}
+
+export function dedupeWorkbenchConflictLines(lines: WorkbenchConflictLine[]): WorkbenchConflictLine[] {
+  const result: WorkbenchConflictLine[] = [];
+  for (const line of lines) {
+    if (result.some((existing) => isDuplicateWorkbenchConflictLine(existing, line))) continue;
+    result.push(line);
+  }
+  return result;
 }
 
 function mapConflictLines(
@@ -148,11 +259,14 @@ function mapConflictLines(
   const lines: WorkbenchConflictLine[] = [];
 
   for (const c of dayConflicts.slice(0, 4)) {
+    const title = c.title?.trim() || '行程冲突';
+    const message = c.message?.trim();
     lines.push({
       id: c.id,
       icon: Car,
-      label: c.message?.trim() || c.title,
-      delta: c.priority === 'must_handle' ? undefined : undefined,
+      label: title,
+      detail: message && message !== title ? message : undefined,
+      severity: c.priority === 'must_handle' ? 'hard' : 'soft',
     });
   }
 
@@ -161,11 +275,41 @@ function mapConflictLines(
       id: `metric-${mc.type}-${mc.title}`,
       icon: Car,
       label: mc.title,
+      detail: mc.description?.trim(),
+      severity: mc.severity === 'HIGH' ? 'hard' : 'soft',
       delta: mc.severity === 'HIGH' ? '!' : undefined,
     });
   }
 
-  return lines.slice(0, 5);
+  return dedupeWorkbenchConflictLines(lines).slice(0, 5);
+}
+
+export type WorkbenchItineraryLoadingPhase =
+  | 'idle'
+  | 'loading_schedule'
+  | 'loading_travel'
+  | 'loading_metrics';
+
+export const WORKBENCH_ITINERARY_LOADING_LABELS: Record<
+  Exclude<WorkbenchItineraryLoadingPhase, 'idle'>,
+  string
+> = {
+  loading_schedule: '正在加载当日行程…',
+  loading_travel: '正在核对交通时间…',
+  loading_metrics: '正在分析冲突与驾驶强度…',
+};
+
+export function resolveWorkbenchItineraryLoadingLabel(
+  phase: WorkbenchItineraryLoadingPhase,
+  conflictsLoading?: boolean,
+): string {
+  if (phase !== 'idle') {
+    return WORKBENCH_ITINERARY_LOADING_LABELS[phase];
+  }
+  if (conflictsLoading) {
+    return '正在同步规划冲突…';
+  }
+  return '正在加载…';
 }
 
 export function useWorkbenchItineraryData(
@@ -173,19 +317,20 @@ export function useWorkbenchItineraryData(
   trip: TripDetail | null,
   conflictItems: PlanningConflictItem[],
   refreshKey = 0,
-  options?: { dailyDriveLimitMinutes?: number; showRouteMap?: boolean },
+  options?: { dailyDriveLimitMinutes?: number },
 ) {
   const dailyDriveLimitMinutes =
     options?.dailyDriveLimitMinutes ?? readDailyDriveLimitHours(trip) * 60;
   const [itineraryByDay, setItineraryByDay] = useState<Map<string, ItineraryItemDetail[]>>(new Map());
   const [travelInfoMap, setTravelInfoMap] = useState<Map<string, DayTravelInfoResponse>>(new Map());
   const [metricsByDay, setMetricsByDay] = useState<Map<string, DayMetricsResponse>>(new Map());
-  const [coverageMap, setCoverageMap] = useState<CoverageMapResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingPhase, setLoadingPhase] = useState<WorkbenchItineraryLoadingPhase>('idle');
 
   const reload = useCallback(async () => {
     if (!tripId || !trip?.TripDay?.length) return;
     setLoading(true);
+    setLoadingPhase('loading_schedule');
     try {
       try {
         const timelineResult = await tripsApi.getScheduleTimeline(tripId, {
@@ -193,6 +338,7 @@ export function useWorkbenchItineraryData(
           travelInfoMode: 'cached',
         });
         if (timelineResult.status !== 'not_modified' && timelineResult.data) {
+          setLoadingPhase('loading_metrics');
           const applied = applyScheduleTimelineToMaps(
             timelineResult.data,
             () => [],
@@ -201,11 +347,6 @@ export function useWorkbenchItineraryData(
           setItineraryByDay(applied.itemsMap);
           setTravelInfoMap(applied.travelInfoMap);
           setMetricsByDay(applied.metricsMap);
-
-          if (options?.showRouteMap) {
-            const mapData = await readinessApi.getCoverageMapData(tripId).catch(() => null);
-            setCoverageMap(mapData);
-          }
           return;
         }
       } catch (timelineError) {
@@ -217,6 +358,7 @@ export function useWorkbenchItineraryData(
       const itemsMap = new Map<string, ItineraryItemDetail[]>();
       const metricsMap = new Map<string, DayMetricsResponse>();
 
+      setLoadingPhase('loading_schedule');
       const allItems = await itineraryItemsApi.getByTrip(tripId).catch(() => [] as ItineraryItemDetail[]);
       const itemsByDayId = new Map<string, ItineraryItemDetail[]>();
       for (const item of allItems) {
@@ -227,13 +369,24 @@ export function useWorkbenchItineraryData(
         else itemsByDayId.set(dayId, [item]);
       }
 
+      for (const day of trip.TripDay) {
+        const norm = normalizeDayDate(day.date);
+        const items = itemsByDayId.get(day.id) ?? [];
+        itemsMap.set(norm, items);
+        itemsMap.set(day.date, items);
+      }
+
+      setLoadingPhase('loading_travel');
+      const travelMap = await loadTripDayTravelInfoMapCached(tripId, trip);
+
+      setItineraryByDay(itemsMap);
+      setTravelInfoMap(travelMap);
+
+      setLoadingPhase('loading_metrics');
       await Promise.all(
         trip.TripDay.map(async (day) => {
           const norm = normalizeDayDate(day.date);
-          const items = itemsByDayId.get(day.id) ?? [];
           const metrics = await tripsApi.getDayMetrics(tripId, day.id).catch(() => null);
-          itemsMap.set(norm, items);
-          itemsMap.set(day.date, items);
           if (metrics) {
             metricsMap.set(norm, metrics);
             metricsMap.set(day.date, metrics);
@@ -241,20 +394,12 @@ export function useWorkbenchItineraryData(
         }),
       );
 
-      const travelMap = await loadTripDayTravelInfoMapCached(tripId, trip);
-
-      setItineraryByDay(itemsMap);
-      setTravelInfoMap(travelMap);
       setMetricsByDay(metricsMap);
-
-      if (options?.showRouteMap) {
-        const mapData = await readinessApi.getCoverageMapData(tripId).catch(() => null);
-        setCoverageMap(mapData);
-      }
     } finally {
       setLoading(false);
+      setLoadingPhase('idle');
     }
-  }, [tripId, trip, options?.showRouteMap]);
+  }, [tripId, trip]);
 
   useEffect(() => {
     void reload();
@@ -287,6 +432,11 @@ export function useWorkbenchItineraryData(
       dailyDriveLimitMinutes,
     };
   }, [trip, travelInfoMap, dailyDriveLimitMinutes]);
+
+  const routeStops = useMemo(
+    () => routeStopsFromTrip(trip, itineraryByDay),
+    [trip, itineraryByDay],
+  );
 
   const buildDaySnapshot = useCallback(
     (dayIndex: number): WorkbenchDaySnapshot | null => {
@@ -354,7 +504,8 @@ export function useWorkbenchItineraryData(
 
   return {
     loading,
-    coverageMap,
+    loadingPhase,
+    routeStops,
     routeStats,
     buildDaySnapshot,
     reload,

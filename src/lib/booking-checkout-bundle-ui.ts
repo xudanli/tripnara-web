@@ -125,7 +125,7 @@ export const BUNDLE_LOCK_STATUS_META: Record<
   LOCKED: {
     label: '已锁价',
     badgeClass:
-      'border-emerald-500/40 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/35 dark:text-emerald-100',
+      'border-gate-allow-border/40 bg-muted text-success dark:bg-muted/35 dark:text-success',
   },
   QUOTE_ONLY: {
     label: '采样价',
@@ -135,6 +135,6 @@ export const BUNDLE_LOCK_STATUS_META: Record<
   LOCK_FAILED: {
     label: '锁价失败',
     badgeClass:
-      'border-red-500/40 bg-red-50 text-red-950 dark:bg-red-950/35 dark:text-red-100',
+      'border-border/40 bg-muted text-error dark:bg-muted/35 dark:text-error',
   },
 };

@@ -1,29 +1,21 @@
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { ChevronRight, Clock, Cloud, Compass, Gauge, Hotel, Shield } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ChevronRight, RefreshCw, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { DecisionCheckerEvidenceDto, DecisionCheckerEvidenceKind } from '@/types/decision-checker';
+import { Button } from '@/components/ui/button';
+import type { DecisionCheckerEvidenceDto } from '@/types/decision-checker';
 import {
+  formatDecisionCheckerText,
   DecisionCheckerAiBox,
   DecisionCheckerBadge,
   DecisionCheckerEmpty,
   DecisionCheckerSection,
-  formatDecisionCheckerText,
   reliabilityLabel,
   reliabilityTone,
 } from './decision-checker-ui';
+import { isPlanObjectEvidenceItem } from '@/lib/decision-checker-evidence-display.util';
+import { PlanObjectSourceBadge } from '@/components/planning-workbench/PlanObjectSourceBadge';
 import { workbenchDecisionCheckerReliabilityStatClass } from '../workbench-ui';
-
-const EVIDENCE_KIND_ICON: Partial<Record<DecisionCheckerEvidenceKind | string, LucideIcon>> = {
-  route_engine: Compass,
-  historical_model: Gauge,
-  weather_road: Cloud,
-  inventory: Hotel,
-  opening_hours: Clock,
-  persona_trace: Gauge,
-  other: Clock,
-};
 
 function formatObservedAt(iso?: string): string | undefined {
   if (!iso) return undefined;
@@ -40,6 +32,10 @@ export interface DecisionCheckerEvidenceTabProps {
   unavailable?: boolean;
   error?: string | null;
   displayTimezone?: string;
+  /** 无证据时的说明（如工作台按天过滤后为空） */
+  emptyMessage?: string;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 export function DecisionCheckerEvidenceTab({
@@ -48,6 +44,9 @@ export function DecisionCheckerEvidenceTab({
   unavailable,
   error,
   displayTimezone,
+  emptyMessage,
+  onRefresh,
+  refreshing,
 }: DecisionCheckerEvidenceTabProps) {
   const items = model.items ?? [];
   const summary = model.summary ?? { high: 0, medium: 0, low: 0 };
@@ -66,9 +65,25 @@ export function DecisionCheckerEvidenceTab({
 
   if (!items.length) {
     return (
-      <DecisionCheckerEmpty>
-        暂无决策证据。完成一次方案生成或可执行性验证后，将在此展示数据来源与可靠性。
-      </DecisionCheckerEmpty>
+      <div className="space-y-3">
+        <DecisionCheckerEmpty>
+          {emptyMessage ??
+            '暂无决策证据。完成一次方案生成或可执行性验证后，将在此展示数据来源与可靠性。'}
+        </DecisionCheckerEmpty>
+        {onRefresh ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mx-auto flex h-8 w-full max-w-xs text-xs"
+            disabled={loading || refreshing}
+            onClick={onRefresh}
+          >
+            <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', refreshing && 'animate-spin')} />
+            刷新决策检查器
+          </Button>
+        ) : null}
+      </div>
     );
   }
 
@@ -79,32 +94,31 @@ export function DecisionCheckerEvidenceTab({
       <DecisionCheckerSection title="证据列表">
         <div className="space-y-2">
           {items.map((item) => {
-            const Icon = EVIDENCE_KIND_ICON[item.kind] ?? Clock;
             const observedLabel = formatObservedAt(item.observedAt);
             return (
               <div
                 key={item.id}
-                className="flex items-start gap-2.5 rounded-lg border border-border/60 bg-background/70 px-2.5 py-2"
+                className="rounded-lg border border-border/60 bg-background/70 px-2.5 py-2"
               >
-                <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60 text-muted-foreground">
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     <p className="text-xs font-medium text-foreground">{item.title}</p>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <DecisionCheckerBadge tone={reliabilityTone(item.reliability)}>
-                        {reliabilityLabel(item.reliability)}
-                      </DecisionCheckerBadge>
-                      {observedLabel ? (
-                        <span className="text-[10px] text-muted-foreground">{observedLabel}前</span>
-                      ) : null}
-                    </div>
+                    {isPlanObjectEvidenceItem(item) ? (
+                      <PlanObjectSourceBadge compact />
+                    ) : null}
                   </div>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                    {formatDecisionCheckerText(item.subtitle, displayTimezone)}
-                  </p>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <DecisionCheckerBadge tone={reliabilityTone(item.reliability)}>
+                      {reliabilityLabel(item.reliability)}
+                    </DecisionCheckerBadge>
+                    {observedLabel ? (
+                      <span className="text-[10px] text-muted-foreground">{observedLabel}前</span>
+                    ) : null}
+                  </div>
                 </div>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                  {formatDecisionCheckerText(item.subtitle, displayTimezone)}
+                </p>
               </div>
             );
           })}
@@ -148,7 +162,7 @@ export function DecisionCheckerEvidenceTab({
           {model.calculationDetailUrl ? (
             <a
               href={model.calculationDetailUrl}
-              className="mt-2 inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+              className="mt-2 inline-flex items-center gap-0.5 text-xs font-medium text-foreground underline-offset-2 hover:underline"
             >
               查看计算明细
               <ChevronRight className="h-3.5 w-3.5" />

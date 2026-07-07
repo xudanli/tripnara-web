@@ -195,7 +195,7 @@ export default function EvidenceFilters({
         {hasActiveFilters && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {filters.priority && filters.priority !== 'all' && (
-              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+              <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border">
                 {filters.priority === 'high'
                   ? t('dashboard.readiness.evidence.filters.priorityHigh', { defaultValue: '高优先级' })
                   : t('dashboard.readiness.evidence.filters.priorityMediumAndHigh', {
@@ -204,12 +204,12 @@ export default function EvidenceFilters({
               </Badge>
             )}
             {filters.type && (
-              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+              <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border">
                 {filters.type}
               </Badge>
             )}
             {filters.day && (
-              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+              <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border">
                 {t('dashboard.readiness.evidence.filters.dayNumber', {
                   day: filters.day,
                   defaultValue: '第 {{day}} 天',
@@ -217,7 +217,7 @@ export default function EvidenceFilters({
               </Badge>
             )}
             {filters.sortBy && filters.sortBy !== 'time' && (
-              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+              <Badge variant="outline" className="text-[10px] bg-muted text-warning border-border">
                 {t(`dashboard.readiness.evidence.filters.sortBy${filters.sortBy.charAt(0).toUpperCase() + filters.sortBy.slice(1)}`, {
                   defaultValue: filters.sortBy,
                 })}

@@ -15,13 +15,16 @@ import type {
   TeamTravelStyleItem,
 } from '@/types/trip-decision-profiling';
 
-export function useDecisionProfilingOnboarding(tripId: string | null | undefined) {
+export function useDecisionProfilingOnboarding(
+  tripId: string | null | undefined,
+  enabled = true,
+) {
   const [data, setData] = useState<OnboardingStatus | null>(null);
-  const [loading, setLoading] = useState(!!tripId);
+  const [loading, setLoading] = useState(!!tripId && enabled);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    if (!tripId) return null;
+    if (!tripId || !enabled) return null;
     try {
       setLoading(true);
       setError(null);
@@ -36,11 +39,12 @@ export function useDecisionProfilingOnboarding(tripId: string | null | undefined
     } finally {
       setLoading(false);
     }
-  }, [tripId]);
+  }, [tripId, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     void reload();
-  }, [reload]);
+  }, [reload, enabled]);
 
   return { data, loading, error, reload };
 }

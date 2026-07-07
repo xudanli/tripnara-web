@@ -47,7 +47,11 @@ export function CollabDecisionQueuePanel({
   const actionable = tasks.filter((t) => t.status !== 'consensus_reached');
 
   return (
-    <CollabWidgetCard title="决策队列" description="点击议题进入协商主舞台" className={className}>
+    <CollabWidgetCard
+      title="领域协商"
+      description="领域结构化协商 · Round Robin 偏好分享"
+      className={className}
+    >
       {loading ? (
         <div className="flex justify-center py-8">
           <Spinner className="h-5 w-5 text-muted-foreground" />
@@ -101,7 +105,12 @@ export function CollabDecisionQueuePanel({
                       </Badge>
                     </div>
                   </div>
-                  <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                  <ChevronRight
+                    className={cn(
+                      'mt-1 h-3.5 w-3.5 shrink-0',
+                      selected ? 'text-primary' : 'text-muted-foreground/60',
+                    )}
+                  />
                 </button>
               </li>
             );

@@ -45,7 +45,7 @@ export function FlywheelAuditReportPanel({ report, className }: FlywheelAuditRep
           className={cn(
             'text-[10px] font-normal',
             report.match
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              ? 'border-gate-allow-border bg-gate-allow text-gate-allow-foreground'
               : 'border-amber-200 bg-amber-50 text-amber-800'
           )}
         >
@@ -96,7 +96,7 @@ export function FlywheelAuditReportPanel({ report, className }: FlywheelAuditRep
           {signalEntries.map(([key, passed]) => (
             <li key={key} className="flex items-start gap-2 text-foreground">
               {passed ? (
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gate-allow-foreground" aria-hidden />
               ) : (
                 <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
               )}
@@ -111,7 +111,7 @@ export function FlywheelAuditReportPanel({ report, className }: FlywheelAuditRep
           {report.assertions.map((assertion) => (
             <li key={assertion.id} className="flex items-start gap-2">
               {assertion.passed ? (
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gate-allow-foreground" aria-hidden />
               ) : (
                 <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
               )}

@@ -61,7 +61,7 @@ export function InTripTodayReadinessCard({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4 text-sky-600" />
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
             今日就绪
             <span className="text-xs font-normal text-muted-foreground">
               第 {dayNumber} 天
@@ -82,7 +82,7 @@ export function InTripTodayReadinessCard({
         {summary && (
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             {summary.blockers > 0 && (
-              <span className="text-red-600 font-medium">{summary.blockers} 阻塞</span>
+              <span className="text-gate-reject-foreground font-medium">{summary.blockers} 阻塞</span>
             )}
             {summary.must > 0 && <span>{summary.must} 必办</span>}
             {summary.should > 0 && <span>{summary.should} 建议</span>}

@@ -30,17 +30,17 @@ import { Cloud, CloudRain, CloudSnow, Sun, Wind, Eye, EyeOff, Thermometer, Alert
 // ==================== 配置 ====================
 
 const VISIBILITY_CONFIG: Record<VisibilityLevel, { label: string; icon: React.ElementType; color: string }> = {
-  EXCELLENT: { label: '极佳', icon: Eye, color: 'text-green-500' },
-  GOOD: { label: '良好', icon: Eye, color: 'text-blue-500' },
+  EXCELLENT: { label: '极佳', icon: Eye, color: 'text-gate-allow-foreground' },
+  GOOD: { label: '良好', icon: Eye, color: 'text-muted-foreground' },
   MODERATE: { label: '中等', icon: Eye, color: 'text-yellow-500' },
   POOR: { label: '较差', icon: EyeOff, color: 'text-orange-500' },
-  VERY_POOR: { label: '极差', icon: EyeOff, color: 'text-red-500' },
+  VERY_POOR: { label: '极差', icon: EyeOff, color: 'text-gate-reject-foreground' },
 };
 
 const ROAD_STATUS_CONFIG: Record<RoadStatusType, { label: string; icon: React.ElementType; color: string; bgColor: string }> = {
-  OPEN: { label: '通行', icon: CheckCircle, color: 'text-green-600', bgColor: 'bg-green-50' },
+  OPEN: { label: '通行', icon: CheckCircle, color: 'text-gate-allow-foreground', bgColor: 'bg-gate-allow' },
   RESTRICTED: { label: '限行', icon: MinusCircle, color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
-  CLOSED: { label: '关闭', icon: XCircle, color: 'text-red-600', bgColor: 'bg-red-50' },
+  CLOSED: { label: '关闭', icon: XCircle, color: 'text-gate-reject-foreground', bgColor: 'bg-gate-reject' },
 };
 
 // ==================== 子组件 ====================
@@ -100,7 +100,7 @@ function WeatherBlock({
             <div className="flex items-center gap-1.5">
               <Wind className={cn(
                 'h-4 w-4',
-                weather.windSpeedMs > 15 ? 'text-red-500' : 
+                weather.windSpeedMs > 15 ? 'text-gate-reject-foreground' : 
                 weather.windSpeedMs > 10 ? 'text-yellow-500' : 
                 'text-muted-foreground'
               )} />
@@ -199,7 +199,7 @@ function RoadStatusBlock({
       
       <div className="flex items-center gap-2">
         {openCount > 0 && (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+          <Badge variant="outline" className="bg-gate-allow text-gate-allow-foreground border-gate-allow-border">
             <CheckCircle className="h-3 w-3 mr-1" />
             {openCount}
           </Badge>
@@ -211,7 +211,7 @@ function RoadStatusBlock({
           </Badge>
         )}
         {closedCount > 0 && (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+          <Badge variant="outline" className="bg-gate-reject text-gate-reject-foreground border-gate-reject-border">
             <XCircle className="h-3 w-3 mr-1" />
             {closedCount}
           </Badge>
@@ -233,9 +233,9 @@ function HumanStateBlock({
   const altitudeRiskPercent = Math.round(human.altitudeSicknessRisk * 100);
 
   const getFatigueColor = (level: number) => {
-    if (level < 0.3) return 'text-green-500';
+    if (level < 0.3) return 'text-gate-allow-foreground';
     if (level < 0.6) return 'text-yellow-500';
-    return 'text-red-500';
+    return 'text-gate-reject-foreground';
   };
 
   return (
@@ -255,9 +255,9 @@ function HumanStateBlock({
                   <div 
                     className={cn(
                       'h-full rounded-full transition-all',
-                      human.fatigueLevel < 0.3 ? 'bg-green-500' :
+                      human.fatigueLevel < 0.3 ? 'bg-gate-allow-foreground' :
                       human.fatigueLevel < 0.6 ? 'bg-yellow-500' :
-                      'bg-red-500'
+                      'bg-gate-reject-foreground'
                     )}
                     style={{ width: `${fatiguePercent}%` }}
                   />
@@ -282,9 +282,9 @@ function HumanStateBlock({
             <div className="flex items-center gap-2">
               <Mountain className={cn(
                 'h-4 w-4',
-                human.altitudeSicknessRisk < 0.3 ? 'text-green-500' :
+                human.altitudeSicknessRisk < 0.3 ? 'text-gate-allow-foreground' :
                 human.altitudeSicknessRisk < 0.6 ? 'text-yellow-500' :
-                'text-red-500'
+                'text-gate-reject-foreground'
               )} />
               <div className="flex items-center gap-1.5">
                 <span className={cn('text-sm', compact && 'hidden sm:inline')}>高反</span>
@@ -390,9 +390,9 @@ export function RealtimeStatusBanner({
 
   const severity = getOverallSeverity();
   const severityColors = {
-    INFO: 'bg-blue-50 border-blue-200',
+    INFO: 'bg-muted/15 border-border',
     WARNING: 'bg-yellow-50 border-yellow-200',
-    CRITICAL: 'bg-red-50 border-red-200',
+    CRITICAL: 'bg-gate-reject border-gate-reject-border',
   };
 
   if (!state) {
@@ -435,9 +435,9 @@ export function RealtimeStatusBanner({
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
         {connected ? (
-          <Wifi className="h-4 w-4 text-green-500" />
+          <Wifi className="h-4 w-4 text-gate-allow-foreground" />
         ) : (
-          <WifiOff className="h-4 w-4 text-red-500" />
+          <WifiOff className="h-4 w-4 text-gate-reject-foreground" />
         )}
         <span className="text-sm font-medium">实时状态</span>
         <span className="text-xs text-muted-foreground">

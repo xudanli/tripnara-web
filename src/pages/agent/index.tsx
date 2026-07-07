@@ -1,5 +1,5 @@
 /**
- * /dashboard/agent 已并入规划工作台右侧全局智能体，本路由仅做重定向。
+ * /dashboard/agent 已并入 Nara 对话页，本路由仅做重定向。
  */
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { buildPlanStudioUrlFromAgentSearchParams } from '@/lib/agent-route-query';

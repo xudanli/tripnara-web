@@ -42,9 +42,9 @@ const RISK_LEVEL_CONFIG: Record<string, {
   icon: React.ElementType;
 }> = {
   LOW: {
-    color: 'text-green-700',
-    bgColor: 'bg-green-100',
-    borderColor: 'border-green-300',
+    color: 'text-gate-allow-foreground',
+    bgColor: 'bg-gate-allow',
+    borderColor: 'border-gate-allow-border',
     label: '低',
     icon: CheckCircle,
   },
@@ -56,16 +56,16 @@ const RISK_LEVEL_CONFIG: Record<string, {
     icon: Info,
   },
   HIGH: {
-    color: 'text-red-700',
-    bgColor: 'bg-red-100',
-    borderColor: 'border-red-300',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
+    borderColor: 'border-gate-reject-border',
     label: '高',
     icon: AlertTriangle,
   },
   CRITICAL: {
-    color: 'text-red-900',
-    bgColor: 'bg-red-200',
-    borderColor: 'border-red-500',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
+    borderColor: 'border-gate-reject-border',
     label: '极高',
     icon: AlertTriangle,
   },

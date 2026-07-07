@@ -149,10 +149,10 @@ export function TrailCard({
               <div
                 className={`h-full ${
                   score >= 80
-                    ? 'bg-green-500'
+                    ? 'bg-gate-allow-foreground'
                     : score >= 60
                     ? 'bg-yellow-500'
-                    : 'bg-red-500'
+                    : 'bg-gate-reject-foreground'
                 }`}
                 style={{ width: `${score}%` }}
               />

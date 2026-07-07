@@ -17,6 +17,8 @@ export function useDecisionStripPlanningReadiness(
   options?: {
     deferConstraintTopicsToCard?: boolean;
     budgetProfile?: TripBudgetProfile | null;
+    useDecisionProblemsBff?: boolean;
+    openDecisionProblemCount?: number;
   },
 ): PlanningReadinessPresentation | null {
   const budgetGate = options?.budgetProfile?.gateStatus ?? null;
@@ -30,6 +32,8 @@ export function useDecisionStripPlanningReadiness(
       budgetGate,
       trip: trip ?? null,
       deferConstraintTopicsToCard: options?.deferConstraintTopicsToCard,
+      useDecisionProblemsBff: options?.useDecisionProblemsBff,
+      openDecisionProblemCount: options?.openDecisionProblemCount,
     });
   }, [
     tripId,
@@ -40,5 +44,7 @@ export function useDecisionStripPlanningReadiness(
     conflicts.loading,
     budgetGate,
     options?.deferConstraintTopicsToCard,
+    options?.useDecisionProblemsBff,
+    options?.openDecisionProblemCount,
   ]);
 }

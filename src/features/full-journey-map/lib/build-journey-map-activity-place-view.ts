@@ -127,7 +127,7 @@ function resolveContextBadges(item: ItineraryItemDetail | null): JourneyMapActiv
   if (isItineraryLandingPointDisplay(item)) {
     badges.push({
       label: '落地点',
-      className: 'border-sky-200 bg-sky-50 text-sky-700',
+      className: 'border-nara-glacier-border bg-nara-glacier-muted text-nara-glacier-foreground',
     });
   }
   if (isCarRentalItineraryItem(item) && !crossLabel) {
@@ -142,7 +142,7 @@ function resolveContextBadges(item: ItineraryItemDetail | null): JourneyMapActiv
       className:
         crossLabel === '退房' || crossLabel === '还车'
           ? 'border-orange-200 bg-orange-50 text-orange-600'
-          : 'border-blue-200 bg-blue-50 text-blue-600',
+          : 'border-nara-glacier-border bg-nara-glacier-muted text-nara-glacier-foreground',
     });
   }
   if (item.isRequired || item.note?.includes('[必游]')) {

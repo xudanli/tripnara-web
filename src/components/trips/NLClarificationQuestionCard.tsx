@@ -557,7 +557,7 @@ export function NLClarificationQuestionCard({
             <Label className="text-xs font-medium text-slate-700">
               {conditionalInput.label || '请输入'}
               {conditionalInput.required && (
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-gate-reject-foreground ml-1">*</span>
               )}
             </Label>
             <div className={cn('flex gap-2', showSubmitButton && 'items-end')}>
@@ -566,7 +566,7 @@ export function NLClarificationQuestionCard({
                 onChange={(e) => handleConditionalInputChange(conditionalInput, e.target.value)}
                 placeholder={conditionalInput.placeholder}
                 disabled={disabled}
-                className={cn(inputError && 'border-red-500', showSubmitButton && 'flex-1')}
+                className={cn(inputError && 'border-gate-reject-border', showSubmitButton && 'flex-1')}
               />
               {showSubmitButton && (
                 <Button
@@ -584,7 +584,7 @@ export function NLClarificationQuestionCard({
               <p className="text-xs text-muted-foreground">{conditionalInput.hint}</p>
             )}
             {inputError && (
-              <p className="text-xs text-red-600" role="alert">{inputError}</p>
+              <p className="text-xs text-gate-reject-foreground" role="alert">{inputError}</p>
             )}
           </div>
         );
@@ -597,7 +597,7 @@ export function NLClarificationQuestionCard({
             <Label className="text-xs font-medium text-slate-700">
               {conditionalInput.label || '请输入数字'}
               {conditionalInput.required && (
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-gate-reject-foreground ml-1">*</span>
               )}
             </Label>
             <div className={cn('flex gap-2', showSubmitButton && 'items-end')}>
@@ -610,7 +610,7 @@ export function NLClarificationQuestionCard({
                 }}
                 placeholder={conditionalInput.placeholder}
                 disabled={disabled}
-                className={cn(inputError && 'border-red-500', showSubmitButton && 'flex-1')}
+                className={cn(inputError && 'border-gate-reject-border', showSubmitButton && 'flex-1')}
               />
               {showSubmitButton && (
                 <Button
@@ -628,7 +628,7 @@ export function NLClarificationQuestionCard({
               <p className="text-xs text-muted-foreground">{conditionalInput.hint}</p>
             )}
             {inputError && (
-              <p className="text-xs text-red-600" role="alert">{inputError}</p>
+              <p className="text-xs text-gate-reject-foreground" role="alert">{inputError}</p>
             )}
           </div>
         );
@@ -641,7 +641,7 @@ export function NLClarificationQuestionCard({
             <Label className="text-xs font-medium text-slate-700">
               {conditionalInput.label || '请选择日期'}
               {conditionalInput.required && (
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-gate-reject-foreground ml-1">*</span>
               )}
             </Label>
             <div className={cn('flex gap-2', showSubmitButton && 'items-end')}>
@@ -650,7 +650,7 @@ export function NLClarificationQuestionCard({
                 value={dateValue}
                 onChange={(e) => handleConditionalInputChange(conditionalInput, e.target.value)}
                 disabled={disabled}
-                className={cn(inputError && 'border-red-500', showSubmitButton && 'flex-1')}
+                className={cn(inputError && 'border-gate-reject-border', showSubmitButton && 'flex-1')}
               />
               {showSubmitButton && (
                 <Button
@@ -668,7 +668,7 @@ export function NLClarificationQuestionCard({
               <p className="text-xs text-muted-foreground">{conditionalInput.hint}</p>
             )}
             {inputError && (
-              <p className="text-xs text-red-600" role="alert">{inputError}</p>
+              <p className="text-xs text-gate-reject-foreground" role="alert">{inputError}</p>
             )}
           </div>
         );
@@ -695,7 +695,7 @@ export function NLClarificationQuestionCard({
             <Label className="text-xs font-medium text-slate-700">
               {conditionalInput.label || '请选择'}
               {conditionalInput.required && (
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-gate-reject-foreground ml-1">*</span>
               )}
             </Label>
             <div className="flex flex-wrap gap-2">
@@ -743,7 +743,7 @@ export function NLClarificationQuestionCard({
               </Button>
             )}
             {inputError && (
-              <p className="text-xs text-red-600 mt-1" role="alert">{inputError}</p>
+              <p className="text-xs text-gate-reject-foreground mt-1" role="alert">{inputError}</p>
             )}
           </div>
         );
@@ -762,7 +762,7 @@ export function NLClarificationQuestionCard({
             <Label className="text-xs font-medium text-slate-700">
               {conditionalInput.label || '请选择日期范围'}
               {conditionalInput.required && (
-                <span className="text-red-500 ml-1">*</span>
+                <span className="text-gate-reject-foreground ml-1">*</span>
               )}
             </Label>
             <div className="flex gap-2">
@@ -773,7 +773,7 @@ export function NLClarificationQuestionCard({
                     className={cn(
                       "w-full justify-start text-left font-normal",
                       !startDate && "text-muted-foreground",
-                      inputError && "border-red-500"
+                      inputError && "border-gate-reject-border"
                     )}
                     disabled={disabled}
                   >
@@ -803,7 +803,7 @@ export function NLClarificationQuestionCard({
                     className={cn(
                       "w-full justify-start text-left font-normal",
                       !endDate && "text-muted-foreground",
-                      inputError && "border-red-500"
+                      inputError && "border-gate-reject-border"
                     )}
                     disabled={disabled}
                   >
@@ -848,7 +848,7 @@ export function NLClarificationQuestionCard({
               </Button>
             )}
             {inputError && (
-              <p className="text-xs text-red-600" role="alert">{inputError}</p>
+              <p className="text-xs text-gate-reject-foreground" role="alert">{inputError}</p>
             )}
           </div>
         );
@@ -862,13 +862,13 @@ export function NLClarificationQuestionCard({
   // 🆕 根据 Critical 字段、优先级和必填状态确定边框颜色
   const isCritical = question.metadata?.isCritical === true;
   const borderColor = isCritical
-    ? 'border-red-300 border-2'  // Critical 字段使用红色边框
+    ? 'border-gate-reject-border border-2'  // Critical 字段使用红色边框
     : question.required 
       ? 'border-slate-300' 
       : 'border-slate-200';
   
   const bgColor = isCritical
-    ? 'bg-red-50/30'  // Critical 字段使用浅红色背景
+    ? 'bg-gate-reject/30'  // Critical 字段使用浅红色背景
     : question.metadata?.priority === 'high'
       ? 'bg-slate-50/60'
       : 'bg-white';
@@ -887,11 +887,11 @@ export function NLClarificationQuestionCard({
           <div className="flex items-start gap-2">
             <p className={cn(
               "text-sm font-medium leading-relaxed flex-1",
-              isCritical ? "text-red-900" : question.required ? "text-slate-900" : "text-slate-800"
+              isCritical ? "text-gate-reject-foreground" : question.required ? "text-slate-900" : "text-slate-800"
             )}>
               {question.text}
               {question.required && !isCritical && (
-                <span className="text-red-500 ml-1 font-semibold" aria-label="必填">*</span>
+                <span className="text-gate-reject-foreground ml-1 font-semibold" aria-label="必填">*</span>
               )}
             </p>
             {/* 🆕 Critical 字段标识 */}
@@ -910,7 +910,7 @@ export function NLClarificationQuestionCard({
           {question.hint && (
             <p className={cn(
               "text-xs leading-relaxed",
-              isCritical ? "text-red-700" : "text-muted-foreground"
+              isCritical ? "text-gate-reject-foreground" : "text-muted-foreground"
             )}>
               {question.hint}
             </p>
@@ -918,14 +918,14 @@ export function NLClarificationQuestionCard({
           
           {/* 🆕 P4: Critical 字段解释提示（符合认知科学中的"上下文帮助"原则） */}
           {isCritical && (
-            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md">
+            <div className="mt-2 p-2 bg-gate-reject border border-gate-reject-border rounded-md">
               <div className="flex items-start gap-2">
-                <HelpCircle className="h-3.5 w-3.5 text-red-600 flex-shrink-0 mt-0.5" />
+                <HelpCircle className="h-3.5 w-3.5 text-gate-reject-foreground flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-xs font-medium text-red-900 mb-0.5">
+                  <p className="text-xs font-medium text-gate-reject-foreground mb-0.5">
                     为什么需要这个信息？
                   </p>
-                  <p className="text-xs text-red-700 leading-relaxed">
+                  <p className="text-xs text-gate-reject-foreground leading-relaxed">
                     这是安全相关的关键信息，必须填写才能继续创建行程。这些信息帮助我们评估行程的安全性和可行性，确保您的旅行安全。
                   </p>
                 </div>
@@ -964,7 +964,7 @@ export function NLClarificationQuestionCard({
         
         {/* 错误提示 */}
         {error && (
-          <p className="text-sm text-red-600 mt-2" role="alert">
+          <p className="text-sm text-gate-reject-foreground mt-2" role="alert">
             {error}
           </p>
         )}

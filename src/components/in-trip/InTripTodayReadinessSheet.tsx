@@ -42,7 +42,7 @@ export function InTripTodayReadinessSheet({
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <ClipboardCheck className="h-5 w-5 text-sky-600" />
+            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
             今日就绪
           </SheetTitle>
           <SheetDescription>
@@ -64,7 +64,7 @@ export function InTripTodayReadinessSheet({
           )}
 
           {error && !loading && (
-            <p className="text-sm text-red-600 py-4">{error}</p>
+            <p className="text-sm text-gate-reject-foreground py-4">{error}</p>
           )}
 
           {data && !loading && (

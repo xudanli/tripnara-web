@@ -65,18 +65,18 @@ export function EmbeddedHikingStatusBar({
   const cta = primaryCta(phase, plans, tripId, navigate, onAddSegment);
 
   return (
-    <div className="rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50/90 to-white px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+    <div className="rounded-lg border border-gate-allow-border bg-gradient-to-r from-gate-allow/90 to-white px-4 py-3 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
-        <Mountain className="h-5 w-5 text-emerald-700 shrink-0" />
+        <Mountain className="h-5 w-5 text-gate-allow-foreground shrink-0" />
         <div>
-          <p className="text-sm font-medium text-emerald-950">
+          <p className="text-sm font-medium text-gate-allow-foreground">
             混合出行 · {segmentCount > 0 ? `${segmentCount} 段徒步` : '待登记片段'}
           </p>
-          <p className="text-xs text-emerald-800/80 mt-0.5">
+          <p className="text-xs text-gate-allow-foreground/80 mt-0.5">
             {phaseHintZh ?? `当前阶段：${HIKING_PHASE_LABELS[phase]}`}
           </p>
         </div>
-        <Badge variant="outline" className="border-emerald-300 text-emerald-900 text-xs shrink-0">
+        <Badge variant="outline" className="border-gate-allow-border text-gate-allow-foreground text-xs shrink-0">
           {HIKING_PHASE_LABELS[phase]}
         </Badge>
       </div>
@@ -84,7 +84,7 @@ export function EmbeddedHikingStatusBar({
         <Button
           type="button"
           size="sm"
-          className="bg-emerald-700 hover:bg-emerald-800"
+          className="bg-gate-allow-foreground hover:bg-gate-allow-foreground"
           onClick={() => cta.action()}
         >
           {cta.label}

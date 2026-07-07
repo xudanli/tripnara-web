@@ -153,15 +153,15 @@ interface EventItemProps {
 
 function EventItem({ event, onEdit }: EventItemProps) {
   const eventTypeConfig = {
-    CHECKIN: { icon: MapPin, label: '到达', color: 'text-blue-600 bg-blue-50' },
-    CHECKOUT: { icon: MapPin, label: '离开', color: 'text-blue-600 bg-blue-50' },
-    PLAN_ITEM_COMPLETED: { icon: CheckCircle2, label: '完成', color: 'text-green-600 bg-green-50' },
-    PLAN_ITEM_SKIPPED: { icon: XCircle, label: '取消', color: 'text-red-600 bg-red-50' },
+    CHECKIN: { icon: MapPin, label: '到达', color: 'text-muted-foreground bg-muted/15' },
+    CHECKOUT: { icon: MapPin, label: '离开', color: 'text-muted-foreground bg-muted/15' },
+    PLAN_ITEM_COMPLETED: { icon: CheckCircle2, label: '完成', color: 'text-gate-allow-foreground bg-gate-allow' },
+    PLAN_ITEM_SKIPPED: { icon: XCircle, label: '取消', color: 'text-gate-reject-foreground bg-gate-reject' },
     PLAN_ITEM_REPLACED: { icon: RefreshCw, label: '替换', color: 'text-orange-600 bg-orange-50' },
     DELAY: { icon: Clock, label: '延误', color: 'text-orange-600 bg-orange-50' },
-    RISK_SIGNAL: { icon: AlertTriangle, label: '风险', color: 'text-red-600 bg-red-50' },
-    BOOKING_FAIL: { icon: XCircle, label: '订座失败', color: 'text-red-600 bg-red-50' },
-    REPAIR_ACTION: { icon: RefreshCw, label: '修复', color: 'text-green-600 bg-green-50' },
+    RISK_SIGNAL: { icon: AlertTriangle, label: '风险', color: 'text-gate-reject-foreground bg-gate-reject' },
+    BOOKING_FAIL: { icon: XCircle, label: '订座失败', color: 'text-gate-reject-foreground bg-gate-reject' },
+    REPAIR_ACTION: { icon: RefreshCw, label: '修复', color: 'text-gate-allow-foreground bg-gate-allow' },
   };
 
   const config = eventTypeConfig[event.type] || { icon: Clock, label: event.type, color: 'text-gray-600 bg-gray-50' };

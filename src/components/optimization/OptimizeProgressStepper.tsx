@@ -48,15 +48,15 @@ export const GUARDIAN_STEPS: Record<string, {
 }> = {
   evaluate: {
     icon: Circle,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted/15',
     label: '评估中',
     description: '分析当前计划的效用评分',
   },
   abu: {
     icon: Shield,
-    color: 'text-red-600',
-    bgColor: 'bg-red-100',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
     label: 'Abu 安全检查',
     description: '安全守护者检查危险因素',
   },
@@ -69,8 +69,8 @@ export const GUARDIAN_STEPS: Record<string, {
   },
   neptune: {
     icon: Wrench,
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-100',
+    color: 'text-gate-allow-foreground',
+    bgColor: 'bg-gate-allow',
     label: 'Neptune 修复',
     description: '修复守护者处理约束冲突',
   },
@@ -113,10 +113,10 @@ function StepIcon({
   if (step.status === 'completed') {
     return (
       <div className={cn(
-        'rounded-full flex items-center justify-center bg-green-100',
+        'rounded-full flex items-center justify-center bg-gate-allow',
         containerSize
       )}>
-        <Check className={cn(iconSize, 'text-green-600')} />
+        <Check className={cn(iconSize, 'text-gate-allow-foreground')} />
       </div>
     );
   }
@@ -124,10 +124,10 @@ function StepIcon({
   if (step.status === 'error') {
     return (
       <div className={cn(
-        'rounded-full flex items-center justify-center bg-red-100',
+        'rounded-full flex items-center justify-center bg-gate-reject',
         containerSize
       )}>
-        <AlertCircle className={cn(iconSize, 'text-red-600')} />
+        <AlertCircle className={cn(iconSize, 'text-gate-reject-foreground')} />
       </div>
     );
   }
@@ -155,7 +155,7 @@ function StepConnector({
     <div className={cn(
       'flex-1 h-0.5 mx-2 rounded-full transition-colors duration-300',
       compact ? 'mx-1' : 'mx-2',
-      status === 'completed' ? 'bg-green-500' : 'bg-muted'
+      status === 'completed' ? 'bg-gate-allow-foreground' : 'bg-muted'
     )} />
   );
 }
@@ -204,9 +204,9 @@ export function OptimizeProgressStepper({
                     {showLabels && !compact && (
                       <span className={cn(
                         'text-xs mt-1 font-medium',
-                        step.status === 'completed' && 'text-green-600',
+                        step.status === 'completed' && 'text-gate-allow-foreground',
                         step.status === 'running' && config.color,
-                        step.status === 'error' && 'text-red-600',
+                        step.status === 'error' && 'text-gate-reject-foreground',
                         step.status === 'pending' && 'text-muted-foreground'
                       )}>
                         {step.label}

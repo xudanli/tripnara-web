@@ -20,7 +20,9 @@ const TRIP_CONTENT_MODES = new Set<TripContentMode>([
 function parseTripContentMode(value: unknown): TripContentMode | undefined {
   if (typeof value !== 'string') return undefined;
   const normalized = value.trim().toLowerCase().replace(/-/g, '_');
-  if (normalized === 'poi_timeline' || normalized === 'classic_poi') return 'poi_timeline';
+  if (normalized === 'poi_timeline' || normalized === 'classic_poi' || normalized === 'poi_itinerary') {
+    return 'poi_timeline';
+  }
   if (normalized === 'hiking_primary' || normalized === 'hiking') return 'hiking_primary';
   if (normalized === 'skeleton_only' || normalized === 'skeleton') return 'skeleton_only';
   return TRIP_CONTENT_MODES.has(normalized as TripContentMode)
@@ -88,12 +90,29 @@ export function resolveTripPlanningAvailability(
     | {
         status?: string;
         generatingItems?: boolean;
+        planningAvailability?: TripPlanningAvailability | string;
         metadata?: Record<string, unknown>;
       }
     | null
     | undefined
 ): TripPlanningAvailability {
   if (!trip) return 'ready';
+
+  const explicit = trip.planningAvailability;
+  if (typeof explicit === 'string') {
+    const normalized = explicit.toLowerCase() as TripPlanningAvailability;
+    if (
+      normalized === 'ready' ||
+      normalized === 'draft' ||
+      normalized === 'collecting_info' ||
+      normalized === 'initializing' ||
+      normalized === 'ready_to_generate' ||
+      normalized === 'generating' ||
+      normalized === 'failed'
+    ) {
+      return normalized;
+    }
+  }
 
   const md = trip.metadata ?? {};
   const progress = readRecord(md.generationProgress ?? md.generation_progress);

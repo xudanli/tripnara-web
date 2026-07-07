@@ -83,7 +83,7 @@ export function FeasibilityGuardianRepairPanel({
     <Collapsible
       open={expanded}
       onOpenChange={setExpanded}
-      className={cn('rounded-lg border border-indigo-200/60 bg-indigo-50/15', className)}
+      className={cn('rounded-lg border border-border/60 bg-muted/15', className)}
     >
       <div className="flex items-start gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1 space-y-1.5">

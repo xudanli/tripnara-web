@@ -130,7 +130,7 @@ export function HikingAuditCard({ tripId, className }: HikingAuditCardProps) {
                   <label htmlFor={`gear-${item.id}`} className="text-sm leading-snug">
                     {item.nameZh}
                     {item.level === 'must' && (
-                      <span className="ml-1 text-[10px] text-red-600">必选</span>
+                      <span className="ml-1 text-[10px] text-gate-reject-foreground">必选</span>
                     )}
                   </label>
                 </li>
@@ -141,13 +141,13 @@ export function HikingAuditCard({ tripId, className }: HikingAuditCardProps) {
 
         {mustFindings.length > 0 && (
           <section>
-            <h4 className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-red-600">
+            <h4 className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-gate-reject-foreground">
               <AlertCircle className="h-3.5 w-3.5" />
               必达项
             </h4>
             <ul className="space-y-3">
               {mustFindings.map((f, i) => (
-                <li key={i} className="rounded-lg border border-red-200/50 bg-red-50/50 px-3 py-2 text-sm dark:bg-red-950/20">
+                <li key={i} className="rounded-lg border border-gate-reject-border/50 bg-gate-reject/50 px-3 py-2 text-sm dark:bg-gate-reject/20">
                   <p>{f.message}</p>
                   {f.tasks && f.tasks.length > 0 && (
                     <ul className="mt-2 list-disc pl-4 text-xs text-muted-foreground">

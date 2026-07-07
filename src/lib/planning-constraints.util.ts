@@ -311,7 +311,9 @@ export function buildPlanningConstraintsSummary(input: {
   };
 }
 
-export function formatConstraintDateRange(
+import type { ConstraintTimeRange } from '@/types/planning-constraints';
+
+function formatConstraintDateRangeParts(
   startDate: string | null,
   endDate: string | null,
   dayCount: number,
@@ -324,6 +326,26 @@ export function formatConstraintDateRange(
   } catch {
     return `${startDate} – ${endDate}`;
   }
+}
+
+export function formatConstraintDateRange(
+  range: ConstraintTimeRange,
+): string;
+export function formatConstraintDateRange(
+  startDate: string | null,
+  endDate: string | null,
+  dayCount: number,
+): string;
+export function formatConstraintDateRange(
+  startOrRange: ConstraintTimeRange | string | null,
+  endDate?: string | null,
+  dayCount = 0,
+): string {
+  if (startOrRange && typeof startOrRange === 'object' && 'startDate' in startOrRange) {
+    const range = startOrRange as ConstraintTimeRange;
+    return formatConstraintDateRangeParts(range.startDate, range.endDate, range.dayCount);
+  }
+  return formatConstraintDateRangeParts(startOrRange, endDate ?? null, dayCount);
 }
 
 export function mergeConstraintsMetadataPatch(

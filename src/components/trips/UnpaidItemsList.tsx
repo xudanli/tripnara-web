@@ -23,10 +23,10 @@ interface UnpaidItemsListProps {
 }
 
 const COST_CATEGORY_COLORS: Record<string, string> = {
-  ACCOMMODATION: 'bg-blue-100 text-blue-800',
-  TRANSPORTATION: 'bg-green-100 text-green-800',
+  ACCOMMODATION: 'bg-muted/15 text-muted-foreground',
+  TRANSPORTATION: 'bg-gate-allow text-gate-allow-foreground',
   FOOD: 'bg-orange-100 text-orange-800',
-  ACTIVITIES: 'bg-purple-100 text-purple-800',
+  ACTIVITIES: 'bg-muted/15 text-muted-foreground',
   SHOPPING: 'bg-pink-100 text-pink-800',
   OTHER: 'bg-gray-100 text-gray-800',
 };
@@ -66,7 +66,7 @@ export function UnpaidItemsList({ tripId, className, onItemClick }: UnpaidItemsL
       <Card className={className}>
         <CardContent className="py-8">
           <div className="flex flex-col items-center justify-center text-center">
-            <AlertCircle className="w-8 h-8 text-red-500 mb-2" />
+            <AlertCircle className="w-8 h-8 text-gate-reject-foreground mb-2" />
             <p className="text-sm text-muted-foreground mb-4">{unpaidError}</p>
             <Button variant="outline" size="sm" onClick={loadItems}>
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -90,7 +90,7 @@ export function UnpaidItemsList({ tripId, className, onItemClick }: UnpaidItemsL
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <CheckCircle2 className="w-12 h-12 text-green-500 mb-2" />
+            <CheckCircle2 className="w-12 h-12 text-gate-allow-foreground mb-2" />
             <p className="text-sm text-muted-foreground">恭喜！所有费用都已支付</p>
           </div>
         </CardContent>

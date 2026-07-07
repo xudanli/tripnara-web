@@ -107,6 +107,63 @@
     "tripnaraFocus": "Focus on whether you should go — and whether the team fit is verifiable",
     "existBadge": "exist"
   },
+  "impact": {
+    "_legacy_headline": "{{text}}",
+    "road_close": {
+      "affects_arrangements": "{{road}} closure will affect {{count}} arrangements on day {{day}}: {{names}}."
+    },
+    "daily_load": {
+      "affects_arrangements": "Day {{day}} driving load is too high and will affect {{count}} arrangement(s): {{names}}."
+    },
+    "weather": {
+      "affects_arrangements": "Weather restrictions will affect {{count}} arrangement(s) on day {{day}}: {{names}}."
+    },
+    "scope": {
+      "sectionTitle": "Impact scope",
+      "sectionHint": "This change affects the following arrangements (cascade impact, not a single alert).",
+      "triggerSource": "Trigger",
+      "chainTitle": "Cascade impact",
+      "chainExpand": "Show cascade logic",
+      "chainCollapse": "Hide cascade logic",
+      "arrangementsTitle": "Affected arrangements",
+      "directImpact": "Direct impact",
+      "sameDayCascade": "Same-day cascade",
+      "dayLabel": "Day {{day}}",
+      "affectedDays": "Days {{days}}"
+    },
+    "trigger": {
+      "ROAD_SEGMENT_UNAVAILABLE": "{{subjectId}} · {{status}}",
+      "WEATHER_RESTRICTION": "Weather restriction · {{subjectId}}",
+      "EXCESSIVE_DAILY_LOAD": "Day {{day}} driving load too high"
+    },
+    "status": {
+      "CLOSED": "Road closed",
+      "RESTRICTED": "Restricted access"
+    },
+    "chain": {
+      "kind": {
+        "trigger": "Trigger",
+        "route": "Route",
+        "arrangement": "Arrangement",
+        "downstream": "Downstream",
+        "DOWNSTREAM": "Downstream",
+        "consequence": "Consequence"
+      },
+      "consequence": {
+        "DAILY_DRIVING_LOAD": "Daily driving load exceeds feasible pace; downstream timing breaks",
+        "CHECKIN_AND_RESERVATION_TIMING": "Check-in and reservation timing cascade conflict"
+      }
+    },
+    "arrangement": {
+      "kind": {
+        "POI": "Sight",
+        "HOTEL": "Stay",
+        "MEAL": "Meal",
+        "TRANSPORT": "Transport",
+        "ACTIVITY": "Activity"
+      }
+    }
+  },
   "personas": {
     "title": "Three Partners Helping You Make Better Travel Decisions",
     "abu": {
@@ -200,8 +257,8 @@
       "places": "Places",
       "schedule": "Schedule",
       "coverage": "Route Coverage",
-      "workbench": "Plan preview & submit",
-      "planGate": "Plan preview & submit",
+      "workbench": "Plan confirmation",
+      "planGate": "Plan confirmation",
       "bookings": "Bookings"
     },
     "noTrip": "Please select a trip first",

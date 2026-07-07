@@ -167,13 +167,13 @@ export function SuggestionPreviewDialog({
             {previewResult.appliedChanges && previewResult.appliedChanges.length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />
                   变更内容
                 </h4>
                 <ul className="space-y-2">
                   {previewResult.appliedChanges.map((change, index) => (
                     <li key={index} className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg">
-                      <CheckCircle2 className="h-4 w-4 mt-0.5 text-green-600 flex-shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 mt-0.5 text-gate-allow-foreground flex-shrink-0" />
                       <span className="text-sm">{change.description}</span>
                     </li>
                   ))}
@@ -185,7 +185,7 @@ export function SuggestionPreviewDialog({
             {previewResult.impact && (
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-blue-600" />
+                  <TrendingUp className="w-4 h-4 text-muted-foreground" />
                   影响分析
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -198,7 +198,7 @@ export function SuggestionPreviewDialog({
                             <span className="text-xs font-medium text-orange-900">疲劳指数</span>
                           </div>
                           <div className={`text-lg font-semibold ${
-                            previewResult.impact.metrics.fatigue > 0 ? 'text-orange-600' : 'text-green-600'
+                            previewResult.impact.metrics.fatigue > 0 ? 'text-orange-600' : 'text-gate-allow-foreground'
                           }`}>
                             {previewResult.impact.metrics.fatigue > 0 ? '+' : ''}
                             {previewResult.impact.metrics.fatigue}
@@ -206,13 +206,13 @@ export function SuggestionPreviewDialog({
                         </div>
                       )}
                       {previewResult.impact.metrics.buffer !== undefined && (
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="p-3 bg-muted/15 border border-border rounded-lg">
                           <div className="flex items-center gap-2 mb-1">
-                            <Clock className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-medium text-blue-900">缓冲时间</span>
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground">缓冲时间</span>
                           </div>
                           <div className={`text-lg font-semibold ${
-                            previewResult.impact.metrics.buffer > 0 ? 'text-green-600' : 'text-red-600'
+                            previewResult.impact.metrics.buffer > 0 ? 'text-gate-allow-foreground' : 'text-gate-reject-foreground'
                           }`}>
                             {previewResult.impact.metrics.buffer > 0 ? '+' : ''}
                             {previewResult.impact.metrics.buffer} 分钟
@@ -220,13 +220,13 @@ export function SuggestionPreviewDialog({
                         </div>
                       )}
                       {previewResult.impact.metrics.cost !== undefined && (
-                        <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <div className="p-3 bg-muted/15 border border-border rounded-lg">
                           <div className="flex items-center gap-2 mb-1">
-                            <DollarSign className="w-4 h-4 text-purple-600" />
-                            <span className="text-xs font-medium text-purple-900">成本变化</span>
+                            <DollarSign className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground">成本变化</span>
                           </div>
                           <div className={`text-lg font-semibold ${
-                            previewResult.impact.metrics.cost > 0 ? 'text-red-600' : 'text-green-600'
+                            previewResult.impact.metrics.cost > 0 ? 'text-gate-reject-foreground' : 'text-gate-allow-foreground'
                           }`}>
                             {previewResult.impact.metrics.cost > 0 ? '+' : ''}
                             {formatCurrency(Math.abs(previewResult.impact.metrics.cost), currency)}
@@ -240,7 +240,7 @@ export function SuggestionPreviewDialog({
                 {/* 风险提示 */}
                 {previewResult.impact.risks && previewResult.impact.risks.length > 0 && (
                   <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium text-red-900">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gate-reject-foreground">
                       <Shield className="w-4 h-4" />
                       可能产生的风险
                     </div>
@@ -249,10 +249,10 @@ export function SuggestionPreviewDialog({
                         key={risk.id}
                         className={`p-2 rounded-lg border ${
                           risk.severity === 'blocker'
-                            ? 'bg-red-50 border-red-200 text-red-900'
+                            ? 'bg-gate-reject border-gate-reject-border text-gate-reject-foreground'
                             : risk.severity === 'warn'
                             ? 'bg-yellow-50 border-yellow-200 text-yellow-900'
-                            : 'bg-blue-50 border-blue-200 text-blue-900'
+                            : 'bg-muted/15 border-border text-muted-foreground'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -268,8 +268,8 @@ export function SuggestionPreviewDialog({
 
             {/* 触发的建议提示 */}
             {previewResult.triggeredSuggestions && previewResult.triggeredSuggestions.length > 0 && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-blue-900">
+              <div className="p-3 bg-muted/15 border border-border rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Info className="w-4 h-4" />
                   <span>
                     应用此建议后可能会产生 {previewResult.triggeredSuggestions.length} 个新建议

@@ -3,6 +3,7 @@ import { parseTravelRouteFromMessage } from '@/lib/feasibility-travel-route-pars
 import { isUltraLongDriveIssue, preferStructuralLongDriveRepairOptions } from '@/lib/feasibility-ultra-long-drive';
 import { isPlanClassAction } from '@/lib/feasibility-repair-plan-class';
 import { isSelfDriveTripContext } from '@/lib/trip-self-drive';
+import { isFeasibilityRepairWorkflowMode } from '@/lib/feasibility-resolution-mode.util';
 import type { FeasibilityIssueDto, FeasibilityRepairOptionDto } from '@/types/trip-feasibility-report';
 
 const SELF_DRIVE_INAPPLICABLE_RE =
@@ -78,6 +79,7 @@ export function shouldShowFeasibilityRepairWorkflow(input: {
   prefersRepairWorkflow?: boolean;
 }): boolean {
   const { issue, repairOptionCount, repairLoading, prefersRepairWorkflow } = input;
+  if (!isFeasibilityRepairWorkflowMode(issue.resolutionMode)) return false;
   if (repairOptionCount > 0 || repairLoading || prefersRepairWorkflow) return true;
   if (issue.priority === 'must_handle' || issue.priority === 'suggest_adjust') return true;
   if (issue.uiHints?.primaryAction === 'open_repair') return true;

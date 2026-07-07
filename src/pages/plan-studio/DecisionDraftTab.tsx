@@ -134,17 +134,17 @@ export default function DecisionDraftTab({
       </div>
 
       {/* 功能说明卡片 */}
-      <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950">
+      <Card className="border-border bg-muted dark:bg-muted">
         <CardContent className="pt-6">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <div className="w-8 h-8 rounded-full bg-muted dark:bg-muted flex items-center justify-center flex-shrink-0">
+              <FileText className="w-4 h-4 text-muted-foreground dark:text-muted-foreground" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+              <p className="text-sm font-medium text-muted-foreground dark:text-muted-foreground mb-1">
                 与"规划工作台"标签页的区别
               </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
+              <p className="text-xs text-muted-foreground dark:text-muted-foreground">
                 <strong>"规划工作台"</strong>标签页展示<strong>决策结果</strong>（三人格评估、综合决策），
                 <strong>"决策过程"</strong>标签页展示<strong>决策过程</strong>（节点、证据链、详细解释）。
                 两者互补，帮助您全面理解方案的生成过程。

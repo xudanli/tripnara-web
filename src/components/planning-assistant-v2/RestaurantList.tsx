@@ -70,9 +70,9 @@ export function RestaurantList({ restaurants, className }: RestaurantListProps) 
             {restaurant.openingHours && (
               <div className="text-xs text-muted-foreground">
                 {restaurant.openingHours.openNow ? (
-                  <span className="text-green-600">🟢 正在营业</span>
+                  <span className="text-gate-allow-foreground">🟢 正在营业</span>
                 ) : (
-                  <span className="text-red-600">🔴 已关闭</span>
+                  <span className="text-gate-reject-foreground">🔴 已关闭</span>
                 )}
               </div>
             )}

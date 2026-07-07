@@ -123,7 +123,7 @@ export default function PoiAccessIssueCard({
         )}
       >
         <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 bg-muted/25">
-          <ShieldCheck className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" aria-hidden />
+          <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground dark:text-muted-foreground shrink-0" aria-hidden />
           <span className="text-xs font-medium text-foreground truncate">{poiName}</span>
           <Badge variant="outline" className="text-[10px] h-5 ml-auto shrink-0">
             {poiAccessVerdictLabel(verdict)}
@@ -202,7 +202,7 @@ export default function PoiAccessIssueCard({
               ) : null}
             </div>
             {hasReservationEvidence ? (
-              <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+              <p className="text-[11px] text-success dark:text-success">
                 已上传预约凭证
                 {existingEvidence[0]?.confirmationCode
                   ? `（${existingEvidence[0].confirmationCode}）`

@@ -230,6 +230,7 @@ import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import { OrchestrationProgressCard } from '@/components/planning-assistant-v2/OrchestrationProgressCard';
 import { toast } from 'sonner';
 import { PlannerThinkingLoading } from '@/components/common/PlannerThinkingLoading';
+import { RouteRunCtreProgressBand } from '@/features/agent/ctre';
 import { CONFIG } from '@/constants/config';
 import { needsApproval, extractApprovalId } from '@/utils/approval';
 import { normalizeToNewFormat } from '@/utils/decision-log-migrator';
@@ -426,10 +427,15 @@ import { fetchTripPoiSchedules } from '@/lib/trip-poi-schedules';
 import type { TimelinePoiScheduleContext } from '@/utils/opening-hours-schedule-check';
 import { chatApi } from '@/api/planning-assistant-v2';
 import { extractMergedConstraintSinkFromRouteRun, extractConstraintSinkFromDecisionLog, type ConstraintSinkDecisionLogEvidence } from '@/lib/extract-memory-contract';
+import { extractDecisionLedgerCausalityFromRouteRun } from '@/lib/extract-decision-ledger-observability';
+import { useOpenDecisionRecordNavigation } from '@/hooks/useOpenDecisionRecordNavigation';
+import type { DecisionLedgerCausalityView } from '@/lib/decision-ledger-causality.util';
 import { deriveConstraintSinkUiAnchorV1, type ConstraintSinkUiAnchorV1 } from '@/contracts/memory-console-ui-state.v1';
 import { isConstraintSinkEnabled } from '@/lib/memory-feature';
 import { useDrawerOptional } from '@/components/layout/DashboardLayout';
 import { buildRouteAndRunConversationContext } from '@/lib/agent-route-and-run-context';
+import { AssistantContextGroundingStrip } from '@/features/trip-context/components/AssistantContextGroundingStrip';
+import { useAssistantTravelContextGrounding } from '@/features/trip-context/hooks/useAssistantTravelContextGrounding';
 import { enrichRouteAndRunRequestWithEmotionalMetadataAsync } from '@/lib/enrich-route-and-run-emotional-metadata';
 import { useTtsEmotionalProsody } from '@/hooks/useTtsEmotionalProsody';
 import { useEmotionContextStore } from '@/store/emotionContextStore';
@@ -529,17 +535,17 @@ const getFindingStyles = (type: TripInsightFinding['type']) => {
       };
     case 'suggestion':
       return {
-        bg: 'bg-blue-50',
-        border: 'border-blue-200',
-        icon: 'text-blue-600',
-        text: 'text-blue-900',
+        bg: 'bg-muted/15',
+        border: 'border-border',
+        icon: 'text-muted-foreground',
+        text: 'text-muted-foreground',
       };
     case 'positive':
       return {
-        bg: 'bg-green-50',
-        border: 'border-green-200',
-        icon: 'text-green-600',
-        text: 'text-green-900',
+        bg: 'bg-gate-allow',
+        border: 'border-gate-allow-border',
+        icon: 'text-gate-allow-foreground',
+        text: 'text-gate-allow-foreground',
       };
   }
 };
@@ -674,7 +680,7 @@ const getWelcomeConfig = (
               
               {/* 如果没有发现，显示正面信息 */}
               {findings.length === 0 && (
-                <div className="text-sm text-green-700 bg-green-50 rounded-md p-2.5 text-left">
+                <div className="text-sm text-gate-allow-foreground bg-gate-allow rounded-md p-2.5 text-left">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
                     <span>行程看起来安排得不错！有什么需要我帮忙的吗？</span>
@@ -969,6 +975,8 @@ interface Message {
   decisionCockpitUiSuppressed?: boolean;
   /** Gate 依据行：observability.memory_contract.constraint_sink + decision_log 合并 */
   memoryConstraintSinkAnchor?: ConstraintSinkUiAnchorV1;
+  /** observability.ledger_healing + decision_ledger_causality */
+  decisionLedgerCausality?: DecisionLedgerCausalityView;
   /** decision_log 原始 constraint_sink 依据（Drawer 交叉展示） */
   memoryConstraintSinkDecisionLog?: ConstraintSinkDecisionLogEvidence;
   /** INTAKE D3：decision_metadata.planning_phase_intent.party_negotiation */
@@ -1320,13 +1328,13 @@ function LiveSensorAuditBlock({ audit }: { audit: Record<string, unknown> }) {
   const hint = buildLiveSensorAuditHint(audit);
   const title = hint.trim() || '实时数据说明';
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="mt-2 rounded-md border border-sky-200/70 bg-sky-50/50 dark:border-sky-800/60 dark:bg-sky-950/25">
+    <Collapsible open={open} onOpenChange={setOpen} className="mt-2 rounded-md border border-border/70 bg-muted/15 dark:border-border/60 dark:bg-muted/15">
       <CollapsibleTrigger asChild>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-auto min-h-8 w-full justify-between gap-2 px-2 py-1.5 text-left text-[11px] font-medium text-sky-900 dark:text-sky-100 items-start"
+          className="h-auto min-h-8 w-full justify-between gap-2 px-2 py-1.5 text-left text-[11px] font-medium text-muted-foreground dark:text-muted-foreground items-start"
         >
           <span className="min-w-0 flex-1 whitespace-pre-line break-words leading-snug">{title}</span>
           <ChevronRight
@@ -1402,15 +1410,15 @@ function StatusIndicator({
         };
       case 'awaiting_consent':
         return {
-          icon: <div className="w-4 h-4 rounded-full bg-red-500"></div>,
+          icon: <div className="w-4 h-4 rounded-full bg-gate-reject-foreground"></div>,
           text: '我需要你的授权才能继续操作 👇',
-          color: 'text-red-600',
+          color: 'text-gate-reject-foreground',
         };
       case 'awaiting_confirmation':
         return {
-          icon: <div className="w-4 h-4 rounded-full bg-red-500"></div>,
+          icon: <div className="w-4 h-4 rounded-full bg-gate-reject-foreground"></div>,
           text: '需要你确认一下，再继续行动～',
-          color: 'text-red-600',
+          color: 'text-gate-reject-foreground',
         };
       case 'awaiting_user_input':
         return {
@@ -1441,45 +1449,45 @@ function StatusIndicator({
           return {
             icon: (
               <CheckCircle2
-                className={cn('w-4 h-4', consultationTone ? 'text-sky-600' : 'text-green-600')}
+                className={cn('w-4 h-4', consultationTone ? 'text-muted-foreground' : 'text-gate-allow-foreground')}
               />
             ),
             text: hint,
-            color: consultationTone ? 'text-sky-700 dark:text-sky-300' : 'text-green-600',
+            color: consultationTone ? 'text-muted-foreground dark:text-muted-foreground' : 'text-gate-allow-foreground',
           };
         }
 
         if (u === 'consultation') {
           return {
-            icon: <CheckCircle2 className="w-4 h-4 text-sky-600" />,
+            icon: <CheckCircle2 className="w-4 h-4 text-muted-foreground" />,
             text: '咨询完成 · 回答已就绪',
-            color: 'text-sky-700 dark:text-sky-300',
+            color: 'text-muted-foreground dark:text-muted-foreground',
           };
         }
         if (u === 'planning') {
           return {
-            icon: <CheckCircle2 className="w-4 h-4 text-green-600" />,
+            icon: <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />,
             text: '行程处理完成',
-            color: 'text-green-600',
+            color: 'text-gate-allow-foreground',
           };
         }
 
         return {
-          icon: <CheckCircle2 className="w-4 h-4 text-green-600" />,
+          icon: <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />,
           text:
             doneSemantic === 'lookup' || doneSemantic === 'qa'
               ? '参考回答已就绪'
               : doneSemantic === 'generic'
                 ? '已完成'
                 : '行程处理完成',
-          color: 'text-green-600',
+          color: 'text-gate-allow-foreground',
         };
       }
       case 'failed':
         return {
-          icon: <XCircle className="w-4 h-4 text-red-600" />,
+          icon: <XCircle className="w-4 h-4 text-gate-reject-foreground" />,
           text: '出了一点小状况，要不再试一次？',
-          color: 'text-red-600',
+          color: 'text-gate-reject-foreground',
         };
       default:
         return {
@@ -1539,9 +1547,9 @@ function RouteInfoCard({
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return 'bg-green-500';
+    if (confidence >= 0.8) return 'bg-gate-allow-foreground';
     if (confidence >= 0.6) return 'bg-yellow-500';
-    return 'bg-red-500';
+    return 'bg-gate-reject-foreground';
   };
 
   return (
@@ -1888,6 +1896,8 @@ function MessageBubble({
   tripStayDates?: { checkIn?: string; checkOut?: string };
   userId?: string;
 }) {
+  const navigate = useNavigate();
+  const openDecisionRecord = useOpenDecisionRecordNavigation(activeTripId);
   const preferZhLabels = debugUiDefaults === false;
   const drawerCtx = useDrawerOptional();
   const isUser = message.role === 'user';
@@ -2062,14 +2072,14 @@ function MessageBubble({
   const assistantSurface = !isUser
     ? (() => {
         if (isKnowledgeAnswer) {
-          return 'border-sky-200/90 bg-gradient-to-b from-sky-50/80 to-background shadow-sm dark:border-sky-800/70 dark:from-sky-950/35 dark:to-background';
+          return 'border-border/90 bg-gradient-to-b from-muted/15 to-background shadow-sm dark:border-border/70 dark:from-muted/15/35 dark:to-background';
         }
         const v = rs?.bubbleVariant;
-        if (v === 'info') return 'border-blue-200 bg-blue-50/40';
+        if (v === 'info') return 'border-border bg-muted/15';
         if (v === 'warning') return 'border-amber-200 bg-amber-50/40';
-        if (v === 'error') return 'border-red-200 bg-red-50/50';
-        if (v === 'success') return 'border-emerald-200 bg-emerald-50/35';
-        return isFastMode ? 'border-blue-200' : 'border-orange-200';
+        if (v === 'error') return 'border-gate-reject-border bg-gate-reject/50';
+        if (v === 'success') return 'border-gate-allow-border bg-gate-allow/35';
+        return 'border-border';
       })()
     : '';
 
@@ -2119,7 +2129,7 @@ function MessageBubble({
               : 'min-w-0 max-w-[80%]',
           isUser
             ? 'bg-primary text-primary-foreground'
-            : cn('bg-background border', isError ? 'border-red-200 bg-red-50/50' : assistantSurface)
+            : cn('bg-background border', isError ? 'border-gate-reject-border bg-gate-reject/50' : assistantSurface)
         )}
       >
         {!isUser &&
@@ -2184,7 +2194,7 @@ function MessageBubble({
           <div
             className={cn(
               'mb-2 flex items-start gap-1.5 rounded-md px-2 py-1 text-[11px]',
-              rs.tone === 'info' && 'bg-blue-100/80 text-blue-900',
+              rs.tone === 'info' && 'bg-muted/20 text-muted-foreground',
               rs.tone === 'warning' && 'bg-amber-100/80 text-amber-950'
             )}
           >
@@ -2227,14 +2237,14 @@ function MessageBubble({
         {/* 错误消息特殊处理 */}
         {isError && (
           <div className="flex items-start gap-2">
-            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-red-100 flex items-center justify-center mt-0.5">
-              <XCircle className="w-3 h-3 text-red-600" />
+            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gate-reject flex items-center justify-center mt-0.5">
+              <XCircle className="w-3 h-3 text-gate-reject-foreground" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-red-900 mb-1">
+              <p className="text-sm font-medium text-gate-reject-foreground mb-1">
                 {isTimeout ? '⚠️ 哎呀，请求超时了...' : '⚠️ 出了一点小状况'}
               </p>
-              <p className="text-xs text-red-700 mb-3 whitespace-pre-wrap">
+              <p className="text-xs text-gate-reject-foreground mb-3 whitespace-pre-wrap">
                 {isTimeout
                   ? '可能是网络问题或服务繁忙。要不要再试一次？'
                   : message.debugBundle || message.content === 'TIMEOUT' || message.content === 'FAILED'
@@ -2247,7 +2257,7 @@ function MessageBubble({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs rounded-full border-red-200 text-red-700 hover:bg-red-50"
+                    className="h-7 text-xs rounded-full border-gate-reject-border text-gate-reject-foreground hover:bg-gate-reject"
                     onClick={async () => {
                       try {
                         await navigator.clipboard.writeText(JSON.stringify(message.debugBundle, null, 2));
@@ -2264,7 +2274,7 @@ function MessageBubble({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs rounded-full border-red-200 text-red-700 hover:bg-red-50"
+                    className="h-7 text-xs rounded-full border-gate-reject-border text-gate-reject-foreground hover:bg-gate-reject"
                     onClick={onRetry}
                   >
                     <RotateCw className="w-3 h-3 mr-1.5" />
@@ -2285,15 +2295,18 @@ function MessageBubble({
         ) : null}
         {!isError && !message.replayResult && !isUser ? (
           message.status === 'thinking' ? (
-            <PlannerThinkingLoading
-              compact
-              size={36}
-              label={messageContent.trim() || undefined}
-              progress={message.routeRunLeaseIndeterminate ? undefined : message.routeRunAsyncProgress}
-              indeterminate={message.routeRunLeaseIndeterminate}
-              className="px-0 py-0"
-              textClassName="text-sm text-muted-foreground"
-            />
+            <div className="space-y-2">
+              <PlannerThinkingLoading
+                compact
+                size={36}
+                label={messageContent.trim() || undefined}
+                progress={message.routeRunLeaseIndeterminate ? undefined : message.routeRunAsyncProgress}
+                indeterminate={message.routeRunLeaseIndeterminate}
+                className="px-0 py-0"
+                textClassName="text-sm text-muted-foreground"
+              />
+              <RouteRunCtreProgressBand compact orchestrationPercent={message.routeRunAsyncProgress} />
+            </div>
           ) : (
           <>
             {showAnswerSummaryOnly ? (
@@ -2531,13 +2544,13 @@ function MessageBubble({
         !isError &&
         message.status !== 'thinking' &&
         message.itineraryAdjustApplyFailed ? (
-          <div className="mb-3 rounded-lg border border-red-200/90 bg-red-50/80 px-3 py-2 text-xs text-red-950 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100">
+          <div className="mb-3 rounded-lg border border-gate-reject-border/90 bg-gate-reject/80 px-3 py-2 text-xs text-gate-reject-foreground dark:border-gate-reject-border/60 dark:bg-gate-reject/30 dark:text-gate-reject-foreground">
             <p className="font-medium">未能写入行程</p>
-            <p className="mt-0.5 text-red-900/80 dark:text-red-200/80">
+            <p className="mt-0.5 text-gate-reject-foreground/80 dark:text-gate-reject-foreground/80">
               {message.itineraryAdjustApplyFailureMessage ?? '请检查地点是否可解析后重试'}
             </p>
             {message.itineraryAdjustApplyResult?.reason === 'unresolved_places' ? (
-              <p className="mt-1 text-red-800/90 dark:text-red-200/90">
+              <p className="mt-1 text-gate-reject-foreground/90 dark:text-gate-reject-foreground/90">
                 部分地点无法解析，请修改草案后再次点击「应用到行程」。
               </p>
             ) : null}
@@ -2574,9 +2587,9 @@ function MessageBubble({
         isItineraryAdjust &&
         !message.itineraryAdjustResult &&
         message.itineraryAdjustAutoApplied ? (
-          <div className="mb-3 rounded-lg border border-emerald-200/90 bg-emerald-50/80 px-3 py-2 text-xs text-emerald-950">
+          <div className="mb-3 rounded-lg border border-gate-allow-border/90 bg-gate-allow/80 px-3 py-2 text-xs text-gate-allow-foreground">
             <p className="font-medium">已更新正式行程</p>
-            <p className="mt-0.5 text-emerald-900/80">左侧时间轴已同步，请查看更新后的日程。</p>
+            <p className="mt-0.5 text-gate-allow-foreground/80">左侧时间轴已同步，请查看更新后的日程。</p>
           </div>
         ) : null}
 
@@ -2982,12 +2995,12 @@ function MessageBubble({
         ) : null}
 
         {!isUser && !isError && message.status !== 'thinking' && rs?.uiMode === 'CLARIFYING' && !showClarificationCard ? (
-          <div className="mt-3 rounded-xl border border-blue-200/90 bg-gradient-to-br from-blue-50 to-background px-3 py-2.5 text-xs text-blue-950 shadow-sm motion-safe:animate-pulse">
+          <div className="mt-3 rounded-xl border border-border/90 bg-gradient-to-br from-muted/15 to-background px-3 py-2.5 text-xs text-muted-foreground shadow-sm motion-safe:animate-pulse">
             <div className="flex items-start gap-2">
-              <Calendar className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
+              <Calendar className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
               <div>
-                <p className="font-medium text-blue-900">还差一点点信息</p>
-                <p className="text-blue-800/90 mt-1 leading-relaxed">
+                <p className="font-medium text-muted-foreground">还差一点点信息</p>
+                <p className="text-muted-foreground mt-1 leading-relaxed">
                   {clarifyTimeGap
                     ? '告诉我出发与返程日期，我会结合季节与路况为您准备可验证的证据与方案。'
                     : '告诉我目的地或偏好区域，我会据此补齐下一步建议。'}
@@ -3056,6 +3069,20 @@ function MessageBubble({
               orchestrationResult={message.orchestrationResult}
               explainGuardianMirror={message.routeRunExplainMirror}
               constraintSinkAnchor={message.memoryConstraintSinkAnchor}
+              decisionLedgerCausality={message.decisionLedgerCausality}
+              onOpenDecisionRecord={(decisionId, ledgerNodeId) => {
+                const tid = activeTripId?.trim();
+                if (!tid) return;
+                if (ledgerNodeId) {
+                  void openDecisionRecord.openByLedgerNode(
+                    ledgerNodeId,
+                    message.decisionLedgerCausality,
+                    decisionId,
+                  );
+                  return;
+                }
+                openDecisionRecord.openByDecisionId(decisionId);
+              }}
               onOpenEvidenceDrawer={
                 drawerCtx
                   ? ({ highlightPatchId }) => {
@@ -3239,6 +3266,8 @@ export default function AgentChat({
   );
   /** 仅 UUID 形 Trip.id 会随 route_and_run / insight 上报；非法占位符视为未绑定 */
   const sanitizedTripId = useMemo(() => sanitizeRouteRunTripId(activeTripId), [activeTripId]);
+  const { ready: tcGroundingReady, travelContextPayload } =
+    useAssistantTravelContextGrounding(sanitizedTripId);
   const chatStorageKey = useMemo(
     () => buildAgentChatStorageKey(sanitizedTripId, entryPoint),
     [sanitizedTripId, entryPoint]
@@ -3941,6 +3970,14 @@ export default function AgentChat({
         contextType:
           routeContextType?.trim() ||
           (useActiveTripSummaryContext ? 'active_trip_summary' : undefined),
+        travelContext:
+          tcGroundingReady && travelContextPayload?.context_id
+            ? {
+                contextId: travelContextPayload.context_id,
+                revision: travelContextPayload.revision ?? 0,
+                stage: travelContextPayload.stage,
+              }
+            : undefined,
       });
 
       const fromTripSummary: StructuredTravelInput | undefined =
@@ -4413,6 +4450,7 @@ export default function AgentChat({
             extractMergedConstraintSinkFromRouteRun(response, decisionLog)
           )
         : undefined;
+      const decisionLedgerCausality = extractDecisionLedgerCausalityFromRouteRun(response);
       const isCacheReplay = isRouteRunCacheReplay(response);
       const orchestrationModeFinal = getRouteRunOrchestrationModeFinal(response);
       const interactionKind = inferInteractionKind(taskType, routePolicy, routeType);
@@ -4785,6 +4823,7 @@ export default function AgentChat({
             ...(effectiveUiHintMessage ? { uiHintMessage: effectiveUiHintMessage } : {}),
             observabilitySystemMode,
             ...(memoryConstraintSinkAnchor ? { memoryConstraintSinkAnchor } : {}),
+            ...(decisionLedgerCausality ? { decisionLedgerCausality } : {}),
             ...(memoryConstraintSinkDecisionLog
               ? { memoryConstraintSinkDecisionLog }
               : {}),
@@ -5655,7 +5694,7 @@ export default function AgentChat({
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                 <Bot className="w-4 h-4 text-primary" />
               </div>
-              <div className="bg-muted rounded-lg border border-border/60">
+              <div className="bg-muted rounded-lg border border-border/60 p-2.5 space-y-2">
                 <PlannerThinkingLoading
                   compact
                   size={36}
@@ -5664,8 +5703,9 @@ export default function AgentChat({
                     planningTaskLeaseRecovering ? undefined : routeRunAsyncProgress
                   }
                   indeterminate={planningTaskLeaseRecovering}
-                  className="px-3 py-2.5"
+                  className="px-0 py-0"
                 />
+                <RouteRunCtreProgressBand compact orchestrationPercent={routeRunAsyncProgress} />
               </div>
             </div>
           ) : null}
@@ -5676,6 +5716,11 @@ export default function AgentChat({
       {/* 输入区域 */}
       <div className="flex-shrink-0 border-t border-border bg-card/50 px-3 py-3">
         <div className={AGENT_PANEL_CONTENT_MAX_CLASS}>
+        <AssistantContextGroundingStrip
+          activeTripId={sanitizedTripId}
+          compact={compactAgentChrome}
+          className="mb-2"
+        />
         {(isAwaitingConfirmation || negotiationConflictBlocking) && (
           <div className="mb-2 rounded-md border border-gate-confirm-border bg-gate-confirm/15 px-2.5 py-2 text-xs text-gate-confirm-foreground">
             {negotiationConflictBlocking
@@ -6325,6 +6370,8 @@ export default function AgentChat({
                       extractMergedConstraintSinkFromRouteRun(retryResponse, retryDecisionLog)
                     )
                   : undefined;
+                const retryDecisionLedgerCausality =
+                  extractDecisionLedgerCausalityFromRouteRun(retryResponse);
                 const retryIsCacheReplay = isRouteRunCacheReplay(retryResponse);
                 const retryOrchestrationModeFinal = getRouteRunOrchestrationModeFinal(retryResponse);
                 const retryRouteRunExplainMirror =
@@ -6422,6 +6469,9 @@ export default function AgentChat({
                       observabilitySystemMode: retryObsMode,
                       ...(retryMemoryConstraintSinkAnchor
                         ? { memoryConstraintSinkAnchor: retryMemoryConstraintSinkAnchor }
+                        : {}),
+                      ...(retryDecisionLedgerCausality
+                        ? { decisionLedgerCausality: retryDecisionLedgerCausality }
                         : {}),
                       ...(retryMemoryConstraintSinkDecisionLog
                         ? { memoryConstraintSinkDecisionLog: retryMemoryConstraintSinkDecisionLog }

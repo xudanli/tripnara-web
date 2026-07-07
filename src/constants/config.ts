@@ -9,6 +9,10 @@ export const CONFIG = {
     import.meta.env.VITE_MAPBOX_TOKEN ||
     '',
   GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+  FEATURES: {
+    /** 与后端 TRAVEL_COMPILER_ENABLED 对齐；为 true 时 route_and_run 默认传 enable_travel_compiler */
+    TRAVEL_COMPILER_ENABLED: import.meta.env.VITE_TRAVEL_COMPILER_ENABLED,
+  },
   PAGINATION: {
     DEFAULT_PAGE: 1,
     DEFAULT_LIMIT: 10,

@@ -159,7 +159,7 @@ export default function HikingLaugavegurDemoPage() {
         )}
 
         {previewQuery.isError && (
-          <p className="text-center text-sm text-red-600">
+          <p className="text-center text-sm text-gate-reject-foreground">
             {(previewQuery.error as Error)?.message ?? '预览加载失败'}
           </p>
         )}

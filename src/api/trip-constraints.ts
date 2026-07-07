@@ -3,6 +3,8 @@ import type {
   CreateTripConstraintDto,
   CreateTripConstraintResponse,
   PatchTripConstraintDto,
+  PatchTripConstraintsContractDto,
+  PatchTripConstraintsContractResponse,
   TripConstraint,
   TripConstraintPreviewImpactData,
   TripConstraintPreviewImpactRequest,
@@ -139,6 +141,18 @@ export const tripConstraintsApi = {
       constraintsVersion != null ? { constraintsVersion } : {},
     );
     return unwrapConstraintPayload(handleResponse(response));
+  },
+
+  /** PATCH /trips/:tripId/constraints/contract */
+  patchContract: async (
+    tripId: string,
+    body: PatchTripConstraintsContractDto,
+  ): Promise<PatchTripConstraintsContractResponse> => {
+    const response = await apiClient.patch<ApiResponseWrapper<PatchTripConstraintsContractResponse>>(
+      `/trips/${tripId}/constraints/contract`,
+      body,
+    );
+    return handleResponse(response);
   },
 
   /** POST /trips/:tripId/constraints/preview-impact */

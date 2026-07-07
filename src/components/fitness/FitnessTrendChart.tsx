@@ -8,6 +8,10 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import type { TrendType } from '@/types/fitness-analytics';
+import {
+  SEMANTIC_BLUE_HEX,
+  SEMANTIC_GREEN_HEX,
+} from '@/lib/semantic-colors';
 
 interface FitnessTrendChartProps {
   trend: TrendType;
@@ -91,11 +95,11 @@ function generateAreaPath(
 function getTrendColors(trend: TrendType) {
   switch (trend) {
     case 'IMPROVING':
-      return { stroke: '#16a34a', fill: 'url(#gradient-improving)' };
+      return { stroke: SEMANTIC_GREEN_HEX, fill: 'url(#gradient-improving)' };
     case 'DECLINING':
       return { stroke: '#ea580c', fill: 'url(#gradient-declining)' };
     case 'STABLE':
-      return { stroke: '#2563eb', fill: 'url(#gradient-stable)' };
+      return { stroke: SEMANTIC_BLUE_HEX, fill: 'url(#gradient-stable)' };
     default:
       return { stroke: '#6b7280', fill: 'url(#gradient-default)' };
   }

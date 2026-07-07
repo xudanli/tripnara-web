@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { ArrowLeft, ChevronDown, MessageSquare } from 'lucide-react';
+import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,8 @@ import {
   workbenchHeaderTitle,
   workbenchPlanRevisionBadge,
   workbenchProgressTrack,
-  workbenchTabList,
-  workbenchTabTrigger,
+  workbenchHeaderModuleTabList,
+  workbenchHeaderModuleTabTrigger,
 } from './workbench-ui';
 
 export interface PlanningWorkbenchHeaderProps {
@@ -29,6 +29,7 @@ export interface PlanningWorkbenchHeaderProps {
   lastSavedAt?: string | null;
   feasibilityScore: number | null;
   feasibilityLoading?: boolean;
+  travelAssurance?: import('@/lib/travel-assurance-summary.util').TravelAssuranceSummary | null;
   onFeasibilityClick?: () => void;
   onPipelineClick?: () => void;
   isPipelineLoading?: boolean;
@@ -46,7 +47,7 @@ export interface PlanningWorkbenchHeaderProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onOpenAssistant?: () => void;
-  /** 团队协作中心等全屏视图：隐藏行程/预算/行前 Tab 条 */
+  /** 团队协作中心等全屏视图：隐藏规划/预算/行前 Tab 条 */
   hideTabBar?: boolean;
   className?: string;
 }
@@ -74,6 +75,7 @@ export function PlanningWorkbenchHeader({
   lastSavedAt,
   feasibilityScore,
   feasibilityLoading,
+  travelAssurance,
   onFeasibilityClick,
   onPipelineClick,
   isPipelineLoading,
@@ -112,7 +114,6 @@ export function PlanningWorkbenchHeader({
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <h1 className={cn(workbenchHeaderTitle, 'text-foreground')}>{displayTitle}</h1>
-              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground/60" aria-hidden />
               {planBadge ? (
                 <Badge
                   variant="secondary"
@@ -178,6 +179,22 @@ export function PlanningWorkbenchHeader({
             />
           ) : null}
 
+          {!hideTabBar ? (
+            <Tabs value={activeTab} onValueChange={onTabChange}>
+              <TabsList className={workbenchHeaderModuleTabList}>
+                <TabsTrigger value="schedule" className={workbenchHeaderModuleTabTrigger}>
+                  规划
+                </TabsTrigger>
+                <TabsTrigger value="budget" className={workbenchHeaderModuleTabTrigger}>
+                  预算
+                </TabsTrigger>
+                <TabsTrigger value="tasks" className={workbenchHeaderModuleTabTrigger}>
+                  行前
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          ) : null}
+
           {onOpenAssistant ? (
             <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={onOpenAssistant}>
               <MessageSquare className="h-4 w-4" />
@@ -187,28 +204,11 @@ export function PlanningWorkbenchHeader({
           <WorkbenchFeasibilityRing
             score={feasibilityScore}
             loading={feasibilityLoading}
+            assurance={travelAssurance}
             onClick={onFeasibilityClick}
           />
         </div>
       </div>
-
-      {!hideTabBar ? (
-        <div className="mt-3 border-t border-border/40 pt-2">
-          <Tabs value={activeTab} onValueChange={onTabChange}>
-            <TabsList className={workbenchTabList}>
-              <TabsTrigger value="schedule" className={workbenchTabTrigger}>
-                行程
-              </TabsTrigger>
-              <TabsTrigger value="budget" className={workbenchTabTrigger}>
-                预算
-              </TabsTrigger>
-              <TabsTrigger value="tasks" className={workbenchTabTrigger}>
-                行前
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      ) : null}
     </header>
   );
 }

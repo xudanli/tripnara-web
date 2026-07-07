@@ -60,6 +60,50 @@ describe('buildSolutionMatrixModel', () => {
     };
     expect(buildSolutionMatrixModel(many).columns).toHaveLength(3);
   });
+
+  it('uses tradeoffs instead of summary for column notes', () => {
+    const model = buildSolutionMatrixModel({
+      options: [
+        {
+          optionId: 'opt-a',
+          scores: { executability: 70, cost: 80, risk: 60 },
+          summary: '可执行性 65 → 92',
+          tradeoffs: ['省 2 小时', '成本 +500'],
+        },
+        {
+          optionId: 'opt-b',
+          scores: { executability: 85, cost: 75, risk: 55 },
+          tradeoffs: ['节奏更稳'],
+        },
+      ],
+      recommendation: { optionId: 'opt-b', reason: '平衡成本与可执行性' },
+    });
+
+    expect(model.columns[0]?.optionId).toBe('opt-b');
+    expect(model.columns[0]?.tradeoffs).toEqual(['节奏更稳']);
+    expect(model.columns[0]?.caveat).toBeUndefined();
+    expect(model.columns[1]?.tradeoffs).toEqual(['省 2 小时', '成本 +500']);
+    expect(model.columns[1]?.caveat).toBeUndefined();
+  });
+
+  it('keeps gate violation caveat separate from tradeoffs', () => {
+    const model = buildSolutionMatrixModel({
+      options: [
+        { optionId: 'opt-a', tradeoffs: ['更省预算'] },
+        { optionId: 'opt-b', tradeoffs: ['更安全'] },
+      ],
+      recommendation: { optionId: 'opt-b', reason: 'test' },
+      kernelGateEval: {
+        optionDeltas: [
+          { optionId: 'opt-a', gateStatus: 'NEED_CONFIRM', violationCount: 2, violationTypes: ['budget', 'pace'] },
+          { optionId: 'opt-b', gateStatus: 'ALLOW', violationCount: 0, violationTypes: [] },
+        ],
+      },
+    });
+
+    expect(model.columns[1]?.caveat).toContain('2 项约束问题');
+    expect(model.columns[1]?.tradeoffs).toEqual(['更省预算']);
+  });
 });
 
 describe('pickDefaultSelectedOptionId', () => {

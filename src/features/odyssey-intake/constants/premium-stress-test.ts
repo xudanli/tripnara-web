@@ -28,7 +28,7 @@ export const PREMIUM_STRESS_QUESTIONS: PremiumStressQuestion[] = [
     title: '资源挤兑与替代决策',
     scenario:
       '你预订的黑沙滩奢华设计酒店因当地极端天气导致供电系统瘫痪，无法入住。此时是深夜 11 点，你唯一的两个 Plan B 是：入住人均 200 元、卫生条件普通的当地民居；或者临时冒雪连夜驱车 3 小时，前往下一个城市的五星级酒店。你会？',
-    wallpaperGradient: 'from-slate-950 via-indigo-950 to-slate-900',
+    wallpaperGradient: 'from-slate-950 via-nara-glacier-muted to-muted',
     options: [
       {
         id: 'A',
@@ -94,7 +94,7 @@ export const PREMIUM_STRESS_QUESTIONS: PremiumStressQuestion[] = [
     title: '溢价消费与附加值认同',
     scenario:
       '行程中发现原本包含在路线内的一个极赞的私家直升机看冰川项目，因临时政策变动需要自费增补 3000 元/人。搭子中有人觉得溢价过高强烈反对，而你非常想去，此时你会？',
-    wallpaperGradient: 'from-sky-950 via-cyan-950 to-slate-950',
+    wallpaperGradient: 'from-nara-glacier-muted via-nara-glacier-muted to-slate-950',
     options: [
       {
         id: 'A',

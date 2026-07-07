@@ -31,12 +31,22 @@ import {
 } from '@/lib/planning-conflicts.util';
 import type { TripDetail } from '@/types/trip';
 import type { FeasibilityIssueDto, TripFeasibilityReportDto } from '@/types/trip-feasibility-report';
+import type { DecisionProblemSummary } from '@/types/decision-problem';
+import {
+  buildDecisionProblemByIdMap,
+  conflictCardAccentFromEnforcement,
+  resolveDecisionProblemForConflict,
+} from '@/lib/planning-conflicts-decision.util';
+import { PlanObjectSourceBadge } from '@/components/planning-workbench/PlanObjectSourceBadge';
+import { isPlanObjectPlanningConflict } from '@/lib/plan-object-source.util';
 import { cn } from '@/lib/utils';
 
 export interface PlanningConflictsPanelProps {
   tripId: string;
   trip?: TripDetail | null;
   conflicts: UsePlanningConflictsResult;
+  decisionProblems?: DecisionProblemSummary[];
+  onOpenDecisionProblem?: (problemId: string) => void;
   className?: string;
   onNavigateToSchedule?: (detail: import('@/lib/plan-studio-schedule-navigation').PlanStudioScheduleNavigateDetail) => void;
 }
@@ -47,20 +57,12 @@ function buildFeasibilityPagePath(tripId: string, issueId?: string) {
   return `/dashboard/feasibility?${params.toString()}`;
 }
 
-function conflictCardAccentClass(item: PlanningConflictItem): string {
-  if (item.priority === 'must_handle') {
-    return 'border-l-4 border-l-red-500';
-  }
-  if (item.source === 'schedule') {
-    return 'border-l-4 border-l-slate-400 dark:border-l-slate-500';
-  }
-  return 'border-l-4 border-l-transparent';
-}
-
 export default function PlanningConflictsPanel({
   tripId,
   trip,
   conflicts,
+  decisionProblems,
+  onOpenDecisionProblem,
   className,
   onNavigateToSchedule,
 }: PlanningConflictsPanelProps) {
@@ -110,6 +112,11 @@ export default function PlanningConflictsPanel({
     return entries.sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)) as [PlanningConflictCategory, number][];
   }, [viewSummary.byCategory]);
 
+  const decisionProblemById = useMemo(
+    () => buildDecisionProblemByIdMap(decisionProblems ?? []),
+    [decisionProblems],
+  );
+
   const reportForGate = useMemo((): TripFeasibilityReportDto | null => {
     if (bundle) {
       return {
@@ -147,6 +154,12 @@ export default function PlanningConflictsPanel({
   };
 
   const openItem = (item: PlanningConflictItem) => {
+    const matchedProblem = resolveDecisionProblemForConflict(item, decisionProblems ?? []);
+    if (matchedProblem && onOpenDecisionProblem) {
+      onOpenDecisionProblem(matchedProblem.id);
+      return;
+    }
+
     if (item.issue) {
       const target = resolveFeasibilityIssueActionTarget(item.issue, tripId, { preferPlanStudio: true });
       if (target.surface === 'schedule_edit' && onNavigateToSchedule) {
@@ -217,9 +230,9 @@ export default function PlanningConflictsPanel({
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-lg border bg-red-50/50 dark:bg-red-950/20 px-3 py-2 text-center">
+        <div className="rounded-lg border bg-muted/50 dark:bg-muted/20 px-3 py-2 text-center">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">必处理</p>
-          <p className="text-lg font-semibold text-red-700 dark:text-red-300">{inbox.mustCount}</p>
+          <p className="text-lg font-semibold text-error dark:text-error">{inbox.mustCount}</p>
         </div>
         <div className="rounded-lg border bg-slate-50/80 dark:bg-slate-900/40 px-3 py-2 text-center">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">时间轴独有</p>
@@ -232,8 +245,8 @@ export default function PlanningConflictsPanel({
       </div>
 
       {error ? (
-        <Card className="border-amber-200 bg-amber-50/40 dark:bg-amber-950/20">
-          <CardContent className="py-3 text-sm text-amber-900 dark:text-amber-100">{error}</CardContent>
+        <Card className="border-border bg-muted/40">
+          <CardContent className="py-3 text-sm text-foreground">{error}</CardContent>
         </Card>
       ) : null}
 
@@ -331,7 +344,7 @@ export default function PlanningConflictsPanel({
 
             if (isAccess && issue) {
               return (
-                <div key={item.id} className={cn('rounded-lg overflow-hidden', conflictCardAccentClass(item))}>
+                <div key={item.id} className={cn('rounded-lg overflow-hidden', conflictCardAccentFromEnforcement(item, decisionProblemById))}>
                   <PoiAccessIssueCard
                     issue={issue}
                     tripId={tripId}
@@ -345,13 +358,13 @@ export default function PlanningConflictsPanel({
             }
 
             return (
-              <Card key={item.id} className={cn('overflow-hidden', conflictCardAccentClass(item))}>
+              <Card key={item.id} className={cn('overflow-hidden', conflictCardAccentFromEnforcement(item, decisionProblemById))}>
                 <CardHeader className="py-3 px-4 space-y-0">
                   <div className="flex flex-wrap items-start gap-2">
                     <AlertTriangle
                       className={cn(
                         'h-4 w-4 shrink-0 mt-0.5',
-                        item.priority === 'must_handle' ? 'text-red-600' : 'text-amber-600',
+                        item.priority === 'must_handle' ? 'text-error' : 'text-warning',
                       )}
                     />
                     <div className="min-w-0 flex-1">
@@ -371,6 +384,9 @@ export default function PlanningConflictsPanel({
                         <Badge variant="outline" className="text-[10px] h-5 border-slate-300">
                           时间轴
                         </Badge>
+                      ) : null}
+                      {isPlanObjectPlanningConflict(item) ? (
+                        <PlanObjectSourceBadge compact />
                       ) : null}
                     </div>
                   </div>

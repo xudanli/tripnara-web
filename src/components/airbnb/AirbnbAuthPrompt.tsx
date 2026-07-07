@@ -89,9 +89,9 @@ export function AirbnbAuthPrompt({
   // 如果已授权，显示成功状态
   if (authStatus?.isAuthorized) {
     return (
-      <Alert className={cn("border-green-200 bg-green-50", className)}>
-        <CheckCircle2 className="h-4 w-4 text-green-600" />
-        <AlertDescription className="text-green-800">
+      <Alert className={cn("border-gate-allow-border bg-gate-allow", className)}>
+        <CheckCircle2 className="h-4 w-4 text-gate-allow-foreground" />
+        <AlertDescription className="text-gate-allow-foreground">
           ✅ 已授权 Airbnb，可以搜索房源了
         </AlertDescription>
       </Alert>

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Cloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -23,11 +24,19 @@ export interface PlanningWorkbenchConstraintsPanelProps {
   constraintsApiList?: TripConstraintsListResponse | null;
   budgetProfile?: TripBudgetProfile | null;
   onOpenFeasibilityReport?: () => void;
+  onOpenDecisionProblem?: (problemId: string) => void;
+  onOpenPlanningInbox?: () => void;
+  focusMode?: import('@/lib/constraint-sidebar-focus.util').ConstraintSidebarFocusMode;
+  onFocusAttention?: () => void;
+  wishSummary?: import('@/types/trip-wishes').WishSummary | null;
+  collaborators?: import('@/types/trip').Collaborator[] | null;
+  onOpenCollaborationCenter?: () => void;
+  onOpenBudgetTab?: () => void;
   className?: string;
 }
 
-/** 左侧 · 约束与偏好（摘要态） */
-export function PlanningWorkbenchConstraintsPanel({
+/** 左侧 · 本次规划条件（摘要态） */
+export const PlanningWorkbenchConstraintsPanel = memo(function PlanningWorkbenchConstraintsPanel({
   tripId,
   constraints,
   trip,
@@ -41,6 +50,14 @@ export function PlanningWorkbenchConstraintsPanel({
   constraintsApiList,
   budgetProfile,
   onOpenFeasibilityReport,
+  onOpenDecisionProblem,
+  onOpenPlanningInbox,
+  focusMode,
+  onFocusAttention,
+  wishSummary,
+  collaborators,
+  onOpenCollaborationCenter,
+  onOpenBudgetTab,
   className,
 }: PlanningWorkbenchConstraintsPanelProps) {
   const handleEdit: ConstraintConsolePanelProps['onEditConstraint'] = (key) => {
@@ -68,9 +85,18 @@ export function PlanningWorkbenchConstraintsPanel({
       constraintsApiList={constraintsApiList}
       budgetProfile={budgetProfile}
       onOpenFeasibilityReport={onOpenFeasibilityReport}
+      onOpenDecisionProblem={onOpenDecisionProblem}
+      onOpenPlanningInbox={onOpenPlanningInbox}
+      focusMode={focusMode}
+      onFocusAttention={onFocusAttention}
+      wishSummary={wishSummary}
+      collaborators={collaborators}
+      onOpenCollaborationCenter={onOpenCollaborationCenter}
+      onOpenBudgetTab={onOpenBudgetTab}
+      variant="workbench"
       className={cn(className)}
     />
   );
-}
+});
 
 export type { ConstraintPendingKey };

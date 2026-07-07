@@ -27,15 +27,15 @@ const DIMENSION_KEYS: DimensionKey[] = [
 ];
 
 function barTone(value: number, softenLowScores: boolean): string {
-  if (value >= 80) return 'bg-emerald-500';
-  if (value >= 60) return 'bg-amber-500';
-  return softenLowScores ? 'bg-amber-600' : 'bg-red-500';
+  if (value >= 80) return 'bg-muted-foreground';
+  if (value >= 60) return 'bg-muted0';
+  return softenLowScores ? 'bg-foreground/60' : 'bg-muted-foreground';
 }
 
 function textTone(value: number, softenLowScores: boolean): string {
-  if (value >= 80) return 'text-emerald-700';
-  if (value >= 60) return 'text-amber-700';
-  return softenLowScores ? 'text-amber-800' : 'text-red-700';
+  if (value >= 80) return 'text-success';
+  if (value >= 60) return 'text-warning';
+  return softenLowScores ? 'text-warning' : 'text-error';
 }
 
 function DimensionRow({

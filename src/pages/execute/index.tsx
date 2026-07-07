@@ -16,21 +16,22 @@ import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { LogoLoading } from '@/components/common/LogoLoading';
 import {
-  MapPin,
   Clock,
   AlertCircle,
   SkipForward,
   RotateCcw,
-  Navigation,
   ChevronDown,
   ChevronUp,
-  ClipboardList,
-  ShieldCheck,
+  Bell,
+  CalendarDays,
+  Headphones,
+  Pencil,
 } from 'lucide-react';
 import { EmptyExecuteIllustration } from '@/components/illustrations';
 import { format, isValid } from 'date-fns';
 import { formatScheduleTime } from '@/lib/itinerary-item-card-format';
 import { toast } from 'sonner';
+import { handleWriteChainBlockedError, notifyDirectWriteBlocked } from '@/lib/write-chain-blocked-ui.util';
 import {
   Sheet,
   SheetContent,
@@ -42,11 +43,15 @@ import SpotlightTour from '@/components/onboarding/SpotlightTour';
 import type { TourStep } from '@/components/onboarding/SpotlightTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
-import { WeatherCard } from '@/components/weather/WeatherCard';
 import { cn } from '@/lib/utils';
 import { FallbackSolutionPreviewDialog } from '@/components/execute/FallbackSolutionPreviewDialog';
 import { ReorderScheduleDialog } from '@/components/execute/ReorderScheduleDialog';
-import { ExecuteItineraryTimeline } from '@/components/execute/ExecuteItineraryTimeline';
+import { ExecuteLiveDashboard, type ExecuteQuickActionItem, ExecuteMemberStatusSheet, ExecuteTeamChatSheet } from '@/components/execute/live';
+import {
+  formatExecuteStatusSubline,
+  formatExecuteTripTitle,
+} from '@/components/execute/live/ExecuteLiveHeader';
+import { buildExecuteMapData } from '@/components/execute/live/execute-live-data.util';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
@@ -66,7 +71,7 @@ import {
 import ReadinessDrawer from '@/components/readiness/ReadinessDrawer';
 import ReadinessSummaryCard from '@/components/readiness/ReadinessSummaryCard';
 import { InTripAnchorBar, InTripTodayPanel, InTripEnvironmentAlertsPanel, InTripEnvironmentEventSheet, InTripCausalInsightCard, InTripMoneyDashboardPanel, InTripMoneyRecordDialog, InTripMoneyRebalancePanel, InTripMoodCheckDialog, InTripPulseInterventionsPanel, InTripTeamThermometerPanel, InTripSplitPanel, InTripSplitSessionSheet, InTripExperiencePulsePanel, InTripExperiencePulseDialog, InTripExperienceWeightPanel, InTripPostTripSummaryPanel, InTripPendingInbox, IN_TRIP_PENDING_ICONS, InTripTodayReadinessSheet } from '@/components/in-trip';
-import { ExecutionAdvisoryCard, ExecutionAdvisorySheet } from '@/components/execution-advisory';
+import { ExecutionAdvisorySheet } from '@/components/execution-advisory';
 import {
   InTripRecoveryLoopBanner,
   InTripRecoveryLoopSheet,
@@ -81,6 +86,11 @@ import { getTripReadinessPhaseFromTrip } from '@/lib/trip-readiness-phase.util';
 import { useInTripToday } from '@/hooks/useInTripToday';
 import { useInTripTodayReadinessDetail } from '@/hooks/useInTripTodayReadiness';
 import { useTripExecutionAdvisory } from '@/hooks/useTripExecutionAdvisory';
+import {
+  isExecutionRecommendationExpiredError,
+  tripConstraintSolverApi,
+  TripConstraintSolverApiError,
+} from '@/api/trip-constraint-solver';
 import { useInTripHandoff } from '@/hooks/useInTripHandoff';
 import { useInTripEnvironmentEvents } from '@/hooks/useInTripEnvironmentEvents';
 import { useInTripMoneyDashboard } from '@/hooks/useInTripMoneyDashboard';
@@ -94,9 +104,25 @@ import {
 } from '@/hooks/useInTripExperience';
 import { useAuth } from '@/hooks/useAuth';
 import { tripBudgetApi } from '@/api/trip-budget';
-import type { ExperiencePulseTrigger } from '@/types/in-trip-experience';
+import { buildExecuteTodayStatusSnapshot, resolveExecuteTodayLocationLabel } from '@/lib/execute-today-status.util';
+import {
+  buildExecuteMemberStatusItems,
+  buildExecuteResourceItems,
+  buildExecuteTransportSnapshot,
+} from '@/lib/execute-status-sidebar.util';
+import {
+  resolveExecuteTimelineRail,
+  resolveWindWarningLabel,
+} from '@/lib/execute-center.util';
+import { buildExecuteCenterDetailModel } from '@/lib/execute-center-detail.util';
+import {
+  buildGoogleMapsDirectionsUrl,
+  resolveNextStopCoordinates,
+} from '@/lib/execute-navigation.util';
+import { useWeather } from '@/hooks/useWeather';
 
-// ⚠️ 改进：提取常量配置，减少硬编码
+const EXECUTE_GUIDE_PHONE = '+3541234567';
+
 const EXECUTE_CONFIG = {
   POLLING_INTERVAL: {
     VISIBLE: 30000,    // 页面可见时：30秒
@@ -143,6 +169,7 @@ export default function ExecutePage() {
   
   // ⚠️ 新增：关键证据状态
   const [placeEvidence, setPlaceEvidence] = useState<PlaceEvidenceResponse | null>(null);
+  const [placeEvidenceEmpty, setPlaceEvidenceEmpty] = useState<string | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   
   // ⚠️ 新增：修复方案状态
@@ -173,6 +200,9 @@ export default function ExecutePage() {
   >(null);
   const [weightsExpanded, setWeightsExpanded] = useState(false);
   const [negotiationSheetOpen, setNegotiationSheetOpen] = useState(false);
+  const [teamChatSheetOpen, setTeamChatSheetOpen] = useState(false);
+  const [memberStatusSheetOpen, setMemberStatusSheetOpen] = useState(false);
+  const [highlightMemberUserId, setHighlightMemberUserId] = useState<string | null>(null);
   const [secondaryModulesOpen, setSecondaryModulesOpen] = useState(false);
   const [todayReadinessSheetOpen, setTodayReadinessSheetOpen] = useState(false);
   const [executionAdvisorySheetOpen, setExecutionAdvisorySheetOpen] = useState(false);
@@ -212,6 +242,7 @@ export default function ExecutePage() {
     data: executionAdvisory,
     loading: executionAdvisoryLoading,
     reload: reloadExecutionAdvisory,
+    setAdvisory: setExecutionAdvisory,
   } = useTripExecutionAdvisory(tripId, {
     enabled: inTravelPhase,
     tripState,
@@ -566,6 +597,45 @@ export default function ExecutePage() {
     return countryCode === 'IS';
   }, [trip?.destination]);
 
+  const weatherQueryParams = useMemo(
+    () =>
+      weatherLocation
+        ? {
+            lat: weatherLocation.location.lat,
+            lng: weatherLocation.location.lng,
+            includeWindDetails: isIceland,
+          }
+        : null,
+    [weatherLocation, isIceland],
+  );
+  const { data: currentWeather } = useWeather(weatherQueryParams, {
+    refreshInterval: EXECUTE_CONFIG.WEATHER_REFRESH_INTERVAL,
+    enabled: inTravelPhase && weatherQueryParams != null,
+  });
+
+  const todayStatus = useMemo(
+    () =>
+      buildExecuteTodayStatusSnapshot({
+        destination: trip?.destination,
+        locationLabel: resolveExecuteTodayLocationLabel(trip, tripState?.nextStop),
+        weather: currentWeather,
+        inTripWeatherSummary: inTripToday?.weather.summary,
+        inTripTemp: inTripToday?.weather.tempMax ?? inTripToday?.weather.tempMin,
+        executionAdvisory,
+        environmentEvents,
+      }),
+    [
+      trip,
+      tripState?.nextStop,
+      currentWeather,
+      inTripToday?.weather.summary,
+      inTripToday?.weather.tempMax,
+      inTripToday?.weather.tempMin,
+      executionAdvisory,
+      environmentEvents,
+    ],
+  );
+
   const itemIdMap = useMemo(() => {
     const map = new Map<number, string>();
     if (!trip?.TripDay || !tripState?.currentDayId) {
@@ -581,6 +651,46 @@ export default function ExecutePage() {
     }
     return map;
   }, [trip, tripState?.currentDayId]);
+
+  const executeQuickActions = useMemo<ExecuteQuickActionItem[]>(
+    () => {
+      if (!tripId) return [];
+      return [
+        {
+          id: 'adjust',
+          label: '调整行程',
+          icon: CalendarDays,
+          onClick: () => navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=schedule`),
+        },
+        {
+          id: 'guide',
+          label: '联系导游',
+          icon: Headphones,
+          onClick: () => window.open(`tel:${EXECUTE_GUIDE_PHONE}`),
+        },
+        {
+          id: 'notify',
+          label: '发送通知',
+          icon: Bell,
+          onClick: () => setShowRepairSheet(true),
+        },
+        {
+          id: 'record',
+          label: '记录事件',
+          icon: Pencil,
+          onClick: () => {
+            const envEvent = environmentEvents[0];
+            if (envEvent) {
+              openEnvironmentEvent(envEvent.id);
+              return;
+            }
+            setMoneyRecordOpen(true);
+          },
+        },
+      ];
+    },
+    [tripId, navigate, environmentEvents],
+  );
 
   useEffect(() => {
     if (tripId) {
@@ -1073,67 +1183,125 @@ export default function ExecutePage() {
     }
   };
 
-  // 打开下一步导航（Google Maps）
+  // 打开下一步导航（Google Maps）— SSOT: GET /trips/:id/state · nextStop.Place
   const handleOpenNavigation = () => {
-    if (!nextStop) return;
-    let place: any = null;
-    let lat: number | null = null;
-    let lng: number | null = null;
-    let activityName: string | null = null;
-    if (tripState?.nextStop?.Place) {
-      place = tripState.nextStop.Place;
-      lat = place.latitude || place.lat || place.location?.lat;
-      lng = place.longitude || place.lng || place.location?.lng;
+    if (!nextStop) {
+      toast.error('暂无下一步目的地');
+      return;
     }
-    const allItems = trip?.TripDay?.flatMap(day => day.ItineraryItem || []) || [];
-    let matchingItem: any = null;
-    if (nextStop?.itemId) {
-      matchingItem = allItems.find(item => item.id === nextStop.itemId);
-      activityName = matchingItem?.note ?? null;
+
+    const coords = resolveNextStopCoordinates(tripState?.nextStop);
+    if (coords) {
+      window.open(buildGoogleMapsDirectionsUrl(coords));
+      return;
     }
-    if (!place && nextStop?.placeId) {
-      matchingItem = matchingItem || allItems.find(item => item.Place?.id === nextStop.placeId);
-      if (matchingItem?.Place) {
-        place = matchingItem.Place;
-        if (!activityName) activityName = matchingItem.note ?? null;
-      }
-    }
-    if (place && (!lat || !lng)) {
-      lat = (place as any).latitude || (place as any).metadata?.location?.lat || (place as any).lat;
-      lng = (place as any).longitude || (place as any).metadata?.location?.lng || (place as any).lng;
-    }
-    if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
-      const destination = `${lat},${lng}`;
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`);
-    } else {
-      if (!place) {
-        toast.error('无法获取目的地坐标', { description: '行程数据中缺少地点信息', duration: 5000 });
-      } else {
-        toast.error('无法获取目的地坐标', { description: '地点数据中缺少坐标字段', duration: 5000 });
-      }
-    }
+
+    toast.error('无法获取目的地坐标', {
+      description: '请确认 GET /trips/:id/state 返回 nextStop.Place.latitude/longitude',
+      duration: 5000,
+    });
   };
 
-  // ⚠️ 新增：加载关键证据
-  const loadPlaceEvidence = async () => {
-    if (!nextStop?.placeId) return;
-    
+  // 加载下一步关键证据（T-05）
+  const loadPlaceEvidence = async (placeId?: number, date?: string) => {
+    const targetPlaceId = placeId ?? tripState?.nextStop?.placeId;
+    if (!targetPlaceId) return;
+
     try {
       setEvidenceLoading(true);
-      const today = new Date().toISOString().split('T')[0];
-      const evidence = await placesApi.getEvidence(nextStop.placeId, {
-        date: today,
+      setPlaceEvidenceEmpty(null);
+      const scheduleDate =
+        date ??
+        trip?.TripDay?.find((d) => d.id === tripState?.currentDayId)?.date ??
+        format(new Date(), 'yyyy-MM-dd');
+      const evidence = await placesApi.getEvidence(targetPlaceId, {
+        date: scheduleDate,
         includeWeather: true,
         includeTraffic: true,
       });
       setPlaceEvidence(evidence);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to load place evidence:', err);
-      // 如果加载失败，不显示错误，使用默认值
+      setPlaceEvidence(null);
+      const apiCode = (err as { response?: { data?: { error?: { code?: string } } } })?.response
+        ?.data?.error?.code;
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (apiCode === 'NOT_FOUND' || status === 404) {
+        setPlaceEvidenceEmpty('暂无该地点的关键证据');
+        toast.info('暂无该地点的关键证据', { description: '营业时间、路况等信息尚未收录' });
+        return;
+      }
+      const message = err instanceof Error ? err.message : '加载关键证据失败';
+      setPlaceEvidenceEmpty(message);
+      toast.error('加载关键证据失败', { description: message });
     } finally {
       setEvidenceLoading(false);
     }
   };
+
+  const handleApplyAdvisoryPlan = async (planId: string) => {
+    if (!tripId) return;
+
+    const recommendation = executionAdvisory?.recommendations.find((rec) => rec.id === planId);
+    if (recommendation?.actionType === 'keep') {
+      toast.info('当前方案为保持原计划，无需应用');
+      return;
+    }
+
+    if (notifyDirectWriteBlocked({ tripId, navigate })) return;
+
+    try {
+      const result = await tripConstraintSolverApi.applyExecutionRecommendation(tripId, planId, {
+        confirm: true,
+        clientTimestamp: new Date().toISOString(),
+      });
+
+      setExecutionAdvisory(result.executionAdvisory);
+
+      if (result.updatedSchedule?.date) {
+        setTodaySchedule({
+          date: result.updatedSchedule.date,
+          schedule: {
+            items: result.updatedSchedule.schedule.items.map((item) => ({
+              placeId: item.placeId,
+              placeName: item.placeName,
+              startTime: item.startTime,
+              endTime: item.endTime,
+              type: 'ACTIVITY' as const,
+              status: item.status,
+            })),
+          },
+          persisted: true,
+        });
+      }
+
+      await loadData();
+      toast.success('方案已应用，行程已更新');
+    } catch (err: unknown) {
+      console.error('Failed to apply advisory plan:', err);
+      if (handleWriteChainBlockedError(err, { tripId, navigate })) return;
+
+      if (isExecutionRecommendationExpiredError(err)) {
+        toast.warning('建议已过期，正在刷新…');
+        await reloadExecutionAdvisory();
+        return;
+      }
+
+      if (err instanceof TripConstraintSolverApiError && err.code === 'RECOMMENDATION_NOT_FOUND') {
+        toast.error('方案不存在', { description: '请刷新后重试' });
+        await reloadExecutionAdvisory();
+        return;
+      }
+
+      const message = err instanceof Error ? err.message : '应用失败，请重试';
+      toast.error(message);
+    }
+  };
+
+  useEffect(() => {
+    if (!inTravelPhase || !tripState?.nextStop?.placeId) return;
+    void loadPlaceEvidence(tripState.nextStop.placeId);
+  }, [inTravelPhase, tripState?.nextStop?.placeId, tripState?.currentDayId]);
 
   // ⚠️ 新增：预览修复方案
   const handlePreviewSolution = (solutionId: string) => {
@@ -1173,6 +1341,8 @@ export default function ExecutePage() {
         }
       }
 
+      if (notifyDirectWriteBlocked({ tripId, navigate })) return;
+
       const result = await executionApi.applyFallback({
         tripId,
         solutionId,
@@ -1201,9 +1371,11 @@ export default function ExecutePage() {
         setFallbackPlan(null);
         toast.success('修复方案已应用');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to apply solution:', err);
-      toast.error(err?.message || '应用失败，请重试');
+      if (handleWriteChainBlockedError(err, { tripId, navigate })) return;
+      const message = err instanceof Error ? err.message : '应用失败，请重试';
+      toast.error(message);
     }
   };
 
@@ -1349,605 +1521,261 @@ export default function ExecutePage() {
     return matchingItem?.Place || undefined;
   };
 
+  const totalDays = trip.TripDay?.length ?? anchorSnapshot?.metadata.totalDays ?? 1;
+  const dayNumber = inTripToday?.dayNumber
+    ?? (currentDay && trip.TripDay
+      ? trip.TripDay.findIndex((d) => d.id === currentDay.id) + 1
+      : 1);
+
+  const { mapPoints, routeCoordinates } = buildExecuteMapData(
+    trip,
+    tripState,
+    todaySchedule,
+    userLocation,
+  );
+
+  const executionScore = inTripToday?.vulnerability?.stabilityScore != null
+    ? Math.round(inTripToday.vulnerability.stabilityScore)
+    : executionAdvisory?.verdict.status === 'ON_TRACK'
+      ? 84
+      : executionAdvisory?.verdict.status === 'AT_RISK'
+        ? 72
+        : null;
+
+  const urgentReminderCount = reminders.filter(
+    (r) => r.priority === 'urgent' || r.priority === 'high',
+  ).length;
+  const notificationCount = pendingTotal + urgentReminderCount + (fallbackPlan ? 1 : 0);
+
+  const alertBanner = (() => {
+    const windBadge = todayStatus?.weatherRisks?.badges.find((b) => b.label.includes('风'));
+    const defaultWindDescription =
+      '目标区域阵风预计持续至 14:00，建议启用 Plan B 或调整行程安排。';
+
+    if (windBadge) {
+      return {
+        title: `强风预警 · Day ${dayNumber} 活动需调整`,
+        description:
+          executionAdvisory?.realtimeRisks.weather
+          ?? environmentEvents[0]?.description
+          ?? defaultWindDescription,
+        onAction: () => {
+          if (executionAdvisory) {
+            setExecutionAdvisorySheetOpen(true);
+            void reloadExecutionAdvisory();
+            return;
+          }
+          const envEvent = environmentEvents[0];
+          if (envEvent) openEnvironmentEvent(envEvent.id);
+        },
+      };
+    }
+
+    if (executionAdvisory && ['AT_RISK', 'REPLAN_REQUIRED', 'STOP'].includes(executionAdvisory.verdict.status)) {
+      return {
+        title: executionAdvisory.verdict.headline,
+        description: executionAdvisory.realtimeRisks.weather
+          ?? executionAdvisory.deviations[0]?.message
+          ?? '建议查看替代方案并调整今日安排。',
+        onAction: () => {
+          setExecutionAdvisorySheetOpen(true);
+          void reloadExecutionAdvisory();
+        },
+      };
+    }
+    const envEvent = environmentEvents[0];
+    if (envEvent && inTravelPhase) {
+      return {
+        title: '环境预警 · 今日活动可能需要调整',
+        description: envEvent.description,
+        onAction: () => openEnvironmentEvent(envEvent.id),
+      };
+    }
+    const urgent = reminders.find((r) => r.priority === 'urgent' || r.priority === 'high');
+    if (urgent) {
+      return {
+        title: urgent.title,
+        description: urgent.message,
+        onAction: () => setShowRepairSheet(true),
+      };
+    }
+    return null;
+  })();
+
+  const currentLegEta = nextStop?.estimatedArrivalTime
+    ? formatScheduleTime(nextStop.estimatedArrivalTime)
+    : nextStop?.startTime
+      ? formatScheduleTime(nextStop.startTime)
+      : undefined;
+
+  const nextStopPlaceLabel = nextStop
+    ? formatPlaceName(nextStop.placeName, nextStop.Place ?? findPlaceById(nextStop.placeId))
+    : undefined;
+
+  const nextStopRefCoords = resolveNextStopCoordinates(nextStop);
+
+  const rallyMinutesUntil = (() => {
+    const raw = nextStop?.estimatedArrivalTime ?? nextStop?.startTime;
+    if (!raw) return undefined;
+    return Math.max(0, Math.round((new Date(raw).getTime() - Date.now()) / 60_000));
+  })();
+
+  const intercomContextNote = (() => {
+    const alertText = `${alertBanner?.title ?? ''} ${alertBanner?.description ?? ''}`;
+    if (/风|天气|雪|storm|wind/i.test(alertText)) return '因天气变化，已提前返程';
+    const summary = executionAdvisory?.verdict?.headline;
+    if (summary && /提前|调整|返程/i.test(summary)) return summary;
+    return undefined;
+  })();
+
+  const executeSidebarMembers = buildExecuteMemberStatusItems({
+    thermometer: teamThermometer,
+    fallbackMembers: moneyMembers,
+  });
+
+  const executeSidebarTransport = buildExecuteTransportSnapshot({
+    trip,
+    tripState,
+    executionAdvisory,
+    nextStopPlaceName: nextStopPlaceLabel,
+    arrivalTimeLabel: currentLegEta,
+  });
+
+  const executeSidebarResources = buildExecuteResourceItems({
+    todaySchedule,
+    trip,
+    nextStopPlaceId: nextStop?.placeId,
+  });
+
+  const windWarningLabel = resolveWindWarningLabel({
+    alertTitle: alertBanner?.title,
+    todayStatus,
+  });
+  const vehicleTimeLabel = todayStatus?.currentTime ?? format(new Date(), 'HH:mm');
+
+  const timelineRail = resolveExecuteTimelineRail({
+    trip,
+    tripState,
+    todaySchedule,
+    inTripToday: inTripToday ?? undefined,
+    arrivalEta: currentLegEta,
+    resources: executeSidebarResources,
+    transport: executeSidebarTransport,
+  });
+
+  const centerDetail = buildExecuteCenterDetailModel({
+    trip,
+    tripState,
+    todaySchedule,
+    timelineRail,
+    resources: executeSidebarResources,
+    activeSplitSession,
+    advisory: executionAdvisory ?? null,
+    windDescription: alertBanner?.description,
+    hasWindWarning: Boolean(alertBanner),
+    formatPlaceName: (name, placeId) =>
+      placeId != null ? formatPlaceName(name, findPlaceById(placeId)) : name,
+  });
+
+  const tripTitle = formatExecuteTripTitle({
+    name: trip.name,
+    destination: trip.destination,
+    totalDays,
+  });
+  const revisionLabel = trip.revisionLabel ?? (trip.revision != null ? `A${trip.revision}` : undefined);
+  const statusSubline = formatExecuteStatusSubline({
+    tripStatus: trip.status,
+    dayNumber,
+    currentDate: currentDay?.date,
+    fallbackLabel: executionBadge.label,
+  });
+  const headerCollaborators = moneyMembers.map((m) => ({
+    userId: m.userId,
+    displayName: m.displayName,
+  }));
+
   return (
     <div className="h-full flex flex-col">
-      {/* Execute Tour */}
-      <SpotlightTour
-        steps={executeTourSteps}
-        open={showExecuteTour && !onboardingState.toursCompleted.execute}
-        onClose={() => {
-          setShowExecuteTour(false);
-          completeTour('execute');
+      <ExecuteLiveDashboard
+        tripTitle={tripTitle}
+        revisionLabel={revisionLabel}
+        statusSubline={statusSubline}
+        dayNumber={dayNumber}
+        totalDays={totalDays}
+        executionScore={executionScore}
+        notificationCount={notificationCount}
+        collaborators={headerCollaborators}
+        weather={currentWeather ?? null}
+        windGust={todayStatus?.weatherRisks?.windGust ?? currentWeather?.metadata?.windGust}
+        alertBanner={alertBanner}
+        currentDate={currentDay?.date}
+        statusSidebar={{
+          todayStatus,
+          members: executeSidebarMembers,
+          membersOnlineCount: anchorSnapshot?.team.memberCount ?? executeSidebarMembers.length,
+          transport: executeSidebarTransport,
+          resources: executeSidebarResources,
+          onViewMembersDetail: () => {
+            setHighlightMemberUserId(null);
+            setMemberStatusSheetOpen(true);
+          },
+          onMemberClick: (member) => {
+            setHighlightMemberUserId(member.userId);
+            setMemberStatusSheetOpen(true);
+          },
+          onViewTransportMap: () => {
+            document
+              .querySelector('[data-section="execute-route-map"]')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          },
+          onManageBookings: () => navigate(`/dashboard/trips/${tripId}?tab=bookings`),
+          onGroupIntercom: () => setTeamChatSheetOpen(true),
+          onTeamNegotiation: () => setNegotiationSheetOpen(true),
+          quickActions: executeQuickActions,
         }}
-        onComplete={() => {
-          setShowExecuteTour(false);
-          completeTour('execute');
-        }}
-      />
-
-      {/* A. 顶部条（精简）：行程名 | 日期/时间 | 状态 | 天气(compact) | 实地报告 */}
-      <div className="border-b bg-white px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold truncate">{trip.destination || '执行模式'}</h1>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
-            {currentDay && (
-              <span>{formatDisplayDate(currentDay.date, 'MM-dd')}</span>
-            )}
-            <span>{format(new Date(), 'HH:mm')}</span>
-          </div>
-          <Badge
-            variant={executionBadge.variant}
-            className="shrink-0"
-            title={
-              executionBadge.abuVerdict || executionBadge.gateStatus
-                ? `Gate: ${executionBadge.gateStatus ?? '—'} · Abu: ${executionBadge.abuVerdict ?? '—'}`
-                : undefined
+        mapPoints={mapPoints}
+        routeCoordinates={routeCoordinates}
+        timelineRail={timelineRail}
+        centerDetail={centerDetail}
+        onViewAlertDetail={alertBanner?.onAction}
+        windWarningLabel={windWarningLabel}
+        vehicleTimeLabel={vehicleTimeLabel}
+        onNavigate={handleOpenNavigation}
+        onNotificationsClick={() => setShowRepairSheet(true)}
+        onCollaboratorsClick={() => setCollaboratorsDialogOpen(true)}
+        onTripTitleClick={() => navigate(`/dashboard/trips/${tripId}`)}
+        decisionSidebar={{
+          tripId,
+          advisory: executionAdvisory ?? null,
+          fallbackPlan,
+          loading: executionAdvisoryLoading,
+          onOpenDetail: () => {
+            setExecutionAdvisorySheetOpen(true);
+            void reloadExecutionAdvisory();
+          },
+          onApplyPlan: (planId) => {
+            const fallbackMatch = fallbackPlan?.solutions.find((solution) => solution.id === planId);
+            if (fallbackMatch) {
+              void handleApplySolution(planId);
+              return;
             }
-          >
-            {executionBadge.label}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (showInTripTodayReadiness) {
-                setExecutionAdvisorySheetOpen(true);
-                void reloadExecutionAdvisory();
-              } else {
-                setReadinessDrawerOpen(true);
-              }
-            }}
-            className="h-8"
-          >
-            <ShieldCheck className="h-4 w-4 sm:mr-1" />
-            <span className="hidden sm:inline">
-              {showInTripTodayReadiness ? '实时状态' : '准备度'}
-            </span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/dashboard/readiness?tripId=${tripId}`)}
-            className="h-8 hidden md:inline-flex"
-          >
-            {showInTripTodayReadiness ? '整趟准备度' : '详细检查'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFieldReportDialogOpen(true)}
-            className="h-8"
-          >
-            <ClipboardList className="h-4 w-4 sm:mr-1" />
-            <span className="hidden sm:inline">实地报告</span>
-          </Button>
-          {fallbackPlan && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowRepairSheet(true)}
-              className="h-8 border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
-            >
-              <AlertCircle className="h-4 w-4 sm:mr-1" />
-              <span className="hidden sm:inline">Neptune 待确认</span>
-              <span className="sm:hidden">Neptune</span>
-            </Button>
-          )}
-          {weatherLocation && (
-            <WeatherCard
-              location={weatherLocation.location}
-              includeWindDetails={isIceland}
-              compact={true}
-              refreshInterval={EXECUTE_CONFIG.WEATHER_REFRESH_INTERVAL}
-              locationName={weatherLocation.name}
-            />
-          )}
-        </div>
-      </div>
-
-      <InTripAnchorBar
-        snapshot={anchorSnapshot}
-        loading={anchorLoading && inTravelPhase}
-        onTeamFrictionClick={() => setNegotiationSheetOpen(true)}
+            const advisoryRec = executionAdvisory?.recommendations.find((rec) => rec.id === planId);
+            if (advisoryRec) {
+              void handleApplyAdvisoryPlan(planId);
+              return;
+            }
+            toast.error('未找到可应用的方案');
+          },
+          onViewEvidence: () => {
+            setExecutionAdvisorySheetOpen(true);
+            void reloadExecutionAdvisory();
+            void loadPlaceEvidence();
+          },
+          onSos: () => {
+            window.open('tel:112');
+          },
+        }}
       />
-
-      {tripId && inTravelPhase && isTripLoopInTripEnabled() ? (
-        <div className="px-6 pt-4 max-w-7xl mx-auto w-full">
-          <InTripRecoveryLoopBanner
-            tripId={tripId}
-            onOpen={() => setInTripRecoverySheetOpen(true)}
-          />
-        </div>
-      ) : null}
-
-      {/* 主内容区 */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="grid grid-cols-12 gap-6 max-w-7xl mx-auto">
-          {/* B. 主区：行程时间线 + 下一步（优先展示） */}
-          <div className="col-span-12 lg:col-span-8 space-y-6">
-            <ExecuteItineraryTimeline
-              trip={trip}
-              tripState={tripState}
-              todaySchedule={todaySchedule}
-              formatPlaceName={formatPlaceName}
-              findPlaceById={findPlaceById}
-            />
-            {nextStop && (
-              <Card className="border-primary" data-tour="next-step">
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-5 w-5 text-primary" />
-                      <span className="font-medium">
-                        {formatPlaceName(nextStop.placeName, nextStop.Place)}
-                      </span>
-                      {nextStop.startTime && (
-                        <span className="text-sm text-muted-foreground">
-                          {formatScheduleTime(nextStop.startTime)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          if (!showEvidence && nextStop?.placeId) {
-                            await loadPlaceEvidence();
-                          }
-                          setShowEvidence(!showEvidence);
-                        }}
-                        disabled={evidenceLoading}
-                      >
-                        {showEvidence ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        关键证据
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={handleOpenNavigation}>
-                        <Navigation className="w-4 h-4 mr-2" />
-                        导航
-                      </Button>
-                    </div>
-                  </div>
-                  {showEvidence && (
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2 text-sm">
-                      {evidenceLoading ? (
-                        <div className="flex items-center justify-center py-2">
-                          <Spinner className="w-4 h-4" />
-                          <span className="ml-2 text-xs">加载中...</span>
-                        </div>
-                      ) : placeEvidence?.evidence ? (
-                        <>
-                          {placeEvidence.evidence.businessHours && (
-                            <div>
-                              <span className="font-medium">营业时间：</span>
-                              <span className="text-muted-foreground">
-                                {placeEvidence.evidence.businessHours.open} - {placeEvidence.evidence.businessHours.close}
-                              </span>
-                            </div>
-                          )}
-                          {placeEvidence.evidence.roadClosure && (
-                            <div>
-                              <span className="font-medium">封路信息：</span>
-                              <span className="text-muted-foreground">
-                                {placeEvidence.evidence.roadClosure.hasClosure 
-                                  ? placeEvidence.evidence.roadClosure.closures?.[0]?.reason || '有封路'
-                                  : '无'}
-                              </span>
-                            </div>
-                          )}
-                          {placeEvidence.evidence.weatherWindow && (
-                            <div>
-                              <span className="font-medium">天气窗口：</span>
-                              <span className="text-muted-foreground">
-                                {placeEvidence.evidence.weatherWindow.description}
-                              </span>
-                            </div>
-                          )}
-                          {!placeEvidence.evidence.businessHours && 
-                           !placeEvidence.evidence.roadClosure && 
-                           !placeEvidence.evidence.weatherWindow && (
-                            <div className="text-muted-foreground text-xs">暂无关键证据信息</div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-muted-foreground text-xs">暂无关键证据信息</div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* C. 右侧：今日就绪 / 提醒（4/12） */}
-          <div className="col-span-12 lg:col-span-4 space-y-6">
-            {tripId && showInTripTodayReadiness ? (
-              <ExecutionAdvisoryCard
-                advisory={executionAdvisory}
-                loading={executionAdvisoryLoading || inTripTodayLoading}
-                onOpenDetail={() => {
-                  setExecutionAdvisorySheetOpen(true);
-                  void reloadExecutionAdvisory();
-                }}
-              />
-            ) : tripId ? (
-              <ReadinessSummaryCard
-                tripId={tripId}
-                onOpenDrawer={() => setReadinessDrawerOpen(true)}
-              />
-            ) : null}
-            {Array.isArray(reminders) && reminders.length > 0 && (() => {
-              const priorityColors: Record<string, string> = {
-                urgent: 'bg-red-100 border-red-300 text-red-800',
-                high: 'bg-orange-100 border-orange-300 text-orange-800',
-                medium: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-                low: 'bg-blue-100 border-blue-300 text-blue-800',
-              };
-              const highPriority = reminders.filter(r => r.priority === 'urgent' || r.priority === 'high');
-              const lowPriority = reminders.filter(r => r.priority === 'medium' || r.priority === 'low');
-              const renderReminder = (reminder: Reminder) => (
-                <div
-                  key={reminder.id}
-                  className={`p-3 border rounded-lg ${priorityColors[reminder.priority] || priorityColors.medium}`}
-                >
-                  <div className="font-medium text-sm mb-1">{reminder.title}</div>
-                  <div className="text-xs opacity-90">{reminder.message}</div>
-                  {reminder.triggerTime && (
-                    <div className="text-xs opacity-70 mt-1">
-                      {formatDisplayDateTime(reminder.triggerTime, 'MM-dd HH:mm')}
-                    </div>
-                  )}
-                </div>
-              );
-              return (
-                <Card className="border-yellow-200 bg-yellow-50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5 text-yellow-600" />
-                      提醒
-                    </CardTitle>
-                    <CardDescription>
-                      {highPriority.length > 0 ? '高优先级提醒' : '提醒事项'}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {highPriority.length > 0 ? highPriority.map(renderReminder) : reminders.map(renderReminder)}
-                      {lowPriority.length > 0 && (
-                        <Collapsible open={lowPriorityRemindersOpen} onOpenChange={setLowPriorityRemindersOpen} className="mt-2">
-                          <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground">
-                              <span>其余 {lowPriority.length} 条提醒</span>
-                              {lowPriorityRemindersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <div className="space-y-2 mt-2 pt-2 border-t border-yellow-200">
-                              {lowPriority.map(renderReminder)}
-                            </div>
-                          </CollapsibleContent>
-                        </Collapsible>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })()}
-          </div>
-
-          {inTravelPhase && moduleVisibility.today && (
-            <InTripTodayPanel
-              tripId={tripId!}
-              data={inTripToday}
-              loading={inTripTodayLoading}
-              error={inTripTodayError}
-              disabled={inTripDisabled}
-              onAskAi={handleAskAi}
-              onEnvironmentAlertsClick={() => {
-                setSecondaryModulesOpen(true);
-                const first = environmentEvents[0];
-                if (first) openEnvironmentEvent(first.id);
-              }}
-              onRecordExpense={openMoneyRecord}
-              onMoodCheck={() => setMoodCheckOpen(true)}
-              onInterventionsClick={() => {
-                setSecondaryModulesOpen(true);
-                setInterventionsExpanded(true);
-              }}
-              onExperiencePulsesClick={openFirstExperiencePulse}
-            />
-          )}
-
-          {inTravelPhase && pendingInboxItems.length > 0 && (
-            <InTripPendingInbox items={pendingInboxItems} total={pendingTotal} />
-          )}
-
-          {isTripCompleted && (
-            <InTripPostTripSummaryPanel
-              className="col-span-12"
-              data={postTripSummary}
-              loading={postTripSummaryLoading}
-              error={postTripSummaryError}
-              memberNameById={memberNameById}
-            />
-          )}
-
-          {inTravelPhase && (
-            <Collapsible
-              open={secondaryModulesOpen}
-              onOpenChange={setSecondaryModulesOpen}
-              className="col-span-12"
-            >
-              <Card className="overflow-hidden">
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
-                  >
-                    <span className="text-sm font-medium">更多行中工具</span>
-                    <div className="flex items-center gap-2">
-                      {pendingTotal > 0 && (
-                        <Badge variant="secondary" className="text-xs">
-                          {pendingTotal} 待处理
-                        </Badge>
-                      )}
-                      {secondaryModulesOpen ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="border-t p-4 grid grid-cols-12 gap-6">
-                    {moduleVisibility.experience &&
-                      (experienceExpanded || experienceTriggers.length > 0) && (
-                      <InTripExperiencePulsePanel
-                        triggers={experienceTriggers}
-                        loading={experiencePendingLoading}
-                        error={experiencePendingError}
-                        disabled={experienceDisabled}
-                        onSelectTrigger={openExperiencePulse}
-                      />
-                    )}
-                    {moduleVisibility.experience &&
-                      (weightsExpanded || experienceWeightsUnread > 0 || experienceWeights?.current) && (
-                      <InTripExperienceWeightPanel
-                        data={experienceWeights}
-                        loading={experienceWeightsLoading}
-                        error={experienceWeightsError}
-                        unreadCount={experienceWeightsUnread}
-                        markingRead={experienceWeightsMarkingRead}
-                        onMarkRead={markExperienceWeightsRead}
-                      />
-                    )}
-                    {moduleVisibility.money && (
-                      <InTripMoneyDashboardPanel
-                        data={moneyDashboard}
-                        loading={moneyDashboardLoading}
-                        error={moneyDashboardError}
-                        disabled={moneyDisabled}
-                        onRecordExpense={openMoneyRecord}
-                        onViewRebalance={() => setRebalanceExpanded(true)}
-                      />
-                    )}
-                    {moduleVisibility.money && (rebalanceExpanded || rebalanceSuggestions.length > 0) && (
-                      <InTripMoneyRebalancePanel
-                        suggestions={rebalanceSuggestions}
-                        loading={rebalanceLoading}
-                        error={rebalanceError}
-                        respondingId={rebalanceRespondingId}
-                        currency={moneyDashboard?.currency}
-                        onRespond={async (id, response) => {
-                          await respondRebalance(id, response);
-                          void reloadMoneyDashboard();
-                          void reloadInTripToday();
-                        }}
-                      />
-                    )}
-                    {moduleVisibility.pulse && (
-                      <InTripTeamThermometerPanel
-                        thermometer={teamThermometer}
-                        myState={myPulseState}
-                        loading={thermometerLoading}
-                      />
-                    )}
-                    {moduleVisibility.pulse && (interventionsExpanded || pulseInterventions.length > 0) && (
-                      <InTripPulseInterventionsPanel
-                        interventions={pulseInterventions}
-                        loading={interventionsLoading}
-                        error={interventionsError}
-                        ackingId={interventionAckingId}
-                        onAck={async (id, action) => {
-                          await ackIntervention(id, action);
-                          handlePulseUpdated();
-                        }}
-                      />
-                    )}
-                    {moduleVisibility.split && (
-                      <InTripSplitPanel
-                        sessions={splitSessions}
-                        activeSession={activeSplitSession}
-                        proposedSessions={proposedSplitSessions}
-                        loading={splitLoading}
-                        proposing={splitProposing}
-                        executingId={splitExecutingId}
-                        onPropose={proposeSplit}
-                        onSelectSession={openSplitSession}
-                        onExecute={handleSplitExecute}
-                      />
-                    )}
-                    {moduleVisibility.environment && tripId && (
-                      <InTripCausalInsightCard
-                        tripId={tripId}
-                        refreshKey={causalInsightRefreshKey}
-                        showPlanningHint={isIceland}
-                        className="col-span-12"
-                      />
-                    )}
-                    {moduleVisibility.environment && (
-                      <InTripEnvironmentAlertsPanel
-                        events={environmentEvents}
-                        loading={environmentEventsLoading}
-                        error={environmentEventsError}
-                        onSelectEvent={openEnvironmentEvent}
-                      />
-                    )}
-                    {moduleVisibility.realtime && tripId && (realtimeState || predictedState) && (
-                      <Collapsible
-                        open={realtimeCollapsibleOpen}
-                        onOpenChange={setRealtimeCollapsibleOpen}
-                        className="col-span-12"
-                      >
-                        <Card className="overflow-hidden">
-                          <CollapsibleTrigger asChild>
-                            <button
-                              type="button"
-                              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
-                            >
-                              <span className="text-sm font-medium">实时状态 · 24h 预测</span>
-                              <div className="flex items-center gap-2">
-                                {predictedState && (
-                                  <Badge variant="outline" className="text-xs">
-                                    可行 {Math.round(predictedState.feasibility.probability * 100)}%
-                                  </Badge>
-                                )}
-                                {realtimeCollapsibleOpen ? (
-                                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                                )}
-                              </div>
-                            </button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <div className="border-t px-4 py-3 space-y-2">
-                              {realtimeState && (
-                                <RealtimeStatusBanner
-                                  state={realtimeState}
-                                  connected
-                                  onRefresh={() => refetchRealtime()}
-                                  refreshing={realtimeFetching}
-                                  compact
-                                />
-                              )}
-                              {predictedState && (
-                                <Card className="p-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">未来 24h 预测</span>
-                                    <Badge variant="outline">
-                                      可行概率 {Math.round(predictedState.feasibility.probability * 100)}%
-                                    </Badge>
-                                  </div>
-                                  {predictedState.feasibility.riskFactors.length > 0 && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      风险因素: {predictedState.feasibility.riskFactors.join(', ')}
-                                    </p>
-                                  )}
-                                </Card>
-                              )}
-                            </div>
-                          </CollapsibleContent>
-                        </Card>
-                      </Collapsible>
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-          )}
-        </div>
-
-        {/* D. 固定动作栏（底部/右下浮层）- 右侧有行程助手时自动左移避免遮挡 */}
-        <div
-          className="fixed bottom-6 z-50"
-          style={{ right: assistantSidebarWidth > 0 ? `calc(${assistantSidebarWidth}px + 1.5rem)` : '1.5rem' }}
-          data-tour="quick-actions"
-        >
-          <Card className="shadow-lg">
-            <CardContent className="p-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAction('delay-15m')}
-                  disabled={actionLoading || !tripId || !tripState?.nextStop?.itemId}
-                  className="flex items-center gap-1"
-                >
-                  {actionLoading ? (
-                    <Spinner className="h-3 w-3" />
-                  ) : (
-                    <Clock className="h-3 w-3" />
-                  )}
-                  延迟15m
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAction('delay-30m')}
-                  disabled={actionLoading || !tripId || !tripState?.nextStop?.itemId}
-                  className="flex items-center gap-1"
-                >
-                  {actionLoading ? (
-                    <Spinner className="h-3 w-3" />
-                  ) : (
-                    <Clock className="h-3 w-3" />
-                  )}
-                  延迟30m
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAction('skip')}
-                  disabled={actionLoading || !tripId || !tripState?.nextStop?.itemId}
-                  className="flex items-center gap-1"
-                >
-                  {actionLoading ? (
-                    <Spinner className="h-3 w-3" />
-                  ) : (
-                    <SkipForward className="h-3 w-3" />
-                  )}
-                  跳过
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAction('replace')}
-                  disabled={actionLoading || !tripId || !tripState?.nextStop?.itemId}
-                  className="flex items-center gap-1"
-                >
-                  {actionLoading ? (
-                    <Spinner className="h-3 w-3" />
-                  ) : (
-                    <RotateCcw className="h-3 w-3" />
-                  )}
-                  替换
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAction('reorder')}
-                  disabled={actionLoading || !tripId || !todaySchedule?.schedule?.items || todaySchedule.schedule.items.length === 0}
-                  className="col-span-2"
-                >
-                  {actionLoading ? (
-                    <>
-                      <Spinner className="h-3 w-3 mr-1" />
-                      处理中...
-                    </>
-                  ) : (
-                    '重排今日行程'
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-      </div>
 
       {/* E. Neptune Repair Sheet（触发后从底部弹出） */}
       <Sheet open={showRepairSheet} onOpenChange={setShowRepairSheet}>
@@ -1990,9 +1818,9 @@ export default function ExecutePage() {
 
             {/* 影响评估 */}
             {fallbackPlan?.impactDetail && (
-              <Card className="border-blue-200 bg-blue-50/40">
+              <Card className="border-border bg-muted/15">
                 <CardContent className="pt-6 space-y-2 text-sm">
-                  <div className="font-medium text-blue-900 mb-2">影响评估</div>
+                  <div className="font-medium text-muted-foreground mb-2">影响评估</div>
                   {fallbackPlan.impactDetail.schedule && (
                     <p><span className="font-medium">行程：</span>{fallbackPlan.impactDetail.schedule}</p>
                   )}
@@ -2235,6 +2063,7 @@ export default function ExecutePage() {
         <ExecutionAdvisorySheet
           open={executionAdvisorySheetOpen}
           onOpenChange={setExecutionAdvisorySheetOpen}
+          tripId={tripId}
           advisory={executionAdvisory}
           onApplyRecommendation={(id) => {
             toast.info(`将应用方案：${id}`);
@@ -2259,6 +2088,37 @@ export default function ExecutePage() {
             setTodayReadinessSheetOpen(false);
             navigate(`/dashboard/readiness?tripId=${tripId}`);
           }}
+        />
+      )}
+
+      {tripId && (
+        <ExecuteMemberStatusSheet
+          open={memberStatusSheetOpen}
+          onOpenChange={setMemberStatusSheetOpen}
+          members={executeSidebarMembers}
+          onlineCount={anchorSnapshot?.team.memberCount ?? executeSidebarMembers.length}
+          highlightUserId={highlightMemberUserId}
+          onOpenTeamChat={() => setTeamChatSheetOpen(true)}
+        />
+      )}
+
+      {tripId && (
+        <ExecuteTeamChatSheet
+          tripId={tripId}
+          open={teamChatSheetOpen}
+          onOpenChange={setTeamChatSheetOpen}
+          tripTitle={trip?.name ?? trip?.destination}
+          nextStopPlaceName={nextStopPlaceLabel}
+          meetingTimeLabel={currentLegEta}
+          minutesUntil={rallyMinutesUntil}
+          contextNote={intercomContextNote}
+          members={moneyMembers}
+          memberStatuses={executeSidebarMembers}
+          currentUserId={user?.id}
+          currentUserName={user?.displayName ?? user?.email ?? '我'}
+          onlineCount={anchorSnapshot?.team.memberCount ?? executeSidebarMembers.length}
+          refLat={nextStopRefCoords?.lat}
+          refLng={nextStopRefCoords?.lng}
         />
       )}
 

@@ -99,9 +99,9 @@ export function FallbackSolutionPreviewDialog({
               <Badge
                 variant="outline"
                 className={cn(
-                  preview.type === 'minimal' && 'border-blue-500 text-blue-700',
-                  preview.type === 'experience' && 'border-purple-500 text-purple-700',
-                  preview.type === 'safety' && 'border-green-500 text-green-700'
+                  preview.type === 'minimal' && 'border-border text-muted-foreground',
+                  preview.type === 'experience' && 'border-border text-muted-foreground',
+                  preview.type === 'safety' && 'border-gate-allow-border text-gate-allow-foreground'
                 )}
               >
                 {preview.type === 'minimal' && '最小改动'}
@@ -127,20 +127,20 @@ export function FallbackSolutionPreviewDialog({
                         key={index}
                         className={cn(
                           'p-3 rounded-lg border',
-                          change.action === 'modify' && 'bg-blue-50 border-blue-200',
-                          change.action === 'remove' && 'bg-red-50 border-red-200',
-                          change.action === 'add' && 'bg-green-50 border-green-200'
+                          change.action === 'modify' && 'bg-muted/15 border-border',
+                          change.action === 'remove' && 'bg-gate-reject border-gate-reject-border',
+                          change.action === 'add' && 'bg-gate-allow border-gate-allow-border'
                         )}
                       >
                         <div className="flex items-start gap-2 mb-2">
                           {change.action === 'modify' && (
-                            <Edit className="w-4 h-4 mt-0.5 text-blue-600 flex-shrink-0" />
+                            <Edit className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
                           )}
                           {change.action === 'remove' && (
-                            <Minus className="w-4 h-4 mt-0.5 text-red-600 flex-shrink-0" />
+                            <Minus className="w-4 h-4 mt-0.5 text-gate-reject-foreground flex-shrink-0" />
                           )}
                           {change.action === 'add' && (
-                            <Plus className="w-4 h-4 mt-0.5 text-green-600 flex-shrink-0" />
+                            <Plus className="w-4 h-4 mt-0.5 text-gate-allow-foreground flex-shrink-0" />
                           )}
                           <div className="flex-1">
                             <div className="font-medium text-sm mb-1">
@@ -199,9 +199,9 @@ export function FallbackSolutionPreviewDialog({
                     <Badge
                       variant="outline"
                       className={cn(
-                        preview.impact.riskChange === 'low' && 'border-green-500 text-green-700',
+                        preview.impact.riskChange === 'low' && 'border-gate-allow-border text-gate-allow-foreground',
                         preview.impact.riskChange === 'medium' && 'border-yellow-500 text-yellow-700',
-                        preview.impact.riskChange === 'high' && 'border-red-500 text-red-700'
+                        preview.impact.riskChange === 'high' && 'border-gate-reject-border text-gate-reject-foreground'
                       )}
                     >
                       {preview.impact.riskChange === 'low' ? '低' : 
@@ -229,9 +229,9 @@ export function FallbackSolutionPreviewDialog({
                         className={cn(
                           'flex items-center gap-3 p-2 rounded-lg border',
                           item.status === 'unchanged' && 'bg-gray-50 border-gray-200',
-                          item.status === 'modified' && 'bg-blue-50 border-blue-200',
-                          item.status === 'new' && 'bg-green-50 border-green-200',
-                          item.status === 'removed' && 'bg-red-50 border-red-200 opacity-50'
+                          item.status === 'modified' && 'bg-muted/15 border-border',
+                          item.status === 'new' && 'bg-gate-allow border-gate-allow-border',
+                          item.status === 'removed' && 'bg-gate-reject border-gate-reject-border opacity-50'
                         )}
                       >
                         <div className="flex-shrink-0 w-16 text-xs text-muted-foreground">

@@ -84,7 +84,7 @@ export default function ReservationEvidenceForm({
   return (
     <div className={cn('space-y-3', className)}>
       {existing.length > 0 ? (
-        <div className="flex items-start gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400">
+        <div className="flex items-start gap-1.5 text-[11px] text-success dark:text-success">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
           <span>
             已上传 {existing.length} 条凭证

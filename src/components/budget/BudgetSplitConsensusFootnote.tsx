@@ -39,13 +39,13 @@ export function BudgetSplitConsensusFootnote({
     return (
       <div
         className={cn(
-          'flex gap-2 rounded-md border border-emerald-200/80 bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-2.5',
+          'flex gap-2 rounded-md border border-gate-allow-border/80 bg-gate-allow/50 dark:bg-gate-allow/20 px-3 py-2.5',
           className,
         )}
       >
-        <Lock className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+        <Lock className="h-4 w-4 shrink-0 text-gate-allow-foreground mt-0.5" />
         <div className="min-w-0 space-y-0.5">
-          <p className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
+          <p className="text-xs font-medium text-gate-allow-foreground dark:text-gate-allow-foreground">
             {isZh ? '已与决策画像分摊共识同步' : 'Synced with decision profiling split consensus'}
           </p>
           <p className="text-[11px] text-muted-foreground leading-relaxed">

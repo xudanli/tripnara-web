@@ -152,37 +152,37 @@ function getChangeTypeConfig(type: DiffChangeType) {
       return {
         icon: Plus,
         label: '添加',
-        color: 'text-green-600',
-        bg: 'bg-green-50',
-        border: 'border-green-200',
-        iconBg: 'bg-green-100',
+        color: 'text-success',
+        bg: 'bg-muted',
+        border: 'border-gate-allow-border',
+        iconBg: 'bg-muted',
       };
     case 'remove':
       return {
         icon: Minus,
         label: '删除',
-        color: 'text-red-600',
-        bg: 'bg-red-50',
-        border: 'border-red-200',
-        iconBg: 'bg-red-100',
+        color: 'text-error',
+        bg: 'bg-muted',
+        border: 'border-border',
+        iconBg: 'bg-muted',
       };
     case 'replace':
       return {
         icon: ArrowRight,
         label: '替换',
-        color: 'text-blue-600',
-        bg: 'bg-blue-50',
-        border: 'border-blue-200',
-        iconBg: 'bg-blue-100',
+        color: 'text-muted-foreground',
+        bg: 'bg-muted',
+        border: 'border-border',
+        iconBg: 'bg-muted',
       };
     case 'move':
       return {
         icon: Move,
         label: '移动',
-        color: 'text-purple-600',
-        bg: 'bg-purple-50',
-        border: 'border-purple-200',
-        iconBg: 'bg-purple-100',
+        color: 'text-muted-foreground',
+        bg: 'bg-muted',
+        border: 'border-border',
+        iconBg: 'bg-muted',
       };
     case 'modify':
       return {
@@ -309,13 +309,13 @@ export function DiffViewer({
                     {change.type === 'replace' && change.before && change.after && (
                       <div className="space-y-1 text-xs">
                         <div className="flex items-center gap-2">
-                          <Minus className="w-3 h-3 text-red-600" />
+                          <Minus className="w-3 h-3 text-error" />
                           <span className="text-muted-foreground line-through">
                             {change.before.name || change.before.time || '原内容'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Plus className="w-3 h-3 text-green-600" />
+                          <Plus className="w-3 h-3 text-success" />
                           <span className="text-foreground font-medium">
                             {change.after.name || change.after.time || '新内容'}
                           </span>
@@ -368,7 +368,7 @@ export function DiffViewer({
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         {change.confirmed ? (
                           <>
-                            <span className="text-green-600">✓ 已确认</span>
+                            <span className="text-success">✓ 已确认</span>
                             {change.confirmedAt && (
                               <span>
                                 {format(new Date(change.confirmedAt), 'MM/dd HH:mm')}

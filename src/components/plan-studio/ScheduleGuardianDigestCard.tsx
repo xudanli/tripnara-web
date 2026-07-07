@@ -69,7 +69,7 @@ export function ScheduleGuardianDigestCard({
     <Card className={cn('border-dashed', className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Shield className="h-4 w-4 text-sky-600" />
+          <Shield className="h-4 w-4 text-muted-foreground" />
           守护者提醒
         </CardTitle>
       </CardHeader>

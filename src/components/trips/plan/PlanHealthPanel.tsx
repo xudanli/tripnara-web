@@ -80,21 +80,21 @@ export default function PlanHealthPanel({
   ];
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
+    if (score >= 80) return 'text-gate-allow-foreground';
     if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    return 'text-gate-reject-foreground';
   };
 
   const getScoreBgColor = (score: number) => {
-    if (score >= 80) return 'bg-green-50';
+    if (score >= 80) return 'bg-gate-allow';
     if (score >= 60) return 'bg-yellow-50';
-    return 'bg-red-50';
+    return 'bg-gate-reject';
   };
 
   const getScoreBadge = (score: number) => {
-    if (score >= 80) return { label: '良好', variant: 'default' as const, className: 'bg-green-100 text-green-700' };
+    if (score >= 80) return { label: '良好', variant: 'default' as const, className: 'bg-gate-allow text-gate-allow-foreground' };
     if (score >= 60) return { label: '需注意', variant: 'default' as const, className: 'bg-yellow-100 text-yellow-700' };
-    return { label: '需修复', variant: 'destructive' as const, className: 'bg-red-100 text-red-700' };
+    return { label: '需修复', variant: 'destructive' as const, className: 'bg-gate-reject text-gate-reject-foreground' };
   };
 
   return (
@@ -137,9 +137,9 @@ export default function PlanHealthPanel({
               <Progress
                 value={metric.value}
                 className={cn('h-2', {
-                  'bg-green-200': metric.value >= 80,
+                  'bg-gate-allow': metric.value >= 80,
                   'bg-yellow-200': metric.value >= 60 && metric.value < 80,
-                  'bg-red-200': metric.value < 60,
+                  'bg-gate-reject': metric.value < 60,
                 })}
               />
               {onMetricClick && (

@@ -33,7 +33,7 @@ const ____personaConfig = {
   abu: {
     icon: Shield,
     label: '风险',
-    color: 'text-red-600',
+    color: 'text-gate-reject-foreground',
   },
   drdre: {
     icon: Activity,

@@ -38,7 +38,8 @@
 | 规划工作台 | `/api/planning-workbench/*` | `src/api/planning-workbench.ts` | 会话式规划骨架；**不带** `world_model_guards`，以 Agent 编排为准 |
 | 规划 / 行程助手 | `/api/agent/planning-assistant/*`、`journey-assistant/*` | `planning-assistant-v2`、`assistant.ts`、`trip-planner.ts` | 专项对话、MCP 能力 |
 | 地点 / 国家 / 交通 | `/api/places/*`、`/countries/*`、`/cities/*`、`/transport/*` | `places.ts`、`countries.ts`、`cities.ts`、`transport.ts` | 选点、路线 |
-| RAG 用户能力 | `/api/rag/search`、`retrieve`、`chat/*`、`destination-insights` 等 | `src/api/rag.ts` | 问答、洞察 |
+| 决策 / 冲突洞察 | `GET /trips/:tripId/destination-insights`（`problemId` / `focusConflictId` / `poiSlug` / `placeId` / `dayIndex`；`includeRag=1` 可选） | `src/api/trip-destination-insights.ts` | 决策检查器证据面板；**勿直调** `/api/rag/destination-insights` |
+| RAG 用户能力 | `/api/rag/search`、`retrieve`、`chat/*`、`destination-insights`（按 `placeId`） | `src/api/rag.ts` | 通用问答、行程详情 POI 贴士 |
 | 行程优化（用户侧） | `POST /api/itinerary-optimization/optimize` | `src/api/itinerary-optimization.ts` | 日程顺序优化（与 `freeze_route_selection` 门控配合） |
 | 准备度 / 审批 | `readiness`、`approvals` 等 | `readiness.ts`、`approvals.ts` | 规划工作台健康度、挂起审批 |
 | **可执行性 / 行中守护** | `GET /trips/:id/feasibility-report`、`POST .../validate`、`POST .../validate-scope`、`GET .../issues/:id/repair-options`、`POST .../preview-repair`、`POST .../apply-repair`、`GET .../in-trip/execution-advisory` | `trip-constraint-solver.ts`、`feasibility-repair.ts` | 行前报告 + 逐 issue 修复（legacy 路径） |

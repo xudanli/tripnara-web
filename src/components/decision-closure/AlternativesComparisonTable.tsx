@@ -61,7 +61,7 @@ export function AlternativesComparisonTable({
                   key={a.id}
                   className={cn(
                     'border-b border-border/40 last:border-0',
-                    isChosen && 'bg-emerald-50/60 dark:bg-emerald-950/20'
+                    isChosen && 'bg-gate-allow/60 dark:bg-gate-allow/20'
                   )}
                 >
                   <td className="px-2 py-1.5 font-mono">

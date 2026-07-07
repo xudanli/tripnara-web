@@ -99,7 +99,7 @@ export default function SharedTripPage() {
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
-              <p className="text-red-600">{error || '分享链接无效或已过期'}</p>
+              <p className="text-gate-reject-foreground">{error || '分享链接无效或已过期'}</p>
               <Button variant="outline" onClick={() => navigate('/')}>
                 返回首页
               </Button>

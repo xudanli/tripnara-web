@@ -167,7 +167,7 @@ export default function CoverageMapExplorer({
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <Map className="h-4 w-4 text-emerald-600 shrink-0" />
+              <Map className="h-4 w-4 text-success shrink-0" />
               <div>
                 <CardTitle className="text-base">路线覆盖地图</CardTitle>
                 <p className="text-xs text-muted-foreground font-normal mt-0.5">
@@ -193,13 +193,13 @@ export default function CoverageMapExplorer({
         <CardContent className="pt-0">
           {data?.summary ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
-              <div className="rounded-md bg-emerald-50 text-emerald-800 px-2 py-1.5">
+              <div className="rounded-md bg-muted text-success px-2 py-1.5">
                 已覆盖 POI {data.summary.coveredPois}/{data.summary.totalPois}
               </div>
-              <div className="rounded-md bg-amber-50 text-amber-800 px-2 py-1.5">
+              <div className="rounded-md bg-muted text-warning px-2 py-1.5">
                 路段预警 {data.summary.warningSegments}
               </div>
-              <div className="rounded-md bg-orange-50 text-orange-800 px-2 py-1.5">
+              <div className="rounded-md bg-muted text-error px-2 py-1.5">
                 总缺口 {data.summary.totalGaps}
               </div>
               <div className="rounded-md bg-slate-50 text-slate-700 px-2 py-1.5">

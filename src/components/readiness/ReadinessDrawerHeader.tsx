@@ -66,7 +66,7 @@ function StatTile({
       )}
     >
       {badge ? (
-        <span className="absolute -top-1.5 -right-1 rounded-full bg-amber-500 px-1.5 py-px text-[9px] font-semibold text-white leading-none shadow-sm">
+        <span className="absolute -top-1.5 -right-1 rounded-full bg-muted0 px-1.5 py-px text-[9px] font-semibold text-white leading-none shadow-sm">
           {badge}
         </span>
       ) : null}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlanningPipelineProgress } from '@/components/agent/PlanningPipelineProgress';
+import { RouteRunCtreProgressBand } from '@/features/agent/ctre';
 import { Button } from '@/components/ui/button';
 import {
   Collapsible,
@@ -52,6 +53,8 @@ export interface DecisionStripProps {
   model: StripModel;
   hasGuards?: boolean;
   onPrimaryCta: (type: DecisionStripCtaType) => void;
+  /** 规划待办收件箱（Tasks · planningInbox） */
+  onOpenPlanningInbox?: () => void;
   onOpenEvidence?: () => void;
   onOpenCausalInsight?: () => void;
   hasCausalInsight?: boolean;
@@ -75,11 +78,13 @@ function stripTone(state: StripModel['state'], hasCompare: boolean) {
 }
 
 const TONE_CLASS = {
-  error: 'border-red-200/80 bg-red-50/80 text-red-950 [&>svg]:text-red-600',
-  blocked: 'border-amber-200/80 bg-amber-50/70 text-amber-950 [&>svg]:text-amber-700',
+  error:
+    'border-border/80 bg-muted/20 text-foreground [&>svg]:text-error',
+  blocked:
+    'border-border/80 bg-muted/20 text-foreground [&>svg]:text-warning',
   compare: 'border-primary/30 bg-primary/5 text-foreground',
   running: 'border-border/70 bg-muted/30 text-foreground',
-  info: 'border-sky-200/80 bg-sky-50/60 text-sky-950 [&>svg]:text-sky-700',
+  info: 'border-border/70 bg-muted/20 text-foreground [&>svg]:text-muted-foreground',
 };
 
 function resolveCtaLabel(
@@ -102,7 +107,7 @@ function resolveCtaLabel(
     confirmContinue: '确认并继续',
     openNegotiation: '选择方案',
     openBudget: '确认预算结构',
-    openConflicts: '打开可执行证明',
+    openConflicts: '查看规划待办',
     confirmRegret: '确认体验底线',
     openTeam: '对齐团队节奏',
   };
@@ -114,6 +119,7 @@ export function DecisionStrip({
   model,
   hasGuards = false,
   onPrimaryCta,
+  onOpenPlanningInbox,
   onOpenEvidence,
   onOpenCausalInsight,
   hasCausalInsight = false,
@@ -218,7 +224,21 @@ export function DecisionStrip({
   );
   const showInboxBadge = model.planningInboxCount > 0;
   const inboxBadge = showInboxBadge ? (
-    <PlanningInboxBadge count={model.planningInboxCount} />
+    onOpenPlanningInbox ? (
+      <button
+        type="button"
+        className="inline-flex rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenPlanningInbox();
+        }}
+        aria-label={`${model.planningInboxCount} 项规划待办`}
+      >
+        <PlanningInboxBadge count={model.planningInboxCount} />
+      </button>
+    ) : (
+      <PlanningInboxBadge count={model.planningInboxCount} />
+    )
   ) : null;
   const planningInboxMode = Boolean(model.planningReadiness?.active);
   const detailsExpandLabel = planningInboxMode
@@ -258,7 +278,7 @@ export function DecisionStrip({
           </p>
           <p className="text-muted-foreground leading-relaxed">{model.compareSummary.reason}</p>
           {model.compareSummary.divergesFromLlm ? (
-            <p className="text-amber-800/90">
+            <p className="text-warning">
               {t('planStudio.decisionStrip.kernelOverride', {
                 defaultValue: 'Kernel 门控覆盖 LLM 推荐',
               })}
@@ -389,13 +409,14 @@ export function DecisionStrip({
         </PlanningHeaderRow>
 
         {showOrchestrationProgress ? (
-          <div className="px-3.5 pb-2">
+          <div className="px-3.5 pb-2 space-y-2">
             <PlanningPipelineProgress
               compact
               message={model.taskMessage}
               currentPhase={model.taskPhase}
               progressPercentage={model.taskProgress}
             />
+            <RouteRunCtreProgressBand compact orchestrationPercent={model.taskProgress} />
           </div>
         ) : null}
 
@@ -428,7 +449,7 @@ export function DecisionStrip({
         <Icon
           className={cn(
             'h-4 w-4 shrink-0',
-            model.state === 'running' && 'animate-spin text-primary',
+            model.state === 'running' && 'animate-spin text-foreground',
           )}
         />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{displayHeadline}</span>
@@ -471,7 +492,7 @@ export function DecisionStrip({
             <Icon
               className={cn(
                 'h-4 w-4',
-                model.state === 'running' && 'animate-spin text-primary',
+                model.state === 'running' && 'animate-spin text-foreground',
               )}
             />
           </div>
@@ -515,13 +536,14 @@ export function DecisionStrip({
       </div>
 
       {showOrchestrationProgress ? (
-        <div className="mt-3">
+        <div className="mt-3 space-y-2">
           <PlanningPipelineProgress
             compact
             message={model.taskMessage}
             currentPhase={model.taskPhase}
             progressPercentage={model.taskProgress}
           />
+          <RouteRunCtreProgressBand compact orchestrationPercent={model.taskProgress} />
         </div>
       ) : null}
 

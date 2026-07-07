@@ -26,6 +26,11 @@ export type PreMatchDecisionBrief = {
 
 export type CollaborativeTaskStatus = 'pending' | 'confirmed' | 'rolled_back' | 'timed_out';
 
+export type CollaborativeTaskSource =
+  | 'decision_problem'
+  | 'domain_influence'
+  | (string & {});
+
 export type CollaborativeTaskBehaviorLogEntry = {
   action: CollaborativeTaskEventAction;
   at: string;
@@ -40,6 +45,19 @@ export type CollaborativeTaskView = {
   assigneeUserId?: string | null;
   assigneeLabel?: string | null;
   status: CollaborativeTaskStatus;
+  /** 协作任务绑定：submit resolutions 后 */
+  resolutionId?: string | null;
+  /** apply 后 */
+  actionPlanId?: string | null;
+  decisionProblemId?: string | null;
+  /** GET collaborative-tasks 合并的子任务项 */
+  isSubTask?: boolean;
+  /** 任务来源（如 decision_problem） */
+  source?: CollaborativeTaskSource;
+  subTaskKind?: string | null;
+  subTaskStatus?: string | null;
+  /** BFF 投影 · 决策问题标题（子任务上下文） */
+  problemTitle?: string | null;
   milestoneId?: string | null;
   behaviorLog?: CollaborativeTaskBehaviorLogEntry[];
 };

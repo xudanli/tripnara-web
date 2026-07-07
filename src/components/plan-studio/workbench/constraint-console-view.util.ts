@@ -31,13 +31,23 @@ import {
   getSoftConstraintTemplate,
   getHardConstraintTemplate,
   isSoftConstraintTemplateId,
+  isCatalogHardTemplate,
+  type ConstraintTemplate,
 } from './constraint-templates';
+import { parseScopeBindingFromConstraint } from '@/lib/constraint-scope.util';
+import {
+  hydrateCatalogHardDraftFromApi,
+  resolveConstraintEditorTemplateId,
+  formatCatalogHardListValueFromDraft,
+} from '@/lib/constraint-catalog-editor.util';
+import { resolveSoftConstraintDescription } from '@/lib/soft-constraint.util';
 import {
   DEFAULT_DAILY_DRIVE_DRAFT,
   type ConstraintEditorDraft,
   type ConstraintImpactPreview,
   type ConstraintListEntry,
 } from './constraint-console-types';
+import { enrichListEntryWithMetadata } from '@/lib/constraint-metadata.util';
 
 export type SoftPreferencePriority = '高' | '中' | '低';
 
@@ -134,7 +144,7 @@ export function sliderToSoftPriority(value: number): SoftPreferencePriority {
 export function softPriorityLabelClass(priority: SoftPreferencePriority): string {
   switch (priority) {
     case '高':
-      return 'bg-gate-suggest/15 text-gate-suggest-foreground border-gate-suggest-border/60';
+      return 'bg-muted/15 text-foreground border-border/60';
     case '中':
       return 'bg-muted text-foreground border-border/70';
     default:
@@ -258,6 +268,10 @@ export function listEntryPatchFromSavedDraft(
           draft.priority >= 7 ? ('高' as const) : draft.priority >= 4 ? ('中' as const) : ('低' as const);
         return { sliderValue: SOFT_PRIORITY_TO_SLIDER[priority] };
       }
+      if (isCatalogHardTemplate(draft.id)) {
+        const value = formatCatalogHardListValueFromDraft(draft);
+        return value ? { value } : {};
+      }
       return {};
   }
 }
@@ -342,7 +356,7 @@ export function buildHardConstraintItems(
       icon: Car,
       label: '每日驾驶上限',
       value: `≤ ${hours} 小时/天`,
-      locked: true,
+      locked: false,
       cardTone: 'default',
     });
   }
@@ -353,7 +367,7 @@ export function buildHardConstraintItems(
     icon: Building2,
     label: '住宿标准',
     value: readAccommodationStandard(trip),
-    locked: true,
+    locked: false,
     cardTone: 'default',
   });
 
@@ -515,20 +529,22 @@ export function buildConstraintListEntries(
 } {
   const hard = buildHardConstraintItems(summary, trip, budgetProfile);
   const mustGoPlaces = extractMustGoPlaces(trip, options?.intentMustPlaces);
-  const hardItems: ConstraintListEntry[] = hard.map((item) => ({
-    id: item.id,
-    kind: 'hard' as const,
-    label: item.label,
-    value: item.usageLabel ? `${item.value} · ${item.usageLabel}` : item.value,
-    icon: item.icon,
-    locked: item.locked,
-    cardTone: item.cardTone ?? 'default',
-    hasConflict: item.cardTone === 'danger',
-  }));
+  const hardItems: ConstraintListEntry[] = hard.map((item) =>
+    enrichListEntryWithMetadata({
+      id: item.id,
+      kind: 'hard' as const,
+      label: item.label,
+      value: item.usageLabel ? `${item.value} · ${item.usageLabel}` : item.value,
+      icon: item.icon,
+      locked: item.locked,
+      cardTone: item.cardTone ?? 'default',
+      hasConflict: item.cardTone === 'danger',
+    }),
+  );
 
   if (summary || trip) {
     const pendingMustGo = mustGoPlaces.filter((p) => !p.inItinerary).length;
-    const mustGoEntry: ConstraintListEntry = {
+    const mustGoEntry: ConstraintListEntry = enrichListEntryWithMetadata({
       id: 'must_go',
       kind: 'hard',
       label: '必去地点',
@@ -542,7 +558,7 @@ export function buildConstraintListEntries(
             ? 'caution'
             : 'default',
       hasConflict: false,
-    };
+    });
     if (hardItems.length > 0) hardItems.splice(1, 0, mustGoEntry);
     else hardItems.push(mustGoEntry);
   }
@@ -552,6 +568,7 @@ export function buildConstraintListEntries(
     kind: 'soft' as const,
     label: item.label,
     icon: item.icon,
+    description: resolveSoftConstraintDescription(undefined, getSoftConstraintTemplate(item.id)?.description),
     sliderValue: SOFT_PRIORITY_TO_SLIDER[item.priority],
     value:
       item.id === 'budget_soft'
@@ -660,7 +677,43 @@ function readAccommodationStars(trip: TripDetail | null | undefined): number {
   return 3;
 }
 
-export function buildEditorDraftFromEntry(
+function resolveHardTemplateDraftDefaults(
+  template: ConstraintTemplate,
+): Partial<ConstraintEditorDraft> {
+  switch (template.id) {
+    case 'earliest_departure':
+      return { targetUnit: 'hour', targetValue: 8 };
+    case 'latest_end':
+      return { targetUnit: 'hour', targetValue: 21 };
+    case 'max_daily_activity':
+      return { targetUnit: 'hour', targetValue: 10 };
+    case 'daily_drive':
+      return { targetUnit: 'hour', targetValue: 4 };
+    case 'max_segment_distance':
+      return { targetUnit: 'km', targetValue: 250 };
+    case 'required_rest':
+      return { targetUnit: 'hour', targetValue: 1 };
+    case 'fixed_appointments':
+      return { targetUnit: 'day', targetValue: 0 };
+    case 'accommodation':
+      return { targetUnit: 'star', targetValue: 3 };
+    case 'activity_budget':
+    case 'budget_overrun_tolerance':
+      return { targetUnit: 'currency', targetValue: 0, currency: 'CNY' };
+    case 'allow_budget_overrun':
+      return { targetUnit: 'day', targetValue: 0 };
+    case 'elderly_walk_limit':
+      return { targetUnit: 'km', targetValue: 5 };
+    case 'child_nap_time':
+      return { targetUnit: 'hour', targetValue: 13 };
+    case 'no_night_drive':
+      return { targetUnit: 'hour', targetValue: 0.5 };
+    default:
+      return { targetUnit: 'hour', targetValue: 0 };
+  }
+}
+
+function resolveEditorDraftFromEntry(
   entryId: string,
   summary: PlanningConstraintsSummary | null,
   trip: TripDetail | null | undefined,
@@ -792,6 +845,7 @@ export function buildEditorDraftFromEntry(
         ...DEFAULT_DAILY_DRIVE_DRAFT,
         id: entryId,
         targetValue: hours,
+        locked: false,
       };
     }
     case 'max_segment_distance': {
@@ -831,7 +885,7 @@ export function buildEditorDraftFromEntry(
         toleranceMode: 'none',
         toleranceMinutes: 0,
         priority: 6,
-        locked: true,
+        locked: false,
       };
     case 'must_go': {
       const places = extractMustGoPlaces(trip, options?.intentMustPlaces);
@@ -902,24 +956,49 @@ export function buildEditorDraftFromEntry(
         };
       }
       const hardFromCatalog = getHardConstraintTemplate(entryId);
-      if (hardFromCatalog) {
+      if (hardFromCatalog && isCatalogHardTemplate(hardFromCatalog.id)) {
+        const defaults = resolveHardTemplateDraftDefaults(hardFromCatalog);
+        const hydrated = hydrateCatalogHardDraftFromApi(
+          hardFromCatalog.id,
+          options?.apiConstraint,
+          defaults,
+        );
         return {
           ...base,
-          id: entryId,
-          name: hardFromCatalog.label,
+          id: hardFromCatalog.id,
+          name: options?.apiConstraint?.name?.trim() || hardFromCatalog.label,
           type: 'HARD',
           scope: 'TRIP',
-          targetValue: 0,
-          targetUnit: 'day',
+          targetValue: defaults.targetValue ?? 0,
+          targetUnit: defaults.targetUnit ?? 'hour',
           toleranceMode: 'none',
           toleranceMinutes: 0,
           priority: 7,
           locked: false,
+          enabled: true,
+          reason: '',
+          ...defaults,
+          ...hydrated,
         };
       }
       return { ...DEFAULT_DAILY_DRIVE_DRAFT, id: entryId, name: entryId, type: 'SOFT' };
     }
   }
+}
+
+export function buildEditorDraftFromEntry(
+  entryId: string,
+  summary: PlanningConstraintsSummary | null,
+  trip: TripDetail | null | undefined,
+  activeSoftPrefs: SoftPreferenceItem[] = [],
+  options?: { intentMustPlaces?: number[]; apiConstraint?: TripConstraint | null },
+): ConstraintEditorDraft {
+  const resolvedId = resolveConstraintEditorTemplateId(entryId, options?.apiConstraint);
+  return {
+    ...resolveEditorDraftFromEntry(resolvedId, summary, trip, activeSoftPrefs, options),
+    id: resolvedId,
+    scopeBinding: parseScopeBindingFromConstraint(options?.apiConstraint ?? null),
+  };
 }
 
 export function normalizeFeasibilityScore(value: unknown, fallback = 84): number {

@@ -236,7 +236,7 @@ export function IdentityHubSection({
             <GraduationCap className="h-4 w-4 text-muted-foreground" aria-hidden />
             学信网一键认证
             {credentials?.education?.verified && (
-              <Badge variant="outline" className="ml-auto text-[10px] text-emerald-600">
+              <Badge variant="outline" className="ml-auto text-[10px] text-gate-allow-foreground">
                 已认证 ✓
               </Badge>
             )}
@@ -290,7 +290,7 @@ export function IdentityHubSection({
             <Briefcase className="h-4 w-4 text-muted-foreground" aria-hidden />
             工作资历授信
             {credentials?.profession?.verified && (
-              <Badge variant="outline" className="ml-auto text-[10px] text-emerald-600">
+              <Badge variant="outline" className="ml-auto text-[10px] text-gate-allow-foreground">
                 已认证 ✓
               </Badge>
             )}

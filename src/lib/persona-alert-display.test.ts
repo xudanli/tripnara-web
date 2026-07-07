@@ -24,6 +24,25 @@ describe('persona-alert-display (BFF M1)', () => {
     ).toBe('第 3 天大风不宜自驾。');
   });
 
+  it('prefers tradeoffDimensions contextualNarrative over explanation', () => {
+    expect(
+      getPersonaAlertUserBody({
+        explanation: '雷尼斯黑沙滩：官方规则已超过 14 天未核验',
+        metadata: {
+          tradeoffDimensions: [
+            {
+              dimension: 'SAFETY',
+              direction: 'WORSEN',
+              explanation: '雷尼斯黑沙滩：官方规则已超过 14 天未核验',
+              contextualNarrative:
+                '你们 Day 2 下午计划去雷尼斯黑沙滩，但官方潮汐/禁入规则已 14 天未更新。',
+            },
+          ],
+        },
+      }),
+    ).toBe('你们 Day 2 下午计划去雷尼斯黑沙滩，但官方潮汐/禁入规则已 14 天未更新。');
+  });
+
   it('uses BFF title and hides internal audience', () => {
     const alert: PersonaAlert = {
       id: '1',

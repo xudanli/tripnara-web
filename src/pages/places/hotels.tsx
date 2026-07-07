@@ -152,9 +152,9 @@ export default function HotelsPage() {
       </div>
 
       {error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <p className="text-red-800">{error}</p>
+            <p className="text-gate-reject-foreground">{error}</p>
           </CardContent>
         </Card>
       )}
@@ -222,7 +222,7 @@ export default function HotelsPage() {
                       {/* 优点 */}
                       <div>
                         <div className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />
                           优点
                         </div>
                         <ul className="space-y-1">
@@ -237,7 +237,7 @@ export default function HotelsPage() {
                       {/* 缺点 */}
                       <div>
                         <div className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <XCircle className="w-4 h-4 text-red-600" />
+                          <XCircle className="w-4 h-4 text-gate-reject-foreground" />
                           缺点
                         </div>
                         <ul className="space-y-1">

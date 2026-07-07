@@ -7,7 +7,9 @@ export type ConstraintPreviewSource = 'idle' | 'bff' | 'unavailable' | 'error';
 export interface UseConstraintImpactPreviewOptions {
   tripId: string;
   draft: ConstraintEditorDraft | null;
+  trip?: import('@/types/trip').TripDetail | null;
   debounceMs?: number;
+  constraintsVersion?: number;
 }
 
 export interface UseConstraintImpactPreviewResult {
@@ -21,7 +23,9 @@ export interface UseConstraintImpactPreviewResult {
 export function useConstraintImpactPreview({
   tripId,
   draft,
+  trip,
   debounceMs = 400,
+  constraintsVersion,
 }: UseConstraintImpactPreviewOptions): UseConstraintImpactPreviewResult {
   const [preview, setPreview] = useState<ConstraintImpactPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,10 +53,14 @@ export function useConstraintImpactPreview({
         setLoading(true);
         setError(null);
         try {
-          const result = await constraintConsoleApi.previewImpact(tripId, {
-            constraintId: draft.id,
-            draft,
-          });
+          const result = await constraintConsoleApi.previewImpact(
+            tripId,
+            {
+              constraintId: draft.id,
+              draft,
+            },
+            { constraintsVersion, trip },
+          );
           if (requestIdRef.current !== requestId) return;
           if (result) {
             setPreview(result.preview);
@@ -75,7 +83,7 @@ export function useConstraintImpactPreview({
     }, debounceMs);
 
     return () => window.clearTimeout(timer);
-  }, [tripId, draft, debounceMs, retryToken]);
+  }, [tripId, draft, trip, debounceMs, retryToken, constraintsVersion]);
 
   return { preview, loading, source, error, retry };
 }

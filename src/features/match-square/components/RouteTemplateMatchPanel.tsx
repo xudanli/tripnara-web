@@ -29,7 +29,7 @@ function MatchCard({
       className={cn(
         'rounded-lg border px-3 py-2.5',
         highlighted
-          ? 'border-sky-500/30 bg-sky-500/8'
+          ? 'border-border/30 bg-muted/150/8'
           : 'border-border/70 bg-background/60'
       )}
     >
@@ -95,14 +95,14 @@ export function RouteTemplateMatchPanel({
       className={cn(
         'rounded-xl border text-sm',
         isPreview
-          ? 'border-sky-500/25 bg-sky-500/5 px-3 py-2.5'
+          ? 'border-border/25 bg-muted/150/5 px-3 py-2.5'
           : 'border-border bg-muted/25 px-4 py-3.5',
         className
       )}
       aria-label="路线模板匹配"
     >
       <div className="flex items-start gap-2">
-        <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
+        <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground dark:text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1 space-y-2">
           {plan.associationHint && (
             <p className="text-xs font-medium leading-snug text-foreground">{plan.associationHint}</p>

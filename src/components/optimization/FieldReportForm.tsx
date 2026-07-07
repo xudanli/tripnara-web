@@ -42,7 +42,7 @@ const REPORT_TYPE_CONFIG: Record<FieldReportType, {
     label: '天气状况',
     description: '报告当前天气情况',
     icon: Cloud,
-    color: 'text-blue-500',
+    color: 'text-muted-foreground',
   },
   ROAD_STATUS: {
     label: '路况信息',
@@ -54,13 +54,13 @@ const REPORT_TYPE_CONFIG: Record<FieldReportType, {
     label: '风险警报',
     description: '报告发现的危险情况',
     icon: AlertTriangle,
-    color: 'text-red-500',
+    color: 'text-gate-reject-foreground',
   },
   HUMAN_STATE: {
     label: '身体状态',
     description: '报告身体状况',
     icon: Activity,
-    color: 'text-green-500',
+    color: 'text-gate-allow-foreground',
   },
 };
 
@@ -112,10 +112,10 @@ const HAZARD_TYPES = [
 ];
 
 const HAZARD_SEVERITY = [
-  { value: 'low', label: '低', color: 'bg-green-100 text-green-700' },
+  { value: 'low', label: '低', color: 'bg-gate-allow text-gate-allow-foreground' },
   { value: 'medium', label: '中', color: 'bg-yellow-100 text-yellow-700' },
   { value: 'high', label: '高', color: 'bg-orange-100 text-orange-700' },
-  { value: 'critical', label: '危险', color: 'bg-red-100 text-red-700' },
+  { value: 'critical', label: '危险', color: 'bg-gate-reject text-gate-reject-foreground' },
 ];
 
 const FEELING_OPTIONS = [
@@ -233,7 +233,7 @@ function LocationInput({
             </div>
           ) : location ? (
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-gate-allow-foreground" />
               已定位: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
             </div>
           ) : (

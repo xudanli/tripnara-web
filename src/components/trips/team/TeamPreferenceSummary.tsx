@@ -64,7 +64,7 @@ export default function TeamPreferenceSummary({
 }
 
 function levelColor(level: string): string {
-  if (level === '极高') return 'text-violet-600 dark:text-violet-400';
+  if (level === '极高') return 'text-muted-foreground dark:text-muted-foreground';
   if (level === '高') return 'text-amber-600 dark:text-amber-400';
   if (level === '中') return 'text-foreground';
   return 'text-muted-foreground';

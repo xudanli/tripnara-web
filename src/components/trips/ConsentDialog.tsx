@@ -54,7 +54,7 @@ export default function ConsentDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-blue-500" />
+            <Shield className="h-5 w-5 text-muted-foreground" />
             <DialogTitle>{title}</DialogTitle>
           </div>
           <DialogDescription className="mt-2">{message}</DialogDescription>
@@ -79,10 +79,10 @@ export default function ConsentDialog({
             </div>
           )}
 
-          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+          <div className="rounded-lg bg-muted/15 border border-border p-3">
             <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-800">
+              <CheckCircle2 className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-muted-foreground">
                 授权后，系统将使用这些权限继续执行您的请求。您可以随时撤销授权。
               </div>
             </div>

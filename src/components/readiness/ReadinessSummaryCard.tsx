@@ -73,11 +73,11 @@ export default function ReadinessSummaryCard({
       className={cn(
         openDrawerOnCardClick && onOpenDrawer ? 'cursor-pointer hover:shadow-md transition-all' : '',
         isBlocked
-          ? 'border-l-4 border-l-red-500'
+          ? 'border-l-4 border-l-gate-reject-foreground'
           : hasWarnings
-            ? 'border-l-4 border-l-amber-500'
+            ? 'border-l-4 border-l-warning'
             : readinessData
-              ? 'border-l-4 border-l-green-500'
+              ? 'border-l-4 border-l-gate-allow-foreground'
               : '',
         className,
       )}
@@ -90,12 +90,12 @@ export default function ReadinessSummaryCard({
               className={cn(
                 'h-4 w-4',
                 isBlocked
-                  ? 'text-red-600'
+                  ? 'text-error'
                   : hasWarnings
-                    ? 'text-amber-600'
+                    ? 'text-warning'
                     : readinessData
-                      ? 'text-green-600'
-                      : 'text-blue-600',
+                      ? 'text-success'
+                      : 'text-muted-foreground',
               )}
             />
             准备度检查
@@ -104,7 +104,7 @@ export default function ReadinessSummaryCard({
             <div
               className={cn(
                 'text-lg font-bold',
-                score < 60 ? 'text-red-600' : score < 80 ? 'text-amber-600' : 'text-green-600',
+                score < 60 ? 'text-error' : score < 80 ? 'text-warning' : 'text-success',
               )}
             >
               {score}
@@ -124,10 +124,10 @@ export default function ReadinessSummaryCard({
               className={cn(
                 'text-sm px-3 py-2 rounded-md text-center font-medium',
                 isBlocked
-                  ? 'bg-red-50 text-red-700'
+                  ? 'bg-muted text-error'
                   : hasWarnings
-                    ? 'bg-amber-50 text-amber-700'
-                    : 'bg-green-50 text-green-700',
+                    ? 'bg-muted text-warning'
+                    : 'bg-muted text-success',
               )}
             >
               {isBlocked
@@ -141,7 +141,7 @@ export default function ReadinessSummaryCard({
               <div
                 className={cn(
                   'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                  blockers > 0 ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600',
+                  blockers > 0 ? 'bg-muted text-error' : 'bg-gray-50 text-gray-600',
                 )}
               >
                 <span className="font-medium">{blockers}</span>
@@ -150,7 +150,7 @@ export default function ReadinessSummaryCard({
               <div
                 className={cn(
                   'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                  must > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600',
+                  must > 0 ? 'bg-muted text-warning' : 'bg-gray-50 text-gray-600',
                 )}
               >
                 <span className="font-medium">{must}</span>
@@ -163,7 +163,7 @@ export default function ReadinessSummaryCard({
               <div
                 className={cn(
                   'flex items-center gap-1.5 px-2 py-1.5 rounded',
-                  (totalRisks ?? 0) > 0 ? 'bg-orange-50 text-orange-700' : 'bg-gray-50 text-gray-600',
+                  (totalRisks ?? 0) > 0 ? 'bg-muted text-warning' : 'bg-gray-50 text-gray-600',
                 )}
               >
                 <span className="font-medium">{totalRisks !== null ? totalRisks : '—'}</span>

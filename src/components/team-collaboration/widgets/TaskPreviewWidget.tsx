@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { resolveCollaborativeTaskAssigneeLabel } from '@/lib/collab-task-assignee.util';
 import type { CollaborativeTaskView } from '@/types/collaborative-task-flywheel';
 import { CollabWidgetCard } from './CollabWidgetCard';
 
@@ -45,9 +46,23 @@ export function TaskPreviewWidget({ tasks, onViewAll }: TaskPreviewWidgetProps) 
             <tbody>
               {preview.map((task) => (
                 <tr key={task.id} className="border-b border-border/40 last:border-0">
-                  <td className="py-2 pr-3 font-medium text-foreground">{task.title}</td>
+                  <td className="py-2 pr-3 font-medium text-foreground">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span>{task.title}</span>
+                      {task.isSubTask ? (
+                        <Badge variant="secondary" className="h-5 text-[10px] font-normal">
+                          跟进
+                        </Badge>
+                      ) : null}
+                      {task.subTaskKind ? (
+                        <Badge variant="outline" className="h-5 text-[10px] font-normal">
+                          {decisionCollaborativeSubTaskKindLabel(task.subTaskKind)}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </td>
                   <td className="py-2 pr-3 text-muted-foreground">
-                    {task.assigneeLabel ?? '—'}
+                    {resolveCollaborativeTaskAssigneeLabel(task) ?? '—'}
                   </td>
                   <td className="py-2">
                     <Badge variant="outline" className="text-[10px] font-normal">

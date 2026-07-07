@@ -1,4 +1,5 @@
 import { dispatchPlanStudioSelectScheduleDay } from '@/lib/plan-studio-schedule-navigation';
+import { resolvePersonaAlertTradeoffSummary } from '@/lib/tradeoff-display.util';
 import type { PersonaAlert, PersonaAlertDeepLink } from '@/types/trip';
 import type { Suggestion } from '@/types/suggestion';
 
@@ -86,8 +87,15 @@ export function getPersonaAlertUserTitle(alert: Pick<
 
 export function getPersonaAlertUserBody(alert: Pick<
   PersonaAlert,
-  'message' | 'explanation' | 'presentation'
+  'message' | 'explanation' | 'presentation' | 'metadata'
 >): string {
+  const fromTradeoffDimensions = resolvePersonaAlertTradeoffSummary(
+    alert.metadata?.tradeoffDimensions,
+  );
+  if (fromTradeoffDimensions) {
+    return stripPersonaMessageTechnicalTail(fromTradeoffDimensions);
+  }
+
   const fromExplanation = alert.explanation?.trim();
   if (fromExplanation) {
     return stripPersonaMessageTechnicalTail(fromExplanation);

@@ -236,7 +236,7 @@ export function TeamNegotiationResultCard({
             className={cn(
               'rounded-lg border px-3 py-2 text-sm',
               hardBlocked
-                ? 'border-red-200 bg-red-50 text-red-900'
+                ? 'border-gate-reject-border bg-gate-reject text-gate-reject-foreground'
                 : 'border-amber-200 bg-amber-50 text-amber-950',
             )}
           >
@@ -250,7 +250,7 @@ export function TeamNegotiationResultCard({
               ))}
             </ul>
             {hardBlocked ? (
-              <p className="text-xs mt-2 text-red-800">
+              <p className="text-xs mt-2 text-gate-reject-foreground">
                 存在不可忽略的安全/合规或最弱链约束，请先修改方案后再协调软约束分歧。
               </p>
             ) : null}

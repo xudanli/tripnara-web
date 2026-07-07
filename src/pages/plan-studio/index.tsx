@@ -25,6 +25,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 // Icons are now imported from pipeline-status.ts
 import {
@@ -44,6 +54,18 @@ import { Settings2 } from 'lucide-react';
 import {
   FeasibilityReportSheet,
 } from '@/components/feasibility-report';
+import { DecisionRecordDrawer } from '@/components/decision-problems';
+import { useDecisionProblemsList, useDecisionCenterOverview, useDecisionProblemSpaceContent } from '@/hooks/useDecisionProblemFlow';
+import { useDecisionSpaceTier2 } from '@/hooks/useDecisionSpaceTier2';
+import { resolvePlanDiffFallbackFromPack } from '@/lib/decision-space-plan-diff-view.util';
+import { prefetchDecisionProblemDetail } from '@/hooks/decision-problems-query.util';
+import { deferUntilIdle } from '@/lib/idle-defer.util';
+import { prefetchPlanProposal } from '@/components/plan-studio/workbench/arrange-itinerary/usePlanProposal';
+import {
+  readDecisionRecordIdFromSearchParams,
+  readDecisionProblemIdFromSearchParams,
+} from '@/lib/plan-studio-decision-navigation.util';
+import { buildTripTravelStatusPath } from '@/lib/travel-status-navigation.util';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
 import { useTripWishSummary } from '@/hooks/useTripWishes';
 import { useAuth } from '@/hooks/useAuth';
@@ -56,6 +78,7 @@ import {
 import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
 import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
 import { PlanStudioProvider, usePlanStudio } from '@/contexts/PlanStudioContext';
+import { TripTravelContextProvider } from '@/features/trip-context';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
 import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
@@ -76,6 +99,28 @@ import { clearRouteRunConfirmationFromStore } from '@/lib/route-run-confirmation
 import { clearRouteRunNegotiationFromStore } from '@/lib/route-run-negotiation';
 import ApprovalDialog from '@/components/trips/ApprovalDialog';
 import NegotiationDialog from '@/components/agent/NegotiationDialog';
+import { StructuredNegotiationDialog } from '@/components/domain-influence/StructuredNegotiationDialog';
+import { DecisionSpaceDomainClaimDialog } from '@/components/plan-studio/workbench/DecisionSpaceDomainClaimDialog';
+import { SilentVoteCreateDialog } from '@/components/silent-vote/SilentVoteCreateDialog';
+import { SilentVoteDialog } from '@/components/silent-vote/SilentVoteDialog';
+import {
+  decisionProblemNegotiationsApi,
+  parseDomainRoundConflictDetails,
+} from '@/api/decision-problem-negotiations';
+import { DecisionSemanticsApiError } from '@/api/decision-problems';
+import { canStartDecisionSpaceCollaboration } from '@/lib/decision-space-collaboration.util';
+import { isDecisionProblemNegotiationEligible } from '@/lib/decision-negotiation-eligibility.util';
+import type {
+  GatewayDecisionPreviewResult,
+  GatewayDecisionProblemDetailResult,
+} from '@/lib/unified-gateway-response.util';
+import {
+  buildDecisionSpaceVoteCreateDraft,
+  type SilentVoteCreateDraft,
+} from '@/lib/decision-space-vote.util';
+import type { StartDecisionProblemNegotiationResponse } from '@/types/decision-problem-negotiation';
+import type { TripDomain } from '@/types/trip-domain-influence';
+import { trackCollabNegotiationStart, trackCollabVoteStart } from '@/utils/collab-center-analytics';
 import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
 import { isSelfDrivePlanningTrip } from '@/lib/trip-self-drive';
 import {
@@ -99,22 +144,68 @@ import {
   PlanningWorkbenchItineraryPanel,
   PlanningWorkbenchDecisionChecker,
   PlanningWorkbenchDecisionSpace,
+  PlanningWorkbenchAttractionExplore,
+  PlanningWorkbenchArrangeItinerary,
   WorkbenchDecisionQueuePanel,
-  WorkbenchParticipantsPanel,
-  ConstraintConsoleWorkbench,
+  ConstraintConsoleDrawer,
+  type ConstraintConsoleWorkbenchHandle,
+  WorkbenchModeIndicatorBar,
   WorkbenchScheduleSheet,
-  AddConstraintDialog,
-  ConstraintItemEditDialog,
+  ConstraintEditSessionBar,
+  WorkbenchConclusionStrip,
+  WorkbenchMobileColumnNav,
+  useWorkbenchDesktopLayout,
+  buildWorkbenchAffectedDayLabel,
+  type WorkbenchMobileColumn,
 } from '@/components/plan-studio/workbench';
-import type { ConstraintTemplate } from '@/components/plan-studio/workbench/constraint-templates';
+import { useWorkbenchConflictDismiss } from '@/hooks/useWorkbenchConflictDismiss';
 import {
-  addCustomSoftConstraint,
-  addSoftConstraintFromTemplate,
-  handleConstraintApiError,
-  resolveSoftPreferences,
-  serviceContextFromApiList,
-} from '@/lib/constraint-console.service';
-import { apiConstraintIdToUi } from '@/lib/trip-constraints.adapter';
+  resolvePlanningConflictGateStatus,
+  resolveTopPlanningConflictBanner,
+} from '@/lib/planning-conflicts.util';
+import {
+  trackWorkbenchConclusionStripView,
+  trackWorkbenchMobileColumnChange,
+  trackWorkbenchScheduleImpression,
+} from '@/utils/plan-studio-workbench-analytics';
+import {
+  buildWorkbenchModeBarViewModel,
+  clearAttractionExploreSearchParams,
+  clearArrangeItinerarySearchParams,
+  clearDecisionSpaceSearchParams,
+  resolveConstraintUiLabel,
+  resolveWorkbenchMode,
+  type WorkbenchMode,
+} from '@/lib/workbench-mode-context.util';
+import { resolveConstraintSidebarFocusMode } from '@/lib/constraint-sidebar-focus.util';
+import { WorkbenchDecisionFocusProvider } from '@/contexts/WorkbenchDecisionFocusContext';
+import { usePlanningWorkbenchSnapshot } from '@/components/plan-studio/workbench/arrange-itinerary/usePlanningWorkbenchSnapshot';
+import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
+import {
+  clearAttractionExploreSuggestSearchParams,
+  markAttractionExploreSuggestSeen,
+  readTripAttractionExploreSuggest,
+  shouldShowAttractionExploreSuggest,
+} from '@/lib/attraction-explore-trip.util';
+import { isUnifiedDecisionGatewayEnabled, prefetchDecisionRuntimeCapabilities } from '@/lib/decision-gateway.util';
+import {
+  trackConstraintDrawerClose,
+  trackConstraintDrawerOpen,
+  trackConstraintDrawerSave,
+  trackConstraintDrawerUnsavedPrompt,
+  trackPlanGateConstraintMutex,
+  trackWorkbenchModeBackClick,
+  trackWorkbenchModeEnter,
+  trackWorkbenchModeExit,
+} from '@/utils/plan-studio-workbench-mode-analytics';
+import { ConstraintMutationHost } from '@/components/constraints';
+import { useConstraintMutations } from '@/hooks/useConstraintMutations';
+import {
+  apiConstraintIdToUi,
+  readMaxSegmentDistanceKmFromConstraint,
+} from '@/lib/trip-constraints.adapter';
+import { TRAVEL_GOALS_SECTION_ID } from '@/lib/travel-goals.util';
+import { selectionIdToSectionKey } from '@/lib/trip-constraints-contract.util';
 import { PlanStudioPlanningHeader } from '@/components/plan-studio/PlanStudioPlanningHeader';
 import { PlanningBudgetConstraintsDialog } from '@/components/plan-studio/PlanningBudgetConstraintsDialog';
 import { PlanningTimeRangeConstraintsDialog } from '@/components/plan-studio/PlanningTimeRangeConstraintsDialog';
@@ -137,13 +228,27 @@ import {
   useWorkbenchCollaborators,
   useWorkbenchScheduleRefresh,
   useWorkbenchTripConstraints,
-  workbenchKeys,
 } from '@/pages/plan-studio/hooks/useWorkbenchData';
 import { resolveCollabCenterTab, type CollabCenterTab } from '@/lib/collab-center-tabs';
 import { clearCollabDeepLinkKeys, isCollabCenterOpenParam, mergeCollabDeepLink, type CollabDeepLinkPatch } from '@/lib/collab-center-navigation';
 import { TeamCollaborationCenterPage } from '@/components/team-collaboration';
 import { trackCollabCenterOpen } from '@/utils/collab-center-analytics';
 import { buildDecisionCheckerPlanningInterim } from '@/lib/decision-checker-interim.util';
+import {
+  buildDecisionCheckerPlanningInterimForFocus,
+  resolveWorkbenchFocusForScheduleDay,
+} from '@/lib/decision-checker-focus.util';
+import { countOpenDecisionProblems } from '@/lib/decision-center.util';
+import { resolveDecisionProblemTaskBinding, resolveDecisionResolutionCtaPhase } from '@/lib/decision-resolution.util';
+import {
+  resolveActiveDecisionProblem,
+  resolveConflictForDecisionProblem,
+  resolveDecisionProblemForConflict,
+} from '@/lib/planning-conflicts-decision.util';
+import {
+  resolvePlanningActionCtaLabel,
+  resolvePlanningActionTarget,
+} from '@/lib/plan-studio-planning-action.util';
 import { resolveDestinationTimezone } from '@/utils/timezone';
 import { parseConstraintDeepLink, resolveTravelerCount } from '@/lib/planning-constraints.util';
 import { consumeAssistantPendingMessage } from '@/lib/assistant-pending-message';
@@ -156,8 +261,6 @@ import { useDrawerOptional } from '@/components/layout/DashboardLayout';
 import type { DecisionStripCtaType } from '@/lib/decision-strip-model';
 import type { ConstraintPendingItem, ConstraintPendingKey } from '@/types/planning-constraints';
 import { trackDecisionStripEvidenceOpen, trackDecisionStripDeepLink } from '@/utils/plan-studio-decision-strip-analytics';
-import CascadeImpactPanel from '@/components/readiness/CascadeImpactPanel';
-import type { CascadeUiHint } from '@/types/readiness-cascade';
 import { loadCausalRuntimeSession } from '@/lib/causal-runtime-session';
 
 /** 工作台标题副文案：与侧栏行程列表展示逻辑对齐 */
@@ -203,19 +306,36 @@ function PlanStudioPageContent() {
   const drawer = useDrawerOptional();
   const planGateUrlHandledRef = useRef(false);
   const constraintViewUrlHandledRef = useRef(false);
+  /** 已通过首屏行程校验的 tripId；避免 URL 仅改 view/tab 时再次整页 LogoLoading */
+  const tripGateCheckedIdRef = useRef<string | null | undefined>(undefined);
   const assistantUrlHandledRef = useRef(false);
   const resumePlanGateAfterConstraintsRef = useRef(false);
   const { user } = useAuth();
   
   // 意图与约束弹窗
   const [showIntentDialog, setShowIntentDialog] = useState(false);
-  const [showAddConstraintDialog, setShowAddConstraintDialog] = useState(false);
   const [constraintConsoleOpen, setConstraintConsoleOpen] = useState(false);
+  const constraintConsoleOpenRef = useRef(constraintConsoleOpen);
+  const [constraintDrawerDirty, setConstraintDrawerDirty] = useState(false);
+  const [constraintPendingSaveCount, setConstraintPendingSaveCount] = useState(0);
+  const [constraintSessionCommitting, setConstraintSessionCommitting] = useState(false);
+  const constraintWorkbenchRef = useRef<ConstraintConsoleWorkbenchHandle | null>(null);
+  const [discardConstraintDraftOpen, setDiscardConstraintDraftOpen] = useState(false);
+  const [constraintEvalCloseConfirmOpen, setConstraintEvalCloseConfirmOpen] = useState(false);
+  const constraintEvalPendingRef = useRef(false);
+  const constraintDrawerOpenedAtRef = useRef<number | null>(null);
+  const constraintDrawerHadSaveRef = useRef(false);
+  const pendingPlanGateOptionsRef = useRef<{ autoGenerate?: boolean } | null>(null);
+  const workbenchModeEnteredAtRef = useRef<{
+    mode: Exclude<WorkbenchMode, 'browse'>;
+    at: number;
+  } | null>(null);
+  const prevWorkbenchModeRef = useRef<WorkbenchMode>('browse');
   const [selectedConstraintId, setSelectedConstraintId] = useState<string | null>(null);
+  const [constraintSidebarForceAttention, setConstraintSidebarForceAttention] = useState(false);
   const [openEditorForConstraintId, setOpenEditorForConstraintId] = useState<string | null>(null);
-  const [itemEditConstraintId, setItemEditConstraintId] = useState<string | null>(null);
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false);
-  const [softPrefsRevision, setSoftPrefsRevision] = useState(0);
+  const [scheduleSheetFocusDayIndex, setScheduleSheetFocusDayIndex] = useState<number | undefined>();
   const queryClient = useQueryClient();
   const [activeConstraintDialog, setActiveConstraintDialog] = useState<ConstraintPendingKey | null>(
     null,
@@ -227,14 +347,51 @@ function PlanStudioPageContent() {
   const [tripExists, setTripExists] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
+
+  useEffect(() => {
+    if (isUnifiedDecisionGatewayEnabled()) {
+      void prefetchDecisionRuntimeCapabilities();
+    }
+  }, []);
   const [feasibilitySheetOpen, setFeasibilitySheetOpen] = useState(false);
   const [feasibilityInitialIssueId, setFeasibilityInitialIssueId] = useState<string | null>(null);
+  const [activeDecisionProblemId, setActiveDecisionProblemId] = useState<string | null>(() =>
+    readDecisionProblemIdFromSearchParams(searchParams),
+  );
+  const [decisionRecordSheetOpen, setDecisionRecordSheetOpen] = useState(false);
+  const [activeDecisionRecordId, setActiveDecisionRecordId] = useState<string | null>(() =>
+    readDecisionRecordIdFromSearchParams(searchParams),
+  );
   const [decisionSpaceOpen, setDecisionSpaceOpen] = useState(
     () => searchParams.get('decisionSpace') === '1',
+  );
+  const [attractionExploreOpen, setAttractionExploreOpen] = useState(
+    () => searchParams.get('attractionExplore') === '1',
+  );
+  const [arrangeItineraryOpen, setArrangeItineraryOpen] = useState(
+    () => searchParams.get('arrangeItinerary') === '1',
   );
   const [decisionSpaceConflictId, setDecisionSpaceConflictId] = useState<string | null>(
     () => searchParams.get('conflictId'),
   );
+  /** 中栏行程天选中（0-based），驱动决策检查器按天联动 */
+  const [selectedScheduleDayIndex, setSelectedScheduleDayIndex] = useState(0);
+  const [workbenchMobileColumn, setWorkbenchMobileColumn] =
+    useState<WorkbenchMobileColumn>('summary');
+  const isWorkbenchDesktop = useWorkbenchDesktopLayout();
+  const [scheduleDayExtraTokens, setScheduleDayExtraTokens] = useState<string[]>([]);
+  const [scheduleDayTimelinePois, setScheduleDayTimelinePois] = useState<string[]>([]);
+  const [selectedTimelineEntryId, setSelectedTimelineEntryId] = useState<string | null>(null);
+  const [workbenchExplicitFocusConflict, setWorkbenchExplicitFocusConflict] =
+    useState<PlanningConflictItem | null>(null);
+  const [decisionSpaceActionPreview, setDecisionSpaceActionPreview] =
+    useState<GatewayDecisionPreviewResult | null>(null);
+  const [decisionSpaceActionPreviewLoading, setDecisionSpaceActionPreviewLoading] =
+    useState(false);
+  const [decisionSpaceSelectedOptionId, setDecisionSpaceSelectedOptionId] = useState<string | null>(
+    null,
+  );
+  const [decisionSpaceSelectedOptionLetter, setDecisionSpaceSelectedOptionLetter] = useState('A');
   const [decisionProfilingQuizRequest, setDecisionProfilingQuizRequest] =
     useState<DecisionProfilingStep | null>(null);
   
@@ -260,13 +417,26 @@ function PlanStudioPageContent() {
   const collaboratorsQuery = useWorkbenchCollaborators(readyTripId);
   useWorkbenchScheduleRefresh(readyTripId);
   const { summary: wishSummary, reload: reloadWishSummary } = useTripWishSummary(readyTripId);
-  const collabPendingCount = useCollabPendingCount(readyTripId, wishSummary);
-  const handleSoftPrefsChanged = useCallback(() => {
-    setSoftPrefsRevision((r) => r + 1);
-    if (readyTripId) {
-      void queryClient.invalidateQueries({ queryKey: workbenchKeys.constraints(readyTripId) });
+  const [collabBadgeEnabled, setCollabBadgeEnabled] = useState(false);
+  const [decisionOverviewDeferred, setDecisionOverviewDeferred] = useState(false);
+  useEffect(() => {
+    if (!readyTripId) {
+      setCollabBadgeEnabled(false);
+      setDecisionOverviewDeferred(false);
+      return;
     }
-  }, [readyTripId, queryClient]);
+    const enable = () => {
+      setCollabBadgeEnabled(true);
+      setDecisionOverviewDeferred(true);
+    };
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(enable, { timeout: 2500 });
+      return () => cancelIdleCallback(id);
+    }
+    const timer = window.setTimeout(enable, 1500);
+    return () => window.clearTimeout(timer);
+  }, [readyTripId]);
+  const collabPendingCount = useCollabPendingCount(readyTripId, wishSummary, collabBadgeEnabled);
 
   const embeddedHiking = useEmbeddedHikingTrip(readyTripId ? currentTrip : null);
   const showEmbeddedPlanStudio =
@@ -275,13 +445,97 @@ function PlanStudioPageContent() {
     embeddedHiking.embedded &&
     isEmbeddedHikingTrip(currentTrip);
 
+  const constraintsVersion = constraintsApiList?.meta?.constraintsVersion ?? null;
+
+  const maxSegmentDistanceKm = useMemo(() => {
+    const constraint = constraintsApiList?.items.find(
+      (item) => item.id === 'c_max_segment_distance',
+    );
+    return readMaxSegmentDistanceKmFromConstraint(constraint);
+  }, [constraintsApiList?.items]);
+
+  const decisionCheckerFocusConflictId = decisionSpaceOpen
+    ? decisionSpaceConflictId
+    : null;
+
+  const constraintSidebarFocusMode = useMemo(
+    () =>
+      resolveConstraintSidebarFocusMode({
+        fromTravel: searchParams.get('from') === 'travel',
+        problemId: activeDecisionProblemId ?? searchParams.get('problemId'),
+        conflictId: decisionSpaceConflictId ?? searchParams.get('conflictId'),
+        decisionSpaceOpen,
+        forceAttention:
+          constraintSidebarForceAttention || Boolean(workbenchExplicitFocusConflict),
+      }),
+    [
+      searchParams,
+      activeDecisionProblemId,
+      decisionSpaceConflictId,
+      decisionSpaceOpen,
+      constraintSidebarForceAttention,
+      workbenchExplicitFocusConflict,
+    ],
+  );
+
+  const handleConstraintSidebarFocusAttention = useCallback(() => {
+    setConstraintSidebarForceAttention(true);
+  }, []);
+
   const planningConflicts = usePlanningConflicts(readyTripId, {
     includeDecisionChecker: true,
-    focusConflictId: decisionSpaceConflictId,
+    /** 日程按天联动由客户端 scheduleDayFocus 裁剪；仅决策空间向 BFF 传 focus */
+    focusConflictId: decisionCheckerFocusConflictId,
+    constraintsVersion,
+    maxSegmentDistanceKm,
   });
+  const workbenchConflictDismiss = useWorkbenchConflictDismiss(
+    readyTripId ?? undefined,
+    planningConflicts.items,
+  );
+  const workbenchVisibleConflicts = useMemo(
+    () => ({
+      ...planningConflicts,
+      items: workbenchConflictDismiss.visibleItems,
+    }),
+    [planningConflicts, workbenchConflictDismiss.visibleItems],
+  );
+  const decisionProblemsInbox = useDecisionProblemsList({
+    tripId: readyTripId ?? '',
+    enabled: Boolean(readyTripId),
+  });
+  const decisionCenterOverview = useDecisionCenterOverview({
+    tripId: readyTripId ?? '',
+    enabled: Boolean(readyTripId) && (activeTab === 'schedule' || activeTab === 'tasks'),
+    includeUnifiedGateway: activeTab === 'tasks',
+  });
+  const useDecisionProblemsBff = !decisionProblemsInbox.useLegacy;
+  const useDecisionProblemWritePath =
+    useDecisionProblemsBff || isUnifiedDecisionGatewayEnabled();
+  const openDecisionProblemCount = useMemo(
+    () => {
+      if (!useDecisionProblemsBff) return 0;
+      if (decisionCenterOverview.overview?.recentDecisions) {
+        return countOpenDecisionProblems(
+          decisionProblemsInbox.items ?? [],
+          decisionCenterOverview.overview.recentDecisions,
+        );
+      }
+      const fromMeta = decisionProblemsInbox.listMeta?.openCount;
+      if (typeof fromMeta === 'number') return fromMeta;
+      return countOpenDecisionProblems(decisionProblemsInbox.items ?? [], null);
+    },
+    [
+      useDecisionProblemsBff,
+      decisionProblemsInbox.items,
+      decisionProblemsInbox.listMeta?.openCount,
+      decisionCenterOverview.overview?.recentDecisions,
+    ],
+  );
   const workbenchFeasibility = useWorkbenchFeasibilityScore(
     planningConflicts.bundle,
     planningConflicts.loading,
+    decisionProblemsInbox.useLegacy ? null : decisionProblemsInbox.items,
   );
   const constraintsSummary = useConstraintsSummary(
     readyTripId,
@@ -302,25 +556,47 @@ function PlanStudioPageContent() {
     awaitingDeferred:
       planningConflicts.decisionCheckerLoading && !planningConflicts.decisionChecker,
     deferredError: planningConflicts.decisionCheckerError,
-    focusConflictId: decisionSpaceConflictId,
+    focusConflictId: decisionCheckerFocusConflictId,
     constraintsVersion: constraintsSummary.summary?.constraintsVersion ?? null,
   });
-  const decisionCheckerPlanningInterim = useMemo(
-    () =>
-      buildDecisionCheckerPlanningInterim({
-        summary: planningConflicts.summary,
-        items: planningConflicts.items,
-        verdictHeadline: planningConflicts.verdictHeadline,
-        planningLoading:
-          planningConflicts.loading && planningConflicts.items.length === 0,
-      }),
-    [
-      planningConflicts.summary,
-      planningConflicts.items,
-      planningConflicts.verdictHeadline,
-      planningConflicts.loading,
-    ],
+
+  const workbenchSnapshotEnabled =
+    activeTab === 'schedule' &&
+    Boolean(readyTripId) &&
+    (decisionSpaceOpen || arrangeItineraryOpen || decisionOverviewDeferred);
+
+  const workbenchPlanningSnapshot = usePlanningWorkbenchSnapshot(
+    readyTripId ?? '',
+    workbenchSnapshotEnabled,
   );
+  const workbenchPendingProposalCount =
+    workbenchPlanningSnapshot.data?.pendingProposalCount ?? 0;
+  const workbenchPendingProposalTitle = useMemo(() => {
+    const suggestions = workbenchPlanningSnapshot.data?.copilotSuggestions ?? [];
+    const pending = suggestions.find((suggestion) => suggestion.kind === 'pending_proposal');
+    return pending?.title?.trim() || '有待确认的行程草案';
+  }, [workbenchPlanningSnapshot.data?.copilotSuggestions]);
+  const workbenchActiveProposalId =
+    workbenchPlanningSnapshot.data?.orchestrationState?.activeProposalId ?? null;
+
+  const prefetchedProposalIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTab !== 'schedule' || !readyTripId || !workbenchActiveProposalId) return;
+    if (!useDecisionProblemWritePath) return;
+    if (prefetchedProposalIdRef.current === workbenchActiveProposalId) return;
+    prefetchedProposalIdRef.current = workbenchActiveProposalId;
+
+    return deferUntilIdle(() => {
+      void prefetchPlanProposal(queryClient, readyTripId, workbenchActiveProposalId);
+    });
+  }, [
+    activeTab,
+    readyTripId,
+    workbenchActiveProposalId,
+    useDecisionProblemWritePath,
+    queryClient,
+  ]);
+
   const workbenchDisplayTimezone = useMemo(
     () => resolveDestinationTimezone(currentTrip?.destination),
     [currentTrip?.destination],
@@ -374,11 +650,206 @@ function PlanStudioPageContent() {
     {
       deferConstraintTopicsToCard: true,
       budgetProfile: budgetProfileQuery.data ?? null,
+      useDecisionProblemsBff,
+      openDecisionProblemCount,
     },
+  );
+  const workbenchPlanningActionTarget = useMemo(
+    () =>
+      resolvePlanningActionTarget({
+        useDecisionProblemsBff,
+        openDecisionProblemCount,
+        context: 'workbench',
+      }),
+    [useDecisionProblemsBff, openDecisionProblemCount],
+  );
+  const workbenchPlanningActionLabel = useMemo(
+    () =>
+      resolvePlanningActionCtaLabel({
+        target: workbenchPlanningActionTarget,
+        context: 'workbench',
+        specificLabel: planningReadiness?.primaryCta.label,
+      }),
+    [workbenchPlanningActionTarget, planningReadiness?.primaryCta.label],
+  );
+  const decisionSpaceActiveConflict = useMemo(() => {
+    if (decisionSpaceConflictId) {
+      const byId = planningConflicts.items.find((item) => item.id === decisionSpaceConflictId);
+      if (byId) return byId;
+    }
+    if (activeDecisionProblemId && !decisionProblemsInbox.useLegacy) {
+      const problem = decisionProblemsInbox.items?.find((item) => item.id === activeDecisionProblemId);
+      if (problem) {
+        return resolveConflictForDecisionProblem(problem, planningConflicts.items) ?? null;
+      }
+    }
+    if (!decisionSpaceOpen) return null;
+    return (
+      planningConflicts.items.find((item) => item.priority === 'must_handle') ??
+      planningConflicts.items[0] ??
+      null
+    );
+  }, [
+    planningConflicts.items,
+    decisionSpaceConflictId,
+    activeDecisionProblemId,
+    decisionProblemsInbox.useLegacy,
+    decisionProblemsInbox.items,
+    decisionSpaceOpen,
+  ]);
+  const decisionSpaceActiveProblem = useMemo(
+    () =>
+      decisionProblemsInbox.useLegacy
+        ? undefined
+        : resolveActiveDecisionProblem(
+            activeDecisionProblemId,
+            decisionSpaceActiveConflict,
+            decisionProblemsInbox.items ?? [],
+          ),
+    [
+      decisionProblemsInbox.useLegacy,
+      decisionProblemsInbox.items,
+      activeDecisionProblemId,
+      decisionSpaceActiveConflict,
+    ],
+  );
+  const activeDecisionProblemSummary = useMemo(
+    () =>
+      activeDecisionProblemId
+        ? decisionProblemsInbox.items?.find((item) => item.id === activeDecisionProblemId) ?? null
+        : null,
+    [activeDecisionProblemId, decisionProblemsInbox.items],
+  );
+  const decisionSpaceSelectedProblemId = decisionSpaceOpen
+    ? decisionSpaceActiveProblem?.id ?? activeDecisionProblemId
+    : null;
+
+  /** Tier-2：bundle（Phase 1）或 detail ∥ inspector 回退 */
+  const decisionSpaceTier2 = useDecisionSpaceTier2({
+    tripId: readyTripId ?? '',
+    problemId: decisionSpaceSelectedProblemId,
+    proposalId: workbenchActiveProposalId,
+    focusConflictId: decisionCheckerFocusConflictId,
+    optionId: decisionSpaceSelectedOptionId,
+    enabled:
+      decisionSpaceOpen &&
+      useDecisionProblemWritePath &&
+      Boolean(decisionSpaceSelectedProblemId),
+  });
+  const decisionSpaceBffContent = decisionSpaceTier2.bffContent;
+  const decisionSpaceSharedInspector = decisionSpaceOpen ? decisionSpaceTier2.sharedInspector : undefined;
+  const decisionSpacePlanDiffFallback = useMemo(
+    () =>
+      decisionSpaceOpen
+        ? resolvePlanDiffFallbackFromPack(
+            decisionSpaceTier2.bundle?.pack?.options,
+            decisionSpaceSelectedOptionId,
+          )
+        : undefined,
+    [
+      decisionSpaceOpen,
+      decisionSpaceTier2.bundle?.pack?.options,
+      decisionSpaceSelectedOptionId,
+    ],
+  );
+  const workbenchScheduleFocus = useMemo(() => {
+    if (decisionSpaceOpen) return null;
+    return resolveWorkbenchFocusForScheduleDay({
+      dayIndex: selectedScheduleDayIndex,
+      conflicts: workbenchConflictDismiss.visibleItems,
+      decisionProblems: decisionProblemsInbox.useLegacy
+        ? undefined
+        : decisionProblemsInbox.items,
+    });
+  }, [
+    decisionSpaceOpen,
+    selectedScheduleDayIndex,
+    workbenchConflictDismiss.visibleItems,
+    decisionProblemsInbox.useLegacy,
+    decisionProblemsInbox.items,
+  ]);
+  const workbenchCheckerFocusConflict = decisionSpaceOpen
+    ? decisionSpaceActiveConflict
+    : workbenchExplicitFocusConflict ?? workbenchScheduleFocus?.conflict ?? null;
+  const workbenchCheckerFocusProblem = decisionSpaceOpen
+    ? decisionSpaceActiveProblem
+    : workbenchExplicitFocusConflict
+      ? resolveDecisionProblemForConflict(
+          workbenchExplicitFocusConflict,
+          decisionProblemsInbox.useLegacy ? [] : (decisionProblemsInbox.items ?? []),
+        ) ?? workbenchScheduleFocus?.problem ?? null
+      : workbenchScheduleFocus?.problem ?? null;
+  const workbenchFocusProblemContent = useDecisionProblemSpaceContent({
+    tripId: readyTripId ?? '',
+    problemId: workbenchCheckerFocusProblem?.id,
+    focusConflictId: workbenchCheckerFocusConflict?.id ?? undefined,
+    enabled:
+      !decisionSpaceOpen &&
+      useDecisionProblemWritePath &&
+      Boolean(readyTripId && workbenchCheckerFocusProblem?.id),
+  });
+  const hasWorkbenchCheckerFocus = Boolean(
+    workbenchCheckerFocusConflict || workbenchCheckerFocusProblem,
+  );
+  const scheduleDaySubtitle = useMemo(() => {
+    if (decisionSpaceOpen) return undefined;
+    const day = selectedScheduleDayIndex + 1;
+    const problems = workbenchScheduleFocus?.dayProblems.length ?? 0;
+    const conflicts = workbenchScheduleFocus?.dayConflicts.length ?? 0;
+    const count = Math.max(problems, conflicts);
+    if (count > 0) {
+      return `第 ${day} 天 · ${count} 项冲突 / 决策问题`;
+    }
+    return `第 ${day} 天 · 冲突与依据`;
+  }, [
+    decisionSpaceOpen,
+    selectedScheduleDayIndex,
+    workbenchScheduleFocus?.dayProblems.length,
+    workbenchScheduleFocus?.dayConflicts.length,
+  ]);
+  const decisionCheckerPlanningInterim = useMemo(
+    () => {
+      const useFocusBuilder = decisionSpaceOpen || hasWorkbenchCheckerFocus;
+      const builder = useFocusBuilder
+        ? buildDecisionCheckerPlanningInterimForFocus
+        : buildDecisionCheckerPlanningInterim;
+      return builder({
+        summary: planningConflicts.summary,
+        items: planningConflicts.items,
+        verdictHeadline: planningConflicts.verdictHeadline,
+        planningLoading:
+          planningConflicts.loading && planningConflicts.items.length === 0,
+        ...(useFocusBuilder
+          ? {
+              focusConflict: workbenchCheckerFocusConflict,
+              focusProblem: workbenchCheckerFocusProblem,
+              focusProblemDetail: decisionSpaceOpen
+                ? decisionSpaceBffContent.detail
+                : undefined,
+              scheduleDayConflicts: decisionSpaceOpen
+                ? undefined
+                : workbenchScheduleFocus?.dayConflicts,
+            }
+          : {}),
+      });
+    },
+    [
+      decisionSpaceOpen,
+      hasWorkbenchCheckerFocus,
+      planningConflicts.summary,
+      planningConflicts.items,
+      planningConflicts.verdictHeadline,
+      planningConflicts.loading,
+      workbenchCheckerFocusConflict,
+      workbenchCheckerFocusProblem,
+      decisionSpaceBffContent.detail,
+      workbenchScheduleFocus?.dayConflicts,
+    ],
   );
   const decisionStrip = useDecisionStripModel(readyTripId, {
     planningReadiness,
     planningInboxCount: planningConflicts.inbox.inboxCount,
+    deferRemoteFetch: true,
   });
   const solutionMatrix = useSolutionMatrixModel(readyTripId);
   const relaxationModel = useRelaxationSuggestionsModel(readyTripId);
@@ -419,6 +890,25 @@ function PlanStudioPageContent() {
   const [decisionCheckerTab, setDecisionCheckerTab] = useState<string | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [negotiationDialogOpen, setNegotiationDialogOpen] = useState(false);
+  const [structuredNegotiationOpen, setStructuredNegotiationOpen] = useState(false);
+  const [structuredNegotiationRoundId, setStructuredNegotiationRoundId] = useState<string | null>(
+    null,
+  );
+  const [structuredNegotiationRoundDomain, setStructuredNegotiationRoundDomain] = useState<
+    string | null
+  >(null);
+  const [negotiationCreateOpen, setNegotiationCreateOpen] = useState(false);
+  const [negotiationClaimDomain, setNegotiationClaimDomain] = useState<TripDomain | null>(null);
+  const [negotiationSubmitting, setNegotiationSubmitting] = useState(false);
+  const [pendingNegotiationRetry, setPendingNegotiationRetry] = useState<{
+    selectedOptionId?: string | null;
+  } | null>(null);
+  const [silentVoteCreateOpen, setSilentVoteCreateOpen] = useState(false);
+  const [silentVoteCreateDraft, setSilentVoteCreateDraft] = useState<SilentVoteCreateDraft | null>(
+    null,
+  );
+  const [silentVoteDetailOpen, setSilentVoteDetailOpen] = useState(false);
+  const [silentVoteDetailId, setSilentVoteDetailId] = useState<string | null>(null);
 
   const showPlanStudioDecisionCockpit = useMemo(
     () =>
@@ -478,8 +968,6 @@ function PlanStudioPageContent() {
   );
   const causalProjection = causalRuntimeSession?.echo?.causalPersonaProjection;
   const causalCounterfactual = causalRuntimeSession?.lastCounterfactualReport;
-  const showCascadePanel =
-    cascadeUiHints.length > 0 || cascadeAffectedItems.length > 0;
 
   useEffect(() => {
     resetWorldModelGuardsStore();
@@ -531,6 +1019,13 @@ function PlanStudioPageContent() {
     clearCollabDeepLinkKeys(newParams);
     newParams.delete('roundId');
     newParams.delete('roundDomain');
+    if (value !== 'schedule') {
+      clearDecisionSpaceSearchParams(newParams);
+      setDecisionSpaceOpen(false);
+      setActiveDecisionProblemId(null);
+      setDecisionSpaceActionPreview(null);
+      setDecisionSpaceActionPreviewLoading(false);
+    }
     setSearchParams(newParams);
 
     // 不再需要切换 personaMode，三人格由系统自动调用
@@ -556,18 +1051,343 @@ function PlanStudioPageContent() {
     navigateToCollabTab(resolveCollabCenterTab(searchParams.get('collabTab')));
   }, [navigateToCollabTab, searchParams, tripId, currentTrip, activeTab]);
 
+  const openDecisionSpaceCollaborationContext = useMemo(
+    () => ({
+      conflict: decisionSpaceActiveConflict,
+      problem: decisionSpaceActiveProblem ?? activeDecisionProblemSummary,
+    }),
+    [
+      decisionSpaceActiveConflict,
+      decisionSpaceActiveProblem,
+      activeDecisionProblemSummary,
+    ],
+  );
+
+  const openStructuredNegotiationDiscussion = useCallback(
+    (link: { roundDomain: string | null; roundId: string | null }) => {
+      setStructuredNegotiationRoundId(link.roundId);
+      setStructuredNegotiationRoundDomain(link.roundDomain);
+      setStructuredNegotiationOpen(true);
+    },
+    [],
+  );
+
+  const handleNegotiationStartResult = useCallback(
+    (
+      result: StartDecisionProblemNegotiationResponse,
+      retryPayload?: { selectedOptionId?: string | null },
+    ) => {
+      if (!tripId) return;
+      const nav = result.clientNavigation;
+      trackCollabNegotiationStart({
+        tripId,
+        domain: nav.roundDomain ?? result.roundDomain ?? undefined,
+      });
+
+      if (result.action === 'claim_required') {
+        const domainRaw = result.claimRequired?.domain ?? nav.roundDomain ?? result.roundDomain;
+        if (typeof domainRaw === 'string' && domainRaw) {
+          setNegotiationClaimDomain(domainRaw as TripDomain);
+          setPendingNegotiationRetry(retryPayload ?? null);
+          setNegotiationCreateOpen(true);
+          return;
+        }
+        toast.error('需要先认领规划领域');
+        return;
+      }
+
+      openStructuredNegotiationDiscussion({
+        roundId: nav.roundId ?? result.roundId ?? null,
+        roundDomain: nav.roundDomain ?? result.roundDomain ?? null,
+      });
+    },
+    [tripId, openStructuredNegotiationDiscussion],
+  );
+
+  const submitDecisionProblemNegotiation = useCallback(
+    async (
+      payload?: { selectedOptionId?: string | null },
+      options?: { autoClaimDomain?: boolean },
+    ) => {
+      if (!tripId) return;
+      const problemId = decisionSpaceActiveProblem?.id ?? activeDecisionProblemId;
+      if (!problemId) {
+        toast.error('请先选择决策问题');
+        return;
+      }
+
+      setNegotiationSubmitting(true);
+      try {
+        const detail = decisionSpaceBffContent.detail as GatewayDecisionProblemDetailResult | null;
+        const taskBinding = resolveDecisionProblemTaskBinding(problemId, detail);
+        const result = await decisionProblemNegotiationsApi.start(tripId, problemId, {
+          focusConflictId: decisionCheckerFocusConflictId ?? undefined,
+          selectedOptionId: payload?.selectedOptionId ?? undefined,
+          autoClaimDomain: options?.autoClaimDomain ?? true,
+          resolutionId: taskBinding.resolutionId,
+          actionPlanId: taskBinding.actionPlanId,
+        });
+        handleNegotiationStartResult(result, payload);
+        void queryClient.invalidateQueries({
+          queryKey: ['trips', tripId, 'collaborative-tasks', 'negotiation'],
+        });
+        decisionSpaceBffContent.reload();
+      } catch (error) {
+        if (error instanceof DecisionSemanticsApiError) {
+          if (error.code === 'DOMAIN_ROUND_CONFLICT') {
+            const details = parseDomainRoundConflictDetails(error.details);
+            toast.error(error.message || '该领域已有其他议题的协商进行中');
+            if (details?.existingRoundId) {
+              openStructuredNegotiationDiscussion({
+                roundId: details.existingRoundId,
+                roundDomain: details.roundDomain ?? null,
+              });
+            }
+            return;
+          }
+          toast.error(error.message);
+          if (
+            error.code === 'INSUFFICIENT_MEMBERS' ||
+            error.code === 'SOLO_TRIP_NOT_SUPPORTED'
+          ) {
+            setCollaboratorsDialogOpen(true);
+          }
+          return;
+        }
+        toast.error((error as Error).message ?? '发起协商失败');
+      } finally {
+        setNegotiationSubmitting(false);
+      }
+    },
+    [
+      tripId,
+      decisionSpaceActiveProblem?.id,
+      activeDecisionProblemId,
+      decisionCheckerFocusConflictId,
+      handleNegotiationStartResult,
+      queryClient,
+      decisionSpaceBffContent,
+      openStructuredNegotiationDiscussion,
+    ],
+  );
+
+  const openDecisionSpaceNegotiation = useCallback(
+    (payload?: { selectedOptionId?: string | null }) => {
+      if (!tripId) return;
+      if (decisionProblemsInbox.useLegacy) {
+        toast.error('当前行程未启用决策问题 BFF，暂无法发起协商');
+        return;
+      }
+
+      const detail = decisionSpaceBffContent.detail as GatewayDecisionProblemDetailResult | null;
+      const negotiation = detail?.negotiation;
+      const suggestedDomain = detail?.suggestedNegotiationDomain ?? null;
+
+      if (negotiation?.buttonLabel === '进入协商') {
+        trackCollabNegotiationStart({
+          tripId,
+          domain: suggestedDomain ?? undefined,
+        });
+        openStructuredNegotiationDiscussion({
+          roundId: negotiation.roundId ?? null,
+          roundDomain: suggestedDomain,
+        });
+        return;
+      }
+
+      if (negotiation?.buttonLabel !== '发起协商') {
+        if (decisionSpaceBffContent.detailLoading) {
+          toast.message('正在加载协商状态…');
+        } else {
+          toast.error('此类问题暂不支持结构化协商，请直接确认方案或发起投票');
+        }
+        return;
+      }
+
+      void submitDecisionProblemNegotiation(payload);
+    },
+    [
+      tripId,
+      decisionProblemsInbox.useLegacy,
+      decisionSpaceBffContent.detail,
+      decisionSpaceBffContent.detailLoading,
+      submitDecisionProblemNegotiation,
+      openStructuredNegotiationDiscussion,
+    ],
+  );
+
+  const openDecisionSpaceVote = useCallback(() => {
+    if (!tripId) return;
+
+    const travelerCount = constraintsSummary.summary?.travelers.count ?? 1;
+    const collaboratorCount = collaboratorsQuery.data?.length ?? 0;
+    if (!canStartDecisionSpaceCollaboration({ travelerCount, collaboratorCount })) {
+      toast.error('请先添加至少 1 名成员后再发起投票', {
+        description: '团队投票需要成员共同参与。',
+      });
+      setCollaboratorsDialogOpen(true);
+      return;
+    }
+
+    if (
+      (decisionSpaceBffContent.detail as GatewayDecisionProblemDetailResult | null)?.negotiation
+        ?.visible === false ||
+      !isDecisionProblemNegotiationEligible({
+        problem: decisionSpaceActiveProblem,
+        conflict: decisionSpaceActiveConflict,
+        detail: decisionSpaceBffContent.detail as GatewayDecisionProblemDetailResult | null,
+      })
+    ) {
+      toast.message('预约类问题请直接选择可执行方案', {
+        description: '执行型任务无需团队投票或结构化协商。',
+      });
+      return;
+    }
+
+    setSilentVoteCreateDraft(
+      buildDecisionSpaceVoteCreateDraft(
+        openDecisionSpaceCollaborationContext,
+        decisionSpaceBffContent.options ?? [],
+      ),
+    );
+    setSilentVoteCreateOpen(true);
+  }, [
+    tripId,
+    constraintsSummary.summary?.travelers.count,
+    collaboratorsQuery.data,
+    openDecisionSpaceCollaborationContext,
+    decisionSpaceBffContent.options,
+    decisionSpaceActiveProblem,
+    decisionSpaceActiveConflict,
+    decisionSpaceBffContent.detail,
+  ]);
+
   const openFeasibilitySheet = useCallback((issueId?: string | null) => {
     if (issueId) setFeasibilityInitialIssueId(issueId);
     setFeasibilitySheetOpen(true);
   }, []);
 
+  const openPlanningInbox = useCallback(() => {
+    setActiveTab('tasks');
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'tasks');
+    next.set('planningInbox', '1');
+    clearCollabDeepLinkKeys(next);
+    next.delete('roundId');
+    next.delete('roundDomain');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const openDecisionRecord = useCallback(
+    (decisionId: string) => {
+      setActiveDecisionRecordId(decisionId);
+      setDecisionRecordSheetOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.set('decisionId', decisionId);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const selectDecisionProblemInSpace = useCallback(
+    (problemId: string) => {
+      setActiveDecisionProblemId(problemId);
+      const problem = decisionProblemsInbox.items?.find((item) => item.id === problemId);
+      const conflict = problem
+        ? resolveConflictForDecisionProblem(problem, planningConflicts.items)
+        : undefined;
+      if (conflict) {
+        setDecisionSpaceConflictId(conflict.id);
+      } else {
+        setDecisionSpaceConflictId(null);
+      }
+      const next = new URLSearchParams(searchParams);
+      next.set('problemId', problemId);
+      if (conflict) next.set('conflictId', conflict.id);
+      else next.delete('conflictId');
+      setSearchParams(next, { replace: true });
+    },
+    [
+      decisionProblemsInbox.items,
+      planningConflicts.items,
+      searchParams,
+      setSearchParams,
+    ],
+  );
+
+  useEffect(() => {
+    const decisionId = readDecisionRecordIdFromSearchParams(searchParams);
+    if (!decisionId || !tripExists) return;
+    setActiveDecisionRecordId(decisionId);
+    setDecisionRecordSheetOpen(true);
+  }, [searchParams, tripExists]);
+
+  useEffect(() => {
+    const problemId = readDecisionProblemIdFromSearchParams(searchParams);
+    if (!problemId || !tripExists) return;
+    setActiveDecisionProblemId(problemId);
+    const problem = decisionProblemsInbox.items?.find((item) => item.id === problemId);
+    const conflict = problem
+      ? resolveConflictForDecisionProblem(problem, planningConflicts.items)
+      : undefined;
+    if (conflict) setDecisionSpaceConflictId(conflict.id);
+    if (searchParams.get('decisionSpace') !== '1') {
+      const next = new URLSearchParams(searchParams);
+      next.set('decisionSpace', '1');
+      if (conflict) next.set('conflictId', conflict.id);
+      else next.delete('conflictId');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, tripExists, decisionProblemsInbox.items, planningConflicts.items, setSearchParams]);
+
+  const handleDecisionProblemExecuted = useCallback(async () => {
+    setRefreshKey((k) => k + 1);
+    if (tripId) {
+      try {
+        const trip = await tripsApi.getById(tripId);
+        setCurrentTrip(trip);
+      } catch {
+        /* ignore refresh errors */
+      }
+    }
+    window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+    await planningConflicts.revalidateAndReload({});
+    void decisionProblemsInbox.reload();
+    void decisionCenterOverview.reload();
+  }, [tripId, planningConflicts, decisionProblemsInbox, decisionCenterOverview]);
+
   const openDecisionSpace = useCallback(
-    (context?: { conflictId?: string; dayIndex?: number }) => {
-      const conflictId =
-        context?.conflictId ??
-        planningConflicts.items.find((item) => item.priority === 'must_handle')?.id ??
-        planningConflicts.items[0]?.id ??
-        null;
+    (context?: { conflictId?: string; dayIndex?: number; problemId?: string }) => {
+      if (
+        context?.problemId &&
+        readyTripId &&
+        useDecisionProblemWritePath &&
+        !decisionProblemsInbox.useLegacy
+      ) {
+        void prefetchDecisionProblemDetail(
+          queryClient,
+          readyTripId,
+          context.problemId,
+          context.conflictId ?? decisionCheckerFocusConflictId,
+        );
+      }
+      setActiveTab('schedule');
+      setAttractionExploreOpen(false);
+      let conflictId = context?.conflictId ?? null;
+      if (context?.problemId) {
+        setActiveDecisionProblemId(context.problemId);
+        const problem = decisionProblemsInbox.items?.find((item) => item.id === context.problemId);
+        const conflict = problem
+          ? resolveConflictForDecisionProblem(problem, planningConflicts.items)
+          : undefined;
+        if (conflict) conflictId = conflict.id;
+      }
+      if (!conflictId) {
+        conflictId =
+          planningConflicts.items.find((item) => item.priority === 'must_handle')?.id ??
+          planningConflicts.items[0]?.id ??
+          null;
+      }
       setDecisionSpaceConflictId(conflictId);
       setDecisionSpaceOpen(true);
       setDecisionCheckerTab('overview');
@@ -577,21 +1397,159 @@ function PlanStudioPageContent() {
       }
       decisionCockpitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       const next = new URLSearchParams(searchParams);
+      next.set('tab', 'schedule');
+      clearAttractionExploreSearchParams(next);
+      clearArrangeItinerarySearchParams(next);
       next.set('decisionSpace', '1');
+      if (context?.problemId) next.set('problemId', context.problemId);
       if (conflictId) next.set('conflictId', conflictId);
       else next.delete('conflictId');
       setSearchParams(next, { replace: true });
     },
-    [planningConflicts.items, solutionMatrix, searchParams, setSearchParams],
+    [planningConflicts.items, decisionProblemsInbox.items, decisionProblemsInbox.useLegacy, queryClient, readyTripId, useDecisionProblemWritePath, decisionCheckerFocusConflictId, solutionMatrix, searchParams, setSearchParams],
   );
 
+  const openDecisionProblem = useCallback(
+    (problemId: string) => {
+      openDecisionSpace({ problemId });
+    },
+    [openDecisionSpace],
+  );
+
+  const prefetchDecisionProblemInSpace = useCallback(
+    (problemId: string) => {
+      if (!readyTripId || !useDecisionProblemWritePath || decisionProblemsInbox.useLegacy) return;
+      void prefetchDecisionProblemDetail(
+        queryClient,
+        readyTripId,
+        problemId,
+        decisionCheckerFocusConflictId,
+      );
+    },
+    [
+      queryClient,
+      readyTripId,
+      useDecisionProblemWritePath,
+      decisionProblemsInbox.useLegacy,
+      decisionCheckerFocusConflictId,
+    ],
+  );
+
+  const prefetchDecisionProblemFromConflict = useCallback(
+    (conflictId: string) => {
+      if (!readyTripId || decisionProblemsInbox.useLegacy) return;
+      const conflict = planningConflicts.items.find((item) => item.id === conflictId);
+      const problem = conflict
+        ? resolveDecisionProblemForConflict(conflict, decisionProblemsInbox.items ?? [])
+        : undefined;
+      if (problem) prefetchDecisionProblemInSpace(problem.id);
+    },
+    [
+      readyTripId,
+      decisionProblemsInbox.useLegacy,
+      decisionProblemsInbox.items,
+      planningConflicts.items,
+      prefetchDecisionProblemInSpace,
+    ],
+  );
+
+  const openWorkbenchPlanningActions = useCallback(() => {
+    if (workbenchPlanningActionTarget === 'decision_space') {
+      openDecisionSpace();
+      return;
+    }
+    openPlanningInbox();
+  }, [workbenchPlanningActionTarget, openDecisionSpace, openPlanningInbox]);
+
   const closeDecisionSpace = useCallback(() => {
+    const fromTravel = searchParams.get('from') === 'travel';
     setDecisionSpaceOpen(false);
+    setActiveDecisionProblemId(null);
+    setDecisionSpaceActionPreview(null);
+    setDecisionSpaceActionPreviewLoading(false);
+    setWorkbenchExplicitFocusConflict(null);
     const next = new URLSearchParams(searchParams);
-    next.delete('decisionSpace');
-    next.delete('conflictId');
+    clearDecisionSpaceSearchParams(next);
+    next.delete('from');
+    if (fromTravel && tripId) {
+      navigate(buildTripTravelStatusPath(tripId));
+      return;
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, tripId, navigate]);
+
+  const openAttractionExplore = useCallback(() => {
+    setActiveTab('schedule');
+    setDecisionSpaceOpen(false);
+    setArrangeItineraryOpen(false);
+    setAttractionExploreOpen(true);
+    const next = new URLSearchParams(searchParams);
+    clearDecisionSpaceSearchParams(next);
+    clearArrangeItinerarySearchParams(next);
+    next.set('tab', 'schedule');
+    next.set('attractionExplore', '1');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  const closeAttractionExplore = useCallback(() => {
+    setAttractionExploreOpen(false);
+    const next = new URLSearchParams(searchParams);
+    clearAttractionExploreSearchParams(next);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const openArrangeItinerary = useCallback((options?: { autoArrange?: boolean }) => {
+    setActiveTab('schedule');
+    setDecisionSpaceOpen(false);
+    setAttractionExploreOpen(false);
+    setArrangeItineraryOpen(true);
+    const next = new URLSearchParams(searchParams);
+    clearDecisionSpaceSearchParams(next);
+    clearAttractionExploreSearchParams(next);
+    next.set('tab', 'schedule');
+    next.set('arrangeItinerary', '1');
+    if (options?.autoArrange) {
+      next.set('arrangeAutoArrange', '1');
+    } else {
+      next.delete('arrangeAutoArrange');
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const openWorkbenchPendingProposal = useCallback(() => {
+    openArrangeItinerary();
+  }, [openArrangeItinerary]);
+
+  const consumeArrangeAutoArrangeIntent = useCallback(() => {
+    if (searchParams.get('arrangeAutoArrange') !== '1') return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('arrangeAutoArrange');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const closeArrangeItinerary = useCallback(() => {
+    setArrangeItineraryOpen(false);
+    const next = new URLSearchParams(searchParams);
+    clearArrangeItinerarySearchParams(next);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const handleDecisionSpaceActionPreviewChange = useCallback(
+    (payload: {
+      preview: GatewayDecisionPreviewResult | null;
+      loading?: boolean;
+      selectedOptionId?: string | null;
+      selectedOptionLetter?: string;
+    }) => {
+      setDecisionSpaceActionPreview(payload.preview);
+      setDecisionSpaceActionPreviewLoading(Boolean(payload.loading));
+      setDecisionSpaceSelectedOptionId(payload.selectedOptionId ?? null);
+      if (payload.selectedOptionLetter) {
+        setDecisionSpaceSelectedOptionLetter(payload.selectedOptionLetter);
+      }
+    },
+    [],
+  );
 
   // 监听「加入行程」等操作，刷新 ScheduleTab（右侧助手添加住宿/火车后）
   useEffect(() => {
@@ -618,20 +1576,32 @@ function PlanStudioPageContent() {
       clearCollabDeepLinkKeys(newParams);
       newParams.delete('roundId');
       newParams.delete('roundDomain');
+      if (tab !== 'schedule') {
+        clearDecisionSpaceSearchParams(newParams);
+        clearAttractionExploreSearchParams(newParams);
+        clearArrangeItinerarySearchParams(newParams);
+        clearArrangeItinerarySearchParams(newParams);
+        setDecisionSpaceOpen(false);
+        setAttractionExploreOpen(false);
+        setArrangeItineraryOpen(false);
+        setActiveDecisionProblemId(null);
+        setDecisionSpaceActionPreview(null);
+      setDecisionSpaceActionPreviewLoading(false);
+      }
       setSearchParams(newParams);
     };
     window.addEventListener('plan-studio:switch-tab', onSwitchTab);
     return () => window.removeEventListener('plan-studio:switch-tab', onSwitchTab);
   }, [searchParams, setSearchParams, navigate, tripId, openFeasibilitySheet]);
 
-  // 旧链接 ?tab=conflicts → 打开可执行证明侧栏
+  // 旧链接 ?tab=conflicts → 行前准备 · 规划待办收件箱
   useEffect(() => {
     if (!tripId || searchParams.get('tab') !== 'conflicts') return;
-    openFeasibilitySheet();
     const newParams = new URLSearchParams(searchParams);
-    newParams.set('tab', 'schedule');
+    newParams.set('tab', 'tasks');
+    newParams.set('planningInbox', '1');
     setSearchParams(newParams, { replace: true });
-  }, [tripId, searchParams, setSearchParams, openFeasibilitySheet]);
+  }, [tripId, searchParams, setSearchParams]);
 
   // URL ?tab= 变化时同步 Tab（例如时间轴卡片「查看报告」仅改 query）
   useEffect(() => {
@@ -646,13 +1616,86 @@ function PlanStudioPageContent() {
     setDecisionSpaceOpen(fromUrl);
     const conflictFromUrl = searchParams.get('conflictId');
     if (conflictFromUrl) setDecisionSpaceConflictId(conflictFromUrl);
+    setAttractionExploreOpen(searchParams.get('attractionExplore') === '1');
+    setArrangeItineraryOpen(searchParams.get('arrangeItinerary') === '1');
   }, [searchParams]);
 
   useEffect(() => {
-    if (activeTab !== 'schedule' && decisionSpaceOpen) {
-      setDecisionSpaceOpen(false);
+    if (activeTab === 'schedule' || !attractionExploreOpen) return;
+    setAttractionExploreOpen(false);
+    if (searchParams.get('attractionExplore') !== '1') return;
+    const next = new URLSearchParams(searchParams);
+    clearAttractionExploreSearchParams(next);
+    setSearchParams(next, { replace: true });
+  }, [activeTab, attractionExploreOpen, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (activeTab === 'schedule' || !arrangeItineraryOpen) return;
+    setArrangeItineraryOpen(false);
+    if (searchParams.get('arrangeItinerary') !== '1') return;
+    const next = new URLSearchParams(searchParams);
+    clearArrangeItinerarySearchParams(next);
+    setSearchParams(next, { replace: true });
+  }, [activeTab, arrangeItineraryOpen, searchParams, setSearchParams]);
+
+  const attractionExploreSuggestShownRef = useRef(false);
+  useEffect(() => {
+    if (!readyTripId || loading || attractionExploreOpen) return;
+    if (attractionExploreSuggestShownRef.current) return;
+    if (
+      !shouldShowAttractionExploreSuggest({
+        tripId: readyTripId,
+        trip: currentTrip,
+        searchParams,
+      })
+    ) {
+      return;
     }
-  }, [activeTab, decisionSpaceOpen]);
+
+    attractionExploreSuggestShownRef.current = true;
+    markAttractionExploreSuggestSeen(readyTripId);
+    const next = new URLSearchParams(searchParams);
+    clearAttractionExploreSuggestSearchParams(next);
+    setSearchParams(next, { replace: true });
+
+    const source = searchParams.get('source');
+    const fromRouteSeed = readTripAttractionExploreSuggest(currentTrip) && source !== 'guide_import';
+    toast.message(
+      source === 'guide_import'
+        ? '攻略景点已写入候选清单'
+        : fromRouteSeed
+          ? '路线景点已写入候选清单'
+          : '可以继续探索更多景点',
+      {
+        description: '在探索景点中查漏补缺、对比取舍，再自动编排进日程',
+        duration: 9000,
+        action: {
+          label: '去探索景点',
+          onClick: () => openAttractionExplore(),
+        },
+      },
+    );
+  }, [
+    readyTripId,
+    loading,
+    attractionExploreOpen,
+    currentTrip,
+    searchParams,
+    setSearchParams,
+    openAttractionExplore,
+  ]);
+
+  useEffect(() => {
+    if (activeTab === 'schedule' || !decisionSpaceOpen) return;
+    setDecisionSpaceOpen(false);
+    setActiveDecisionProblemId(null);
+    setDecisionSpaceActionPreview(null);
+    setDecisionSpaceActionPreviewLoading(false);
+    if (searchParams.get('decisionSpace') !== '1') return;
+    const next = new URLSearchParams(searchParams);
+    clearDecisionSpaceSearchParams(next);
+    setSearchParams(next, { replace: true });
+  }, [activeTab, decisionSpaceOpen, searchParams, setSearchParams]);
 
   const handleNavigateToScheduleFromFeasibility = (detail: PlanStudioScheduleNavigateDetail) => {
     let highlightItemIds = detail.highlightItemIds;
@@ -678,19 +1721,6 @@ function PlanStudioPageContent() {
   const handleRelaxationDiscuss = useCallback(() => {
     openAssistant();
   }, [openAssistant]);
-
-  const handleCascadeDiscussWithAi = useCallback(
-    (hint: CascadeUiHint) => {
-      openAssistant();
-      const message = hint.message?.trim();
-      if (message) {
-        sendAssistantMessage(
-          `关于级联影响：${message}。请说明推荐的修复方式，以及会影响哪些天。`,
-        );
-      }
-    },
-    [openAssistant, sendAssistantMessage],
-  );
 
   useEffect(() => {
     if (assistantUrlHandledRef.current) return;
@@ -725,12 +1755,14 @@ function PlanStudioPageContent() {
     switch (type) {
       case 'open_plan_gate':
         solutionMatrix.setExpanded(true);
-        planStudio.openPlanGate();
+        openPlanGateFromWorkbench();
         break;
       case 'open_budget':
         handleTabChange('budget');
         break;
       case 'open_conflicts':
+        openWorkbenchPlanningActions();
+        break;
       case 'open_feasibility':
         openFeasibilitySheet();
         break;
@@ -788,6 +1820,168 @@ function PlanStudioPageContent() {
     setDecisionCheckerTab('evidence');
   }, []);
 
+  useEffect(() => {
+    if (!readyTripId) return;
+    setWorkbenchMobileColumn(
+      planningConflicts.summary.mustHandle > 0 ? 'summary' : 'itinerary',
+    );
+  }, [readyTripId]);
+
+  useEffect(() => {
+    if (activeTab !== 'schedule' || !readyTripId) return;
+    trackWorkbenchScheduleImpression({
+      tripId: readyTripId,
+      viewport: isWorkbenchDesktop ? 'desktop' : 'mobile',
+    });
+  }, [activeTab, readyTripId, isWorkbenchDesktop]);
+
+  const workbenchTopVisibleConflict = useMemo(
+    () => resolveTopPlanningConflictBanner(workbenchConflictDismiss.visibleItems),
+    [workbenchConflictDismiss.visibleItems],
+  );
+  const workbenchConclusionGateStatus = useMemo(
+    () =>
+      workbenchTopVisibleConflict
+        ? resolvePlanningConflictGateStatus(workbenchTopVisibleConflict)
+        : null,
+    [workbenchTopVisibleConflict],
+  );
+  const workbenchConclusionFocusDayIndex = useMemo(() => {
+    const days = workbenchTopVisibleConflict?.affectedDays;
+    if (days?.length) return Math.max(0, days[0] - 1);
+    return selectedScheduleDayIndex;
+  }, [workbenchTopVisibleConflict, selectedScheduleDayIndex]);
+  const workbenchItineraryDayBadgeCount = useMemo(() => {
+    const set = new Set<number>();
+    for (const item of workbenchConflictDismiss.visibleItems) {
+      const days = item.affectedDays ?? item.issue?.affectedDays;
+      days?.forEach((day) => set.add(day - 1));
+    }
+    return set.size;
+  }, [workbenchConflictDismiss.visibleItems]);
+  const canDeferWorkbenchDayConflicts = useMemo(
+    () =>
+      workbenchConflictDismiss.canDeferDay(
+        selectedScheduleDayIndex,
+        workbenchConflictDismiss.visibleItems,
+      ),
+    [workbenchConflictDismiss, selectedScheduleDayIndex],
+  );
+
+  const handleWorkbenchScheduleDayChange = useCallback(
+    (dayIndex: number) => {
+      setSelectedScheduleDayIndex(dayIndex);
+      setSelectedTimelineEntryId(null);
+      if (!isWorkbenchDesktop && !decisionSpaceOpen) {
+        setWorkbenchMobileColumn('itinerary');
+      }
+    },
+    [isWorkbenchDesktop, decisionSpaceOpen],
+  );
+
+  const handleOpenScheduleEditor = useCallback((dayIndex?: number) => {
+    setScheduleSheetFocusDayIndex(dayIndex);
+    setScheduleSheetOpen(true);
+  }, []);
+
+  const handleScheduleSheetOpenChange = useCallback((open: boolean) => {
+    setScheduleSheetOpen(open);
+    if (!open) {
+      setScheduleSheetFocusDayIndex(undefined);
+    }
+  }, []);
+
+  const handleWorkbenchItineraryChanged = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    if (tripId) {
+      tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
+    }
+  }, [tripId]);
+
+  const navigateToWorkbenchJourneyMap = useCallback(
+    (dayIndex?: number) => {
+      if (!tripId) {
+        navigate('/dashboard/journey-map');
+        return;
+      }
+      const day = (dayIndex ?? selectedScheduleDayIndex) + 1;
+      navigate(`/dashboard/journey-map?tripId=${tripId}&day=${day}`);
+    },
+    [navigate, selectedScheduleDayIndex, tripId],
+  );
+
+  const handleViewTimelineEntryImpact = useCallback(
+    (_entryId: string, dayIndex: number) => {
+      setSelectedScheduleDayIndex(dayIndex);
+      setDecisionCheckerTab('impact');
+      if (!isWorkbenchDesktop) {
+        setWorkbenchMobileColumn('decision');
+      }
+    },
+    [isWorkbenchDesktop],
+  );
+
+  const handleWorkbenchMobileColumnChange = useCallback(
+    (column: WorkbenchMobileColumn) => {
+      setWorkbenchMobileColumn(column);
+      if (readyTripId) {
+        trackWorkbenchMobileColumnChange({ tripId: readyTripId, column, source: 'nav' });
+      }
+    },
+    [readyTripId],
+  );
+
+  const handleWorkbenchConclusionPrimaryCta = useCallback(() => {
+    if (!isWorkbenchDesktop && readyTripId) {
+      setWorkbenchMobileColumn('decision');
+      trackWorkbenchMobileColumnChange({
+        tripId: readyTripId,
+        column: 'decision',
+        source: 'conclusion_cta',
+      });
+    }
+    handleDecisionStripPrimaryCta(
+      decisionStrip.primaryCta?.type ?? 'open_feasibility',
+    );
+  }, [
+    isWorkbenchDesktop,
+    readyTripId,
+    decisionStrip.primaryCta?.type,
+  ]);
+
+  const handleWorkbenchConclusionFocusDay = useCallback(
+    (dayIndex: number) => {
+      setSelectedScheduleDayIndex(dayIndex);
+      if (!isWorkbenchDesktop) {
+        setWorkbenchMobileColumn('itinerary');
+        if (readyTripId) {
+          trackWorkbenchMobileColumnChange({
+            tripId: readyTripId,
+            column: 'itinerary',
+            source: 'conclusion_focus_day',
+          });
+        }
+      }
+    },
+    [isWorkbenchDesktop, readyTripId],
+  );
+
+  useEffect(() => {
+    if (isWorkbenchDesktop || activeTab !== 'schedule' || !readyTripId || decisionSpaceOpen) return;
+    trackWorkbenchConclusionStripView({
+      tripId: readyTripId,
+      gateStatus: workbenchConclusionGateStatus,
+      mustHandleCount: workbenchVisibleConflicts.summary.mustHandle,
+    });
+  }, [
+    isWorkbenchDesktop,
+    activeTab,
+    readyTripId,
+    decisionSpaceOpen,
+    workbenchConclusionGateStatus,
+    workbenchVisibleConflicts.summary.mustHandle,
+  ]);
+
   const handleOpenSplitPlanTab = useCallback(() => {
     setDecisionCheckerTab(workbenchSplitPlan ? 'split' : 'counterfactual');
     decisionCockpitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -844,17 +2038,6 @@ function PlanStudioPageContent() {
     [openAssistant, sendAssistantMessage],
   );
 
-  const maybePromptResumePlanGate = useCallback(() => {
-    if (!resumePlanGateAfterConstraintsRef.current) {
-      return;
-    }
-    resumePlanGateAfterConstraintsRef.current = false;
-    planStudio.openPlanGate({ autoGenerate: true });
-    toast.success('约束已更新', {
-      description: '正在重新评估方案，合规规则将一并刷新',
-    });
-  }, [planStudio]);
-
   const handleDailyDriveHoursSaved = useCallback((hours: number) => {
     setCurrentTrip((prev) => {
       if (!prev) return prev;
@@ -875,111 +2058,280 @@ function PlanStudioPageContent() {
     });
   }, []);
 
-  const handleConstraintSaved = useCallback(async () => {
-    if (tripId) {
-      await invalidateWorkbenchAfterConstraintChange(queryClient, tripId, {
-        skipConstraintsList: true,
-      });
-      void tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
-    }
-    void decisionCheckerModel.reload();
-    maybePromptResumePlanGate();
-  }, [tripId, queryClient, decisionCheckerModel, maybePromptResumePlanGate]);
-
   const openConstraintConsole = useCallback(
-    (constraintId?: string) => {
-      const uiId = constraintId ? apiConstraintIdToUi(constraintId) : 'daily_drive';
+    (constraintId?: string, source = 'workbench') => {
+      if (planStudio.planGateOpen) {
+        planStudio.closePlanGate();
+        if (tripId) {
+          trackPlanGateConstraintMutex({
+            tripId,
+            action: 'plan_gate_closed_for_constraint',
+          });
+        }
+      }
+      if (decisionSpaceOpen) {
+        setDecisionSpaceOpen(false);
+        setActiveDecisionProblemId(null);
+        setDecisionSpaceActionPreview(null);
+      setDecisionSpaceActionPreviewLoading(false);
+        if (tripId) {
+          trackPlanGateConstraintMutex({
+            tripId,
+            action: 'decision_space_closed_for_constraint',
+          });
+        }
+      }
+      const uiId = constraintId
+        ? constraintId === TRAVEL_GOALS_SECTION_ID || selectionIdToSectionKey(constraintId)
+          ? constraintId
+          : apiConstraintIdToUi(constraintId)
+        : TRAVEL_GOALS_SECTION_ID;
       setSelectedConstraintId(uiId);
       setConstraintConsoleOpen(true);
+      constraintDrawerOpenedAtRef.current = Date.now();
+      constraintDrawerHadSaveRef.current = false;
+      if (tripId) {
+        trackConstraintDrawerOpen({
+          tripId,
+          constraintId: uiId,
+          source,
+          dayIndex: selectedScheduleDayIndex,
+        });
+      }
       const next = new URLSearchParams(searchParams);
       next.set('tab', 'schedule');
       next.set('view', 'constraints');
+      clearDecisionSpaceSearchParams(next);
       if (constraintId) next.set('constraintId', uiId);
       else next.delete('constraintId');
       setSearchParams(next, { replace: true });
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams, tripId, selectedScheduleDayIndex, planStudio, decisionSpaceOpen],
   );
 
-  const closeConstraintConsole = useCallback(() => {
-    setConstraintConsoleOpen(false);
-    const next = new URLSearchParams(searchParams);
-    next.delete('view');
-    next.delete('constraintId');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  const handleAddConstraint = useCallback(() => {
-    setShowAddConstraintDialog(true);
-  }, []);
-
-  const handleEditConstraintItem = useCallback((constraintId: string) => {
-    setItemEditConstraintId(constraintId);
-  }, []);
-
-  const handleSelectConstraintTemplate = useCallback(
-    (constraintId: string, template: ConstraintTemplate) => {
-      if (template.kind === 'soft' && tripId) {
-        void (async () => {
-          try {
-            const ctx = serviceContextFromApiList(constraintsApiList);
-            const before = resolveSoftPreferences(tripId, ctx);
-            const after = await addSoftConstraintFromTemplate(tripId, constraintId, ctx);
-            if (after.length > before.length) {
-              setSoftPrefsRevision((r) => r + 1);
-              toast.success(`已添加软偏好「${template.label}」`);
-            }
-          } catch (err) {
-            handleConstraintApiError(err);
-          }
-        })();
+  const closeConstraintConsole = useCallback(
+    (options?: { saved?: boolean }) => {
+      const hadSaveDuringSession = constraintDrawerHadSaveRef.current;
+      if (tripId && constraintDrawerOpenedAtRef.current != null) {
+        trackConstraintDrawerClose({
+          tripId,
+          constraintId: selectedConstraintId,
+          saved: options?.saved ?? hadSaveDuringSession,
+          hadSaveDuringSession,
+          durationMs: Date.now() - constraintDrawerOpenedAtRef.current,
+        });
       }
+      constraintDrawerOpenedAtRef.current = null;
+      constraintDrawerHadSaveRef.current = false;
+      setConstraintDrawerDirty(false);
+      setConstraintPendingSaveCount(0);
+      setConstraintConsoleOpen(false);
+      const next = new URLSearchParams(searchParams);
+      next.delete('view');
+      next.delete('constraintId');
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams, tripId, selectedConstraintId],
+  );
 
-      if (constraintConsoleOpen) {
-        setSelectedConstraintId(constraintId);
-        setOpenEditorForConstraintId(constraintId);
-        const next = new URLSearchParams(searchParams);
-        next.set('constraintId', constraintId);
-        setSearchParams(next, { replace: true });
+  const requestCloseConstraintConsole = useCallback(() => {
+    const hasUnsavedEdits =
+      constraintPendingSaveCount > 0 || constraintDrawerDirty;
+    if (hasUnsavedEdits) {
+      setDiscardConstraintDraftOpen(true);
+      return;
+    }
+    if (constraintEvalPendingRef.current) {
+      setConstraintEvalCloseConfirmOpen(true);
+      return;
+    }
+    closeConstraintConsole();
+  }, [constraintPendingSaveCount, constraintDrawerDirty, closeConstraintConsole]);
+
+  const handleConstraintDrawerOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        setConstraintConsoleOpen(true);
+        if (constraintDrawerOpenedAtRef.current == null) {
+          constraintDrawerOpenedAtRef.current = Date.now();
+        }
         return;
       }
-      handleEditConstraintItem(constraintId);
+      requestCloseConstraintConsole();
+    },
+    [requestCloseConstraintConsole],
+  );
+
+  const handleConfirmDiscardConstraintDraft = useCallback(() => {
+    if (tripId) {
+      trackConstraintDrawerUnsavedPrompt({ tripId, action: 'confirm' });
+    }
+    setDiscardConstraintDraftOpen(false);
+    constraintWorkbenchRef.current?.discardPendingSaves();
+    closeConstraintConsole();
+    const pendingPlanGate = pendingPlanGateOptionsRef.current;
+    pendingPlanGateOptionsRef.current = null;
+    if (pendingPlanGate) {
+      if (decisionSpaceOpen) {
+        closeDecisionSpace();
+      }
+      planStudio.openPlanGate(pendingPlanGate);
+    }
+  }, [tripId, closeConstraintConsole, decisionSpaceOpen, closeDecisionSpace, planStudio]);
+
+  const handleCancelDiscardConstraintDraft = useCallback(() => {
+    if (tripId) {
+      trackConstraintDrawerUnsavedPrompt({ tripId, action: 'cancel' });
+    }
+    pendingPlanGateOptionsRef.current = null;
+    setDiscardConstraintDraftOpen(false);
+  }, [tripId]);
+
+  const openPlanGateFromWorkbench = useCallback(
+    (options?: { autoGenerate?: boolean }) => {
+      if (constraintConsoleOpen) {
+        if (constraintPendingSaveCount > 0 || constraintDrawerDirty) {
+          pendingPlanGateOptionsRef.current = options ?? {};
+          setDiscardConstraintDraftOpen(true);
+          return;
+        }
+        closeConstraintConsole({ saved: constraintDrawerHadSaveRef.current });
+        if (tripId) {
+          trackPlanGateConstraintMutex({
+            tripId,
+            action: 'constraint_closed_for_plan_gate',
+          });
+        }
+      }
+      if (decisionSpaceOpen) {
+        closeDecisionSpace();
+      }
+      planStudio.openPlanGate(options);
     },
     [
       constraintConsoleOpen,
-      handleEditConstraintItem,
-      searchParams,
-      setSearchParams,
+      constraintPendingSaveCount,
+      constraintDrawerDirty,
+      closeConstraintConsole,
+      decisionSpaceOpen,
+      closeDecisionSpace,
+      planStudio,
       tripId,
-      constraintsApiList,
     ],
   );
 
-  const handleAddCustomSoft = useCallback(
-    (label: string) => {
-      if (!tripId) return;
-      void (async () => {
-        try {
-          const ctx = serviceContextFromApiList(constraintsApiList);
-          const after = await addCustomSoftConstraint(tripId, label, ctx);
-          setSoftPrefsRevision((r) => r + 1);
-          const added = after[after.length - 1];
-          toast.success(`已添加自定义软偏好「${label}」`);
-          if (added) {
-            if (constraintConsoleOpen) {
-              setSelectedConstraintId(added.id);
-              setOpenEditorForConstraintId(added.id);
-            } else {
-              handleEditConstraintItem(added.id);
-            }
-          }
-        } catch (err) {
-          handleConstraintApiError(err);
-        }
-      })();
-    },
-    [tripId, constraintConsoleOpen, handleEditConstraintItem, constraintsApiList],
-  );
+  const maybePromptResumePlanGate = useCallback(() => {
+    if (!resumePlanGateAfterConstraintsRef.current) {
+      return;
+    }
+    resumePlanGateAfterConstraintsRef.current = false;
+    openPlanGateFromWorkbench({ autoGenerate: true });
+    toast.success('约束已更新', {
+      description: '正在重新评估方案，合规规则将一并刷新',
+    });
+  }, [openPlanGateFromWorkbench]);
+
+  const handleConstraintSavedExtra = useCallback(async () => {
+    if (tripId) {
+      void tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
+    }
+    void decisionCheckerModel.reload();
+    maybePromptResumePlanGate();
+  }, [tripId, decisionCheckerModel, maybePromptResumePlanGate]);
+
+  const handleWorkbenchModeBack = useCallback(() => {
+    const mode = resolveWorkbenchMode({
+      decisionSpaceOpen,
+      constraintConsoleOpen,
+      attractionExploreOpen,
+      arrangeItineraryOpen,
+    });
+    if (mode === 'browse' || !tripId) return;
+    trackWorkbenchModeBackClick({
+      tripId,
+      mode,
+      hadUnsavedDraft: mode === 'constraint_edit' ? constraintDrawerDirty : false,
+    });
+    if (decisionSpaceOpen) {
+      closeDecisionSpace();
+      return;
+    }
+    if (attractionExploreOpen) {
+      closeAttractionExplore();
+      return;
+    }
+    if (arrangeItineraryOpen) {
+      closeArrangeItinerary();
+      return;
+    }
+    if (constraintConsoleOpen) {
+      requestCloseConstraintConsole();
+    }
+  }, [
+    tripId,
+    decisionSpaceOpen,
+    attractionExploreOpen,
+    arrangeItineraryOpen,
+    constraintConsoleOpen,
+    constraintDrawerDirty,
+    closeDecisionSpace,
+    closeAttractionExplore,
+    closeArrangeItinerary,
+    requestCloseConstraintConsole,
+  ]);
+
+  useEffect(() => {
+    if (activeTab !== 'schedule') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (discardConstraintDraftOpen || planStudio.planGateOpen) return;
+      if (decisionSpaceOpen) {
+        event.preventDefault();
+        closeDecisionSpace();
+        return;
+      }
+      if (arrangeItineraryOpen) {
+        event.preventDefault();
+        closeArrangeItinerary();
+        return;
+      }
+      if (attractionExploreOpen) {
+        event.preventDefault();
+        closeAttractionExplore();
+        return;
+      }
+      if (constraintConsoleOpen) {
+        event.preventDefault();
+        requestCloseConstraintConsole();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    activeTab,
+    discardConstraintDraftOpen,
+    planStudio.planGateOpen,
+    decisionSpaceOpen,
+    arrangeItineraryOpen,
+    attractionExploreOpen,
+    constraintConsoleOpen,
+    closeDecisionSpace,
+    closeArrangeItinerary,
+    closeAttractionExplore,
+    requestCloseConstraintConsole,
+  ]);
 
   const handleConstraintNaturalLanguage = useCallback(
     (text: string) => {
@@ -991,26 +2343,6 @@ function PlanStudioPageContent() {
     },
     [constraintConsoleOpen, openConstraintConsole, sendAssistantMessage, openAssistant],
   );
-
-  const activeSoftIds = useMemo(() => {
-    if (!tripId) return [];
-    const ctx = serviceContextFromApiList(constraintsApiList);
-    return resolveSoftPreferences(tripId, ctx).map((p) => p.id);
-  }, [tripId, softPrefsRevision, constraintsApiList]);
-
-  const configuredHardIds = useMemo(() => {
-    const ids: string[] = [];
-    if (constraintsSummary.summary) {
-      ids.push('time_range', 'budget', 'accommodation', 'must_go');
-      if (isSelfDrivePlanningTrip(currentTrip)) {
-        ids.push('daily_drive', 'road_restrictions');
-      }
-    }
-    if (constraintsApiList?.items.some((item) => item.id === 'c_max_segment_distance')) {
-      ids.push('max_segment_distance');
-    }
-    return ids;
-  }, [constraintsSummary.summary, currentTrip, constraintsApiList?.items]);
 
   const openConstraintEditor = useCallback(
     (key: ConstraintPendingKey, item?: ConstraintPendingItem) => {
@@ -1034,6 +2366,94 @@ function PlanStudioPageContent() {
     [openFeasibilitySheet, handleTabChange],
   );
 
+  useEffect(() => {
+    constraintConsoleOpenRef.current = constraintConsoleOpen;
+  }, [constraintConsoleOpen]);
+
+  const constraintMutations = useConstraintMutations({
+    tripId: tripId ?? '',
+    trip: currentTrip,
+    summary: constraintsSummary.summary,
+    constraintsApiList,
+    budgetProfile: budgetProfileQuery.data ?? null,
+    constraintConsoleOpen,
+    onAfterConstraintEvalCommit: handleConstraintSavedExtra,
+    onDailyDriveHoursSaved: handleDailyDriveHoursSaved,
+    onLegacyEditor: openConstraintEditor,
+    onNaturalLanguageSubmit: handleConstraintNaturalLanguage,
+    onOpenEditorAfterCreate: useCallback(
+      (editorId: string) => {
+        if (!constraintConsoleOpenRef.current) return false;
+        setSelectedConstraintId(editorId);
+        setOpenEditorForConstraintId(editorId);
+        const next = new URLSearchParams(searchParams);
+        next.set('constraintId', editorId);
+        setSearchParams(next, { replace: true });
+        return true;
+      },
+      [searchParams, setSearchParams],
+    ),
+  });
+
+  const handleAddConstraint = constraintMutations.openAddDialog;
+  const handleEditConstraintItem = constraintMutations.openEditItem;
+  const handleConstraintSaved = constraintMutations.handleConstraintSaved;
+  const handleSoftPrefsChanged = constraintMutations.handleSoftPrefsChanged;
+  const constraintEditSession = constraintMutations.constraintEditSession;
+
+  useEffect(() => {
+    constraintEvalPendingRef.current = constraintEditSession.evalPending;
+  }, [constraintEditSession.evalPending]);
+
+  const handleCommitConstraintEval = useCallback(async () => {
+    const hadPending = (constraintWorkbenchRef.current?.pendingSaveCount ?? 0) > 0;
+    const saved = await constraintWorkbenchRef.current?.commitPendingSaves();
+    if (saved === false) return;
+    await constraintEditSession.commitEval();
+    if (hadPending || constraintEvalPendingRef.current) {
+      toast.success('旅行条件已更新，并完成重新检查');
+    }
+  }, [constraintEditSession]);
+
+  const handleSaveAndCloseConstraintConsole = useCallback(() => {
+    setDiscardConstraintDraftOpen(false);
+    void (async () => {
+      const saved = await constraintWorkbenchRef.current?.commitPendingSaves();
+      if (saved === false) return;
+      await constraintEditSession.commitEval();
+      closeConstraintConsole({ saved: true });
+      maybePromptResumePlanGate();
+    })();
+  }, [closeConstraintConsole, constraintEditSession, maybePromptResumePlanGate]);
+
+  const handleConfirmEvalAndCloseConstraintConsole = useCallback(() => {
+    setConstraintEvalCloseConfirmOpen(false);
+    void constraintEditSession.commitEval().then(() => {
+      closeConstraintConsole({ saved: true });
+    });
+  }, [closeConstraintConsole, constraintEditSession]);
+
+  const handleCloseConstraintConsoleWithoutEval = useCallback(() => {
+    setConstraintEvalCloseConfirmOpen(false);
+    constraintEditSession.dismissPendingEval();
+    closeConstraintConsole({ saved: constraintDrawerHadSaveRef.current });
+  }, [closeConstraintConsole, constraintEditSession]);
+
+  const handleConfirmDiscardConstraintDraftWithEval = useCallback(() => {
+    constraintEditSession.dismissPendingEval();
+    handleConfirmDiscardConstraintDraft();
+  }, [constraintEditSession, handleConfirmDiscardConstraintDraft]);
+
+  const handleConstraintDrawerSaved = useCallback(() => {
+    constraintDrawerHadSaveRef.current = true;
+    if (tripId && constraintConsoleOpenRef.current) {
+      trackConstraintDrawerSave({
+        tripId,
+        constraintId: selectedConstraintId,
+      });
+    }
+    handleConstraintSaved();
+  }, [tripId, selectedConstraintId, handleConstraintSaved]);
 
   const handleConfirmConstraints = () => {
     if (!user?.id) {
@@ -1067,6 +2487,7 @@ function PlanStudioPageContent() {
 
       const dayIndex = resolveScheduleDayIndex(detail);
       if (typeof dayIndex === 'number' && dayIndex >= 0) {
+        setSelectedScheduleDayIndex(dayIndex);
         window.setTimeout(() => {
           window.dispatchEvent(
             new CustomEvent('plan-studio:scroll-schedule-day', {
@@ -1195,12 +2616,12 @@ function PlanStudioPageContent() {
     const onOpenStructuredNegotiation = (event: Event) => {
       const detail = (event as CustomEvent<{ tripId?: string }>).detail;
       if (!tripId || detail?.tripId !== tripId) return;
-      navigateToCollabTab('decisions');
+      openDecisionSpaceNegotiation();
     };
     window.addEventListener('plan-studio:open-structured-negotiation', onOpenStructuredNegotiation);
     return () =>
       window.removeEventListener('plan-studio:open-structured-negotiation', onOpenStructuredNegotiation);
-  }, [tripId, navigateToCollabTab]);
+  }, [tripId, openDecisionSpaceNegotiation]);
 
   const decisionProfilingStepParam = searchParams.get('decisionProfilingStep');
   const openDecisionProfilingParam = searchParams.get('openDecisionProfiling') === '1';
@@ -1262,8 +2683,8 @@ function PlanStudioPageContent() {
     next.delete('generate');
     setSearchParams(next, { replace: true });
     setActiveTab('schedule');
-    planStudio.openPlanGate({ autoGenerate });
-  }, [tripId, tripExists, searchParams, setSearchParams, planStudio]);
+    openPlanGateFromWorkbench({ autoGenerate });
+  }, [tripId, tripExists, searchParams, setSearchParams, openPlanGateFromWorkbench]);
 
   useEffect(() => {
     constraintViewUrlHandledRef.current = false;
@@ -1274,11 +2695,31 @@ function PlanStudioPageContent() {
     if (searchParams.get('view') !== 'constraints') return;
     constraintViewUrlHandledRef.current = true;
     const rawId = searchParams.get('constraintId') ?? undefined;
-    const id = rawId ? apiConstraintIdToUi(rawId) : undefined;
-    setSelectedConstraintId(id ?? 'daily_drive');
+    const id =
+      rawId === TRAVEL_GOALS_SECTION_ID || selectionIdToSectionKey(rawId ?? null)
+        ? rawId!
+        : rawId
+          ? apiConstraintIdToUi(rawId)
+          : undefined;
+    setSelectedConstraintId(id ?? TRAVEL_GOALS_SECTION_ID);
     setConstraintConsoleOpen(true);
+    constraintDrawerOpenedAtRef.current = Date.now();
+    constraintDrawerHadSaveRef.current = false;
+    if (planStudio.planGateOpen) {
+      planStudio.closePlanGate();
+      trackPlanGateConstraintMutex({
+        tripId: readyTripId,
+        action: 'plan_gate_closed_for_constraint',
+      });
+    }
+    trackConstraintDrawerOpen({
+      tripId: readyTripId,
+      constraintId: id ?? TRAVEL_GOALS_SECTION_ID,
+      source: 'deeplink',
+      dayIndex: selectedScheduleDayIndex,
+    });
     setActiveTab('schedule');
-  }, [readyTripId, searchParams]);
+  }, [readyTripId, searchParams, selectedScheduleDayIndex, planStudio]);
 
   useEffect(() => {
     if (!showDecisionCockpitDeepLink || !decisionCockpit || !decisionCockpitRef.current) return;
@@ -1334,11 +2775,15 @@ function PlanStudioPageContent() {
 
   // 检查行程数据和验证tripId是否有效
   useEffect(() => {
+    const needsFullPageGate = tripGateCheckedIdRef.current !== tripId;
+
     const checkTripsAndTripId = async () => {
       try {
-        setLoading(true);
-        setTripExists(false);
-        setCurrentTrip(null);
+        if (needsFullPageGate) {
+          setLoading(true);
+          setTripExists(false);
+          setCurrentTrip(null);
+        }
 
         if (tripId) {
           // 有 tripId 时并行拉列表与当前行程，避免 getAll → getById 串行阻塞首屏
@@ -1369,16 +2814,20 @@ function PlanStudioPageContent() {
             } else {
               console.warn('Trip is not in PLANNING status:', tripId, trip.status);
               setTripExists(false);
-              const newParams = new URLSearchParams(searchParams);
-              newParams.delete('tripId');
-              setSearchParams(newParams);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('tripId');
+                return next;
+              });
             }
           } else {
             console.warn('Trip not found or deleted:', tripId);
             setTripExists(false);
-            const newParams = new URLSearchParams(searchParams);
-            newParams.delete('tripId');
-            setSearchParams(newParams);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete('tripId');
+              return next;
+            });
           }
           return;
         }
@@ -1400,12 +2849,15 @@ function PlanStudioPageContent() {
         setTripExists(false);
         setShowWelcomeModal(true);
       } finally {
-        setLoading(false);
+        if (needsFullPageGate) {
+          setLoading(false);
+          tripGateCheckedIdRef.current = tripId ?? null;
+        }
       }
     };
 
     void checkTripsAndTripId();
-  }, [tripId, searchParams, setSearchParams]);
+  }, [tripId, setSearchParams]);
 
   // 获取行程 Pipeline 状态
   const loadPipelineStatus = async () => {
@@ -1624,6 +3076,72 @@ function PlanStudioPageContent() {
     navigate('/dashboard/trips/new?experience=' + experienceType);
   };
 
+  const workbenchMode = resolveWorkbenchMode({
+    decisionSpaceOpen,
+    constraintConsoleOpen,
+    attractionExploreOpen,
+    arrangeItineraryOpen,
+  });
+
+  useEffect(() => {
+    if (!tripId) return;
+    const prev = prevWorkbenchModeRef.current;
+    const next = workbenchMode;
+    prevWorkbenchModeRef.current = next;
+    if (prev === next) return;
+
+    if (next !== 'browse') {
+      workbenchModeEnteredAtRef.current = { mode: next, at: Date.now() };
+      trackWorkbenchModeEnter({ tripId, mode: next });
+    }
+
+    if (prev !== 'browse') {
+      const entered = workbenchModeEnteredAtRef.current;
+      if (entered?.mode === prev) {
+        trackWorkbenchModeExit({
+          tripId,
+          mode: prev,
+          durationMs: Date.now() - entered.at,
+          completed: next === 'browse',
+        });
+      }
+    }
+  }, [tripId, workbenchMode]);
+
+  const decisionResolutionPhase = useMemo(() => {
+    if (!decisionSpaceOpen) return null;
+    const detail = decisionSpaceBffContent.detail as GatewayDecisionProblemDetailResult | null;
+    return resolveDecisionResolutionCtaPhase(detail);
+  }, [decisionSpaceOpen, decisionSpaceBffContent.detail]);
+
+  const constraintScheduleConflictHint = useMemo(() => {
+    if (!constraintConsoleOpen) return null;
+    const day = selectedScheduleDayIndex + 1;
+    const focusConflict =
+      workbenchScheduleFocus?.dayConflicts?.[0]?.title ??
+      workbenchScheduleFocus?.conflict?.title ??
+      decisionSpaceActiveConflict?.title;
+    if (focusConflict) return `第 ${day} 天 · ${focusConflict}`;
+    return scheduleDaySubtitle;
+  }, [
+    constraintConsoleOpen,
+    selectedScheduleDayIndex,
+    workbenchScheduleFocus,
+    decisionSpaceActiveConflict?.title,
+    scheduleDaySubtitle,
+  ]);
+
+  const workbenchModeBarModel = buildWorkbenchModeBarViewModel({
+    mode: workbenchMode,
+    fromTravelOverview: searchParams.get('from') === 'travel',
+    conflict: decisionSpaceActiveConflict,
+    problem: decisionSpaceActiveProblem,
+    scheduleDayIndex: selectedScheduleDayIndex,
+    constraintLabel: resolveConstraintUiLabel(selectedConstraintId),
+    decisionResolutionPhase,
+    hasUnsavedConstraintDraft: constraintDrawerDirty || constraintPendingSaveCount > 0,
+  });
+
   // 加载中状态（使用 Logo 加载动画，符合 TripNARA 品牌与决策感）
   if (loading) {
     return (
@@ -1696,7 +3214,8 @@ function PlanStudioPageContent() {
     trip: currentTrip,
     onEditConstraint: openConstraintEditor,
     onConfirm: handleConfirmConstraints,
-    onOpenConflicts: () => openFeasibilitySheet(),
+    onOpenConflicts: openWorkbenchPlanningActions,
+    planningActionsLabel: `${workbenchPlanningActionLabel} →`,
     planningInboxCount: planningConflicts.inbox.inboxCount,
     deferToPlanningInbox: planningConflicts.inbox.inboxCount > 0,
   };
@@ -1706,6 +3225,7 @@ function PlanStudioPageContent() {
     model: decisionStrip,
     hasGuards: Boolean(worldModelGuards),
     onPrimaryCta: handleDecisionStripPrimaryCta,
+    onOpenPlanningInbox: openWorkbenchPlanningActions,
     onOpenEvidence: drawer ? handleDecisionStripOpenEvidence : undefined,
     onOpenCausalInsight: handleDecisionStripOpenCausalInsight,
     hasCausalInsight: Boolean(causalProjection),
@@ -1737,6 +3257,7 @@ function PlanStudioPageContent() {
       lastSavedAt={currentTrip?.updatedAt ?? currentTrip?.createdAt}
       feasibilityScore={workbenchFeasibility.score}
       feasibilityLoading={workbenchFeasibility.loading}
+      travelAssurance={workbenchFeasibility.assurance}
       onFeasibilityClick={() => openFeasibilitySheet()}
       onPipelineClick={() => setShowStatusDialog(true)}
       isPipelineLoading={loadingStatus}
@@ -1760,6 +3281,26 @@ function PlanStudioPageContent() {
       onOpenAssistant={openAssistant}
       hideTabBar={isCollabCenterOpen}
     />
+  ) : null;
+
+  const scheduleWorkbenchHeader = workbenchHeader ? (
+    <>
+      {workbenchHeader}
+      {workbenchModeBarModel ? (
+        <WorkbenchModeIndicatorBar
+          model={workbenchModeBarModel}
+          onBack={handleWorkbenchModeBack}
+        />
+      ) : null}
+      {constraintEditSession.sessionUiActive && !constraintConsoleOpen ? (
+        <ConstraintEditSessionBar
+          pendingCount={constraintPendingSaveCount}
+          saveCount={constraintEditSession.saveCount}
+          evalPending={constraintEditSession.evalPending}
+          onCommitEval={() => void handleCommitConstraintEval()}
+        />
+      ) : null}
+    </>
   ) : null;
 
   return (
@@ -1790,106 +3331,260 @@ function PlanStudioPageContent() {
           className={cn('flex h-full min-h-0 flex-col', activeTab !== 'schedule' && 'hidden')}
           aria-hidden={activeTab !== 'schedule'}
         >
-        {constraintConsoleOpen ? (
-          <div className="flex h-full min-h-0 flex-col">
-            {workbenchHeader}
-            <ConstraintConsoleWorkbench
+        {arrangeItineraryOpen ? (
+          <>
+            {scheduleWorkbenchHeader}
+            <PlanningWorkbenchArrangeItinerary
+              className="min-h-0 flex-1"
               tripId={tripId}
-              summary={constraintsSummary.summary}
               trip={currentTrip}
-              conflicts={planningConflicts}
-              feasibilityScore={workbenchFeasibility.score}
-              selectedId={selectedConstraintId}
-              onSelectedIdChange={setSelectedConstraintId}
-              onBack={closeConstraintConsole}
-              onOpenLegacyEditor={openConstraintEditor}
-              onAddConstraint={handleAddConstraint}
-              openEditorForId={openEditorForConstraintId}
-              onOpenEditorConsumed={() => setOpenEditorForConstraintId(null)}
-              onSaved={handleConstraintSaved}
-              onDailyDriveHoursSaved={handleDailyDriveHoursSaved}
-              onSoftPrefsChanged={handleSoftPrefsChanged}
-              softPrefsRevision={softPrefsRevision}
-              constraintsApiList={constraintsApiList}
-              budgetProfile={budgetProfileQuery.data ?? null}
-              onOpenFeasibilityReport={() => openFeasibilitySheet()}
+              conflicts={workbenchVisibleConflicts.items}
+              refreshKey={refreshKey}
+              autoArrangeOnMount={searchParams.get('arrangeAutoArrange') === '1'}
+              onAutoArrangeIntentConsumed={consumeArrangeAutoArrangeIntent}
+              onViewMap={(dayIndex) =>
+                navigateToWorkbenchJourneyMap(dayIndex ?? selectedScheduleDayIndex)
+              }
+              onEditPreferences={handleOpenCollaborationCenter}
+              onItineraryChanged={handleWorkbenchItineraryChanged}
             />
-          </div>
+          </>
+        ) : attractionExploreOpen ? (
+          <>
+            {scheduleWorkbenchHeader}
+            <PlanningWorkbenchAttractionExplore
+              className="min-h-0 flex-1"
+              tripId={tripId}
+              onViewMap={() => navigateToWorkbenchJourneyMap(selectedScheduleDayIndex)}
+              onEditPreferences={handleOpenCollaborationCenter}
+              onOpenArrangeItinerary={openArrangeItinerary}
+            />
+          </>
         ) : (
+        <WorkbenchDecisionFocusProvider
+          conflicts={workbenchConflictDismiss.visibleItems}
+          decisionProblems={
+            decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
+          }
+          selectedDayIndex={selectedScheduleDayIndex}
+          scheduleDayTimelinePois={scheduleDayTimelinePois}
+          scheduleDayExtraTokens={scheduleDayExtraTokens}
+          onSelectDayIndex={setSelectedScheduleDayIndex}
+          onSelectTimelineEntryId={setSelectedTimelineEntryId}
+          onDecisionCheckerTab={setDecisionCheckerTab}
+          onFocusAttention={handleConstraintSidebarFocusAttention}
+          onScrollToDecision={() =>
+            decisionCockpitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+          }
+          onMobileColumn={handleWorkbenchMobileColumnChange}
+          onFocusConflictChange={setWorkbenchExplicitFocusConflict}
+          isDesktop={isWorkbenchDesktop}
+        >
         <PlanningWorkbenchLayout
-          header={workbenchHeader}
+          header={scheduleWorkbenchHeader}
+          conclusionStrip={
+            !isWorkbenchDesktop && !decisionSpaceOpen ? (
+              <WorkbenchConclusionStrip
+                gateStatus={workbenchConclusionGateStatus}
+                headline={workbenchTopVisibleConflict?.title ?? planningConflicts.verdictHeadline}
+                detail={workbenchTopVisibleConflict?.message}
+                affectedDayLabel={buildWorkbenchAffectedDayLabel(
+                  workbenchTopVisibleConflict?.affectedDays,
+                )}
+                pendingCount={workbenchVisibleConflicts.summary.mustHandle}
+                feasibilityScore={workbenchFeasibility.score}
+                primaryCtaLabel={
+                  decisionStrip.primaryCta?.labelOverride?.trim() ||
+                  workbenchPlanningActionLabel ||
+                  '查看修复方案'
+                }
+                onPrimaryCta={handleWorkbenchConclusionPrimaryCta}
+                focusDayIndex={workbenchConclusionFocusDayIndex}
+                onFocusDay={handleWorkbenchConclusionFocusDay}
+                onViewAnalysis={() => handleWorkbenchMobileColumnChange('decision')}
+              />
+            ) : null
+          }
+          mobileColumn={
+            !isWorkbenchDesktop && !decisionSpaceOpen ? workbenchMobileColumn : null
+          }
+          mobileColumnNav={
+            !isWorkbenchDesktop && !decisionSpaceOpen ? (
+              <WorkbenchMobileColumnNav
+                value={workbenchMobileColumn}
+                onChange={handleWorkbenchMobileColumnChange}
+                badges={{
+                  constraints: planningConflicts.summary.mustHandle,
+                  itinerary: workbenchItineraryDayBadgeCount,
+                  decision: useDecisionProblemsBff
+                    ? openDecisionProblemCount
+                    : planningConflicts.inbox.inboxCount,
+                }}
+              />
+            ) : null
+          }
+          mobileSummary={
+            !decisionSpaceOpen ? (
+              <PlanningWorkbenchItineraryPanel
+                tripId={tripId}
+                trip={currentTrip}
+                conflicts={workbenchVisibleConflicts}
+                showRouteSummary
+                refreshKey={refreshKey}
+                memberCount={constraintsSummary.summary?.travelers.count ?? 1}
+                splitBanner={workbenchSplitBanner}
+                daySplits={workbenchDaySplits}
+                collaborators={collaboratorsQuery.data}
+                splitPreviewPending={workbenchDaySplits.length > 0}
+                onOpenSplitPlan={handleOpenSplitPlanTab}
+                onOpenConflicts={openWorkbenchPlanningActions}
+                onOpenDecisionSpace={openDecisionSpace}
+                onAdjustSegmentDistance={() => handleEditConstraintItem('max_segment_distance')}
+                onViewFullMap={() => navigateToWorkbenchJourneyMap(selectedScheduleDayIndex)}
+                onOpenFullSchedule={handleOpenScheduleEditor}
+                onOpenAttractionExplore={openAttractionExplore}
+                onOpenArrangeItinerary={openArrangeItinerary}
+                onItineraryChanged={handleWorkbenchItineraryChanged}
+                decisionProblems={
+                  decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
+                }
+                selectedDay={selectedScheduleDayIndex}
+                onSelectedDayChange={handleWorkbenchScheduleDayChange}
+                panelDepth="summary"
+              />
+            ) : null
+          }
           constraints={
-            <div id="plan-studio-planning-constraints" className="scroll-mt-4">
+            <div
+              id="plan-studio-planning-constraints"
+              className={cn('scroll-mt-4', decisionSpaceOpen && 'flex h-full min-h-0 flex-col')}
+            >
               {decisionSpaceOpen ? (
-                <>
-                  <WorkbenchDecisionQueuePanel
+                <WorkbenchDecisionQueuePanel
+                  className="min-h-0 flex-1"
+                  tripId={tripId}
                     items={planningConflicts.items}
                     selectedConflictId={decisionSpaceConflictId}
                     onSelectConflict={(conflictId) => {
                       setDecisionSpaceConflictId(conflictId);
+                      const conflict = planningConflicts.items.find((item) => item.id === conflictId);
+                      const problem =
+                        conflict && !decisionProblemsInbox.useLegacy
+                          ? resolveDecisionProblemForConflict(
+                              conflict,
+                              decisionProblemsInbox.items ?? [],
+                            )
+                          : undefined;
+                      if (problem) {
+                        setActiveDecisionProblemId(problem.id);
+                      }
                       const next = new URLSearchParams(searchParams);
                       next.set('conflictId', conflictId);
+                      if (problem) next.set('problemId', problem.id);
+                      else next.delete('problemId');
                       setSearchParams(next, { replace: true });
                     }}
+                    decisionProblems={
+                      decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
+                    }
+                    useDecisionProblemsBff={!decisionProblemsInbox.useLegacy}
+                    decisionCenterOverview={decisionCenterOverview.overview}
+                    decisionCenterOverviewLoading={decisionCenterOverview.loading}
+                    activePacks={decisionCenterOverview.unifiedView?.activePacks}
+                    selectedProblemId={activeDecisionProblemId}
+                    onSelectProblem={selectDecisionProblemInSpace}
+                    onPrefetchProblem={prefetchDecisionProblemInSpace}
+                    onPrefetchConflict={prefetchDecisionProblemFromConflict}
+                    planningInboxCount={planningConflicts.inbox.inboxCount}
+                    onOpenFullPlanningInbox={openPlanningInbox}
+                    onViewDecision={openDecisionRecord}
+                    decisionProblemsOpenCount={decisionProblemsInbox.listMeta?.openCount}
+                    decisionProblemsListMeta={decisionProblemsInbox.listMeta}
+                    planningConflictsTotal={planningConflicts.summary.total}
+                    pendingProposalCount={workbenchPendingProposalCount}
+                    pendingProposalTitle={workbenchPendingProposalTitle}
+                    onOpenPendingProposal={
+                      workbenchPendingProposalCount > 0 ? openWorkbenchPendingProposal : undefined
+                    }
                   />
-                  <WorkbenchParticipantsPanel
-                    tripId={tripId}
-                    collaborators={collaboratorsQuery.data}
-                    onClick={() => setCollaboratorsDialogOpen(true)}
-                  />
-                </>
-              ) : null}
-              <PlanningWorkbenchConstraintsPanel
-                tripId={tripId}
-                constraints={constraintsCardProps}
-                trip={currentTrip}
-                conflictCount={planningConflicts.summary.mustHandle}
-                onAddConstraint={handleAddConstraint}
-                onViewAllConstraints={() => openConstraintConsole()}
-                onOpenConstraintConsole={openConstraintConsole}
-                onEditConstraintItem={handleEditConstraintItem}
-                softPrefsRevision={softPrefsRevision}
-                onSoftPrefsChanged={handleSoftPrefsChanged}
-                constraintsApiList={constraintsApiList}
-                budgetProfile={budgetProfileQuery.data ?? null}
-                onOpenFeasibilityReport={() => openFeasibilitySheet()}
-              />
+              ) : (
+                <PlanningWorkbenchConstraintsPanel
+                  tripId={tripId}
+                  constraints={constraintsCardProps}
+                  trip={currentTrip}
+                  conflictCount={planningConflicts.summary.mustHandle}
+                  onAddConstraint={handleAddConstraint}
+                  onViewAllConstraints={() => openConstraintConsole()}
+                  onOpenConstraintConsole={openConstraintConsole}
+                  onEditConstraintItem={handleEditConstraintItem}
+                  softPrefsRevision={constraintMutations.softPrefsRevision}
+                  onSoftPrefsChanged={handleSoftPrefsChanged}
+                  constraintsApiList={constraintsApiList}
+                  budgetProfile={budgetProfileQuery.data ?? null}
+                  onOpenFeasibilityReport={() => openFeasibilitySheet()}
+                  onOpenDecisionProblem={openDecisionProblem}
+                  onOpenPlanningInbox={openWorkbenchPlanningActions}
+                  focusMode={constraintSidebarFocusMode}
+                  onFocusAttention={handleConstraintSidebarFocusAttention}
+                  wishSummary={wishSummary}
+                  collaborators={collaboratorsQuery.data ?? null}
+                  onOpenCollaborationCenter={handleOpenCollaborationCenter}
+                  onOpenBudgetTab={() => handleTabChange('budget')}
+                />
+              )}
             </div>
           }
           itinerary={
             decisionSpaceOpen ? (
               <PlanningWorkbenchDecisionSpace
                 tripId={tripId}
-                conflict={
-                  planningConflicts.items.find((item) => item.id === decisionSpaceConflictId) ??
-                  planningConflicts.items.find((item) => item.priority === 'must_handle') ??
-                  planningConflicts.items[0] ??
-                  null
-                }
+                conflict={decisionSpaceActiveConflict}
                 conflicts={planningConflicts.items}
                 decisionChecker={decisionCheckerModel}
                 solutionMatrix={solutionMatrix}
-                personaAlerts={decisionStrip.personaAlerts}
                 memberCount={constraintsSummary.summary?.travelers.count ?? 1}
+                collaboratorCount={collaboratorsQuery.data?.length ?? 0}
                 onBack={closeDecisionSpace}
+                backLabel={
+                  searchParams.get('from') === 'travel' ? '返回概览' : '返回行程分析'
+                }
+                onOpenTravelStatus={
+                  tripId && searchParams.get('from') === 'travel'
+                    ? () => navigate(buildTripTravelStatusPath(tripId))
+                    : undefined
+                }
                 onSelectOption={() => {
                   decisionCockpitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }}
-                onInitiateNegotiation={() => navigateToCollabTab('decisions')}
-                onInitiateVote={() => navigateToCollabTab('decisions')}
-                onGenerateDraft={() => {
-                  planStudio.openPlanGate();
-                  handleDecisionStripPrimaryCta('open_plan_gate');
-                }}
-                onOpenCollaboration={() => navigateToCollabTab('decisions')}
+                onInitiateNegotiation={openDecisionSpaceNegotiation}
+                onInitiateVote={openDecisionSpaceVote}
+                onOpenCollaboration={openDecisionSpaceNegotiation}
+                negotiationSubmitting={negotiationSubmitting}
+                decisionProblems={
+                  decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
+                }
+                useDecisionProblemsBff={!decisionProblemsInbox.useLegacy}
+                activeProblemId={activeDecisionProblemId}
+                onOpenDecisionProblem={openDecisionProblem}
+                bffSpaceContent={decisionSpaceTier2.bffContent}
+                onCanonicalExecuted={handleDecisionProblemExecuted}
+                onReservationEvidenceSaved={handleDecisionProblemExecuted}
+                trip={currentTrip}
+                personaAlerts={decisionStrip.personaAlerts}
+                displayTimezone={workbenchDisplayTimezone}
+                collaborators={collaboratorsQuery.data}
+                collaboratorsLoading={collaboratorsQuery.isLoading}
+                onActionPreviewChange={handleDecisionSpaceActionPreviewChange}
+                compactChrome={Boolean(workbenchModeBarModel)}
+                activeProposalId={workbenchActiveProposalId}
+                inspectorBasis={decisionSpaceTier2.inspectorBasis}
               />
             ) : (
             <PlanningWorkbenchItineraryPanel
               tripId={tripId}
               trip={currentTrip}
-              conflicts={planningConflicts}
-              personaAlerts={decisionStrip.personaAlerts}
-              showRouteMap={showSelfDriveCoverageTab}
+              conflicts={workbenchVisibleConflicts}
+              showRouteSummary
               refreshKey={refreshKey}
               memberCount={constraintsSummary.summary?.travelers.count ?? 1}
               splitBanner={workbenchSplitBanner}
@@ -1897,37 +3592,40 @@ function PlanStudioPageContent() {
               collaborators={collaboratorsQuery.data}
               splitPreviewPending={workbenchDaySplits.length > 0}
               onOpenSplitPlan={handleOpenSplitPlanTab}
-              onOpenConflicts={() => openFeasibilitySheet()}
+              onOpenConflicts={openWorkbenchPlanningActions}
               onOpenDecisionSpace={openDecisionSpace}
               onAdjustSegmentDistance={() => handleEditConstraintItem('max_segment_distance')}
-              onViewFullMap={
-                showSelfDriveCoverageTab && tripId
-                  ? () => navigate(`/dashboard/journey-map?tripId=${tripId}`)
-                  : tripId
-                    ? () => navigate(`/dashboard/journey-map?tripId=${tripId}`)
-                    : () => navigate('/dashboard/journey-map')
+              onViewFullMap={() => navigateToWorkbenchJourneyMap(selectedScheduleDayIndex)}
+              onOpenFullSchedule={handleOpenScheduleEditor}
+              onOpenAttractionExplore={openAttractionExplore}
+              onOpenArrangeItinerary={openArrangeItinerary}
+              onItineraryChanged={handleWorkbenchItineraryChanged}
+              decisionProblems={
+                decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
               }
-              onViewEvaluationReport={() => {
-                setDecisionCheckerTab('evidence');
-                decisionCockpitRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-              }}
-              onOpenFullSchedule={() => setScheduleSheetOpen(true)}
+              selectedDay={selectedScheduleDayIndex}
+              onSelectedDayChange={handleWorkbenchScheduleDayChange}
+              onScheduleDayFocusDetailChange={setScheduleDayExtraTokens}
+              onScheduleDayTimelinePoisChange={setScheduleDayTimelinePois}
+              cascadeHints={cascadeUiHints}
+              cascadeAffectedItems={cascadeAffectedItems}
+              onViewDayMap={navigateToWorkbenchJourneyMap}
+              selectedTimelineEntryId={selectedTimelineEntryId}
+              onSelectedTimelineEntryChange={setSelectedTimelineEntryId}
+              onViewTimelineEntryImpact={handleViewTimelineEntryImpact}
+              panelDepth="full"
+              onDeferDayConflicts={(dayIndex) =>
+                workbenchConflictDismiss.deferConflictsForDay(dayIndex, planningConflicts.items)
+              }
+              canDeferDayConflicts={canDeferWorkbenchDayConflicts}
+              isConflictDismissed={(conflictId) =>
+                workbenchConflictDismiss.isDismissed({ id: conflictId })
+              }
+              onRestoreConflict={workbenchConflictDismiss.restoreConflict}
               topBanners={
                 <>
                   {!decisionStrip.hidePlanningBanner ? (
                     <PlanningBanner guards={worldModelGuards} />
-                  ) : null}
-                  {showCascadePanel ? (
-                    <CascadeImpactPanel
-                      id="plan-studio-cascade-hints"
-                      hints={cascadeUiHints}
-                      affectedItems={cascadeAffectedItems}
-                      modeLabel="修复前预分析"
-                      compact
-                      showCardActions
-                      onViewRepairOptions={() => openDecisionSpace()}
-                      onDiscussWithAi={handleCascadeDiscussWithAi}
-                    />
                   ) : null}
                   {showEmbeddedPlanStudio ? (
                     <EmbeddedHikingStatusBar
@@ -1945,13 +3643,20 @@ function PlanStudioPageContent() {
             )
           }
           decisionChecker={
-            <div ref={decisionCockpitRef}>
+            <div ref={decisionCockpitRef} className="flex h-full min-h-0 flex-col">
               <PlanningWorkbenchDecisionChecker
                 tripId={tripId}
                 decisionChecker={decisionCheckerModel}
                 strip={decisionStripProps}
                 solutionMatrix={{ matrix: solutionMatrix }}
                 relaxation={relaxationBarProps}
+                onOpenPlanningActions={openWorkbenchPlanningActions}
+                planningActionCount={
+                  useDecisionProblemsBff
+                    ? openDecisionProblemCount
+                    : planningConflicts.inbox.inboxCount
+                }
+                planningActionLabel={workbenchPlanningActionLabel}
                 onPrimaryCta={handleDecisionStripPrimaryCta}
                 onOpenFeasibility={() => openFeasibilitySheet()}
                 onApplySplitPlan={handleApplySplitPlan}
@@ -1960,21 +3665,120 @@ function PlanStudioPageContent() {
                 splitPlanSnapshotStale={splitPlanSnapshotStale}
                 splitPreviewPending={workbenchDaySplits.length > 0}
                 requestedTab={decisionCheckerTab}
+                onRequestedTabConsumed={() => setDecisionCheckerTab(null)}
+                onUserTabChange={() => setDecisionCheckerTab(null)}
                 decisionSpaceMode={decisionSpaceOpen}
-                selectedOptionLetter={selectedDecisionOptionLetter}
+                decisionResolutionPhase={decisionResolutionPhase}
+                selectedOptionLetter={
+                  decisionSpaceOpen
+                    ? decisionSpaceSelectedOptionLetter
+                    : selectedDecisionOptionLetter
+                }
+                selectedOptionId={decisionSpaceOpen ? decisionSpaceSelectedOptionId : null}
                 onConfirmSelectedOption={() => {
-                  planStudio.openPlanGate();
                   handleDecisionStripPrimaryCta('open_plan_gate');
                 }}
                 planningInterim={decisionCheckerPlanningInterim}
                 displayTimezone={workbenchDisplayTimezone}
                 splitPlan={workbenchSplitPlan}
+                maxSegmentDistanceKm={maxSegmentDistanceKm}
+                focusConflict={workbenchCheckerFocusConflict}
+                focusProblem={workbenchCheckerFocusProblem}
+                focusProblemDetail={
+                  decisionSpaceOpen
+                    ? decisionSpaceBffContent.detail
+                    : workbenchFocusProblemContent.detail
+                }
+                focusProblemDetailLoading={
+                  decisionSpaceOpen
+                    ? decisionSpaceBffContent.detailLoading
+                    : workbenchFocusProblemContent.detailLoading
+                }
+                focusProblemOptions={
+                  decisionSpaceOpen ? decisionSpaceBffContent.options : undefined
+                }
+                scheduleDayFocus={
+                  decisionSpaceOpen ? null : workbenchScheduleFocus
+                }
+                scheduleDayExtraTokens={
+                  decisionSpaceOpen ? undefined : scheduleDayExtraTokens
+                }
+                scheduleDayTimelinePois={
+                  decisionSpaceOpen ? undefined : scheduleDayTimelinePois
+                }
+                scheduleDaySubtitle={scheduleDaySubtitle}
+                personaAlerts={decisionStrip.personaAlerts}
+                focusedActionPreview={
+                  decisionSpaceOpen ? decisionSpaceActionPreview : null
+                }
+                actionPreviewLoading={
+                  decisionSpaceOpen ? decisionSpaceActionPreviewLoading : false
+                }
+                constraintEvalPending={constraintEditSession.evalPending}
+                onRefreshConstraintEval={handleCommitConstraintEval}
+                onOpenDecisionSpace={openDecisionSpace}
+                activeProposalId={workbenchActiveProposalId}
+                sharedInspector={decisionSpaceSharedInspector}
+                solutionCount={
+                  workbenchVisibleConflicts.summary.mustHandle +
+                  workbenchVisibleConflicts.summary.suggestAdjust
+                }
+                planDiffCounterfactualRows={decisionSpacePlanDiffFallback?.counterfactualRows}
+                planDiffImpactScope={decisionSpacePlanDiffFallback?.impactScope}
+                planDiffUnchangedHints={decisionSpacePlanDiffFallback?.unchangedHints}
               />
             </div>
           }
+          decisionSpaceMode={decisionSpaceOpen}
         />
+        </WorkbenchDecisionFocusProvider>
         )}
         </div>
+        {tripId ? (
+          <ConstraintConsoleDrawer
+            ref={constraintWorkbenchRef}
+            open={constraintConsoleOpen}
+            onOpenChange={handleConstraintDrawerOpenChange}
+            focusTitle={resolveConstraintUiLabel(selectedConstraintId)}
+            drawerSubtitle={
+              constraintPendingSaveCount > 0
+                ? `${workbenchDisplayTitle ?? '当前行程'} · 编辑草稿`
+                : (workbenchDisplayTitle ?? undefined)
+            }
+            scheduleConflictHint={constraintScheduleConflictHint}
+            editSessionPendingCount={constraintPendingSaveCount}
+            editSessionSaveCount={constraintEditSession.saveCount}
+            editSessionEvalPending={constraintEditSession.evalPending}
+            sessionCommitting={constraintSessionCommitting}
+            onCommitConstraintEval={() => void handleCommitConstraintEval()}
+            onDirtyChange={setConstraintDrawerDirty}
+            onPendingSaveCountChange={setConstraintPendingSaveCount}
+            onSessionCommittingChange={setConstraintSessionCommitting}
+            tripId={tripId}
+            summary={constraintsSummary.summary}
+            trip={currentTrip}
+            conflicts={planningConflicts}
+            feasibilityScore={workbenchFeasibility.score}
+            selectedId={selectedConstraintId}
+            onSelectedIdChange={setSelectedConstraintId}
+            onOpenLegacyEditor={openConstraintEditor}
+            onAddConstraint={handleAddConstraint}
+            openEditorForId={openEditorForConstraintId}
+            onOpenEditorConsumed={() => setOpenEditorForConstraintId(null)}
+            onSaved={handleConstraintDrawerSaved}
+            onDailyDriveHoursSaved={handleDailyDriveHoursSaved}
+            onSoftPrefsChanged={handleSoftPrefsChanged}
+            softPrefsRevision={constraintMutations.softPrefsRevision}
+            constraintsApiList={constraintsApiList}
+            budgetProfile={budgetProfileQuery.data ?? null}
+            onOpenFeasibilityReport={() => openFeasibilitySheet()}
+            onOpenDecisionProblem={openDecisionProblem}
+            onOpenPlanningActions={openWorkbenchPlanningActions}
+            onOpenCollaborationCenter={handleOpenCollaborationCenter}
+            focusMode={constraintSidebarFocusMode}
+            onFocusAttention={handleConstraintSidebarFocusAttention}
+          />
+        ) : null}
         <div
           className={cn('flex h-full min-h-0 flex-col', activeTab === 'schedule' && 'hidden')}
           aria-hidden={activeTab === 'schedule'}
@@ -1992,14 +3796,14 @@ function PlanStudioPageContent() {
                 activeTab === 'tasks' ? 'max-w-7xl' : activeTab !== 'budget' ? 'max-w-5xl' : undefined,
               )}
             >
-              <div className={cn(activeTab !== 'budget' && 'hidden', 'h-full')}>
+              {activeTab === 'budget' ? (
                 <BudgetTab
                   tripId={tripId}
                   tripDayCount={currentTrip?.TripDay?.length ?? 0}
                   tripDayDates={currentTrip?.TripDay?.map((day) => day.date).filter(Boolean) ?? []}
                 />
-              </div>
-              <div className={cn(activeTab !== 'tasks' && 'hidden')}>
+              ) : null}
+              {activeTab === 'tasks' ? (
                 <TasksTab
                   tripId={tripId}
                   initialSubTab={
@@ -2010,11 +3814,22 @@ function PlanStudioPageContent() {
                         : 'tasks'
                   }
                   planningConflicts={planningConflicts.items}
+                  planningConflictsResult={planningConflicts}
                   conflictsLoading={planningConflicts.loading}
+                  decisionProblems={
+                    decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
+                  }
+                  decisionCenterOverview={decisionCenterOverview.overview}
+                  decisionCenterOverviewLoading={decisionCenterOverview.loading}
+                  activePacks={decisionCenterOverview.unifiedView?.activePacks}
+                  useDecisionProblemsBff={!decisionProblemsInbox.useLegacy}
+                  onOpenDecisionProblem={openDecisionProblem}
+                  focusPlanningInbox={searchParams.get('planningInbox') === '1'}
                   onOpenFeasibility={openFeasibilitySheet}
                   onGoToSchedule={() => handleTabChange('schedule')}
+                  onViewDecision={openDecisionRecord}
                 />
-              </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -2032,7 +3847,72 @@ function PlanStudioPageContent() {
         </div>
       )}
 
-      <PlanGateDrawer tripId={tripId} initialTrip={currentTrip} />
+      <PlanGateDrawer
+        tripId={tripId}
+        initialTrip={currentTrip}
+        inputsSummary={{
+          memberCount: constraintsSummary.summary?.travelers.count,
+          budgetPerPerson:
+            constraintsSummary.summary?.budget.total != null &&
+            (constraintsSummary.summary.travelers.count ?? 0) > 0
+              ? Math.round(
+                  constraintsSummary.summary.budget.total /
+                    constraintsSummary.summary.travelers.count,
+                )
+              : constraintsSummary.summary?.budget.total ?? undefined,
+          budgetCurrency: constraintsSummary.summary?.budget.currency ?? undefined,
+          missingInfoCount: constraintsSummary.summary?.pendingCount,
+          decisionCount: openDecisionProblemCount > 0 ? openDecisionProblemCount : undefined,
+        }}
+      />
+
+      <AlertDialog open={discardConstraintDraftOpen} onOpenChange={setDiscardConstraintDraftOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>是否保存当前旅行条件？</AlertDialogTitle>
+            <AlertDialogDescription>
+              你有尚未保存的修改。保存后将写入正式条件并重新检查是否走得通；不保存则丢弃本次修改。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDiscardConstraintDraft}>
+              继续编辑
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleConfirmDiscardConstraintDraftWithEval}
+            >
+              不保存并关闭
+            </Button>
+            <AlertDialogAction onClick={handleSaveAndCloseConstraintConsole}>
+              保存并检查
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={constraintEvalCloseConfirmOpen}
+        onOpenChange={setConstraintEvalCloseConfirmOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>条件已保存，是否重新检查？</AlertDialogTitle>
+            <AlertDialogDescription>
+              本次修改已写入，但尚未反映到可执行性与待办。你可以立即检查后再关闭，或直接关闭稍后再刷新。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCloseConstraintConsoleWithoutEval}>
+              直接关闭
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmEvalAndCloseConstraintConsole}>
+              检查并关闭
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {routeRunConfirmation?.approvalId ? (
         <ApprovalDialog
@@ -2078,6 +3958,73 @@ function PlanStudioPageContent() {
         />
       ) : null}
 
+      {tripId && tripExists ? (
+        <DecisionSpaceDomainClaimDialog
+          tripId={tripId}
+          open={negotiationCreateOpen}
+          onOpenChange={(open) => {
+            setNegotiationCreateOpen(open);
+            if (!open) {
+              setNegotiationClaimDomain(null);
+              setPendingNegotiationRetry(null);
+            }
+          }}
+          domain={negotiationClaimDomain}
+          onClaimed={async () => {
+            if (pendingNegotiationRetry) {
+              await submitDecisionProblemNegotiation(pendingNegotiationRetry, {
+                autoClaimDomain: true,
+              });
+            }
+            decisionSpaceBffContent.reload();
+          }}
+        />
+      ) : null}
+
+      {tripId && tripExists ? (
+        <StructuredNegotiationDialog
+          tripId={tripId}
+          open={structuredNegotiationOpen}
+          onOpenChange={(open) => {
+            setStructuredNegotiationOpen(open);
+            if (!open) {
+              decisionSpaceBffContent.reload();
+            }
+          }}
+          initialRoundId={structuredNegotiationRoundId}
+          initialRoundDomain={structuredNegotiationRoundDomain}
+        />
+      ) : null}
+
+      {tripId && tripExists ? (
+        <SilentVoteCreateDialog
+          tripId={tripId}
+          open={silentVoteCreateOpen}
+          onOpenChange={(open) => {
+            setSilentVoteCreateOpen(open);
+            if (!open) setSilentVoteCreateDraft(null);
+          }}
+          draft={silentVoteCreateDraft}
+          onCreated={(voteId) => {
+            trackCollabVoteStart({ tripId, voteId });
+            setSilentVoteDetailId(voteId);
+            setSilentVoteDetailOpen(true);
+          }}
+        />
+      ) : null}
+
+      {tripId && tripExists ? (
+        <SilentVoteDialog
+          tripId={tripId}
+          voteId={silentVoteDetailId}
+          open={silentVoteDetailOpen}
+          onOpenChange={(open) => {
+            setSilentVoteDetailOpen(open);
+            if (!open) setSilentVoteDetailId(null);
+          }}
+        />
+      ) : null}
+
       {/* Pipeline 状态详情对话框 */}
       {(pipelineStatus || statusError) && (
         <Dialog open={showStatusDialog} onOpenChange={setShowStatusDialog}>
@@ -2105,35 +4052,13 @@ function PlanStudioPageContent() {
         </Dialog>
       )}
 
-      <AddConstraintDialog
-        open={showAddConstraintDialog}
-        onOpenChange={setShowAddConstraintDialog}
-        trip={currentTrip}
-        activeSoftIds={activeSoftIds}
-        configuredHardIds={configuredHardIds}
-        onSelectTemplate={handleSelectConstraintTemplate}
-        onAddCustomSoft={handleAddCustomSoft}
-        onOpenLegacyEditor={openConstraintEditor}
-        onNaturalLanguageSubmit={handleConstraintNaturalLanguage}
-      />
-
       {tripId ? (
-        <ConstraintItemEditDialog
+        <ConstraintMutationHost
           tripId={tripId}
-          constraintId={itemEditConstraintId}
-          open={itemEditConstraintId != null}
-          onOpenChange={(open: boolean) => {
-            if (!open) setItemEditConstraintId(null);
-          }}
-          summary={constraintsSummary.summary}
           trip={currentTrip}
-          onOpenLegacyEditor={openConstraintEditor}
-          onSaved={handleConstraintSaved}
-          onDailyDriveHoursSaved={handleDailyDriveHoursSaved}
-          onSoftPrefsChanged={handleSoftPrefsChanged}
-          softPrefsRevision={softPrefsRevision}
+          summary={constraintsSummary.summary}
           constraintsApiList={constraintsApiList}
-          budgetProfile={budgetProfileQuery.data ?? null}
+          mutations={constraintMutations}
         />
       ) : null}
 
@@ -2142,7 +4067,7 @@ function PlanStudioPageContent() {
         open={showIntentDialog}
         onOpenChange={(open) => {
           setShowIntentDialog(open);
-          if (!open) setSoftPrefsRevision((r) => r + 1);
+          if (!open) constraintMutations.handleSoftPrefsChanged();
         }}
       >
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto p-4 gap-2">
@@ -2239,11 +4164,11 @@ function PlanStudioPageContent() {
       {tripId && tripExists && activeTab === 'schedule' ? (
         <WorkbenchScheduleSheet
           open={scheduleSheetOpen}
-          onOpenChange={setScheduleSheetOpen}
+          onOpenChange={handleScheduleSheetOpenChange}
           tripId={tripId}
           trip={currentTrip}
           refreshKey={refreshKey}
-          personaAlerts={decisionStrip.personaAlerts}
+          focusDayIndex={scheduleSheetFocusDayIndex}
           onScheduleChanged={() => {
             setRefreshKey((k) => k + 1);
             if (tripId) {
@@ -2263,6 +4188,25 @@ function PlanStudioPageContent() {
           }}
           initialIssueId={feasibilityInitialIssueId}
           onNavigateToSchedule={handleNavigateToScheduleFromFeasibility}
+          onViewDecision={openDecisionRecord}
+        />
+      ) : null}
+
+      {tripId && tripExists ? (
+        <DecisionRecordDrawer
+          tripId={tripId}
+          decisionId={activeDecisionRecordId}
+          open={decisionRecordSheetOpen}
+          onOpenChange={(open) => {
+            setDecisionRecordSheetOpen(open);
+            if (!open) {
+              setActiveDecisionRecordId(null);
+              const next = new URLSearchParams(searchParams);
+              next.delete('decisionId');
+              setSearchParams(next, { replace: true });
+            }
+          }}
+          onExecutionSettled={handleDecisionProblemExecuted}
         />
       ) : null}
     </div>
@@ -2338,10 +4282,19 @@ function PipelineStageCard({
 }
 
 // 导出包裹了 Provider 的页面组件
+function PlanStudioTravelContextBridge({ children }: { children: React.ReactNode }) {
+  const [searchParams] = useSearchParams();
+  const tripId = searchParams.get('tripId') ?? undefined;
+  if (!tripId) return <>{children}</>;
+  return <TripTravelContextProvider tripId={tripId}>{children}</TripTravelContextProvider>;
+}
+
 export default function PlanStudioPage() {
   return (
     <PlanStudioProvider>
-      <PlanStudioPageContent />
+      <PlanStudioTravelContextBridge>
+        <PlanStudioPageContent />
+      </PlanStudioTravelContextBridge>
     </PlanStudioProvider>
   );
 }

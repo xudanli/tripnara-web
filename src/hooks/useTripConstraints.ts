@@ -12,6 +12,7 @@ import {
   partitionConstraintEntries,
   type ConstraintConsolePartition,
 } from '@/lib/constraint-console-partition.util';
+import { ensureHardConstraintMetadataOnEntries } from '@/lib/constraint-metadata.util';
 import {
   useWorkbenchTripConstraints,
   workbenchKeys,
@@ -21,11 +22,21 @@ import type { PlanningConstraintsSummary } from '@/types/planning-constraints';
 import type { TripDetail } from '@/types/trip';
 import type { TripBudgetProfile } from '@/types/trip-budget';
 import type {
+  TripConstraintsContract,
   TripConstraintsListMeta,
   TripConstraintsListResponse,
 } from '@/types/trip-constraints';
 import type { ConstraintListEntry } from '@/components/plan-studio/workbench/constraint-console-types';
 import type { TripConstraintsCheckResponse } from '@/types/trip-constraints';
+import {
+  buildConstraintConsoleSections,
+  attachContractConflictIds,
+  resolveTravelGoalsFromContract,
+  type ConstraintConsoleSectionViewModel,
+} from '@/lib/trip-constraints-contract.util';
+import { enrichListEntryWithDestinationRule } from '@/lib/destination-rules.util';
+import { resolveTravelGoalOrder } from '@/lib/travel-goals.util';
+import type { TravelGoalDimension } from '@/types/travel-decision-contract';
 
 export type TripConstraintsSource = 'bff' | 'local';
 
@@ -49,6 +60,9 @@ export interface UseTripConstraintsResult {
   error: string | null;
   meta: TripConstraintsListMeta | null;
   apiList: TripConstraintsListResponse | null;
+  contract: TripConstraintsContract | null;
+  sections: ConstraintConsoleSectionViewModel[];
+  travelGoalOrderedIds: TravelGoalDimension[];
   hardItems: ConstraintListEntry[];
   softItems: ConstraintListEntry[];
   externalItems: ConstraintListEntry[];
@@ -157,16 +171,64 @@ export function useTripConstraints({
   }, [apiList, mergedBundle.bundle.softItems]);
 
   const partition = useMemo(() => {
-    const allItems = attachCheckIssuesToEntries(
+    const mergedItems = ensureHardConstraintMetadataOnEntries(
       [
         ...applyListPatches(mergedBundle.bundle.hardItems),
         ...applyListPatches(mergedBundle.bundle.softItems),
         ...mergedBundle.bundle.externalItems,
       ],
-      checkResult?.issues,
+      apiList?.items,
     );
-    return partitionConstraintEntries(allItems);
-  }, [mergedBundle.bundle, applyListPatches, checkResult?.issues]);
+    const withIssues = attachCheckIssuesToEntries(mergedItems, checkResult?.issues, {
+      sacrificedConstraintIds: checkResult?.sacrificedConstraintIds,
+    });
+    const withConflicts = attachContractConflictIds(
+      withIssues,
+      checkResult?.contractConflicts?.conflictConstraintIds,
+      checkResult?.sacrificedConstraintIds,
+    );
+    const raw = partitionConstraintEntries(withConflicts);
+    return {
+      ...raw,
+      officialRuleItems: raw.officialRuleItems.map((item) =>
+        item.destinationRule ? item : enrichListEntryWithDestinationRule(item),
+      ),
+    };
+  }, [
+    mergedBundle.bundle,
+    applyListPatches,
+    checkResult?.issues,
+    checkResult?.contractConflicts,
+    checkResult?.sacrificedConstraintIds,
+    apiList?.items,
+  ]);
+
+  const allEntries = useMemo(
+    () => [
+      ...partition.userHardItems,
+      ...partition.userSoftItems,
+      ...partition.officialRuleItems,
+      ...(partition.worldFeasibilityItem ? [partition.worldFeasibilityItem] : []),
+    ],
+    [partition],
+  );
+
+  const contract = apiList?.contract ?? null;
+
+  const travelGoalOrderedIds = useMemo(() => {
+    const fallback = resolveTravelGoalOrder({ tripId, planningPolicy: undefined });
+    return resolveTravelGoalsFromContract(contract, fallback);
+  }, [contract, tripId]);
+
+  const sections = useMemo(
+    () =>
+      buildConstraintConsoleSections({
+        response: apiList,
+        partition,
+        allEntries,
+      }),
+    [apiList, partition, allEntries],
+  );
 
   return {
     source: mergedBundle.source,
@@ -174,6 +236,9 @@ export function useTripConstraints({
     error,
     meta: apiList?.meta ?? null,
     apiList,
+    contract,
+    sections,
+    travelGoalOrderedIds,
     hardItems: partition.userHardItems,
     softItems: partition.userSoftItems,
     externalItems: [

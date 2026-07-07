@@ -98,11 +98,11 @@ export default function HikeReviewPage() {
   };
 
   const categoryColors: Record<string, string> = {
-    highlight: 'bg-green-50 border-green-200',
-    friction: 'bg-red-50 border-red-200',
-    rhythm: 'bg-blue-50 border-blue-200',
+    highlight: 'bg-gate-allow border-gate-allow-border',
+    friction: 'bg-gate-reject border-gate-reject-border',
+    rhythm: 'bg-muted/15 border-border',
     safety: 'bg-yellow-50 border-yellow-200',
-    decision: 'bg-purple-50 border-purple-200',
+    decision: 'bg-muted/15 border-border',
   };
 
   const eventTypeLabels: Record<string, string> = {
@@ -117,8 +117,8 @@ export default function HikeReviewPage() {
   const eventTypeColors: Record<string, string> = {
     delay: 'bg-yellow-100 text-yellow-800',
     fatigue: 'bg-orange-100 text-orange-800',
-    wind: 'bg-blue-100 text-blue-800',
-    water_crossing: 'bg-cyan-100 text-cyan-800',
+    wind: 'bg-muted/15 text-muted-foreground',
+    water_crossing: 'bg-muted/15 text-muted-foreground',
     turnaround: 'bg-gray-100 text-gray-800',
     skip: 'bg-gray-100 text-gray-800',
   };
@@ -252,9 +252,9 @@ export default function HikeReviewPage() {
                       <div
                         className={`w-3 h-3 rounded-full border-2 border-white ${
                           event.impact === 'negative'
-                            ? 'bg-red-500'
+                            ? 'bg-gate-reject-foreground'
                             : event.impact === 'positive'
-                            ? 'bg-green-500'
+                            ? 'bg-gate-allow-foreground'
                             : 'bg-gray-500'
                         }`}
                       />
@@ -387,7 +387,7 @@ export default function HikeReviewPage() {
                   key={rule.id}
                   className={`border ${
                     rule.priority === 'high'
-                      ? 'bg-red-50 border-red-200'
+                      ? 'bg-gate-reject border-gate-reject-border'
                       : rule.priority === 'medium'
                       ? 'bg-yellow-50 border-yellow-200'
                       : 'bg-gray-50 border-gray-200'

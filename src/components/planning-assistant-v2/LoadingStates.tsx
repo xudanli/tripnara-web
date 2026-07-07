@@ -25,7 +25,7 @@ export function LoadingSpinner({ className }: { className?: string }) {
 export function MessageLoading() {
   return (
     <div className="flex gap-3 animate-in fade-in duration-200">
-      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
         <Sparkles className="w-4 h-4 text-white" />
       </div>
       <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-2.5 flex items-center gap-2">

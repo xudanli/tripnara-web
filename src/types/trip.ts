@@ -2701,6 +2701,14 @@ export interface PersonaAlertPresentationSnapshot {
   hardConstraintBlocked?: boolean;
 }
 
+/** Persona Alerts M2 — feasibility issue → alert 的 tradeoff 维度投影 */
+export interface PersonaAlertTradeoffDimension {
+  dimension: string;
+  direction?: 'IMPROVE' | 'WORSEN' | 'UNCHANGED' | (string & {});
+  explanation?: string;
+  contextualNarrative?: string;
+}
+
 export interface PersonaAlertMetadata {
   audience?: PersonaAlertAudience;
   scenario?: LeadSpeakerScenario;
@@ -2710,6 +2718,8 @@ export interface PersonaAlertMetadata {
   reasonCodesDisplayZh?: string[];
   readinessEvidenceDisplayZh?: string;
   deepLink?: PersonaAlertDeepLink;
+  /** Persona Alerts M2 — 带行程上下文的 tradeoff 维度（Timeline / 提醒 / 审查条兜底） */
+  tradeoffDimensions?: PersonaAlertTradeoffDimension[];
   [key: string]: unknown;
 }
 
@@ -3176,6 +3186,8 @@ export interface UpdateIntentRequest {
     maxDailyDrivingHours?: number;
   };
   planningPolicy?: 'safe' | 'experience' | 'challenge';
+  /** 旅行目标排序（前台原则 → 后台权重） */
+  travelGoalRanks?: string[];
   totalBudget?: number;
 }
 
@@ -3194,6 +3206,8 @@ export interface IntentResponse {
       maxDailyDrivingHours?: number;
     };
     planningPolicy?: string;
+    /** 旅行目标维度排序（优先级从高到低） */
+    travelGoalRanks?: string[];
   };
 }
 

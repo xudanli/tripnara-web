@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { workbenchLinkClass } from '@/components/plan-studio/workbench/workbench-ui';
 import {
   getItineraryItemTypeDisplay,
   getItineraryItemTimelineTypeBadge,
@@ -50,8 +51,15 @@ import type { DecisionAuthorityLabel } from '@/lib/domain-influence-mapping';
 import { ItineraryDecisionAuthorityRow } from '@/components/domain-influence';
 import { getCrossDayBadgeLabel, readCrossDayInfo } from '@/lib/itinerary-item-sort';
 import { isItineraryCarRentalDisplay, isItineraryDeparturePointDisplay, isItineraryLandingPointDisplay } from '@/lib/itinerary-special-display';
+import {
+  isPlanGateTimelineItem,
+  stripPlanGateTimelineNotePrefix,
+} from '@/lib/plan-gate-timeline.util';
 import { isCarRentalItineraryItem } from '@/lib/trip-car-rental-status';
 import { PresentedItineraryItemInsight } from '@/components/experience-fulfillment/PresentedItineraryItemInsight';
+import { PlanContentStateBadge } from '@/features/trip-context';
+import { resolveItineraryItemPlanContentState } from '@/features/trip-context/lib/plan-content-state.util';
+import { resolveItineraryItemPlaceDisplayName } from '@/lib/itinerary-place-display.util';
 import { PlaceImageViewerDialog } from '@/components/plan-studio/PlaceImageViewerDialog';
 import { collectPlaceImages } from '@/lib/collect-place-images';
 import type { PresentedItineraryItem } from '@/types/experience-fulfillment';
@@ -91,8 +99,8 @@ interface ItineraryItemRowProps {
 
 // 预订状态标签映射
 const bookingStatusLabels: Record<BookingStatus, { label: string; color: string; icon: string }> = {
-  BOOKED: { label: '已预订', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '✅' },
-  NEED_BOOKING: { label: '待预订', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: '📅' },
+  BOOKED: { label: '已预订', color: 'bg-muted text-success border-border', icon: '✅' },
+  NEED_BOOKING: { label: '待预订', color: 'bg-muted text-warning border-border', icon: '📅' },
   NO_BOOKING: { label: '无需预订', color: 'bg-gray-50 text-gray-600 border-gray-200', icon: '✓' },
 };
 
@@ -159,13 +167,16 @@ export default function ItineraryItemRow({
   };
 
   // ==================== 基础字段提取 ====================
-  // 优先显示中文名称，如果 nameCN 为空字符串或未定义，则使用 nameEN
-  // 无 Place 时（如从推荐加入的自定义住宿）：用 note 首行作为名称
-  const name = (place?.nameCN && place.nameCN.trim()) 
-    ? place.nameCN 
-    : (place?.nameEN && place.nameEN.trim()) 
-      ? place.nameEN 
-      : (item.note?.split('\n')[0]?.trim()) || getItineraryItemTypeDisplay(item.type).label || '未知地点';
+  // 优先 Place 库 nameCN；无 Place 时用 note 首行作为名称
+  const planGateTimelineItem = isPlanGateTimelineItem(item.note);
+  const planContentState = resolveItineraryItemPlanContentState(item);
+  const noteDisplayName = stripPlanGateTimelineNotePrefix(item.note);
+  const name =
+    resolveItineraryItemPlaceDisplayName(item) ||
+    noteDisplayName ||
+    (item.note?.split('\n')[0]?.trim()) ||
+    getItineraryItemTypeDisplay(item.type).label ||
+    '未知地点';
   const category = (place?.category || item.type || '').toUpperCase();
   const typeBadge = getItineraryItemTimelineTypeBadge(item);
   // 使用目的地时区显示时间
@@ -644,11 +655,11 @@ export default function ItineraryItemRow({
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'red':
-        return 'border-red-300 bg-red-50';
+        return 'border-border bg-muted';
       case 'yellow':
-        return 'border-yellow-300 bg-yellow-50';
+        return 'border-border bg-muted';
       case 'green':
-        return 'border-green-300 bg-green-50';
+        return 'border-border bg-muted';
       default:
         return 'border-gray-200 bg-white';
     }
@@ -699,7 +710,7 @@ export default function ItineraryItemRow({
       className={cn(
         'p-3 border rounded-lg transition-colors group cursor-pointer',
         structureLocked
-          ? 'border-amber-200/70 bg-amber-50/30 hover:border-amber-300/80'
+          ? 'border-border/70 bg-muted/30 hover:border-border'
           : 'hover:border-primary',
         abuFields ? getStatusColor(abuFields.status) : '',
         highlighted && 'border-primary bg-primary/5 ring-1 ring-primary/20'
@@ -795,6 +806,15 @@ export default function ItineraryItemRow({
               </span>
             )}
             
+            {planGateTimelineItem && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 border-border/50 bg-muted/10 text-success"
+              >
+                方案确认
+              </Badge>
+            )}
+
             {isDeparturePointDisplay && (
               <Badge
                 variant="outline"
@@ -807,7 +827,7 @@ export default function ItineraryItemRow({
             {isCarRentalDisplay && !crossDayBadgeLabel && (
               <Badge
                 variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-800 border-amber-200"
+                className="text-[10px] px-1.5 py-0 bg-muted text-warning border-border"
               >
                 租车
               </Badge>
@@ -816,7 +836,7 @@ export default function ItineraryItemRow({
             {isLandingPointDisplay && (
               <Badge
                 variant="outline"
-                className="text-[10px] px-1.5 py-0 bg-sky-50 text-sky-700 border-sky-200"
+                className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground border-border"
               >
                 落地点
               </Badge>
@@ -829,8 +849,8 @@ export default function ItineraryItemRow({
                 className={cn(
                   "text-[10px] px-1.5 py-0",
                   crossDayBadgeLabel === '退房' || crossDayBadgeLabel === '还车'
-                    ? "bg-orange-50 text-orange-600 border-orange-200" 
-                    : "bg-blue-50 text-blue-600 border-blue-200"
+                    ? "bg-muted text-warning border-border" 
+                    : "bg-muted text-muted-foreground border-border"
                 )}
               >
                 {crossDayBadgeLabel}
@@ -838,7 +858,7 @@ export default function ItineraryItemRow({
             )}
             
             {placeDetails?.rating && (
-              <span className="flex items-center text-xs text-amber-500">
+              <span className="flex items-center text-xs text-warning">
                 <Star className="w-3 h-3 mr-0.5 fill-current" />
                 {placeDetails.rating.toFixed(1)}
               </span>
@@ -860,7 +880,7 @@ export default function ItineraryItemRow({
               {structureLocked ? (
                 <Badge
                   variant="outline"
-                  className="text-[10px] shrink-0 border-amber-300/80 bg-amber-50 text-amber-900"
+                  className="text-[10px] shrink-0 border-border bg-muted text-warning"
                 >
                   <Lock className="h-3 w-3 mr-0.5" />
                   段已锁定
@@ -887,6 +907,7 @@ export default function ItineraryItemRow({
 
           {/* 第三行：类别 + 营业状态 + 开放时间 + 价格 */}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {planContentState ? <PlanContentStateBadge state={planContentState} /> : null}
             <Badge variant="outline" className="text-xs">
               {typeBadge.emoji} {typeBadge.label}
             </Badge>
@@ -909,8 +930,8 @@ export default function ItineraryItemRow({
                 variant="outline" 
                 className={cn(
                   "text-xs",
-                  placeDetails.isOpen === true && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                  placeDetails.isOpen === false && "bg-red-50 text-red-700 border-red-200"
+                  placeDetails.isOpen === true && "bg-muted text-success border-border",
+                  placeDetails.isOpen === false && "bg-muted text-error border-border"
                 )}
               >
                 🕐 {typeof placeDetails.todayHours === 'string' ? placeDetails.todayHours : String(placeDetails.todayHours || '')}
@@ -921,7 +942,7 @@ export default function ItineraryItemRow({
             
             {/* 地点参考价格 */}
             {placeDetails?.price && (
-              <Badge variant="outline" className="text-xs text-emerald-600">
+              <Badge variant="outline" className="text-xs text-success">
                 {/* ✅ 确保 price 是字符串 */}
                 {typeof placeDetails.price === 'string' ? placeDetails.price : String(placeDetails.price || '')}
               </Badge>
@@ -929,7 +950,7 @@ export default function ItineraryItemRow({
             
             {/* 行程项费用信息 */}
             {item.estimatedCost && item.estimatedCost > 0 && (
-              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+              <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
                 💰 预估 {formatCurrency(item.estimatedCost, currency)}
               </Badge>
             )}
@@ -939,8 +960,8 @@ export default function ItineraryItemRow({
                 className={cn(
                   "text-xs",
                   item.isPaid 
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                    : "bg-amber-50 text-amber-700 border-amber-200"
+                    ? "bg-muted text-success border-border" 
+                    : "bg-muted text-warning border-border"
                 )}
               >
                 {item.isPaid ? '✅' : '💳'} 实付 {formatCurrency(item.actualCost, currency)}
@@ -972,7 +993,7 @@ export default function ItineraryItemRow({
                           href={item.bookingUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="text-primary hover:underline flex items-center gap-1"
+                          className={cn(workbenchLinkClass, 'flex items-center gap-1')}
                         >
                           <ExternalLink className="w-3 h-3" /> 查看预订
                         </a>
@@ -1079,7 +1100,7 @@ export default function ItineraryItemRow({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+                    className="h-7 w-7 text-slate-500 hover:text-muted-foreground hover:bg-muted"
                     onClick={handleOpenNavigation}
                   >
                     <Compass className="h-4 w-4" />
@@ -1134,7 +1155,7 @@ export default function ItineraryItemRow({
                         !getPlaceCoordinates && 'opacity-50 cursor-not-allowed'
                       )}
                     >
-                      <MapPin className="w-4 h-4 mr-2 text-blue-600" />
+                      <MapPin className="w-4 h-4 mr-2 text-muted-foreground" />
                       <span className="font-medium">搜索附近</span>
                       {!getPlaceCoordinates && (
                         <span className="ml-auto text-xs text-muted-foreground">（需坐标）</span>
@@ -1150,7 +1171,7 @@ export default function ItineraryItemRow({
                         disabled={!getPlaceCoordinates}
                         className="cursor-pointer"
                       >
-                        <Star className="w-4 h-4 mr-2 text-amber-500" />
+                        <Star className="w-4 h-4 mr-2 text-warning" />
                         <span>景点</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -1162,7 +1183,7 @@ export default function ItineraryItemRow({
                         disabled={!getPlaceCoordinates}
                         className="cursor-pointer"
                       >
-                        <Utensils className="w-4 h-4 mr-2 text-red-500" />
+                        <Utensils className="w-4 h-4 mr-2 text-error" />
                         <span>餐厅</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -1186,7 +1207,7 @@ export default function ItineraryItemRow({
                         disabled={!getPlaceCoordinates}
                         className="cursor-pointer"
                       >
-                        <Coffee className="w-4 h-4 mr-2 text-amber-700" />
+                        <Coffee className="w-4 h-4 mr-2 text-warning" />
                         <span>休息点</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem
@@ -1198,7 +1219,7 @@ export default function ItineraryItemRow({
                         disabled={!getPlaceCoordinates}
                         className="cursor-pointer"
                       >
-                        <Fuel className="w-4 h-4 mr-2 text-green-600" />
+                        <Fuel className="w-4 h-4 mr-2 text-success" />
                         <span>加油站</span>
                       </DropdownMenuItem>
                     </DropdownMenuSubContent>
@@ -1228,7 +1249,7 @@ export default function ItineraryItemRow({
                 <>
                   <div className="h-px bg-slate-200 my-1" />
                   <DropdownMenuItem
-                    className="text-red-600 focus:text-red-600 min-h-[44px] cursor-pointer"
+                    className="text-error focus:text-error min-h-[44px] cursor-pointer"
                     onClick={() => onDelete(item)}
                     aria-label={t('planStudio.scheduleTab.actions.delete', { defaultValue: '删除' })}
                   >
@@ -1278,7 +1299,7 @@ export default function ItineraryItemRow({
                     href={placeDetails.website} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-primary hover:underline"
+                    className={workbenchLinkClass}
                   >
                     🔗 官网
                   </a>
@@ -1307,7 +1328,7 @@ export default function ItineraryItemRow({
       <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-blue-500" />
+            <MapPin className="h-5 w-5 text-muted-foreground" />
             {name}
           </DialogTitle>
           <DialogDescription>
@@ -1350,7 +1371,7 @@ export default function ItineraryItemRow({
           <div className="space-y-3">
             <div className="flex items-center gap-4 text-sm">
               {placeDetails?.rating && (
-                <div className="flex items-center gap-1 text-amber-500">
+                <div className="flex items-center gap-1 text-warning">
                   <Star className="w-4 h-4 fill-current" />
                   <span className="font-medium">{placeDetails.rating.toFixed(1)}</span>
                 </div>
@@ -1394,7 +1415,7 @@ export default function ItineraryItemRow({
             {(placeDetails?.phone || placeDetails?.website) && (
               <div className="flex items-center gap-4 text-sm">
                 {placeDetails.phone && (
-                  <a href={`tel:${placeDetails.phone}`} className="text-primary hover:underline">
+                  <a href={`tel:${placeDetails.phone}`} className={workbenchLinkClass}>
                     📞 {placeDetails.phone}
                   </a>
                 )}
@@ -1403,7 +1424,7 @@ export default function ItineraryItemRow({
                     href={placeDetails.website} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-primary hover:underline flex items-center gap-1"
+                    className={cn(workbenchLinkClass, 'flex items-center gap-1')}
                   >
                     🔗 官网 <ExternalLink className="w-3 h-3" />
                   </a>

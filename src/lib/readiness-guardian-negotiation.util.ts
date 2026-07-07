@@ -141,11 +141,11 @@ export const GUARDIAN_CONSENSUS_LABEL_EN: Record<GuardianNegotiationConsensus, s
 export function getGuardianStanceStyles(stance: GuardianNegotiationStance): string {
   switch (stance) {
     case 'SUPPORT':
-      return 'bg-green-50 text-green-800 border-green-200';
+      return 'bg-muted text-success border-gate-allow-border';
     case 'CAUTION':
       return 'bg-amber-50 text-amber-800 border-amber-200';
     case 'OPPOSE':
-      return 'bg-red-50 text-red-800 border-red-200';
+      return 'bg-muted text-error border-border';
     default:
       return 'bg-slate-50 text-slate-700 border-slate-200';
   }

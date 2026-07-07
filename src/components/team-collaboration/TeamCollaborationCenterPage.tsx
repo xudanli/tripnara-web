@@ -1,5 +1,3 @@
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { TripDetail } from '@/types/trip';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
@@ -39,19 +37,7 @@ export function TeamCollaborationCenterPage({
 }: TeamCollaborationCenterPageProps) {
   return (
     <div className={cn('min-h-0 flex-1 overflow-y-auto', className)}>
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        {onBack ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="-ml-2 mb-4 h-8 gap-1.5 text-xs text-muted-foreground"
-            onClick={onBack}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            返回行程
-          </Button>
-        ) : null}
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
         <TeamCollaborationCenter
           tripId={tripId}
           trip={trip}

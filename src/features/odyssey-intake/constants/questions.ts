@@ -21,7 +21,7 @@ export const ODYSSEY_QUESTIONS: OdysseyQuestion[] = [
     scene: '雪山景观餐厅 · 傍晚',
     prompt:
       '在长途公路旅行的第 4 天傍晚，你们偶然经过一家极其种草、推开窗就是雪山的黑珍珠景观餐厅。但它的人均消费高出你们原本单餐预算 400 元，你会？',
-    wallpaperGradient: 'from-slate-900 via-emerald-950 to-slate-800',
+    wallpaperGradient: 'from-slate-900 via-gate-allow to-muted',
     options: [
       {
         id: 'A',
@@ -45,7 +45,7 @@ export const ODYSSEY_QUESTIONS: OdysseyQuestion[] = [
     scene: '暴雪封路 · 公路',
     prompt:
       '由于强风暴雪，去往核心景区的道路被交警临时封闭，所有车辆禁止通行。你唯一的 Plan B 是原路返回酒店躺着，或者多花 3 小时绕行一条未知的泥泞山路，你会？',
-    wallpaperGradient: 'from-zinc-950 via-slate-800 to-blue-950',
+    wallpaperGradient: 'from-zinc-950 via-muted to-nara-glacier-muted',
     options: [
       {
         id: 'A',

@@ -11,6 +11,7 @@ import {
   resolveItineraryAdjustScheduleDays,
 } from '@/lib/itinerary-adjust-response';
 import { cn } from '@/lib/utils';
+import { PlanContentStateBadge } from '@/features/trip-context';
 
 export function ItineraryAdjustScheduleDayPreview({
   preview,
@@ -39,31 +40,28 @@ export function ItineraryAdjustScheduleDayPreview({
   const title =
     (result ? itineraryAdjustResultTitle(result) : undefined) ??
     (preview.targetDayNumber != null ? `第 ${preview.targetDayNumber} 天` : '改排草案');
-  const badge = result?.status_label_zh?.trim() || '草案待确认';
 
   return (
     <div
       className={cn(
-        'rounded-lg border border-amber-300/80 bg-amber-50/90 p-3 space-y-3 dark:border-amber-800/50 dark:bg-amber-950/25',
+        'rounded-lg border border-border/80 bg-card p-3 space-y-3',
         className
       )}
       data-itinerary-adjust-draft-preview
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex rounded-full border border-amber-400/70 bg-amber-100/90 px-2 py-0.5 text-[10px] font-semibold text-amber-950 dark:bg-amber-900/50 dark:text-amber-100">
-          {badge}
-        </span>
-        <span className="text-sm font-semibold text-amber-950 dark:text-amber-50">{title}</span>
+        <PlanContentStateBadge state="draft" />
+        <span className="text-sm font-semibold text-foreground">{title}</span>
       </div>
 
       {body?.kind === 'bullets' ? (
-        <ul className="space-y-1 pl-3.5 text-xs leading-relaxed list-disc text-amber-950/90 dark:text-amber-100/90">
+        <ul className="space-y-1 pl-3.5 text-xs leading-relaxed list-disc text-foreground/90">
           {body.lines.map((line, i) => (
             <li key={i}>{line}</li>
           ))}
         </ul>
       ) : body?.kind === 'text' ? (
-        <p className="text-xs leading-relaxed text-amber-950/85 dark:text-amber-100/85 whitespace-pre-wrap">
+        <p className="text-xs leading-relaxed text-foreground/85 whitespace-pre-wrap">
           {body.text}
         </p>
       ) : null}
@@ -77,11 +75,11 @@ export function ItineraryAdjustScheduleDayPreview({
 
       {draftScheduleZh || items.length > 0 ? (
         <div className="space-y-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-amber-900/70 dark:text-amber-200/70">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             草案日程
           </p>
           {draftScheduleZh ? (
-            <pre className="whitespace-pre-wrap rounded-md border border-amber-200/60 bg-background/80 px-2.5 py-2 font-sans text-xs leading-relaxed text-amber-950/90 dark:text-amber-100/90">
+            <pre className="whitespace-pre-wrap rounded-md border border-border/60 bg-background/80 px-2.5 py-2 font-sans text-xs leading-relaxed text-foreground/90">
               {draftScheduleZh}
             </pre>
           ) : null}
@@ -106,7 +104,7 @@ export function ItineraryAdjustScheduleDayPreview({
       ) : null}
 
       {result?.apply_hint_zh ? (
-        <p className="text-[10px] text-amber-900/65 dark:text-amber-200/65">{result.apply_hint_zh}</p>
+        <p className="text-[10px] text-muted-foreground">{result.apply_hint_zh}</p>
       ) : null}
     </div>
   );

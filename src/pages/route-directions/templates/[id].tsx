@@ -75,13 +75,13 @@ export default function RouteTemplateDetailPage() {
   const getIntensityColor = (intensity?: string) => {
     switch (intensity) {
       case 'LIGHT':
-        return 'bg-green-100 text-green-800';
+        return 'bg-gate-allow text-gate-allow-foreground';
       case 'MODERATE':
         return 'bg-yellow-100 text-yellow-800';
       case 'CHALLENGE':
         return 'bg-orange-100 text-orange-800';
       case 'EXTREME':
-        return 'bg-red-100 text-red-800';
+        return 'bg-gate-reject text-gate-reject-foreground';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -90,9 +90,9 @@ export default function RouteTemplateDetailPage() {
   const getPaceColor = (pace?: string) => {
     switch (pace) {
       case 'RELAXED':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-muted/15 text-muted-foreground';
       case 'BALANCED':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-muted/15 text-muted-foreground';
       case 'CHALLENGE':
         return 'bg-pink-100 text-pink-800';
       default:
@@ -111,9 +111,9 @@ export default function RouteTemplateDetailPage() {
   if (error && !template) {
     return (
       <div className="p-6">
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-800">
+            <div className="flex items-center gap-2 text-gate-reject-foreground">
               <XCircle className="w-4 h-4" />
               <span>{error}</span>
             </div>
@@ -148,9 +148,9 @@ export default function RouteTemplateDetailPage() {
 
       {/* 错误提示 */}
       {error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-800">
+            <div className="flex items-center gap-2 text-gate-reject-foreground">
               <XCircle className="w-4 h-4" />
               <span>{error}</span>
             </div>
@@ -178,8 +178,8 @@ export default function RouteTemplateDetailPage() {
                 <div className="flex items-center gap-2">
                   {template.isActive ? (
                     <>
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      <span className="text-sm text-green-600">已激活</span>
+                      <CheckCircle2 className="w-4 h-4 text-gate-allow-foreground" />
+                      <span className="text-sm text-gate-allow-foreground">已激活</span>
                     </>
                   ) : (
                     <>

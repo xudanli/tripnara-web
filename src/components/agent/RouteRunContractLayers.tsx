@@ -334,7 +334,7 @@ export function RouteRunContractLayers({
       {showFeasibilityBanner ? (
             <Alert
               variant="destructive"
-              className="py-2 border-red-200/80 bg-red-50/50 dark:bg-red-950/25 dark:border-red-900/50"
+              className="py-2 border-gate-reject-border/80 bg-gate-reject/50 dark:bg-gate-reject/25 dark:border-gate-reject-border/50"
             >
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle className="text-xs font-semibold break-words [overflow-wrap:anywhere]">
@@ -386,7 +386,7 @@ export function RouteRunContractLayers({
             <Alert
               key={`c-${idx}-${issue.code ?? idx}`}
               variant="destructive"
-              className="py-2 border-red-200/80 bg-red-50/50 dark:bg-red-950/25 dark:border-red-900/50"
+              className="py-2 border-gate-reject-border/80 bg-gate-reject/50 dark:bg-gate-reject/25 dark:border-gate-reject-border/50"
             >
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle className="text-xs font-semibold break-words [overflow-wrap:anywhere]">

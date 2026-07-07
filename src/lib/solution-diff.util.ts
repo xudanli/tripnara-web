@@ -49,9 +49,9 @@ export function computeOverallScore(scores: Record<string, number> | undefined):
 export function diffToneClassName(tone: SolutionDiffTone): string {
   switch (tone) {
     case 'better':
-      return 'bg-gate-allow/15 text-gate-allow-foreground';
+      return 'bg-muted/15 text-success';
     case 'worse':
-      return 'bg-red-50/80 text-red-800 dark:bg-red-950/30 dark:text-red-200';
+      return 'bg-muted/80 text-error dark:bg-muted/30 dark:text-error';
     case 'same':
       return 'text-muted-foreground';
     default:

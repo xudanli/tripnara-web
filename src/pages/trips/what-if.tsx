@@ -534,9 +534,9 @@ export default function WhatIfPage() {
       )}
 
       {error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-gate-reject-border bg-gate-reject">
           <CardContent className="pt-6">
-            <p className="text-red-800">{error}</p>
+            <p className="text-gate-reject-foreground">{error}</p>
           </CardContent>
         </Card>
       )}
@@ -807,8 +807,8 @@ export default function WhatIfPage() {
                                   <div
                                     className={`text-xs ${
                                       candidate.deltaSummary.missDelta < 0
-                                        ? 'text-green-600'
-                                        : 'text-red-600'
+                                        ? 'text-gate-allow-foreground'
+                                        : 'text-gate-reject-foreground'
                                     }`}
                                   >
                                     {candidate.deltaSummary.missDelta > 0 ? '+' : ''}
@@ -825,8 +825,8 @@ export default function WhatIfPage() {
                                   <div
                                     className={`text-xs ${
                                       candidate.deltaSummary.completionP10Delta > 0
-                                        ? 'text-green-600'
-                                        : 'text-red-600'
+                                        ? 'text-gate-allow-foreground'
+                                        : 'text-gate-reject-foreground'
                                     }`}
                                   >
                                     {candidate.deltaSummary.completionP10Delta > 0 ? '+' : ''}
@@ -843,8 +843,8 @@ export default function WhatIfPage() {
                                   <div
                                     className={`text-xs ${
                                       candidate.deltaSummary.onTimeDelta > 0
-                                        ? 'text-green-600'
-                                        : 'text-red-600'
+                                        ? 'text-gate-allow-foreground'
+                                        : 'text-gate-reject-foreground'
                                     }`}
                                   >
                                     {candidate.deltaSummary.onTimeDelta > 0 ? '+' : ''}

@@ -51,7 +51,7 @@ export default function WelcomeSection({ user, activeTrip, getCountryName }: Wel
 
   if (!activeTrip) {
     return (
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+      <Card className="bg-gradient-to-br from-muted/15 to-muted/15 border-border">
         <CardContent className="p-8">
           <div className="text-center space-y-4">
             <h1 className="text-3xl font-bold text-gray-900">
@@ -79,7 +79,7 @@ export default function WelcomeSection({ user, activeTrip, getCountryName }: Wel
   const countryName = getCountryName(activeTrip.destination);
 
   return (
-    <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+    <Card className="bg-gradient-to-br from-muted/15 to-muted/15 border-border">
       <CardContent className="p-8">
         {/* 标题 */}
         <h1 className="text-3xl font-bold text-gray-900 mb-6">

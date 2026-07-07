@@ -49,7 +49,7 @@ const KIND_LABELS: Record<string, string> = {
 
 function riskBadgeClass(risk: string | undefined): string {
   const r = (risk ?? '').toUpperCase();
-  if (r === 'HIGH') return 'border-red-300 bg-red-50 text-red-900 dark:bg-red-950/40';
+  if (r === 'HIGH') return 'border-gate-reject-border bg-gate-reject text-gate-reject-foreground dark:bg-gate-reject/40';
   if (r === 'MEDIUM') return 'border-amber-300 bg-amber-50 text-amber-950 dark:bg-amber-950/30';
   return 'border-border bg-muted/60';
 }

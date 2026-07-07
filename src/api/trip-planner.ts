@@ -17,6 +17,8 @@
  * - 如需优化已创建行程，暂时仍使用旅程助手接口
  */
 
+import { assertTripPlannerApplySuggestionAllowed } from '@/lib/effective-plan-write-chain.util';
+
 // 接口已删除，不再需要导入
 // import { planningAssistantApi, journeyAssistantApi } from './assistant';
 // import type { PlanningChatRequest, JourneyChatRequest, JourneyAssistantResponse } from './assistant';
@@ -753,7 +755,11 @@ export const tripPlannerApi = {
    * 应用建议
    * ⚠️ 接口已删除
    */
-  applySuggestion: async (_data: ApplySuggestionRequest): Promise<ApplySuggestionResponse> => {
+  applySuggestion: async (data: ApplySuggestionRequest): Promise<ApplySuggestionResponse> => {
+    assertTripPlannerApplySuggestionAllowed({
+      tripId: data.tripId,
+      suggestionId: data.suggestionId,
+    });
     throw new Error('规划工作台右侧对话框接口已删除');
   },
 

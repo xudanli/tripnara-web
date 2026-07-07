@@ -73,7 +73,7 @@ export function InTripEnvironmentAlertsPanel({
             <AlertTriangle
               className={cn(
                 'h-4 w-4 shrink-0 mt-0.5',
-                event.severity === 'red' ? 'text-red-600' : 'text-amber-600',
+                event.severity === 'red' ? 'text-gate-reject-foreground' : 'text-amber-600',
               )}
               aria-hidden
             />

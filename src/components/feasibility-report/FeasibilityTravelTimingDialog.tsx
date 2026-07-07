@@ -177,7 +177,7 @@ export function FeasibilityTravelTimingDialog({
                 ? 'border-gate-suggest-border bg-gate-suggest/25 text-gate-suggest-foreground'
                 : previewTone === 'tight'
                   ? 'border-gate-suggest-border/80 bg-gate-suggest/15 text-muted-foreground'
-                  : 'border-gate-allow-border bg-gate-allow/15 text-muted-foreground',
+                  : 'border-gate-allow-border bg-muted/15 text-muted-foreground',
             )}
           >
             {previewMessage}

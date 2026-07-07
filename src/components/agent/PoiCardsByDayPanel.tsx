@@ -152,7 +152,7 @@ function PoiCard({
       className={cn(
         'min-w-[min(100%,280px)] max-w-[280px] shrink-0 snap-start shadow-sm transition-colors',
         resolvedFromPlace &&
-          'border-emerald-500/40 bg-emerald-50/35 dark:border-emerald-600/35 dark:bg-emerald-950/25',
+          'border-gate-allow-border/40 bg-gate-allow/35 dark:border-gate-allow-border/35 dark:bg-gate-allow/25',
         showDraftHint && !resolvedFromPlace && 'border-dashed border-muted-foreground/35 bg-muted/25 opacity-[0.97]',
         !resolvedFromPlace && !showDraftHint && 'border-border/80'
       )}
@@ -162,7 +162,7 @@ function PoiCard({
           {resolvedFromPlace ? (
             <Badge
               variant="secondary"
-              className="h-5 gap-0.5 border-emerald-600/30 bg-emerald-100/90 text-[10px] font-medium text-emerald-950 dark:bg-emerald-950/50 dark:text-emerald-100"
+              className="h-5 gap-0.5 border-gate-allow-border/30 bg-gate-allow/90 text-[10px] font-medium text-gate-allow-foreground dark:bg-gate-allow/50 dark:text-gate-allow-foreground"
             >
               <Database className="h-3 w-3" aria-hidden />
               Place 库
@@ -171,7 +171,7 @@ function PoiCard({
           {offbeat ? (
             <Badge
               variant="secondary"
-              className="h-5 gap-0.5 border-violet-500/35 bg-violet-100/80 text-[10px] font-medium text-violet-950 dark:bg-violet-950/40 dark:text-violet-100"
+              className="h-5 gap-0.5 border-border/35 bg-muted/20 text-[10px] font-medium text-muted-foreground dark:bg-muted/15 dark:text-muted-foreground"
               title="反热门配额 / offbeat lane 入选"
             >
               <Sparkles className="h-3 w-3" aria-hidden />
@@ -400,9 +400,9 @@ export function PoiCardsByDayPanel({
   return (
     <div className={cn('space-y-5', className)}>
       {offbeatCount > 0 ? (
-        <div className="rounded-lg border border-violet-500/25 bg-violet-50/40 px-3 py-2 text-xs text-violet-950 dark:bg-violet-950/25 dark:text-violet-100">
+        <div className="rounded-lg border border-border/25 bg-muted/15 px-3 py-2 text-xs text-muted-foreground dark:bg-muted/15 dark:text-muted-foreground">
           <span className="font-medium">小众偏好已生效</span>
-          <span className="text-violet-900/80 dark:text-violet-200/80">
+          <span className="text-muted-foreground/80 dark:text-muted-foreground/80">
             {' '}
             · 本批 {offbeatCount}/{allCards.length} 个 POI 为小众精选
             {offbeatRatio >= 0.2 ? '（已达 ≥20% 配额）' : ''}

@@ -40,7 +40,7 @@ export default function BreakdownBarList({ score, onShowBlockers }: BreakdownBar
               <div className="flex items-center gap-2">
                 <span className={cn(
                   'text-sm font-semibold',
-                  value >= 80 ? 'text-green-600' : value >= 60 ? 'text-yellow-600' : 'text-red-600'
+                  value >= 80 ? 'text-success' : value >= 60 ? 'text-warning' : 'text-error'
                 )}>
                   {value}%
                 </span>

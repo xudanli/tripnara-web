@@ -123,20 +123,23 @@ export function DecisionCheckerCounterfactualTab({
               {ifUnchanged.label}
             </DecisionCheckerBadge>
           }
-          className="border-red-200/70 bg-red-50/30"
+          className="border-border/70 bg-muted/10"
         >
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="flex w-full flex-col gap-2">
             {ifUnchanged.points?.map((point) => (
-              <div key={point.title} className="rounded-lg border border-red-200/60 bg-background/70 px-2.5 py-2">
+              <div
+                key={point.title}
+                className="w-full min-w-0 rounded-lg border border-border/60 bg-background/70 px-3 py-2.5"
+              >
                 <p className="text-xs font-medium text-foreground">{point.title}</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground break-words">
                   {formatDecisionCheckerText(point.description, displayTimezone)}
                 </p>
               </div>
             ))}
           </div>
           {ifUnchanged.recommendation?.text ? (
-            <DecisionCheckerAiBox className="mt-3 border-red-200/50 bg-red-50/40 text-red-950">
+            <DecisionCheckerAiBox className="mt-3 border-border/50 bg-muted/8 text-foreground">
               <p className="flex items-center gap-1.5 font-medium">
                 <Sparkles className="h-3.5 w-3.5" />
                 {formatDecisionCheckerText(ifUnchanged.recommendation.text, displayTimezone)}

@@ -1,9 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Handshake, UserPlus, Settings2 } from 'lucide-react';
+import { ArrowLeft, Handshake, UserPlus, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
+import { StructuredNegotiationDialog } from '@/components/domain-influence/StructuredNegotiationDialog';
 import { cn } from '@/lib/utils';
 import {
   COLLAB_CENTER_TABS,
@@ -61,6 +62,9 @@ export function TeamCollaborationCenter({
 }: TeamCollaborationCenterProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const collabTab = resolveCollabCenterTab(searchParams.get('collabTab'));
+  const [structuredNegotiationOpen, setStructuredNegotiationOpen] = useState(false);
+  const negotiationRoundId = searchParams.get('roundId');
+  const negotiationRoundDomain = searchParams.get('roundDomain');
 
   const memberCount = trip ? resolveTravelerCount(trip) : 1;
 
@@ -76,6 +80,7 @@ export function TeamCollaborationCenter({
   const handleNewNegotiation = () => {
     trackCollabNegotiationStart({ tripId });
     setCollabTab('decisions');
+    setStructuredNegotiationOpen(true);
   };
 
   if (!trip) {
@@ -87,51 +92,86 @@ export function TeamCollaborationCenter({
   }
 
   return (
-    <div className={cn('space-y-5', className)} role="region" aria-label="团队协作中心">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">团队协作中心</h2>
-          <p className="text-sm text-muted-foreground">
-            {memberCount} 位成员 · 一起把行程定下来
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {onInviteMembers ? (
-            <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={onInviteMembers}>
-              <UserPlus className="h-3.5 w-3.5" />
-              邀请成员
-            </Button>
-          ) : null}
-          {onOpenTeamSettings ? (
-            <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={onOpenTeamSettings}>
-              <Settings2 className="h-3.5 w-3.5" />
-              团队设置
-            </Button>
-          ) : null}
-          <Button type="button" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleNewNegotiation}>
-            <Handshake className="h-3.5 w-3.5" />
-            新建协商
-          </Button>
-        </div>
-      </header>
-
+    <div className={cn('space-y-0', className)} role="region" aria-label="团队协作中心">
       <Tabs value={collabTab} onValueChange={(v) => setCollabTab(resolveCollabCenterTab(v))}>
-        <TabsList
-          className="h-9 w-full justify-start overflow-x-auto rounded-none border-b border-border/60 bg-transparent p-0"
-          aria-label="协作中心分区"
-        >
-          {COLLAB_CENTER_TABS.map((tab) => (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className="h-9 shrink-0 rounded-none border-b-2 border-transparent px-3 text-sm text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:font-medium data-[state=active]:text-foreground"
-            >
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="sticky top-0 z-10 -mx-4 border-b border-border/60 bg-background/95 px-4 backdrop-blur-sm sm:-mx-6 sm:px-6">
+          <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {onGoToSchedule ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 gap-1 px-1.5 text-xs text-muted-foreground"
+                  onClick={onGoToSchedule}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span className="max-sm:sr-only">返回行程</span>
+                </Button>
+              ) : null}
+              <h2 className="truncate text-base font-semibold tracking-tight text-foreground">
+                团队协作中心
+              </h2>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                · {memberCount} 位成员
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {onInviteMembers ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  aria-label="邀请成员"
+                  onClick={onInviteMembers}
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">邀请成员</span>
+                </Button>
+              ) : null}
+              {onOpenTeamSettings ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  aria-label="团队设置"
+                  onClick={onOpenTeamSettings}
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">团队设置</span>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={handleNewNegotiation}
+              >
+                <Handshake className="h-3.5 w-3.5" />
+                新建协商
+              </Button>
+            </div>
+          </header>
 
-        <TabsContent value="members" forceMount className="mt-5 focus-visible:outline-none data-[state=inactive]:hidden">
+          <TabsList
+            className="h-8 w-full justify-start overflow-x-auto rounded-none border-0 bg-transparent p-0"
+            aria-label="协作中心分区"
+          >
+            {COLLAB_CENTER_TABS.map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="h-8 shrink-0 rounded-none border-b-2 border-transparent px-2.5 text-xs text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:font-medium data-[state=active]:text-foreground sm:px-3 sm:text-sm"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+
+        <TabsContent value="members" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
           <CollabCenterMembersTab
             tripId={tripId}
             trip={trip}
@@ -140,11 +180,11 @@ export function TeamCollaborationCenter({
           />
         </TabsContent>
 
-        <TabsContent value="decisions" forceMount className="mt-5 focus-visible:outline-none data-[state=inactive]:hidden">
+        <TabsContent value="decisions" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
           <CollabCenterDecisionsTab tripId={tripId} />
         </TabsContent>
 
-        <TabsContent value="persona" forceMount className="mt-5 focus-visible:outline-none data-[state=inactive]:hidden">
+        <TabsContent value="persona" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
           <CollabCenterPersonaTab
             tripId={tripId}
             initialStep={decisionProfilingInitialStep}
@@ -154,7 +194,7 @@ export function TeamCollaborationCenter({
           />
         </TabsContent>
 
-        <TabsContent value="wishes" forceMount className="mt-5 focus-visible:outline-none data-[state=inactive]:hidden">
+        <TabsContent value="wishes" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
           <CollabCenterWishesTab
             tripId={tripId}
             destinationLabel={destinationLabel}
@@ -163,10 +203,18 @@ export function TeamCollaborationCenter({
           />
         </TabsContent>
 
-        <TabsContent value="tasks" forceMount className="mt-5 focus-visible:outline-none data-[state=inactive]:hidden">
+        <TabsContent value="tasks" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
           <CollabCenterTasksTab tripId={tripId} />
         </TabsContent>
       </Tabs>
+
+      <StructuredNegotiationDialog
+        tripId={tripId}
+        open={structuredNegotiationOpen}
+        onOpenChange={setStructuredNegotiationOpen}
+        initialRoundId={negotiationRoundId}
+        initialRoundDomain={negotiationRoundDomain}
+      />
     </div>
   );
 }

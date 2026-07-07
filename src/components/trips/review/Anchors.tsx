@@ -44,9 +44,9 @@ export default function Anchors({
   onDisable,
 }: AnchorsProps) {
   const anchorTypeConfig: Record<AnchorType, { label: string; icon: any; color: string }> = {
-    preference: { label: '偏好锚点', icon: TrendingUp, color: 'text-blue-600 bg-blue-50' },
-    risk_policy: { label: '风险策略', icon: Shield, color: 'text-red-600 bg-red-50' },
-    route_pattern: { label: '路线模式', icon: Route, color: 'text-purple-600 bg-purple-50' },
+    preference: { label: '偏好锚点', icon: TrendingUp, color: 'text-muted-foreground bg-muted/15' },
+    risk_policy: { label: '风险策略', icon: Shield, color: 'text-gate-reject-foreground bg-gate-reject' },
+    route_pattern: { label: '路线模式', icon: Route, color: 'text-muted-foreground bg-muted/15' },
     pacing: { label: '节奏规则', icon: Activity, color: 'text-orange-600 bg-orange-50' },
   };
 
@@ -396,7 +396,7 @@ function AnchorCard({
               variant="ghost"
               onClick={handleDelete}
               disabled={submitting}
-              className="text-red-600 hover:text-red-700"
+              className="text-gate-reject-foreground hover:text-gate-reject-foreground"
             >
               <Trash2 className="w-4 h-4 mr-1" />
               删除

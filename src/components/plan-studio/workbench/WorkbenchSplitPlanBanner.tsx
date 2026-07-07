@@ -54,7 +54,7 @@ export function WorkbenchSplitPlanBanner({
             <Badge
               key={day}
               variant="outline"
-              className="h-5 rounded-full border-gate-suggest-border/45 bg-background/70 px-1.5 py-0 text-[10px] font-normal leading-5 text-gate-suggest-foreground"
+              className="h-5 rounded-full border-border/60 bg-muted/20 px-1.5 py-0 text-[10px] font-normal leading-5 text-muted-foreground"
             >
               Day {day}
             </Badge>
@@ -65,7 +65,7 @@ export function WorkbenchSplitPlanBanner({
         <button
           type="button"
           onClick={onViewSplitPlan}
-          className="ml-auto inline-flex shrink-0 items-center gap-1 font-medium text-gate-suggest-foreground hover:underline"
+          className="ml-auto inline-flex shrink-0 items-center gap-1 font-medium text-foreground hover:underline"
         >
           <Sparkles className="h-3 w-3" aria-hidden />
           查看分流方案

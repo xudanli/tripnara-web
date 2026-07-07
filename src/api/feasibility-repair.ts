@@ -1,5 +1,11 @@
 import apiClient from './client';
 import { readinessApi } from '@/api/readiness';
+import {
+  assertFeasibilityApplyRepairAllowed,
+  coerceWriteChainBlockedError,
+  EffectivePlanWriteChainRequiredError,
+  shouldBlockDirectEffectivePlanWrite,
+} from '@/lib/effective-plan-write-chain.util';
 import type { RepairOption } from '@/types/readiness';
 import type {
   ApplyRepairResponse,
@@ -320,6 +326,8 @@ export async function applyRepair(
   issueId: string,
   body: ApplyRepairBody,
 ): Promise<ApplyRepairResponse> {
+  assertFeasibilityApplyRepairAllowed({ id: issueId });
+
   try {
     const response = await apiClient.post<ApiResponseWrapper<Record<string, unknown>>>(
       `${base(tripId)}/issues/${encodeURIComponent(issueId)}/apply-repair`,
@@ -329,7 +337,11 @@ export async function applyRepair(
     if (data) return normalizeApplyRepair(data);
     return { status: 'applied', message: '', actionType: '' };
   } catch (err) {
-    if (!isNotImplemented(err)) throw err;
+    if (!isNotImplemented(err)) throw coerceWriteChainBlockedError(err);
+  }
+
+  if (shouldBlockDirectEffectivePlanWrite()) {
+    throw new EffectivePlanWriteChainRequiredError(issueId);
   }
 
   const legacy = await readinessApi.applyRepair(tripId, issueId, body.optionId);

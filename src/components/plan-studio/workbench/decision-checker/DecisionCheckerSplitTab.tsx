@@ -80,7 +80,7 @@ export function DecisionCheckerSplitTab({
   return (
     <div className="space-y-3">
       {!splitPreviewPending ? (
-        <p className="rounded-lg border border-gate-allow-border/60 bg-gate-allow/10 px-2.5 py-2 text-[11px] leading-relaxed text-gate-allow-foreground">
+        <p className="rounded-lg border border-border/60 bg-muted/10 px-2.5 py-2 text-[11px] leading-relaxed text-success">
           分流已写入单线日程；各活动 note 含分流标记，行中执行层可据此分组引导。
         </p>
       ) : null}
@@ -154,9 +154,9 @@ export function DecisionCheckerSplitTab({
             {risks.map((risk) => (
               <div
                 key={risk.title}
-                className="flex gap-2 rounded-lg border border-gate-confirm-border/60 bg-gate-confirm/10 px-2.5 py-2"
+                className="flex gap-2 rounded-lg border border-border/60 bg-muted/10 px-2.5 py-2"
               >
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gate-confirm-foreground" />
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
                 <div>
                   <p className="text-xs font-medium text-foreground">{risk.title}</p>
                   <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">

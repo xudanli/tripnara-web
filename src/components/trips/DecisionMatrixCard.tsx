@@ -37,9 +37,9 @@ const DECISION_CONFIG: Record<DecisionType, {
 }> = {
   GO_FULLY_SUPPORTED: {
     icon: CheckCircle2,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-300',
+    color: 'text-gate-allow-foreground',
+    bgColor: 'bg-gate-allow',
+    borderColor: 'border-gate-allow-border',
     title: '完全支持',
     description: '用户完全适合，鼓励前往',
   },
@@ -53,9 +53,9 @@ const DECISION_CONFIG: Record<DecisionType, {
   },
   GO_ALTERNATIVE_PLAN: {
     icon: Lightbulb,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-300',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted/15',
+    borderColor: 'border-border',
     title: '推荐替代方案',
     description: '建议选择更适合的方案',
   },
@@ -69,9 +69,9 @@ const DECISION_CONFIG: Record<DecisionType, {
   },
   NOT_RECOMMENDED: {
     icon: XCircle,
-    color: 'text-red-600',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-300',
+    color: 'text-gate-reject-foreground',
+    bgColor: 'bg-gate-reject',
+    borderColor: 'border-gate-reject-border',
     title: '不推荐',
     description: '风险过高，不建议前往',
   },

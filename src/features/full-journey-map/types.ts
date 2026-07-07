@@ -219,12 +219,12 @@ export const INSPECTOR_TABS: Array<{ id: InspectorTab; label: string }> = [
   { id: 'risk', label: '风险与影响' },
 ];
 
-/** 全程地图 · 按天分色（地图功能色 · 禁止 UI 紫） */
+/** 全程地图 · 按天分色（语义色 + 橙琥珀区分） */
 export const DAY_COLORS = [
   '#f97316', // Day 1 · 橙
-  '#3b82f6', // Day 2 · 蓝
-  '#0d9488', // Day 3 · 青绿
-  '#22c55e', // Day 4 · 绿
-  '#ef4444', // Day 5 · 红
-  '#14b8a6', // Day 6 · 青
+  '#88C0D0', // Day 2 · 蓝
+  '#5E7D5B', // Day 3 · 绿
+  '#8F3D28', // Day 4 · 红
+  '#eab308', // Day 5 · 琥珀
+  '#64748b', // Day 6 · 中性
 ] as const;

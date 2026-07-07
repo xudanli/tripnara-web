@@ -162,7 +162,7 @@ export const UNIFIED_MAP_POINT_STYLES: Record<
   string,
   { color: string; emoji: string; label: string }
 > = {
-  poi: { color: '#2563eb', emoji: '📍', label: '行程 POI' },
+  poi: { color: '#88C0D0', emoji: '📍', label: '行程 POI' },
   hotel_depot: { color: '#7c3aed', emoji: '🏨', label: '住宿锚点' },
   car_pickup: { color: '#059669', emoji: '🚗', label: '取车' },
   car_dropoff: { color: '#d97706', emoji: '🅿️', label: '还车' },

@@ -1,4 +1,9 @@
 import apiClient from './client';
+import {
+  assertExecutionApplyFallbackAllowed,
+  assertExecutionReorderAllowed,
+  coerceWriteChainBlockedError,
+} from '@/lib/effective-plan-write-chain.util';
 
 // ==================== 类型定义 ====================
 
@@ -497,15 +502,16 @@ export const executionApi = {
   reorder: async (
     data: ReorderRequest
   ): Promise<ReorderResponse> => {
+    assertExecutionReorderAllowed({ tripId: data.tripId });
     try {
       const response = await apiClient.post<ApiResponseWrapper<ReorderResponse>>(
         '/execution/reorder',
         data
       );
       return handleResponse(response);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Execution API] reorder 请求失败:', error);
-      throw error;
+      throw coerceWriteChainBlockedError(error);
     }
   },
 
@@ -516,15 +522,16 @@ export const executionApi = {
   applyFallback: async (
     data: ApplyFallbackRequest
   ): Promise<ApplyFallbackResponse> => {
+    assertExecutionApplyFallbackAllowed({ tripId: data.tripId, solutionId: data.solutionId });
     try {
       const response = await apiClient.post<ApiResponseWrapper<ApplyFallbackResponse>>(
         '/execution/apply-fallback',
         data
       );
       return handleResponse(response);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Execution API] applyFallback 请求失败:', error);
-      throw error;
+      throw coerceWriteChainBlockedError(error);
     }
   },
 

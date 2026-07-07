@@ -6,6 +6,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useTripFeasibilityReport } from '@/hooks/useTripFeasibilityReport';
 import {
+  buildTravelAssuranceSummary,
+  formatTravelAssuranceSubtitle,
+} from '@/lib/travel-assurance-summary.util';
+import {
   feasibilityVerdictGateClasses,
   feasibilityVerdictIcon,
   feasibilityVerdictToGate,
@@ -50,6 +54,20 @@ export function FeasibilitySummaryCard({
 
   if (!data) return null;
 
+  const assurance = buildTravelAssuranceSummary({
+    planningSummary: {
+      total: data.summary.mustHandle + data.summary.suggestAdjust + data.summary.pendingConfirm,
+      mustHandle: data.summary.mustHandle,
+      suggestAdjust: data.summary.suggestAdjust,
+      pendingConfirm: data.summary.pendingConfirm,
+      byCategory: Object.fromEntries(
+        data.dimensions.map((d) => [d.key, d.issueCount]),
+      ),
+    },
+    feasibilityDimensions: data.dimensions,
+  });
+  const assuranceSubtitle = formatTravelAssuranceSubtitle(assurance);
+
   const Icon = feasibilityVerdictIcon(data.verdict.status);
   const gateLabel = getGateStatusLabel(feasibilityVerdictToGate(data.verdict.status));
 
@@ -77,7 +95,7 @@ export function FeasibilitySummaryCard({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-foreground">可执行性</span>
+                <span className="text-sm font-semibold text-foreground">行程保障</span>
                 <Badge
                   variant="outline"
                   className={cn(
@@ -89,6 +107,9 @@ export function FeasibilitySummaryCard({
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                {assuranceSubtitle}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
                 {data.verdict.headline}
               </p>
             </div>
@@ -96,7 +117,7 @@ export function FeasibilitySummaryCard({
         </div>
 
         {data.isStale && (
-          <p className="text-[11px] text-gate-confirm-foreground bg-gate-confirm/50 border border-gate-confirm-border rounded-md px-2.5 py-1.5 leading-relaxed">
+          <p className="text-[11px] text-warning bg-muted/50 border border-border rounded-md px-2.5 py-1.5 leading-relaxed">
             报告已过期 · 验证 {data.verifiedForTripVersion ?? '—'} / 当前{' '}
             {data.currentTripVersion ?? '—'}
           </p>

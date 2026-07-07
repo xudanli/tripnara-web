@@ -115,7 +115,7 @@ export default function PreDepartureOverviewSidebar({
               className={cn(
                 'rounded-lg border px-2 py-1.5 text-center',
                 blockers > 0
-                  ? 'border-gate-reject-border/50 bg-gate-reject/8 text-gate-reject-foreground'
+                  ? 'border-border/50 bg-muted/8 text-error'
                   : 'border-border/50 bg-muted/20 text-muted-foreground',
               )}
             >
@@ -128,7 +128,7 @@ export default function PreDepartureOverviewSidebar({
               className={cn(
                 'rounded-lg border px-2 py-1.5 text-center',
                 must > 0
-                  ? 'border-gate-confirm-border/50 bg-gate-confirm/8 text-gate-confirm-foreground'
+                  ? 'border-gate-confirm-border/50 bg-gate-confirm/8 text-warning'
                   : 'border-border/50 bg-muted/20 text-muted-foreground',
               )}
             >

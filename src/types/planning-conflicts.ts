@@ -67,6 +67,8 @@ export interface PlanningConflictsResponse {
   conflictsGeneratedAt?: string;
   summary: PlanningConflictsSummaryDto;
   conflicts: PlanningConflictDto[];
+  /** 生成该聚合时采用的 constraintsVersion（与 query cv 不一致时 isStale） */
+  constraintsVersion?: number;
   /** P2：`?includeConstraintsSummary=1` */
   constraintsSummary?: import('@/types/planning-constraints').ConstraintsSummaryResponse;
   /** 决策检查器读模型：`?includeDecisionChecker=1` 或 deferred 轮询 ready 后 */

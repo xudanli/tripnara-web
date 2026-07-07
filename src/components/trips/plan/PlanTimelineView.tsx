@@ -52,10 +52,10 @@ export default function PlanTimelineView({
 
   const getItemTypeColor = (type: string) => {
     const colors: Record<string, string> = {
-      ACTIVITY: 'bg-blue-100 text-blue-700',
+      ACTIVITY: 'bg-muted/15 text-muted-foreground',
       FOOD: 'bg-orange-100 text-orange-700',
-      ACCOMMODATION: 'bg-purple-100 text-purple-700',
-      TRANSPORTATION: 'bg-green-100 text-green-700',
+      ACCOMMODATION: 'bg-muted/15 text-muted-foreground',
+      TRANSPORTATION: 'bg-gate-allow text-gate-allow-foreground',
     };
     return colors[type] || 'bg-gray-100 text-gray-700';
   };

@@ -17,13 +17,13 @@ interface ExecutionAdvisoryCardProps {
 function verdictBorder(status: TripExecutionAdvisoryDto['verdict']['status']) {
   switch (status) {
     case 'ON_TRACK':
-      return 'border-l-green-500';
+      return 'border-l-gate-allow-foreground';
     case 'AT_RISK':
       return 'border-l-amber-500';
     case 'REPLAN_REQUIRED':
       return 'border-l-orange-500';
     case 'STOP':
-      return 'border-l-red-500';
+      return 'border-l-gate-reject-foreground';
     default:
       return 'border-l-slate-400';
   }
@@ -64,7 +64,7 @@ export function ExecutionAdvisoryCard({
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Shield className="h-4 w-4 text-sky-700" />
+            <Shield className="h-4 w-4 text-muted-foreground" />
             实时执行状态
             <Badge variant="outline" className="text-[10px]">
               {executionVerdictLabel(advisory.verdict.status)}
@@ -81,7 +81,7 @@ export function ExecutionAdvisoryCard({
         <p className="text-sm font-medium text-slate-800">{advisory.verdict.headline}</p>
 
         {recommended && advisory.verdict.status !== 'ON_TRACK' && (
-          <p className="text-xs text-sky-800 bg-sky-50 rounded px-2 py-1.5">
+          <p className="text-xs text-muted-foreground bg-muted/15 rounded px-2 py-1.5">
             建议：{recommended.label}
             {recommended.impactSummary ? ` · ${recommended.impactSummary}` : ''}
           </p>
@@ -93,8 +93,8 @@ export function ExecutionAdvisoryCard({
               <span
                 className={cn(
                   'w-1.5 h-1.5 rounded-full shrink-0',
-                  item.status === 'completed' && 'bg-green-500',
-                  item.status === 'active' && 'bg-sky-500',
+                  item.status === 'completed' && 'bg-gate-allow-foreground',
+                  item.status === 'active' && 'bg-muted/150',
                   item.status === 'at_risk' && 'bg-amber-500',
                   item.status === 'upcoming' && 'bg-slate-300',
                 )}

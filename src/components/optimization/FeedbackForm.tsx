@@ -151,10 +151,10 @@ function FatigueSlider({
   predicted?: number;
 }) {
   const getColor = (v: number) => {
-    if (v < 0.5) return 'text-green-500';
+    if (v < 0.5) return 'text-gate-allow-foreground';
     if (v < 1) return 'text-yellow-500';
     if (v < 1.5) return 'text-orange-500';
-    return 'text-red-500';
+    return 'text-gate-reject-foreground';
   };
 
   const getLabel = (v: number) => {

@@ -71,10 +71,10 @@ const getTerrainClasses = (_terrain: TerrainType, characteristics: TerrainCharac
   
   // 基于风险等级的颜色
   const riskColors: Record<string, string> = {
-    LOW: 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200',
+    LOW: 'bg-gate-allow text-gate-allow-foreground border-gate-allow-border hover:bg-gate-allow',
     MEDIUM: 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200',
     HIGH: 'bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200',
-    CRITICAL: 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200',
+    CRITICAL: 'bg-gate-reject text-gate-reject-foreground border-gate-reject-border hover:bg-gate-reject',
   };
   
   return riskColors[riskLevel] || riskColors.MEDIUM;

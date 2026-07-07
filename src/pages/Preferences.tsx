@@ -252,22 +252,22 @@ export default function PreferencesPage() {
 
         {/* Error Display */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-800">{error}</p>
+          <div className="mb-6 p-4 bg-gate-reject border border-gate-reject-border rounded-md">
+            <p className="text-gate-reject-foreground">{error}</p>
           </div>
         )}
 
         {/* Success Message */}
         {submitSuccess && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-green-800">{t('preferences.saveSuccess')}</p>
+          <div className="mb-6 p-4 bg-gate-allow border border-gate-allow-border rounded-md">
+            <p className="text-gate-allow-foreground">{t('preferences.saveSuccess')}</p>
           </div>
         )}
 
         {/* Submit Error */}
         {submitError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-800">{submitError}</p>
+          <div className="mb-6 p-4 bg-gate-reject border border-gate-reject-border rounded-md">
+            <p className="text-gate-reject-foreground">{submitError}</p>
           </div>
         )}
 

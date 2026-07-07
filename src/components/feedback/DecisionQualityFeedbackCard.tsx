@@ -66,9 +66,9 @@ export default function DecisionQualityFeedbackCard({
 
   if (submitted) {
     return (
-      <Card className={cn('border-green-300 bg-green-50', className)}>
+      <Card className={cn('border-gate-allow-border bg-gate-allow', className)}>
         <CardContent className="pt-6">
-          <div className="flex items-center gap-2 text-green-700">
+          <div className="flex items-center gap-2 text-gate-allow-foreground">
             <Star className="w-5 h-5" />
             <span className="font-medium">感谢您的反馈！</span>
           </div>
@@ -78,7 +78,7 @@ export default function DecisionQualityFeedbackCard({
   }
 
   return (
-    <Card className={cn('border-blue-200', className)}>
+    <Card className={cn('border-border', className)}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>

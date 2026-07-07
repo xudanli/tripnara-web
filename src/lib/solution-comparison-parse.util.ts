@@ -26,6 +26,14 @@ function pickNumber(obj: Record<string, unknown>, ...keys: string[]): number | u
   return undefined;
 }
 
+function normalizeStringArray(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items = raw
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+  return items.length ? items : undefined;
+}
+
 export function normalizeExplainAlternativeDto(raw: unknown): ExplainAlternativeDto | null {
   const o = asRecord(raw);
   if (!o) return null;
@@ -42,6 +50,7 @@ export function normalizeExplainAlternativeDto(raw: unknown): ExplainAlternative
     dimension_scores: dimensionScores as ExplainAlternativeDto['dimension_scores'],
     scores: dimensionScores as Record<string, number> | undefined,
     caveat: pickString(o, 'caveat') ?? (Array.isArray(o.caveats) ? String(o.caveats[0]) : undefined),
+    tradeoffs: normalizeStringArray(o.tradeoffs),
     is_recommended: o.is_recommended === true || o.isRecommended === true,
     gate_status: pickString(o, 'gate_status', 'gateStatus'),
   };
@@ -65,7 +74,7 @@ export function buildOptionComparisonFromExplainAlternatives(input: {
   const options = alternatives.map((alt) => ({
     optionId: alt.id,
     scores: (alt.dimension_scores ?? alt.scores) as Record<string, number> | undefined,
-    summary: alt.summary ?? alt.caveat,
+    ...(alt.tradeoffs?.length ? { tradeoffs: alt.tradeoffs } : {}),
   }));
 
   return {

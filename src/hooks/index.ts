@@ -28,12 +28,6 @@ export { useSystemStatus } from './useSystemStatus';
 export { useDebounce } from './useDebounce';
 
 // 智能体助手
-export { usePlanningAssistant } from './usePlanningAssistant';
-export type { 
-  PlanningMessage, 
-  UsePlanningAssistantReturn 
-} from './usePlanningAssistant';
-
 export { useJourneyAssistant } from './useJourneyAssistant';
 export type { 
   JourneyMessage, 
@@ -100,6 +94,8 @@ export {
 
 export { useQuestionnaireProgress } from './useQuestionnaireProgress';
 export { useFitnessPrompt } from './useFitnessPrompt';
+
+export { useTravelStatus, useTripIntent, travelStatusQueryKeys } from './useTravelStatus';
 
 // V2 优化系统
 export {

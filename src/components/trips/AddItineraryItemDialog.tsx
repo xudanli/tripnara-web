@@ -388,7 +388,7 @@ export function AddItineraryItemDialog({
           {/* 地点搜索 - 仅活动和用餐类型显示 */}
           {(itemType === 'ACTIVITY' || itemType === 'MEAL_ANCHOR' || itemType === 'MEAL_FLOATING') && (
             <div className="space-y-2">
-              <Label>选择地点 {itemType === 'ACTIVITY' && <span className="text-red-500">*</span>}</Label>
+              <Label>选择地点 {itemType === 'ACTIVITY' && <span className="text-gate-reject-foreground">*</span>}</Label>
               <Popover open={searchOpen} onOpenChange={setSearchOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -628,15 +628,15 @@ export function AddItineraryItemDialog({
           {validationResult && validationResult.errors.length > 0 && (
             <div className="space-y-2">
               {validationResult.errors.map((err, idx) => (
-                <div key={idx} className="rounded-lg bg-red-50 border border-red-200 p-3">
+                <div key={idx} className="rounded-lg bg-gate-reject border border-gate-reject-border p-3">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-gate-reject-foreground flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-red-800">{formatValidationMessage(err.message, err.details)}</p>
+                      <p className="text-sm font-medium text-gate-reject-foreground">{formatValidationMessage(err.message, err.details)}</p>
                       {err.suggestions && err.suggestions.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {err.suggestions.map((suggestion: { description?: string }, sIdx: number) => (
-                            <p key={sIdx} className="text-xs text-red-700">
+                            <p key={sIdx} className="text-xs text-gate-reject-foreground">
                               💡 {suggestion.description}
                             </p>
                           ))}
@@ -695,10 +695,10 @@ export function AddItineraryItemDialog({
           {validationResult && validationResult.infos.length > 0 && (
             <div className="space-y-2">
               {validationResult.infos.map((info, idx) => (
-                <div key={idx} className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                <div key={idx} className="rounded-lg bg-muted/15 border border-border p-3">
                   <div className="flex items-start gap-2">
-                    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-800">{formatValidationMessage(info.message, info.details)}</p>
+                    <Info className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-muted-foreground">{formatValidationMessage(info.message, info.details)}</p>
                   </div>
                 </div>
               ))}
@@ -735,7 +735,7 @@ export function AddItineraryItemDialog({
 
             {/* 错误提示（兼容旧代码） */}
             {error && !validationResult && (
-              <div className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-md">
+              <div className="text-sm text-gate-reject-foreground bg-gate-reject px-3 py-2 rounded-md">
                 {error}
               </div>
             )}

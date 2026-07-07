@@ -65,7 +65,7 @@ export function InTripMoneyDashboardPanel({
     <Card className={cn('col-span-12', className)}>
       <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <Wallet className="h-4 w-4 text-emerald-600" aria-hidden />
+          <Wallet className="h-4 w-4 text-gate-allow-foreground" aria-hidden />
           消费智能 · Money Brain
         </CardTitle>
         <div className="flex items-center gap-2">

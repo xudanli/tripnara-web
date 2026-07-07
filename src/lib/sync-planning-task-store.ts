@@ -1,4 +1,5 @@
 import type { RouteAndRunResponse, RouteRunAsyncTaskStatusResponse } from '@/api/agent';
+import { extractCtreCompileProgressFromRouteRun } from '@/lib/ctre-compile-progress-sync';
 import { syncRelaxationSuggestionsFromRouteRun } from '@/lib/sync-relaxation-suggestions-store';
 import { applyRouteAndRunToStore } from '@/lib/world-model-guards';
 import { applyRouteRunConfirmationToStore } from '@/lib/route-run-confirmation';
@@ -40,6 +41,13 @@ export function syncPlanningTaskFromPollSnapshot(snap: RouteRunAsyncTaskStatusRe
     status: mapTaskStatus(snap.status),
     resultData,
     taskLease: snap.task_lease_v1 ?? null,
+    ...(resultData
+      ? {
+          ctreCompilation:
+            extractCtreCompileProgressFromRouteRun(resultData) ??
+            usePlanningTaskStore.getState().ctreCompilation,
+        }
+      : {}),
   });
 
   if (resultData) {
@@ -56,5 +64,6 @@ export function markPlanningTaskProcessing(taskId: string, pollPath: string): vo
     message: '规划师已接收需求…',
     currentPhase: 'INTAKE',
     resultData: null,
+    ctreCompilation: null,
   });
 }

@@ -95,7 +95,7 @@ export function VibeIntentComposer({
     <div className={cn('space-y-3', className)}>
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor="vibe-intent" className="flex items-center gap-1.5 text-base font-medium">
-          <Wand2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+          <Wand2 className="h-4 w-4 text-gate-allow-foreground dark:text-gate-allow-foreground" aria-hidden />
           招募愿景 · 怎么玩、要什么人
         </Label>
         {(isParsing || isStale) && value.trim().length >= 10 && (
@@ -115,7 +115,7 @@ export function VibeIntentComposer({
             className={cn(
               'rounded-md px-1.5 py-0.5 text-[10px] font-medium',
               isLiveLlm
-                ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                ? 'bg-gate-allow-foreground/10 text-gate-allow-foreground dark:text-gate-allow-foreground'
                 : 'bg-muted text-muted-foreground'
             )}
           >

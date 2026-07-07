@@ -79,20 +79,20 @@ export default function RiskCard({
     high: {
       label: isZh ? '高' : 'High',
       labelEn: 'High',
-      className: 'bg-red-50 text-red-700 border-red-200',
-      iconClassName: 'text-red-600',
+      className: 'bg-muted text-error border-border',
+      iconClassName: 'text-error',
     },
     medium: {
       label: isZh ? '中' : 'Medium',
       labelEn: 'Medium',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
-      iconClassName: 'text-amber-600',
+      className: 'bg-muted text-warning border-border',
+      iconClassName: 'text-warning',
     },
     low: {
       label: isZh ? '低' : 'Low',
       labelEn: 'Low',
-      className: 'bg-amber-50 text-amber-700 border-amber-200',
-      iconClassName: 'text-amber-600',
+      className: 'bg-muted text-warning border-border',
+      iconClassName: 'text-warning',
     },
   };
 
@@ -144,8 +144,8 @@ export default function RiskCard({
   }, [actionableMitigations, preparationTasksById, risk]);
 
   const priorityConfig = {
-    high: { label: isZh ? '高优先级' : 'High', className: 'text-red-600 border-red-200' },
-    medium: { label: isZh ? '中优先级' : 'Medium', className: 'text-amber-600 border-amber-200' },
+    high: { label: isZh ? '高优先级' : 'High', className: 'text-error border-border' },
+    medium: { label: isZh ? '中优先级' : 'Medium', className: 'text-warning border-border' },
     low: { label: isZh ? '低优先级' : 'Low', className: 'text-slate-600 border-slate-200' },
   };
   
@@ -226,7 +226,7 @@ export default function RiskCard({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-auto min-h-7 py-1 px-2 text-xs font-normal bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"
+                      className="h-auto min-h-7 py-1 px-2 text-xs font-normal bg-muted text-muted-foreground border-border hover:bg-muted"
                       title={isZh ? '在时间轴中查看该天/该点' : 'Focus on timeline'}
                       onClick={() => {
                         const ok = jumpFromAffectedPoi(trip!, planStudio!, poi);
@@ -239,7 +239,7 @@ export default function RiskCard({
                     <Badge
                       key={poi.id || index}
                       variant="outline"
-                      className="text-xs bg-blue-50 text-blue-700 border-blue-200 font-normal py-1 px-2 h-auto"
+                      className="text-xs bg-muted text-muted-foreground border-border font-normal py-1 px-2 h-auto"
                     >
                       {inner}
                     </Badge>
@@ -281,7 +281,7 @@ export default function RiskCard({
               {mitigationProgress.total > 0 ? (
                 <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    className="h-full rounded-full bg-muted-foreground transition-all duration-300"
                     style={{
                       width: `${Math.round((mitigationProgress.done / mitigationProgress.total) * 100)}%`,
                     }}
@@ -309,7 +309,7 @@ export default function RiskCard({
                         className={cn(
                           'flex items-start gap-2 rounded-lg border px-2.5 py-2 transition-colors',
                           checked
-                            ? 'border-emerald-200 bg-emerald-50/60'
+                            ? 'border-border bg-muted/60'
                             : 'border-slate-100 bg-slate-50/40 hover:border-slate-200',
                         )}
                       >
@@ -350,7 +350,7 @@ export default function RiskCard({
                             </span>
                           ) : null}
                           {task?.scope === 'team' && !task.assigneeLabel ? (
-                            <span className="text-[10px] text-amber-700">
+                            <span className="text-[10px] text-warning">
                               {isZh ? '待分配' : 'Unassigned'}
                             </span>
                           ) : null}
@@ -405,7 +405,7 @@ export default function RiskCard({
                               href={source.canonicalUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-sm text-blue-700 hover:text-blue-800 hover:underline mt-1"
+                              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-muted-foreground hover:underline mt-1"
                             >
                               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                               <span className="truncate">{source.canonicalUrl}</span>
