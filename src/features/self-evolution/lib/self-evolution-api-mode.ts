@@ -1,4 +1,4 @@
-import { isApiNotReadyError } from '@/features/match-square/lib/match-square-api-mode';
+import { isApiNotReadyError } from '@/lib/api-fallback-mode';
 
 export type SelfEvolutionApiMode = 'mock' | 'live' | 'auto';
 

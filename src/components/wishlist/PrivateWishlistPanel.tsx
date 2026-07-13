@@ -1,6 +1,6 @@
 import type { ReactNode, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Heart, LayoutGrid, Lock, PenLine, Users } from 'lucide-react';
+import { Heart, LayoutGrid, PenLine, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
@@ -11,9 +11,10 @@ import { WishCardPicker } from './WishCardPicker';
 import { WishFreeForm } from './WishFreeForm';
 import { WishInspirationGallery } from './WishInspirationGallery';
 import { WishEmptyState, WishItemCard } from './WishItemCard';
+import { CollabWishTableRow } from '@/components/team-collaboration/widgets/CollabWishTableRow';
 import { CollabWidgetCard } from '@/components/team-collaboration/widgets/CollabWidgetCard';
-import { collabDashboardGrid, collabDashboardSpan } from '@/components/team-collaboration/collab-dashboard-layout';
-import type { TeamWishItem, TripWishItem, WishSummary } from '@/types/trip-wishes';
+import { collabDashboardGrid, collabDashboardSpan, collabPageStack } from '@/components/team-collaboration/collab-dashboard-layout';
+import type { TeamWishItem, TripWishItem, WishCategory, WishSummary, WishVisibility } from '@/types/trip-wishes';
 import {
   wishEmptyBox,
   wishInputTabsList,
@@ -36,12 +37,20 @@ interface PrivateWishlistPanelProps {
   embedded?: boolean;
   /** 协作中心三列布局 */
   collabCenterLayout?: boolean;
-  /** 协作中心右侧栏（col-span-3） */
+  /** 协作中心顶栏（统计 + AI 摘要） */
+  renderCollabHeader?: (ctx: {
+    summary: WishSummary | null;
+    mine: TripWishItem[];
+    team: TeamWishItem[];
+    loading: boolean;
+  }) => ReactNode;
+  /** 协作中心右侧栏 */
   renderCollabSidebar?: (ctx: {
     summary: WishSummary | null;
     mine: TripWishItem[];
     team: TeamWishItem[];
     loading: boolean;
+    onDeleteMine: (wishId: string) => Promise<void>;
   }) => ReactNode;
   /** 协作中心底部全宽区 */
   renderCollabFooter?: (ctx: {
@@ -53,8 +62,9 @@ interface PrivateWishlistPanelProps {
   /** URL 深链 ?wishId= */
   highlightWishId?: string | null;
   onHighlightWishConsumed?: () => void;
-  /** 协作中心：表单区 ref，供底部 CTA 滚动定位 */
+  /** 协作中心：表单区 ref，供顶部 CTA 滚动定位 */
   formSectionRef?: RefObject<HTMLDivElement | null>;
+  onWishSubmit?: (payload: { visibility: WishVisibility; category: WishCategory }) => void;
 }
 
 export function PrivateWishlistPanel({
@@ -65,6 +75,7 @@ export function PrivateWishlistPanel({
   onSummaryChange,
   embedded = false,
   collabCenterLayout = false,
+  renderCollabHeader,
   renderCollabSidebar,
   renderCollabFooter,
   highlightWishId,
@@ -230,12 +241,7 @@ export function PrivateWishlistPanel({
       }
     >
       {collabCenterLayout ? (
-        <CollabWidgetCard
-          title="记录你的心愿"
-          action={<Lock className="h-3.5 w-3.5 text-primary" aria-hidden />}
-          compact
-          className="h-full min-h-0"
-        >
+        <CollabWidgetCard title="录入心愿" compact className="shrink-0 !p-2.5">
           {formInner}
         </CollabWidgetCard>
       ) : (
@@ -246,29 +252,55 @@ export function PrivateWishlistPanel({
 
   const listInner = (
     <>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <Tabs value={listView} onValueChange={(v) => setListView(v as 'mine' | 'team')}>
-          <TabsList className={cn(wishSegmentList, 'h-8')}>
-            <TabsTrigger value="mine" className={cn('h-7 px-3', wishSegmentTrigger)}>
-              我的心愿
-            </TabsTrigger>
-            <TabsTrigger value="team" className={cn('h-7 gap-1 px-3', wishSegmentTrigger)}>
-              <Users className="h-3 w-3" />
-              团队心愿
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {loading ? <Spinner className="h-4 w-4" /> : null}
-      </div>
+      {!collabCenterLayout || loading ? (
+        <div className="mb-2 flex items-center justify-between gap-2">
+          {!collabCenterLayout ? (
+            <Tabs value={listView} onValueChange={(v) => setListView(v as 'mine' | 'team')}>
+              <TabsList className={cn(wishSegmentList, 'h-8')}>
+                <TabsTrigger value="mine" className={cn('h-7 px-3', wishSegmentTrigger)}>
+                  我的心愿
+                </TabsTrigger>
+                <TabsTrigger value="team" className={cn('h-7 gap-1 px-3', wishSegmentTrigger)}>
+                  <Users className="h-3 w-3" />
+                  团队心愿
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          ) : null}
+          {loading ? <Spinner className="h-4 w-4" /> : null}
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="flex justify-center py-12">
           <Spinner className="h-6 w-6" />
         </div>
-      ) : listView === 'mine' ? (
+      ) : collabCenterLayout || listView === 'mine' ? (
         <>
           {mine.length === 0 ? (
             <WishEmptyState />
+          ) : collabCenterLayout ? (
+            <>
+              <div className="rounded-md border border-border/60">
+                {mine.slice(0, 6).map((wish) => (
+                  <div key={wish.id} id={`wish-item-${wish.id}`}>
+                    <CollabWishTableRow
+                      wish={wish}
+                      highlighted={wish.id === highlightWishId}
+                      onDelete={async () => {
+                        await archiveWish(wish.id);
+                        afterMutation();
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+              {mine.length > 6 ? (
+                <p className="mt-2 text-center text-[10px] text-primary">
+                  查看全部 {mine.length} 条心愿 →
+                </p>
+              ) : null}
+            </>
           ) : (
             <ul
               className={cn(
@@ -297,7 +329,7 @@ export function PrivateWishlistPanel({
               ))}
             </ul>
           )}
-          {collabCenterLayout && team.length > 0 ? (
+          {!collabCenterLayout && team.length > 0 ? (
             <div className="mt-6 space-y-3 border-t border-border/60 pt-4">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold text-foreground">团队心愿</h3>
@@ -333,6 +365,19 @@ export function PrivateWishlistPanel({
             邀请成员后可见团队心愿，或将心愿设为「匿名」/「署名」
           </p>
         </div>
+      ) : collabCenterLayout ? (
+        <div className="rounded-md border border-border/60">
+          {team.map((wish) => (
+            <div key={wish.id} id={`wish-item-${wish.id}`}>
+              <CollabWishTableRow
+                wish={wish}
+                teamWallView
+                authorName={userDisplayName}
+                highlighted={wish.id === highlightWishId}
+              />
+            </div>
+          ))}
+        </div>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
           {team.map((wish) => (
@@ -363,7 +408,7 @@ export function PrivateWishlistPanel({
       }
     >
       {collabCenterLayout ? (
-        <CollabWidgetCard title="心愿列表" compact className="h-full min-h-0">
+        <CollabWidgetCard title="我的心愿" compact className="min-h-0 flex-1">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-0.5 scrollbar-auto-hide">
             {listInner}
           </div>
@@ -444,20 +489,32 @@ export function PrivateWishlistPanel({
     </div>
   );
 
-  const wishCtx = { summary, mine, team, loading };
+  const handleDeleteMine = useCallback(
+    async (wishId: string) => {
+      await archiveWish(wishId);
+      afterMutation();
+    },
+    [archiveWish, afterMutation],
+  );
+
+  const wishCtx = {
+    summary,
+    mine,
+    team,
+    loading,
+    onDeleteMine: handleDeleteMine,
+  };
 
   if (collabCenterLayout) {
     return (
-      <section className={cn('space-y-3', className)}>
-        <div className={cn(collabDashboardGrid, 'items-stretch')}>
+      <section className={cn(collabPageStack, className)}>
+        {renderCollabHeader ? renderCollabHeader(wishCtx) : null}
+        <div className={cn(collabDashboardGrid, 'items-start')}>
           <div className={cn(collabDashboardSpan({ md: 6, lg: 4 }), 'flex min-h-0 flex-col')}>
             {formSection}
           </div>
-          <div className={cn(collabDashboardSpan({ md: 6, lg: 5 }), 'flex min-h-0 flex-col')}>
-            {listSection}
-          </div>
           {renderCollabSidebar ? (
-            <div className={cn(collabDashboardSpan({ md: 6, lg: 3 }), 'flex min-h-0 flex-col')}>
+            <div className={cn(collabDashboardSpan({ md: 6, lg: 8 }), 'flex min-h-0 flex-col')}>
               {renderCollabSidebar(wishCtx)}
             </div>
           ) : null}

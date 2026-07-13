@@ -4,7 +4,7 @@
  */
 
 import { identityGovernanceApi, isIdentityApiNotReady } from '@/api/identity-governance';
-import { isApiNotReadyError } from '@/features/match-square/lib/match-square-api-mode';
+import { isApiNotReadyError } from '@/lib/api-fallback-mode';
 import { mapAgencyPayloadToDraftBody } from '@/lib/map-agency-certification';
 import {
   markAgencyCertificationSubmitted,

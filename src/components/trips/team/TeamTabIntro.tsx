@@ -11,17 +11,17 @@ interface TeamTabIntroProps {
 
 const STEPS = {
   'empty-solo': [
-    { icon: Users, title: '单人也能规划', body: '出行人数在上方「固化约束」里设置即可，这里只有在你邀请同行者时才需要。' },
+    { icon: Users, title: '单人也能规划', body: '出行人数在上方「固化约束」里设置即可；多人出行时通过邀请码收集偏好。' },
   ],
   'empty-group': [
-    { icon: UserPlus, title: '先列出同行者', body: '上方约束里的「N 人出行」只是规划假设；这里要录入真实同行者，系统才能对齐偏好。' },
-    { icon: Handshake, title: '再决定谁拍板', body: '补充体力、预算倾向后，可选择平等商量或领队说了算。' },
+    { icon: UserPlus, title: '发送邀请码', body: '成员通过问卷提交偏好后，可在「团队需求画像」查看汇总。' },
+    { icon: Handshake, title: '再一起定方案', body: '偏好齐全后，可检查是否合拍并发起协调。' },
   ],
   setup: [
-    { icon: UserPlus, title: '补充同行者信息', body: '带「待补充」标记的是占位成员，请点进去填写姓名和偏好。' },
+    { icon: UserPlus, title: '等待成员提交问卷', body: '「团队需求画像」会显示谁还未完成偏好填写。' },
   ],
   ready: [
-    { icon: Handshake, title: '可以一起定方案了', body: '成员信息齐全后，可检查大家是否合拍，或在右上角用「结构化协商」。' },
+    { icon: Handshake, title: '可以一起定方案了', body: '成员偏好齐全后，可检查大家是否合拍并发起行程协调。' },
   ],
 } as const;
 
@@ -42,7 +42,7 @@ export function TeamTabIntro({
       )}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-semibold text-foreground">同行者与决策</h2>
+        <h2 className="font-semibold text-foreground">团队协调</h2>
         {phase === 'empty-group' && plannedTravelerCount ? (
           <span className="text-xs text-muted-foreground">约束里已设 {plannedTravelerCount} 人出行</span>
         ) : null}

@@ -1,17 +1,24 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Handshake, UserPlus, Settings2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Handshake,
+  Plus,
+  UserPlus,
+  Settings2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
 import { StructuredNegotiationDialog } from '@/components/domain-influence/StructuredNegotiationDialog';
 import { cn } from '@/lib/utils';
-import {
-  COLLAB_CENTER_TABS,
-  resolveCollabCenterTab,
-  type CollabCenterTab,
-} from '@/lib/collab-center-tabs';
+import { type CollabCenterTab } from '@/lib/collab-center-tabs';
 import { mergeCollabDeepLink } from '@/lib/collab-center-navigation';
+import {
+  isAdvisorLedTrip,
+  resolveCollabCenterTabForTrip,
+  resolveCollabCenterTabsForTrip,
+} from '@/lib/trip-collaboration-mode.util';
 import { resolveTravelerCount } from '@/lib/planning-constraints.util';
 import {
   trackCollabNegotiationStart,
@@ -25,6 +32,8 @@ import { CollabCenterDecisionsTab } from './tabs/CollabCenterDecisionsTab';
 import { CollabCenterPersonaTab } from './tabs/CollabCenterPersonaTab';
 import { CollabCenterWishesTab } from './tabs/CollabCenterWishesTab';
 import { CollabCenterTasksTab } from './tabs/CollabCenterTasksTab';
+import { CollabCenterRoleInvitesTab } from './tabs/CollabCenterRoleInvitesTab';
+import { CollabCenterAdvisorVotesTab } from './tabs/CollabCenterAdvisorVotesTab';
 
 export interface TeamCollaborationCenterProps {
   tripId: string;
@@ -43,7 +52,7 @@ export interface TeamCollaborationCenterProps {
   className?: string;
 }
 
-/** 团队协作中心 Shell：页头 + 五 Tab 导航 */
+/** 团队协作中心 Shell：页头 + Tab 导航（顾问制 / 自由行 Tab 集不同） */
 export function TeamCollaborationCenter({
   tripId,
   trip,
@@ -61,8 +70,16 @@ export function TeamCollaborationCenter({
   className,
 }: TeamCollaborationCenterProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const collabTab = resolveCollabCenterTab(searchParams.get('collabTab'));
+  const advisorLed = trip ? isAdvisorLedTrip(trip) : false;
+  const collabTabs = useMemo(
+    () => (trip ? resolveCollabCenterTabsForTrip(trip) : []),
+    [trip],
+  );
+  const collabTab = trip
+    ? resolveCollabCenterTabForTrip(searchParams.get('collabTab'), trip)
+    : 'members';
   const [structuredNegotiationOpen, setStructuredNegotiationOpen] = useState(false);
+  const [createVoteNonce, setCreateVoteNonce] = useState(0);
   const negotiationRoundId = searchParams.get('roundId');
   const negotiationRoundDomain = searchParams.get('roundDomain');
 
@@ -76,6 +93,15 @@ export function TeamCollaborationCenter({
     },
     [searchParams, setSearchParams, tripId],
   );
+
+  const handleInviteMembers = useCallback(() => {
+    setCollabTab('invites');
+  }, [setCollabTab]);
+
+  const handleCreateVote = useCallback(() => {
+    setCollabTab('decisions');
+    setCreateVoteNonce((n) => n + 1);
+  }, [setCollabTab]);
 
   const handleNewNegotiation = () => {
     trackCollabNegotiationStart({ tripId });
@@ -91,9 +117,17 @@ export function TeamCollaborationCenter({
     );
   }
 
+  const showInviteButton = true;
+  const showNewNegotiation = !advisorLed && collabTab !== 'decisions' && collabTab !== 'invites';
+  /** 全部行程、全部 Tab 固定展示 */
+  const showCreateVote = true;
+
   return (
     <div className={cn('space-y-0', className)} role="region" aria-label="团队协作中心">
-      <Tabs value={collabTab} onValueChange={(v) => setCollabTab(resolveCollabCenterTab(v))}>
+      <Tabs
+        value={collabTab}
+        onValueChange={(v) => setCollabTab(resolveCollabCenterTabForTrip(v, trip))}
+      >
         <div className="sticky top-0 z-10 -mx-4 border-b border-border/60 bg-background/95 px-4 backdrop-blur-sm sm:-mx-6 sm:px-6">
           <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2">
             <div className="flex min-w-0 items-center gap-1.5">
@@ -117,17 +151,28 @@ export function TeamCollaborationCenter({
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {onInviteMembers ? (
+              {showCreateVote ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={handleCreateVote}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">新增投票</span>
+                </Button>
+              ) : null}
+              {showInviteButton ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-7 gap-1 px-2 text-xs"
-                  aria-label="邀请成员"
-                  onClick={onInviteMembers}
+                  aria-label={advisorLed ? '角色邀请' : '邀请成员'}
+                  onClick={handleInviteMembers}
                 >
                   <UserPlus className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">邀请成员</span>
+                  <span className="hidden sm:inline">{advisorLed ? '角色邀请' : '邀请成员'}</span>
                 </Button>
               ) : null}
               {onOpenTeamSettings ? (
@@ -143,15 +188,17 @@ export function TeamCollaborationCenter({
                   <span className="hidden sm:inline">团队设置</span>
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                size="sm"
-                className="h-7 gap-1 px-2 text-xs"
-                onClick={handleNewNegotiation}
-              >
-                <Handshake className="h-3.5 w-3.5" />
-                新建协商
-              </Button>
+              {showNewNegotiation ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={handleNewNegotiation}
+                >
+                  <Handshake className="h-3.5 w-3.5" />
+                  新建协商
+                </Button>
+              ) : null}
             </div>
           </header>
 
@@ -159,7 +206,7 @@ export function TeamCollaborationCenter({
             className="h-8 w-full justify-start overflow-x-auto rounded-none border-0 bg-transparent p-0"
             aria-label="协作中心分区"
           >
-            {COLLAB_CENTER_TABS.map((tab) => (
+            {collabTabs.map((tab) => (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
@@ -171,50 +218,77 @@ export function TeamCollaborationCenter({
           </TabsList>
         </div>
 
-        <TabsContent value="members" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
+        <TabsContent value="members" forceMount className="mt-2 focus-visible:outline-none data-[state=inactive]:hidden">
           <CollabCenterMembersTab
             tripId={tripId}
             trip={trip}
             onTripRefetch={onTripRefetch}
             onGoToSchedule={onGoToSchedule}
+            onOpenRoleInvites={() => setCollabTab('invites')}
           />
         </TabsContent>
 
-        <TabsContent value="decisions" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
-          <CollabCenterDecisionsTab tripId={tripId} />
-        </TabsContent>
-
-        <TabsContent value="persona" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
-          <CollabCenterPersonaTab
+        <TabsContent value="invites" forceMount className="mt-2 focus-visible:outline-none data-[state=inactive]:hidden">
+          <CollabCenterRoleInvitesTab
             tripId={tripId}
-            initialStep={decisionProfilingInitialStep}
-            forceOpenQuiz={decisionProfilingForceQuiz}
-            forceReuseProfile={decisionProfilingForceReuse}
-            initialSurface={decisionProfilingInitialSurface}
+            trip={trip}
+            onTripRefetch={onTripRefetch}
           />
         </TabsContent>
 
-        <TabsContent value="wishes" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
-          <CollabCenterWishesTab
-            tripId={tripId}
-            destinationLabel={destinationLabel}
-            userDisplayName={userDisplayName}
-            onSummaryChange={onWishSummaryChange}
-          />
+        <TabsContent value="decisions" forceMount className="mt-2 focus-visible:outline-none data-[state=inactive]:hidden">
+          {advisorLed ? (
+            <CollabCenterAdvisorVotesTab
+              tripId={tripId}
+              createVoteNonce={createVoteNonce}
+              onOpenRoleInvites={() => setCollabTab('invites')}
+            />
+          ) : (
+            <CollabCenterDecisionsTab
+              tripId={tripId}
+              createVoteNonce={createVoteNonce}
+              onStartNegotiation={handleNewNegotiation}
+            />
+          )}
         </TabsContent>
 
-        <TabsContent value="tasks" forceMount className="mt-3 focus-visible:outline-none data-[state=inactive]:hidden">
-          <CollabCenterTasksTab tripId={tripId} />
-        </TabsContent>
+        {!advisorLed ? (
+          <>
+            <TabsContent value="persona" forceMount className="mt-2 focus-visible:outline-none data-[state=inactive]:hidden">
+              <CollabCenterPersonaTab
+                tripId={tripId}
+                initialStep={decisionProfilingInitialStep}
+                forceOpenQuiz={decisionProfilingForceQuiz}
+                forceReuseProfile={decisionProfilingForceReuse}
+                initialSurface={decisionProfilingInitialSurface}
+              />
+            </TabsContent>
+
+            <TabsContent value="wishes" forceMount className="mt-2 focus-visible:outline-none data-[state=inactive]:hidden">
+              <CollabCenterWishesTab
+                tripId={tripId}
+                destinationLabel={destinationLabel}
+                userDisplayName={userDisplayName}
+                onSummaryChange={onWishSummaryChange}
+              />
+            </TabsContent>
+
+            <TabsContent value="tasks" forceMount className="mt-2 focus-visible:outline-none data-[state=inactive]:hidden">
+              <CollabCenterTasksTab tripId={tripId} />
+            </TabsContent>
+          </>
+        ) : null}
       </Tabs>
 
-      <StructuredNegotiationDialog
-        tripId={tripId}
-        open={structuredNegotiationOpen}
-        onOpenChange={setStructuredNegotiationOpen}
-        initialRoundId={negotiationRoundId}
-        initialRoundDomain={negotiationRoundDomain}
-      />
+      {!advisorLed ? (
+        <StructuredNegotiationDialog
+          tripId={tripId}
+          open={structuredNegotiationOpen}
+          onOpenChange={setStructuredNegotiationOpen}
+          initialRoundId={negotiationRoundId}
+          initialRoundDomain={negotiationRoundDomain}
+        />
+      ) : null}
     </div>
   );
 }

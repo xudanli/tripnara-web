@@ -25,7 +25,8 @@ export function PlanningDecisionClusterQueueStrip({
   className,
 }: PlanningDecisionClusterQueueStripProps) {
   const sorted = sortDecisionClusterSummaries(clusters ?? []);
-  if (!loading && sorted.length === 0) return null;
+  const hasPendingProposal = Boolean(activeProposalId);
+  if (!loading && sorted.length === 0 && !hasPendingProposal) return null;
 
   const diagnosticTotal = clusterDiagnosticTotal(sorted);
 
@@ -40,11 +41,19 @@ export function PlanningDecisionClusterQueueStrip({
           <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px] tabular-nums">
             {diagnosticTotal} 项诊断
           </Badge>
+        ) : hasPendingProposal ? (
+          <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px]">
+            待确认
+          </Badge>
         ) : null}
       </div>
 
       {loading ? (
         <p className="text-[10px] text-muted-foreground">加载决策队列…</p>
+      ) : sorted.length === 0 && hasPendingProposal ? (
+        <p className="text-[11px] text-muted-foreground">
+          有未确认的编排草案，点下方打开查看。
+        </p>
       ) : (
         <ul className={cn('space-y-1.5', workbenchScrollable)}>
           {sorted.map((cluster) => (

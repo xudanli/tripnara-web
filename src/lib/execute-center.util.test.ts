@@ -71,20 +71,17 @@ describe('execute-center.util', () => {
     expect(note).toContain('集合');
   });
 
-  it('resolveExecuteTimelineRail falls back to Iceland demo when schedule is empty', () => {
+  it('resolveExecuteTimelineRail uses placeholders when schedule is empty', () => {
     const rail = resolveExecuteTimelineRail({
       trip: null,
       tripState: null,
       todaySchedule: null,
     });
-    expect(rail.current.routeLabel).toBe('丁基达尔斯 → 冰川营地');
-    expect(rail.current.arrivalEta).toBe('12:05');
-    expect(rail.next.activityLabel).toBe('冰川徒步体验');
-    expect(rail.next.startTimeLabel).toBe('12:30');
-    expect(rail.next.statusLabel).toBe('待确认');
-    expect(rail.gathering.time).toBe('16:30');
-    expect(rail.gathering.place).toBe('丁基达尔斯村');
-    expect(rail.gathering.destination).toBe('统一前往布迪尔温泉');
+    expect(rail.current.routeLabel).toBe('当前路段待同步');
+    expect(rail.current.isPlaceholder).toBe(true);
+    expect(rail.next.activityLabel).toBe('下一项活动待确认');
+    expect(rail.next.isPlaceholder).toBe(true);
+    expect(rail.gathering.isPlaceholder).toBe(true);
   });
 
   it('resolveExecuteTimelineRail derives next activity after next stop', () => {

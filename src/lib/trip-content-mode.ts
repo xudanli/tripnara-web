@@ -6,14 +6,12 @@
 
 import type { TripDetail, TripListItem } from '@/types/trip';
 import { normalizeTripStatusFromApi } from '@/lib/in-trip-execution';
-import { getMatchSquareInstantiation } from '@/lib/match-square-trip-metadata';
-import { getTripHikingProfile } from '@/lib/trip-hiking';
+import { getTripInstantiationMetadata } from '@/lib/trip-instantiation-metadata';
 
-export type TripContentMode = 'poi_timeline' | 'hiking_primary' | 'skeleton_only';
+export type TripContentMode = 'poi_timeline' | 'skeleton_only';
 
 const TRIP_CONTENT_MODES = new Set<TripContentMode>([
   'poi_timeline',
-  'hiking_primary',
   'skeleton_only',
 ]);
 
@@ -23,15 +21,11 @@ function parseTripContentMode(value: unknown): TripContentMode | undefined {
   if (normalized === 'poi_timeline' || normalized === 'classic_poi' || normalized === 'poi_itinerary') {
     return 'poi_timeline';
   }
-  if (normalized === 'hiking_primary' || normalized === 'hiking') return 'hiking_primary';
+  if (normalized === 'hiking_primary' || normalized === 'hiking') return 'skeleton_only';
   if (normalized === 'skeleton_only' || normalized === 'skeleton') return 'skeleton_only';
   return TRIP_CONTENT_MODES.has(normalized as TripContentMode)
     ? (normalized as TripContentMode)
     : undefined;
-}
-
-function ____readRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 }
 
 /** 是否已有经典 POI 行程项（非 loading 推断依据） */
@@ -54,7 +48,6 @@ export function resolveTripGeneratingItems(
   const md = trip.metadata;
   if (md?.generatingItems === true || md?.generating_items === true) return true;
 
-  // 过渡：后端尚未写 generatingItems 时，沿用 generationProgress 进行中态
   const progress = md?.generationProgress ?? md?.generation_progress;
   const status =
     progress && typeof progress === 'object'
@@ -178,7 +171,7 @@ export function getTripPlanningAvailabilityLabel(state: TripPlanningAvailability
   }
 }
 
-/** 解析 tripContentMode（API 优先，metadata / 徒步 / Match Square 兜底） */
+/** 解析 tripContentMode（API 优先，metadata / 模板实例化兜底） */
 export function resolveTripContentMode(
   trip:
     | (Pick<TripDetail, 'tripContentMode' | 'metadata' | 'TripDay' | 'statistics'> & {
@@ -195,22 +188,9 @@ export function resolveTripContentMode(
     parseTripContentMode(trip.metadata?.trip_content_mode);
   if (explicit) return explicit;
 
-  const md = trip.metadata ?? {};
-  const inst = getMatchSquareInstantiation(md);
-  const hikingProfile = getTripHikingProfile({ metadata: md });
-
-  if (hikingProfile === 'embedded' || hikingProfile === 'primary') {
-    return 'hiking_primary';
-  }
-
-  if (inst) {
-    const instProfile = inst.hikingProfile ?? hikingProfile;
-    if (instProfile === 'embedded' || instProfile === 'primary') {
-      return 'hiking_primary';
-    }
-    if (!hasPoiTimelineItems(trip)) {
-      return 'skeleton_only';
-    }
+  const inst = getTripInstantiationMetadata(trip.metadata ?? {});
+  if (inst && !hasPoiTimelineItems(trip)) {
+    return 'skeleton_only';
   }
 
   if (hasPoiTimelineItems(trip)) {
@@ -242,20 +222,9 @@ export function shouldShowTripSkeletonOnlyEmptyState(
   return !hasPoiTimelineItems(trip);
 }
 
-import {
-  normalizeHikingDayCard,
-  normalizeHikingTrailSegments,
-} from '@/lib/hiking-day-card';
-
 type TripApiShape = TripDetail & {
   generating_items?: boolean;
   trip_content_mode?: string;
-  hiking_trail_segments?: unknown;
-  TripDay?: Array<
-    TripDetail['TripDay'][0] & {
-      hiking_day_card?: unknown;
-    }
-  >;
 };
 
 /** GET /trips/:id 响应字段归一化 */
@@ -273,18 +242,6 @@ export function normalizeTripApiFields<T extends TripApiShape>(trip: T): T {
     parseTripContentMode(trip.metadata?.tripContentMode) ??
     parseTripContentMode(trip.metadata?.trip_content_mode);
 
-  const hikingTrailSegments = normalizeHikingTrailSegments(
-    trip.hikingTrailSegments ?? trip.hiking_trail_segments
-  );
-
-  const TripDay = trip.TripDay?.map((day) => {
-    const withSnake = day as typeof day & { hiking_day_card?: unknown };
-    const rawCard = day.hikingDayCard ?? withSnake.hiking_day_card;
-    if (rawCard === null) return { ...day, hikingDayCard: null };
-    const hikingDayCard = normalizeHikingDayCard(rawCard);
-    return hikingDayCard ? { ...day, hikingDayCard } : day;
-  });
-
   return {
     ...trip,
     ...(trip.status
@@ -292,8 +249,6 @@ export function normalizeTripApiFields<T extends TripApiShape>(trip: T): T {
       : {}),
     ...(generatingItems !== undefined ? { generatingItems } : {}),
     ...(tripContentMode ? { tripContentMode } : {}),
-    ...(hikingTrailSegments.length > 0 ? { hikingTrailSegments } : {}),
-    ...(TripDay ? { TripDay } : {}),
   };
 }
 

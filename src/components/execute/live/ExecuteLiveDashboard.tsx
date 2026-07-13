@@ -58,6 +58,7 @@ export interface ExecuteLiveDashboardProps {
   onTripTitleClick?: () => void;
   decisionSidebar?: {
     tripId?: string | null;
+    trip?: import('@/types/trip').TripDetail | null;
     advisory: TripExecutionAdvisoryDto | null;
     fallbackPlan?: FallbackPlan | null;
     loading?: boolean;
@@ -158,6 +159,7 @@ export function ExecuteLiveDashboard({
                 <ExecuteDecisionSidebar
                   className="min-h-0 flex-1"
                   tripId={decisionSidebar.tripId}
+                  trip={decisionSidebar.trip}
                   advisory={decisionSidebar.advisory}
                   fallbackPlan={decisionSidebar.fallbackPlan}
                   loading={decisionSidebar.loading}

@@ -81,21 +81,22 @@ export function ArrangeItineraryProposalDialog({
   executionSteps,
   validUntil,
 }: ArrangeItineraryProposalDialogProps) {
-  if (!proposal) return null;
-
-  const packOptions = proposal.decisionPack?.options ?? [];
+  const packOptions = proposal?.decisionPack?.options ?? [];
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(
     packOptions.find((option) => option.recommended)?.id ?? packOptions[0]?.id ?? null,
   );
 
-  const validityUntil = validUntil ?? proposal.decisionPack?.validUntil ?? proposal.expiresAt;
-
-  const validationMeta = VALIDATION_BADGE[proposal.validation.status] ?? VALIDATION_BADGE.WARN!;
+  const validityUntil =
+    validUntil ?? proposal?.decisionPack?.validUntil ?? proposal?.expiresAt;
+  const validationMeta =
+    VALIDATION_BADGE[proposal?.validation.status ?? 'WARN'] ?? VALIDATION_BADGE.WARN!;
   const ValidationIcon = validationMeta.icon;
-  const isBlocked = proposal.validation.status === 'BLOCK';
+  const isBlocked = proposal?.validation.status === 'BLOCK';
+  const dialogOpen = open && proposal != null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
+      {proposal ? (
       <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border/50 px-4 py-3">
           <div className="flex items-start justify-between gap-2">
@@ -250,6 +251,7 @@ export function ArrangeItineraryProposalDialog({
           </div>
         </DialogFooter>
       </DialogContent>
+      ) : null}
     </Dialog>
   );
 }

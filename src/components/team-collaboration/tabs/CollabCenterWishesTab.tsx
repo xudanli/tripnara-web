@@ -4,8 +4,8 @@ import { PrivateWishlistPanel } from '@/components/wishlist/PrivateWishlistPanel
 import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
 import { mergeCollabDeepLink } from '@/lib/collab-center-navigation';
 import { trackCollabWishSubmit } from '@/utils/collab-center-analytics';
-import { CollabWishAiInsightsRow } from '../widgets/CollabWishAiInsightsRow';
-import { CollabWishOverviewSidebar } from '../widgets/CollabWishOverviewSidebar';
+import { CollabWishRightColumn } from '../widgets/CollabWishRightColumn';
+import { CollabWishStatusBanner } from '../widgets/CollabWishStatusBanner';
 
 interface CollabCenterWishesTabProps {
   tripId: string;
@@ -52,21 +52,24 @@ export function CollabCenterWishesTab({
       onWishSubmit={({ visibility, category }) => {
         trackCollabWishSubmit({ tripId, visibility, category });
       }}
+      renderCollabHeader={(ctx) => (
+        <CollabWishStatusBanner
+          summary={ctx.summary}
+          mine={ctx.mine}
+          team={ctx.team}
+          onNewWish={scrollToForm}
+        />
+      )}
       renderCollabSidebar={(ctx) => (
-        <CollabWishOverviewSidebar
+        <CollabWishRightColumn
           summary={ctx.summary}
           mine={ctx.mine}
           team={ctx.team}
           loading={ctx.loading}
-        />
-      )}
-      renderCollabFooter={(ctx) => (
-        <CollabWishAiInsightsRow
-          mine={ctx.mine}
-          team={ctx.team}
-          summary={ctx.summary}
+          userDisplayName={userDisplayName}
+          highlightWishId={highlightWishId}
           onAskAssistant={handleAskAssistant}
-          onScrollToForm={scrollToForm}
+          onDeleteMine={ctx.onDeleteMine}
         />
       )}
     />

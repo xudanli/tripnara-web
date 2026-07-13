@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Compass, Map, Puzzle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { TripDetail } from '@/types/trip';
-import { getMatchSquareInstantiation } from '@/lib/match-square-trip-metadata';
+import { getTripInstantiationMetadata } from '@/lib/trip-instantiation-metadata';
 import { cn } from '@/lib/utils';
 
 type TripSkeletonOnlyEmptyStateProps = {
@@ -11,14 +11,14 @@ type TripSkeletonOnlyEmptyStateProps = {
   className?: string;
 };
 
-/** Match Square / 模板 instantiate 后的骨架空态 — 引导 spawn / 编排 / Active Trip */
+/** 模板 instantiate 后的骨架空态 — 引导 spawn / 编排 / Active Trip */
 export function TripSkeletonOnlyEmptyState({
   trip,
   tripId,
   className,
 }: TripSkeletonOnlyEmptyStateProps) {
-  const inst = getMatchSquareInstantiation(trip.metadata);
-  const recruitmentPostId = inst?.recruitmentPostId;
+  const inst = getTripInstantiationMetadata(trip.metadata);
+  const trustedProjectId = inst?.recruitmentPostId;
 
   return (
     <div
@@ -41,7 +41,7 @@ export function TripSkeletonOnlyEmptyState({
       <ul className="w-full space-y-2 text-left text-xs text-muted-foreground">
         <li className="flex items-start gap-2 rounded-lg border border-border/60 px-3 py-2">
           <Map className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-          <span>绑定路线模板或确认招募帖内的模板匹配</span>
+          <span>绑定路线模板或确认可信项目内的模板匹配</span>
         </li>
         <li className="flex items-start gap-2 rounded-lg border border-border/60 px-3 py-2">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
@@ -57,9 +57,9 @@ export function TripSkeletonOnlyEmptyState({
         <Button asChild>
           <Link to={`/dashboard/trips/${tripId}/active`}>进入 Active Trip</Link>
         </Button>
-        {recruitmentPostId && (
+        {trustedProjectId && (
           <Button variant="outline" asChild>
-            <Link to={`/dashboard/trusted-projects/${recruitmentPostId}`}>返回可信项目</Link>
+            <Link to={`/dashboard/trusted-projects/${trustedProjectId}`}>返回可信项目</Link>
           </Button>
         )}
         <Button variant="ghost" asChild>

@@ -96,7 +96,7 @@ import { useInTripEnvironmentEvents } from '@/hooks/useInTripEnvironmentEvents';
 import { useInTripMoneyDashboard } from '@/hooks/useInTripMoneyDashboard';
 import { useInTripMoneyRebalance } from '@/hooks/useInTripMoneyRebalance';
 import { useInTripPulseThermometer, useInTripPulseInterventions, useInTripPulseMyState } from '@/hooks/useInTripPulse';
-import { useInTripSplitSessions } from '@/hooks/useInTripSplit';
+import { useInTripSplitSessions, useInTripSplitSession } from '@/hooks/useInTripSplit';
 import {
   useInTripExperiencePending,
   useInTripExperienceWeights,
@@ -120,8 +120,20 @@ import {
   resolveNextStopCoordinates,
 } from '@/lib/execute-navigation.util';
 import { useWeather } from '@/hooks/useWeather';
+import { useExecutionTep } from '@/hooks/useExecutionTep';
+import { useExecutionOverview } from '@/hooks/useExecutionOverview';
+import { useExecutionSlip } from '@/hooks/useExecutionSlip';
+import { useConstraintsSummary } from '@/hooks/useConstraintsSummary';
+import { ExecutionTepHubSheet, type ExecutionTepHubTab } from '@/components/execute/tep';
+import {
+  DepartureSlipDialog,
+  ExecutionOverviewPanel,
+  ExecutionScheduleDecisionSheet,
+} from '@/components/execute/p3';
+import { hasExecutionTepContent, resolveQueueItemIdForDecisionProblem, shouldShowExecutionTepHub } from '@/lib/mobile-execution.util';
+import { shouldShowSelfDriveExecutability } from '@/lib/trip-executability.util';
 
-const EXECUTE_GUIDE_PHONE = '+3541234567';
+import { resolveExecuteGuidePhone } from '@/lib/execute-decision-sidebar.util';
 
 const EXECUTE_CONFIG = {
   POLLING_INTERVAL: {
@@ -207,7 +219,10 @@ export default function ExecutePage() {
   const [todayReadinessSheetOpen, setTodayReadinessSheetOpen] = useState(false);
   const [executionAdvisorySheetOpen, setExecutionAdvisorySheetOpen] = useState(false);
   const [inTripRecoverySheetOpen, setInTripRecoverySheetOpen] = useState(false);
-  const [causalInsightRefreshKey, setCausalInsightRefreshKey] = useState(0);
+  const [executionTepHubOpen, setExecutionTepHubOpen] = useState(false);
+  const [executionTepHubTab, setExecutionTepHubTab] = useState<ExecutionTepHubTab>('alerts');
+  const [executionTepHighlightId, setExecutionTepHighlightId] = useState<string | null>(null);
+  const [departureSlipOpen, setDepartureSlipOpen] = useState(false);
 
   const { user } = useAuth();
 
@@ -219,6 +234,38 @@ export default function ExecutePage() {
   const { width: assistantSidebarWidth, sendAssistantMessage } = useAssistantSidebar();
 
   const inTravelPhase = isTripInTravelPhase(trip?.status);
+  const constraintsSummary = useConstraintsSummary(tripId, trip);
+  const tepExecutionEnabled =
+    inTravelPhase &&
+    shouldShowSelfDriveExecutability(trip?.destination, constraintsSummary.summary);
+  const {
+    alerts: executionTepAlerts,
+    queue: executionTepQueue,
+    reload: reloadExecutionTep,
+  } = useExecutionTep(tripId, { enabled: tepExecutionEnabled });
+  const hasTepExecutionData = hasExecutionTepContent(executionTepAlerts, executionTepQueue);
+  const legacyExecutionAdvisoryEnabled = inTravelPhase && !tepExecutionEnabled;
+  const suppressLegacyExecutionAlerts = tepExecutionEnabled && hasTepExecutionData;
+
+  const executionOverview = useExecutionOverview(tripId, { enabled: tepExecutionEnabled });
+  const executionSlip = useExecutionSlip(tripId, {
+    enabled: tepExecutionEnabled,
+    tripDayDate: trip?.TripDay?.find((day) => day.id === tripState?.currentDayId)?.date ?? null,
+  });
+
+  const openExecutionTepHub = (
+    tab: ExecutionTepHubTab = 'alerts',
+    decisionProblemId?: string | null,
+  ) => {
+    const highlightItemId = resolveQueueItemIdForDecisionProblem(
+      executionTepQueue,
+      decisionProblemId,
+    );
+    setExecutionTepHubTab(tab);
+    setExecutionTepHighlightId(highlightItemId);
+    setExecutionTepHubOpen(true);
+    void reloadExecutionTep();
+  };
   const {
     data: inTripToday,
     loading: inTripTodayLoading,
@@ -244,7 +291,7 @@ export default function ExecutePage() {
     reload: reloadExecutionAdvisory,
     setAdvisory: setExecutionAdvisory,
   } = useTripExecutionAdvisory(tripId, {
-    enabled: inTravelPhase,
+    enabled: legacyExecutionAdvisoryEnabled,
     tripState,
     pollIntervalMs: EXECUTE_CONFIG.POLLING_INTERVAL.VISIBLE,
   });
@@ -301,6 +348,10 @@ export default function ExecutePage() {
     propose: proposeSplit,
     execute: executeSplit,
   } = useInTripSplitSessions(tripId, inTravelPhase);
+  const { detail: activeSplitSessionDetail } = useInTripSplitSession(
+    tripId,
+    activeSplitSession?.id ?? null,
+  );
   const {
     triggers: experienceTriggers,
     loading: experiencePendingLoading,
@@ -621,7 +672,7 @@ export default function ExecutePage() {
         weather: currentWeather,
         inTripWeatherSummary: inTripToday?.weather.summary,
         inTripTemp: inTripToday?.weather.tempMax ?? inTripToday?.weather.tempMin,
-        executionAdvisory,
+        executionAdvisory: suppressLegacyExecutionAlerts ? null : executionAdvisory,
         environmentEvents,
       }),
     [
@@ -633,6 +684,7 @@ export default function ExecutePage() {
       inTripToday?.weather.tempMin,
       executionAdvisory,
       environmentEvents,
+      suppressLegacyExecutionAlerts,
     ],
   );
 
@@ -655,26 +707,49 @@ export default function ExecutePage() {
   const executeQuickActions = useMemo<ExecuteQuickActionItem[]>(
     () => {
       if (!tripId) return [];
-      return [
-        {
+      const guidePhone = resolveExecuteGuidePhone(trip);
+      const actions: ExecuteQuickActionItem[] = [];
+
+      if (tepExecutionEnabled) {
+        actions.push({
+          id: 'log-event',
+          label: '我晚了',
+          icon: Clock,
+          onClick: () => setDepartureSlipOpen(true),
+        });
+        actions.push({
+          id: 'adjust-itinerary',
+          label: '待调整项',
+          icon: CalendarDays,
+          onClick: () => openExecutionTepHub('queue'),
+        });
+      } else {
+        actions.push({
           id: 'adjust',
           label: '调整行程',
           icon: CalendarDays,
           onClick: () => navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=schedule`),
-        },
-        {
+        });
+      }
+
+      if (guidePhone) {
+        actions.push({
           id: 'guide',
           label: '联系导游',
           icon: Headphones,
-          onClick: () => window.open(`tel:${EXECUTE_GUIDE_PHONE}`),
-        },
+          onClick: () => window.open(`tel:${guidePhone.replace(/\s/g, '')}`),
+        });
+      }
+      actions.push(
         {
           id: 'notify',
           label: '发送通知',
           icon: Bell,
           onClick: () => setShowRepairSheet(true),
         },
-        {
+      );
+      if (!tepExecutionEnabled) {
+        actions.push({
           id: 'record',
           label: '记录事件',
           icon: Pencil,
@@ -686,10 +761,11 @@ export default function ExecutePage() {
             }
             setMoneyRecordOpen(true);
           },
-        },
-      ];
+        });
+      }
+      return actions;
     },
-    [tripId, navigate, environmentEvents],
+    [tripId, trip, navigate, environmentEvents, tepExecutionEnabled, openExecutionTepHub],
   );
 
   useEffect(() => {
@@ -1536,29 +1612,61 @@ export default function ExecutePage() {
 
   const executionScore = inTripToday?.vulnerability?.stabilityScore != null
     ? Math.round(inTripToday.vulnerability.stabilityScore)
-    : executionAdvisory?.verdict.status === 'ON_TRACK'
-      ? 84
-      : executionAdvisory?.verdict.status === 'AT_RISK'
-        ? 72
-        : null;
+    : tepExecutionEnabled && executionOverview.overview?.executionScore != null
+      ? executionOverview.overview.executionScore
+      : suppressLegacyExecutionAlerts || tepExecutionEnabled
+        ? null
+        : executionAdvisory?.verdict.status === 'ON_TRACK'
+          ? 84
+          : executionAdvisory?.verdict.status === 'AT_RISK'
+            ? 72
+            : null;
 
   const urgentReminderCount = reminders.filter(
     (r) => r.priority === 'urgent' || r.priority === 'high',
   ).length;
-  const notificationCount = pendingTotal + urgentReminderCount + (fallbackPlan ? 1 : 0);
+  const notificationCount =
+    pendingTotal +
+    urgentReminderCount +
+    (fallbackPlan ? 1 : 0) +
+    (hasTepExecutionData ? (executionTepQueue?.pendingCount ?? 0) : 0);
 
   const alertBanner = (() => {
-    const windBadge = todayStatus?.weatherRisks?.badges.find((b) => b.label.includes('风'));
-    const defaultWindDescription =
-      '目标区域阵风预计持续至 14:00，建议启用 Plan B 或调整行程安排。';
+    if (hasTepExecutionData && executionTepAlerts) {
+      const banner = executionTepAlerts.banner;
+      const primary = executionTepAlerts.primaryRisk;
+      const title =
+        banner?.title ??
+        primary?.userNarrative?.whatHappened ??
+        primary?.title ??
+        '行中风险提醒';
+      const description =
+        banner?.detail ??
+        primary?.userNarrative?.impactOnTrip ??
+        primary?.reason ??
+        executionTepAlerts.aiRecommendation?.detail ??
+        '请查看待调整项并完成确认。';
+      return {
+        title,
+        description,
+        onAction: () => {
+          openExecutionTepHub(
+            shouldShowExecutionTepHub(executionTepAlerts.requiredAction) ? 'queue' : 'alerts',
+            primary?.decisionProblemIds?.[0],
+          );
+        },
+      };
+    }
 
-    if (windBadge) {
+    const windBadge = todayStatus?.weatherRisks?.badges.find((b) => b.label.includes('风'));
+
+    if (windBadge && !suppressLegacyExecutionAlerts && !tepExecutionEnabled) {
       return {
         title: `强风预警 · Day ${dayNumber} 活动需调整`,
         description:
           executionAdvisory?.realtimeRisks.weather
           ?? environmentEvents[0]?.description
-          ?? defaultWindDescription,
+          ?? '当前区域存在强风风险，建议查看替代方案并调整今日安排。',
         onAction: () => {
           if (executionAdvisory) {
             setExecutionAdvisorySheetOpen(true);
@@ -1571,7 +1679,12 @@ export default function ExecutePage() {
       };
     }
 
-    if (executionAdvisory && ['AT_RISK', 'REPLAN_REQUIRED', 'STOP'].includes(executionAdvisory.verdict.status)) {
+    if (
+      !suppressLegacyExecutionAlerts &&
+      !tepExecutionEnabled &&
+      executionAdvisory &&
+      ['AT_RISK', 'REPLAN_REQUIRED', 'STOP'].includes(executionAdvisory.verdict.status)
+    ) {
       return {
         title: executionAdvisory.verdict.headline,
         description: executionAdvisory.realtimeRisks.weather
@@ -1584,7 +1697,7 @@ export default function ExecutePage() {
       };
     }
     const envEvent = environmentEvents[0];
-    if (envEvent && inTravelPhase) {
+    if (envEvent && inTravelPhase && !suppressLegacyExecutionAlerts && !tepExecutionEnabled) {
       return {
         title: '环境预警 · 今日活动可能需要调整',
         description: envEvent.description,
@@ -1623,7 +1736,7 @@ export default function ExecutePage() {
   const intercomContextNote = (() => {
     const alertText = `${alertBanner?.title ?? ''} ${alertBanner?.description ?? ''}`;
     if (/风|天气|雪|storm|wind/i.test(alertText)) return '因天气变化，已提前返程';
-    const summary = executionAdvisory?.verdict?.headline;
+    const summary = suppressLegacyExecutionAlerts ? undefined : executionAdvisory?.verdict?.headline;
     if (summary && /提前|调整|返程/i.test(summary)) return summary;
     return undefined;
   })();
@@ -1636,7 +1749,7 @@ export default function ExecutePage() {
   const executeSidebarTransport = buildExecuteTransportSnapshot({
     trip,
     tripState,
-    executionAdvisory,
+    executionAdvisory: suppressLegacyExecutionAlerts ? null : executionAdvisory,
     nextStopPlaceName: nextStopPlaceLabel,
     arrivalTimeLabel: currentLegEta,
   });
@@ -1670,7 +1783,9 @@ export default function ExecutePage() {
     timelineRail,
     resources: executeSidebarResources,
     activeSplitSession,
-    advisory: executionAdvisory ?? null,
+    splitSessionDetail: activeSplitSessionDetail,
+    memberNameById,
+    advisory: suppressLegacyExecutionAlerts ? null : executionAdvisory ?? null,
     windDescription: alertBanner?.description,
     hasWindWarning: Boolean(alertBanner),
     formatPlaceName: (name, placeId) =>
@@ -1696,6 +1811,35 @@ export default function ExecutePage() {
 
   return (
     <div className="h-full flex flex-col">
+      {tripId && tepExecutionEnabled ? (
+        <div className="shrink-0 px-2 pt-2 sm:px-3">
+          <ExecutionOverviewPanel
+            overview={executionOverview.overview}
+            loading={executionOverview.loading}
+            partial={executionOverview.partial}
+            canReportSlip={executionSlip.canReportSlip}
+            onStatusRowClick={(rowId) => {
+              if (rowId === 'risk') {
+                openExecutionTepHub('alerts');
+                return;
+              }
+              if (rowId === 'adjust') {
+                openExecutionTepHub('queue');
+                return;
+              }
+              document
+                .querySelector('[data-section="execute-itinerary-panel"]')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            onQuickAction={(actionId) => {
+              if (actionId === 'adjust-itinerary') {
+                openExecutionTepHub('queue');
+              }
+            }}
+            onReportSlip={() => setDepartureSlipOpen(true)}
+          />
+        </div>
+      ) : null}
       <ExecuteLiveDashboard
         tripTitle={tripTitle}
         revisionLabel={revisionLabel}
@@ -1746,10 +1890,15 @@ export default function ExecutePage() {
         onTripTitleClick={() => navigate(`/dashboard/trips/${tripId}`)}
         decisionSidebar={{
           tripId,
-          advisory: executionAdvisory ?? null,
+          trip,
+          advisory: suppressLegacyExecutionAlerts ? null : executionAdvisory ?? null,
           fallbackPlan,
-          loading: executionAdvisoryLoading,
+          loading: legacyExecutionAdvisoryEnabled && executionAdvisoryLoading,
           onOpenDetail: () => {
+            if (suppressLegacyExecutionAlerts || tepExecutionEnabled) {
+              openExecutionTepHub('queue');
+              return;
+            }
             setExecutionAdvisorySheetOpen(true);
             void reloadExecutionAdvisory();
           },
@@ -2059,7 +2208,50 @@ export default function ExecutePage() {
         }}
       />
 
-      {tripId && executionAdvisory && (
+      {tripId && tepExecutionEnabled && (
+        <ExecutionTepHubSheet
+          tripId={tripId}
+          open={executionTepHubOpen}
+          onOpenChange={setExecutionTepHubOpen}
+          initialTab={executionTepHubTab}
+          highlightItemId={executionTepHighlightId}
+          enabled={tepExecutionEnabled}
+          onOpenScheduleDecision={(problemId) => {
+            setExecutionTepHubOpen(false);
+            executionSlip.openDecision(problemId);
+          }}
+        />
+      )}
+
+      {tripId && tepExecutionEnabled && (
+        <>
+          <DepartureSlipDialog
+            open={departureSlipOpen}
+            onOpenChange={setDepartureSlipOpen}
+            submitting={executionSlip.submittingSlip}
+            onSubmit={async (input) => {
+              await executionSlip.submitDepartureSlip(input);
+              setDepartureSlipOpen(false);
+            }}
+          />
+          <ExecutionScheduleDecisionSheet
+            open={Boolean(executionSlip.decisionProblemId)}
+            onOpenChange={(open) => {
+              if (!open) executionSlip.closeDecision();
+            }}
+            decision={executionSlip.decision}
+            loading={executionSlip.decisionLoading}
+            applying={executionSlip.applyingDecision}
+            onAccept={async (input) => {
+              await executionSlip.acceptScheduleDecision(input);
+              void executionOverview.reload();
+              void reloadExecutionTep();
+            }}
+          />
+        </>
+      )}
+
+      {tripId && executionAdvisory && legacyExecutionAdvisoryEnabled && !suppressLegacyExecutionAlerts && (
         <ExecutionAdvisorySheet
           open={executionAdvisorySheetOpen}
           onOpenChange={setExecutionAdvisorySheetOpen}

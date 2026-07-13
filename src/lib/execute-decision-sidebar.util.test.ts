@@ -1,14 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { buildExecuteDecisionSidebarModel } from './execute-decision-sidebar.util';
+import {
+  buildExecuteDecisionSidebarModel,
+  resolveExecuteEmergencyContacts,
+  resolveExecuteGuidePhone,
+} from './execute-decision-sidebar.util';
 
 describe('execute-decision-sidebar.util', () => {
-  it('returns default Plan B cards when no advisory data', () => {
+  it('returns empty Plan B cards when no advisory data', () => {
     const model = buildExecuteDecisionSidebarModel({});
-    expect(model.plans).toHaveLength(3);
-    expect(model.plans[0]?.recommended).toBe(true);
-    expect(model.plans[0]?.code).toBe('Plan B-1');
-    expect(model.contacts.length).toBeGreaterThan(0);
-    expect(model.aiSuggestion.primary).toContain('Plan B-1');
+    expect(model.plans).toHaveLength(0);
+    expect(model.contacts).toHaveLength(0);
+    expect(model.aiSuggestion.primary).toContain('暂无实时建议');
+  });
+
+  it('reads emergency contacts from trip metadata', () => {
+    const contacts = resolveExecuteEmergencyContacts({
+      metadata: {
+        guidePhone: '+8613800138000',
+        guideName: '张导',
+        localRescuePhone: '112',
+      },
+    } as never);
+    expect(contacts).toHaveLength(2);
+    expect(contacts[0]?.phone).toBe('+8613800138000');
+    expect(resolveExecuteGuidePhone({
+      metadata: { guideContactPhone: '+8613800138000' },
+    } as never)).toBe('+8613800138000');
   });
 
   it('maps advisory recommendations to plan cards', () => {

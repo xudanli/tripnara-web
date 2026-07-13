@@ -18,7 +18,7 @@ import { TripCoverDialog } from '@/components/trips/list/TripCoverDialog';
 import { tripListUi } from '@/components/trips/list/trip-list-ui';
 import { toast } from 'sonner';
 import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
-import { buildTripTravelStatusPath } from '@/lib/travel-status-navigation.util';
+import { buildPlanningWorkbenchPath } from '@/lib/travel-status-navigation.util';
 import {
   getTripPlanningAvailabilityLabel,
   resolveTripPlanningAvailability,
@@ -458,7 +458,11 @@ export default function TripsPage() {
         }
         return;
       }
-      navigate(trip.status === 'PLANNING' ? buildTripTravelStatusPath(tripId) : `/dashboard/trips/${tripId}`);
+      navigate(
+        trip.status === 'PLANNING'
+          ? buildPlanningWorkbenchPath(tripId)
+          : `/dashboard/trips/${tripId}`,
+      );
     } catch (err) {
       console.error('Failed to check trip before navigation:', err);
       toast.error('无法加载行程，请重试');

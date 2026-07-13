@@ -38,7 +38,7 @@ export default function PublicTrustProfilePage() {
     <div className="flex min-h-full flex-col bg-neutral-50 dark:bg-neutral-950">
       <div className="border-b bg-background/80 backdrop-blur-sm">
         <DashboardSubpageHeader
-          backTo="/dashboard/profile"
+          backTo="/dashboard/settings?tab=governance"
           title="信任档案"
           subtitle="验证 · 资质 · 背书 · 声誉事实（无信用分）"
           maxWidth="full"

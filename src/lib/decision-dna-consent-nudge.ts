@@ -16,7 +16,7 @@ export function snoozeDecisionDnaConsentNudge(days = SNOOZE_DAYS): void {
   localStorage.setItem(SNOOZE_KEY, String(until));
 }
 
-export const DECISION_DNA_CONSENT_SETTINGS_PATH = '/dashboard/settings?tab=data';
+export const DECISION_DNA_CONSENT_SETTINGS_PATH = '/dashboard/settings';
 
 export const DECISION_DNA_CONSENT_QUERY_KEY = ['decision-dna', 'consent'] as const;
 

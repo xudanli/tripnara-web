@@ -90,6 +90,11 @@ export function HardConstraintMetadataCard({
               )}
             >
               {row.value}
+              {row.label === '判定规则' ? (
+                <span className="mt-1 block text-[10px] font-normal text-muted-foreground">
+                  系统定义，不可直接编辑
+                </span>
+              ) : null}
             </dd>
           </div>
         ))}

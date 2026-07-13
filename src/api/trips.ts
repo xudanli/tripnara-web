@@ -673,33 +673,6 @@ export const tripsApi = {
   },
 
   /**
-   * P1 徒步摘要：profile、phase、segments + 关联 HikePlan
-   * GET /trips/:tripId/hiking-summary
-   */
-  getHikingSummary: async (
-    tripId: string
-  ): Promise<import('@/types/trip-hiking-summary').TripHikingSummary> => {
-    const response = await apiClient.get<
-      ApiResponseWrapper<import('@/types/trip-hiking-summary').TripHikingSummary>
-    >(`/trips/${tripId}/hiking-summary`);
-    return handleResponse(response);
-  },
-
-  /**
-   * 片段评估：Readiness / 许可 / 费用提示
-   * GET /trips/:tripId/hiking-segments/:segmentId/evaluate
-   */
-  evaluateHikingSegment: async (
-    tripId: string,
-    segmentId: string
-  ): Promise<import('@/types/trip-hiking-summary').HikingSegmentEvaluateResponse> => {
-    const response = await apiClient.get<
-      ApiResponseWrapper<import('@/types/trip-hiking-summary').HikingSegmentEvaluateResponse>
-    >(`/trips/${tripId}/hiking-segments/${segmentId}/evaluate`);
-    return handleResponse(response);
-  },
-
-  /**
    * 删除行程
    * DELETE /trips/:id
    * @param id 行程 ID

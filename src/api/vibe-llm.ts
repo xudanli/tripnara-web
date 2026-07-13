@@ -2,11 +2,11 @@ import apiClient from '@/api/client';
 import {
   getVibeLlmApiMode,
   withVibeLlmFallback,
-} from '@/features/match-square/lib/match-square-api-mode';
+} from '@/lib/api-fallback-mode';
 import {
   buildVibeLlmParseResponse,
   normalizeVibeLlmParseResponse,
-} from '@/features/match-square/lib/vibe-llm/normalize-api';
+} from '@/lib/recruitment-bridge/vibe-llm/normalize-api';
 import type { VibeLlmParseRequest, VibeLlmParseResponse } from '@/types/vibe-llm';
 
 const BASE_PATH = '/match-square/vibe-llm';

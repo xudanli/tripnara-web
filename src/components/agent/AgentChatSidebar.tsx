@@ -366,30 +366,33 @@ export default function AgentChatSidebar({
         )}
       </div>
 
-      {/* Content */}
-      {expanded ? (
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          {renderAssistant()}
-        </div>
-      ) : (
-        // Collapsed state - show vertical text and expand hint
+      {/* Content — 收起时保持 AgentChat 挂载，避免 Portal/Dialog 卸载触发 removeChild */}
+      <div
+        className={cn(
+          'flex-1 min-h-0 overflow-hidden flex flex-col',
+          !expanded && 'hidden',
+        )}
+        aria-hidden={!expanded}
+      >
+        {renderAssistant()}
+      </div>
+      {!expanded ? (
         <div className="flex-1 flex flex-col items-center py-4">
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleExpanded}
-            className="h-10 w-10 mb-4 text-gray-400 hover:text-primary hover:bg-primary/10"
+            className="h-10 w-10 mb-2 text-gray-400 hover:text-primary hover:bg-primary/10"
             title="展开 AI 助手"
           >
             <PanelRightOpen className="h-5 w-5" />
           </Button>
-          
-          {/* Vertical text */}
+
           <div className="writing-vertical-rl text-[11px] text-muted-foreground tracking-wider select-none">
             Nara
           </div>
         </div>
-      )}
+      ) : null}
     </aside>
   );
 }

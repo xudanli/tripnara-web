@@ -308,14 +308,16 @@ export function ConstraintItemEditDialog({
       setSaving(true);
       try {
         const change = draftToPreviewChange(draft);
-        await patchTripConstraintItem(
-          tripId,
-          TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE,
-          change.patch,
-          serviceCtx,
-          { queryClient },
-        );
-        finishSave('单段最长行驶距离已保存');
+        const apiId =
+          draft.id === 'no_night_drive' || draft.id === 'c_no_night_drive'
+            ? TRIP_CONSTRAINT_LEGACY_IDS.NO_NIGHT_DRIVE
+            : TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE;
+        const successLabel =
+          draft.id === 'no_night_drive' || draft.id === 'c_no_night_drive'
+            ? '不夜间驾驶已保存'
+            : '单段最长行驶距离已保存';
+        await patchTripConstraintItem(tripId, apiId, change.patch, serviceCtx, { queryClient });
+        finishSave(successLabel);
       } catch (err) {
         handleConstraintApiError(err, err instanceof Error ? err.message : '保存失败');
       } finally {
@@ -486,6 +488,7 @@ export function ConstraintItemEditDialog({
       mustGoPlaces={mustGoDraft}
       onMustGoPlacesChange={setMustGoOverride}
       tripDestination={trip?.destination}
+      transportScope={summary?.transport.scope}
       saving={saving}
       errorMessage={saveError}
       budgetUsage={budgetProfile?.actuals?.totalEstimated ?? null}

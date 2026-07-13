@@ -37,6 +37,7 @@ import { isConstraintsStaleError } from '@/api/frontend-travel-decision-contract
 import { workbenchKeys } from '@/pages/plan-studio/hooks/useWorkbenchData';
 import type { QueryClient } from '@tanstack/react-query';
 import { mergeContractPatch } from '@/lib/trip-constraints-contract.util';
+import { constraintAssessmentKeys } from '@/lib/constraint-assessment-query.util';
 import type {
   PatchTripConstraintsContractDto,
   PatchTripConstraintsContractResponse,
@@ -363,6 +364,7 @@ function bumpConstraintsListVersion(
       };
     },
   );
+  void queryClient.invalidateQueries({ queryKey: constraintAssessmentKeys.all(tripId) });
 }
 
 /** contract PATCH 乐观更新 + 应用 BFF 响应 */

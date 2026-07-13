@@ -110,6 +110,25 @@
         "category": {
           "$ref": "#/$defs/hardCategory"
         },
+        "defaultScope": {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": true,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["TRIP", "DAY", "MEMBER", "MEMBER_GROUP", "ROUTE_SEGMENT"]
+            },
+            "dayIndex": { "type": "integer", "minimum": 1 },
+            "memberIds": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "segmentId": { "type": "string", "minLength": 1 },
+            "fromItemId": { "type": "string", "minLength": 1 },
+            "toItemId": { "type": "string", "minLength": 1 }
+          }
+        },
         "defaultPriority": {
           "type": "integer",
           "minimum": 1,

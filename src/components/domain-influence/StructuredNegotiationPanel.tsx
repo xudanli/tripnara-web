@@ -84,6 +84,7 @@ interface StructuredNegotiationPanelProps {
   onStartVote?: () => void;
   onGenerateCompromise?: () => void;
   onDiscussWithAssistant?: () => void;
+  onReachConsensus?: () => void;
   voteActionDisabled?: boolean;
 }
 
@@ -112,6 +113,7 @@ export function StructuredNegotiationPanel({
   onStartVote,
   onGenerateCompromise,
   onDiscussWithAssistant,
+  onReachConsensus,
   voteActionDisabled,
 }: StructuredNegotiationPanelProps) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -365,6 +367,7 @@ export function StructuredNegotiationPanel({
               onStartVote={onStartVote}
               onGenerateCompromise={onGenerateCompromise}
               onDiscussWithAssistant={onDiscussWithAssistant}
+              onReachConsensus={onReachConsensus}
               voteActionDisabled={voteActionDisabled}
             />
           ) : (

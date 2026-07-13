@@ -378,7 +378,10 @@ export const arrangeItineraryApi = {
     const data = normalizeAutoArrangeResponse(
       await postJson<unknown>(
         `${tripBase(tripId)}/attraction-explore/auto-arrange`,
-        withCommitMode(payload),
+        {
+          ...payload,
+          commitMode: payload.commitMode ?? 'direct',
+        },
       ),
     );
     logIntegration('POST auto-arrange', payload);

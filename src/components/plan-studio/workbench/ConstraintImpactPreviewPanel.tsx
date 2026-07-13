@@ -1,4 +1,4 @@
-import { AlertTriangle, RefreshCw, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, RefreshCw, Sparkles, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,18 @@ import type { ConstraintImpactAffectedDayDetail, ConstraintImpactPreview } from 
 import type { ConstraintPreviewSource } from '@/hooks/useConstraintImpactPreview';
 import { normalizeFeasibilityScore } from './constraint-console-view.util';
 import {
+  isDevPreviewText,
+  verdictUiTone,
+  shouldHidePlaceholderPreviewDayTabs,
+  previewHasActionableDayDetails,
+  hasPreviewActivityScheduleDetail,
+} from '@/lib/constraint-impact-user-preview.util';
+import { isNoNightDriveDegradationPreviewItem } from '@/lib/sdr-202-rule-metadata.util';
+import { isGenericQuickPreviewBullet, dedupePreviewLines } from '@/lib/constraint-preview-generic.util';
+import { assessmentToneBadgeClass } from '@/lib/frontend-constraint-card-view.util';
+import { resolveTripDashboardHref } from '@/lib/travel-status-navigation.util';
+import { ConstraintAssessmentLaneBadges } from './ConstraintAssessmentLaneBadges';
+import {
   workbenchCard,
   workbenchEmptySurface,
   workbenchFeasibilityBadge,
@@ -19,6 +31,27 @@ import {
   workbenchMinorDayChip,
   workbenchSegmentSelected,
 } from './workbench-ui';
+
+function collectConstraintChangeSummaries(preview: ConstraintImpactPreview): string[] {
+  return (preview.structuredImpact?.constraintChanges ?? [])
+    .map((change) => change.userFacingSummary?.trim())
+    .filter(Boolean) as string[];
+}
+
+function shouldShowConflictDeltaSummaries(
+  summaries: ConstraintImpactPreview['executeabilityDelta'] extends infer T
+    ? T extends { conflictsDeltaSummary?: infer S }
+      ? S
+      : never
+    : never,
+): boolean {
+  if (!summaries) return false;
+  const entries = [summaries.mustHandle, summaries.suggestAdjust, summaries.pendingConfirm]
+    .map((line) => (typeof line === 'string' ? line.trim() : undefined))
+    .filter(Boolean) as string[];
+  if (!entries.length) return false;
+  return entries.some((text) => !isGenericQuickPreviewBullet(text));
+}
 
 function displayFeasibilityScore(value: unknown): number | null {
   const normalized = normalizeFeasibilityScore(value, Number.NaN);
@@ -35,12 +68,22 @@ function ConflictCountRow({
   label,
   before,
   after,
+  snapshotOnly,
 }: {
   label: string;
   before?: number;
   after?: number;
+  snapshotOnly?: boolean;
 }) {
   if (before == null && after == null) return null;
+  if (snapshotOnly && after == null && before != null) {
+    return (
+      <div className="flex items-center justify-between gap-2 text-[11px]">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="tabular-nums font-medium text-foreground">{before}</span>
+      </div>
+    );
+  }
   const b = before ?? 0;
   const a = after ?? 0;
   const delta = a - b;
@@ -74,6 +117,7 @@ export interface ConstraintImpactPreviewPanelProps {
   onRetry?: () => void;
   /** 空态说明（drawer 延迟预览等） */
   emptyHint?: string | null;
+  onOpenFeasibilityReport?: () => void;
   className?: string;
 }
 
@@ -102,7 +146,17 @@ function PreviewStatusBadge({
         variant="outline"
         className={cn('h-5 rounded-full px-2 text-[10px] font-normal', workbenchFeasibilityBadge)}
       >
-        {refreshType === 'deep' ? '完整检查' : '完整检查中'}
+        {refreshType === 'deep' ? '完整检查' : '即时预览'}
+      </Badge>
+    );
+  }
+  if (source === 'assessment') {
+    return (
+      <Badge
+        variant="outline"
+        className={cn('h-5 rounded-full px-2 text-[10px] font-normal', workbenchFeasibilityBadge)}
+      >
+        验证快照
       </Badge>
     );
   }
@@ -119,6 +173,110 @@ function formatChangeCell(value: unknown, unit?: string): string {
   return coerceDisplayText(value) ?? '—';
 }
 
+function ConflictSummaryRow({ label, summary }: { label: string; summary?: string }) {
+  const text = typeof summary === 'string' ? summary.trim() : '';
+  if (!text) return null;
+  return (
+    <p className="text-[11px] leading-relaxed text-muted-foreground">
+      <span className="font-medium text-foreground/85">{label}：</span>
+      {text}
+    </p>
+  );
+}
+
+function UserVerdictBanner({ preview }: { preview: ConstraintImpactPreview }) {
+  const summary = preview.userSummary;
+  if (!summary?.verdictLabel) return null;
+
+  const tone = verdictUiTone(summary.verdict);
+  const Icon =
+    tone === 'success' ? CheckCircle2 : tone === 'danger' ? XCircle : AlertTriangle;
+
+  return (
+    <section
+      className={cn(
+        'rounded-xl border px-3 py-3',
+        tone === 'danger'
+          ? 'border-[color-mix(in_srgb,var(--color-danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_8%,transparent)]'
+          : tone === 'success'
+            ? 'border-[color-mix(in_srgb,var(--color-success)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)]'
+            : 'border-border/60 bg-muted/15',
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <Icon
+          className={cn(
+            'mt-0.5 h-4 w-4 shrink-0',
+            tone === 'danger'
+              ? 'text-error'
+              : tone === 'success'
+                ? 'text-[var(--color-success)]'
+                : 'text-[var(--color-warning)]',
+          )}
+          aria-hidden
+        />
+        <div className="min-w-0 flex-1">
+          <p className={cn('text-sm font-semibold', assessmentToneBadgeClass(tone))}>
+            {summary.verdictLabel}
+          </p>
+          {summary.verdictReason ? (
+            <p className="mt-1 text-[11px] leading-relaxed text-foreground/90">
+              {summary.verdictReason}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PreviewFollowUpSection({
+  preview,
+  onOpenFeasibilityReport,
+}: {
+  preview: ConstraintImpactPreview;
+  onOpenFeasibilityReport?: () => void;
+}) {
+  const action = preview.suggestedFollowUpAction;
+  const legacy = preview.suggestedFollowUp;
+  if (!action?.label && !legacy) return null;
+
+  const label = action?.label ?? legacy ?? '';
+  const deepLink = action?.deepLink ? resolveTripDashboardHref(action.deepLink) : undefined;
+
+  const handleClick = () => {
+    if (action?.action === 'OPEN_FEASIBILITY_REPORT') {
+      onOpenFeasibilityReport?.();
+      return;
+    }
+    if (deepLink) {
+      window.location.assign(deepLink);
+    }
+  };
+
+  const showButton =
+    action?.action === 'OPEN_FEASIBILITY_REPORT' ||
+    (action?.action !== 'CONFIRM_AND_DEEP_CHECK' && Boolean(deepLink));
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
+      <p className="text-[11px] font-medium text-foreground">建议下一步</p>
+      {showButton ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 h-8 w-full text-xs"
+          onClick={handleClick}
+        >
+          {label}
+        </Button>
+      ) : (
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{label}</p>
+      )}
+    </div>
+  );
+}
+
 function AffectedScheduleSection({
   preview,
 }: {
@@ -126,15 +284,20 @@ function AffectedScheduleSection({
 }) {
   const dayDetails = preview.affectedDayDetails ?? [];
   const [selectedDayNumber, setSelectedDayNumber] = useState<number | null>(null);
+  const snapshotOnly = preview.isTripSnapshotOnly;
 
   useEffect(() => {
+    if (snapshotOnly) {
+      setSelectedDayNumber(null);
+      return;
+    }
     const preferred =
-      preview.affectedDays.find((day) => day.tone === 'major')?.dayNumber ??
-      preview.affectedDays[0]?.dayNumber ??
+      (preview.affectedDays ?? []).find((day) => day.tone === 'major')?.dayNumber ??
+      preview.affectedDays?.[0]?.dayNumber ??
       dayDetails[0]?.dayNumber ??
       null;
     setSelectedDayNumber(preferred);
-  }, [preview.affectedDays, dayDetails]);
+  }, [preview.affectedDays, dayDetails, snapshotOnly]);
 
   const selectedDetail = useMemo((): ConstraintImpactAffectedDayDetail | null => {
     if (selectedDayNumber == null) return null;
@@ -142,30 +305,46 @@ function AffectedScheduleSection({
   }, [dayDetails, selectedDayNumber]);
 
   const selectedTone =
-    preview.affectedDays.find((day) => day.dayNumber === selectedDayNumber)?.tone ??
+    (preview.affectedDays ?? []).find((day) => day.dayNumber === selectedDayNumber)?.tone ??
     selectedDetail?.tone;
 
-  if (preview.affectedDays.length === 0 && !preview.adjustmentSummary) return null;
+  const summaryText = preview.adjustmentSummary?.trim() || undefined;
+  const scheduleNote = preview.scheduleDetailUnavailableReason?.trim() || undefined;
+  const isActivitySchedule = hasPreviewActivityScheduleDetail(preview);
+  const secondaryNote =
+    summaryText && scheduleNote && summaryText !== scheduleNote ? scheduleNote : undefined;
+  const primaryText = summaryText ?? (isActivitySchedule ? undefined : scheduleNote);
+  const hideDayTabs = shouldHidePlaceholderPreviewDayTabs(preview);
+  const hasDayDetailContent = previewHasActionableDayDetails(preview);
+  const scheduleSectionTitle = snapshotOnly
+    ? '本次修改摘要'
+    : isActivitySchedule
+      ? '行程活动预览'
+      : '受影响日程';
+  const dayItemsSectionTitle = isActivitySchedule ? '行程段明细' : '受影响活动';
+
+  if (!(preview.affectedDays?.length) && !primaryText && !snapshotOnly) return null;
 
   return (
     <section>
       <div className="mb-2">
-        <p className="text-xs font-medium text-foreground">受影响日程</p>
-        {preview.adjustmentSummary ? (
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{preview.adjustmentSummary}</p>
+        <p className="text-xs font-medium text-foreground">{scheduleSectionTitle}</p>
+        {primaryText ? (
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{primaryText}</p>
+        ) : null}
+        {secondaryNote ? (
+          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{secondaryNote}</p>
         ) : null}
       </div>
-      {preview.affectedDays.length > 0 ? (
+      {!snapshotOnly && (preview.affectedDays?.length ?? 0) > 0 && !hideDayTabs ? (
         <div className="flex flex-wrap gap-1.5">
-          {preview.affectedDays.map((day) => {
+          {(preview.affectedDays ?? []).map((day) => {
             const selected = day.dayNumber === selectedDayNumber;
-            const hasDetails = dayDetails.some((detail) => detail.dayNumber === day.dayNumber);
             return (
               <button
                 key={day.dayNumber}
                 type="button"
                 onClick={() => setSelectedDayNumber(day.dayNumber)}
-                disabled={!hasDetails && dayDetails.length > 0}
                 className={cn(
                   'relative rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
                   selected
@@ -173,9 +352,7 @@ function AffectedScheduleSection({
                     : day.tone === 'major'
                       ? workbenchMajorDayChip
                       : workbenchMinorDayChip,
-                  hasDetails || dayDetails.length === 0
-                    ? 'cursor-pointer hover:border-foreground/30'
-                    : 'cursor-default opacity-70',
+                  'cursor-pointer hover:border-foreground/30',
                 )}
               >
                 第 {day.dayNumber} 天
@@ -191,14 +368,28 @@ function AffectedScheduleSection({
       {selectedDetail && selectedDetail.items.length > 0 ? (
         <div className="mt-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
           <p className="text-[11px] font-medium text-foreground">
-            第 {selectedDetail.dayNumber} 天 · 受影响活动
+            第 {selectedDetail.dayNumber} 天 · {dayItemsSectionTitle}
             {selectedTone === 'major' ? (
               <span className="ml-1.5 font-normal text-muted-foreground">主要调整</span>
             ) : null}
           </p>
           <ul className="mt-2 space-y-2">
-            {selectedDetail.items.map((item) => (
-              <li key={item.itemId ?? `${selectedDetail.dayNumber}-${item.label}`} className="text-[11px]">
+            {selectedDetail.items.map((item) => {
+              const isDegradation = isNoNightDriveDegradationPreviewItem(item);
+              return (
+              <li
+                key={item.itemId ?? `${selectedDetail.dayNumber}-${item.label}`}
+                className={cn('text-[11px]', isDegradation && 'rounded-md border border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] px-2 py-1.5')}
+              >
+                {isDegradation ? (
+                  <>
+                    <p className="font-medium text-foreground">无法生成路段明细</p>
+                    {item.detail ? (
+                      <p className="mt-0.5 leading-snug text-muted-foreground">{item.detail}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate font-medium text-foreground">{item.label}</span>
                   {item.startTimeLabel ? (
@@ -208,12 +399,26 @@ function AffectedScheduleSection({
                 {item.detail ? (
                   <p className="mt-0.5 leading-snug text-muted-foreground">{item.detail}</p>
                 ) : null}
+                  </>
+                )}
               </li>
-            ))}
+            );
+            })}
           </ul>
         </div>
-      ) : selectedDayNumber != null && dayDetails.length > 0 ? (
-        <p className="mt-2 text-[11px] text-muted-foreground">该日暂无活动级明细。</p>
+      ) : selectedDayNumber != null && hasDayDetailContent ? (
+        <div className="mt-2 space-y-1.5">
+          {selectedDetail?.daySummary ? (
+            <p className="text-[11px] leading-relaxed text-foreground/90">{selectedDetail.daySummary}</p>
+          ) : null}
+          {!snapshotOnly && !selectedDetail?.items?.length ? (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              该日暂无活动级明细。
+            </p>
+          ) : null}
+        </div>
+      ) : hideDayTabs && scheduleNote ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{scheduleNote}</p>
       ) : null}
     </section>
   );
@@ -227,6 +432,7 @@ export function ConstraintImpactPreviewPanel({
   error,
   onRetry,
   emptyHint,
+  onOpenFeasibilityReport,
   className,
 }: ConstraintImpactPreviewPanelProps) {
   const feasibilityBefore = preview ? displayFeasibilityScore(preview.feasibilityBefore) : null;
@@ -240,12 +446,31 @@ export function ConstraintImpactPreviewPanel({
         : null;
 
   const showEmpty = !loading && !preview;
-  const recommendations =
+
+  const constraintChangeLines = preview ? collectConstraintChangeSummaries(preview) : [];
+  const diffBullets = dedupePreviewLines(
+    (preview?.diffBullets ?? [])
+      .filter((line) => !isDevPreviewText(line))
+      .filter((line) => !constraintChangeLines.includes(line.trim())),
+  );
+
+  const recommendationCandidates = (
     preview?.recommendations?.length
       ? preview.recommendations
       : preview?.recommendation
         ? [preview.recommendation]
-        : [];
+        : []
+  ).filter((line) => !isDevPreviewText(line));
+
+  const recommendations = dedupePreviewLines(
+    recommendationCandidates.filter(
+      (line) =>
+        !diffBullets.includes(line.trim()) && !constraintChangeLines.includes(line.trim()),
+    ),
+  );
+
+  const conflictSummaries = preview?.executeabilityDelta?.conflictsDeltaSummary;
+  const showConflictSummaryText = shouldShowConflictDeltaSummaries(conflictSummaries);
 
   return (
     <aside
@@ -300,18 +525,26 @@ export function ConstraintImpactPreviewPanel({
 
         {preview && !loading ? (
           <>
-            {preview.suggestedFollowUp ? (
-              <div className="rounded-lg border border-border bg-muted/15 px-3 py-2.5">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-                  <div>
-                    <p className="text-[11px] font-medium text-foreground">建议后续操作</p>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                      {preview.suggestedFollowUp}
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <UserVerdictBanner preview={preview} />
+
+            <PreviewFollowUpSection
+              preview={preview}
+              onOpenFeasibilityReport={onOpenFeasibilityReport}
+            />
+
+            {preview.constraintAssessments?.length ? (
+              <section className="rounded-xl border border-border/60 bg-muted/10 p-3">
+                <p className="mb-2 text-xs font-medium text-foreground">约束验证（预览）</p>
+                <ul className="space-y-2">
+                  {preview.constraintAssessments.map((entry) => (
+                    <li key={entry.constraintKey ?? entry.legacyConstraintId ?? entry.assessment.constraintKey}>
+                      {entry.laneBadges.length ? (
+                        <ConstraintAssessmentLaneBadges badges={entry.laneBadges} compact />
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ) : null}
 
             {feasibilityAfter != null ? (
@@ -329,20 +562,14 @@ export function ConstraintImpactPreviewPanel({
                         需调整
                       </Badge>
                     ) : null}
-                    {preview.executeabilityDelta?.mustHandleDelta != null &&
-                    preview.executeabilityDelta.mustHandleDelta !== 0 ? (
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        必处理冲突变化：
-                        <span
-                          className={cn(
-                            'ml-1 font-medium tabular-nums',
-                            preview.executeabilityDelta.mustHandleDelta > 0
-                              ? 'text-error'
-                              : 'text-success',
-                          )}
-                        >
-                          {formatDelta(preview.executeabilityDelta.mustHandleDelta)}
-                        </span>
+                    {preview.executeabilityDelta?.scoreDeltaReason ? (
+                      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                        {preview.executeabilityDelta.scoreDeltaReason}
+                      </p>
+                    ) : null}
+                    {preview.executeabilityDelta?.blockingRuleIds?.length ? (
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        阻断规则：{preview.executeabilityDelta.blockingRuleIds.join('、')}
                       </p>
                     ) : null}
                   </div>
@@ -375,22 +602,49 @@ export function ConstraintImpactPreviewPanel({
 
             {preview.conflictsBefore || preview.conflictsAfter ? (
               <section className="rounded-xl border border-border/60 p-3">
-                <p className="mb-2 text-xs font-medium text-foreground">冲突变化</p>
+                <p className="mb-2 text-xs font-medium text-foreground">
+                  {preview.isTripSnapshotOnly && !preview.conflictsAfter
+                    ? '当前行程冲突（保存后重算）'
+                    : '本约束冲突变化'}
+                </p>
+                {preview.isTripSnapshotOnly && !preview.conflictsAfter ? (
+                  <p className="mb-2 text-[10px] leading-relaxed text-muted-foreground">
+                    即时预览不会模拟保存后的冲突数量，下列为当前行程状态。
+                  </p>
+                ) : preview.tripLevelConflicts?.before ? (
+                  <p className="mb-2 text-[10px] leading-relaxed text-muted-foreground">
+                    下列为本约束相关计数；整趟行程必处理{' '}
+                    {preview.tripLevelConflicts.before.mustHandle ?? '—'}
+                    {preview.tripLevelConflicts.after?.mustHandle != null
+                      ? ` → ${preview.tripLevelConflicts.after.mustHandle}`
+                      : ''}
+                  </p>
+                ) : null}
+                {showConflictSummaryText ? (
+                  <div className="mb-2 space-y-1">
+                    <ConflictSummaryRow label="必须处理" summary={conflictSummaries?.mustHandle} />
+                    <ConflictSummaryRow label="建议调整" summary={conflictSummaries?.suggestAdjust} />
+                    <ConflictSummaryRow label="待确认" summary={conflictSummaries?.pendingConfirm} />
+                  </div>
+                ) : null}
                 <div className="space-y-1.5">
                   <ConflictCountRow
                     label="必须处理"
                     before={preview.conflictsBefore?.mustHandle}
-                    after={preview.conflictsAfter?.mustHandle}
+                    after={preview.isTripSnapshotOnly ? undefined : preview.conflictsAfter?.mustHandle}
+                    snapshotOnly={preview.isTripSnapshotOnly}
                   />
                   <ConflictCountRow
                     label="建议调整"
                     before={preview.conflictsBefore?.suggestAdjust}
-                    after={preview.conflictsAfter?.suggestAdjust}
+                    after={preview.isTripSnapshotOnly ? undefined : preview.conflictsAfter?.suggestAdjust}
+                    snapshotOnly={preview.isTripSnapshotOnly}
                   />
                   <ConflictCountRow
                     label="待确认"
                     before={preview.conflictsBefore?.pendingConfirm}
-                    after={preview.conflictsAfter?.pendingConfirm}
+                    after={preview.isTripSnapshotOnly ? undefined : preview.conflictsAfter?.pendingConfirm}
+                    snapshotOnly={preview.isTripSnapshotOnly}
                   />
                 </div>
               </section>
@@ -416,7 +670,12 @@ export function ConstraintImpactPreviewPanel({
                           className="border-b border-border/40 last:border-0"
                         >
                           <td className="px-2.5 py-1.5 text-foreground">
-                            {change.name ?? change.constraintId}
+                            <p>{change.name ?? change.constraintId}</p>
+                            {change.userFacingSummary ? (
+                              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                {change.userFacingSummary}
+                              </p>
+                            ) : null}
                           </td>
                           <td className="px-2.5 py-1.5 tabular-nums text-muted-foreground">
                             {formatChangeCell(change.before, change.unit)}
@@ -455,7 +714,7 @@ export function ConstraintImpactPreviewPanel({
               </section>
             ) : null}
 
-            {preview.affectedDays.length > 0 || preview.adjustmentSummary ? (
+            {preview.affectedDays.length > 0 || preview.adjustmentSummary || preview.isTripSnapshotOnly ? (
               <AffectedScheduleSection preview={preview} />
             ) : null}
 
@@ -510,11 +769,11 @@ export function ConstraintImpactPreviewPanel({
               </section>
             ) : null}
 
-            {preview.diffBullets.length > 0 ? (
+            {diffBullets.length > 0 ? (
               <section>
                 <p className="mb-2 text-xs font-medium text-foreground">差异摘要</p>
                 <ul className="space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                  {preview.diffBullets.map((line, i) => (
+                  {diffBullets.map((line, i) => (
                     <li key={i} className="flex gap-1.5">
                       <span className="text-muted-foreground/50">·</span>
                       <span>{coerceDisplayText(line) ?? '—'}</span>

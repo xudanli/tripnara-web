@@ -48,7 +48,6 @@ export function listItemHasItineraryItems(item: TripListItem | null | undefined)
 
   const normalized = normalizeTripListItemFields(item);
   if (resolveTripGeneratingItems(normalized)) return false;
-  if (resolveTripContentMode(normalized) === 'hiking_primary') return true;
   if (resolveTripContentMode(normalized) === 'skeleton_only') return true;
 
   if (hasPoiTimelineItems(normalized)) return true;

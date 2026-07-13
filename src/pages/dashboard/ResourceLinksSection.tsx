@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, Hotel, Route, Navigation } from 'lucide-react';
+import { MapPin, Hotel, Navigation } from 'lucide-react';
 
 export default function ResourceLinksSection() {
   const navigate = useNavigate();
@@ -22,14 +22,6 @@ export default function ResourceLinksSection() {
       icon: <Hotel className="w-5 h-5" />,
       route: '/dashboard/hotels',
       color: 'text-gate-allow-foreground',
-    },
-    {
-      id: 'trails',
-      name: '路线',
-      description: '探索徒步路线',
-      icon: <Route className="w-5 h-5" />,
-      route: '/dashboard/trails',
-      color: 'text-muted-foreground',
     },
     {
       id: 'route-directions',

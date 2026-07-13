@@ -269,8 +269,6 @@ export interface TripDay {
   date: string;
   /** ✅ 新增字段（2026-01-29）：当天的主题（从模板的 dayPlans[].theme 获取，或从 trip.metadata.dayThemes[dayNumber] 获取） */
   theme?: string | null;
-  /** GET /trips/:id — 该日历日的徒步卡片；休整日无此字段 */
-  hikingDayCard?: import('@/types/hiking-trail-card').HikingDayCard | null;
   ItineraryItem: ItineraryItem[];
 }
 
@@ -309,10 +307,8 @@ export interface TripDetail extends BaseEntity {
   pendingTasksCount?: number;
   /** NL 后台生成 POI 行程项中（仅 poi_timeline / NL 创建） */
   generatingItems?: boolean;
-  /** 详情内容分支：poi_timeline | hiking_primary | skeleton_only */
+  /** 详情内容分支：poi_timeline | skeleton_only */
   tripContentMode?: import('@/lib/trip-content-mode').TripContentMode;
-  /** GET /trips/:id — 徒步 Trail 按日段总览（如朗格迈维卢尔 4 日） */
-  hikingTrailSegments?: import('@/types/hiking-trail-card').HikingTrailSegment[];
   metadata?: {
     generationProgress?: GenerationProgress;
     /** ✅ 新增字段（2026-01-29）：每日主题映射，key 为天数（1, 2, 3...），value 为主题字符串 */

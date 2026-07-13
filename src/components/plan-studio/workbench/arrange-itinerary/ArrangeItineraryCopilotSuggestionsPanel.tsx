@@ -19,6 +19,7 @@ const KIND_LABELS: Record<string, string> = {
   unarranged_must_visit: '未编排必去',
   high_detour_candidate: '高绕路候选',
   schedule_gap: '日程空档',
+  suggest_lodging_for_day: '待补住宿',
 };
 
 export function ArrangeItineraryCopilotSuggestionsPanel({
@@ -108,6 +109,10 @@ function actionHintLabel(hint: CopilotActionHint): string {
       return '优化路线';
     case 'review_proposal':
       return '查看草案';
+    case 'suggest_lodging':
+      return '补齐当晚住宿';
+    case 'apply_lodging_suggestion':
+      return '采纳住宿建议';
     default:
       return '执行建议';
   }

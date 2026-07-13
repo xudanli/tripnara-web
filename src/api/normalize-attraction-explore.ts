@@ -562,7 +562,11 @@ function normalizeMapPoint(raw: unknown): AttractionExploreMapPoint | null {
 
   const kindRaw = asString(record.kind ?? record.type);
   const kind =
-    kindRaw === 'candidate' || kindRaw === 'recommended' || kindRaw === 'route'
+    kindRaw === 'candidate' ||
+    kindRaw === 'recommended' ||
+    kindRaw === 'route' ||
+    kindRaw === 'lodging' ||
+    kindRaw === 'lodging_suggestion'
       ? kindRaw
       : undefined;
 
@@ -573,8 +577,91 @@ function normalizeMapPoint(raw: unknown): AttractionExploreMapPoint | null {
     lat,
     lng,
     kind,
+    dayIndex: asNumber(record.dayIndex ?? record.day_index) ?? undefined,
+    lodgingRole:
+      asString(record.lodgingRole ?? record.lodging_role) === 'overnight' ||
+      asString(record.lodgingRole ?? record.lodging_role) === 'suggestion'
+        ? (asString(record.lodgingRole ?? record.lodging_role) as 'overnight' | 'suggestion')
+        : undefined,
     highlighted: record.highlighted === true,
     insertHint: normalizeInsertHint(record.insertHint ?? record.insert_hint),
+  };
+}
+
+function normalizeLodgingLegEndpoint(
+  raw: unknown,
+): import('@/types/attraction-explore').AttractionExploreMapLodgingLegEndpoint | undefined {
+  const record = readRecord(raw);
+  if (!record) return undefined;
+  const label = asString(record.label);
+  const placeId = record.placeId ?? record.place_id;
+  const kind = asString(record.kind);
+  if (!label && placeId == null && !kind) return undefined;
+  return {
+    kind,
+    placeId: placeId ?? undefined,
+    label,
+  };
+}
+
+function normalizeLodgingLeg(raw: unknown): import('@/types/attraction-explore').AttractionExploreMapLodgingLeg | null {
+  const record = readRecord(raw);
+  if (!record) return null;
+  const dayIndex = asNumber(
+    record.dayIndex ?? record.day_index ?? record.nightIndex ?? record.night_index,
+  );
+  if (dayIndex == null) return null;
+
+  const from = normalizeLodgingLegEndpoint(record.from);
+  const to = normalizeLodgingLegEndpoint(record.to);
+
+  const polylineRaw = record.polyline ?? record.path ?? record.coordinates;
+  const polyline = Array.isArray(polylineRaw)
+    ? polylineRaw
+        .map((point) => {
+          const item = readRecord(point);
+          const lat = asNumber(item?.lat ?? item?.latitude);
+          const lng = asNumber(item?.lng ?? item?.longitude ?? item?.lon);
+          if (lat == null || lng == null) return null;
+          return { lat, lng };
+        })
+        .filter(Boolean) as Array<{ lat: number; lng: number }>
+    : [];
+
+  const driveMinutes = asNumber(
+    record.driveMinutes ??
+      record.drive_minutes ??
+      record.driveMinutesEstimate ??
+      record.drive_minutes_estimate,
+  );
+  const distanceKm = asNumber(record.distanceKm ?? record.distance_km);
+  const legKindRaw = asString(record.kind ?? record.legKind ?? record.leg_kind);
+  const legKind =
+    legKindRaw === 'approach' || legKindRaw === 'relocation' ? legKindRaw : undefined;
+
+  const label =
+    asString(record.label) ??
+    (from?.label && to?.label ? `${from.label} → ${to.label}` : undefined);
+
+  if (polyline.length === 0 && !from && !to && !label) return null;
+
+  return {
+    id: asString(record.id),
+    dayIndex,
+    nightIndex: asNumber(record.nightIndex ?? record.night_index),
+    fromPointId:
+      asString(record.fromPointId ?? record.from_point_id) ??
+      (from?.placeId != null ? String(from.placeId) : undefined),
+    toPointId:
+      asString(record.toPointId ?? record.to_point_id) ??
+      (to?.placeId != null ? String(to.placeId) : undefined),
+    from,
+    to,
+    polyline: polyline.length > 0 ? polyline : undefined,
+    label,
+    driveMinutes,
+    distanceKm,
+    legKind,
   };
 }
 
@@ -615,6 +702,14 @@ export function normalizeAttractionExploreMap(data: unknown): AttractionExploreM
       .map((item) => normalizeMapPoint(item))
       .filter(Boolean) as AttractionExploreMapPoint[],
     routePolyline,
+    lodgingLegs: (() => {
+      const legsRaw = record.lodgingLegs ?? record.lodging_legs;
+      if (!Array.isArray(legsRaw)) return undefined;
+      const legs = legsRaw
+        .map((item) => normalizeLodgingLeg(item))
+        .filter(Boolean) as import('@/types/attraction-explore').AttractionExploreMapLodgingLeg[];
+      return legs.length > 0 ? legs : undefined;
+    })(),
   };
 }
 

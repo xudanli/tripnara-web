@@ -3,9 +3,7 @@
  * 基于 API 文档 v1 规范
  */
 
-import type { CausalRuntimeEcho, TripWorldState } from '@/types/causal-travel-runtime';
-import type { HardTrekTrailPlan } from '@/types/hiking';
-
+import type { CausalRuntimeEcho, TripWorldState, OpsRealityOutcomeCausalExtension } from '@/types/causal-travel-runtime';
 export type {
   CausalObservationV1,
   CausalRuntimeEcho,
@@ -346,7 +344,6 @@ export interface OpsOperationalGovernanceSnapshot {
 /** 决策引擎 plan/repair 返回的 log 可能携带 opsOperationalGovernance */
 export type DecisionEnginePlanLog = Record<string, unknown> & {
   opsOperationalGovernance?: OpsOperationalGovernanceSnapshot;
-  hardTrekTrailPlan?: HardTrekTrailPlan;
   routeDirection?: { selected?: { name?: string } };
 };
 

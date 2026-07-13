@@ -50,4 +50,65 @@ describe('constraint-scope.util', () => {
     const value = mergeScopeBindingIntoValue({ hours: 4 }, binding);
     expect((value as { scopeBinding: unknown }).scopeBinding).toBeTruthy();
   });
+
+  it('maps route_segment binding to ROUTE_SEGMENT API scope', () => {
+    const binding = normalizeScopeBinding({
+      temporal: {
+        kind: 'route_segment',
+        segmentId: 'from__to',
+        dayNumber: 1,
+        fromItemId: 'from',
+        toItemId: 'to',
+        label: 'D1 A → B',
+      },
+      member: { kind: 'all' },
+      phase: { planning: true, execution: true },
+    });
+    expect(scopeBindingToApiScope(binding)).toEqual({
+      type: 'ROUTE_SEGMENT',
+      segmentId: 'from__to',
+      fromItemId: 'from',
+      toItemId: 'to',
+      dayIndex: 1,
+    });
+  });
+
+  it('parses ROUTE_SEGMENT scope from API constraint', () => {
+    const binding = parseScopeBindingFromConstraint({
+      id: 'c_tpl_no_unpaved_road',
+      name: '不走未铺装道路',
+      type: 'HARD',
+      scope: {
+        type: 'ROUTE_SEGMENT',
+        segmentId: 'a__b',
+        fromItemId: 'a',
+        toItemId: 'b',
+        dayIndex: 2,
+      },
+    });
+    expect(binding.temporal).toEqual({
+      kind: 'route_segment',
+      segmentId: 'a__b',
+      label: undefined,
+      dayNumber: 2,
+      fromItemId: 'a',
+      toItemId: 'b',
+    });
+  });
+
+  it('derives route segment id from from/to item ids on parse', () => {
+    const binding = parseScopeBindingFromConstraint({
+      id: 'c_tpl_x',
+      name: 'x',
+      type: 'HARD',
+      scope: { type: 'ROUTE_SEGMENT', fromItemId: 'a', toItemId: 'b', dayIndex: 1 },
+    });
+    expect(binding.temporal).toMatchObject({
+      kind: 'route_segment',
+      segmentId: 'a__b',
+      fromItemId: 'a',
+      toItemId: 'b',
+      dayNumber: 1,
+    });
+  });
 });

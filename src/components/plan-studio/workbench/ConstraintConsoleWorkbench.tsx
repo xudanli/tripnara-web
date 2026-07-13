@@ -23,7 +23,7 @@ import {
   applyContractPatchToConstraintsCache,
 } from '@/lib/constraint-console.service';
 import { useConstraintImpactPreview } from '@/hooks/useConstraintImpactPreview';
-import { useTripConstraints } from '@/hooks/useTripConstraints';
+import { useConstraintConsoleWithAssessments } from '@/hooks/useConstraintConsoleWithAssessments';
 import { useTripConstraintsCheck } from '@/hooks/useTripConstraintsCheck';
 import { useTravelStatus } from '@/hooks/useTravelStatus';
 import { hasAutomationCatalogSummary } from '@/components/trip-automation/AutomationCatalogSummaryPanel';
@@ -47,9 +47,11 @@ import {
   sliderToSoftPriority,
   isSoftConstraintId,
   isApiManagedHardConstraintId,
+  resolveApiManagedHardConstraintApiId,
   listEntryPatchFromSavedDraft,
   type MustGoPlaceSummary,
 } from './constraint-console-view.util';
+import { dispatchConstraintListItemPatch } from '@/lib/plan-studio-constraints-events';
 import { uiConstraintIdToApi, draftToPreviewChange } from '@/lib/trip-constraints.adapter';
 import { formatCurrency } from '@/utils/format';
 import {
@@ -193,7 +195,7 @@ export const ConstraintConsoleWorkbench = forwardRef<
     refreshKey: constraintsApiListProp?.meta?.constraintsVersion ?? softPrefsRevision,
   });
 
-  const tripConstraints = useTripConstraints({
+  const tripConstraints = useConstraintConsoleWithAssessments({
     tripId,
     summary,
     trip,
@@ -204,19 +206,26 @@ export const ConstraintConsoleWorkbench = forwardRef<
     checkResult: constraintsCheck.checkResult,
   });
 
-  const { softPrefs, apiList, meta, reload, source, partition, contract, sections, travelGoalOrderedIds: contractTravelGoals } = tripConstraints;
+  const { softPrefs, apiList, meta, reload, reloadAssessments, source, partition, contract, sections, travelGoalOrderedIds: contractTravelGoals, assessments } = tripConstraints;
 
-  const partitionWithOverrides = useMemo(() => {
-    const pendingDraftOps = deferSessionSave
-      ? pendingOps.filter((op): op is Extract<ConstraintPendingSaveOp, { kind: 'draft' }> => op.kind === 'draft')
-      : [];
+  const pendingDraftOps = useMemo(
+    () =>
+      deferSessionSave
+        ? pendingOps.filter((op): op is Extract<ConstraintPendingSaveOp, { kind: 'draft' }> => op.kind === 'draft')
+        : [],
+    [deferSessionSave, pendingOps],
+  );
 
-    const matchesDraftEntry = (itemId: string, draftId: string) =>
+  const matchesDraftEntry = useCallback(
+    (itemId: string, draftId: string) =>
       itemId === draftId ||
       resolveConstraintEditorTemplateId(itemId) === draftId ||
-      resolveConstraintEditorTemplateId(itemId) === resolveConstraintEditorTemplateId(draftId);
+      resolveConstraintEditorTemplateId(itemId) === resolveConstraintEditorTemplateId(draftId),
+    [],
+  );
 
-    const applyItemOverrides = (items: ConstraintListEntry[]) =>
+  const applyLiveListOverrides = useCallback(
+    (items: ConstraintListEntry[]) =>
       items.map((item) => {
         let next = item;
         const sliderOverride = softSliderOverrides[item.id];
@@ -232,39 +241,45 @@ export const ConstraintConsoleWorkbench = forwardRef<
           next = { ...next, ...patch };
         }
         return next;
-      });
+      }),
+    [softSliderOverrides, pendingDraftOps, matchesDraftEntry, summary?.travelers.count],
+  );
 
-    const hasLiveOverrides =
-      Object.keys(softSliderOverrides).length > 0 || pendingDraftOps.length > 0;
+  const hasLiveListOverrides =
+    deferSessionSave &&
+    (Object.keys(softSliderOverrides).length > 0 || pendingDraftOps.length > 0);
 
-    if (!deferSessionSave || !hasLiveOverrides) {
+  const partitionWithOverrides = useMemo(() => {
+    if (!hasLiveListOverrides) {
       return partition;
     }
 
     return {
       ...partition,
-      userHardItems: applyItemOverrides(partition.userHardItems),
-      userSoftItems: applyItemOverrides(partition.userSoftItems),
+      userHardItems: applyLiveListOverrides(partition.userHardItems),
+      userSoftItems: applyLiveListOverrides(partition.userSoftItems),
     };
-  }, [
-    partition,
-    softSliderOverrides,
-    pendingOps,
-    deferSessionSave,
-    summary?.travelers.count,
-  ]);
+  }, [partition, hasLiveListOverrides, applyLiveListOverrides]);
+
+  const sectionsWithOverrides = useMemo(() => {
+    if (!hasLiveListOverrides) return sections;
+    return sections.map((section) => ({
+      ...section,
+      items: applyLiveListOverrides(section.items),
+    }));
+  }, [sections, hasLiveListOverrides, applyLiveListOverrides]);
 
   const { status: travelStatus } = useTravelStatus({ tripId, enabled: Boolean(tripId) });
   const automationSummary = travelStatus?.automation ?? null;
 
   const visibleSections = useMemo(
     () =>
-      sections.filter(
+      sectionsWithOverrides.filter(
         (section) =>
           section.meta.key !== 'automation' ||
           hasAutomationCatalogSummary(automationSummary),
       ),
-    [sections, automationSummary],
+    [sectionsWithOverrides, automationSummary],
   );
 
   const travelGoalOrderedIds = travelGoalOverride ?? contractTravelGoals;
@@ -455,13 +470,10 @@ export const ConstraintConsoleWorkbench = forwardRef<
   const pendingDraftForSelected = useMemo((): ConstraintEditorDraft | null => {
     if (!selectedId || !deferSessionSave) return null;
     const op = pendingOps.find(
-      (item) =>
-        item.kind === 'draft' &&
-        (item.id === selectedId ||
-          resolveConstraintEditorTemplateId(selectedId) === item.id),
+      (item) => item.kind === 'draft' && matchesDraftEntry(selectedId, item.id),
     );
     return op?.draft ?? null;
-  }, [selectedId, pendingOps, deferSessionSave]);
+  }, [selectedId, pendingOps, deferSessionSave, matchesDraftEntry]);
 
   const draft = draftOverride ?? pendingDraftForSelected ?? serverDraft;
 
@@ -775,6 +787,9 @@ export const ConstraintConsoleWorkbench = forwardRef<
     trip,
     constraintsVersion: serviceCtx.constraintsVersion,
     draft: impactPreviewDraft,
+    assessments,
+    feasibilityScore,
+    apiConstraint: selectedApiConstraint,
   });
 
   const selectedHardMetadata = useMemo(() => {
@@ -892,7 +907,7 @@ export const ConstraintConsoleWorkbench = forwardRef<
 
     const queueDraftForSession = () => {
       const currency = draft.currency ?? summary?.budget.currency ?? 'CNY';
-      applyConstraintListItemSave(queryClient, tripId, draft, {
+      const patch = listEntryPatchFromSavedDraft(draft, {
         mustGoPlaces: draft.id === 'must_go' ? mustGoDraft : undefined,
         travelersCount: summary?.travelers.count,
         budgetUsageLabel:
@@ -900,6 +915,9 @@ export const ConstraintConsoleWorkbench = forwardRef<
             ? formatCurrency(budgetProfile.actuals.totalEstimated, currency)
             : undefined,
       });
+      if (Object.keys(patch).length > 0) {
+        dispatchConstraintListItemPatch(tripId, draft.id, patch);
+      }
       setPendingOps((prev) =>
         upsertPendingOp(prev, {
           kind: 'draft',
@@ -1043,16 +1061,15 @@ export const ConstraintConsoleWorkbench = forwardRef<
       setSaving(true);
       try {
         const change = draftToPreviewChange(draft);
-        await patchTripConstraintItem(
-          tripId,
-          TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE,
-          change.patch,
-          serviceCtx,
-          { queryClient },
-        );
+        const apiId = resolveApiManagedHardConstraintApiId(draft.id);
+        const successLabel =
+          draft.id === 'no_night_drive' || draft.id === 'c_no_night_drive'
+            ? '不夜间驾驶已保存'
+            : '单段最长行驶距离已保存';
+        await patchTripConstraintItem(tripId, apiId, change.patch, serviceCtx, { queryClient });
         const needsFeasibilityHint =
           preview?.recommendation?.includes('深度') || preview?.planLabel?.includes('深度');
-        finishSave('单段最长行驶距离已保存', async () => {
+        finishSave(successLabel, async () => {
           void conflicts.reload();
           if (needsFeasibilityHint) {
             showConstraintSaveInfo('建议重新验证可行性', '该约束变更影响范围较大，冲突列表已刷新');
@@ -1200,6 +1217,7 @@ export const ConstraintConsoleWorkbench = forwardRef<
     setRefreshingExternal(true);
     try {
       await constraintsCheck.runCheck();
+      await tripConstraints.reloadAssessments();
       await reload();
       toast.success('约束验证已刷新');
     } catch {
@@ -1207,7 +1225,7 @@ export const ConstraintConsoleWorkbench = forwardRef<
     } finally {
       setRefreshingExternal(false);
     }
-  }, [constraintsCheck, reload]);
+  }, [constraintsCheck, reload, reloadAssessments]);
 
   const handleViewRepair = useCallback(
     (decisionProblemId: string) => {
@@ -1364,6 +1382,7 @@ export const ConstraintConsoleWorkbench = forwardRef<
             mustGoPlaces={mustGoDraft}
             onMustGoPlacesChange={setMustGoOverride}
             tripDestination={trip?.destination}
+            transportScope={summary?.transport.scope}
             saving={saving || sessionCommitting}
             saveLabel="确认修改"
             errorMessage={saveError}
@@ -1395,6 +1414,7 @@ export const ConstraintConsoleWorkbench = forwardRef<
           onOpenFeasibilityReport={onOpenFeasibilityReport}
           hardMetadata={selectedHardMetadata}
           hardConstraintLabel={selectedEntry?.label}
+          hardEntry={selectedEntry?.kind === 'hard' ? selectedEntry : null}
           softEntry={selectedEntry?.kind === 'soft' ? selectedEntry : null}
           softScopeContext={selectedEntry?.kind === 'soft' ? selectedScopeContext : null}
           hardScopeContext={selectedEntry?.kind === 'hard' ? selectedScopeContext : null}
@@ -1431,6 +1451,7 @@ export const ConstraintConsoleWorkbench = forwardRef<
           mustGoPlaces={mustGoDraft}
           onMustGoPlacesChange={setMustGoOverride}
           tripDestination={trip?.destination}
+          transportScope={summary?.transport.scope}
           saving={saving || sessionCommitting}
           saveLabel={deferSessionSave ? '确认修改' : undefined}
           errorMessage={saveError}

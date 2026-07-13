@@ -3,7 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { formatDetourMethodLabel } from '@/lib/attraction-explore-route-options.util';
-import type { AttractionExploreCandidate, AttractionExploreMapPoint } from '@/types/attraction-explore';
+import { formatLodgingLegLabel } from '@/lib/arrange-itinerary-lodging-suggestions.util';
+import type {
+  AttractionExploreMapLodgingLeg,
+  AttractionExploreMapPoint,
+} from '@/types/attraction-explore';
 import {
   workbenchAccentIconClass,
   workbenchAttractionExploreAiBox,
@@ -16,8 +20,8 @@ import {
 import { ARRANGE_ITINERARY_AI_ACTIONS, type ArrangeItineraryAiAction } from './types';
 
 export interface ArrangeItineraryAssistantPanelProps {
-  candidates: AttractionExploreCandidate[];
   mapPoints: AttractionExploreMapPoint[];
+  mapLodgingLegs?: AttractionExploreMapLodgingLeg[];
   mapLoading?: boolean;
   mapSyncEnabled?: boolean;
   aiPending?: boolean;
@@ -25,16 +29,16 @@ export interface ArrangeItineraryAssistantPanelProps {
   placePending?: boolean;
   onViewMap?: () => void;
   onAiAction?: (action: ArrangeItineraryAiAction) => void;
-  onPlaceCandidate?: (candidateId: string) => void;
   onPlaceMapPoint?: (point: AttractionExploreMapPoint) => void;
   mapPlacePending?: boolean;
   copilotEnabled?: boolean;
+  lodgingIncomplete?: boolean;
   className?: string;
 }
 
 export function ArrangeItineraryAssistantPanel({
-  candidates,
   mapPoints,
+  mapLodgingLegs = [],
   mapLoading = false,
   mapSyncEnabled = true,
   aiPending = false,
@@ -42,13 +46,20 @@ export function ArrangeItineraryAssistantPanel({
   placePending = false,
   onViewMap,
   onAiAction,
-  onPlaceCandidate,
   onPlaceMapPoint,
   mapPlacePending = false,
   copilotEnabled = true,
+  lodgingIncomplete = false,
   className,
 }: ArrangeItineraryAssistantPanelProps) {
   const previewPoints = mapSyncEnabled ? mapPoints.slice(0, 6) : [];
+  const previewLegs = mapSyncEnabled ? mapLodgingLegs.slice(0, 3) : [];
+
+  function mapPointBadge(point: AttractionExploreMapPoint): string | null {
+    if (point.kind === 'lodging') return '已订住宿';
+    if (point.kind === 'lodging_suggestion') return '住宿候选';
+    return null;
+  }
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col', className)}>
@@ -77,9 +88,13 @@ export function ArrangeItineraryAssistantPanel({
                   key={point.id}
                   className={cn(
                     'rounded-lg border px-2.5 py-2 text-[11px]',
-                    point.highlighted
-                      ? 'border-primary/50 bg-card'
-                      : 'border-border/55 bg-card',
+                    point.kind === 'lodging'
+                      ? 'border-gate-allow-border/60 bg-gate-allow/10'
+                      : point.kind === 'lodging_suggestion'
+                        ? 'border-gate-warn-border/50 bg-gate-warn/10'
+                        : point.highlighted
+                          ? 'border-primary/50 bg-card'
+                          : 'border-border/55 bg-card',
                   )}
                 >
                   <div className="flex items-start gap-2">
@@ -87,7 +102,20 @@ export function ArrangeItineraryAssistantPanel({
                       {index + 1}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">{point.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate font-medium text-foreground">{point.name}</p>
+                        {mapPointBadge(point) ? (
+                          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                            {mapPointBadge(point)}
+                          </span>
+                        ) : null}
+                      </div>
+                      {point.dayIndex != null && point.kind?.startsWith('lodging') ? (
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          第 {point.dayIndex} 晚
+                          {point.lodgingRole === 'overnight' ? ' · 过夜' : ' · 建议'}
+                        </p>
+                      ) : null}
                       {point.insertHint ? (
                         <p className="mt-0.5 text-[10px] text-muted-foreground">
                           第 {point.insertHint.suggestedDayIndex} 天
@@ -120,53 +148,21 @@ export function ArrangeItineraryAssistantPanel({
                   还有 {mapPoints.length - previewPoints.length} 个点位
                 </p>
               ) : null}
+              {previewLegs.length > 0 ? (
+                <ul className="mt-2 space-y-1 border-t border-border/40 pt-2">
+                  {previewLegs.map((leg) => (
+                    <li key={`leg-${leg.dayIndex}-${leg.fromPointId ?? ''}`} className="text-[10px] text-muted-foreground">
+                      {formatLodgingLegLabel(leg)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </ul>
           ) : (
             <div className={cn(workbenchAttractionExploreEmptySurface, 'px-3 py-6 text-center text-[11px] text-muted-foreground')}>
               {mapSyncEnabled ? '暂无地图点位' : '地图联动已关闭'}
             </div>
           )}
-        </section>
-
-        <section>
-          <p className="mb-2 text-xs font-medium text-foreground">待编排景点</p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {candidates.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">暂无候选</p>
-            ) : (
-              candidates.slice(0, 8).map((candidate) => (
-                <div
-                  key={candidate.id}
-                  className="w-[120px] shrink-0 rounded-xl border border-border/55 bg-card p-2"
-                >
-                  {candidate.imageUrl ? (
-                    <img
-                      src={candidate.imageUrl}
-                      alt=""
-                      className="mb-1.5 h-14 w-full rounded-md object-cover"
-                    />
-                  ) : (
-                    <div className="mb-1.5 flex h-14 items-center justify-center rounded-md bg-muted/30 text-[10px] text-muted-foreground">
-                      POI
-                    </div>
-                  )}
-                  <p className="line-clamp-2 text-[10px] font-medium leading-snug text-foreground">
-                    {candidate.name}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 h-7 w-full text-[10px]"
-                    disabled={placePending}
-                    onClick={() => onPlaceCandidate?.(candidate.id)}
-                  >
-                    拖入日程
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
         </section>
 
         <section className={workbenchAttractionExploreAiBox}>
@@ -191,19 +187,27 @@ export function ArrangeItineraryAssistantPanel({
           ) : null}
 
           <div className="grid grid-cols-2 gap-2">
-            {ARRANGE_ITINERARY_AI_ACTIONS.map((action) => (
+            {ARRANGE_ITINERARY_AI_ACTIONS.map((action) => {
+              const emphasizeLodging =
+                lodgingIncomplete && action.emphasizeWhenLodgingIncomplete;
+              return (
               <Button
                 key={action.id}
                 type="button"
-                variant="outline"
+                variant={emphasizeLodging ? 'default' : 'outline'}
                 size="sm"
                 disabled={aiPending || !copilotEnabled}
-                className={cn('h-8 text-[11px]', action.id === 'fill_gaps' && workbenchPrimaryAction)}
+                className={cn(
+                  'h-8 text-[11px]',
+                  action.id === 'fill_gaps' && !emphasizeLodging && workbenchPrimaryAction,
+                  emphasizeLodging && 'col-span-2',
+                )}
                 onClick={() => onAiAction?.(action.id)}
               >
                 {action.label}
               </Button>
-            ))}
+            );
+            })}
           </div>
         </section>
       </div>

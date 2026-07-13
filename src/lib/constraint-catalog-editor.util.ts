@@ -132,9 +132,10 @@ const CATALOG_HARD_EDITOR_SPECS: Record<CatalogHardTemplateId, CatalogHardEditor
   },
   no_high_risk_activity: {
     templateId: 'no_high_risk_activity',
-    fieldKind: 'toggle',
+    fieldKind: 'toggle_with_notes',
     valueLabel: '不参加高风险活动',
-    helperText: '不得安排冰川徒步、未评估探险等高风险活动。',
+    helperText: '判定规则由系统模板固定；可在下方补充需排除的具体活动类型。',
+    notesPlaceholder: '例如：冰川徒步、冰洞探险、未评估户外项目…',
   },
   no_unverified_route: {
     templateId: 'no_unverified_route',
@@ -150,8 +151,11 @@ export function resolveConstraintEditorTemplateId(
 ): string {
   if (isCatalogHardTemplate(entryId)) return entryId;
   const fromApiId = apiConstraintIdToUi(entryId);
+  if (fromApiId !== entryId) return fromApiId;
   if (isCatalogHardTemplate(fromApiId)) return fromApiId;
   const templateId = apiConstraint?.source?.templateId;
+  if (templateId === 'max_daily_drive') return 'daily_drive';
+  if (templateId === 'no_night_drive') return 'no_night_drive';
   if (templateId && isCatalogHardTemplate(templateId)) return templateId;
   return entryId;
 }
@@ -453,6 +457,134 @@ function formatPreviewUnitSuffix(unit?: string): string | undefined {
   }
 }
 
+function readCatalogHardEnabledFromPreviewValue(
+  record: Record<string, unknown>,
+): boolean | undefined {
+  if (typeof record.enabled === 'boolean') return record.enabled;
+  if (typeof record.unpavedAllowed === 'boolean') return !record.unpavedAllowed;
+  if (typeof record.allowed === 'boolean') return !record.allowed;
+  return undefined;
+}
+
+function isCatalogHardPreviewValue(record: Record<string, unknown>): boolean {
+  const templateId = record.templateId;
+  if (typeof templateId === 'string' && isCatalogHardTemplate(templateId)) return true;
+  return (
+    typeof record.judgmentResult === 'string' ||
+    typeof record.rule === 'string' ||
+    typeof record.unpavedAllowed === 'boolean'
+  );
+}
+
+function formatPacingConstraintPreviewChangeValue(
+  record: Record<string, unknown>,
+): string | undefined {
+  if (
+    typeof record.maxMinutesAfterSunset === 'number' &&
+    Number.isFinite(record.maxMinutesAfterSunset)
+  ) {
+    const minutes = Math.round(record.maxMinutesAfterSunset);
+    if (record.enabled === false) {
+      return `已停用（原日落后 ${minutes} 分钟）`;
+    }
+    return `日落后 ${minutes} 分钟内停止驾驶`;
+  }
+  if (typeof record.maxHours === 'number' && Number.isFinite(record.maxHours)) {
+    const hours = Math.round(record.maxHours * 10) / 10;
+    const label = `${hours} 小时/天`;
+    if (record.enabled === false) return `${label}（已停用）`;
+    return label;
+  }
+  return undefined;
+}
+
+export function containsBrokenPreviewObjectText(text: string | null | undefined): boolean {
+  return Boolean(text?.includes('[object Object]'));
+}
+
+export function buildConstraintChangeUserFacingSummary(change: {
+  name?: string;
+  before?: unknown;
+  after?: unknown;
+  unit?: string;
+  userFacingSummary?: string;
+}): string | undefined {
+  const existing = change.userFacingSummary?.trim();
+  if (existing && !containsBrokenPreviewObjectText(existing)) return existing;
+
+  const before =
+    typeof change.before === 'string' && !containsBrokenPreviewObjectText(change.before)
+      ? change.before
+      : formatConstraintPreviewChangeValue(change.before, change.unit);
+  const after =
+    typeof change.after === 'string' && !containsBrokenPreviewObjectText(change.after)
+      ? change.after
+      : formatConstraintPreviewChangeValue(change.after, change.unit);
+  if (!before && !after) return existing;
+
+  const label = change.name?.trim() || '约束';
+  return `${label}：${before ?? '—'} → ${after ?? '—'}`;
+}
+
+export function repairBrokenPreviewObjectText(
+  text: string,
+  changes?: Array<{
+    name?: string;
+    before?: unknown;
+    after?: unknown;
+    unit?: string;
+    userFacingSummary?: string;
+  }>,
+): string {
+  if (!containsBrokenPreviewObjectText(text)) return text;
+  for (const change of changes ?? []) {
+    const summary = buildConstraintChangeUserFacingSummary(change);
+    if (summary && change.name && text.includes(change.name)) return summary;
+  }
+  if (changes?.length === 1) {
+    const summary = buildConstraintChangeUserFacingSummary(changes[0]);
+    if (summary) return summary;
+  }
+  return text.replace(/\[object Object\]/g, '—');
+}
+
+/** catalog 硬约束 · preview-impact before/after 对象（避免整段 JSON） */
+function formatCatalogHardPreviewChangeValue(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (!isCatalogHardPreviewValue(record)) return undefined;
+
+  const templateId =
+    typeof record.templateId === 'string' ? record.templateId : undefined;
+  const spec = templateId ? resolveCatalogHardEditorSpec(templateId) : null;
+
+  if (
+    spec &&
+    spec.fieldKind !== 'toggle' &&
+    spec.fieldKind !== 'toggle_with_notes'
+  ) {
+    return undefined;
+  }
+
+  const enabled = readCatalogHardEnabledFromPreviewValue(record);
+  const notes = readNotesFromValue(record);
+  const parts: string[] = [];
+
+  if (enabled === false) parts.push('已停用');
+  else if (enabled === true) parts.push('已启用');
+  if (notes) parts.push(`补充：${notes}`);
+
+  if (parts.length > 0) return parts.join(' · ');
+
+  const rule =
+    (typeof record.judgmentResult === 'string' && record.judgmentResult.trim()) ||
+    (typeof record.rule === 'string' && record.rule.trim()) ||
+    undefined;
+  if (rule) return rule;
+
+  return '已配置';
+}
+
 /** preview-impact · 约束变化 before/after 展示（API 可能返回 time 对象） */
 export function formatConstraintPreviewChangeValue(
   value: unknown,
@@ -498,6 +630,10 @@ export function formatConstraintPreviewChangeValue(
     if (km != null) return `${km} km`;
     const count = readCountFromValue(value);
     if (count != null) return `${count} 个`;
+    const pacing = formatPacingConstraintPreviewChangeValue(record);
+    if (pacing) return pacing;
+    const catalogHard = formatCatalogHardPreviewChangeValue(record);
+    if (catalogHard) return catalogHard;
     if (typeof record.enabled === 'boolean') {
       return record.enabled ? '已启用' : '未启用';
     }

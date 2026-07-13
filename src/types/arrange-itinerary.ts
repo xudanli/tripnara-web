@@ -17,7 +17,8 @@ export type ArrangeItineraryAiActionType =
   | 'fill_gaps'
   | 'optimize_route'
   | 'arrange_lunch'
-  | 'reduce_intensity';
+  | 'reduce_intensity'
+  | 'arrange_lodging';
 
 export type ArrangeOrchestrationPhase =
   | 'IDLE'
@@ -40,6 +41,7 @@ export type PlanProposalIntent =
   | 'OPTIMIZE_ROUTE'
   | 'ARRANGE_LUNCH'
   | 'REDUCE_INTENSITY'
+  | 'ARRANGE_LODGING'
   | 'MOVE_ITEM';
 
 export type ArrangePlanningMode = 'manual' | 'copilot';
@@ -255,6 +257,79 @@ export interface ArrangeItineraryOverviewResponse {
   pacingLabel?: string | null;
   transportLabel?: string | null;
   departureLabel?: string | null;
+  /** P2 · 每晚住宿建议（BFF auto-arrange / overview / snapshot） */
+  lodgingSuggestions?: ArrangeLodgingSuggestion[];
+  accommodationStandardStars?: number;
+  accommodationStandardLabel?: string;
+}
+
+/** P2 · 快照 lodgingSuggestions 单条（BFF 扁平工作台项） */
+export type ArrangeLodgingWorkbenchKind = 'current' | 'alternative' | 'recommended';
+export type ArrangeLodgingWorkbenchPriority = 'primary' | 'alternative' | 'recommended';
+
+export interface ArrangeLodgingWorkbenchMeta {
+  distanceFromAnchorKm?: number;
+  anchorPlaceName?: string;
+  driveMinutesEstimate?: number;
+}
+
+export interface ArrangeLodgingWorkbenchItem {
+  id: string;
+  nightIndex: number;
+  dayIndex: number;
+  placeId?: number | string;
+  name: string;
+  kind: ArrangeLodgingWorkbenchKind;
+  priority?: ArrangeLodgingWorkbenchPriority;
+  coordinates?: { lat: number; lng: number };
+  reason?: string;
+  meta?: ArrangeLodgingWorkbenchMeta;
+}
+
+/** P2 · 单晚住宿建议候选 */
+export interface ArrangeLodgingSuggestionCandidate {
+  id: string;
+  name: string;
+  placeId?: number | string;
+  lat?: number;
+  lng?: number;
+  stars?: number;
+  priceTierLabel?: string;
+  /** 相对当前方案的次日车程变化（分钟，负值=更省） */
+  nextDayDriveMinutesDelta?: number;
+  nextDayDriveMinutes?: number;
+  matchScore?: number;
+  url?: string;
+  applySnapshot?: Record<string, unknown>;
+  recommended?: boolean;
+  /** BFF 工作台项 kind / priority */
+  kind?: ArrangeLodgingWorkbenchKind;
+  priority?: ArrangeLodgingWorkbenchPriority;
+  reason?: string;
+  distanceFromAnchorKm?: number;
+  anchorPlaceName?: string;
+  driveMinutesEstimate?: number;
+}
+
+/** P2 · 单晚住宿建议 */
+export interface ArrangeLodgingSuggestion {
+  /** 1-based，与 BFF dayIndex 对齐 */
+  dayIndex: number;
+  dayNumber?: number;
+  dateLabel?: string;
+  status: 'missing' | 'suggested' | 'booked';
+  currentLabel?: string;
+  currentItemId?: string;
+  candidates: ArrangeLodgingSuggestionCandidate[];
+  recommendationReason?: string;
+  accommodationStandardHint?: string;
+}
+
+export interface ArrangeLodgingSuggestionsBundle {
+  suggestions: ArrangeLodgingSuggestion[];
+  accommodationStandardStars?: number;
+  accommodationStandardLabel?: string;
+  source: 'bff' | 'client_projection';
 }
 
 export interface ArrangePlanningModeResponse {
@@ -291,13 +366,16 @@ export type CopilotSuggestionKind =
   | 'pending_proposal'
   | 'unarranged_must_visit'
   | 'high_detour_candidate'
-  | 'schedule_gap';
+  | 'schedule_gap'
+  | 'suggest_lodging_for_day';
 
 export type CopilotActionHintType =
   | 'place-proposal'
   | 'fill_gaps'
   | 'optimize_route'
   | 'review_proposal'
+  | 'suggest_lodging'
+  | 'apply_lodging_suggestion'
   | string;
 
 export interface CopilotActionHint {
@@ -370,6 +448,9 @@ export interface PlanningWorkbenchSnapshot {
   decisionClusters?: PlanningDecisionClusterSummary[];
   pendingProposalCount?: number;
   updatedAt?: string;
+  lodgingSuggestions?: ArrangeLodgingSuggestion[];
+  accommodationStandardStars?: number;
+  accommodationStandardLabel?: string;
 }
 
 export function isArrangeProposalWriteResponse(

@@ -4,11 +4,13 @@
  * 与后端 `dto/frontend-travel-decision-contract-api-client.ts` 对齐
  */
 
+import apiClient from './client';
 import {
   tripConstraintsApi,
   TripConstraintsApiError,
   isTripConstraintsUnavailable,
 } from '@/api/trip-constraints';
+import type { UnifiedConstraintAssessmentBundle } from '@/types/frontend-constraint-assessment-api.types';
 import type { ConstraintListEntry } from '@/components/plan-studio/workbench/constraint-console-types';
 import { buildConstraintConsoleViewModelFromListResponse } from '@/lib/trip-constraints-contract.util';
 import type {
@@ -75,4 +77,42 @@ export async function checkConstraintConflicts(
 
 export function isConstraintsStaleError(err: unknown): boolean {
   return err instanceof TripConstraintsApiError && err.code === 'CONSTRAINTS_STALE';
+}
+
+type ConstraintAssessmentBundlePayload = UnifiedConstraintAssessmentBundle & {
+  /** BFF Phase 0 实际字段名；与 assessments 同构 */
+  items?: UnifiedConstraintAssessmentBundle['assessments'];
+};
+
+/** BFF 返回 items[] 时归一化为 assessments[]，供 card-view lookup 使用 */
+export function normalizeConstraintAssessmentBundle(
+  data: ConstraintAssessmentBundlePayload,
+): UnifiedConstraintAssessmentBundle {
+  const assessments =
+    data.assessments?.length ? data.assessments : (data.items ?? []);
+  return {
+    tripId: data.tripId,
+    constraintsVersion: data.constraintsVersion,
+    assessedAt: data.assessedAt,
+    assessments,
+  };
+}
+
+/** GET /trips/:tripId/constraint-assessments */
+export async function fetchConstraintAssessments(
+  tripId: string,
+  options?: { refresh?: boolean },
+): Promise<UnifiedConstraintAssessmentBundle> {
+  const response = await apiClient.get<{
+    success: boolean;
+    data?: ConstraintAssessmentBundlePayload;
+    error?: { message?: string };
+  }>(`/trips/${tripId}/constraint-assessments`, {
+    params: options?.refresh ? { refresh: true } : undefined,
+  });
+  const body = response.data;
+  if (!body?.success || !body.data) {
+    throw new Error(body?.error?.message ?? 'constraint-assessments failed');
+  }
+  return normalizeConstraintAssessmentBundle(body.data);
 }

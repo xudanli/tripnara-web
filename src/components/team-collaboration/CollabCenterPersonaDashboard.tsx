@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { DecisionProfilingQuizDialog } from '@/components/decision-profiling/DecisionProfilingQuizDialog';
 import { SplitConsensusPanel } from '@/components/decision-profiling/SplitConsensusPanel';
 import {
@@ -14,17 +15,17 @@ import { useDomainNegotiationTasks } from '@/hooks/useDomainNegotiationTasks';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
 import type { FrictionDomain, HighRiskAlert } from '@/types/trip-decision-profiling';
 import { mergeCollabDeepLink } from '@/lib/collab-center-navigation';
+import { COLLAB_TAB_SCOPE_COPY } from '@/lib/collab-center-tabs';
 import { resolveFrictionNegotiationDeepLink } from '@/lib/collab-friction-navigation';
 import { cn } from '@/lib/utils';
-import { collabDashboardGrid, collabDashboardSpan } from './collab-dashboard-layout';
-import { TeamFrictionScoreWidget } from './widgets/TeamFrictionScoreWidget';
-import { DecisionStyleSurveyWidget } from './widgets/DecisionStyleSurveyWidget';
+import { collabColumnStack, collabDashboardGrid, collabDashboardSpan, collabPageStack } from './collab-dashboard-layout';
+import { CollabTabScopeHint } from './widgets/CollabTabScopeHint';
+import { PersonaStatusBanner } from './widgets/PersonaStatusBanner';
+import { PersonaStyleWallWidget } from './widgets/PersonaStyleWallWidget';
+import { PersonaMoneyDnaCompareWidget } from './widgets/PersonaMoneyDnaCompareWidget';
+import { PersonaFrictionHeatmapWidget } from './widgets/PersonaFrictionHeatmapWidget';
+import { PersonaHighRiskListWidget } from './widgets/PersonaHighRiskListWidget';
 import { PersonaNextActionsWidget } from './widgets/PersonaNextActionsWidget';
-import { MemberPersonaCardsWidget } from './widgets/MemberPersonaCardsWidget';
-import { FrictionMatrixCompactWidget } from './widgets/FrictionMatrixCompactWidget';
-import { HighRiskAlertsWidget } from './widgets/HighRiskAlertsWidget';
-import { PersonaMoneyDnaWidget } from './widgets/PersonaMoneyDnaWidget';
-import { PersonaMemberPropensityWidget } from './widgets/PersonaMemberPropensityWidget';
 import { CollabSplitConsensusWidget } from './widgets/CollabSplitConsensusWidget';
 
 interface CollabCenterPersonaDashboardProps {
@@ -32,19 +33,6 @@ interface CollabCenterPersonaDashboardProps {
   initialStep?: DecisionProfilingStep | null;
   forceOpenQuiz?: boolean;
   className?: string;
-}
-
-function formatFrictionUpdatedAt(iso?: string): string | undefined {
-  if (!iso) return undefined;
-  try {
-    return new Date(iso).toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return undefined;
-  }
 }
 
 export function CollabCenterPersonaDashboard({
@@ -113,15 +101,14 @@ export function CollabCenterPersonaDashboard({
     });
   }, []);
 
+  const goToMembersTab = useCallback(() => {
+    const next = mergeCollabDeepLink(searchParams, { collabTab: 'members' });
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const handleQuizCompleted = () => {
     void reload();
   };
-
-  const compatibility = friction?.compatibility;
-  const frictionScore = compatibility ? Math.round(compatibility.overallScore) : 72;
-  const frictionSummary = compatibility
-    ? `团队整体方向一致，但在预算分配与行程节奏上存在差异。预算重叠 ${compatibility.budgetOverlapPct}% · 节奏同步 ${compatibility.paceSyncPct}%`
-    : '完成团队调查后可查看摩擦分与合拍度。';
 
   if (onboardingLoading && frictionLoading) {
     return (
@@ -133,47 +120,38 @@ export function CollabCenterPersonaDashboard({
   }
 
   return (
-    <div className={cn('space-y-4', className)}>
+    <div className={cn(collabPageStack, className)}>
+      <CollabTabScopeHint
+        action={
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0 text-[11px] text-primary"
+            onClick={goToMembersTab}
+          >
+            前往团队与需求（行前问卷）
+            <ChevronRight className="ml-0.5 h-3 w-3" />
+          </Button>
+        }
+      >
+        {COLLAB_TAB_SCOPE_COPY.persona}
+      </CollabTabScopeHint>
+
+      <PersonaStatusBanner
+        friction={friction}
+        onboarding={onboarding}
+        reusing={reusing}
+        onStartQuiz={openQuiz}
+        onReuseProfile={() => void reuse().then(() => reload())}
+      />
+
       <div className={collabDashboardGrid}>
-        <div className={collabDashboardSpan({ md: 6, lg: 8 })}>
-          <TeamFrictionScoreWidget
-            score={frictionScore}
-            bandLabel={compatibility?.bandLabel ?? '中度摩擦'}
-            summary={frictionSummary}
-            updatedAt={formatFrictionUpdatedAt(friction?.computedAt)}
-            memberCount={friction?.memberCount}
-            onViewDetail={() => navigateToFrictionDecision('budget')}
+        <div className={cn(collabDashboardSpan({ md: 6, lg: 4 }), collabColumnStack)}>
+          <PersonaStyleWallWidget
+            members={travelStyles}
+            loading={teamStylesLoading}
+            onOpenQuiz={openQuiz}
           />
-        </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
-          <DecisionStyleSurveyWidget
-            onboarding={onboarding}
-            memberCount={friction?.memberCount}
-            completedAt={formatFrictionUpdatedAt(friction?.computedAt)}
-            reusing={reusing}
-            onStartQuiz={openQuiz}
-            onReuseProfile={() => void reuse().then(() => reload())}
-          />
-        </div>
-
-        <div className={collabDashboardSpan({ md: 6, lg: 12 })}>
-          <MemberPersonaCardsWidget members={travelStyles} loading={teamStylesLoading} />
-        </div>
-
-        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
-          <PersonaMoneyDnaWidget tripId={tripId} teamMoneyDna={moneyDna} />
-        </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
-          <PersonaMemberPropensityWidget teamMoneyDna={moneyDna} />
-        </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
-          <FrictionMatrixCompactWidget
-            pairs={friction?.frictionMatrix ?? []}
-            onDomainClick={navigateToFrictionDecision}
-            onViewDetail={() => navigateToFrictionDecision('pace')}
-          />
-        </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
           <CollabSplitConsensusWidget
             data={splitConsensus}
             quizCompleted={onboarding?.quizCompleted ?? false}
@@ -182,13 +160,19 @@ export function CollabCenterPersonaDashboard({
           />
         </div>
 
-        <div className={collabDashboardSpan({ md: 6, lg: 8 })}>
-          <HighRiskAlertsWidget
+        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
+          <PersonaMoneyDnaCompareWidget tripId={tripId} teamMoneyDna={moneyDna} />
+        </div>
+
+        <div className={cn(collabDashboardSpan({ md: 6, lg: 4 }), collabColumnStack)}>
+          <PersonaFrictionHeatmapWidget
+            pairs={friction?.frictionMatrix ?? []}
+            onViewDetail={() => navigateToFrictionDecision('pace')}
+          />
+          <PersonaHighRiskListWidget
             alerts={friction?.highRiskAlerts ?? []}
             onAlertClick={handleAlertClick}
           />
-        </div>
-        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
           <PersonaNextActionsWidget
             alerts={friction?.highRiskAlerts ?? []}
             quizCompleted={onboarding?.quizCompleted ?? false}

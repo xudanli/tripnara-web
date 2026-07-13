@@ -490,6 +490,7 @@ export function mapConstraintsSummaryFromBff(
         dto.transport.sampleSegment?.travelMode ??
         null,
       status: normalizeConstraintFieldStatus(dto.transport.status),
+      scope: dto.transport.scope ?? null,
     },
     pendingItems: (dto.pendingItems ?? []).map((item) => ({
       ...item,

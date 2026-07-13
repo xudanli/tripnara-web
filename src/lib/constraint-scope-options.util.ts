@@ -2,6 +2,8 @@ import { sortItineraryItemsForDisplay } from '@/lib/itinerary-item-sort';
 import { resolveWorkbenchTimelineItemTitle } from '@/components/plan-studio/workbench/workbench-format.util';
 import { parseGovernanceModeFromContractRules } from '@/lib/trip-constraints-contract.util';
 import { GOVERNANCE_MODE_META } from '@/lib/team-tab-model';
+import { normalizeScopeBinding } from '@/lib/constraint-scope.util';
+import type { ConstraintScopeBinding } from '@/types/constraint-scope';
 import type {
   TripConstraintsContract,
   TripConstraintsTeamGovernance,
@@ -168,4 +170,34 @@ export function findRouteSegmentOption(
 ): ConstraintRouteSegmentOption | null {
   if (!segmentId?.trim()) return null;
   return options.find((o) => o.segmentId === segmentId) ?? null;
+}
+
+/** 从行程日程补全路段 label / dayNumber（GET scope 常只有 type=ROUTE_SEGMENT） */
+export function enrichScopeBindingWithRouteSegmentOption(
+  binding: ConstraintScopeBinding,
+  trip?: TripDetail | null,
+): ConstraintScopeBinding {
+  if (binding.temporal.kind !== 'route_segment') return binding;
+  const temporal = binding.temporal;
+  if (temporal.label?.trim()) return binding;
+
+  const segmentId =
+    temporal.segmentId?.trim() ||
+    (temporal.fromItemId?.trim() && temporal.toItemId?.trim()
+      ? `${temporal.fromItemId.trim()}__${temporal.toItemId.trim()}`
+      : undefined);
+  const option = findRouteSegmentOption(buildRouteSegmentOptionsFromTrip(trip), segmentId);
+  if (!option) return binding;
+
+  return normalizeScopeBinding({
+    ...binding,
+    temporal: {
+      kind: 'route_segment',
+      segmentId: option.segmentId,
+      label: option.label,
+      dayNumber: option.dayNumber,
+      fromItemId: option.fromItemId,
+      toItemId: option.toItemId,
+    },
+  });
 }

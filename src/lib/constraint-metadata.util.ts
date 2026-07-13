@@ -53,6 +53,13 @@ function formatScopeLabel(scope?: TripConstraintScope | null): string {
     return count > 0 ? `${count} 位成员` : '指定成员';
   }
   if (scope.type === 'MEMBER_GROUP') return '成员组';
+  if (scope.type === 'ROUTE_SEGMENT') {
+    if (scope.segmentId?.trim()) return `路线：${scope.segmentId.trim()}`;
+    if (scope.fromItemId?.trim() && scope.toItemId?.trim()) {
+      return `路线：${scope.fromItemId.trim()} → ${scope.toItemId.trim()}`;
+    }
+    return '某一段路线';
+  }
   return String(scope.type);
 }
 
@@ -76,6 +83,7 @@ function violationForHardConstraint(
 function readStructuredRuleFromApi(
   apiConstraint?: TripConstraint | null,
 ): Partial<Pick<HardConstraintMetadata, 'ruleLabel' | 'violationLabel'>> | null {
+  if (apiConstraint?.id === 'c_transport_mode') return null;
   if (!apiConstraint?.value || typeof apiConstraint.value !== 'object') return null;
   const value = apiConstraint.value as Record<string, unknown>;
   const rule =
@@ -354,6 +362,29 @@ function buildRuleLabel(ctx: RuleBuildContext): string {
   return ctx.entry.label;
 }
 
+function readNotesFromConstraintValue(
+  apiConstraint?: TripConstraint | null,
+  draft?: ConstraintEditorDraft | null,
+): string | undefined {
+  const fromDraft = draft?.reason?.trim();
+  if (fromDraft) return fromDraft;
+  if (!apiConstraint?.value || typeof apiConstraint.value !== 'object') return undefined;
+  const value = apiConstraint.value as Record<string, unknown>;
+  for (const key of ['notes', 'description', 'detail']) {
+    const text = value[key];
+    if (typeof text === 'string' && text.trim()) return text.trim();
+  }
+  return undefined;
+}
+
+function appendCatalogHardNotesToRule(ruleLabel: string, notes?: string): string {
+  const base = ruleLabel.trim();
+  const extra = notes?.trim();
+  if (!extra) return base;
+  if (base.includes(extra)) return base;
+  return `${base}（排除：${extra}）`;
+}
+
 function violationLabelFromContractMeta(
   contractMeta?: TripConstraint['contractMeta'],
 ): string | undefined {
@@ -397,10 +428,12 @@ export function buildHardConstraintMetadata(input: {
   const fromApi = readStructuredRuleFromApi(apiConstraint);
   const draftRule =
     draft != null ? formatCatalogHardRuleFromDraft(metaKey, ctx) : null;
-  const ruleLabel =
+  const baseRule =
     draftRule ??
     contractMeta?.judgmentRule?.trim() ??
     buildRuleLabel(ctx);
+  const notes = readNotesFromConstraintValue(apiConstraint, draft);
+  const ruleLabel = appendCatalogHardNotesToRule(baseRule, notes);
   const violationLabel =
     violationLabelFromContractMeta(contractMeta) ??
     fromApi?.violationLabel ??

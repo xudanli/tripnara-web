@@ -8,6 +8,8 @@ import type { ConstraintListEntry } from './constraint-console-types';
 import { hasConstraintConflict } from '@/lib/constraint-console-partition.util';
 import { ConstraintListEditButton } from './ConstraintListEditButton';
 import { workbenchPendingSaveBadgeClass } from './workbench-ui';
+import { assessmentToneBorderClass } from '@/lib/frontend-constraint-card-view.util';
+import { ConstraintAssessmentSummary } from './ConstraintAssessmentLaneBadges';
 
 export interface ConstraintSidebarListRowProps {
   icon: LucideIcon;
@@ -28,6 +30,10 @@ export interface ConstraintSidebarListRowProps {
   repairing?: boolean;
   /** 正文换行展示，徽章移到正文下方（窄侧栏下的目的地规则等） */
   wrapContent?: boolean;
+  /** P1-A · aggregateStatus 左边线（优先于 type 推断） */
+  assessmentTone?: import('@/types/frontend-constraint-assessment-api.types').ConstraintAssessmentUiTone;
+  contractRequirement?: string | null;
+  assessmentLaneBadges?: import('@/types/frontend-constraint-assessment-api.types').ConstraintAssessmentLaneBadge[];
   className?: string;
 }
 
@@ -49,6 +55,9 @@ export function ConstraintSidebarListRow({
   onViewRepair,
   repairing = false,
   wrapContent = false,
+  assessmentTone,
+  contractRequirement,
+  assessmentLaneBadges,
   className,
 }: ConstraintSidebarListRowProps) {
   const descriptionText = coerceDisplayText(description);
@@ -93,82 +102,60 @@ export function ConstraintSidebarListRow({
   const textBlock = (
     <>
       {showLabel ? (
-        <p
-          className={cn(
-            'text-xs font-medium text-foreground',
-            wrapContent ? 'leading-snug' : 'truncate',
-          )}
-        >
+        <p className="break-words text-xs font-medium leading-snug text-foreground">
           {label}
         </p>
       ) : null}
       {descriptionText ? (
-        <p
-          className={cn(
-            'text-[10px] text-muted-foreground',
-            wrapContent ? 'mt-0.5 leading-relaxed' : 'leading-snug line-clamp-2',
-            showLabel && !wrapContent && 'mt-0.5',
-          )}
-        >
+        <p className="mt-0.5 break-words text-[10px] leading-relaxed text-muted-foreground">
           {descriptionText}
         </p>
       ) : null}
     </>
   );
 
-  if (wrapContent) {
-    return (
-      <div
-        className={cn(
-          'group rounded-lg border px-2.5 py-2',
-          selected ? 'border-foreground/15 bg-muted/50 ring-1 ring-foreground/8' : 'border-border/45 bg-muted/8',
-          onSelect && !selected && 'hover:border-border/70 hover:bg-muted/15',
-          className,
-        )}
-      >
-        <div className="flex items-start gap-2">
-          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1">
-            {onSelect ? (
-              <button type="button" onClick={onSelect} className="w-full text-left">
-                {textBlock}
-              </button>
-            ) : (
-              textBlock
-            )}
-            <div className="mt-1.5 flex flex-wrap items-center gap-1">{trailingBadges}</div>
-          </div>
-          {onViewRepair ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-6 shrink-0 px-2 text-[10px]"
-              disabled={repairing}
-              onClick={onViewRepair}
-            >
-              查看修复
-            </Button>
-          ) : null}
-          {onEdit ? <ConstraintListEditButton label={label} onClick={onEdit} /> : null}
-          {onDelete ? (
-            <button
-              type="button"
-              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label={`移除 ${label}`}
-              onClick={onDelete}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
+  const actionButtons = (
+    <>
+      {onViewRepair ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-6 shrink-0 px-2 text-[10px]"
+          disabled={repairing}
+          onClick={onViewRepair}
+        >
+          查看修复
+        </Button>
+      ) : null}
+      {onEdit ? <ConstraintListEditButton label={label} onClick={onEdit} /> : null}
+      {onDelete ? (
+        <button
+          type="button"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label={`移除 ${label}`}
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </>
+  );
+
+  const hasTrailingBadges = Boolean(value || badge || statusBadge || pendingSave || locked);
+  const hasFooterActions = Boolean(onViewRepair || onEdit || onDelete);
+  const footerRow =
+    hasTrailingBadges || hasFooterActions ? (
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+        {trailingBadges}
+        {actionButtons}
       </div>
-    );
-  }
+    ) : null;
 
   return (
     <div
       className={cn(
         'group rounded-lg border px-2.5 py-2',
+        assessmentTone ? assessmentToneBorderClass(assessmentTone) : null,
         selected ? 'border-foreground/15 bg-muted/50 ring-1 ring-foreground/8' : 'border-border/45 bg-muted/8',
         onSelect && !selected && 'hover:border-border/70 hover:bg-muted/15',
         className,
@@ -176,7 +163,7 @@ export function ConstraintSidebarListRow({
     >
       <div className="flex items-start gap-2">
         <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 w-full flex-1">
           {onSelect ? (
             <button type="button" onClick={onSelect} className="w-full text-left">
               {textBlock}
@@ -184,30 +171,15 @@ export function ConstraintSidebarListRow({
           ) : (
             textBlock
           )}
+          <ConstraintAssessmentSummary
+            contractRequirement={contractRequirement}
+            aggregateLabel={statusBadge?.label}
+            aggregateTone={assessmentTone}
+            laneBadges={assessmentLaneBadges}
+            className="mt-1"
+          />
+          {footerRow}
         </div>
-        <div className="flex shrink-0 items-center gap-1">{trailingBadges}</div>
-        {onViewRepair ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-6 shrink-0 px-2 text-[10px]"
-            disabled={repairing}
-            onClick={onViewRepair}
-          >
-            查看修复
-          </Button>
-        ) : null}
-        {onEdit ? <ConstraintListEditButton label={label} onClick={onEdit} /> : null}
-        {onDelete ? (
-          <button
-            type="button"
-            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label={`移除 ${label}`}
-            onClick={onDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
       </div>
     </div>
   );
@@ -226,17 +198,38 @@ export function mapConstraintEntryToSidebarRowProps(
   } = {},
 ): ConstraintSidebarListRowProps {
   const conflict = hasConstraintConflict(item);
-  const description =
+  const hasAssessment = Boolean(item.assessmentAggregateStatus);
+  const assessmentBlocking = item.assessmentTone === 'danger';
+  const isTransportItem = item.id === 'transport' || item.id === 'c_transport_mode';
+  const rawDescription =
     coerceDisplayText(item.description) ||
     item.destinationRule?.judgmentRule ||
-    (item.kind === 'hard' ? item.metadata?.ruleLabel : undefined);
-  return {
-    icon: item.icon,
-    label: item.label,
-    description,
-    value: item.value,
-    wrapContent: options.wrapContent ?? Boolean(item.destinationRule),
-    statusBadge: item.statusLabel
+    (item.kind === 'hard' && !hasAssessment ? item.metadata?.ruleLabel : undefined);
+  const description =
+    isTransportItem &&
+    rawDescription &&
+    (rawDescription === '出行方式' || rawDescription === '基础交通方式')
+      ? undefined
+      : rawDescription;
+  const contractRequirement =
+    item.contractRequirement ??
+    (hasAssessment ? item.metadata?.ruleLabel ?? item.value : undefined);
+
+  const statusBadge = hasAssessment
+    ? item.assessmentAggregateLabel
+      ? {
+          label: item.assessmentAggregateLabel,
+          className:
+            item.assessmentTone === 'danger'
+              ? 'border-[color-mix(in_srgb,var(--color-danger)_35%,transparent)] text-error'
+              : item.assessmentTone === 'warning'
+                ? 'border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] text-[var(--color-warning)]'
+                : item.assessmentTone === 'success'
+                  ? 'border-[color-mix(in_srgb,var(--color-success)_35%,transparent)] text-[var(--color-success)]'
+                  : 'text-muted-foreground',
+        }
+      : null
+    : item.statusLabel
       ? {
           label: item.statusLabel,
           className:
@@ -244,16 +237,30 @@ export function mapConstraintEntryToSidebarRowProps(
               ? 'border-border/50 text-error'
               : 'text-muted-foreground',
         }
-      : null,
+      : null;
+
+  const repairIssueId =
+    item.assessmentRepairProblemId ?? item.checkIssueId ?? undefined;
+
+  return {
+    icon: item.icon,
+    label: item.label,
+    description,
+    value: item.value,
+    wrapContent: options.wrapContent ?? Boolean(item.destinationRule),
+    statusBadge,
+    assessmentTone: item.assessmentTone,
+    contractRequirement,
+    assessmentLaneBadges: item.assessmentLaneBadges,
     selected: options.selected,
     locked: Boolean(item.locked || item.readOnly),
     pendingSave: options.pendingSave,
     onSelect: options.onSelect,
     onEdit: options.onEdit,
     onViewRepair:
-      conflict && item.checkIssueId && options.onViewRepair
+      (assessmentBlocking || conflict) && repairIssueId && options.onViewRepair
         ? () => {
-            options.onViewRepair?.(item.checkIssueId!);
+            options.onViewRepair?.(repairIssueId);
           }
         : undefined,
     repairing: options.repairing,

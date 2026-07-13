@@ -17,6 +17,7 @@ import type { ConstraintListEntry } from './constraint-console-types';
 import { SoftConstraintDetailCard } from './SoftConstraintDetailCard';
 import type { ConstraintEntryScopeContext } from '@/lib/constraint-entry-scope-context.util';
 import { ConstraintEntryScopeCard } from './ConstraintEntryScopeCard';
+import { ConstraintAssessmentSummary } from './ConstraintAssessmentLaneBadges';
 
 export interface ConstraintConsoleDetailPanelProps {
   selectedId: string | null;
@@ -28,6 +29,7 @@ export interface ConstraintConsoleDetailPanelProps {
   travelGoalsSaving?: boolean;
   hardMetadata?: HardConstraintMetadata | null;
   hardConstraintLabel?: string;
+  hardEntry?: ConstraintListEntry | null;
   softEntry?: ConstraintListEntry | null;
   softScopeContext?: ConstraintEntryScopeContext | null;
   hardScopeContext?: ConstraintEntryScopeContext | null;
@@ -66,6 +68,7 @@ export function ConstraintConsoleDetailPanel({
   travelGoalsSaving,
   hardMetadata,
   hardConstraintLabel,
+  hardEntry,
   softEntry,
   softScopeContext,
   hardScopeContext,
@@ -170,6 +173,7 @@ export function ConstraintConsoleDetailPanel({
         error={previewError}
         onRetry={onPreviewRetry}
         emptyHint={previewEmptyHint}
+        onOpenFeasibilityReport={onOpenFeasibilityReport}
         className={cn('min-h-0 flex-1 border-l border-border/60', className)}
       />
     );
@@ -198,6 +202,15 @@ export function ConstraintConsoleDetailPanel({
             metadata={hardMetadata}
             constraintLabel={hardConstraintLabel}
           />
+          {hardEntry?.assessmentAggregateStatus ? (
+            <ConstraintAssessmentSummary
+              contractRequirement={hardEntry.contractRequirement ?? hardEntry.metadata?.ruleLabel}
+              aggregateLabel={hardEntry.assessmentAggregateLabel}
+              aggregateTone={hardEntry.assessmentTone}
+              laneBadges={hardEntry.assessmentLaneBadges}
+              className="mt-3 rounded-lg border border-border/50 bg-muted/10 p-3"
+            />
+          ) : null}
           <ConstraintEntryScopeCard scope={hardScopeContext} className="mt-3" />
         </div>
       ) : null}
@@ -210,6 +223,7 @@ export function ConstraintConsoleDetailPanel({
           source={previewSource}
           error={previewError}
           onRetry={onPreviewRetry}
+          onOpenFeasibilityReport={onOpenFeasibilityReport}
           className="min-h-0 flex-1"
         />
       ) : null}

@@ -1,6 +1,17 @@
 import type { LucideIcon } from 'lucide-react';
 import type { HardConstraintMetadata } from '@/lib/constraint-metadata.util';
 import type { TripConstraintCardTone } from '@/types/trip-constraints';
+import type {
+  ConstraintAggregateStatus,
+  ConstraintAssessmentLaneBadge,
+  ConstraintAssessmentUiTone,
+} from '@/types/frontend-constraint-assessment-api.types';
+import type {
+  TripConstraintPreviewFollowUpAction,
+  TripConstraintPreviewScheduleDetailLevel,
+  TripConstraintPreviewVerdict,
+} from '@/types/trip-constraints';
+import type { UnifiedConstraintAssessmentView } from '@/types/frontend-constraint-assessment-api.types';
 
 export type ConstraintConsoleItemKind = 'hard' | 'soft' | 'external';
 
@@ -42,6 +53,15 @@ export interface ConstraintListEntry {
   metadata?: HardConstraintMetadata;
   /** 目的地官方规则元数据（只读） */
   destinationRule?: import('@/types/destination-rules').DestinationRuleMetadata;
+  /** P1-A · 合同要求摘要（assessment 卡片「要求 ≤6h」） */
+  contractRequirement?: string;
+  /** P1-A · GET /constraint-assessments aggregateStatus */
+  assessmentAggregateStatus?: ConstraintAggregateStatus;
+  assessmentAggregateLabel?: string;
+  assessmentTone?: ConstraintAssessmentUiTone;
+  assessmentLaneBadges?: ConstraintAssessmentLaneBadge[];
+  assessmentRepairProblemId?: string;
+  assessmentRepairDeepLink?: string;
 }
 
 export interface ConstraintEditorDraft {
@@ -67,17 +87,19 @@ export interface ConstraintEditorDraft {
   scopeBinding?: import('@/types/constraint-scope').ConstraintScopeBinding;
 }
 
+export interface ConstraintImpactAffectedDayDetail {
+  dayNumber: number;
+  tone?: 'major' | 'minor' | 'none';
+  daySummary?: string;
+  items: ConstraintImpactAffectedDayItem[];
+}
+
 export interface ConstraintImpactAffectedDayItem {
   itemId?: string;
   label: string;
   startTimeLabel?: string;
   detail?: string;
-}
-
-export interface ConstraintImpactAffectedDayDetail {
-  dayNumber: number;
-  tone?: 'major' | 'minor' | 'none';
-  items: ConstraintImpactAffectedDayItem[];
+  impactType?: string;
 }
 
 export interface ConstraintImpactPreview {
@@ -90,16 +112,55 @@ export interface ConstraintImpactPreview {
   planNeedsAdjust: boolean;
   feasibilityBefore: number;
   feasibilityAfter: number;
-  executeabilityDelta?: { scoreDelta?: number; mustHandleDelta?: number };
+  executeabilityDelta?: {
+    scoreDelta?: number;
+    mustHandleDelta?: number;
+    scoreDeltaReason?: string;
+    blockingRuleIds?: string[];
+    conflictsDeltaSummary?: {
+      mustHandle?: string;
+      suggestAdjust?: string;
+      pendingConfirm?: string;
+    };
+  };
   budgetRows: Array<{ label: string; delta: number; currency: string }>;
   diffBullets: string[];
   recommendation: string;
   recommendations?: string[];
   conflictsBefore?: { mustHandle?: number; suggestAdjust?: number; pendingConfirm?: number };
   conflictsAfter?: { mustHandle?: number; suggestAdjust?: number; pendingConfirm?: number };
+  /** meta.debug · 整趟行程冲突对照（非本约束域） */
+  tripLevelConflicts?: {
+    before?: { mustHandle?: number; suggestAdjust?: number; pendingConfirm?: number };
+    after?: { mustHandle?: number; suggestAdjust?: number; pendingConfirm?: number };
+  };
+  /** @deprecated 使用 suggestedFollowUpAction */
   suggestedFollowUp?: string;
+  suggestedFollowUpAction?: {
+    label: string;
+    action: TripConstraintPreviewFollowUpAction;
+    deepLink?: string;
+  };
+  userSummary?: {
+    verdict: TripConstraintPreviewVerdict;
+    verdictLabel: string;
+    verdictReason: string;
+    confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+    previewMode?: 'quick' | 'deep';
+  };
+  scheduleDetailLevel?: TripConstraintPreviewScheduleDetailLevel;
+  scheduleDetailUnavailableReason?: string;
+  constraintAssessments?: Array<{
+    constraintKey?: string;
+    legacyConstraintId?: string;
+    aggregateStatus?: ConstraintAggregateStatus;
+    laneBadges: ConstraintAssessmentLaneBadge[];
+    assessment: UnifiedConstraintAssessmentView;
+  }>;
   refreshType?: 'quick' | 'deep';
   structuredImpact?: import('@/types/trip-constraints').TripConstraintPreviewStructuredImpact;
+  /** quick 预览仅为当前行程快照，affectedDays/冲突计数并非本次修改专属 */
+  isTripSnapshotOnly?: boolean;
 }
 
 /** mapPreviewImpactToUi 缺字段时的空骨架（不含演示数据） */

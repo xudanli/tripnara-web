@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Car, Clock } from 'lucide-react';
+import { Car, Clock, ShieldAlert } from 'lucide-react';
 import type { ConstraintListEntry } from '@/components/plan-studio/workbench/constraint-console-types';
 import {
   buildHardConstraintMetadata,
@@ -138,6 +138,42 @@ describe('constraint-metadata.util', () => {
     expect(meta.scopeLabel).toContain('第 2—5 天');
     expect(meta.scopeRows.some((r) => r.label === '成员' && r.value.includes('主驾驶人'))).toBe(true);
     expect(meta.scopeRows.some((r) => r.label === '阶段' && r.value.includes('规划'))).toBe(true);
+  });
+
+  it('appends catalog hard notes to judgment rule label', () => {
+    const meta = buildHardConstraintMetadata({
+      entry: {
+        id: 'no_high_risk_activity',
+        kind: 'hard',
+        label: '不参加高风险活动',
+        icon: ShieldAlert,
+        value: '已启用',
+      },
+      apiConstraint: {
+        id: 'c_tpl_no_high_risk_activity',
+        name: '不参加高风险活动',
+        type: 'HARD',
+        category: 'SAFETY',
+        enabled: true,
+        value: { enabled: true, notes: '冰川徒步' },
+        contractMeta: {
+          judgmentRule: '不得安排冰川徒步等高风险活动',
+          violationResult: 'BLOCK',
+        },
+      } as import('@/types/trip-constraints').TripConstraint,
+      draft: {
+        id: 'no_high_risk_activity',
+        label: '不参加高风险活动',
+        type: 'HARD',
+        scope: 'TRIP',
+        enabled: true,
+        reason: '冰川徒步',
+        targetValue: 1,
+        priority: 7,
+        locked: false,
+      },
+    });
+    expect(meta.ruleLabel).toContain('冰川徒步');
   });
 
   it('ensureHardConstraintMetadataOnEntries fills missing metadata on hard items', () => {

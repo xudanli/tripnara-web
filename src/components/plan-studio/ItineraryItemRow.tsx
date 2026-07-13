@@ -50,6 +50,7 @@ import { toast } from 'sonner';
 import type { DecisionAuthorityLabel } from '@/lib/domain-influence-mapping';
 import { ItineraryDecisionAuthorityRow } from '@/components/domain-influence';
 import { getCrossDayBadgeLabel, readCrossDayInfo } from '@/lib/itinerary-item-sort';
+import { formatItineraryItemTimeRangeLabel } from '@/lib/itinerary-item-card-format';
 import { isItineraryCarRentalDisplay, isItineraryDeparturePointDisplay, isItineraryLandingPointDisplay } from '@/lib/itinerary-special-display';
 import {
   isPlanGateTimelineItem,
@@ -182,6 +183,7 @@ export default function ItineraryItemRow({
   // 使用目的地时区显示时间
   const startTime = formatTimeInTimezone(item.startTime);
   const endTime = formatTimeInTimezone(item.endTime);
+  const timeRangeLabel = formatItineraryItemTimeRangeLabel(item, timezone);
 
   // ==================== 天气显示逻辑 ====================
   // 室内类型（不显示天气）
@@ -239,9 +241,6 @@ export default function ItineraryItemRow({
   const isCarRentalDisplay = isItineraryCarRentalDisplay(item);
   const isCrossDayCheckout =
     crossDayInfo?.displayMode === 'checkout' || crossDayInfo?.isCheckoutItem === true;
-  const checkoutEndLabel =
-    crossDayInfo?.timeLabels?.end ||
-    (isCarRentalItineraryItem(item) ? '还车' : '退房');
   
   // 预计时长（从 physicalMetadata 获取，作为参考）
   const physicalMetadata = (place as any)?.physicalMetadata || {};
@@ -792,17 +791,11 @@ export default function ItineraryItemRow({
               </span>
             ) : isCarRentalDisplay && crossDayBadgeLabel === '取车' ? (
               <span className="text-sm font-medium text-gray-700">
-                取车 {startTime}{endTime && ` -${endTime}`}
-              </span>
-            ) : isCrossDayCheckout ? (
-              // 退房/还车项：只显示结束时间
-              <span className="text-sm font-medium text-gray-700">
-                {checkoutEndLabel}: {endTime}
+                取车 {startTime}{endTime && ` - ${endTime}`}
               </span>
             ) : (
-              // 正常项或入住/取车项
               <span className="text-sm font-medium text-gray-700">
-                {startTime}{endTime && ` -${endTime}`}
+                {timeRangeLabel}
               </span>
             )}
             
@@ -1399,7 +1392,7 @@ export default function ItineraryItemRow({
                   ? `落地 ${startTime}`
                   : isDeparturePointDisplay
                     ? `值机 ${startTime}`
-                    : `${startTime}${endTime ? ` - ${endTime}` : ''}`}
+                    : timeRangeLabel}
                 {durationDisplay ? ` · ${durationDisplay}` : ''}
               </span>
             </div>

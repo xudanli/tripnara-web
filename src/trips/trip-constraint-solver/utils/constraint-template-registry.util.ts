@@ -62,6 +62,7 @@ function hardEntry(input: {
   category: ConstraintTemplateHardCategory;
   solverRuleKind: SolverRuleKind;
   legacyPatchOnly?: boolean;
+  defaultScope?: ConstraintTemplateRegistryEntry['defaultScope'];
 }): ConstraintTemplateRegistryEntry {
   return {
     templateId: input.templateId,
@@ -73,6 +74,7 @@ function hardEntry(input: {
     category: input.category,
     solverRuleKind: input.solverRuleKind,
     legacyPatchOnly: input.legacyPatchOnly ?? false,
+    ...(input.defaultScope ? { defaultScope: input.defaultScope } : {}),
   };
 }
 
@@ -195,6 +197,7 @@ const CONSTRAINT_TEMPLATE_REGISTRY: ConstraintTemplateRegistryEntry[] = [
     defaultDescription: '不得安排未铺装或高风险路况路段',
     category: 'RISK',
     solverRuleKind: 'route_shape',
+    defaultScope: { type: 'ROUTE_SEGMENT' },
   }),
   hardEntry({
     templateId: 'no_bad_weather',
@@ -202,6 +205,7 @@ const CONSTRAINT_TEMPLATE_REGISTRY: ConstraintTemplateRegistryEntry[] = [
     defaultDescription: '恶劣天气条件下不得安排受影响出行',
     category: 'RISK',
     solverRuleKind: 'route_shape',
+    defaultScope: { type: 'ROUTE_SEGMENT' },
   }),
   hardEntry({
     templateId: 'no_high_risk_activity',

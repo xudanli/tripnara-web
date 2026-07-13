@@ -24,6 +24,15 @@ export type ConstraintTemplateHardCategory =
   | 'RISK'
   | 'PLACE';
 
+export interface ConstraintTemplateScopeDefault {
+  type: 'TRIP' | 'DAY' | 'MEMBER' | 'MEMBER_GROUP' | 'ROUTE_SEGMENT' | string;
+  dayIndex?: number;
+  memberIds?: string[];
+  segmentId?: string;
+  fromItemId?: string;
+  toItemId?: string;
+}
+
 export interface ConstraintTemplateRegistryEntry {
   templateId: string;
   constraintId: string;
@@ -32,6 +41,11 @@ export interface ConstraintTemplateRegistryEntry {
   type: ConstraintTemplateRegistryType;
   sectionKey: ConstraintTemplateSectionKey;
   category?: ConstraintTemplateHardCategory;
+  /**
+   * 新建实例默认 scope（前端 SSOT 字段名）。
+   * 后端 GET /constraints/catalog 同语义字段名为 `scope`。
+   */
+  defaultScope?: ConstraintTemplateScopeDefault;
   defaultPriority?: number;
   defaultIntensity?: number;
   solverRuleKind: SolverRuleKind;

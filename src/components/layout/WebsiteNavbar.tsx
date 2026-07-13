@@ -308,7 +308,7 @@ export default function WebsiteNavbar() {
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full"
               >
-                <Link to="/dashboard/settings?tab=preferences">
+                <Link to="/dashboard/settings">
                   {t('nav.preferences')}
                 </Link>
               </Button>

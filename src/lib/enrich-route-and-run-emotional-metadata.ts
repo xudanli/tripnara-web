@@ -1,48 +1,25 @@
-import type { RouteAndRunRequest } from '@/api/agent';
 import { buildEmotionalRealtimeSignals } from '@/lib/emotional-realtime-signals';
-import { trailOfflineStore } from '@/services/trail-offline-store';
+import type { RouteAndRunRequest } from '@/api/agent';
 import type { RouteRunEmotionalMetadata } from '@/types/route-run-emotional-metadata';
-
-let offlineMapsSyncedCache: boolean | undefined;
 
 function resolveTimezoneFromRequest(request: RouteAndRunRequest): string | undefined {
   const tz = request.conversation_context?.timezone?.trim();
   return tz || undefined;
 }
 
-/** 刷新离线地图同步态：至少一个 pack 且 tileCache 已写入 */
-export async function refreshOfflineMapsSyncedState(): Promise<boolean> {
-  try {
-    const packs = await trailOfflineStore.list();
-    offlineMapsSyncedCache = packs.some((p) => Boolean(p.tileCache?.packKey));
-  } catch {
-    offlineMapsSyncedCache = false;
-  }
-  return offlineMapsSyncedCache === true;
-}
-
-export function getOfflineMapsSyncedSnapshot(): boolean | undefined {
-  return offlineMapsSyncedCache;
-}
-
 export function buildRouteRunEmotionalMetadataSync(
   request?: RouteAndRunRequest
 ): RouteRunEmotionalMetadata {
-  const metadata: RouteRunEmotionalMetadata = {
+  return {
     emotional_realtime_signals: buildEmotionalRealtimeSignals({
       timezone: request ? resolveTimezoneFromRequest(request) : undefined,
     }),
   };
-  if (offlineMapsSyncedCache === true) {
-    metadata.offline_maps_synced = true;
-  }
-  return metadata;
 }
 
 export async function buildRouteRunEmotionalMetadataAsync(
   request?: RouteAndRunRequest
 ): Promise<RouteRunEmotionalMetadata> {
-  await refreshOfflineMapsSyncedState();
   return buildRouteRunEmotionalMetadataSync(request);
 }
 
@@ -69,8 +46,7 @@ export function enrichRouteAndRunRequestWithEmotionalMetadata(
     emotional.emotional_realtime_signals &&
       Object.keys(emotional.emotional_realtime_signals).length > 0
   );
-  const hasOfflineFlag = emotional.offline_maps_synced === true;
-  if (!hasSignals && !hasOfflineFlag) return request;
+  if (!hasSignals) return request;
 
   return {
     ...request,
@@ -78,7 +54,7 @@ export function enrichRouteAndRunRequestWithEmotionalMetadata(
   };
 }
 
-/** 异步版：含 offline_maps_synced 探测 */
+/** 异步版 */
 export async function enrichRouteAndRunRequestWithEmotionalMetadataAsync(
   request: RouteAndRunRequest
 ): Promise<RouteAndRunRequest> {

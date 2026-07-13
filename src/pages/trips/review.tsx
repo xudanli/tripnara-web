@@ -103,10 +103,9 @@ export default function TripReviewPage() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `trip-review-${tripId}.${format === 'pdf' ? 'pdf' : 'md'}`;
-      document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      a.remove();
     } catch (err: any) {
       setError(err.message || '导出失败');
     }

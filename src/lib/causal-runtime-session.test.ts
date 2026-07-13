@@ -62,7 +62,7 @@ describe('causal-runtime-session', () => {
     const nested = {
       tripId: 'trip-1',
       state: { context: { country: 'IS' }, decisionCausalityChain: [] },
-      metadata: { hikingProfile: 'primary' },
+      metadata: { matchSquareInstantiation: { strategy: 'route_template_v1' } },
     };
     expect(extractTripWorldStateFromGeneratePlanRequest(nested).context).toEqual({
       country: 'IS',

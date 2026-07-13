@@ -4,10 +4,6 @@ import {
   getActionableMitigations,
   mitigationKey,
 } from '@/lib/risk-mitigation-progress';
-import {
-  resolveMatchSquareRosterFromContext,
-  type MatchSquareRosterMember,
-} from '@/lib/match-square-trip-roster';
 
 export type ReadinessTaskScope = 'team' | 'personal';
 
@@ -155,17 +151,9 @@ export function savePreparationTasks(tripId: string, tasks: ReadinessPreparation
 }
 
 export function resolveTaskMembers(
-  tripId: string,
+  _tripId: string,
   viewer?: { id: string; name?: string | null } | null,
 ): ReadinessTaskMember[] {
-  const roster = resolveMatchSquareRosterFromContext(tripId);
-  if (roster?.members.length) {
-    return roster.members.map((m: MatchSquareRosterMember) => ({
-      userId: m.userId,
-      displayName: m.displayName,
-      role: m.role,
-    }));
-  }
   if (viewer?.id) {
     return [
       {

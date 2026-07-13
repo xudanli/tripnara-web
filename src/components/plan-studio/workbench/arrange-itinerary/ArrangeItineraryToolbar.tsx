@@ -1,7 +1,8 @@
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { CalendarRange } from 'lucide-react';
+import { CalendarRange, ClipboardList, SlidersHorizontal } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { TripDetail } from '@/types/trip';
 import type { ArrangePlanningMode } from '@/types/arrange-itinerary';
@@ -22,6 +23,9 @@ export interface ArrangeItineraryToolbarProps {
   planningMode?: ArrangePlanningMode;
   planningModePending?: boolean;
   onPlanningModeChange?: (mode: ArrangePlanningMode) => void;
+  onOpenItineraryDiagnosis?: () => void;
+  onOpenConstraints?: () => void;
+  conflictMustHandleCount?: number;
   className?: string;
 }
 
@@ -47,6 +51,9 @@ export function ArrangeItineraryToolbar({
   planningMode = 'copilot',
   planningModePending = false,
   onPlanningModeChange,
+  onOpenItineraryDiagnosis,
+  onOpenConstraints,
+  conflictMustHandleCount = 0,
   className,
 }: ArrangeItineraryToolbarProps) {
   const copilotEnabled = planningMode === 'copilot';
@@ -70,6 +77,36 @@ export function ArrangeItineraryToolbar({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {onOpenItineraryDiagnosis ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 rounded-md px-2 text-[10px]"
+            onClick={onOpenItineraryDiagnosis}
+          >
+            <ClipboardList className="h-3 w-3" />
+            行程诊断
+            {conflictMustHandleCount > 0 ? (
+              <span className="rounded-full bg-destructive/10 px-1.5 text-[9px] font-medium text-destructive">
+                {conflictMustHandleCount}
+              </span>
+            ) : null}
+          </Button>
+        ) : null}
+        {onOpenConstraints ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 rounded-md px-2 text-[10px]"
+            onClick={onOpenConstraints}
+          >
+            <SlidersHorizontal className="h-3 w-3" />
+            约束编辑
+          </Button>
+        ) : null}
+
         {onPlanningModeChange ? (
           <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5">
             {(

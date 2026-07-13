@@ -4,7 +4,7 @@
  */
 
 import { identityGovernanceApi, isIdentityApiNotReady } from '@/api/identity-governance';
-import { isApiNotReadyError } from '@/features/match-square/lib/match-square-api-mode';
+import { isApiNotReadyError } from '@/lib/api-fallback-mode';
 import { mapProfessionalPayloadToDraftBody } from '@/lib/map-professional-certification';
 import { markProfessionalCertificationSubmitted } from '@/lib/professional-certification-draft';
 import type { ProfessionalStatus } from '@/types/identity-governance';

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Leaf, Lock, Plus, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -96,12 +97,14 @@ function TemplateCard({
   selected = false,
   batchSelectable = false,
   onClick,
+  onToggleSelect,
 }: {
   template: ConstraintTemplate;
   badge?: { label: string; tone?: 'neutral' | 'success' };
   selected?: boolean;
   batchSelectable?: boolean;
   onClick: () => void;
+  onToggleSelect?: () => void;
 }) {
   const Icon = template.icon;
   return (
@@ -117,13 +120,26 @@ function TemplateCard({
     >
       {batchSelectable ? (
         <span
+          role="checkbox"
+          aria-checked={selected}
+          tabIndex={0}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelect?.();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggleSelect?.();
+            }
+          }}
           className={cn(
             'absolute right-2.5 top-2.5 flex h-4 w-4 items-center justify-center rounded border',
             selected
               ? 'border-border bg-muted text-foreground'
               : 'border-border/70 bg-background',
           )}
-          aria-hidden
         >
           {selected ? <Check className="h-2.5 w-2.5" /> : null}
         </span>
@@ -234,11 +250,6 @@ export function AddConstraintDialog({
   };
 
   const handlePick = (template: ConstraintTemplate) => {
-    if (isBatchAddableConstraintTemplate(template)) {
-      toggleTemplateSelection(template);
-      return;
-    }
-
     const resolved = resolveTemplateSelection(template);
     onOpenChange(false);
     setNlText('');
@@ -251,13 +262,41 @@ export function AddConstraintDialog({
     onSelectTemplate(resolved.constraintId, template);
   };
 
+  const handleBatchAddSingle = async (template: ConstraintTemplate) => {
+    if (!onBatchAddTemplates || batchAdding) return;
+    setBatchAdding(true);
+    try {
+      const added = await onBatchAddTemplates([template]);
+      if (added === 0) {
+        toast.message('未能添加该项，可能已存在或暂不可用');
+      }
+    } finally {
+      setBatchAdding(false);
+    }
+  };
+
+  const handleTemplateClick = (template: ConstraintTemplate) => {
+    if (isBatchAddableConstraintTemplate(template)) {
+      void handleBatchAddSingle(template);
+      return;
+    }
+    handlePick(template);
+  };
+
   const handleBatchAdd = async (finish: boolean) => {
-    if (!onBatchAddTemplates || selectedTemplates.length === 0 || batchAdding) return;
+    if (!onBatchAddTemplates || selectedTemplates.length === 0 || batchAdding) {
+      if (selectedTemplates.length === 0) {
+        toast.message('请先勾选右上角复选框，或点击模板卡片直接添加');
+      }
+      return;
+    }
     setBatchAdding(true);
     try {
       const added = await onBatchAddTemplates(selectedTemplates);
       if (added > 0) {
         setSelectedTemplateIds(new Set());
+      } else {
+        toast.message('未能添加所选项，可能已存在或暂不可用');
       }
       if (finish) {
         onOpenChange(false);
@@ -317,7 +356,7 @@ export function AddConstraintDialog({
             <div className="space-y-4">
               <p className="rounded-lg border border-border/50 bg-muted/15 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                 {showBatchFooter
-                  ? '点击模板可多选；需单独配置的项点击后直接打开编辑器。已配置的硬约束不会重复出现。'
+                  ? '点击模板卡片即可添加；勾选右上角复选框可多选后批量提交。需单独配置的项点击后直接打开编辑器。'
                   : '硬约束按时间、预算、人员、风险等分类选用；已配置的项不会重复出现在列表中。'}
               </p>
               {hardGroups.length > 0 ? (
@@ -331,7 +370,8 @@ export function AddConstraintDialog({
                           template={template}
                           batchSelectable={isBatchAddableConstraintTemplate(template)}
                           selected={selectedTemplateIds.has(template.id)}
-                          onClick={() => handlePick(template)}
+                          onClick={() => handleTemplateClick(template)}
+                          onToggleSelect={() => toggleTemplateSelection(template)}
                         />
                       ))}
                     </div>
@@ -442,7 +482,8 @@ export function AddConstraintDialog({
                             ? `默认${template.defaultPriority}`
                             : '点击添加',
                         }}
-                        onClick={() => handlePick(template)}
+                        onClick={() => handleTemplateClick(template)}
+                        onToggleSelect={() => toggleTemplateSelection(template)}
                       />
                     ))}
                   </div>
@@ -464,7 +505,7 @@ export function AddConstraintDialog({
                   已选 <span className="font-medium text-foreground">{selectedTemplates.length}</span> 项
                 </>
               ) : (
-                '选择模板后可批量添加'
+                '点击模板卡片添加，或勾选多项后批量添加'
               )}
             </p>
             <div className="flex shrink-0 items-center gap-2">

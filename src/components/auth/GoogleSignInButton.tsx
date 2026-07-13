@@ -48,11 +48,15 @@ export default function GoogleSignInButton({
       }
     };
 
-    const initializeButton = async () => {
-      // 清空容器，避免重复渲染
-      if (buttonRef.current) {
-        buttonRef.current.innerHTML = '';
+    const clearButtonContainer = () => {
+      if (!buttonRef.current) return;
+      while (buttonRef.current.firstChild) {
+        buttonRef.current.firstChild.remove();
       }
+    };
+
+    const initializeButton = async () => {
+      clearButtonContainer();
 
       if (mode === 'code') {
         // 方案 1: 使用 Code Client
@@ -132,9 +136,7 @@ export default function GoogleSignInButton({
 
     // 清理函数
     return () => {
-      if (buttonRef.current) {
-        buttonRef.current.innerHTML = '';
-      }
+      clearButtonContainer();
       customButton = null;
       codeClient = null;
     };

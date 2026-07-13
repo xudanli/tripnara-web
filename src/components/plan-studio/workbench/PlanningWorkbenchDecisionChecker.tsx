@@ -31,7 +31,6 @@ import { DecisionCheckerSplitTab } from './decision-checker/DecisionCheckerSplit
 import { DecisionCheckerMembersTab } from './decision-checker/DecisionCheckerMembersTab';
 import { DecisionCheckerRecordsTab } from './decision-checker/DecisionCheckerRecordsTab';
 import { ConstraintEvalPendingBanner } from './ConstraintEvalPendingBanner';
-import { WorkbenchAiAssistantDock } from './WorkbenchAiAssistantDock';
 import { DecisionSpaceCausalChainPanel } from '@/components/decision-problems/decision-space/DecisionSpaceCausalChainPanel';
 import { DecisionProfessionalReviewStrip } from '@/components/decision-problems/DecisionProfessionalReviewStrip';
 import { DecisionSpacePlanDiffPanel } from '@/components/decision-problems/decision-space/DecisionSpacePlanDiffPanel';
@@ -1021,8 +1020,6 @@ export const PlanningWorkbenchDecisionChecker = memo(function PlanningWorkbenchD
           ) : null}
         </div>
       </Tabs>
-
-      {!decisionSpaceMode ? <WorkbenchAiAssistantDock /> : null}
 
       {decisionSpaceMode &&
       onConfirmSelectedOption &&

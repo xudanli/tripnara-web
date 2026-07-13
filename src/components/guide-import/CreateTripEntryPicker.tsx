@@ -20,6 +20,8 @@ import {
   ListChecks,
   Check,
   Info,
+  Briefcase,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -32,10 +34,11 @@ import {
   guideImportPrimaryButtonClass,
 } from '@/components/guide-import/guide-import-ui';
 
-export type CreateTripEntryId = 'tell-ai' | 'from-guide' | 'import' | 'inspiration';
+export type CreateTripEntryId = 'tell-ai' | 'from-guide' | 'advisor-create' | 'import' | 'inspiration';
 
 const TELL_AI_HREF = '/dashboard/explore';
 const FROM_GUIDE_HREF = '/dashboard/trips/new/from-guide';
+const ADVISOR_CREATE_HREF = '/dashboard/trips/new/advisor-create';
 
 interface EntryOption {
   id: CreateTripEntryId;
@@ -59,6 +62,13 @@ const ENTRIES: EntryOption[] = [
     title: '从攻略开始规划',
     description: '粘贴小红书、公众号或上传截图',
     icon: BookOpen,
+  },
+  {
+    id: 'advisor-create',
+    title: '顾问代客创建',
+    description: '旅行社顾问填写行程信息、指定角色并生成成员邀请码',
+    icon: Briefcase,
+    badge: '机构',
   },
   {
     id: 'import',
@@ -118,6 +128,13 @@ const GUIDE_STEPS = [
   { label: '生成行程草案', icon: Route },
 ] as const;
 
+const ADVISOR_CREATE_STEPS = [
+  { label: '填写基本信息', icon: MapPin },
+  { label: '指定关键角色', icon: Users },
+  { label: '录入预算与要求', icon: FileSpreadsheet },
+  { label: '生成成员邀请码', icon: Link2 },
+] as const;
+
 const ENTRY_PRIMARY: Record<
   CreateTripEntryId,
   { label: string; footnote: string; helperTitle: string; steps: readonly { label: string; icon: typeof MapPin }[] }
@@ -133,6 +150,12 @@ const ENTRY_PRIMARY: Record<
     footnote: '也可切换为探索规划，或等待其他入口上线',
     helperTitle: '攻略导入会帮你',
     steps: GUIDE_STEPS,
+  },
+  'advisor-create': {
+    label: '开始顾问创建',
+    footnote: '面向旅行社顾问与机构成员',
+    helperTitle: '顾问创建会帮你',
+    steps: ADVISOR_CREATE_STEPS,
   },
   import: {
     label: '即将上线',
@@ -158,6 +181,17 @@ const TELL_AI_SIDEBAR = {
   ],
 };
 
+const ADVISOR_CREATE_SIDEBAR = {
+  title: '顾问代客创建',
+  intro: '旅行社顾问在 Web 端为客户创建行程骨架，指定主联系人、付款人与确认人，并生成成员邀请码。',
+  bullets: [
+    '填写目的地、日期、天数与预计人数',
+    '指定顾问、领队与客户侧关键角色',
+    '录入初步预算与已知要求',
+    '一键生成成员邀请码，团员扫码加入后补充偏好',
+  ],
+};
+
 function entryIconClass(highlighted: boolean, disabled?: boolean): string {
   if (disabled) return 'bg-muted/50 text-muted-foreground';
   if (highlighted) return 'bg-primary text-primary-foreground';
@@ -180,7 +214,11 @@ export function CreateTripEntryPicker({
   const [hovered, setHovered] = useState<CreateTripEntryId>(activeId);
 
   const sidebarEntry =
-    hovered === 'from-guide' || selected === 'from-guide' ? 'from-guide' : hovered;
+    hovered === 'from-guide' || selected === 'from-guide'
+      ? 'from-guide'
+      : hovered === 'advisor-create' || selected === 'advisor-create'
+        ? 'advisor-create'
+        : hovered;
 
   const selectedEntry = ENTRIES.find((e) => e.id === selected);
   const primaryMeta = ENTRY_PRIMARY[selected];
@@ -190,6 +228,7 @@ export function CreateTripEntryPicker({
     if (!canContinue) return;
     if (selected === 'tell-ai') navigate(TELL_AI_HREF);
     else if (selected === 'from-guide') navigate(FROM_GUIDE_HREF);
+    else if (selected === 'advisor-create') navigate(ADVISOR_CREATE_HREF);
   };
 
   return (
@@ -384,6 +423,27 @@ export function CreateTripEntryPicker({
               <p className="text-xs text-muted-foreground leading-relaxed">{TELL_AI_SIDEBAR.intro}</p>
               <ul className="space-y-3 flex-1">
                 {TELL_AI_SIDEBAR.bullets.map((b) => (
+                  <li key={b} className="text-xs text-foreground flex gap-2 leading-relaxed">
+                    <Check
+                      className="w-3.5 h-3.5 text-foreground flex-shrink-0 mt-0.5"
+                      strokeWidth={2.5}
+                    />
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : sidebarEntry === 'advisor-create' ? (
+            <>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center flex-shrink-0">
+                  <Briefcase className="w-4 h-4 text-primary-foreground" />
+                </div>
+                <h3 className="font-semibold text-sm">{ADVISOR_CREATE_SIDEBAR.title}</h3>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{ADVISOR_CREATE_SIDEBAR.intro}</p>
+              <ul className="space-y-3 flex-1">
+                {ADVISOR_CREATE_SIDEBAR.bullets.map((b) => (
                   <li key={b} className="text-xs text-foreground flex gap-2 leading-relaxed">
                     <Check
                       className="w-3.5 h-3.5 text-foreground flex-shrink-0 mt-0.5"

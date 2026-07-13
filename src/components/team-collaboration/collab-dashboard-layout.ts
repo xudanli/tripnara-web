@@ -1,8 +1,17 @@
 import { cn } from '@/lib/utils';
 
-/** 协作中心 Dashboard 12 列栅格 */
+/** 协作中心页面区块纵向间距 */
+export const collabPageStack = 'space-y-2.5';
+
+/** 同一栏内多张卡片纵向间距 */
+export const collabColumnStack = 'space-y-2';
+
+/** 协作中心 Dashboard 12 列栅格（列高随内容，避免短卡片被撑满整列） */
 export const collabDashboardGrid =
-  'grid grid-cols-1 items-stretch gap-3 md:grid-cols-6 md:gap-4 lg:grid-cols-12';
+  'grid grid-cols-1 items-start gap-2 md:grid-cols-6 md:gap-2.5 lg:grid-cols-12';
+
+/** 协作决策 Tab 三栏栅格 */
+export const collabDecisionsGrid = 'grid grid-cols-1 gap-2.5 xl:grid-cols-12';
 
 export function collabDashboardSpan(
   cols: { md?: number; lg: number },
@@ -16,6 +25,7 @@ export function collabDashboardSpan(
     cols.lg === 12 && 'lg:col-span-12',
     cols.lg === 8 && 'lg:col-span-8',
     cols.lg === 6 && 'lg:col-span-6',
+    cols.lg === 7 && 'lg:col-span-7',
     cols.lg === 5 && 'lg:col-span-5',
     cols.lg === 4 && 'lg:col-span-4',
     cols.lg === 3 && 'lg:col-span-3',

@@ -28,10 +28,12 @@ import {
 import { useExecuteCausalInsight } from '@/hooks/useExecuteCausalInsight';
 import { ExecuteCausalInsightPanel } from '@/components/execute/live/ExecuteCausalInsightPanel';
 import type { TripExecutionAdvisoryDto } from '@/types/trip-execution-advisory';
+import type { TripDetail } from '@/types/trip';
 import { cn } from '@/lib/utils';
 
 interface ExecuteDecisionSidebarProps {
   tripId?: string | null;
+  trip?: TripDetail | null;
   advisory: TripExecutionAdvisoryDto | null;
   fallbackPlan?: FallbackPlan | null;
   loading?: boolean;
@@ -194,6 +196,7 @@ function ContactKindIcon({ kind }: { kind: ExecuteEmergencyContactKind }) {
 
 export function ExecuteDecisionSidebar({
   tripId,
+  trip,
   advisory,
   fallbackPlan,
   onApplyPlan,
@@ -202,7 +205,7 @@ export function ExecuteDecisionSidebar({
   className,
 }: ExecuteDecisionSidebarProps) {
   const [tab, setTab] = useState('overview');
-  const model = buildExecuteDecisionSidebarModel({ advisory, fallbackPlan });
+  const model = buildExecuteDecisionSidebarModel({ advisory, fallbackPlan, trip });
   const overviewActive = tab === 'overview';
   const { insight: causalInsight, loading: causalInsightLoading } = useExecuteCausalInsight(
     tripId,
@@ -275,7 +278,7 @@ export function ExecuteDecisionSidebar({
                     ))}
                   </ul>
                 ) : (
-                  <p className={workbenchEmptyHint}>阵风预计持续至 14:00，14:00 后改善概率 68%。</p>
+                  <p className={workbenchEmptyHint}>暂无偏差证据。系统将持续监控环境变化。</p>
                 )}
                 {advisory?.evidence.weatherAsOf ? (
                   <p className="mt-2 text-[10px] text-muted-foreground">
@@ -297,7 +300,7 @@ export function ExecuteDecisionSidebar({
                     ))}
                   </ul>
                 ) : (
-                  <p className={workbenchEmptyHint}>冰川徒步体验可能需延后或改线，集合时间暂保持不变。</p>
+                  <p className={workbenchEmptyHint}>暂无受影响的行程项。</p>
                 )}
               </TabsContent>
 
@@ -312,9 +315,13 @@ export function ExecuteDecisionSidebar({
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border/50">
           <p className="shrink-0 px-2 pt-1.5 text-[11px] font-semibold text-foreground">立即可执行的替代方案</p>
           <div className={cn('min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 pb-2 pt-1', workbenchScrollable)}>
-            {model.plans.map((plan) => (
-              <PlanBCard key={plan.id} plan={plan} onApply={onApplyPlan} />
-            ))}
+            {model.plans.length > 0 ? (
+              model.plans.map((plan) => (
+                <PlanBCard key={plan.id} plan={plan} onApply={onApplyPlan} />
+              ))
+            ) : (
+              <p className={workbenchEmptyHint}>暂无替代方案。当系统生成 Plan B 后将显示在这里。</p>
+            )}
           </div>
         </div>
       </section>
@@ -323,7 +330,8 @@ export function ExecuteDecisionSidebar({
         <h3 className={cn(workbenchPanelTitle, 'mb-1.5')}>紧急联系与支援</h3>
         <div className="flex gap-2">
           <ul className="min-w-0 flex-1 divide-y divide-border/60">
-            {model.contacts.map((contact) => {
+            {model.contacts.length > 0 ? (
+              model.contacts.map((contact) => {
               const kind = resolveContactKind(contact);
               return (
                 <li key={contact.id} className="flex items-center gap-2 py-1.5 first:pt-0 last:pb-0 text-xs">
@@ -351,7 +359,12 @@ export function ExecuteDecisionSidebar({
                   </Button>
                 </li>
               );
-            })}
+            })
+            ) : (
+              <li className="py-2 text-xs text-muted-foreground">
+                暂无紧急联系人。可在行程 metadata 中配置导游、救援或保险电话。
+              </li>
+            )}
           </ul>
           <button
             type="button"

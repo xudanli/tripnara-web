@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { identityGovernanceApi, isIdentityApiNotReady } from '@/api/identity-governance';
-import { isApiNotReadyError } from '@/features/match-square/lib/match-square-api-mode';
+import { isApiNotReadyError } from '@/lib/api-fallback-mode';
 import type { SubmitQualificationRequest } from '@/types/identity-governance';
 
 export const MY_QUALIFICATIONS_QUERY_KEY = ['identity', 'qualifications', 'mine'] as const;

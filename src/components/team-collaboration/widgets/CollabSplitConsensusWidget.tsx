@@ -1,10 +1,7 @@
 import { ChevronRight, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  personaFooterLinkClass,
-  personaSectionMinHeight,
-} from '@/components/team-collaboration/persona-ui';
+import { personaFooterLinkClass } from '@/components/team-collaboration/persona-ui';
 import { SPLIT_MODE_LABELS } from '@/lib/decision-profiling-labels';
 import type { SplitConsensusData } from '@/types/trip-decision-profiling';
 import { cn } from '@/lib/utils';
@@ -25,7 +22,7 @@ export function CollabSplitConsensusWidget({
 }: CollabSplitConsensusWidgetProps) {
   if (!quizCompleted) {
     return (
-      <CollabWidgetCard title="分摊机制共识" className={cn('h-full', personaSectionMinHeight)}>
+      <CollabWidgetCard title="分摊共识机制">
         <p className="text-xs text-muted-foreground">
           完成决策风格调查后，AI 将推荐分摊方案并收集全员确认。
         </p>
@@ -54,8 +51,7 @@ export function CollabSplitConsensusWidget({
 
   return (
     <CollabWidgetCard
-      title="分摊机制共识"
-      className={cn('h-full', personaSectionMinHeight)}
+      title="分摊共识机制"
       footer={
         onViewDetail ? (
           <Button
@@ -70,7 +66,7 @@ export function CollabSplitConsensusWidget({
         ) : undefined
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div
           className={cn(
             'rounded-lg border px-3 py-2.5',

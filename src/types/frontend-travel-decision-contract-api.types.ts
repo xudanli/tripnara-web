@@ -61,3 +61,13 @@ export interface ConstraintConsoleViewSection {
   constraints: import('@/components/plan-studio/workbench/constraint-console-types').ConstraintListEntry[];
   contractBlock?: import('@/types/trip-constraints').TripConstraintsContractBlockType | null;
 }
+
+export type {
+  ConstraintAggregateStatus,
+  ConstraintAssessmentLaneBadge,
+  ConstraintAssessmentUiTone,
+  ConstraintCardView,
+  ConstraintConsoleWithAssessmentsViewModel,
+  UnifiedConstraintAssessmentBundle,
+  UnifiedConstraintAssessmentView,
+} from '@/types/frontend-constraint-assessment-api.types';

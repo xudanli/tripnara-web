@@ -4,7 +4,7 @@ import {
   getCatalogEntryById,
   parseRouteTemplatePlazaSearchParams,
   type RouteTemplatePlazaSearchParams,
-} from '@/features/match-square/lib/route-template-plaza-bridge';
+} from '@/lib/recruitment-bridge/route-template-plaza-bridge';
 
 export type TrustedProjectCreateInitial = Partial<
   Pick<

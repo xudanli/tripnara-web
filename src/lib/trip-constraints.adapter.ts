@@ -25,6 +25,8 @@ import { coerceDisplayText } from '@/lib/coerce-display-text.util';
 import {
   decimalHoursToTimeString,
   formatConstraintPreviewChangeValue,
+  buildConstraintChangeUserFacingSummary,
+  repairBrokenPreviewObjectText,
   isCatalogHardToggleTemplate,
 } from '@/lib/constraint-catalog-editor.util';
 import {
@@ -33,7 +35,31 @@ import {
   scopeBindingToApiScope,
 } from '@/lib/constraint-scope.util';
 import { formatConstraintTravelMode } from '@/lib/planning-constraints.util';
-import { buildAffectedDayDetailsFromStructuredImpact } from '@/lib/constraint-preview-schedule.util';
+import { buildAffectedDayDetailsFromStructuredImpact, sanitizePreviewAffectedDays } from '@/lib/constraint-preview-schedule.util';
+import {
+  mapApiAffectedDayDetails,
+  mapPreviewConstraintAssessments,
+  normalizeSuggestedFollowUp,
+  resolvePreviewUserSummary,
+  sanitizePreviewUserFacingText,
+  normalizePreviewExecuteabilityDelta,
+  extractTripLevelConflictsFromPreviewMeta,
+  resolvePreviewAffectedDaysSource,
+  resolvePreviewAffectedDayDetailsSource,
+  buildConstraintScopedConflictSummary,
+  supplementPreviewScheduleFromAssessments,
+  shouldHidePlaceholderPreviewDayTabs,
+  isPlainPreviewDayList,
+  syncPreviewAffectedDaysWithDetails,
+  resolvePreviewScheduleDetailLevel,
+  hasPreviewActivityScheduleDetail,
+  buildPreviewAdjustmentSummaryFromSchedule,
+} from '@/lib/constraint-impact-user-preview.util';
+import {
+  applyGenericQuickPreviewPresentation,
+  isGenericQuickPreviewBullet,
+  dedupePreviewLines,
+} from '@/lib/constraint-preview-generic.util';
 import { enrichListEntryWithMetadata, ensureHardConstraintMetadataOnEntries } from '@/lib/constraint-metadata.util';
 import { enrichListEntryWithDestinationRule } from '@/lib/destination-rules.util';
 import type {
@@ -302,6 +328,9 @@ function formatConstraintDisplayValue(constraint: TripConstraint): string | unde
       if (typeof v.travelMode === 'string') {
         return formatConstraintTravelMode(v.travelMode);
       }
+      if (typeof v.raw === 'string') {
+        return formatConstraintTravelMode(v.raw);
+      }
     }
   }
 
@@ -555,6 +584,13 @@ export function draftToPreviewChange(draft: ConstraintEditorDraft): TripConstrai
     if (draft.toleranceMode === 'allow_over' && draft.toleranceMinutes > 0) {
       patch.tolerance = draft.toleranceMinutes;
     }
+  } else if (draft.id === 'no_night_drive') {
+    patch.enabled = draft.enabled !== false;
+    patch.value = embedScope({
+      maxMinutesAfterSunset: draft.targetValue,
+      enabled: draft.enabled !== false,
+    });
+    patch.unit = 'minute';
   } else if (draft.id === 'accommodation') {
     patch.value = embedScope(draft.targetValue);
     patch.unit = 'star';
@@ -565,27 +601,48 @@ export function draftToPreviewChange(draft: ConstraintEditorDraft): TripConstrai
     patch.unit = draft.targetUnit;
   }
 
-  if (draft.name.trim()) patch.name = draft.name.trim();
+  const draftName = draft.name?.trim();
+  if (draftName) patch.name = draftName;
   if (isCatalogHardTemplate(draft.id) && isCatalogHardToggleTemplate(draft.id)) {
     patch.enabled = draft.enabled !== false;
   }
-  if (draft.reason.trim()) {
+  const draftReason = draft.reason?.trim();
+  if (draftReason) {
     patch.value =
       typeof patch.value === 'object' && patch.value != null
-        ? { ...(patch.value as Record<string, unknown>), reason: draft.reason.trim() }
-        : { value: patch.value, reason: draft.reason.trim() };
+        ? { ...(patch.value as Record<string, unknown>), reason: draftReason }
+        : { value: patch.value, reason: draftReason };
   }
 
   return { constraintId, patch };
 }
 
 function sanitizePreviewUserText(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return trimmed;
-  if (/assess\s*读模型/i.test(trimmed) || /轻量变更已接入/i.test(trimmed)) {
-    return '变更已纳入可行性评估，确认后将重新检查是否走得通';
-  }
-  return trimmed;
+  return sanitizePreviewUserFacingText(text);
+}
+
+function normalizePreviewConstraintChanges(
+  changes: NonNullable<NonNullable<ConstraintImpactPreview['structuredImpact']>['constraintChanges']>,
+): NonNullable<NonNullable<ConstraintImpactPreview['structuredImpact']>['constraintChanges']> {
+  return changes.map((change) => {
+    const before = formatConstraintPreviewChangeValue(change.before, change.unit);
+    const after = formatConstraintPreviewChangeValue(change.after, change.unit);
+    const formatted = before != null || after != null;
+    return {
+      ...change,
+      before: before ?? change.before,
+      after: after ?? change.after,
+      unit: formatted ? undefined : change.unit,
+      userFacingSummary: buildConstraintChangeUserFacingSummary(change),
+    };
+  });
+}
+
+function repairPreviewTextLine(
+  line: string,
+  constraintChanges?: NonNullable<ConstraintImpactPreview['structuredImpact']>['constraintChanges'],
+): string {
+  return repairBrokenPreviewObjectText(sanitizePreviewUserText(line), constraintChanges);
 }
 
 export function mapPreviewImpactToUi(
@@ -593,6 +650,10 @@ export function mapPreviewImpactToUi(
   _empty: ConstraintImpactPreview = EMPTY_CONSTRAINT_IMPACT_PREVIEW,
 ): ConstraintImpactPreview {
   const structured = data.structuredImpact;
+  const rawConstraintChanges = structured?.constraintChanges;
+  const normalizedConstraintChanges = rawConstraintChanges?.length
+    ? normalizePreviewConstraintChanges(rawConstraintChanges)
+    : undefined;
 
   let budgetRows =
     data.budgetDelta?.rows?.map((row) => ({
@@ -618,7 +679,7 @@ export function mapPreviewImpactToUi(
 
   let feasibilityBeforeRaw = readFeasibilityScore(data.feasibilityBefore, data.assessBefore);
   let feasibilityAfterRaw = readFeasibilityScore(data.feasibilityAfter, data.assessAfter);
-  let executeabilityDelta = data.executeabilityDelta;
+  let executeabilityDelta = normalizePreviewExecuteabilityDelta(data.executeabilityDelta);
 
   if (structured?.executeability) {
     if (structured.executeability.scoreBefore != null) {
@@ -654,9 +715,13 @@ export function mapPreviewImpactToUi(
       : feasibilityBefore;
 
   const conflictSummary =
-    data.conflictsBefore?.mustHandle != null
-      ? `${data.conflictsBefore.mustHandle} 项需处理`
-      : undefined;
+    buildConstraintScopedConflictSummary({
+      before: data.conflictsBefore,
+      after: data.conflictsAfter,
+    }) ??
+    (data.conflictsBefore?.mustHandle != null
+      ? `本约束 ${data.conflictsBefore.mustHandle} 项需处理`
+      : undefined);
 
   const conflictDeltaBullets: string[] = [];
   if (data.conflictsBefore && data.conflictsAfter) {
@@ -675,11 +740,11 @@ export function mapPreviewImpactToUi(
   const structuredBullets = (structured?.summaryBullets ?? [])
     .map(coerceDisplayText)
     .filter((line): line is string => Boolean(line))
-    .map(sanitizePreviewUserText);
+    .map((line) => repairPreviewTextLine(line, rawConstraintChanges));
   const recommendationList = (data.recommendations ?? [])
     .map(coerceDisplayText)
     .filter((line): line is string => Boolean(line))
-    .map(sanitizePreviewUserText);
+    .map((line) => repairPreviewTextLine(line, rawConstraintChanges));
   const mergedRecommendations = [
     ...new Set(
       recommendationList.filter((line) => !structuredBullets.includes(line)),
@@ -688,25 +753,41 @@ export function mapPreviewImpactToUi(
 
   const rawDiffBullets = (data.diffBullets ?? [])
     .map(coerceDisplayText)
-    .filter((line): line is string => Boolean(line));
-  const diffBullets =
-    structuredBullets.length > 0
+    .filter((line): line is string => Boolean(line))
+    .map((line) => repairPreviewTextLine(line, rawConstraintChanges));
+  const diffBullets = dedupePreviewLines(
+    (structuredBullets.length > 0
       ? [...structuredBullets, ...conflictDeltaBullets]
       : rawDiffBullets.length > 0
         ? [...rawDiffBullets, ...conflictDeltaBullets]
-        : conflictDeltaBullets;
+        : conflictDeltaBullets
+    ).filter((line) => !isGenericQuickPreviewBullet(line)),
+  );
+
+  const mergedRecommendationsFiltered = dedupePreviewLines(
+    mergedRecommendations.filter(
+      (line) =>
+        !isGenericQuickPreviewBullet(line) &&
+        !rawDiffBullets.includes(line) &&
+        !structuredBullets.includes(line),
+    ),
+  );
 
   const recommendation =
-    sanitizePreviewUserText(
+    repairPreviewTextLine(
       coerceDisplayText(data.recommendation) ??
         structuredBullets[0] ??
-        mergedRecommendations[0] ??
+        mergedRecommendationsFiltered[0] ??
         (data.refreshType === 'deep' ? '建议查看完整冲突检测与修复选项。' : '') ??
         '',
+      rawConstraintChanges,
     ) || undefined;
 
-  let affected = normalizeAffectedDays(data.affectedDays, []);
-  if (structured?.schedule?.daysNeedingSplit?.length) {
+  let affected = normalizeAffectedDays(resolvePreviewAffectedDaysSource(data), []);
+  if (
+    !data.structuredImpact?.schedule?.affectedDays?.length &&
+    structured?.schedule?.daysNeedingSplit?.length
+  ) {
     affected = structured.schedule.daysNeedingSplit.map((dayNumber, index) => ({
       dayNumber,
       tone: (index === 0 ? 'major' : 'minor') as 'major' | 'minor',
@@ -719,9 +800,6 @@ export function mapPreviewImpactToUi(
       : structured?.schedule?.poisToRelocate
           ?.map((poi) => poi.itemId)
           .filter((id): id is string => Boolean(id));
-
-  const majorCount = affected.filter((d) => d.tone === 'major').length;
-  const minorCount = affected.filter((d) => d.tone === 'minor').length;
 
   let adjustmentSummary = coerceDisplayText(data.adjustmentSummary);
   if (!adjustmentSummary && structured?.schedule) {
@@ -738,57 +816,115 @@ export function mapPreviewImpactToUi(
     if (parts.length) adjustmentSummary = parts.join(' · ');
   }
 
-  return {
+  const affectedDayDetailsFromApi = mapApiAffectedDayDetails(
+    resolvePreviewAffectedDayDetailsSource(data),
+  );
+  const affectedDayDetailsFromStructured = buildAffectedDayDetailsFromStructuredImpact({
     affectedDays: affected,
-    affectedDayDetails: buildAffectedDayDetailsFromStructuredImpact({
-      affectedDays: affected,
-      structuredImpact: structured,
-    } as ConstraintImpactPreview),
+    structuredImpact: structured,
+  } as ConstraintImpactPreview);
+  let affectedDayDetails =
+    affectedDayDetailsFromApi.length > 0
+      ? affectedDayDetailsFromApi
+      : affectedDayDetailsFromStructured ?? [];
+  let sanitizedAffectedDays = sanitizePreviewAffectedDays(
+    syncPreviewAffectedDaysWithDetails({
+      affectedDays: sanitizePreviewAffectedDays(affected),
+      affectedDayDetails,
+    }),
+  );
+  const sanitizedAffectedDayDetails = sanitizePreviewAffectedDays(affectedDayDetails);
+  const scheduleDetailLevel = resolvePreviewScheduleDetailLevel(data);
+  const hasActivitySchedule = hasPreviewActivityScheduleDetail({
+    scheduleDetailLevel,
+    affectedDayDetails: sanitizedAffectedDayDetails,
+  });
+  const placeholderDayList =
+    isPlainPreviewDayList(sanitizedAffectedDays) && sanitizedAffectedDayDetails.length === 0;
+  const majorCount = sanitizedAffectedDays.filter((d) => d.tone === 'major').length;
+  const minorCount = sanitizedAffectedDays.filter((d) => d.tone === 'minor').length;
+
+  const suggestedFollowUpAction = normalizeSuggestedFollowUp(data.suggestedFollowUp);
+  const legacySuggestedFollowUp =
+    typeof data.suggestedFollowUp === 'string'
+      ? sanitizePreviewUserText(data.suggestedFollowUp)
+      : undefined;
+
+  const tripLevelConflicts = extractTripLevelConflictsFromPreviewMeta(data.meta);
+  const scheduleFromStructured = structured?.schedule;
+
+  const basePreview: ConstraintImpactPreview = {
+    affectedDays: sanitizedAffectedDays,
+    affectedDayDetails: sanitizedAffectedDayDetails,
     affectedItemIds: affectedItemIds?.length ? affectedItemIds : undefined,
     adjustmentSummary:
       adjustmentSummary ??
-      (affected.length > 0
-        ? `${majorCount} 处主要调整，${minorCount} 处次要调整${conflictSummary ? ` · ${conflictSummary}` : ''}`
-        : conflictSummary ?? '暂无显著日程影响'),
+      (hasActivitySchedule
+        ? buildPreviewAdjustmentSummaryFromSchedule({
+            affectedDayDetails: sanitizedAffectedDayDetails,
+            fallback: conflictSummary,
+          })
+        : placeholderDayList
+          ? conflictSummary ??
+            sanitizePreviewUserText(data.userSummary?.verdictReason) ??
+            '暂无按天活动明细，保存后将运行完整检查'
+          : sanitizedAffectedDays.length > 0
+            ? `${majorCount} 处主要调整，${minorCount} 处次要调整${conflictSummary ? ` · ${conflictSummary}` : ''}`
+            : conflictSummary ?? '暂无显著日程影响'),
     planLabel: data.planLabel ?? (data.refreshType === 'deep' ? '深度预览' : '即时预览'),
     planNeedsAdjust:
       data.planNeedsAdjust ??
-      (executeabilityDelta?.scoreDelta != null && executeabilityDelta.scoreDelta < -5
+      (data.userSummary?.verdict === 'STILL_NOT_EXECUTABLE' ||
+      data.userSummary?.verdict === 'NEEDS_CONFIRM'
         ? true
-        : data.conflictsBefore?.mustHandle != null && data.conflictsBefore.mustHandle > 0
+        : executeabilityDelta?.scoreDelta != null && executeabilityDelta.scoreDelta < -5
           ? true
-          : typeof data.feasibilityAfter === 'object' &&
-              (data.feasibilityAfter as { canStartExecute?: boolean }).canStartExecute === false
+          : data.conflictsBefore?.mustHandle != null && data.conflictsBefore.mustHandle > 0
             ? true
-            : false),
+            : typeof data.feasibilityAfter === 'object' &&
+                (data.feasibilityAfter as { canStartExecute?: boolean }).canStartExecute === false
+              ? true
+              : false),
     feasibilityBefore,
     feasibilityAfter,
-    executeabilityDelta,
+    executeabilityDelta: executeabilityDelta ?? data.executeabilityDelta,
     budgetRows,
     diffBullets,
     recommendation,
-    recommendations: mergedRecommendations.length ? mergedRecommendations : undefined,
+    recommendations: mergedRecommendationsFiltered.length
+      ? mergedRecommendationsFiltered
+      : undefined,
     conflictsBefore: data.conflictsBefore,
     conflictsAfter: data.conflictsAfter,
-    suggestedFollowUp: coerceDisplayText(data.suggestedFollowUp),
+    tripLevelConflicts,
+    suggestedFollowUp: suggestedFollowUpAction ? undefined : legacySuggestedFollowUp,
+    suggestedFollowUpAction,
+    userSummary: resolvePreviewUserSummary(data.userSummary),
+    scheduleDetailLevel,
+    scheduleDetailUnavailableReason: hasActivitySchedule
+      ? undefined
+      : (
+          data.scheduleDetailUnavailableReason ??
+          scheduleFromStructured?.scheduleDetailUnavailableReason
+        )
+        ? sanitizePreviewUserText(
+            (data.scheduleDetailUnavailableReason ??
+              scheduleFromStructured?.scheduleDetailUnavailableReason) as string,
+          )
+        : undefined,
+    constraintAssessments: mapPreviewConstraintAssessments(data.constraintAssessments),
     refreshType: data.refreshType,
     structuredImpact: structured
       ? {
           ...structured,
-          constraintChanges: structured.constraintChanges?.map((change) => {
-            const before = formatConstraintPreviewChangeValue(change.before, change.unit);
-            const after = formatConstraintPreviewChangeValue(change.after, change.unit);
-            const formatted = before != null || after != null;
-            return {
-              ...change,
-              before: before ?? change.before,
-              after: after ?? change.after,
-              unit: formatted ? undefined : change.unit,
-            };
-          }),
+          constraintChanges: normalizedConstraintChanges,
         }
       : undefined,
   };
+
+  return supplementPreviewScheduleFromAssessments(
+    applyGenericQuickPreviewPresentation(basePreview, data),
+  );
 }
 
 function formatHourValueToTime(value: number): string {
@@ -817,6 +953,7 @@ export function buildCatalogHardConstraintValue(
       return { count: draft.targetValue };
     case 'accessibility':
     case 'motion_sickness':
+    case 'dietary_restrictions':
       return {
         enabled: draft.enabled !== false,
         ...(draft.reason.trim() ? { notes: draft.reason.trim() } : {}),
@@ -825,7 +962,10 @@ export function buildCatalogHardConstraintValue(
     case 'no_bad_weather':
     case 'no_high_risk_activity':
     case 'no_unverified_route':
-      return { enabled: draft.enabled !== false };
+      return {
+        enabled: draft.enabled !== false,
+        ...(draft.reason.trim() ? { notes: draft.reason.trim() } : {}),
+      };
     default:
       return draft.targetValue;
   }

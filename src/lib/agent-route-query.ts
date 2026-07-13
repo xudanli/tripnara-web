@@ -75,3 +75,27 @@ export function buildPlanStudioUrlFromAgentSearchParams(params: URLSearchParams)
   const qs = next.toString();
   return `/dashboard/nara${qs ? `?${qs}` : ''}`;
 }
+
+/** 规划工作台 / 行中 · 打开全屏行程副驾驶 */
+export function buildNaraCopilotUrl(options: {
+  tripId?: string | null;
+  searchParams?: URLSearchParams;
+  from?: 'plan-studio' | 'execute';
+}): string {
+  const next = new URLSearchParams();
+  if (options.tripId?.trim()) next.set('tripId', options.tripId.trim());
+  if (options.from) next.set('from', options.from);
+
+  const src = options.searchParams;
+  if (src) {
+    for (const key of ['mode', 'liveTools', 'enableLiveTools', 'intentFlags', 'tab'] as const) {
+      const value = src.get(key);
+      if (value) next.set(key, value);
+    }
+    const contextType = src.get('contextType') ?? src.get('context_type');
+    if (contextType) next.set('contextType', contextType);
+  }
+
+  const qs = next.toString();
+  return `/dashboard/nara${qs ? `?${qs}` : ''}`;
+}

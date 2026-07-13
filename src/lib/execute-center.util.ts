@@ -145,36 +145,7 @@ export interface ExecuteTimelineRailSnapshot {
   };
 }
 
-/** 冰岛执行页 · 地图左侧时间轴演示数据（后端 tripState 为空时） */
-export const ICELAND_DEMO_TIMELINE_RAIL: ExecuteTimelineRailSnapshot = {
-  current: {
-    routeLabel: '丁基达尔斯 → 冰川营地',
-    arrivalEta: '12:05',
-    isPlaceholder: false,
-  },
-  next: {
-    activityLabel: '冰川徒步体验',
-    startTimeLabel: '12:30',
-    statusLabel: '待确认',
-    isPlaceholder: false,
-  },
-  gathering: {
-    time: '16:30',
-    place: '丁基达尔斯村',
-    destination: '统一前往布迪尔温泉',
-    isPlaceholder: false,
-  },
-};
-
-function applyDemoTimelineRailFallback(snapshot: ExecuteTimelineRailSnapshot): ExecuteTimelineRailSnapshot {
-  const demo = ICELAND_DEMO_TIMELINE_RAIL;
-  return {
-    current: snapshot.current.isPlaceholder ? demo.current : snapshot.current,
-    next: snapshot.next.isPlaceholder ? demo.next : snapshot.next,
-    gathering: snapshot.gathering.isPlaceholder ? demo.gathering : snapshot.gathering,
-  };
-}
-
+/** 左侧时间轴三栏：始终返回完整结构，避免后端空状态时 UI 空白 */
 function collectTimelineScheduleItems(input: {
   trip?: TripDetail | null;
   tripState?: TripState | null;
@@ -310,7 +281,7 @@ export function resolveExecuteTimelineRail(input: {
     }
   }
 
-  return applyDemoTimelineRailFallback({
+  return {
     current: {
       routeLabel: currentRoute ?? '当前路段待同步',
       arrivalEta: input.arrivalEta ?? input.transport?.arrivalTime,
@@ -328,5 +299,5 @@ export function resolveExecuteTimelineRail(input: {
       destination: gathering.destination,
       isPlaceholder: !gathering.time && !gathering.place && !gathering.destination,
     },
-  });
+  };
 }

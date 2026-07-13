@@ -11,7 +11,7 @@ import {
   Pencil,
   ShieldAlert,
   Sparkles,
-  Star,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,7 +29,21 @@ import type { DecisionProblemSummary } from '@/types/decision-problem';
 import type { WorkbenchDayContextSummary } from '@/lib/workbench-timeline-impact.util';
 import { useWorkbenchDecisionFocus } from '@/contexts/WorkbenchDecisionFocusContext';
 import { isWorkbenchTimelineEntryHighlighted } from '@/lib/workbench-decision-focus.util';
-import { workbenchCard, workbenchConflictSurface, workbenchDecisionCheckerBadgeClass, workbenchHighlightStarIcon, workbenchLinkClass, workbenchPrimaryAction, workbenchScheduleConflictPanel, workbenchScheduleNoticeSurface, workbenchScheduleTimelineTime, workbenchSplitGroupLabelBadge } from './workbench-ui';
+import { WorkbenchCompactTravelConnector } from './WorkbenchCompactTravelConnector';
+import { WorkbenchTimelineEntryBody } from './WorkbenchTimelineEntryBody';
+import {
+  formatWorkbenchDurationMinutes,
+} from './workbench-format.util';
+import {
+  workbenchCard,
+  workbenchConflictSurface,
+  workbenchDecisionCheckerBadgeClass,
+  workbenchLinkClass,
+  workbenchPrimaryAction,
+  workbenchScheduleConflictPanel,
+  workbenchScheduleNoticeSurface,
+  workbenchScheduleTimelineTime,
+} from './workbench-ui';
 
 export interface WorkbenchDayDetailCardProps {
   day: WorkbenchDaySnapshot;
@@ -46,6 +60,8 @@ export interface WorkbenchDayDetailCardProps {
   onViewDayMap?: () => void;
   /** 打开 EditItineraryItemDialog 编辑该 POI 项 */
   onEditEntry?: (entryId: string) => void;
+  /** 删除行程项 */
+  onDeleteEntry?: (entryId: string) => void;
   /** 分析移动影响（编排 P2） */
   onAnalyzeMoveEntry?: (entryId: string) => void;
   itemLocks?: ArrangeItemLocksResponse | null;
@@ -86,6 +102,7 @@ export function WorkbenchDayDetailCard({
   onRestoreConflict,
   onViewDayMap,
   onEditEntry,
+  onDeleteEntry,
   onAnalyzeMoveEntry,
   itemLocks,
   userLockedItemIds,
@@ -159,6 +176,11 @@ export function WorkbenchDayDetailCard({
               {contextSummary.statusLabel}
             </Badge>
           ) : null}
+          {day.dayDriveMinutes > 0 ? (
+            <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px] font-normal text-muted-foreground">
+              驾驶 {formatWorkbenchDurationMinutes(day.dayDriveMinutes)}
+            </Badge>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {onViewDayMap ? (
@@ -189,42 +211,36 @@ export function WorkbenchDayDetailCard({
         </div>
       </div>
 
-      {contextSummary ? (
-        <div className={cn(workbenchScheduleNoticeSurface, 'border-b border-border/40 px-3 py-1.5')}>
-          <p className="text-[11px] font-semibold leading-snug text-foreground">{contextSummary.headline}</p>
-          {contextSummary.mainReason ? (
-            <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+      {contextSummary?.mainReason || hasDecisionProblems ? (
+        <div
+          className={cn(
+            workbenchScheduleNoticeSurface,
+            'flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-border/40 px-3 py-1',
+          )}
+        >
+          {contextSummary?.mainReason ? (
+            <p className="line-clamp-1 text-[10px] leading-snug text-muted-foreground">
               {contextSummary.mainReason}
             </p>
           ) : null}
-        </div>
-      ) : null}
-
-      {hasDecisionProblems ? (
-        <div className={cn(workbenchScheduleNoticeSurface, 'px-3 py-1.5')}>
-          <div className="flex items-start gap-1.5">
-            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold text-foreground">
+          {hasDecisionProblems ? (
+            <>
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-foreground">
+                <ShieldAlert className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
                 本日 {decisionProblems.length} 项待决策
-              </p>
-              <ul className="mt-0.5 space-y-0.5">
-                {decisionProblems.slice(0, 1).map((problem) => (
-                  <li key={problem.id} className="line-clamp-1 text-[10px] text-muted-foreground">
-                    {problem.title}
-                  </li>
-                ))}
-              </ul>
-              <Button
-                variant="link"
-                size="sm"
-                className="mt-0.5 h-auto px-0 text-[10px] text-foreground underline-offset-2"
-                onClick={onViewSolutions}
-              >
-                查看修复方案
-              </Button>
-            </div>
-          </div>
+              </span>
+              {onViewSolutions ? (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 text-[10px] text-foreground underline-offset-2"
+                  onClick={onViewSolutions}
+                >
+                  查看修复方案
+                </Button>
+              ) : null}
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -232,7 +248,7 @@ export function WorkbenchDayDetailCard({
         className={cn(
           'grid min-h-0 flex-1',
           showConflictPanel
-            ? 'grid-cols-1 md:grid-cols-[minmax(0,1.55fr)_minmax(200px,1fr)]'
+            ? 'grid-cols-1 md:grid-cols-[minmax(0,1.75fr)_minmax(180px,0.85fr)]'
             : 'grid-cols-1',
         )}
       >
@@ -246,7 +262,7 @@ export function WorkbenchDayDetailCard({
           {timeline.length === 0 ? (
             <p className="py-8 text-center text-xs text-muted-foreground">当天暂无行程安排</p>
           ) : (
-            <ol className="space-y-0">
+            <ol className="grid grid-cols-[2.75rem_1.25rem_minmax(0,1fr)] gap-x-2">
               {timeline.map((entry, idx) => {
                 const Icon = entry.icon;
                 const isLast = idx === timeline.length - 1;
@@ -257,21 +273,21 @@ export function WorkbenchDayDetailCard({
                   decisionFocus?.isActive && decisionFocus.focus.timelineEntryId !== entry.id
                     ? isWorkbenchTimelineEntryHighlighted(entry, decisionFocus.focus)
                     : false;
+                const rowSurface = cn(
+                  entry.splitGroupLabel && 'rounded-lg border border-border/50 bg-muted/15 px-1.5 py-1.5 -mx-0.5',
+                  entry.isLodging && 'rounded-lg border border-gate-allow-border/40 bg-gate-allow/5 px-1.5 py-1 -mx-0.5',
+                  selected && 'rounded-lg ring-2 ring-primary/30 bg-primary/5',
+                  !selected && focusHighlighted && 'rounded-lg ring-1 ring-primary/20 bg-muted/20',
+                );
                 return (
-                  <li
-                    key={entry.id}
-                    className={cn(
-                      'grid grid-cols-[2.75rem_1.25rem_minmax(0,1fr)] gap-x-2',
-                      entry.splitGroupLabel &&
-                        'rounded-lg border border-border/50 bg-muted/15 px-1.5 py-1.5 -mx-0.5',
-                      selected && 'rounded-lg ring-2 ring-primary/30 bg-primary/5',
-                      !selected && focusHighlighted && 'rounded-lg ring-1 ring-primary/20 bg-muted/20',
-                    )}
-                  >
-                    <span className={cn(workbenchScheduleTimelineTime, 'pt-0.5 text-[10px]')}>
+                  <li key={entry.id} className="contents">
+                    {entry.travelSegmentBefore ? (
+                      <WorkbenchCompactTravelConnector segment={entry.travelSegmentBefore} />
+                    ) : null}
+                    <span className={cn(workbenchScheduleTimelineTime, 'pt-0.5 text-[10px]', rowSurface)}>
                       {entry.timeLabel}
                     </span>
-                    <div className="relative flex justify-center pt-0.5">
+                    <div className={cn('relative flex justify-center pt-0.5', rowSurface)}>
                       {!isLast ? (
                         <span
                           className="absolute left-1/2 top-5 bottom-0 w-px -translate-x-1/2 bg-border/80"
@@ -282,110 +298,85 @@ export function WorkbenchDayDetailCard({
                         <Icon className="h-3 w-3 text-muted-foreground/90" />
                       </div>
                     </div>
-                    <div className="flex min-w-0 items-start gap-0.5 pb-2.5 pt-0">
-                      <div className="min-w-0 flex-1">
-                      {onSelectEntry ? (
-                        <button
-                          type="button"
-                          className="w-full text-left"
-                          onClick={() => handleSelectEntry(entry.id, entry.title, entry.subtitle)}
-                        >
-                          <p className="text-xs font-medium leading-snug text-foreground break-words">
-                            {entry.title}
-                            {entry.splitGroupLabel ? (
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  'ml-1.5 rounded-full px-1.5 py-0 text-[10px] font-normal',
-                                  workbenchSplitGroupLabelBadge,
-                                )}
-                              >
-                                {entry.splitGroupLabel}
-                                {entry.splitPhaseLabel ? ` · ${entry.splitPhaseLabel}` : ''}
-                              </Badge>
-                            ) : null}
-                            {entry.highlight ? (
-                              <Star className={cn('ml-1 inline h-3 w-3', workbenchHighlightStarIcon)} />
-                            ) : null}
-                          </p>
-                        </button>
-                      ) : (
-                        <p className="text-xs font-medium leading-snug text-foreground break-words">
-                          {entry.title}
-                          {entry.splitGroupLabel ? (
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                'ml-1.5 rounded-full px-1.5 py-0 text-[10px] font-normal',
-                                workbenchSplitGroupLabelBadge,
-                              )}
-                            >
-                              {entry.splitGroupLabel}
-                              {entry.splitPhaseLabel ? ` · ${entry.splitPhaseLabel}` : ''}
-                            </Badge>
-                          ) : null}
-                          {entry.highlight ? (
-                            <Star className={cn('ml-1 inline h-3 w-3', workbenchHighlightStarIcon)} />
-                          ) : null}
-                        </p>
-                      )}
-                      {entry.subtitle ? (
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">{entry.subtitle}</p>
-                      ) : null}
-                      {itemLocks || userLockedItemIds ? (
-                        <EntryLockHint
-                          entryId={entry.id}
-                          itemLocks={itemLocks}
-                          userLockedItemIds={userLockedItemIds}
+                    <div className={cn('min-w-0 pb-2.5 pt-0', rowSurface)}>
+                        <WorkbenchTimelineEntryBody
+                          entry={entry}
+                          selected={selected}
+                          onSelect={
+                            onSelectEntry
+                              ? () => handleSelectEntry(entry.id, entry.title, entry.subtitle)
+                              : undefined
+                          }
+                          trailing={
+                            <>
+                              {onAnalyzeMoveEntry ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                  aria-label={`分析移动 ${entry.title}`}
+                                  onClick={() => onAnalyzeMoveEntry(entry.id)}
+                                >
+                                  <MoveHorizontal className="h-3 w-3" />
+                                </Button>
+                              ) : null}
+                              {onToggleUserLock ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                  aria-label={
+                                    userLockedItemIds?.has(entry.id)
+                                      ? `解锁 ${entry.title}`
+                                      : `锁定 ${entry.title}`
+                                  }
+                                  onClick={() =>
+                                    onToggleUserLock(entry.id, !userLockedItemIds?.has(entry.id))
+                                  }
+                                >
+                                  {userLockedItemIds?.has(entry.id) ? (
+                                    <Lock className="h-3 w-3" />
+                                  ) : (
+                                    <LockOpen className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              ) : null}
+                              {onEditEntry ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                  aria-label={`编辑 ${entry.title}`}
+                                  onClick={() => onEditEntry(entry.id)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              ) : null}
+                              {onDeleteEntry ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  aria-label={`删除 ${entry.title}`}
+                                  onClick={() => onDeleteEntry(entry.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              ) : null}
+                            </>
+                          }
                         />
-                      ) : null}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                      {onAnalyzeMoveEntry ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                          aria-label={`分析移动 ${entry.title}`}
-                          onClick={() => onAnalyzeMoveEntry(entry.id)}
-                        >
-                          <MoveHorizontal className="h-3 w-3" />
-                        </Button>
-                      ) : null}
-                      {onToggleUserLock ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                          aria-label={
-                            userLockedItemIds?.has(entry.id) ? `解锁 ${entry.title}` : `锁定 ${entry.title}`
-                          }
-                          onClick={() =>
-                            onToggleUserLock(entry.id, !userLockedItemIds?.has(entry.id))
-                          }
-                        >
-                          {userLockedItemIds?.has(entry.id) ? (
-                            <Lock className="h-3 w-3" />
-                          ) : (
-                            <LockOpen className="h-3 w-3" />
-                          )}
-                        </Button>
-                      ) : null}
-                      {onEditEntry ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                          aria-label={`编辑 ${entry.title}`}
-                          onClick={() => onEditEntry(entry.id)}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      ) : null}
-                      </div>
+                        {itemLocks || userLockedItemIds ? (
+                          <EntryLockHint
+                            entryId={entry.id}
+                            itemLocks={itemLocks}
+                            userLockedItemIds={userLockedItemIds}
+                          />
+                        ) : null}
                     </div>
                   </li>
                 );

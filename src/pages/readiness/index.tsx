@@ -83,9 +83,6 @@ import PackingListTab from '@/components/readiness/PackingListTab';
 import ReadinessDisclaimerComponent from '@/components/readiness/ReadinessDisclaimer'; // 🆕 免责声明组件
 import { planningWorkbenchApi } from '@/api/planning-workbench'; // 🆕 规划工作台 API
 import { useIcelandInfo, useIsIcelandTrip } from '@/hooks'; // 🆕 冰岛信息源 Hook
-import { HikingTrailReadinessPanel } from '@/components/hiking/HikingTrailReadinessPanel';
-import { HikingAuditCard } from '@/components/hiking/HikingAuditCard';
-import { tripIncludesHiking } from '@/lib/trip-hiking';
 import { inferIcelandInfoParams } from '@/utils/iceland-info-inference'; // 🆕 冰岛信息源参数推断
 import CapabilityPackCard from '@/components/readiness/CapabilityPackCard';
 import PreparationChecklistPanel from '@/components/readiness/PreparationChecklistPanel';
@@ -118,11 +115,6 @@ export default function ReadinessPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tripId = searchParams.get('tripId');
-  const trailIdParam = searchParams.get('trailId');
-  const trailRouteId =
-    trailIdParam && /^\d+$/.test(trailIdParam) ? Number(trailIdParam) : null;
-  const hikePlanIdParam = searchParams.get('hikePlanId') ?? undefined;
-  const plannedDateParam = searchParams.get('plannedDate') ?? undefined;
   const tabParam = searchParams.get('tab'); // 🆕 从 URL 参数读取标签页
   
   // 🆕 获取用户权限
@@ -255,16 +247,12 @@ export default function ReadinessPage() {
   const [repairForceConfirmed, setRepairForceConfirmed] = useState(false);
 
   useEffect(() => {
-    if (trailRouteId != null) {
-      setLoading(false);
-      return;
-    }
     if (tripId) {
       loadData();
     } else {
       loadRecentTrip();
     }
-  }, [tripId, trailRouteId]);
+  }, [tripId]);
 
   const loadRecentTrip = async () => {
     try {
@@ -1648,18 +1636,6 @@ export default function ReadinessPage() {
   const repairApplyBlocked =
     repairGuardianNegotiation?.consensus === 'BLOCKED' && !repairForceConfirmed;
 
-  if (trailRouteId != null) {
-    return (
-      <div className="h-full flex flex-col overflow-auto px-4 py-6 md:px-6">
-        <HikingTrailReadinessPanel
-          routeDirectionId={trailRouteId}
-          hikePlanId={hikePlanIdParam}
-          plannedDate={plannedDateParam}
-        />
-      </div>
-    );
-  }
-
   if (loading) {
     return <ReadinessPageSkeleton />;
   }
@@ -1699,7 +1675,6 @@ export default function ReadinessPage() {
   const isReady = readinessData.status === 'ready';
   const isNearly = readinessData.status === 'nearly';
   const isNotReady = readinessData.status === 'not-ready';
-  const showHikingAudit = Boolean(tripId && trip && tripIncludesHiking(trip));
 
   return (
     <div className="h-full flex flex-col">
@@ -1842,14 +1817,6 @@ export default function ReadinessPage() {
 
         </div>
       </div>
-
-      {showHikingAudit && (
-        <div className="border-b bg-background px-6 py-4">
-          <div className="max-w-7xl mx-auto">
-            <HikingAuditCard tripId={tripId!} />
-          </div>
-        </div>
-      )}
 
       {/* Core 区域：Blockers + Repair Preview */}
       <div className="flex-1 overflow-y-auto bg-muted/30">

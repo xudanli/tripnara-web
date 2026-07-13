@@ -3,6 +3,7 @@ import { shouldShowListEditButton } from '@/lib/constraint-console-interaction.u
 import { expandConstraintIdVariants, collectIssueConstraintIds } from '@/lib/constraints-check-normalize.util';
 import { apiConstraintIdToUi, uiConstraintIdToApi } from '@/lib/trip-constraints.adapter';
 import { isOfficialRuleConstraintId } from '@/lib/trip-constraint-destination-rule.util';
+import { isUserAdjustablePacingHardConstraint } from '@/lib/trip-constraint-hard-enforcement.util';
 import {
   TRIP_CONSTRAINT_LEGACY_IDS,
   type TripConstraint,
@@ -31,6 +32,22 @@ export function isOfficialRuleConstraint(
     | Pick<TripConstraint, 'id' | 'type' | 'source' | 'sectionKey'>
     | Pick<ConstraintListEntry, 'id' | 'kind' | 'sourceType' | 'sectionKey'>,
 ): boolean {
+  if ('id' in constraint) {
+    const pacingSource =
+      'source' in constraint && constraint.source
+        ? constraint.source
+        : 'sourceType' in constraint && constraint.sourceType
+          ? { type: constraint.sourceType }
+          : undefined;
+    if (
+      isUserAdjustablePacingHardConstraint({
+        id: constraint.id,
+        source: pacingSource,
+      })
+    ) {
+      return false;
+    }
+  }
   if ('id' in constraint && isOfficialRuleConstraintId(constraint.id)) return true;
   if ('sectionKey' in constraint && constraint.sectionKey === 'readonly_official') {
     if ('sourceType' in constraint && constraint.sourceType === 'OFFICIAL_RULE') return true;

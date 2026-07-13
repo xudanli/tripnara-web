@@ -4,7 +4,7 @@
  */
 
 import apiClient from './client';
-import { withMatchSquareFallback } from '@/features/match-square/lib/match-square-api-mode';
+import { withMatchSquareFallback } from '@/lib/api-fallback-mode';
 import { selfEvolutionMockStore } from '@/features/self-evolution/lib/mock-store';
 import {
   normalizeCalibrationCurve,

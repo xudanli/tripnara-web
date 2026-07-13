@@ -1,8 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { constraintConsoleApi } from '@/api/constraint-console';
+import { TripConstraintsApiError } from '@/api/trip-constraints';
+import { isPreviewImpactRecoverableServerError } from '@/lib/constraint-impact-preview-fallback.util';
 import type { ConstraintEditorDraft, ConstraintImpactPreview } from '@/components/plan-studio/workbench/constraint-console-types';
 
-export type ConstraintPreviewSource = 'idle' | 'bff' | 'unavailable' | 'error';
+function formatPreviewImpactError(err: unknown): string {
+  if (err instanceof TripConstraintsApiError) {
+    if (isPreviewImpactRecoverableServerError(err)) {
+      return '预览计算暂时失败，已尝试使用验证快照；若仍无结果请保存后完整检查';
+    }
+    return err.message;
+  }
+  const message = err instanceof Error ? err.message : '预览计算失败';
+  if (/reading 'find'/i.test(message)) {
+    return '预览服务内部错误，请稍后重试或保存后运行完整检查';
+  }
+  return message;
+}
+
+export type ConstraintPreviewSource = 'idle' | 'bff' | 'assessment' | 'unavailable' | 'error';
 
 export interface UseConstraintImpactPreviewOptions {
   tripId: string;
@@ -10,6 +26,9 @@ export interface UseConstraintImpactPreviewOptions {
   trip?: import('@/types/trip').TripDetail | null;
   debounceMs?: number;
   constraintsVersion?: number;
+  assessments?: import('@/types/frontend-constraint-assessment-api.types').UnifiedConstraintAssessmentBundle | null;
+  feasibilityScore?: number | null;
+  apiConstraint?: import('@/types/trip-constraints').TripConstraint | null;
 }
 
 export interface UseConstraintImpactPreviewResult {
@@ -26,6 +45,9 @@ export function useConstraintImpactPreview({
   trip,
   debounceMs = 400,
   constraintsVersion,
+  assessments,
+  feasibilityScore,
+  apiConstraint,
 }: UseConstraintImpactPreviewOptions): UseConstraintImpactPreviewResult {
   const [preview, setPreview] = useState<ConstraintImpactPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,12 +81,12 @@ export function useConstraintImpactPreview({
               constraintId: draft.id,
               draft,
             },
-            { constraintsVersion, trip },
+            { constraintsVersion, trip, assessments, feasibilityScore, apiConstraint },
           );
           if (requestIdRef.current !== requestId) return;
           if (result) {
             setPreview(result.preview);
-            setSource('bff');
+            setSource(result.source);
             setError(null);
           } else {
             setPreview(null);
@@ -75,7 +97,7 @@ export function useConstraintImpactPreview({
           if (requestIdRef.current !== requestId) return;
           setPreview(null);
           setSource('error');
-          setError(err instanceof Error ? err.message : '预览计算失败');
+          setError(formatPreviewImpactError(err));
         } finally {
           if (requestIdRef.current === requestId) setLoading(false);
         }
@@ -83,7 +105,7 @@ export function useConstraintImpactPreview({
     }, debounceMs);
 
     return () => window.clearTimeout(timer);
-  }, [tripId, draft, trip, debounceMs, retryToken, constraintsVersion]);
+  }, [tripId, draft, trip, debounceMs, retryToken, constraintsVersion, assessments, feasibilityScore, apiConstraint]);
 
   return { preview, loading, source, error, retry };
 }

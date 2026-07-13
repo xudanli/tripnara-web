@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { workbenchShell } from '@/components/plan-studio/workbench/workbench-ui';
 import type { TripDetail } from '@/types/trip';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
 import { TeamCollaborationCenter } from './TeamCollaborationCenter';
@@ -36,7 +37,7 @@ export function TeamCollaborationCenterPage({
   className,
 }: TeamCollaborationCenterPageProps) {
   return (
-    <div className={cn('min-h-0 flex-1 overflow-y-auto', className)}>
+    <div className={cn('min-h-0 flex-1 overflow-y-auto', workbenchShell, className)}>
       <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
         <TeamCollaborationCenter
           tripId={tripId}

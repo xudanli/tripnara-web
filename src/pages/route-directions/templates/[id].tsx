@@ -6,8 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
-import { LaunchRecruitmentFromTemplateButton } from '@/features/match-square/components/LaunchRecruitmentFromTemplateButton';
-import { useCanPublishTrustedProject } from '@/hooks/useCanPublishTrustedProject';
 import {
   ArrowLeft,
   Calendar,
@@ -21,7 +19,6 @@ import {
 export default function RouteTemplateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { canPublish } = useCanPublishTrustedProject();
   const [template, setTemplate] = useState<RouteTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -381,20 +378,6 @@ export default function RouteTemplateDetailPage() {
 
         {/* 右侧：关联信息 */}
         <div className="space-y-6">
-          {canPublish && (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">可信项目 · 车队招募</CardTitle>
-              <CardDescription>
-                强绑定本模板 GPS / 天数 / 物理约束，一键创建可信项目 listing
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LaunchRecruitmentFromTemplateButton template={template} fullWidth />
-            </CardContent>
-          </Card>
-          )}
-
           {/* 路线方向信息 */}
           {template.routeDirection && (
             <Card>

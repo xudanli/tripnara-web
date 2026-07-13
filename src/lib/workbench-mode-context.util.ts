@@ -7,6 +7,7 @@ import { selectionIdToSectionKey } from '@/lib/trip-constraints-contract.util';
 
 export type WorkbenchMode =
   | 'browse'
+  | 'itinerary_diagnosis'
   | 'decision_space'
   | 'constraint_edit'
   | 'attraction_explore'
@@ -30,6 +31,11 @@ export function clearArrangeItinerarySearchParams(params: URLSearchParams): void
   params.delete('arrangeAutoArrange');
 }
 
+/** 离开行程诊断时从 URL 移除的 query keys */
+export function clearItineraryDiagnosisSearchParams(params: URLSearchParams): void {
+  params.delete('itineraryDiagnosis');
+}
+
 export const ARRANGE_AUTO_ARRANGE_SEARCH_PARAM = 'arrangeAutoArrange';
 
 export function resolveWorkbenchMode(input: {
@@ -37,10 +43,12 @@ export function resolveWorkbenchMode(input: {
   constraintConsoleOpen: boolean;
   attractionExploreOpen?: boolean;
   arrangeItineraryOpen?: boolean;
+  itineraryDiagnosisOpen?: boolean;
 }): WorkbenchMode {
   if (input.decisionSpaceOpen) return 'decision_space';
-  if (input.arrangeItineraryOpen) return 'arrange_itinerary';
   if (input.attractionExploreOpen) return 'attraction_explore';
+  if (input.itineraryDiagnosisOpen) return 'itinerary_diagnosis';
+  if (input.arrangeItineraryOpen) return 'arrange_itinerary';
   if (input.constraintConsoleOpen) return 'constraint_edit';
   return 'browse';
 }
@@ -98,9 +106,13 @@ export function buildWorkbenchModeBarViewModel(input: {
   decisionResolutionPhase?: DecisionResolutionCtaPhase | null;
   hasUnsavedConstraintDraft?: boolean;
 }): WorkbenchModeBarViewModel | null {
-  if (input.mode === 'browse') return null;
+  if (input.mode === 'browse' || input.mode === 'arrange_itinerary') return null;
 
-  const backLabel = input.fromTravelOverview ? '返回概览' : '返回行程分析';
+  const backLabel = input.fromTravelOverview
+    ? '返回概览'
+    : input.mode === 'decision_space'
+      ? '返回行程诊断'
+      : '返回编排行程';
   // 旅行条件已改为右侧抽屉（ConstraintConsoleDrawer），顶栏由抽屉自身承担，不再叠工作台模式条
   if (input.mode === 'constraint_edit') {
     return null;
@@ -115,12 +127,12 @@ export function buildWorkbenchModeBarViewModel(input: {
     };
   }
 
-  if (input.mode === 'arrange_itinerary') {
+  if (input.mode === 'itinerary_diagnosis') {
     return {
       mode: input.mode,
       backLabel,
-      modeLabel: '正在编排行程',
-      focusTitle: '把候选景点排进日程',
+      modeLabel: '行程诊断',
+      focusTitle: '冲突分析、可行性与决策建议',
     };
   }
 

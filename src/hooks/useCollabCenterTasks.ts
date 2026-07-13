@@ -48,12 +48,14 @@ export function useCollabCenterTasks(tripId: string | undefined) {
     myTasks,
     unassigned,
     currentUserId,
+    collaborators,
     loading: overviewLoading || collaboratorsLoading,
   } satisfies {
     collaborativeTasks: CollaborativeTaskView[];
     myTasks: CollaborativeTaskView[];
     unassigned: CollaborativeTaskView[];
     currentUserId: string | null;
+    collaborators: typeof collaborators;
     loading: boolean;
   };
 }

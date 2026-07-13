@@ -16,12 +16,12 @@ describe('trip-metadata-size.util', () => {
 
   it('formats user-facing hint with top offenders', () => {
     const hint = formatTripMetadataSizeHint({
-      hardTrekTrailPlan: { segments: [{ id: 'a'.repeat(500) }] },
+      itineraryPresentation: { days: [{ day: 1, cards: 'x'.repeat(500) }] },
       maxDailyDrivingHours: 4,
     });
 
     expect(hint).toContain('占用较大的字段');
-    expect(hint).toContain('hardTrekTrailPlan');
+    expect(hint).toContain('itineraryPresentation');
     expect(hint).toContain('需后端清理');
   });
 });

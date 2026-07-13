@@ -15,23 +15,34 @@ describe('workbench-mode-context.util', () => {
         constraintConsoleOpen: true,
         attractionExploreOpen: true,
         arrangeItineraryOpen: true,
+        itineraryDiagnosisOpen: true,
       }),
     ).toBe('decision_space');
     expect(
       resolveWorkbenchMode({
         decisionSpaceOpen: false,
         constraintConsoleOpen: false,
-        arrangeItineraryOpen: true,
         attractionExploreOpen: true,
+        arrangeItineraryOpen: true,
       }),
-    ).toBe('arrange_itinerary');
+    ).toBe('attraction_explore');
     expect(
       resolveWorkbenchMode({
         decisionSpaceOpen: false,
         constraintConsoleOpen: false,
-        attractionExploreOpen: true,
+        attractionExploreOpen: false,
+        itineraryDiagnosisOpen: true,
+        arrangeItineraryOpen: true,
       }),
-    ).toBe('attraction_explore');
+    ).toBe('itinerary_diagnosis');
+    expect(
+      resolveWorkbenchMode({
+        decisionSpaceOpen: false,
+        constraintConsoleOpen: false,
+        attractionExploreOpen: false,
+        arrangeItineraryOpen: true,
+      }),
+    ).toBe('arrange_itinerary');
     expect(
       resolveWorkbenchMode({ decisionSpaceOpen: false, constraintConsoleOpen: true }),
     ).toBe('constraint_edit');
@@ -40,20 +51,20 @@ describe('workbench-mode-context.util', () => {
     ).toBe('browse');
   });
 
-  it('buildWorkbenchModeBarViewModel builds attraction explore context', () => {
+  it('buildWorkbenchModeBarViewModel builds itinerary diagnosis context', () => {
     const model = buildWorkbenchModeBarViewModel({
-      mode: 'attraction_explore',
+      mode: 'itinerary_diagnosis',
     });
-    expect(model?.modeLabel).toBe('正在探索景点');
-    expect(model?.focusTitle).toBe('发现与筛选候选景点');
+    expect(model?.modeLabel).toBe('行程诊断');
+    expect(model?.backLabel).toBe('返回编排行程');
   });
 
-  it('buildWorkbenchModeBarViewModel builds arrange itinerary context', () => {
-    const model = buildWorkbenchModeBarViewModel({
-      mode: 'arrange_itinerary',
-    });
-    expect(model?.modeLabel).toBe('正在编排行程');
-    expect(model?.focusTitle).toBe('把候选景点排进日程');
+  it('buildWorkbenchModeBarViewModel returns null in arrange itinerary home', () => {
+    expect(
+      buildWorkbenchModeBarViewModel({
+        mode: 'arrange_itinerary',
+      }),
+    ).toBeNull();
   });
 
   it('buildWorkbenchModeBarViewModel returns null in browse mode', () => {

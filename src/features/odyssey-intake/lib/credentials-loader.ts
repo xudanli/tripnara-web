@@ -1,7 +1,7 @@
 import { odysseyIntakeApi } from '@/api/odyssey-intake';
 import type { VerifiedCredentials } from '@/types/match-square';
-import { getMatchSquareApiMode } from '@/features/match-square/lib/match-square-api-mode';
-import { MOCK_VIEWER_CREDENTIALS } from '@/features/match-square/lib/verified-credentials';
+import { getMatchSquareApiMode } from '@/lib/api-fallback-mode';
+import { MOCK_VIEWER_CREDENTIALS } from '@/lib/credentials/verified-credentials';
 import { odysseyCredentialsMockStore } from './credentials-mock-store';
 
 function hasVerifiedAssets(credentials: VerifiedCredentials | null | undefined): boolean {

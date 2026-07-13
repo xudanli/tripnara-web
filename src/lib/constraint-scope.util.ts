@@ -124,6 +124,26 @@ export function parseScopeBindingFromConstraint(
       member: { kind: 'members', memberIds: scope.memberIds },
     });
   }
+  if (scope?.type === 'ROUTE_SEGMENT') {
+    const segmentId =
+      scope.segmentId?.trim() ||
+      (scope.fromItemId?.trim() && scope.toItemId?.trim()
+        ? `${scope.fromItemId.trim()}__${scope.toItemId.trim()}`
+        : undefined);
+    return normalizeScopeBinding({
+      temporal: {
+        kind: 'route_segment',
+        segmentId,
+        dayNumber: scope.dayIndex,
+        fromItemId: scope.fromItemId?.trim() || undefined,
+        toItemId: scope.toItemId?.trim() || undefined,
+      },
+      member:
+        scope.memberIds?.length
+          ? { kind: 'members', memberIds: scope.memberIds }
+          : { kind: 'all' },
+    });
+  }
 
   return { ...DEFAULT_CONSTRAINT_SCOPE_BINDING };
 }
@@ -209,6 +229,19 @@ export function scopeBindingToApiScope(binding: ConstraintScopeBinding): TripCon
   }
   if (temporal.kind === 'day_range') {
     return { type: 'DAY', dayIndex: temporal.dayFrom };
+  }
+  if (temporal.kind === 'route_segment') {
+    const fromItemId = temporal.fromItemId?.trim();
+    const toItemId = temporal.toItemId?.trim();
+    const segmentId =
+      temporal.segmentId?.trim() ||
+      (fromItemId && toItemId ? `${fromItemId}__${toItemId}` : undefined);
+    const scope: TripConstraintScope = { type: 'ROUTE_SEGMENT' };
+    if (segmentId) scope.segmentId = segmentId;
+    if (fromItemId) scope.fromItemId = fromItemId;
+    if (toItemId) scope.toItemId = toItemId;
+    if (temporal.dayNumber != null) scope.dayIndex = temporal.dayNumber;
+    return scope;
   }
   if (member.kind === 'members' && member.memberIds.length) {
     return { type: 'MEMBER', memberIds: member.memberIds };

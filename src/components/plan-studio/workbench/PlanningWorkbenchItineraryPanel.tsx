@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
-import { AlertTriangle, CalendarRange, Compass, Wand2 } from 'lucide-react';
+import { AlertTriangle, CalendarRange } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -108,6 +108,8 @@ export interface PlanningWorkbenchItineraryPanelProps {
   selectedTimelineEntryId?: string | null;
   onSelectedTimelineEntryChange?: (entryId: string | null) => void;
   onViewTimelineEntryImpact?: (entryId: string, dayIndex: number) => void;
+  /** P1：冰岛自驾 TEP 弹性标签编辑 */
+  tepFlexibilityEnabled?: boolean;
   className?: string;
 }
 
@@ -149,6 +151,7 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
   selectedTimelineEntryId,
   onSelectedTimelineEntryChange,
   onViewTimelineEntryImpact,
+  tepFlexibilityEnabled = false,
   className,
 }: PlanningWorkbenchItineraryPanelProps) {
   const dayCount = trip?.TripDay?.length ?? 0;
@@ -583,30 +586,8 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
       {panelDepth === 'full' ? (
         <div className={workbenchPanelHeader}>
           <div className="flex items-center justify-between gap-2">
-            <h2 className={workbenchPanelTitle}>行程与冲突分析</h2>
+            <h2 className={workbenchPanelTitle}>行程诊断</h2>
             <div className="flex shrink-0 items-center gap-1.5">
-              {onOpenArrangeItinerary ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1 rounded-md px-2 text-[10px]"
-                  onClick={onOpenArrangeItinerary}
-                >
-                  <Wand2 className="h-3 w-3" />
-                  编排行程
-                </Button>
-              ) : null}
-              {onOpenAttractionExplore ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 gap-1 rounded-md px-2 text-[10px]"
-                  onClick={onOpenAttractionExplore}
-                >
-                  <Compass className="h-3 w-3" />
-                  探索景点
-                </Button>
-              ) : null}
               {onOpenFullSchedule ? (
                 <Button
                   variant="outline"
@@ -650,6 +631,7 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
         timezone={scheduleTimezone}
         tripDays={trip?.TripDay?.map((d) => ({ id: d.id, date: d.date })) ?? []}
         currentTripDayId={editingItem.tripDayId ?? editingItem.TripDay?.id}
+        tepFlexibilityEnabled={tepFlexibilityEnabled}
       />
     ) : null}
     </>

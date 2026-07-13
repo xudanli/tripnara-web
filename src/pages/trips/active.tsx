@@ -72,14 +72,14 @@ export default function ActiveTripPage() {
     );
   }
 
-  const { trip, viewer, matchSquare } = dashboard;
+  const { trip, viewer, trustedProject } = dashboard;
   const awaitingLabel = AWAITING_LABELS[viewer.awaitingViewerAction];
 
   return (
     <div className="mx-auto min-h-full w-full max-w-3xl px-4 py-6 sm:px-6">
       <DashboardSubpageHeader
-        backTo={matchSquare?.recruitmentPostId
-          ? `/dashboard/trusted-projects/${matchSquare.recruitmentPostId}`
+        backTo={trustedProject?.recruitmentPostId
+          ? `/dashboard/trusted-projects/${trustedProject.recruitmentPostId}`
           : `/dashboard/trips/${trip.tripId}`}
         title={trip.name}
         subtitle="Active Trip · 行中指挥台"
@@ -114,12 +114,12 @@ export default function ActiveTripPage() {
             </div>
           </div>
 
-          {matchSquare && (
+          {trustedProject && (
             <p className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
               <Compass className="h-3 w-3 shrink-0" aria-hidden />
-              拼团 · {matchSquare.strategy}
-              {matchSquare.catalogId && (
-                <span className="ml-1">· 模板 {matchSquare.catalogId}</span>
+              可信项目 · {trustedProject.strategy}
+              {trustedProject.catalogId && (
+                <span className="ml-1">· 模板 {trustedProject.catalogId}</span>
               )}
             </p>
           )}
@@ -128,9 +128,9 @@ export default function ActiveTripPage() {
             <Button size="sm" variant="outline" asChild>
               <Link to={`/dashboard/trips/${trip.tripId}`}>完整行程</Link>
             </Button>
-            {matchSquare?.recruitmentPostId && (
+            {trustedProject?.recruitmentPostId && (
               <Button size="sm" variant="ghost" className="text-muted-foreground" asChild>
-                <Link to={`/dashboard/trusted-projects/${matchSquare.recruitmentPostId}`}>
+                <Link to={`/dashboard/trusted-projects/${trustedProject.recruitmentPostId}`}>
                   可信项目
                 </Link>
               </Button>

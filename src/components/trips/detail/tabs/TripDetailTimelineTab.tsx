@@ -4,7 +4,6 @@ import {
   BedDouble,
   Camera,
   Car,
-  Clock,
   MapPin,
   Plane,
   Plus,
@@ -16,16 +15,13 @@ import { isAccommodationItineraryItem } from '@/lib/itinerary-item-sort';
 import { resolveItineraryItemPlaceDisplayName } from '@/lib/itinerary-place-display.util';
 import {
   formatTimelinePendingSubtext,
-  TRIP_DETAIL_NAV,
   TRIP_DETAIL_TERMS,
 } from '@/lib/trip-detail-terminology.util';
-import { resolveReminderBody, resolveTimelineScoreLabel } from '@/lib/timeline-overview.util';
+import { resolveTimelineScoreLabel } from '@/lib/timeline-overview.util';
 import type { TimelineOverviewResponse } from '@/types/timeline-overview';
 import type { ItineraryItem, TripDay, TripDetail } from '@/types/trip';
 import {
-  TripDetailSection,
   TripDetailStatCard,
-  TripDetailTwoColumn,
   tripDetailUi,
 } from '../trip-detail-ui';
 import {
@@ -76,18 +72,10 @@ interface TripDetailTimelineTabProps {
   /** 父级 useTripDetailTabBff 预加载的 timeline-overview */
   timelineOverview: TimelineOverviewResponse | null;
   timelineOverviewLoading?: boolean;
-  timelinePhase2Loading?: boolean;
-  newSuggestionCount?: number;
-  onOpenSuggestions?: () => void;
   onAddDay?: () => void;
   onOpenPlanStudio?: (detail?: PlanStudioScheduleNavigateDetail) => void;
-  /** 概览 Tab 已存在：隐藏重复指标与侧栏提醒 */
-  companionOverviewTab?: boolean;
-  onOpenOverview?: () => void;
   onOpenFilesTab?: () => void;
   onOpenDecisions?: () => void;
-  onOpenAccommodation?: () => void;
-  onOpenActivities?: () => void;
   highlightItineraryItemId?: string | null;
 }
 
@@ -99,7 +87,6 @@ function DayTimelineRow({
   highlightItineraryItemId,
   dayExecutability,
   onViewAlternatives,
-  onOpenAccommodation,
 }: {
   day: TripDay;
   dayIndex: number;
@@ -108,7 +95,6 @@ function DayTimelineRow({
   highlightItineraryItemId?: string | null;
   dayExecutability?: DayExecutabilityView;
   onViewAlternatives?: () => void;
-  onOpenAccommodation?: () => void;
 }) {
   const items = day.ItineraryItem || [];
   const accommodation = items.find(isAccommodationItineraryItem);
@@ -190,10 +176,10 @@ function DayTimelineRow({
           </div>
         </div>
 
-        {onOpenAccommodation ? (
+        {onOpenPlanStudioDay ? (
           <button
             type="button"
-            onClick={onOpenAccommodation}
+            onClick={() => onOpenPlanStudioDay(dayIndex + 1)}
             className="rounded-md border border-border bg-card px-2 py-1.5 self-center text-left transition-colors hover:bg-muted/20"
           >
             {accommodation ? (
@@ -351,15 +337,8 @@ export default function TripDetailTimelineTab({
   onOpenPlanStudio,
   timelineOverview: overview,
   timelineOverviewLoading = false,
-  timelinePhase2Loading = false,
-  newSuggestionCount = 0,
-  onOpenSuggestions,
-  companionOverviewTab = false,
-  onOpenOverview,
   onOpenFilesTab,
   onOpenDecisions,
-  onOpenAccommodation,
-  onOpenActivities,
   highlightItineraryItemId = null,
 }: TripDetailTimelineTabProps) {
   const { status: travelStatus } = useTripStatusBarModel(trip.id);
@@ -394,10 +373,6 @@ export default function TripDetailTimelineTab({
     0,
   );
 
-  const reminders = overview?.todayReminders ?? [];
-  const tasks = overview?.tasks ?? [];
-  const sidebarPending = timelinePhase2Loading && !overview?.tasks?.length;
-
   const planObjectDayByNumber = useMemo(() => {
     const map = new Map<number, PlanObjectDayChainDto>();
     for (const day of overview?.planObjects?.days ?? []) {
@@ -405,14 +380,6 @@ export default function TripDetailTimelineTab({
     }
     return map;
   }, [overview?.planObjects?.days]);
-
-  const nightsWithoutAccommodation = useMemo(
-    () =>
-      (trip.TripDay || []).filter(
-        (day) => !(day.ItineraryItem || []).some(isAccommodationItineraryItem),
-      ).length,
-    [trip.TripDay],
-  );
 
   useEffect(() => {
     if (!highlightItineraryItemId) return;
@@ -436,253 +403,62 @@ export default function TripDetailTimelineTab({
   };
 
   return (
-    <TripDetailTwoColumn
-      className="gap-3"
-      mainClassName="space-y-2.5"
-      sidebarClassName="space-y-2.5"
-      main={
-        <>
-          <TripDetailTabGateSummary
-            variant="executability"
-            tripId={trip.id}
-            bannerLayout="inline"
-            onOpenOverview={onOpenOverview}
-            className="shadow-none"
-          />
-          {!companionOverviewTab ? (
-            <TimelineOverviewStatsRow
-              overview={overview}
-              loading={overviewLoading}
-              onOpenFilesTab={onOpenFilesTab}
-            />
-          ) : null}
-          {overview?.planObjects?.topAssessment ? (
-            <TimelinePlanObjectTopAssessmentCard
-              assessment={overview.planObjects.topAssessment}
-              className="shadow-none"
-            />
-          ) : null}
-          <DecisionSurfaceAlignmentDevHint
-            problemsOpenCount={alignmentProbe.snapshot.problemsOpenCount}
-            conflictsTotal={alignmentProbe.snapshot.conflictsTotal}
-            timelineConflictCount={alignmentProbe.snapshot.timelineConflictCount}
-            timelineConflictCountSource={overview?.stats?.conflictCountSource}
-            decisionProblems={alignmentProbe.snapshot.decisionProblems}
-            planningConflicts={alignmentProbe.snapshot.planningConflicts}
-          />
+    <div className="space-y-2.5">
+      <TripDetailTabGateSummary
+        variant="executability"
+        tripId={trip.id}
+        bannerLayout="inline"
+        className="shadow-none"
+      />
+      <TimelineOverviewStatsRow
+        overview={overview}
+        loading={overviewLoading}
+        onOpenFilesTab={onOpenFilesTab}
+      />
+      {overview?.planObjects?.topAssessment ? (
+        <TimelinePlanObjectTopAssessmentCard
+          assessment={overview.planObjects.topAssessment}
+          className="shadow-none"
+        />
+      ) : null}
+      <DecisionSurfaceAlignmentDevHint
+        problemsOpenCount={alignmentProbe.snapshot.problemsOpenCount}
+        conflictsTotal={alignmentProbe.snapshot.conflictsTotal}
+        timelineConflictCount={alignmentProbe.snapshot.timelineConflictCount}
+        timelineConflictCountSource={overview?.stats?.conflictCountSource}
+        decisionProblems={alignmentProbe.snapshot.decisionProblems}
+        planningConflicts={alignmentProbe.snapshot.planningConflicts}
+      />
 
-          <div className="space-y-1.5">
-            {(trip.TripDay || []).map((day, idx) => (
-              <DayTimelineRow
-                key={day.id}
-                day={day}
-                dayIndex={idx}
-                planObjectDay={planObjectDayByNumber.get(idx + 1)}
-                highlightItineraryItemId={highlightItineraryItemId}
-                dayExecutability={dayExecutabilityMap.get(idx + 1)}
-                onViewAlternatives={onOpenDecisions}
-                onOpenAccommodation={onOpenAccommodation}
-                onOpenPlanStudioDay={
-                  onOpenPlanStudio ? (dayNumber) => openPlanStudio({ dayNumber }) : undefined
-                }
-              />
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            {onAddDay ? (
-              <Button variant="outline" size="sm" onClick={onAddDay}>
-                <Plus className="w-4 h-4 mr-1" />
-                添加新的一天
-              </Button>
-            ) : null}
-            <div className="text-sm text-muted-foreground ml-auto tabular-nums">
-              总里程 ~{Math.round(totalKm / 1000).toLocaleString()} km · 总时长 ~
-              {Math.floor(totalMin / 60)}h {String(totalMin % 60).padStart(2, '0')}m
-            </div>
-          </div>
-        </>
-      }
-      sidebar={
-        <>
-          {companionOverviewTab ? (
-            <TripDetailSection
-              title="提醒与监控"
-              className="shadow-none"
-              headerClassName="px-3 py-2"
-              bodyClassName="p-3"
-            >
-              <p className="text-sm text-muted-foreground py-1">
-                天气、路况等监控告警已在「概览」统一展示。
-              </p>
-              {onOpenOverview ? (
-                <Button
-                  variant="outline"
-                  className="mt-2 h-9 w-full rounded-lg text-sm font-medium"
-                  onClick={onOpenOverview}
-                >
-                  查看概览
-                </Button>
-              ) : null}
-            </TripDetailSection>
-          ) : (
-            <TripDetailSection
-              title="今日提醒"
-              className="shadow-none"
-              headerClassName="px-3 py-2"
-              bodyClassName="p-3"
-            >
-              {overviewLoading && !overview ? (
-                <p className="text-sm text-muted-foreground py-2">加载中…</p>
-              ) : sidebarPending ? (
-                <p className="text-sm text-muted-foreground py-2">加载中…</p>
-              ) : reminders.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">暂无提醒</p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {reminders.map((alert) => {
-                    const body = resolveReminderBody(alert.explanation, alert.message);
-                    return (
-                      <li key={alert.id} className="flex items-start gap-2">
-                        <Clock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="font-medium text-foreground">{alert.title}</p>
-                          {body ? (
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{body}</p>
-                          ) : null}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </TripDetailSection>
-          )}
-
-          <TripDetailSection
-            title="待办事项"
-            className="shadow-none"
-            headerClassName="px-3 py-2"
-            bodyClassName="p-3"
-            action={
-              overview && overview.incompleteTaskCount > 0 ? (
-                <Badge variant="secondary" className="text-xs tabular-nums">
-                  {overview.incompleteTaskCount}
-                </Badge>
-              ) : null
+      <div className="space-y-1.5">
+        {(trip.TripDay || []).map((day, idx) => (
+          <DayTimelineRow
+            key={day.id}
+            day={day}
+            dayIndex={idx}
+            planObjectDay={planObjectDayByNumber.get(idx + 1)}
+            highlightItineraryItemId={highlightItineraryItemId}
+            dayExecutability={dayExecutabilityMap.get(idx + 1)}
+            onViewAlternatives={onOpenDecisions}
+            onOpenPlanStudioDay={
+              onOpenPlanStudio ? (dayNumber) => openPlanStudio({ dayNumber }) : undefined
             }
-          >
-            {overviewLoading && !overview ? (
-              <p className="text-sm text-muted-foreground py-2">加载中…</p>
-            ) : sidebarPending ? (
-              <p className="text-sm text-muted-foreground py-2">加载中…</p>
-            ) : tasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">暂无待办</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {tasks.map((task) => (
-                  <li key={task.id} className="flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        'text-foreground line-clamp-2',
-                        task.completed && 'line-through text-muted-foreground',
-                      )}
-                    >
-                      {task.text}
-                    </span>
-                    {!task.completed && onOpenPlanStudio ? (
-                      <Button
-                        variant="link"
-                        className={tripDetailUi.linkInline}
-                        onClick={() =>
-                          openPlanStudio(
-                            task.metadata?.day != null ? { dayNumber: task.metadata.day } : undefined,
-                            { taskId: task.id, taskCategory: task.category },
-                          )
-                        }
-                      >
-                        处理
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </TripDetailSection>
+          />
+        ))}
+      </div>
 
-          {onOpenAccommodation || onOpenActivities ? (
-            <TripDetailSection
-              title="行程扩展"
-              className="shadow-none"
-              headerClassName="px-3 py-2"
-              bodyClassName="p-3 space-y-1.5"
-            >
-              {onOpenAccommodation ? (
-                <Button
-                  variant="outline"
-                  className="h-9 w-full justify-between rounded-lg text-sm font-medium"
-                  onClick={onOpenAccommodation}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <BedDouble className="h-4 w-4 text-muted-foreground" />
-                    {TRIP_DETAIL_NAV.accommodation}
-                  </span>
-                  {nightsWithoutAccommodation > 0 ? (
-                    <Badge variant="secondary" className="text-xs tabular-nums">
-                      {nightsWithoutAccommodation} 晚待安排
-                    </Badge>
-                  ) : null}
-                </Button>
-              ) : null}
-              {onOpenActivities ? (
-                <Button
-                  variant="outline"
-                  className="h-9 w-full justify-start rounded-lg text-sm font-medium"
-                  onClick={onOpenActivities}
-                >
-                  <Camera className="mr-1.5 h-4 w-4 text-muted-foreground" />
-                  {TRIP_DETAIL_NAV.activities}
-                </Button>
-              ) : null}
-            </TripDetailSection>
-          ) : null}
-
-          {onOpenSuggestions ? (
-            <TripDetailSection
-              title="智能建议"
-              className="shadow-none"
-              headerClassName="px-3 py-2"
-              bodyClassName="p-3"
-              action={
-                newSuggestionCount > 0 ? (
-                  <Badge variant="secondary" className="text-xs tabular-nums">
-                    {newSuggestionCount}
-                  </Badge>
-                ) : null
-              }
-            >
-              <Button
-                variant="outline"
-                className="h-9 w-full rounded-lg text-sm font-medium"
-                onClick={onOpenSuggestions}
-              >
-                {newSuggestionCount > 0
-                  ? `查看 ${newSuggestionCount} 条新建议`
-                  : '查看智能建议'}
-              </Button>
-            </TripDetailSection>
-          ) : null}
-
-          {onOpenPlanStudio ? (
-            <Button
-              className={cn('w-full', tripDetailUi.primaryBtn)}
-              onClick={() => openPlanStudio()}
-            >
-              进入规划工作台
-            </Button>
-          ) : null}
-        </>
-      }
-    />
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        {onAddDay ? (
+          <Button variant="outline" size="sm" onClick={onAddDay}>
+            <Plus className="w-4 h-4 mr-1" />
+            添加新的一天
+          </Button>
+        ) : null}
+        <div className="text-sm text-muted-foreground ml-auto tabular-nums">
+          总里程 ~{Math.round(totalKm / 1000).toLocaleString()} km · 总时长 ~
+          {Math.floor(totalMin / 60)}h {String(totalMin % 60).padStart(2, '0')}m
+        </div>
+      </div>
+    </div>
   );
 }

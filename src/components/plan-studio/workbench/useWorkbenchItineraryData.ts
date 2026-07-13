@@ -7,14 +7,26 @@ import {
   applyScheduleTimelineToMaps,
   isScheduleTimelineUnavailable,
 } from '@/lib/schedule-timeline-apply';
-import { sortItineraryItemsForDisplay } from '@/lib/itinerary-item-sort';
-import { extractHmFromWindow } from '@/lib/itinerary-item-card-format';
+import {
+  sortItineraryItemsForDisplay,
+  isAccommodationItineraryItem,
+  itemSpansOvernight,
+  filterCheckoutDayTimelineItems,
+  getOvernightItemsForPriorDayTimeline,
+  getCarRentalReturnItemsForDayTimeline,
+} from '@/lib/itinerary-item-sort';
+import { extractHmFromWindow, formatItineraryItemTimeRangeLabel } from '@/lib/itinerary-item-card-format';
 import { getItineraryItemTypeDisplay, isItineraryItemType } from '@/lib/itinerary-item-type-display';
+import { collectPlaceImages } from '@/lib/collect-place-images';
+import { getItineraryItemTimelineTypeBadge } from '@/lib/itinerary-item-type-display';
+import { travelSegmentHasData } from '@/lib/itinerary-travel-info';
+import { resolveDestinationTimezone } from '@/utils/timezone';
 import type {
   DayMetricsResponse,
   DayTravelInfoResponse,
   ItineraryItemDetail,
   ItineraryItemType,
+  TravelSegment,
   TripDetail,
 } from '@/types/trip';
 import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
@@ -35,6 +47,13 @@ import {
   shouldShowWorkbenchSplitGroupLabel,
 } from './workbench-format.util';
 
+export interface WorkbenchTimelineEntryDetail {
+  description?: string;
+  phone?: string;
+  website?: string;
+  tags?: string[];
+}
+
 export interface WorkbenchTimelineEntry {
   id: string;
   timeLabel: string;
@@ -45,6 +64,15 @@ export interface WorkbenchTimelineEntry {
   /** 已应用分流后 ItineraryItem.note 解析出的分组标签 */
   splitGroupLabel?: string;
   splitPhaseLabel?: string;
+  typeLabel?: string;
+  typeEmoji?: string;
+  imageUrl?: string;
+  address?: string;
+  isLodging?: boolean;
+  /** POI 简介与联系信息，用于时间轴内联展开 */
+  detail?: WorkbenchTimelineEntryDetail;
+  /** 到达本项前的交通段 */
+  travelSegmentBefore?: TravelSegment;
 }
 
 export interface WorkbenchConflictLine {
@@ -118,19 +146,33 @@ function resolveWorkbenchTimelineIcon(
 }
 
 function buildWorkbenchTimelineSubtitle(input: {
+  item: ItineraryItemDetail;
   typeKey: ItineraryItemType;
   display: ReturnType<typeof getItineraryItemTypeDisplay>;
   startTime?: string;
   endTime?: string;
   travelBits: string[];
+  isLodging: boolean;
 }): string {
-  const { typeKey, display, startTime, endTime, travelBits } = input;
+  const { typeKey, display, startTime, endTime, travelBits, isLodging, item } = input;
 
   if (travelBits.length > 0) {
     return travelBits.join(' · ');
   }
 
   const stayMinutes = durationMinutesBetweenWindows(startTime, endTime);
+
+  if (isLodging) {
+    if (itemSpansOvernight(item)) {
+      const duration =
+        stayMinutes != null ? formatWorkbenchDurationMinutes(stayMinutes) : undefined;
+      return duration ? `入住至次日退房 · ${duration}` : '入住至次日退房';
+    }
+    return stayMinutes != null
+      ? `住宿 · ${formatWorkbenchDurationMinutes(stayMinutes)}`
+      : '住宿';
+  }
+
   const duration =
     stayMinutes != null ? formatWorkbenchDurationMinutes(stayMinutes) : undefined;
 
@@ -146,32 +188,99 @@ function buildWorkbenchTimelineSubtitle(input: {
   return display.shortLabel;
 }
 
+function resolveWorkbenchDayTimelineItems(
+  dayIndex: number,
+  trip: TripDetail | null,
+  itineraryByDay: Map<string, ItineraryItemDetail[]>,
+): ItineraryItemDetail[] {
+  const day = trip?.TripDay?.[dayIndex];
+  if (!day) return [];
+
+  const norm = normalizeDayDate(day.date);
+  const dayItems =
+    itineraryByDay.get(day.date) ?? itineraryByDay.get(norm) ?? day.ItineraryItem ?? [];
+
+  const nextDay = trip?.TripDay?.[dayIndex + 1];
+  const nextNorm = nextDay ? normalizeDayDate(nextDay.date) : null;
+  const nextItems = nextDay
+    ? itineraryByDay.get(nextDay.date) ??
+      itineraryByDay.get(nextNorm!) ??
+      nextDay.ItineraryItem ??
+      []
+    : [];
+
+  const bridgedOvernight = getOvernightItemsForPriorDayTimeline(nextItems, dayIndex + 1).filter(
+    (item) => !dayItems.some((existing) => existing.id === item.id),
+  );
+  const baseItems = filterCheckoutDayTimelineItems(dayItems, dayIndex);
+  const carRentalReturns =
+    trip?.TripDay != null
+      ? getCarRentalReturnItemsForDayTimeline(trip.TripDay, dayIndex, itineraryByDay)
+      : [];
+
+  return sortItineraryItemsForDisplay([
+    ...baseItems,
+    ...carRentalReturns,
+    ...bridgedOvernight,
+  ]);
+}
+
+function resolveWorkbenchTimelineEntryDetail(
+  place: ItineraryItemDetail['Place'],
+): WorkbenchTimelineEntryDetail | undefined {
+  if (!place) return undefined;
+
+  const metadata = place.metadata;
+  const description = place.description?.trim() || undefined;
+  const phone = metadata?.phone?.trim() || undefined;
+  const website = metadata?.website?.trim() || undefined;
+  const tags = metadata?.tags?.filter((tag) => typeof tag === 'string' && tag.trim()).slice(0, 5);
+
+  if (!description && !phone && !website && (!tags || tags.length === 0)) {
+    return undefined;
+  }
+
+  return {
+    description,
+    phone,
+    website,
+    tags,
+  };
+}
+
 function buildTimelineEntries(
   items: ItineraryItemDetail[],
   travelInfo?: DayTravelInfoResponse | null,
+  timezone?: string,
 ): WorkbenchTimelineEntry[] {
-  const sorted = sortItineraryItemsForDisplay(items);
   const entries: WorkbenchTimelineEntry[] = [];
 
-  for (const item of sorted) {
+  for (const item of items) {
     const typeKey = isItineraryItemType(item.type) ? item.type : 'ACTIVITY';
     const display = getItineraryItemTypeDisplay(typeKey);
-    const timeLabel =
-      extractHmFromWindow(item.startTime) ??
-      extractHmFromWindow(item.endTime) ??
-      '—';
+    const timeLabel = formatItineraryItemTimeRangeLabel(item, timezone);
     const splitMarker = parseItinerarySplitPlanNote(item.note);
     const noteBody = stripSplitPlanNoteLines(item.note);
     const placeName = resolveWorkbenchTimelineItemTitle(item);
 
-    const segment = travelInfo?.segments?.find(
-      (s) => s.toItemId === item.id || s.fromItemId === item.id,
-    );
+    const segment = travelInfo?.segments?.find((s) => s.toItemId === item.id);
+    const showTravelConnector = segment != null && travelSegmentHasData(segment);
     const travelBits: string[] = [];
-    if (segment?.distance) travelBits.push(formatWorkbenchDistanceKm(segment.distance / 1000));
-    if (segment?.duration) {
+    if (!showTravelConnector && segment?.distance) {
+      travelBits.push(formatWorkbenchDistanceKm(segment.distance / 1000));
+    }
+    if (!showTravelConnector && segment?.duration) {
       travelBits.push(formatWorkbenchDurationMinutes(segment.duration));
     }
+
+    const isLodging = isAccommodationItineraryItem(item);
+    const typeBadge = isLodging
+      ? { emoji: '🏨', label: '住宿' }
+      : getItineraryItemTimelineTypeBadge(item);
+    const place = item.Place;
+    const imageUrl = collectPlaceImages({ place })[0]?.url;
+    const address = place?.address?.trim() || undefined;
+    const detail = resolveWorkbenchTimelineEntryDetail(place);
 
     const stayMinutes = durationMinutesBetweenWindows(item.startTime, item.endTime);
     const highlight =
@@ -180,11 +289,13 @@ function buildTimelineEntries(
       (typeKey === 'ACTIVITY' && stayMinutes != null && stayMinutes >= 90);
 
     const subtitle = buildWorkbenchTimelineSubtitle({
+      item,
       typeKey,
       display,
       startTime: item.startTime,
       endTime: item.endTime,
       travelBits,
+      isLodging,
     });
 
     const splitLabel = splitMarker ? formatItinerarySplitGroupLabel(splitMarker) : undefined;
@@ -202,6 +313,13 @@ function buildTimelineEntries(
         showSplitLabel && splitMarker
           ? itinerarySplitPhaseLabel(splitMarker.phase) ?? undefined
           : undefined,
+      typeLabel: typeBadge.label,
+      typeEmoji: typeBadge.emoji,
+      imageUrl,
+      address,
+      isLodging,
+      detail,
+      travelSegmentBefore: showTravelConnector ? segment : undefined,
     });
   }
 
@@ -444,11 +562,8 @@ export function useWorkbenchItineraryData(
       if (!day) return null;
 
       const norm = normalizeDayDate(day.date);
-      const items =
-        itineraryByDay.get(norm) ??
-        itineraryByDay.get(day.date) ??
-        day.ItineraryItem ??
-        [];
+      const scheduleTimezone = resolveDestinationTimezone(trip?.destination);
+      const timelineItems = resolveWorkbenchDayTimelineItems(dayIndex, trip, itineraryByDay);
       const travelInfo = travelInfoMap.get(norm) ?? travelInfoMap.get(day.date);
       const metrics = metricsByDay.get(norm) ?? metricsByDay.get(day.date);
       const dayNumber = dayIndex + 1;
@@ -486,7 +601,7 @@ export function useWorkbenchItineraryData(
         dateLabel,
         weekdayLabel,
         executable: !hasBlocker,
-        timeline: buildTimelineEntries(items as ItineraryItemDetail[], travelInfo),
+        timeline: buildTimelineEntries(timelineItems, travelInfo, scheduleTimezone),
         conflictLines,
         dayDriveMinutes,
         metrics,
@@ -505,6 +620,7 @@ export function useWorkbenchItineraryData(
   return {
     loading,
     loadingPhase,
+    itineraryByDay,
     routeStops,
     routeStats,
     buildDaySnapshot,

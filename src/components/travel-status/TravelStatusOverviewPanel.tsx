@@ -244,6 +244,34 @@ export default function TravelStatusOverviewPanel({
     [tripId],
   );
 
+  const goToSuggestedConfirm = useCallback(() => {
+    if (!hasInlineVerificationItems && suggestedConfirmCount > 0) {
+      navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=tasks`);
+      return;
+    }
+    scrollToVerification();
+  }, [
+    hasInlineVerificationItems,
+    suggestedConfirmCount,
+    navigate,
+    tripId,
+    scrollToVerification,
+  ]);
+
+  useEffect(() => {
+    if (!scrollToSection) return;
+    if (scrollToSection === 'decisions') scrollToDecisionQueue();
+    else if (scrollToSection === 'verify') goToSuggestedConfirm();
+    else if (scrollToSection === 'monitor') scrollToMonitoring();
+    onScrollToSectionHandled?.();
+  }, [
+    scrollToSection,
+    scrollToDecisionQueue,
+    goToSuggestedConfirm,
+    scrollToMonitoring,
+    onScrollToSectionHandled,
+  ]);
+
   if (isLoading) {
     return (
       <div className="space-y-2.5">
@@ -376,36 +404,8 @@ export default function TravelStatusOverviewPanel({
   const showVerificationSection =
     hasInlineVerificationItems || (suggestedConfirmCount > 0 && !overviewLayout);
 
-  const goToSuggestedConfirm = useCallback(() => {
-    if (!hasInlineVerificationItems && suggestedConfirmCount > 0) {
-      navigate(`/dashboard/plan-studio?tripId=${tripId}&tab=tasks`);
-      return;
-    }
-    scrollToVerification();
-  }, [
-    hasInlineVerificationItems,
-    suggestedConfirmCount,
-    navigate,
-    tripId,
-    scrollToVerification,
-  ]);
-
   const showFullTopSummary = !skipTopSummary;
   const showOverviewMetricStrip = overviewLayout && skipTopSummary;
-
-  useEffect(() => {
-    if (!scrollToSection) return;
-    if (scrollToSection === 'decisions') scrollToDecisionQueue();
-    else if (scrollToSection === 'verify') goToSuggestedConfirm();
-    else if (scrollToSection === 'monitor') scrollToMonitoring();
-    onScrollToSectionHandled?.();
-  }, [
-    scrollToSection,
-    scrollToDecisionQueue,
-    goToSuggestedConfirm,
-    scrollToMonitoring,
-    onScrollToSectionHandled,
-  ]);
 
   const hasDecisionQueueContent = openDecisionCount > 0;
   const overviewPrimaryTodos = hasDecisionQueueContent || showVerificationSection;

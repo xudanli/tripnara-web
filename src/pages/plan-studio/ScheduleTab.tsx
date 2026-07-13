@@ -115,10 +115,6 @@ import {
 } from '@/lib/world-model-guards';
 import { SegmentEditorDegradedShell } from '@/components/planning/SegmentEditorDegradedShell';
 import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
-import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
-import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
-import { isEmbeddedHikingTrip } from '@/lib/trip-hiking';
-import { EmbeddedHikingStatusBar, EmbeddedHikingDayRail } from '@/components/hiking';
 import { CertaintyBadge } from '@/components/experience-fulfillment';
 import { PresentedItineraryItemInsight } from '@/components/experience-fulfillment/PresentedItineraryItemInsight';
 import { extractItineraryPresentation } from '@/lib/trip-experience-metadata.util';
@@ -137,6 +133,13 @@ import type { DayWishImpact } from '@/types/trip-wishes';
 import { useDomainWorkbenchBreakdown } from '@/hooks/useTripDomainInfluence';
 import { resolveDecisionAuthority } from '@/lib/domain-influence-mapping';
 import { ScheduleRouteRunEvidenceSection } from '@/components/plan-studio/ScheduleRouteRunEvidenceSection';
+import { ScheduleDayTepBadge } from '@/components/plan-studio/tep';
+import { tripExecutabilityApi } from '@/api/trip-executability';
+import type { TripExecutabilityView } from '@/types/trip-executability';
+import {
+  buildDayExecutabilityBadgeModel,
+  resolveVulnerableDayIndex,
+} from '@/lib/trip-executability.util';
 
 interface ScheduleTabProps {
   tripId: string;
@@ -144,6 +147,10 @@ interface ScheduleTabProps {
   initialTrip?: TripDetail | null;
   refreshKey?: number; // 用于触发刷新
   wishImpactByDay?: DayWishImpact[];
+  /** P1：冰岛自驾 TEP */
+  tepEnabled?: boolean;
+  tepExecutability?: TripExecutabilityView | null;
+  onTepRefresh?: () => void | Promise<void>;
 }
 
 export default function ScheduleTab({
@@ -151,6 +158,9 @@ export default function ScheduleTab({
   initialTrip,
   refreshKey,
   wishImpactByDay,
+  tepEnabled = false,
+  tepExecutability = null,
+  onTepRefresh,
 }: ScheduleTabProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -163,6 +173,27 @@ export default function ScheduleTab({
   const { worldModelGuards, lockedSegmentIds, degradation: segmentDegradation } =
     useWorldModelGuards();
   const scheduleTimelineRef = useRef<HTMLDivElement>(null);
+
+  const tepVulnerableDayIndex = useMemo(
+    () =>
+      tepExecutability
+        ? resolveVulnerableDayIndex(
+            tepExecutability.assessment.findings,
+            tepExecutability.dailyDrivePlans,
+          )
+        : null,
+    [tepExecutability],
+  );
+
+  const refreshTepAfterItemChange = useCallback(async () => {
+    if (!tepEnabled) return;
+    if (onTepRefresh) {
+      await onTepRefresh();
+      return;
+    }
+    await tripExecutabilityApi.refreshAfterPlanEdit(tripId);
+    window.dispatchEvent(new CustomEvent('plan-studio:schedule-refresh'));
+  }, [tepEnabled, onTepRefresh, tripId]);
 
   const scrollToScheduleDay = useCallback((dayIndex: number) => {
     const el = scheduleTimelineRef.current?.querySelector(
@@ -219,9 +250,6 @@ export default function ScheduleTab({
     setPendingApprovalId(null);
   };
   const [trip, setTrip] = useState<TripDetail | null>(null);
-  const embeddedHiking = useEmbeddedHikingTrip(trip);
-  const showEmbeddedUi =
-    isEmbeddedHikingEnabled() && embeddedHiking.embedded && isEmbeddedHikingTrip(trip);
   const [schedules, setSchedules] = useState<Map<string, ScheduleResponse>>(new Map());
   const [loading, setLoading] = useState(true);
   /** 首次加载完成后，refreshKey 触发的刷新不再切回全屏骨架屏 */
@@ -863,8 +891,9 @@ export default function ScheduleTab({
         silent: true,
         recalculateTravelDayIds: ids.length > 0 ? ids : undefined,
       });
+      await refreshTepAfterItemChange();
     },
-    [trip, tripId, loadTrip],
+    [trip, tripId, loadTrip, refreshTepAfterItemChange],
   );
 
   useEffect(() => {
@@ -1686,15 +1715,6 @@ export default function ScheduleTab({
 
   return (
     <>
-      {showEmbeddedUi ? (
-        <EmbeddedHikingStatusBar
-          tripId={tripId}
-          phase={embeddedHiking.phase}
-          phaseHintZh={embeddedHiking.phaseHintZh}
-          segmentCount={embeddedHiking.segments.length}
-          plans={embeddedHiking.plans}
-        />
-      ) : null}
       <div className="grid grid-cols-12 gap-6">
         {/* 左（8/12）：Day Timeline */}
         <div
@@ -1804,6 +1824,14 @@ export default function ScheduleTab({
           const dayWishImpact = wishImpactByDay?.find((d) => d.dayIndex === idx + 1);
           const presentedDay = getPresentedItineraryDay(itineraryPresentationLookup, idx + 1);
           const dayNumber = idx + 1;
+          const tepBadgeModel =
+            tepEnabled && tepExecutability
+              ? buildDayExecutabilityBadgeModel(
+                  dayNumber,
+                  tepExecutability,
+                  tepVulnerableDayIndex,
+                )
+              : null;
           const crossDaySegment =
             idx > 0 && trip
               ? findInterDayTravelSegment(trip, idx - 1, dayTravelInfoMap, itineraryItemsMap)
@@ -1984,6 +2012,24 @@ export default function ScheduleTab({
                         有 {dayWishImpact.impactCount} 条私密偏好影响本日
                       </p>
                     ) : null}
+                    {tepBadgeModel &&
+                    (tepBadgeModel.loadTier ||
+                      tepBadgeModel.isVulnerable ||
+                      tepBadgeModel.flexibleCount === 0 ||
+                      tepBadgeModel.weatherSensitiveCount > 0) ? (
+                      <div className="mt-2">
+                        <ScheduleDayTepBadge
+                          model={tepBadgeModel}
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent('plan-studio:scroll-tep-day', {
+                                detail: { dayIndex: dayNumber },
+                              }),
+                            );
+                          }}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                   <Badge variant="outline" className="text-xs">
                     {weekday}
@@ -2004,17 +2050,6 @@ export default function ScheduleTab({
                     </p>
                   ) : null}
                   <div className={showAdjustDraftPreview ? 'opacity-50 pointer-events-none' : undefined}>
-                  {showEmbeddedUi && trip ? (
-                    <EmbeddedHikingDayRail
-                      trip={trip}
-                      tripDay={day}
-                      dayDate={day.date}
-                      dayIndex={idx}
-                      segments={embeddedHiking.segments}
-                      plans={embeddedHiking.plans}
-                      resolvePlan={embeddedHiking.planForSegment}
-                    />
-                  ) : null}
                   {/* 交通信息摘要（含自上一日衔接段） */}
                   {travelSummaryMerged ? (
                     <TravelSummary
@@ -2564,6 +2599,7 @@ export default function ScheduleTab({
               editedItem: editingItem,
             });
           }}
+          tepFlexibilityEnabled={tepEnabled}
           timezone={getTimezoneByCountry(trip?.destination || '')}
           tripDays={trip?.TripDay?.map(d => ({ id: d.id, date: d.date })) || []}
           currentTripDayId={editingItem?.tripDayId || (editingItem as any)?.TripDay?.id}

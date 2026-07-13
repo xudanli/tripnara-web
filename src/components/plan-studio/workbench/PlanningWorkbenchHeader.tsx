@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { WeatherCard } from '@/components/weather/WeatherCard';
 import type { Collaborator, PipelineStatus } from '@/types/trip';
 import { getPipelineProgressColor } from '@/lib/pipeline-status';
 import { WorkbenchCollaboratorsRow } from './WorkbenchCollaboratorsRow';
@@ -39,11 +38,6 @@ export interface PlanningWorkbenchHeaderProps {
   onOpenCollaborators?: () => void;
   onOpenCollaborationCenter?: () => void;
   collaborationPendingCount?: number;
-  weather?: {
-    location: { lat: number; lng: number };
-    name: string;
-    includeWindDetails?: boolean;
-  } | null;
   activeTab: string;
   onTabChange: (tab: string) => void;
   onOpenAssistant?: () => void;
@@ -85,7 +79,6 @@ export function PlanningWorkbenchHeader({
   onOpenCollaborators,
   onOpenCollaborationCenter,
   collaborationPendingCount = 0,
-  weather,
   activeTab,
   onTabChange,
   onOpenAssistant,
@@ -156,18 +149,6 @@ export function PlanningWorkbenchHeader({
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-          {weather ? (
-            <div className="hidden sm:block">
-              <WeatherCard
-                location={weather.location}
-                locationName={weather.name}
-                compact
-                includeWindDetails={weather.includeWindDetails}
-                refreshInterval={10 * 60 * 1000}
-              />
-            </div>
-          ) : null}
-
           {tripId ? (
             <WorkbenchCollaboratorsRow
               tripId={tripId}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeTimeWindowScheduleViolations,
   enrichConstraintImpactPreviewWithSchedule,
+  sanitizePreviewAffectedDays,
 } from './constraint-preview-schedule.util';
 import { EMPTY_CONSTRAINT_IMPACT_PREVIEW } from '@/components/plan-studio/workbench/constraint-console-types';
 import type { TripDetail } from '@/types/trip';
@@ -76,5 +77,17 @@ describe('constraint-preview-schedule.util', () => {
     expect(enriched.planNeedsAdjust).toBe(true);
     expect(enriched.diffBullets.some((line) => line.includes('整趟'))).toBe(false);
     expect(enriched.recommendations?.[0]).toContain('10:00');
+  });
+
+  it('drops invalid day numbers such as year-like 2026', () => {
+    const filtered = sanitizePreviewAffectedDays(
+      [
+        { dayNumber: 1, tone: 'major' as const },
+        { dayNumber: 2, tone: 'minor' as const },
+        { dayNumber: 2026, tone: 'minor' as const },
+      ],
+      { maxDay: 9 },
+    );
+    expect(filtered.map((day) => day.dayNumber)).toEqual([1, 2]);
   });
 });

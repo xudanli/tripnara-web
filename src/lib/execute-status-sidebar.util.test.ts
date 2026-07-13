@@ -24,7 +24,7 @@ describe('execute-status-sidebar.util', () => {
     });
 
     expect(members[0]?.conditionLabel).toBe('状态良好');
-    expect(members[0]?.activityLabel).toBe('驾驶中');
+    expect(members[0]?.activityLabel).toBe('当前活动');
     expect(members[1]?.conditionLabel).toBe('轻微疲劳');
     expect(members[1]?.activityLabel).toBe('休息中');
   });

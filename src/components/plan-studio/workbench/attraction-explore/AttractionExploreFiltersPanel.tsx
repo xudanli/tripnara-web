@@ -1,17 +1,23 @@
-import { Pencil } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { TeamRequirementProfilePanel } from '@/features/member-onboarding';
+import { isAdvisorLedTrip } from '@/lib/trip-collaboration-mode.util';
 import type { AttractionExploreContextResponse } from '@/types/attraction-explore';
+import type { Collaborator, TripDetail } from '@/types/trip';
 import {
   workbenchAttractionExploreChipIdle,
   workbenchAttractionExploreChipSelected,
   workbenchAttractionExploreContextCard,
   workbenchAttractionExploreSectionTitle,
+  workbenchLinkClass,
   workbenchPanelTitle,
   workbenchScrollable,
 } from '../workbench-ui';
 
 export interface AttractionExploreFiltersPanelProps {
+  tripId: string;
+  trip?: TripDetail | null;
+  collaborators?: Collaborator[] | null;
   context?: AttractionExploreContextResponse | null;
   selectedThemeIds: string[];
   selectedSuitabilityIds: string[];
@@ -52,6 +58,9 @@ function FilterChipGroup({
 }
 
 export function AttractionExploreFiltersPanel({
+  tripId,
+  trip,
+  collaborators,
   context,
   selectedThemeIds,
   selectedSuitabilityIds,
@@ -60,9 +69,50 @@ export function AttractionExploreFiltersPanel({
   onEditPreferences,
   className,
 }: AttractionExploreFiltersPanelProps) {
+  const advisorLed = useMemo(() => isAdvisorLedTrip(trip), [trip]);
+  const profileCollaborators = useMemo(
+    () =>
+      collaborators?.map((c) => ({
+        userId: c.userId,
+        displayName: c.displayName,
+        role: c.role,
+      })) ?? [],
+    [collaborators],
+  );
+
+  const teamRequirementsBlock = (
+    <>
+      <TeamRequirementProfilePanel
+        tripId={tripId}
+        collaborators={profileCollaborators}
+        compact
+        sidebar
+        includeFriction={!advisorLed}
+        className="border-border/70 shadow-none"
+      />
+      {onEditPreferences ? (
+        <button
+          type="button"
+          className={cn(workbenchLinkClass, 'text-[10px]')}
+          onClick={onEditPreferences}
+        >
+          查看完整团队与需求 →
+        </button>
+      ) : null}
+    </>
+  );
+
   if (!context) {
     return (
-      <div className={cn('p-4 text-xs text-muted-foreground', className)}>正在加载筛选条件…</div>
+      <div className={cn('flex min-h-0 flex-col', className)}>
+        <div className="shrink-0 border-b border-border/50 px-3 py-1.5">
+          <h2 className={workbenchPanelTitle}>这次想怎么玩</h2>
+        </div>
+        <div className={cn('min-h-0 flex-1 space-y-4 overflow-y-auto p-3', workbenchScrollable)}>
+          <p className="text-xs text-muted-foreground">正在加载筛选条件…</p>
+          {teamRequirementsBlock}
+        </div>
+      </div>
     );
   }
 
@@ -101,36 +151,7 @@ export function AttractionExploreFiltersPanel({
           </dl>
         </section>
 
-        <section className={workbenchAttractionExploreContextCard}>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className={workbenchAttractionExploreSectionTitle}>出行成员与偏好</p>
-            {onEditPreferences ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 px-1.5 text-[10px] text-muted-foreground"
-                onClick={onEditPreferences}
-              >
-                <Pencil className="mr-1 h-3 w-3" />
-                编辑
-              </Button>
-            ) : null}
-          </div>
-          <div className="mb-2 flex -space-x-1">
-            {(context.memberPreferences?.memberInitials ?? []).map((initial, index) => (
-              <span
-                key={`${initial}-${index}`}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-[10px] font-medium text-foreground"
-              >
-                {initial}
-              </span>
-            ))}
-          </div>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {context.memberPreferences?.summary ?? '暂无成员偏好信息'}
-          </p>
-        </section>
+        {teamRequirementsBlock}
       </div>
     </div>
   );

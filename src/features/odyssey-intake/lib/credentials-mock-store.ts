@@ -7,12 +7,12 @@ import {
   MOCK_VIEWER_CREDENTIALS,
   formatZhimaDisplay,
   zhimaTierFromScore,
-} from '@/features/match-square/lib/verified-credentials';
+} from '@/lib/credentials/verified-credentials';
 import {
   blurProfessionVerifiedLabel,
   formatEducationVerifiedLabel,
   inferIndustryFromEmailDomain,
-} from '@/features/match-square/lib/privacy-labels';
+} from '@/lib/credentials/privacy-labels';
 
 const STORAGE_KEY = 'odyssey-credentials-me';
 

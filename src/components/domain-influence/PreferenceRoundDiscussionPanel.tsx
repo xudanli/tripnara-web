@@ -85,6 +85,7 @@ interface PreferenceRoundDiscussionPanelProps {
   onStartVote?: () => void;
   onGenerateCompromise?: () => void;
   onDiscussWithAssistant?: () => void;
+  onReachConsensus?: () => void;
   voteActionDisabled?: boolean;
 }
 
@@ -100,6 +101,7 @@ export function PreferenceRoundDiscussionPanel({
   onStartVote,
   onGenerateCompromise,
   onDiscussWithAssistant,
+  onReachConsensus,
   voteActionDisabled,
 }: PreferenceRoundDiscussionPanelProps) {
   const { user } = useAuth();
@@ -139,6 +141,7 @@ export function PreferenceRoundDiscussionPanel({
         onStartVote={onStartVote}
         onGenerateCompromise={onGenerateCompromise}
         onDiscussWithAssistant={onDiscussWithAssistant}
+        onReachConsensus={onReachConsensus}
         voteActionDisabled={voteActionDisabled}
         className={className}
       />

@@ -1,26 +1,31 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { StructuredNegotiationPanel } from '@/components/domain-influence/StructuredNegotiationPanel';
-import { SilentVoteListPanel } from '@/components/silent-vote/SilentVoteListPanel';
+import { SilentVoteDialog } from '@/components/silent-vote/SilentVoteDialog';
+import { SilentVoteCreateDialog } from '@/components/silent-vote/SilentVoteCreateDialog';
 import { useCollabOverview } from '@/hooks/useCollabOverview';
 import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
 import { mergeCollabDeepLink } from '@/lib/collab-center-navigation';
 import { trackCollabVoteStart } from '@/utils/collab-center-analytics';
-import { workbenchCardFlat } from '@/components/plan-studio/workbench/workbench-ui';
 import { cn } from '@/lib/utils';
 import type { DomainNegotiationTask } from '@/types/domain-negotiation-task';
 import { resolveNegotiationTaskId } from '@/lib/collab-negotiation-selection.util';
 import { filterDomainInfluenceNegotiationTasks } from '@/lib/collab-collaborative-task-display.util';
-import { CollabDecisionStatsRow } from '../widgets/CollabDecisionStatsRow';
+import { collabColumnStack, collabDecisionsGrid, collabPageStack } from '../collab-dashboard-layout';
+import { CollabDecisionStatusBanner } from '../widgets/CollabDecisionStatusBanner';
 import { CollabAiSuggestionsPanel } from '../widgets/CollabAiSuggestionsPanel';
 import { CollabDecisionQueuePanel } from '../widgets/CollabDecisionQueuePanel';
-import { CollabDecisionFollowUpQueuePanel } from '../widgets/CollabDecisionFollowUpQueuePanel';
-import { NegotiationSummaryWidget } from '../widgets/NegotiationSummaryWidget';
-import { collabDashboardGrid, collabDashboardSpan } from '../collab-dashboard-layout';
+import { CollabTeamVoteLeanWidget } from '../widgets/CollabTeamVoteLeanWidget';
+import { Spinner } from '@/components/ui/spinner';
 
 interface CollabCenterDecisionsTabProps {
   tripId: string;
   className?: string;
+  /** 页头「新增投票」触发 */
+  createVoteNonce?: number;
+  /** 顶部状态栏「开始新协商」 */
+  onStartNegotiation?: () => void;
 }
 
 function resolveSelectedTaskId(
@@ -32,23 +37,36 @@ function resolveSelectedTaskId(
   return resolveNegotiationTaskId(tasks, { negotiationTaskId, roundId, roundDomain });
 }
 
-export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDecisionsTabProps) {
+export function CollabCenterDecisionsTab({
+  tripId,
+  className,
+  createVoteNonce = 0,
+  onStartNegotiation,
+}: CollabCenterDecisionsTabProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const roundId = searchParams.get('roundId');
   const roundDomain = searchParams.get('roundDomain');
   const negotiationTaskId = searchParams.get('negotiationTaskId');
   const voteIdParam = searchParams.get('voteId');
-  const { decisionStats, votes, negotiationTasks, decisionFollowUps, loading } =
-    useCollabOverview(tripId);
+  const {
+    decisionStats,
+    votes,
+    negotiationTasks,
+    loading,
+    friction,
+    reloadVotes,
+  } = useCollabOverview(tripId);
 
   const domainNegotiationTasks = useMemo(
     () => filterDomainInfluenceNegotiationTasks(negotiationTasks),
     [negotiationTasks],
   );
   const { openAssistant, sendAssistantMessage } = useAssistantSidebar();
-  const voteSectionRef = useRef<HTMLElement>(null);
   const stageSectionRef = useRef<HTMLDivElement>(null);
   const voteDeepLinkConsumedRef = useRef(false);
+  const [voteDialogOpen, setVoteDialogOpen] = useState(false);
+  const [createVoteOpen, setCreateVoteOpen] = useState(false);
+  const [activeVoteId, setActiveVoteId] = useState<string | null>(null);
 
   const openVote = votes.find((v) => v.status === 'open');
 
@@ -56,6 +74,13 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
     () => resolveSelectedTaskId(domainNegotiationTasks, negotiationTaskId, roundId, roundDomain),
     [domainNegotiationTasks, negotiationTaskId, roundId, roundDomain],
   );
+
+  const activeTask = useMemo(
+    () => domainNegotiationTasks.find((t) => t.id === selectedTaskId) ?? domainNegotiationTasks[0] ?? null,
+    [domainNegotiationTasks, selectedTaskId],
+  );
+
+  const discussTopic = openVote?.title ?? activeTask?.title ?? '团队协商';
 
   const handleSelectQueueTask = useCallback(
     (task: DomainNegotiationTask) => {
@@ -73,13 +98,6 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
     [searchParams, setSearchParams],
   );
 
-  const activeTask = useMemo(
-    () => domainNegotiationTasks.find((t) => t.id === selectedTaskId) ?? null,
-    [domainNegotiationTasks, selectedTaskId],
-  );
-
-  const discussTopic = openVote?.title ?? activeTask?.title ?? '团队协商';
-
   const handleDiscussWithAssistant = useCallback(() => {
     openAssistant();
     sendAssistantMessage(`关于「${discussTopic}」，请帮我分析各方观点并给出妥协建议。`);
@@ -92,6 +110,10 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
     );
   }, [openAssistant, sendAssistantMessage, discussTopic]);
 
+  const handleReachConsensus = useCallback(() => {
+    toast.success('共识方案已记录，将写回行程规划（需后端确认接口）');
+  }, []);
+
   const clearVoteDeepLink = useCallback(() => {
     if (!searchParams.get('voteId')) return;
     const next = mergeCollabDeepLink(searchParams, { voteId: null });
@@ -101,6 +123,8 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
   const handleVoteOpen = useCallback(
     (voteId: string) => {
       trackCollabVoteStart({ tripId, voteId });
+      setActiveVoteId(voteId);
+      setVoteDialogOpen(true);
       const next = mergeCollabDeepLink(searchParams, {
         collabTab: 'decisions',
         voteId,
@@ -114,85 +138,114 @@ export function CollabCenterDecisionsTab({ tripId, className }: CollabCenterDeci
     if (voteIdParam && !voteDeepLinkConsumedRef.current) {
       voteDeepLinkConsumedRef.current = true;
       trackCollabVoteStart({ tripId, voteId: voteIdParam });
+      setActiveVoteId(voteIdParam);
+      setVoteDialogOpen(true);
     }
   }, [tripId, voteIdParam]);
 
+  const handleVoteCreated = useCallback(
+    async (voteId: string) => {
+      setCreateVoteOpen(false);
+      await reloadVotes();
+      handleVoteOpen(voteId);
+    },
+    [reloadVotes, handleVoteOpen],
+  );
+
+  useEffect(() => {
+    handleInitialVoteConsumed();
+  }, [handleInitialVoteConsumed]);
+
+  useEffect(() => {
+    if (createVoteNonce > 0) {
+      setCreateVoteOpen(true);
+    }
+  }, [createVoteNonce]);
+
+  if (loading && domainNegotiationTasks.length === 0) {
+    return (
+      <div className={cn('flex justify-center py-16', className)}>
+        <Spinner className="h-6 w-6 text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
-    <div className={cn('space-y-4', className)}>
-      <CollabDecisionStatsRow stats={decisionStats} />
+    <div className={cn(collabPageStack, className)}>
+      <CollabDecisionStatusBanner
+        stats={decisionStats}
+        tasks={domainNegotiationTasks}
+        alerts={friction?.highRiskAlerts}
+        onStartNegotiation={onStartNegotiation}
+      />
 
-      <div className={collabDashboardGrid}>
-        <div className={collabDashboardSpan({ md: 6, lg: 4 })}>
-          <div className="space-y-4">
-            <CollabDecisionFollowUpQueuePanel
-              tripId={tripId}
-              tasks={decisionFollowUps}
-              loading={loading}
-            />
-            <CollabDecisionQueuePanel
-              tasks={domainNegotiationTasks}
-              selectedTaskId={selectedTaskId}
-              loading={loading}
-              onSelectTask={handleSelectQueueTask}
-            />
-          </div>
-        </div>
+      <div className={collabDecisionsGrid}>
+        <aside className={cn(collabColumnStack, 'xl:col-span-3')}>
+          <CollabDecisionQueuePanel
+            tasks={domainNegotiationTasks}
+            votes={votes}
+            selectedTaskId={selectedTaskId}
+            loading={loading}
+            onSelectTask={handleSelectQueueTask}
+          />
+        </aside>
 
-        <div ref={stageSectionRef} className={collabDashboardSpan({ md: 6, lg: 5 })}>
+        <main ref={stageSectionRef} className="xl:col-span-6">
           <StructuredNegotiationPanel
             tripId={tripId}
             initialRoundId={roundId}
             initialRoundDomain={roundDomain}
-            initialNegotiationTaskId={negotiationTaskId}
+            initialNegotiationTaskId={negotiationTaskId ?? activeTask?.id ?? null}
             hideTaskList
             collabStage
+            className="min-h-[520px]"
             onStartVote={() => {
-              if (openVote) {
-                handleVoteOpen(openVote.id);
-              }
-              voteSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+              if (openVote) handleVoteOpen(openVote.id);
             }}
             onGenerateCompromise={handleGenerateCompromise}
             onDiscussWithAssistant={handleDiscussWithAssistant}
+            onReachConsensus={handleReachConsensus}
             voteActionDisabled={!openVote}
           />
-        </div>
+        </main>
 
-        <div className={collabDashboardSpan({ md: 6, lg: 3 })}>
+        <aside className={cn(collabColumnStack, 'xl:col-span-3')}>
           <CollabAiSuggestionsPanel
             tripId={tripId}
-            onStartNegotiation={() => {
-              stageSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
+            activeTask={activeTask}
             onStartVote={() => {
-              if (openVote) {
-                handleVoteOpen(openVote.id);
-              }
-              voteSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+              if (openVote) handleVoteOpen(openVote.id);
             }}
             onGenerateCompromise={handleGenerateCompromise}
             onDiscussWithAssistant={handleDiscussWithAssistant}
           />
-        </div>
-
-        <div className={collabDashboardSpan({ md: 6, lg: 6 })}>
-          <NegotiationSummaryWidget tasks={domainNegotiationTasks} />
-        </div>
-
-        <div className={collabDashboardSpan({ md: 6, lg: 6 })}>
-          <section ref={voteSectionRef} className={cn(workbenchCardFlat, 'h-full p-4')}>
-            <h3 className="mb-3 text-sm font-semibold tracking-tight text-foreground">团队投票</h3>
-            <SilentVoteListPanel
-              tripId={tripId}
-              showCreate
-              initialVoteId={voteIdParam}
-              onInitialVoteConsumed={handleInitialVoteConsumed}
-              onVoteOpen={handleVoteOpen}
-              onVoteClose={clearVoteDeepLink}
-            />
-          </section>
-        </div>
+          <CollabTeamVoteLeanWidget votes={votes} onOpenVote={handleVoteOpen} />
+        </aside>
       </div>
+
+      <p className="text-center text-[10px] leading-relaxed text-muted-foreground">
+        协商与投票数据实时同步；AI 建议仅供参考，最终决策请由团队共同确认。
+      </p>
+
+      <SilentVoteCreateDialog
+        tripId={tripId}
+        open={createVoteOpen}
+        onOpenChange={setCreateVoteOpen}
+        onCreated={(voteId) => void handleVoteCreated(voteId)}
+      />
+
+      <SilentVoteDialog
+        tripId={tripId}
+        voteId={activeVoteId ?? voteIdParam}
+        open={voteDialogOpen || Boolean(voteIdParam)}
+        onOpenChange={(open) => {
+          setVoteDialogOpen(open);
+          if (!open) {
+            setActiveVoteId(null);
+            clearVoteDeepLink();
+          }
+        }}
+      />
     </div>
   );
 }

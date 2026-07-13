@@ -110,7 +110,7 @@ export function WishFreeForm({ tripId, onSubmit, submitting, collabMode = false 
   const busy = submitting || optimizing || transcribing;
 
   return (
-    <div className={cn(collabMode ? 'flex h-full min-h-0 flex-col gap-2.5' : 'space-y-4')}>
+    <div className={cn(collabMode ? 'flex h-full min-h-0 flex-col gap-2' : 'space-y-4')}>
       <WishCategorySelect
         tripId={tripId}
         value={category}

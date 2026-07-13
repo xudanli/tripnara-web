@@ -7,6 +7,12 @@ import {
   getItineraryItemTypeShortLabel,
   isItineraryItemType,
 } from '@/lib/itinerary-item-type-display';
+import type { ItineraryItem } from '@/types/trip';
+import {
+  isAccommodationItineraryItem,
+  itemSpansOvernight,
+  readCrossDayInfo,
+} from '@/lib/itinerary-item-sort';
 
 const TIME_IN_STR = /(\d{1,2}):(\d{1,2})/;
 
@@ -42,6 +48,48 @@ export function formatScheduleTimeRange(start?: string | null, end?: string | nu
   const endLabel = formatScheduleTime(end);
   if (startLabel && endLabel) return `${startLabel} - ${endLabel}`;
   return startLabel || endLabel;
+}
+
+/** 行程项时间轴展示：跨夜住宿为「入住 20:00 → 次日 08:00」，退房项为「退房 08:00」 */
+export function formatItineraryItemTimeRangeLabel(
+  item: Pick<
+    ItineraryItem,
+    | 'startTime'
+    | 'endTime'
+    | 'type'
+    | 'costCategory'
+    | 'Place'
+    | 'crossDayInfo'
+    | 'cross_day_info'
+    | 'note'
+    | 'metadata'
+  >,
+  timezone?: string,
+): string {
+  const cross = readCrossDayInfo(item);
+  const isCheckout = cross?.displayMode === 'checkout' || cross?.isCheckoutItem === true;
+  const startHm = extractHmFromWindow(item.startTime, timezone);
+  const endHm = extractHmFromWindow(item.endTime, timezone);
+
+  if (isAccommodationItineraryItem(item)) {
+    if (isCheckout && endHm) {
+      return `退房 ${endHm}`;
+    }
+    if (startHm && endHm && itemSpansOvernight(item)) {
+      return `入住 ${startHm} → 次日 ${endHm}`;
+    }
+    if (startHm && endHm) return `${startHm} - ${endHm}`;
+    if (startHm) return `入住 ${startHm}`;
+    if (endHm) return `退房 ${endHm}`;
+  }
+
+  if (isCheckout && endHm) {
+    const label = cross?.timeLabels?.end ?? '结束';
+    return `${label} ${endHm}`;
+  }
+
+  if (startHm && endHm) return `${startHm} - ${endHm}`;
+  return startHm ?? endHm ?? '—';
 }
 
 function minutesFromHm(hm: string): number | null {

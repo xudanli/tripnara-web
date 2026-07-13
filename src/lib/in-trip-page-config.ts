@@ -1,9 +1,8 @@
 import type { TripDetail } from '@/types/trip';
-import { getTripHikingProfile } from '@/lib/trip-hiking';
 import { resolveTripContentMode } from '@/lib/trip-content-mode';
 
 /** 行中模块展示所依据的行程形态 */
-export type InTripTripKind = 'hiking' | 'multi_party' | 'poi_drive' | 'default';
+export type InTripTripKind = 'multi_party' | 'poi_drive' | 'default';
 
 export type InTripModuleKey =
   | 'today'
@@ -29,11 +28,6 @@ function countTravelers(trip: TripDetail | null | undefined): number {
 export function resolveInTripTripKind(trip: TripDetail | null | undefined): InTripTripKind {
   if (!trip) return 'default';
 
-  const hikingProfile = getTripHikingProfile(trip);
-  if (hikingProfile === 'primary' || hikingProfile === 'embedded') {
-    return 'hiking';
-  }
-
   if (countTravelers(trip) > 1) {
     return 'multi_party';
   }
@@ -53,16 +47,6 @@ export function resolveInTripTripKind(trip: TripDetail | null | undefined): InTr
 }
 
 const MODULE_MATRIX: Record<InTripTripKind, InTripModuleVisibility> = {
-  hiking: {
-    today: true,
-    experience: true,
-    money: true,
-    pulse: true,
-    split: false,
-    environment: true,
-    realtime: true,
-    postTripSummary: true,
-  },
   multi_party: {
     today: true,
     experience: true,

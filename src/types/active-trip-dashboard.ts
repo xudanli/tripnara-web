@@ -67,7 +67,7 @@ export type ActiveTripTaskSummary = {
   assignedToViewer: number;
 };
 
-export type ActiveTripMatchSquareBinding = {
+export type ActiveTripTrustedProjectBinding = {
   recruitmentPostId: string;
   strategy: string;
   catalogId: string | null;
@@ -93,7 +93,7 @@ export type ActiveTripDashboard = {
     canProposeRollback: boolean;
     awaitingViewerAction: ActiveTripAwaitingViewerAction;
   };
-  matchSquare: ActiveTripMatchSquareBinding | null;
+  trustedProject: ActiveTripTrustedProjectBinding | null;
   contextualCards: ActiveTripContextualCard[];
   crewDnaPanel: ActiveTripCrewMember[];
   collaborativeTasks: CollaborativeTaskView[];

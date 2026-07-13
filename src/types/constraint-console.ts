@@ -7,5 +7,5 @@ export interface ConstraintPreviewImpactRequest {
 
 export interface ConstraintPreviewImpactResponse {
   preview: ConstraintImpactPreview;
-  source: 'bff';
+  source: 'bff' | 'assessment';
 }

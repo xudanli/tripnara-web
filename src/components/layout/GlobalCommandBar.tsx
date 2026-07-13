@@ -284,13 +284,6 @@ export default function GlobalCommandBar({
                   <span>{t('globalCommandBar.settings')}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => navigate('/dashboard/settings?tab=preferences')}
-                  className="cursor-pointer"
-                >
-                  <User className="mr-2 h-4 w-4" />
-                  <span>{t('globalCommandBar.preferences')}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
                   onClick={() => setContactUsOpen(true)}
                   className="cursor-pointer"
                 >

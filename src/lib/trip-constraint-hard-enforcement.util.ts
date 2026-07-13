@@ -134,6 +134,26 @@ export function resolveHardEnforcementSpec(input: {
   return undefined;
 }
 
+/** 用户可调 pacing 硬约束 — 与 BFF section 排除一致，永不归入 readonly_official */
+export const USER_ADJUSTABLE_PACING_TEMPLATE_IDS = new Set<HardConstraintEnforcementTemplateId>([
+  'max_daily_drive',
+  'no_night_drive',
+]);
+
+export function isUserAdjustablePacingHardConstraint(
+  constraint: Pick<TripConstraint, 'id' | 'source'>,
+): boolean {
+  const templateId = constraint.source?.templateId?.trim();
+  if (templateId && USER_ADJUSTABLE_PACING_TEMPLATE_IDS.has(templateId)) return true;
+
+  const spec = resolveHardEnforcementSpec({
+    templateId,
+    constraintId: constraint.id,
+    uiId: apiConstraintIdToUi(constraint.id),
+  });
+  return Boolean(spec && USER_ADJUSTABLE_PACING_TEMPLATE_IDS.has(spec.templateId));
+}
+
 export function resolveHardEnforcementSpecForConstraint(
   constraint: Pick<TripConstraint, 'id' | 'source'>,
 ): HardConstraintEnforcementSpec | undefined {

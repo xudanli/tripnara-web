@@ -53,6 +53,13 @@ describe('constraint-template-registry.util', () => {
     expect([...CATALOG_SOFT_TEMPLATE_IDS]).toEqual(softIds);
   });
 
+  it('route_shape risk templates default to ROUTE_SEGMENT scope', () => {
+    const unpaved = getConstraintTemplateRegistryEntry('no_unpaved_road');
+    const badWeather = getConstraintTemplateRegistryEntry('no_bad_weather');
+    expect(unpaved?.defaultScope).toEqual({ type: 'ROUTE_SEGMENT' });
+    expect(badWeather?.defaultScope).toEqual({ type: 'ROUTE_SEGMENT' });
+  });
+
   it('matches committed JSON snapshot (CI drift guard)', () => {
     const exported = exportConstraintTemplateCatalog();
     const onDisk = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));

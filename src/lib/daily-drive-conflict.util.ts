@@ -1,6 +1,31 @@
 import type { DayMetricsResponse, DayTravelInfoResponse, TripDetail } from '@/types/trip';
+import { TRIP_CONSTRAINT_LEGACY_IDS, type TripConstraint } from '@/types/trip-constraints';
 
-export function readDailyDriveLimitHours(trip: TripDetail | null | undefined): number {
+export function readMaxDailyDriveHoursFromConstraint(
+  constraint?: TripConstraint | null,
+): number | null {
+  const raw = constraint?.value;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (raw && typeof raw === 'object') {
+    const record = raw as Record<string, unknown>;
+    for (const key of ['maxHours', 'maxHoursPerDay', 'hours', 'value'] as const) {
+      const n = record[key];
+      if (typeof n === 'number' && Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+
+export function readDailyDriveLimitHours(
+  trip: TripDetail | null | undefined,
+  apiConstraint?: TripConstraint | null,
+): number {
+  const fromApi =
+    apiConstraint?.id === TRIP_CONSTRAINT_LEGACY_IDS.MAX_DAILY_DRIVE
+      ? readMaxDailyDriveHoursFromConstraint(apiConstraint)
+      : null;
+  if (fromApi != null) return fromApi;
+
   const meta = trip?.metadata as Record<string, unknown> | undefined;
   const nested = meta?.constraints as Record<string, unknown> | undefined;
   const raw =

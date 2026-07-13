@@ -60,7 +60,7 @@ export default function MemoryConsolePage() {
     if (action === 'login') {
       navigate('/login');
     } else if (action === 'hide_console') {
-      navigate('/dashboard/settings?tab=data');
+      navigate('/dashboard/settings');
     }
     throw err;
   };
@@ -82,7 +82,7 @@ export default function MemoryConsolePage() {
       <div className="border-b bg-white px-6 py-4">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
-            <Link to="/dashboard/settings?tab=data">
+            <Link to="/dashboard/settings">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>

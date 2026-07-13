@@ -31,6 +31,7 @@ import ActiveTripReplayPage from './pages/trips/replay';
 import ActiveTripBackflowPage from './pages/trips/backflow';
 import NewTripPage from './pages/trips/new';
 import FromGuidePage from './pages/trips/from-guide';
+import AdvisorCreateTripPage from './pages/trips/advisor-create';
 import TripBudgetPage from './pages/trips/budget';
 import TripSchedulePage from './pages/trips/schedule';
 import TripOptimizePage from './pages/trips/optimize';
@@ -40,13 +41,19 @@ import TripReviewPage from './pages/trips/review';
 import DylCanvasPage from './pages/trips/tools/DylCanvasPage';
 import CollectedTripsPage from './pages/trips/collected';
 import SharedTripPage from './pages/trips/shared/[shareToken]';
-const SharedTrailPage = lazy(() => import('./pages/trails/shared/[shareToken]'));
 import JoinTeamPage from './pages/join-team/[token]';
+import JoinTripRedirectPage from './pages/join-trip/[code]';
+import {
+  UnifiedInvitePage,
+  MemberOnboardingPage,
+  MemberHomePage,
+} from './features/member-onboarding';
+import TripResponsibilityPage from './pages/trips/responsibility';
 import FeaturedTripsPage from './pages/trips/featured';
 import PlacesPage from './pages/places';
 import PlaceDetailPage from './pages/places/[id]';
 import HotelsRecommendPage from './pages/places/hotels';
-// PreferencesPage has been moved to Settings page, old route redirects to /dashboard/settings?tab=preferences
+// PreferencesPage has been removed; old route redirects to settings
 import RouteDirectionsByCountryPage from './pages/route-directions/by-country';
 import RouteTemplatesPage from './pages/route-directions/templates';
 import RouteTemplateDetailPage from './pages/route-directions/templates/[id]';
@@ -110,7 +117,6 @@ import {
 import PublicTrustProfilePage from './pages/trust/PublicTrustProfilePage';
 import PublicOrganizationTrustProfilePage from './pages/trust/PublicOrganizationTrustProfilePage';
 import MemoryConsolePage from './features/memory/pages/MemoryConsolePage';
-import { ProfilePage, OdysseyIntakePage } from './features/odyssey-intake';
 import AgentPage from './pages/agent';
 import NaraPage from './pages/nara';
 import { FullJourneyMapPage } from '@/features/full-journey-map';
@@ -132,16 +138,6 @@ import {
 } from '@/features/exploration/pages/ExploreLegacyRedirect';
 import ExplorationTravelContextLayout from '@/features/exploration/context/ExplorationTravelContextLayout';
 import TripContextShellLayout from '@/features/trip-context/context/TripContextShellLayout';
-import TrailsHubPage from './pages/trails';
-import TrailsExplorePage from './pages/trails/explore';
-import TrailDetailPage from './pages/trails/[id]';
-import TrailsSavedPage from './pages/trails/saved';
-import MyHikesPage from './pages/trails/my-hikes';
-import TrailsSafetyPage from './pages/trails/safety';
-import TrailPrepPage from './pages/trails/prep/[hikePlanId]';
-import TrailOnTrailPage from './pages/trails/on-trail/[hikePlanId]';
-import TrailReviewPage from './pages/trails/review/[hikePlanId]';
-import HikingLaugavegurDemoPage from './pages/demo/HikingLaugavegurDemo';
 import DecisionExecutionProposalDemoPage from './pages/demo/DecisionExecutionProposalDemo';
 import DecisionSpaceCheckerTabsDemoPage from './pages/demo/DecisionSpaceCheckerTabsDemo';
 import { clearLegacyOdysseyCompanionClientStorage } from '@/lib/legacy-companion-odyssey-cleanup';
@@ -253,17 +249,13 @@ function App() {
 
         {/* Shared Trip Page (Public) */}
         <Route path="/trips/shared/:shareToken" element={<SharedTripPage />} />
-        {/* Shared hiking route (Public) */}
-        <Route
-          path="/trails/shared/:shareToken"
-          element={
-            <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Spinner className="h-8 w-8" /></div>}>
-              <SharedTrailPage />
-            </Suspense>
-          }
-        />
         {/* Join Team by Invite (Public) */}
         <Route path="/join-team/:token" element={<JoinTeamPage />} />
+        <Route path="/join-trip/:code" element={<JoinTripRedirectPage />} />
+        <Route path="/invite/:token" element={<UnifiedInvitePage />} />
+        <Route path="/member/:token/onboarding/:stepId" element={<MemberOnboardingPage />} />
+        <Route path="/member/:token/onboarding" element={<Navigate to="role" replace />} />
+        <Route path="/member/:token/home" element={<MemberHomePage />} />
         {/* Participant Portal (Public) */}
         <Route path="/participant/invites/:token" element={<ParticipantInviteShell />}>
           <Route index element={<ParticipantInviteEntryPage />} />
@@ -299,9 +291,6 @@ function App() {
         <Route path="/ui-test/decision-execution-proposal" element={<DecisionExecutionProposalDemoPage />} />
         <Route path="/ui-test/decision-space-checker-tabs" element={<DecisionSpaceCheckerTabsDemoPage />} />
 
-        {/* 徒步融资 Demo（无登录） */}
-        <Route path="/demo/hiking/laugavegur" element={<HikingLaugavegurDemoPage />} />
-
         {/* Dashboard Routes (Protected) - New Layout */}
         <Route
           path="/dashboard"
@@ -315,6 +304,7 @@ function App() {
           <Route path="trips" element={<TripsPage />} />
           <Route path="trips/new" element={<NewTripPage />} />
           <Route path="trips/new/from-guide" element={<FromGuidePage />} />
+          <Route path="trips/new/advisor-create" element={<AdvisorCreateTripPage />} />
           <Route path="explore" element={<ExploreHubRedirectPage />} />
           <Route path="explore/:scenarioId" element={<ExplorationTravelContextLayout />}>
             <Route path="conditions" element={<ExploreConditionsPage />} />
@@ -351,6 +341,7 @@ function App() {
             <Route path="replay" element={<ActiveTripReplayPage />} />
             <Route path="backflow" element={<ActiveTripBackflowPage />} />
             <Route path="budget" element={<TripBudgetPage />} />
+            <Route path="responsibility" element={<TripResponsibilityPage />} />
             <Route path="schedule" element={<TripSchedulePage />} />
             <Route path="review" element={<TripReviewPage />} />
           </Route>
@@ -377,8 +368,8 @@ function App() {
           <Route path="readiness" element={<ReadinessPage />} />
           <Route path="agent" element={<AgentPage />} />
           <Route path="nara" element={<NaraPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="tripnara/odyssey" element={<OdysseyIntakePage />} />
+          <Route path="profile" element={<Navigate to="/dashboard/settings?tab=governance" replace />} />
+          <Route path="tripnara/odyssey" element={<Navigate to="/dashboard/settings?tab=governance" replace />} />
           <Route path="tripnara/plaza" element={<Navigate to="/dashboard/trusted-projects" replace />} />
           <Route path="tripnara/plaza/my" element={<Navigate to="/dashboard/trusted-projects/mine" replace />} />
           <Route path="tripnara/plaza/new" element={<RedirectPlazaNewToTrustedProject />} />
@@ -429,19 +420,11 @@ function App() {
           <Route path="places" element={<PlacesPage />} />
           <Route path="places/:id" element={<PlaceDetailPage />} />
           <Route path="hotels" element={<HotelsRecommendPage />} />
-          <Route path="preferences" element={<Navigate to="/dashboard/settings?tab=preferences" replace />} />
+          <Route path="preferences" element={<Navigate to="/dashboard/settings" replace />} />
           <Route path="route-directions/by-country" element={<RouteDirectionsByCountryPage />} />
           <Route path="route-directions/templates" element={<RouteTemplatesPage />} />
           <Route path="route-directions/templates/:id" element={<RouteTemplateDetailPage />} />
-          <Route path="trails" element={<TrailsHubPage />} />
-          <Route path="trails/explore" element={<TrailsExplorePage />} />
-          <Route path="trails/saved" element={<TrailsSavedPage />} />
-          <Route path="trails/my-hikes" element={<MyHikesPage />} />
-          <Route path="trails/safety" element={<TrailsSafetyPage />} />
-          <Route path="trails/prep/:hikePlanId" element={<TrailPrepPage />} />
-          <Route path="trails/on-trail/:hikePlanId" element={<TrailOnTrailPage />} />
-          <Route path="trails/review/:hikePlanId" element={<TrailReviewPage />} />
-          <Route path="trails/:id" element={<TrailDetailPage />} />
+          <Route path="trails/*" element={<Navigate to="/dashboard" replace />} />
           <Route path="decision-cockpit" element={<Navigate to="/dashboard" replace />} />
           <Route path="tripnara/explore" element={<Navigate to="/dashboard/explore" replace />} />
           <Route path="tripnara/intake-cafe" element={<Navigate to="/dashboard" replace />} />
@@ -472,7 +455,7 @@ function App() {
         <Route path="/companion/requests/:id" element={<Navigate to="/dashboard" replace />} />
         <Route path="/tripnara/explore" element={<Navigate to="/dashboard/explore" replace />} />
         <Route path="/tripnara/intake-cafe" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/tripnara/odyssey" element={<Navigate to="/dashboard/tripnara/odyssey" replace />} />
+        <Route path="/tripnara/odyssey" element={<Navigate to="/dashboard/settings?tab=governance" replace />} />
         <Route path="/tripnara/odyssey/plaza" element={<Navigate to="/dashboard/trusted-projects" replace />} />
         <Route path="/tripnara/booking" element={<Navigate to="/dashboard" replace />} />
 

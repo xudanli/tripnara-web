@@ -1,16 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { itineraryItemsApi } from '@/api/trips';
+import { guardStructuralEditOrToast } from '@/lib/world-model-guards';
 import { getPlanProposal } from '@/dto/frontend-arrange-itinerary-api-client';
 import { EditItineraryItemDialog } from '@/components/trips/EditItineraryItemDialog';
-import type { ItineraryItemDetail, TripDetail } from '@/types/trip';
+import { EnhancedAddItineraryItemDialog } from '@/components/trips/EnhancedAddItineraryItemDialog';
+import type { Collaborator, ItineraryItemDetail, TripDetail } from '@/types/trip';
 import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
 import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
 import { resolveDestinationTimezone } from '@/utils/timezone';
 import { isArrangeProposalWriteResponse } from '@/types/arrange-itinerary';
+import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
+import {
+  buildArrangeLodgingAssistantPrompt,
+} from '@/lib/arrange-itinerary-lodging-coverage.util';
+import {
+  buildLodgingCandidateAssistantPrompt,
+  pickNightSuggestionForDay,
+  pickRecommendedLodgingCandidate,
+} from '@/lib/arrange-itinerary-lodging-suggestions.util';
+import type {
+  ArrangeLodgingSuggestion,
+  ArrangeLodgingSuggestionCandidate,
+  CopilotSuggestion,
+} from '@/types/arrange-itinerary';
 import { ArrangeItineraryAddItemDialog } from './ArrangeItineraryAddItemDialog';
-import { ArrangeItineraryAssistantPanel } from './ArrangeItineraryAssistantPanel';
+import { ArrangeItineraryAddLodgingSheet } from './ArrangeItineraryAddLodgingSheet';
+import { ArrangeItineraryRightPanel } from './ArrangeItineraryRightPanel';
+import { ArrangeItineraryCompletionBanner } from './ArrangeItineraryCompletionBanner';
 import { ArrangeItineraryContextPanel } from './ArrangeItineraryContextPanel';
 import { ArrangeItineraryInsertGapDialog } from './ArrangeItineraryInsertGapDialog';
 import { ArrangeItineraryMoveItemDialog } from './ArrangeItineraryMoveItemDialog';
@@ -18,11 +36,15 @@ import { PlanProposalDecisionSheet } from './PlanProposalDecisionSheet';
 import { AttractionExploreMapPlaceSuggestionsDialog } from '../attraction-explore/AttractionExploreMapPlaceSuggestionsDialog';
 import { ArrangeItineraryTimelinePanel } from './ArrangeItineraryTimelinePanel';
 import { ArrangeItineraryToolbar } from './ArrangeItineraryToolbar';
+import { WorkbenchDeleteItineraryEntryDialog } from '../WorkbenchDeleteItineraryEntryDialog';
 import { useArrangeItinerary } from './useArrangeItinerary';
 import type { ArrangeItineraryAiAction } from './types';
 import type { AttractionExploreMapPoint } from '@/types/attraction-explore';
-import type { CopilotSuggestion } from '@/types/arrange-itinerary';
-import { workbenchArrangeItineraryColumnSurface, workbenchScrollable } from '../workbench-ui';
+import {
+  workbenchArrangeItineraryColumnSurface,
+  workbenchColumnSurface,
+  workbenchScrollable,
+} from '../workbench-ui';
 
 export interface PlanningWorkbenchArrangeItineraryProps {
   tripId: string;
@@ -34,6 +56,13 @@ export interface PlanningWorkbenchArrangeItineraryProps {
   onViewMap?: (dayIndex?: number) => void;
   onEditPreferences?: () => void;
   onItineraryChanged?: () => void;
+  collaborators?: Collaborator[] | null;
+  onOpenFullSchedule?: (dayIndex?: number) => void;
+  onOpenAttractionExplore?: () => void;
+  onOpenItineraryDiagnosis?: () => void;
+  onOpenConstraints?: () => void;
+  conflictMustHandleCount?: number;
+  tepFlexibilityEnabled?: boolean;
   className?: string;
 }
 
@@ -59,20 +88,130 @@ export function PlanningWorkbenchArrangeItinerary({
   onViewMap,
   onEditPreferences,
   onItineraryChanged,
+  collaborators,
+  onOpenFullSchedule,
+  onOpenAttractionExplore,
+  onOpenItineraryDiagnosis,
+  onOpenConstraints,
+  conflictMustHandleCount = 0,
+  tepFlexibilityEnabled = false,
   className,
 }: PlanningWorkbenchArrangeItineraryProps) {
   const arrange = useArrangeItinerary(tripId, trip, conflicts, refreshKey);
+  const { sendAssistantMessage } = useAssistantSidebar();
   const { canEditTiming, worldModelGuards } = useWorldModelGuards();
   const [editingItem, setEditingItem] = useState<ItineraryItemDetail | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addDialogDayIndex, setAddDialogDayIndex] = useState<number | null>(null);
+  const [lodgingSheetDayIndex, setLodgingSheetDayIndex] = useState<number | null>(null);
+  const [lodgingSearchDayIndex, setLodgingSearchDayIndex] = useState<number | null>(null);
   const [gapDialogDayIndex, setGapDialogDayIndex] = useState<number | null>(null);
   const [moveDialog, setMoveDialog] = useState<{
     itemId: string;
     dayIndex: number;
     label: string;
   } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
   const scheduleTimezone = resolveDestinationTimezone(trip?.destination);
+  const editTripDays = useMemo(
+    () => trip?.TripDay?.map((d) => ({ id: d.id, date: d.date })) ?? [],
+    [trip?.TripDay],
+  );
+  const lodgingNightByDayIndex = useMemo(
+    () => new Map(arrange.lodgingCoverage.nights.map((night) => [night.dayIndex, night])),
+    [arrange.lodgingCoverage.nights],
+  );
+  const lodgingSheetNight =
+    lodgingSheetDayIndex != null ? lodgingNightByDayIndex.get(lodgingSheetDayIndex) ?? null : null;
+  const lodgingSearchDay =
+    lodgingSearchDayIndex != null ? trip?.TripDay?.[lodgingSearchDayIndex] ?? null : null;
+  const lodgingIncomplete =
+    arrange.lodgingCoverage.totalNights > 0 && !arrange.lodgingCoverage.isComplete;
+
+  const handleSelectTimelineEntry = useCallback(
+    (entryId: string) => {
+      arrange.setSelectedTimelineEntryId(entryId);
+    },
+    [arrange],
+  );
+
+  const handleOpenAddLodging = useCallback(
+    (dayIndex: number) => {
+      if (!guardStructuralEditOrToast(worldModelGuards)) return;
+      if (!trip?.TripDay?.[dayIndex]) {
+        toast.error('未找到对应日程');
+        return;
+      }
+      setLodgingSheetDayIndex(dayIndex);
+    },
+    [trip?.TripDay, worldModelGuards],
+  );
+
+  const handleOpenLodgingHotelSearch = useCallback(() => {
+    if (lodgingSheetDayIndex == null) return;
+    setLodgingSearchDayIndex(lodgingSheetDayIndex);
+    setLodgingSheetDayIndex(null);
+  }, [lodgingSheetDayIndex]);
+
+  const lodgingStandardLabel =
+    arrange.lodgingSuggestionsBundle.accommodationStandardLabel ?? '3 星或以上';
+
+  const handleFillLodgingWithAssistant = useCallback(() => {
+    sendAssistantMessage(
+      buildArrangeLodgingAssistantPrompt(arrange.lodgingCoverage, lodgingStandardLabel),
+    );
+  }, [arrange.lodgingCoverage, lodgingStandardLabel, sendAssistantMessage]);
+
+  const handleAskAssistantForLodgingDay = useCallback(
+    (dayIndex: number) => {
+      const night = arrange.lodgingCoverage.nights.find((item) => item.dayIndex === dayIndex);
+      if (!night) {
+        handleFillLodgingWithAssistant();
+        return;
+      }
+      sendAssistantMessage(
+        `请根据当前已排好的景点路线，为 Day ${night.dayNumber}（${night.dateLabel}）推荐当晚住宿并加入行程。优先减少次日早晨车程，并符合团队住宿标准（${lodgingStandardLabel}）。`,
+      );
+    },
+    [
+      arrange.lodgingCoverage.nights,
+      handleFillLodgingWithAssistant,
+      lodgingStandardLabel,
+      sendAssistantMessage,
+    ],
+  );
+
+  const handleAdoptLodgingCandidate = useCallback(
+    (
+      dayIndex: number,
+      candidate: ArrangeLodgingSuggestionCandidate,
+      _night: ArrangeLodgingSuggestion,
+    ) => {
+      const coverageNight = arrange.lodgingCoverage.nights.find((item) => item.dayIndex === dayIndex);
+      if (!coverageNight) {
+        toast.error('未找到对应夜晚');
+        return;
+      }
+
+      if (candidate.placeId != null) {
+        setLodgingSearchDayIndex(dayIndex);
+        setLodgingSheetDayIndex(null);
+      }
+
+      sendAssistantMessage(
+        buildLodgingCandidateAssistantPrompt(coverageNight, candidate, lodgingStandardLabel),
+      );
+    },
+    [arrange.lodgingCoverage.nights, lodgingStandardLabel, sendAssistantMessage],
+  );
+
+  const handleLodgingAdded = useCallback(() => {
+    void arrange.reloadAll();
+    onItineraryChanged?.();
+    setLodgingSearchDayIndex(null);
+    setLodgingSheetDayIndex(null);
+  }, [arrange, onItineraryChanged]);
 
   const notifyWriteResult = useCallback(
     (result: unknown, directSuccessMessage: string) => {
@@ -137,6 +276,10 @@ export function PlanningWorkbenchArrangeItinerary({
   };
 
   const handleAiAction = async (action: ArrangeItineraryAiAction) => {
+    if (action === 'arrange_lodging') {
+      handleFillLodgingWithAssistant();
+      return;
+    }
     if (!arrange.copilotEnabled) {
       toast.message('手动模式下 AI 编排动作已关闭');
       return;
@@ -265,6 +408,45 @@ export function PlanningWorkbenchArrangeItinerary({
     onItineraryChanged?.();
   };
 
+  const resolveEntryTitle = useCallback(
+    (entryId: string) => {
+      for (const day of arrange.daySnapshots) {
+        const entry = day.timeline.find((item) => item.id === entryId);
+        if (entry) return entry.title;
+      }
+      return '行程项';
+    },
+    [arrange.daySnapshots],
+  );
+
+  const handleDeleteEntry = useCallback(
+    (entryId: string) => {
+      if (!guardStructuralEditOrToast(worldModelGuards)) return;
+      if (arrange.userLockedItemIds?.has(entryId)) {
+        toast.error('该行程项已锁定，请先解除锁定后再删除');
+        return;
+      }
+      setDeleteTarget({ id: entryId, title: resolveEntryTitle(entryId) });
+    },
+    [arrange.userLockedItemIds, resolveEntryTitle, worldModelGuards],
+  );
+
+  const handleConfirmDeleteEntry = async () => {
+    if (!deleteTarget) return;
+    setDeletePending(true);
+    try {
+      await itineraryItemsApi.delete(deleteTarget.id);
+      toast.success(`已删除「${deleteTarget.title}」`);
+      setDeleteTarget(null);
+      await arrange.reloadAll();
+      onItineraryChanged?.();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '删除失败');
+    } finally {
+      setDeletePending(false);
+    }
+  };
+
   const handleAnalyzeMoveEntry = (entryId: string, dayIndex: number) => {
     const day = arrange.daySnapshots[dayIndex];
     const entry = day?.timeline.find((item) => item.id === entryId);
@@ -317,6 +499,45 @@ export function PlanningWorkbenchArrangeItinerary({
   };
 
   const handleExecuteCopilotSuggestion = async (suggestion: CopilotSuggestion) => {
+    if (suggestion.kind === 'suggest_lodging_for_day') {
+      const dayIndexOneBased = suggestion.actionHint?.dayIndex;
+      if (dayIndexOneBased != null) {
+        handleOpenAddLodging(dayIndexOneBased - 1);
+        return;
+      }
+      handleFillLodgingWithAssistant();
+      return;
+    }
+
+    if (suggestion.actionHint?.type === 'apply_lodging_suggestion') {
+      const dayIndexOneBased = suggestion.actionHint.dayIndex;
+      if (dayIndexOneBased != null) {
+        const nightSuggestion = pickNightSuggestionForDay(
+          arrange.lodgingSuggestionsBundle,
+          dayIndexOneBased - 1,
+        );
+        const candidate = nightSuggestion
+          ? pickRecommendedLodgingCandidate(nightSuggestion)
+          : undefined;
+        if (nightSuggestion && candidate) {
+          handleAdoptLodgingCandidate(dayIndexOneBased - 1, candidate, nightSuggestion);
+          return;
+        }
+      }
+      handleFillLodgingWithAssistant();
+      return;
+    }
+
+    if (suggestion.actionHint?.type === 'suggest_lodging') {
+      const dayIndexOneBased = suggestion.actionHint.dayIndex;
+      if (dayIndexOneBased != null) {
+        handleOpenAddLodging(dayIndexOneBased - 1);
+        return;
+      }
+      handleFillLodgingWithAssistant();
+      return;
+    }
+
     if (!arrange.copilotEnabled) {
       toast.message('手动模式下 Copilot 动作已关闭');
       return;
@@ -398,6 +619,15 @@ export function PlanningWorkbenchArrangeItinerary({
               toast.error(resolveApiError(error, '切换规划模式失败'));
             });
           }}
+          onOpenItineraryDiagnosis={onOpenItineraryDiagnosis}
+          onOpenConstraints={onOpenConstraints}
+          conflictMustHandleCount={conflictMustHandleCount}
+        />
+
+        <ArrangeItineraryCompletionBanner
+          activityCount={arrange.activityCount}
+          lodgingSummary={arrange.lodgingCoverage}
+          onFillLodgingWithAssistant={handleFillLodgingWithAssistant}
         />
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[minmax(220px,18%)_minmax(0,1fr)_minmax(260px,24%)] xl:overflow-hidden">
@@ -409,14 +639,11 @@ export function PlanningWorkbenchArrangeItinerary({
             )}
           >
             <ArrangeItineraryContextPanel
-              context={arrange.context}
-              overview={arrange.overview}
+              tripId={tripId}
+              trip={trip}
+              collaborators={collaborators}
               candidates={arrange.candidates}
               candidatesLoading={arrange.candidatesLoading || arrange.overviewLoading}
-              routeStats={arrange.routeStats}
-              activityCount={arrange.activityCount}
-              dayCount={dayCount}
-              nights={arrange.nights}
               onRemoveCandidate={(candidateId) => void handleRemoveCandidate(candidateId)}
               onPlaceCandidate={(candidateId) => void handlePlaceCandidate(candidateId)}
               placePending={arrange.placeCandidatePending || arrange.writePending}
@@ -430,12 +657,19 @@ export function PlanningWorkbenchArrangeItinerary({
               onExecuteCopilotSuggestion={(suggestion) =>
                 void handleExecuteCopilotSuggestion(suggestion)
               }
-              pendingProposalCount={arrange.pendingProposalCount}
               decisionClusters={arrange.workbenchDecisionClusters}
               activeProposalId={arrange.orchestrationState?.activeProposalId}
               decisionClustersLoading={arrange.workbenchSnapshotLoading}
               onOpenActiveProposal={() => void arrange.loadActiveProposal()}
               onEditPreferences={onEditPreferences}
+              lodgingSummary={arrange.lodgingCoverage}
+              lodgingSuggestionsBundle={arrange.lodgingSuggestionsBundle}
+              onAdoptLodgingCandidate={handleAdoptLodgingCandidate}
+              onAskNaraForLodgingNight={handleAskAssistantForLodgingDay}
+              adoptLodgingPending={arrange.writePending}
+              onAddLodging={handleOpenAddLodging}
+              onEditLodging={(itemId) => void handleEditEntry(itemId)}
+              onOpenAttractionExplore={onOpenAttractionExplore}
             />
           </aside>
 
@@ -449,15 +683,21 @@ export function PlanningWorkbenchArrangeItinerary({
               loading={arrange.itineraryLoading}
               destinationLabel={trip?.destination?.trim()}
               weatherLabel={arrange.context?.tripContext?.weatherLabel}
-              onViewDayMap={onViewMap}
               onEditEntry={(entryId) => void handleEditEntry(entryId)}
+              onDeleteEntry={handleDeleteEntry}
               onAddActivity={handleAddActivity}
+              onAddLodging={handleOpenAddLodging}
+              onEditLodging={(itemId) => void handleEditEntry(itemId)}
+              onAskAssistantForLodging={handleAskAssistantForLodgingDay}
+              lodgingNightByDayIndex={lodgingNightByDayIndex}
               onInsertGap={handleInsertGap}
               onAnalyzeMoveEntry={handleAnalyzeMoveEntry}
               itemLocks={arrange.itemLocks}
               userLockedItemIds={arrange.userLockedItemIds}
               onToggleUserLock={(itemId, locked) => void handleToggleUserLock(itemId, locked)}
               copilotEnabled={arrange.copilotEnabled}
+              selectedEntryId={arrange.selectedTimelineEntryId}
+              onSelectEntry={handleSelectTimelineEntry}
             />
           </main>
 
@@ -467,23 +707,23 @@ export function PlanningWorkbenchArrangeItinerary({
               workbenchArrangeItineraryColumnSurface,
             )}
           >
-            <ArrangeItineraryAssistantPanel
+            <ArrangeItineraryRightPanel
               className="h-full min-h-0"
-              candidates={arrange.candidates}
-              mapPoints={arrange.mapPoints}
-              mapLoading={arrange.mapLoading}
-              mapSyncEnabled={arrange.mapSyncEnabled}
-              aiPending={arrange.aiActionPending}
-              aiAnswer={arrange.proposalAiAnswer}
-              placePending={arrange.placeCandidatePending || arrange.writePending}
-              onViewMap={() => onViewMap?.(arrange.selectedDayIndex)}
-              onAiAction={(action) => void handleAiAction(action)}
-              onPlaceCandidate={(candidateId) =>
-                void handlePlaceCandidate(candidateId, arrange.selectedDayIndex)
-              }
-              onPlaceMapPoint={(point) => void handlePlaceMapPoint(point)}
-              mapPlacePending={arrange.mapPlaceProposalPending}
-              copilotEnabled={arrange.copilotEnabled}
+              assistantProps={{
+                mapPoints: arrange.mapPoints,
+                mapLodgingLegs: arrange.mapLodgingLegs,
+                mapLoading: arrange.mapLoading,
+                mapSyncEnabled: arrange.mapSyncEnabled,
+                aiPending: arrange.aiActionPending,
+                aiAnswer: arrange.proposalAiAnswer,
+                placePending: arrange.placeCandidatePending || arrange.writePending,
+                onViewMap: () => onViewMap?.(arrange.selectedDayIndex),
+                onAiAction: (action) => void handleAiAction(action),
+                onPlaceMapPoint: (point) => void handlePlaceMapPoint(point),
+                mapPlacePending: arrange.mapPlaceProposalPending,
+                copilotEnabled: arrange.copilotEnabled,
+                lodgingIncomplete,
+              }}
             />
           </aside>
         </div>
@@ -522,8 +762,26 @@ export function PlanningWorkbenchArrangeItinerary({
         tripConflicts={arrange.tripConflictDiagnostics}
         monitorStale={arrange.proposalMonitorStale}
         monitorStaleReason={arrange.proposalMonitorStaleReason}
+        lodgingCoverage={arrange.lodgingCoverage}
+        onFillLodging={handleFillLodgingWithAssistant}
         onApply={(force) => void handleApplyProposal(force)}
         onDiscard={() => void handleDiscardProposal()}
+      />
+
+      <ArrangeItineraryAddLodgingSheet
+        open={lodgingSheetDayIndex != null}
+        onOpenChange={(open) => {
+          if (!open) setLodgingSheetDayIndex(null);
+        }}
+        night={lodgingSheetNight}
+        missingLodgingNights={arrange.lodgingCoverage.missingNights}
+        onOpenHotelSearch={handleOpenLodgingHotelSearch}
+        onAskNara={
+          lodgingSheetDayIndex != null
+            ? () => handleAskAssistantForLodgingDay(lodgingSheetDayIndex)
+            : undefined
+        }
+        onFillAllWithNara={handleFillLodgingWithAssistant}
       />
 
       <ArrangeItineraryAddItemDialog
@@ -559,15 +817,46 @@ export function PlanningWorkbenchArrangeItinerary({
         onSubmit={(payload) => void handleMoveSubmit(payload)}
       />
 
+      {lodgingSearchDay ? (
+        <EnhancedAddItineraryItemDialog
+          tripId={tripId}
+          tripDay={lodgingSearchDay}
+          tripDays={trip?.TripDay}
+          countryCode={trip?.destination}
+          open={lodgingSearchDayIndex != null}
+          onOpenChange={(open) => {
+            if (!open) setLodgingSearchDayIndex(null);
+          }}
+          onSuccess={handleLodgingAdded}
+          initialCategory="HOTEL"
+        />
+      ) : null}
+
       {editingItem ? (
         <EditItineraryItemDialog
           open={editDialogOpen}
-          onOpenChange={setEditDialogOpen}
+          onOpenChange={(open) => {
+            setEditDialogOpen(open);
+            if (!open) setEditingItem(null);
+          }}
           item={editingItem}
           timezone={scheduleTimezone}
+          tripDays={editTripDays}
+          currentTripDayId={editingItem.tripDayId ?? editingItem.TripDay?.id}
           onSuccess={handleEditSaved}
+          tepFlexibilityEnabled={tepFlexibilityEnabled}
         />
       ) : null}
+
+      <WorkbenchDeleteItineraryEntryDialog
+        open={deleteTarget != null}
+        title={deleteTarget?.title}
+        pending={deletePending}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        onConfirm={handleConfirmDeleteEntry}
+      />
     </>
   );
 }

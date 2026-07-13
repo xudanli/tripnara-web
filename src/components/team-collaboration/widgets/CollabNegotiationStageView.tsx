@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { ChevronRight, MessageSquare, RefreshCw } from 'lucide-react';
+import { Bot, ChevronRight, MessageSquare, RefreshCw, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,6 +53,7 @@ export interface CollabNegotiationStageViewProps {
   onStartVote?: () => void;
   onGenerateCompromise?: () => void;
   onDiscussWithAssistant?: () => void;
+  onReachConsensus?: () => void;
   voteActionDisabled?: boolean;
   className?: string;
 }
@@ -72,6 +73,7 @@ export function CollabNegotiationStageView({
   onStartVote,
   onGenerateCompromise,
   onDiscussWithAssistant,
+  onReachConsensus,
   voteActionDisabled,
   className,
 }: CollabNegotiationStageViewProps) {
@@ -93,7 +95,10 @@ export function CollabNegotiationStageView({
   return (
     <div className={cn('space-y-5', className)}>
       <div className="flex items-start justify-between gap-2">
-        <CollabNegotiationTopicHeader task={task} detail={detail} />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-primary">结构化协商主舞台</p>
+          <CollabNegotiationTopicHeader task={task} detail={detail} className="mt-2" />
+        </div>
         {onRefresh ? (
           <Button
             type="button"
@@ -149,7 +154,39 @@ export function CollabNegotiationStageView({
           ) : null}
 
           {options.length > 0 ? (
-            <CollabOptionCompareTable task={task} detail={detail} variant="stage" />
+            <CollabOptionCompareTable task={task} detail={detail} variant="cards" />
+          ) : null}
+
+          {detail.utterances.length > 0 ? (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-foreground">讨论动态</h4>
+              <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
+                {detail.utterances.slice(-4).map((u) => (
+                  <UtteranceRow key={u.id} utterance={u} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {detail.interventions.length > 0 ? (
+            <div className="space-y-2">
+              <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <Bot className="h-3.5 w-3.5 text-primary" />
+                AI Nara 干预
+              </h4>
+              {detail.interventions.map((item) => (
+                <div
+                  key={item.targetUserId}
+                  className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm leading-relaxed"
+                >
+                  <p className="mb-1 flex items-center gap-1 text-[11px] font-medium text-primary">
+                    <Sparkles className="h-3 w-3" />
+                    AI Nara
+                  </p>
+                  {item.messageCN}
+                </div>
+              ))}
+            </div>
           ) : null}
 
           {detail.status === 'collecting' && detail.canSpeak ? (
@@ -217,20 +254,7 @@ export function CollabNegotiationStageView({
             </div>
           ) : null}
 
-          {detail.interventions.length > 0 ? (
-            <div className="space-y-2">
-              {detail.interventions.map((item) => (
-                <div
-                  key={item.targetUserId}
-                  className="rounded-lg border border-gate-confirm-border bg-gate-confirm/15 px-3 py-2 text-sm"
-                >
-                  {item.messageCN}
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {detail.utterances.length > 0 ? (
+          {detail.utterances.length > 4 ? (
             <div className="space-y-2">
               <button
                 type="button"
@@ -275,6 +299,7 @@ export function CollabNegotiationStageView({
         onStartVote={onStartVote}
         onGenerateCompromise={onGenerateCompromise}
         onDiscussWithAssistant={onDiscussWithAssistant}
+        onReachConsensus={onReachConsensus}
         voteDisabled={voteActionDisabled}
       />
     </div>

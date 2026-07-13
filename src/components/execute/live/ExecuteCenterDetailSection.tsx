@@ -206,24 +206,36 @@ export function ExecuteCenterDetailSection({
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
         <div className="border-b lg:border-b-0 lg:border-r border-border/70 p-1.5 sm:p-2 min-w-0">
           <h3 className={cn(executeTimelineUi.stepTitle, 'font-semibold mb-1')}>今日行程时间线</h3>
-          <ol className="space-y-0.5">
-            {timeline.map((entry) => (
-              <TimelineRow key={entry.id} entry={entry} />
-            ))}
-          </ol>
+          {timeline.length > 0 ? (
+            <ol className="space-y-0.5">
+              {timeline.map((entry) => (
+                <TimelineRow key={entry.id} entry={entry} />
+              ))}
+            </ol>
+          ) : (
+            <p className="px-1 py-3 text-xs text-muted-foreground">今日暂无行程安排，或数据同步中。</p>
+          )}
         </div>
 
         <div className="p-1.5 sm:p-2 min-w-0">
           <h3 className={cn(executeTimelineUi.stepTitle, 'font-semibold mb-1')}>分流执行安排</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {splitGroups.map((group, index) => (
-              <SplitGroupCard
-                key={group.id}
-                group={group}
-                branchIndex={resolveSplitBranchIndex(group, index)}
-              />
-            ))}
-          </div>
+          {splitGroups.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {splitGroups.map((group, index) => (
+                <SplitGroupCard
+                  key={group.id}
+                  group={group}
+                  branchIndex={resolveSplitBranchIndex(group, index)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="py-3 text-xs text-muted-foreground">
+              {reunionSummary
+                ? '分流组详情同步中，汇合信息如下。'
+                : '暂无分流安排。发起分组执行后将显示各组详情。'}
+            </p>
+          )}
           {reunionSummary ? (
             <div
               className={cn(

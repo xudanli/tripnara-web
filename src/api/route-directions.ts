@@ -17,11 +17,6 @@ import type {
   CreateTripFromTemplateRequest,
   CreateTripFromTemplateResponse,
 } from '@/types/places-routes';
-import type {
-  LaunchRecruitmentFromTemplateRequest,
-  LaunchRecruitmentFromTemplateResponse,
-} from '@/types/launch-recruitment';
-import { mockLaunchRecruitmentFromTemplate } from '@/features/match-square/lib/launch-recruitment-mock';
 
 // 文档中的响应格式是 { success: true, data: T }
 interface SuccessResponse<T> {
@@ -213,28 +208,6 @@ export const routeDirectionsApi = {
     const raw = response?.data as { data?: { message?: string }; message?: string };
     const msg = raw?.data?.message ?? raw?.message;
     return msg ? { ...result, message: msg } : result;
-  },
-
-  /**
-   * §链路 A · 路线模板一键发起招募
-   * POST /route-directions/templates/:id/launch-recruitment
-   */
-  launchRecruitment: async (
-    templateId: number,
-    data: LaunchRecruitmentFromTemplateRequest,
-    templateForMock?: import('@/types/places-routes').RouteTemplate
-  ): Promise<LaunchRecruitmentFromTemplateResponse> => {
-    try {
-      const response = await apiClient.post<
-        ApiResponseWrapper<LaunchRecruitmentFromTemplateResponse>
-      >(`/route-directions/templates/${templateId}/launch-recruitment`, data);
-      return handleResponse(response);
-    } catch (err) {
-      if (!templateForMock || templateForMock.id !== templateId) {
-        throw err;
-      }
-      return mockLaunchRecruitmentFromTemplate(templateForMock, data);
-    }
   },
 };
 

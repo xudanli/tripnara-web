@@ -1,5 +1,9 @@
 import { normalizeAttractionExploreCandidates } from './normalize-attraction-explore';
 import {
+  normalizeArrangeLodgingSuggestions,
+  readLodgingStandardFromRecord,
+} from './normalize-arrange-itinerary-lodging';
+import {
   normalizePlanningDecisionClusterSummary,
   normalizePlanningDecisionExecutionSteps,
   normalizePlanningDecisionPack,
@@ -419,6 +423,17 @@ export function normalizePlanningWorkbenchSnapshot(
             asNumber(
               overviewRaw.unplacedCandidateCount ?? overviewRaw.unplaced_candidate_count,
             ) ?? 0,
+          ...(() => {
+            const lodgingSuggestions = normalizeArrangeLodgingSuggestions(
+              overviewRaw.lodgingSuggestions ?? overviewRaw.lodging_suggestions,
+            );
+            const standard = readLodgingStandardFromRecord(overviewRaw);
+            return {
+              ...(lodgingSuggestions.length > 0 ? { lodgingSuggestions } : {}),
+              ...(standard.stars != null ? { accommodationStandardStars: standard.stars } : {}),
+              ...(standard.label ? { accommodationStandardLabel: standard.label } : {}),
+            };
+          })(),
         }
       : undefined,
     itemLocksSummary: normalizeItemLocksSummary(
@@ -434,6 +449,17 @@ export function normalizePlanningWorkbenchSnapshot(
     pendingProposalCount:
       asNumber(record.pendingProposalCount ?? record.pending_proposal_count) ?? undefined,
     updatedAt: asString(record.updatedAt ?? record.updated_at),
+    ...(() => {
+      const lodgingSuggestions = normalizeArrangeLodgingSuggestions(
+        record.lodgingSuggestions ?? record.lodging_suggestions,
+      );
+      const standard = readLodgingStandardFromRecord(record);
+      return {
+        ...(lodgingSuggestions.length > 0 ? { lodgingSuggestions } : {}),
+        ...(standard.stars != null ? { accommodationStandardStars: standard.stars } : {}),
+        ...(standard.label ? { accommodationStandardLabel: standard.label } : {}),
+      };
+    })(),
   };
 }
 

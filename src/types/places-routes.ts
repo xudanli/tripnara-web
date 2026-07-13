@@ -409,7 +409,6 @@ export interface RouteDirection {
     [key: string]: unknown;
   };
   /** GET ?longestHike= 且 tags 含徒步时，后端 merge override 后的详情 */
-  hikingDetail?: import('@/types/hiking-trail-detail').HikingTrailDetail;
 }
 
 export interface RouteDirectionCard {

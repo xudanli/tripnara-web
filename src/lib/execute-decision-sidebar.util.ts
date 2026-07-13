@@ -1,5 +1,6 @@
 import type { FallbackPlan } from '@/api/execution';
 import type { TripExecutionAdvisoryDto } from '@/types/trip-execution-advisory';
+import type { TripDetail } from '@/types/trip';
 
 export type ExecutePlanBSafetyLevel = 'low' | 'medium' | 'high' | 'very_high';
 
@@ -39,49 +40,83 @@ export interface ExecuteDecisionSidebarModel {
   aiSuggestion: ExecuteAiSuggestionModel;
 }
 
-const DEFAULT_PLANS: ExecutePlanBCardModel[] = [
-  {
-    id: 'plan-b-1',
-    index: 1,
-    code: 'Plan B-1',
-    title: '推迟徒步 · 等风减弱',
-    description: '延后至 14:30 重新评估风况后再执行。',
-    recommended: true,
-    safetyLabel: '高',
-    safetyLevel: 'high',
-    experiencePercent: 85,
-    timeImpact: '+1h',
-  },
-  {
-    id: 'plan-b-2',
-    index: 2,
-    code: 'Plan B-2',
-    title: '改为温泉 + 观景',
-    description: '取消冰川徒步，改为观景点 + 布迪尔温泉。',
-    safetyLabel: '很高',
-    safetyLevel: 'very_high',
-    experiencePercent: 70,
-    timeImpact: '+0.5h',
-  },
-  {
-    id: 'plan-b-3',
-    index: 3,
-    code: 'Plan B-3',
-    title: '分流执行（当前方案）',
-    description: '徒步组尝试执行，休息组改为咖啡馆 / 酒店。',
-    isCurrentPlan: true,
-    safetyLabel: '中',
-    safetyLevel: 'medium',
-    experiencePercent: 75,
-    timeImpact: '+0h',
-  },
-];
+function readMetadataString(
+  metadata: Record<string, unknown> | null | undefined,
+  keys: string[],
+): string | undefined {
+  if (!metadata) return undefined;
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
 
-const DEFAULT_CONTACTS: ExecuteEmergencyContactModel[] = [
-  { id: 'guide', kind: 'guide', label: '导游', subtitle: 'Patriksjor', phone: '+3541234567' },
-  { id: 'rescue', kind: 'rescue', label: '当地救援', phone: '112' },
-  { id: 'insurance', kind: 'insurance', label: '保险援助', subtitle: 'AIG', phone: '+864008208858' },
-];
+/** 从行程 metadata 解析导游电话（供快捷操作与紧急联系人复用） */
+export function resolveExecuteGuidePhone(trip?: TripDetail | null): string | undefined {
+  const metadata = trip?.metadata as Record<string, unknown> | undefined;
+  return readMetadataString(metadata, [
+    'guidePhone',
+    'guideContactPhone',
+    'guideTel',
+    'emergencyGuidePhone',
+  ]);
+}
+
+export function resolveExecuteEmergencyContacts(
+  trip?: TripDetail | null,
+): ExecuteEmergencyContactModel[] {
+  const metadata = trip?.metadata as Record<string, unknown> | undefined;
+  const contacts: ExecuteEmergencyContactModel[] = [];
+
+  const guidePhone = resolveExecuteGuidePhone(trip);
+  const guideName = readMetadataString(metadata, ['guideName', 'guideContactName']);
+  if (guidePhone) {
+    contacts.push({
+      id: 'guide',
+      kind: 'guide',
+      label: '导游',
+      subtitle: guideName,
+      phone: guidePhone,
+    });
+  }
+
+  const rescuePhone = readMetadataString(metadata, [
+    'localRescuePhone',
+    'rescuePhone',
+    'emergencyPhone',
+  ]);
+  if (rescuePhone) {
+    contacts.push({
+      id: 'rescue',
+      kind: 'rescue',
+      label: '当地救援',
+      phone: rescuePhone,
+    });
+  }
+
+  const insurancePhone = readMetadataString(metadata, [
+    'insurancePhone',
+    'insuranceAssistancePhone',
+    'insuranceContactPhone',
+  ]);
+  const insuranceName = readMetadataString(metadata, [
+    'insuranceProvider',
+    'insuranceCompany',
+    'insuranceName',
+  ]);
+  if (insurancePhone) {
+    contacts.push({
+      id: 'insurance',
+      kind: 'insurance',
+      label: '保险援助',
+      subtitle: insuranceName,
+      phone: insurancePhone,
+    });
+  }
+
+  return contacts;
+}
 
 function mapRiskToSafety(risk?: 'low' | 'medium' | 'high'): {
   label: string;
@@ -158,27 +193,33 @@ function buildAiSuggestion(input: {
     };
   }
 
+  if (recommended) {
+    return {
+      primary: `建议优先采用「${recommended.title}」。`,
+      secondary: recommended.description,
+      evidenceLabel: input.advisory ? '查看预测证据' : undefined,
+    };
+  }
+
   return {
-    primary:
-      '建议优先采用 Plan B-1（推迟徒步），14:00 后风况显著改善的概率为 68%。',
-    secondary: '若 12:30 风速仍 >20 m/s，请切换至 Plan B-2。',
-    evidenceLabel: '查看预测证据',
+    primary: '暂无实时建议。当系统检测到风险或产生替代方案时，建议将显示在这里。',
   };
 }
 
 export function buildExecuteDecisionSidebarModel(input: {
   advisory?: TripExecutionAdvisoryDto | null;
   fallbackPlan?: FallbackPlan | null;
+  trip?: TripDetail | null;
 }): ExecuteDecisionSidebarModel {
   const plans = input.fallbackPlan?.solutions?.length
     ? mapFallbackPlans(input.fallbackPlan)
     : input.advisory?.recommendations?.length
       ? mapAdvisoryPlans(input.advisory.recommendations)
-      : DEFAULT_PLANS;
+      : [];
 
   return {
-    plans: plans.length > 0 ? plans : DEFAULT_PLANS,
-    contacts: DEFAULT_CONTACTS,
+    plans,
+    contacts: resolveExecuteEmergencyContacts(input.trip),
     aiSuggestion: buildAiSuggestion({ advisory: input.advisory, plans }),
   };
 }

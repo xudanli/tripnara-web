@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { itineraryItemsApi } from '@/api/trips';
 import { placesApi } from '@/api/places';
-import { trailsApi } from '@/api/trails';
 import type { CreateItineraryItemRequest, ItineraryItemType } from '@/types/trip';
 import type { TripDetail } from '@/types/trip';
 import {
@@ -20,7 +19,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { MapPin, Calendar, Clock, Mountain, Utensils, Coffee, Car, Hotel, Sparkles, CheckCircle2, Plus } from 'lucide-react';
+import { MapPin, Calendar, Clock, Utensils, Coffee, Car, Hotel, Sparkles, CheckCircle2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ITINERARY_ITEM_TYPE_DISPLAY } from '@/lib/itinerary-item-type-display';
 import { toast } from 'sonner';
@@ -93,12 +92,6 @@ export function CreateItineraryItemDialog({
   const [placeSearchLoading, setPlaceSearchLoading] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<{ id: number; name: string } | null>(null);
 
-  // ✅ 徒步路线搜索相关状态
-  const [trailSearchOpen, setTrailSearchOpen] = useState(false);
-  const [trailSearchQuery, setTrailSearchQuery] = useState('');
-  const [trailSearchResults, setTrailSearchResults] = useState<any[]>([]);
-  const [selectedTrail, setSelectedTrail] = useState<{ id: number; name: string } | null>(null);
-
   // ✅ 获取当前日期，用于设置默认时间
   const currentDay = useMemo(() => {
     if (!trip) return null;
@@ -138,12 +131,9 @@ export function CreateItineraryItemDialog({
         endTime: defaultEndTime,
         note: '',
         placeId: undefined,
-        trailId: undefined,
       });
       setSelectedPlace(null);
-      setSelectedTrail(null);
       setPlaceSearchQuery('');
-      setTrailSearchQuery('');
       setError(null);
     }
   }, [open, tripDayId, currentDay]);
@@ -170,33 +160,6 @@ export function CreateItineraryItemDialog({
 
     return () => clearTimeout(timer);
   }, [placeSearchQuery, placeSearchOpen]);
-
-  // ✅ 徒步路线搜索（防抖）
-  useEffect(() => {
-    if (!trailSearchQuery.trim() || !trailSearchOpen || formData.type !== 'ACTIVITY') {
-      setTrailSearchResults([]);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        // 这里需要根据实际的 trails API 实现搜索
-        // 暂时使用 getAll，实际应该使用搜索接口
-        const results = await trailsApi.getAll({ limit: 10 });
-        const filtered = results.data?.data?.filter((trail: any) =>
-          trail.name?.toLowerCase().includes(trailSearchQuery.toLowerCase())
-        ) || [];
-        setTrailSearchResults(filtered);
-      } catch (err) {
-        console.error('Failed to search trails:', err);
-        setTrailSearchResults([]);
-      } finally {
-        // setTrailSearchLoading(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [trailSearchQuery, trailSearchOpen, formData.type]);
 
   // ✅ 当开始时间改变时，自动更新结束时间
   useEffect(() => {
@@ -237,7 +200,6 @@ export function CreateItineraryItemDialog({
           endTime: endDateTime.toISOString(),
           note: formData.note?.trim() || undefined,
           placeId: selectedPlace?.id,
-          trailId: selectedTrail?.id,
         };
 
         // 执行预校验
@@ -294,7 +256,6 @@ export function CreateItineraryItemDialog({
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
         placeId: selectedPlace?.id,
-        trailId: selectedTrail?.id,
         note: formData.note || undefined,
         forceCreate: forceCreate, // 如果用户确认，强制创建
       };
@@ -504,11 +465,6 @@ export function CreateItineraryItemDialog({
                   value={formData.type}
                   onValueChange={(value) => {
                     setFormData({ ...formData, type: value as ItineraryItemType });
-                    // 切换类型时清空地点和路线
-                    if (value !== 'ACTIVITY') {
-                      setSelectedTrail(null);
-                      setFormData(prev => ({ ...prev, trailId: undefined }));
-                    }
                   }}
                 >
                   <SelectTrigger id="type" className="flex items-center gap-2">
@@ -671,82 +627,6 @@ export function CreateItineraryItemDialog({
                 <h3 className="text-sm font-semibold text-foreground">更多设置（可选）</h3>
               </div>
 
-              {/* 徒步路线 - 仅徒步活动时显示 */}
-              {formData.type === 'ACTIVITY' && (
-                <div className="space-y-2">
-                  <Label htmlFor="trail" className="flex items-center gap-2">
-                    <Mountain className="w-4 h-4" />
-                    选择徒步路线
-                    <span className="text-xs text-muted-foreground font-normal">（可选）</span>
-                  </Label>
-                  <Popover open={trailSearchOpen} onOpenChange={setTrailSearchOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className={cn(
-                          "w-full justify-between",
-                          !selectedTrail && "text-muted-foreground"
-                        )}
-                      >
-                        {selectedTrail ? (
-                          <span className="flex items-center gap-2">
-                            <Mountain className="w-4 h-4" />
-                            {selectedTrail.name}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">选择路线，如"黄山西海大环线"</span>
-                        )}
-                        <Mountain className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0" align="start">
-                      <Command shouldFilter={false}>
-                        <CommandInput
-                          placeholder="搜索徒步路线..."
-                          value={trailSearchQuery}
-                          onValueChange={setTrailSearchQuery}
-                        />
-                        <CommandList>
-                          {trailSearchResults.length === 0 && trailSearchQuery ? (
-                            <CommandEmpty>未找到路线</CommandEmpty>
-                          ) : trailSearchResults.length > 0 ? (
-                            <CommandGroup>
-                              {trailSearchResults.map((trail: any) => (
-                                <CommandItem
-                                  key={trail.id}
-                                  value={trail.id?.toString()}
-                                  onSelect={() => {
-                                    setSelectedTrail({ id: trail.id, name: trail.name });
-                                    setTrailSearchOpen(false);
-                                    setTrailSearchQuery('');
-                                  }}
-                                >
-                                  <CheckCircle2
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      selectedTrail?.id === trail.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <Mountain className="mr-2 h-4 w-4" />
-                                  {trail.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ) : (
-                            <div className="py-6 text-center text-sm text-muted-foreground">
-                              输入路线名称开始搜索
-                            </div>
-                          )}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <p className="text-xs text-muted-foreground">
-                    如果是徒步活动，可以关联徒步路线
-                  </p>
-                </div>
-              )}
 
               {/* 备注 */}
               <div className="space-y-2">

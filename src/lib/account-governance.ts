@@ -1,7 +1,6 @@
 /**
  * 账号治理 · 权限推导（PRD V1.0 §11 / §15）
  */
-import type { MatchSquareAccess } from '@/types/match-square';
 import type {
   AccountCapabilities,
   AgencyCertificationStatus,
@@ -65,34 +64,6 @@ export function trustedProjectPublishBlockReason(
 
 export function canCreatePrivateProject(_caps?: AccountCapabilities | null): boolean {
   return true;
-}
-
-/** Match Square 冻结主链路 — R0 默认禁止公开招募 */
-export function deriveMatchSquareAccessFromCapabilities(
-  caps: AccountCapabilities | null | undefined
-): MatchSquareAccess {
-  const canPublish = canPublishPublicRecruitment(caps?.publishingPermission, {
-    professionalVerified: caps?.professionalVerified,
-    agencyVerified: caps?.agencyVerified,
-  });
-
-  return {
-    canBrowse: true,
-    canPost: canPublish,
-    canApply: hasActiveVerification(caps?.verifications, 'EMAIL') ||
-      hasActiveVerification(caps?.verifications, 'PHONE'),
-    quizComplete: false,
-  };
-}
-
-/** R0 保守默认：浏览开放；公开招募需发布权限（默认关闭） */
-export function defaultMatchSquareAccessR0(): MatchSquareAccess {
-  return {
-    canBrowse: true,
-    canPost: false,
-    canApply: true,
-    quizComplete: false,
-  };
 }
 
 export function publishingBlockReason(

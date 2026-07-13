@@ -35,6 +35,8 @@ export interface ConstraintTransport {
   transportHint: string | null;
   sampleTravelMode: string | null;
   status: ConstraintFieldStatus;
+  /** TEP 展示门槛：self_drive_only */
+  scope?: string | null;
 }
 
 export interface ConstraintPendingItem {
@@ -113,6 +115,8 @@ export interface ConstraintsSummaryResponse {
     sampleTravelMode: string | null;
     sampleDistanceMeters: number | null;
     status: ConstraintFieldStatus;
+    /** TEP 展示门槛：self_drive_only */
+    scope?: string | null;
     /** legacy BFF 嵌套 segment */
     sampleSegment?: {
       duration: number | null;

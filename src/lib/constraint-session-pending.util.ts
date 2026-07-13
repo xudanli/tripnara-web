@@ -21,11 +21,10 @@ import {
   type ConstraintTransportValue,
 } from '@/lib/planning-constraint-edit-meta';
 import { draftToPreviewChange } from '@/lib/trip-constraints.adapter';
-import { TRIP_CONSTRAINT_LEGACY_IDS } from '@/types/trip-constraints';
 import { travelGoalDimensionsToApiPrinciples } from '@/lib/trip-constraints-contract.util';
 import type { ConstraintEditorDraft } from '@/components/plan-studio/workbench/constraint-console-types';
 import type { MustGoPlaceSummary } from '@/components/plan-studio/workbench/constraint-console-view.util';
-import { isApiManagedHardConstraintId, isSoftConstraintId } from '@/components/plan-studio/workbench/constraint-console-view.util';
+import { isApiManagedHardConstraintId, isSoftConstraintId, resolveApiManagedHardConstraintApiId } from '@/components/plan-studio/workbench/constraint-console-view.util';
 import type { TripDetail } from '@/types/trip';
 import type { PatchTripConstraintsContractDto } from '@/types/trip-constraints';
 import type { TravelGoalDimension } from '@/types/travel-decision-contract';
@@ -124,7 +123,7 @@ export async function executeConstraintDraftSave({
     const change = draftToPreviewChange(draft);
     await patchTripConstraintItem(
       tripId,
-      TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE,
+      resolveApiManagedHardConstraintApiId(draft.id),
       change.patch,
       serviceCtx,
       { queryClient },
@@ -181,7 +180,10 @@ export async function executeConstraintDraftSave({
 
   if (draft.type === 'HARD') {
     const saved = await saveCatalogHardConstraint(tripId, draft, serviceCtx, { queryClient });
-    if (!saved) return;
+    if (!saved) {
+      throw new Error(`无法保存「${draft.name?.trim() || draft.id}」`);
+    }
+    return;
   }
 }
 

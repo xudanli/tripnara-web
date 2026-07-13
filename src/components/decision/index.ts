@@ -5,4 +5,3 @@
 export { DecisionExplanation } from './DecisionExplanation';
 export { DecisionFeedbackForm } from './DecisionFeedbackForm';
 export { DecisionResultCard } from './DecisionResultCard';
-export { LearningProgressCard } from './LearningProgressCard';

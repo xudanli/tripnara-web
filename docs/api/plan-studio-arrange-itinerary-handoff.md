@@ -396,6 +396,76 @@ POST /api/trips/:tripId/arrange-itinerary/copilot-actions
 
 `POST .../candidates` 在 copilot 模式下，`must_go` / `very_interested` 可附带 `copilotNextAction`。探索页 toast 提供「生成插入草案」快捷按钮，仍须 apply 写入。
 
+### 3.12 住宿建议 · 地图住宿层 · Copilot 住宿（P2 · 前端已接入）
+
+#### 接口分工（BFF 已实现）
+
+| 端点 | 字段 | 用途 |
+|------|------|------|
+| `GET .../arrange-itinerary/planning-workbench-snapshot` | `lodgingSuggestions[]` | 左栏候选列表 |
+| `GET .../attraction-explore/map` | 住宿 POI + `lodgingLegs[]` | 右栏地图 |
+
+#### lodgingSuggestions（快照 · 扁平工作台项）
+
+`planning-workbench-snapshot.lodgingSuggestions` 为**扁平数组**（按 `nightIndex` / `dayIndex` 分组后展示）：
+
+```json
+{
+  "id": "lodging-rec-1-381119",
+  "nightIndex": 1,
+  "dayIndex": 1,
+  "placeId": 381119,
+  "name": "尼达鲁尔山屋",
+  "kind": "current | alternative | recommended",
+  "priority": "primary | alternative | recommended",
+  "coordinates": { "lat": 64.73, "lng": -18.1 },
+  "reason": "距 斯普伦吉桑杜尔 约 14.2 km",
+  "meta": {
+    "distanceFromAnchorKm": 14.16,
+    "anchorPlaceName": "斯普伦吉桑杜尔",
+    "driveMinutesEstimate": 17
+  }
+}
+```
+
+前端：`normalizeLodgingWorkbenchItem` → `groupLodgingWorkbenchItems` → 按晚聚合为 UI 用的 `ArrangeLodgingSuggestion[]`；并与 `lodgingCoverage` 合并补全各晚 `dateLabel` / 已订状态。
+
+| kind | 含义 |
+|------|------|
+| `current` | 当晚已订住宿 |
+| `recommended` | 主推候选（`priority: primary` 标为推荐） |
+| `alternative` | 备选候选 |
+
+#### 地图 — 住宿 POI + lodgingLegs
+
+`GET .../attraction-explore/map` 响应扩展：
+
+- `points[].kind`: `lodging`（已订）\| `lodging_suggestion`（候选）
+- `lodgingLegs[]`:
+
+```json
+{
+  "id": "lodging-leg-1-381119",
+  "nightIndex": 1,
+  "from": { "kind": "day_anchor", "placeId": 381388, "label": "斯普伦吉桑杜尔" },
+  "to": { "kind": "suggested_lodging", "placeId": 381119, "label": "尼达鲁尔山屋" },
+  "distanceKm": 14.16,
+  "driveMinutesEstimate": 17,
+  "kind": "approach | relocation"
+}
+```
+
+前端右栏展示 `from.label → to.label` 与车程/距离；无 `polyline` 时仍渲染标签。
+
+#### Copilot 住宿建议
+
+`copilot-suggestions` 可返回 `kind: suggest_lodging_for_day`；BFF 未下发时前端按未补齐夜晚合成。点击「采纳」向 Nara 发送候选 `reason` + `driveMinutesEstimate`。
+
+#### 左栏 UI
+
+- `ArrangeItineraryLodgingSection`：每晚住宿进度（P0/P1）
+- `ArrangeItineraryLodgingSuggestionsPanel`：BFF 扁平项聚合后的候选列表 + 采纳 CTA（P2）
+
 ---
 
 ## 4. 前端文件索引
@@ -412,6 +482,9 @@ POST /api/trips/:tripId/arrange-itinerary/copilot-actions
 | `src/components/.../AttractionExploreMapPlaceSuggestionsDialog.tsx` | P3 地图插入位置选择 |
 | `src/lib/attraction-explore-route-options.util.ts` | P4 实时路由开关与 detourMethod 文案 |
 | `src/components/.../ArrangeItineraryCopilotSuggestionsPanel.tsx` | P4 Copilot 协同建议 |
+| `src/components/.../ArrangeItineraryLodgingSuggestionsPanel.tsx` | P2 住宿 BFF 候选 |
+| `src/api/normalize-arrange-itinerary-lodging.ts` | P2 lodgingSuggestions 归一化 |
+| `src/lib/arrange-itinerary-lodging-suggestions.util.ts` | P2 住宿 bundle / 地图 / Copilot 合并 |
 | `src/components/.../usePlanningWorkbenchSnapshot.ts` | P5 工作台快照轮询 |
 | `src/components/plan-studio/workbench/arrange-itinerary/PlanningWorkbenchArrangeItinerary.tsx` | 三栏主容器 |
 | `src/components/plan-studio/workbench/arrange-itinerary/useArrangeItinerary.ts` | 聚合 explore + schedule-timeline |
@@ -447,6 +520,10 @@ POST /api/trips/:tripId/arrange-itinerary/copilot-actions
 - [x] planning-workbench-snapshot 共享轮询
 - [x] copilot-actions 协同动作 + 草案确认
 - [x] 加入候选 copilotNextAction toast 快捷草案
+- [x] 编排左栏「每晚住宿」进度 + 添加住宿 Sheet（P0/P1）
+- [x] lodgingSuggestions BFF 归一化 + 左栏候选采纳（P2）
+- [x] 地图 lodging / lodging_suggestion 点位与 lodgingLegs 预览（P2）
+- [x] Copilot suggest_lodging_for_day 客户端合成与执行（P2）
 - [ ] 拖拽候选 → place（before/after）
 - [ ] PATCH 候选排序
 - [ ] AI preview apply

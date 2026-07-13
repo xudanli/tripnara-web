@@ -111,6 +111,29 @@ function formatDayList(days: number[]): string {
   return `第 ${days.slice(0, 3).join('、')} 天等 ${days.length} 天`;
 }
 
+/** 过滤 preview 中误传的 year / 越界 dayNumber（如 2026） */
+export function sanitizePreviewAffectedDays<T extends { dayNumber: number }>(
+  days: T[],
+  options?: { maxDay?: number },
+): T[] {
+  const cap = options?.maxDay ?? 90;
+  const seen = new Set<number>();
+  const sanitized: T[] = [];
+  for (const day of days) {
+    const dayNumber = Math.round(Number(day.dayNumber));
+    if (!Number.isFinite(dayNumber) || dayNumber < 1 || dayNumber > cap) continue;
+    if (seen.has(dayNumber)) continue;
+    seen.add(dayNumber);
+    sanitized.push(dayNumber === day.dayNumber ? day : { ...day, dayNumber });
+  }
+  return sanitized;
+}
+
+export function resolvePreviewMaxTripDay(trip?: TripDetail | null): number | undefined {
+  const count = trip?.TripDay?.length;
+  return count && count > 0 ? count : undefined;
+}
+
 function shouldSupplementBackendPreview(preview: ConstraintImpactPreview): boolean {
   if (preview.refreshType === 'deep' && preview.structuredImpact?.schedule) return false;
   const weakSummary = preview.diffBullets.some((line) => /影响较小|暂无显著/.test(line));
@@ -181,11 +204,27 @@ export function enrichConstraintImpactPreviewWithSchedule(
   const analysis = computeTimeWindowScheduleViolations(draft, trip);
   if (!analysis || analysis.violatingDays.length === 0) {
     const fromBackend = buildAffectedDayDetailsFromStructuredImpact(preview);
-    return fromBackend ? { ...preview, affectedDayDetails: fromBackend } : preview;
+    const maxDay = resolvePreviewMaxTripDay(trip);
+    const next = fromBackend ? { ...preview, affectedDayDetails: fromBackend } : preview;
+    return {
+      ...next,
+      affectedDays: sanitizePreviewAffectedDays(next.affectedDays, { maxDay }),
+      affectedDayDetails: sanitizePreviewAffectedDays(next.affectedDayDetails ?? [], {
+        maxDay,
+      }),
+    };
   }
   if (!shouldSupplementBackendPreview(preview)) {
     const fromBackend = buildAffectedDayDetailsFromStructuredImpact(preview);
-    return fromBackend ? { ...preview, affectedDayDetails: fromBackend } : preview;
+    const maxDay = resolvePreviewMaxTripDay(trip);
+    return {
+      ...(fromBackend ? { ...preview, affectedDayDetails: fromBackend } : preview),
+      affectedDays: sanitizePreviewAffectedDays(preview.affectedDays, { maxDay }),
+      affectedDayDetails: sanitizePreviewAffectedDays(
+        fromBackend ?? preview.affectedDayDetails ?? [],
+        { maxDay },
+      ),
+    };
   }
 
   const { templateId, constraintTimeLabel, violatingDays } = analysis;

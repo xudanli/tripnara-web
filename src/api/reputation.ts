@@ -4,8 +4,8 @@
  */
 
 import apiClient from './client';
-import { reputationMockStore } from '@/features/match-square/lib/reputation-mock-store';
-import { withMatchSquareFallback } from '@/features/match-square/lib/match-square-api-mode';
+import { reputationMockStore } from '@/lib/api-mocks/reputation-mock-store';
+import { withMatchSquareFallback } from '@/lib/api-fallback-mode';
 import type {
   PendingSurveysResponse,
   ReputationSurveyQuestionsResponse,

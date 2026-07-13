@@ -127,10 +127,6 @@ export type {
 export { OptimizationWorkbench } from './OptimizationWorkbench';
 export type { OptimizationWorkbenchProps } from './OptimizationWorkbench';
 
-// 用户偏好设置
-export { UserPreferencesPanel } from './UserPreferencesPanel';
-export type { UserPreferencesPanelProps } from './UserPreferencesPanel';
-
 // 用户决策点弹窗
 export { JudgmentPointDialog } from './JudgmentPointDialog';
 export type { 

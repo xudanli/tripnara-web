@@ -1,20 +1,11 @@
-import { useCallback, useEffect, useRef, useState, useId } from 'react';
+import { useEffect, useRef, useState, useId } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { cn } from '@/lib/utils';
 import { getMapboxAccessToken } from '@/lib/mapbox-token';
-import { SEMANTIC_BLUE_HEX, SEMANTIC_GREEN_HEX, SEMANTIC_RED_HEX } from '@/lib/semantic-colors';
-import { buildOfflineBasemapStyle } from '@/lib/offline-basemap-style';
-import {
-  EMPTY_TILE_DATA_URL,
-  getCachedBlobUrl,
-  isOfflineTileUrl,
-  warmOfflineTilesForBounds,
-} from '@/lib/offline-tile-blob-cache';
+import { SEMANTIC_BLUE_HEX, SEMANTIC_GREEN_HEX } from '@/lib/semantic-colors';
 import type { LngLat } from '@/lib/map-geo';
 import { coerceLngLatLine } from '@/features/exploration/lib/route-map.util';
-import type { TileManifest } from '@/types/hiking-offline';
-import type { OfflineTileFormat } from '@/types/trail-offline';
 
 export type MapboxMapMarker = {
   id: string;
@@ -53,14 +44,6 @@ export interface MapboxTrailMapProps {
   currentPosition?: { lng: number; lat: number };
   onMarkerClick?: (markerId: string) => void;
   emptyMessage?: string;
-  /** 已缓存的离线底图（IndexedDB 瓦片 + tripnara-offline:// 协议） */
-  offlineBasemap?: {
-    packKey: string;
-    manifest: TileManifest;
-    format: OfflineTileFormat;
-  };
-  /** 为 true 且 offlineBasemap 有瓦片时使用离线底图（行中推荐 true） */
-  useOfflineBasemap?: boolean;
 }
 
 export function MapboxTrailMap({
@@ -79,8 +62,6 @@ export function MapboxTrailMap({
   currentPosition,
   onMarkerClick,
   emptyMessage,
-  offlineBasemap,
-  useOfflineBasemap = false,
 }: MapboxTrailMapProps) {
   const token = getMapboxAccessToken();
   const routeLine = coerceLngLatLine(lineCoordinates);
@@ -101,31 +82,9 @@ export function MapboxTrailMap({
     (recordedLine?.length ?? 0) >= 2 ||
     markers.length > 0;
 
-  const offlineStyleActive = Boolean(useOfflineBasemap && offlineBasemap?.packKey);
-
   /** 避免 markers/line 更新时重建 map（会触发 Style is not done loading） */
   const viewPropsRef = useRef({ center, lineCoordinates: routeLine, markers, zoom });
   viewPropsRef.current = { center, lineCoordinates: routeLine, markers, zoom };
-
-  const refreshOfflineTileBlobs = useCallback(
-    async (map: mapboxgl.Map) => {
-      if (!offlineBasemap) return;
-      const z = Math.max(0, Math.min(22, Math.round(map.getZoom())));
-      const manifest = offlineBasemap.manifest;
-      const zooms = manifest.recommendedCacheZoom?.length
-        ? manifest.recommendedCacheZoom.filter((level) => Math.abs(level - z) <= 2)
-        : [z];
-      await warmOfflineTilesForBounds(
-        offlineBasemap.packKey,
-        manifest.bounds,
-        zooms,
-        offlineBasemap.format,
-        120
-      );
-      map.triggerRepaint();
-    },
-    [offlineBasemap]
-  );
 
   useEffect(() => {
     if (!token || !containerRef.current) return;
@@ -136,28 +95,12 @@ export function MapboxTrailMap({
     const defaultCenter: LngLat =
       c ?? lines?.[0] ?? (ms[0] ? [ms[0].lng, ms[0].lat] : [-19.0, 64.5]);
 
-    const style =
-      offlineStyleActive && offlineBasemap
-        ? buildOfflineBasemapStyle(
-            offlineBasemap.packKey,
-            offlineBasemap.manifest.bounds,
-            offlineBasemap.format,
-            offlineBasemap.manifest.tiles.attribution
-          )
-        : STYLE_URL[mapStyle];
-
     const mb = new mapboxgl.Map({
       container: containerRef.current,
-      style,
+      style: STYLE_URL[mapStyle],
       center: defaultCenter,
       zoom: z ?? (lines && lines.length > 1 ? 8 : 6),
       attributionControl: false,
-      transformRequest: (url, resourceType) => {
-        if (resourceType === 'Tile' && isOfflineTileUrl(url)) {
-          return { url: getCachedBlobUrl(url) ?? EMPTY_TILE_DATA_URL };
-        }
-        return { url };
-      },
     });
 
     mb.addControl(new mapboxgl.NavigationControl({ visualizePitch: false }), 'top-right');
@@ -172,13 +115,9 @@ export function MapboxTrailMap({
     const onMapReady = () => {
       if (mapRef.current !== mb) return;
       setReady(true);
-      if (offlineStyleActive) void refreshOfflineTileBlobs(mb);
     };
 
     mb.once('load', onMapReady);
-    mb.on('moveend', () => {
-      if (offlineStyleActive) void refreshOfflineTileBlobs(mb);
-    });
 
     return () => {
       mb.off('load', onMapReady);
@@ -190,13 +129,7 @@ export function MapboxTrailMap({
       mapRef.current = null;
       setReady(false);
     };
-  }, [
-    token,
-    mapStyle,
-    offlineStyleActive,
-    offlineBasemap,
-    refreshOfflineTileBlobs,
-  ]);
+  }, [token, mapStyle]);
 
   useEffect(() => {
     const mb = mapRef.current;

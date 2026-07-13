@@ -1,6 +1,6 @@
 import type { OdysseyCredentialsMe } from '@/types/odyssey-intake';
 import type { VerifiedCredentials } from '@/types/match-square';
-import { normalizeVerifiedCredentials } from '@/features/match-square/lib/verified-credentials';
+import { normalizeVerifiedCredentials } from '@/lib/credentials/verified-credentials';
 
 /** Identity Hub GET /credentials/me → 广场共用 VerifiedCredentials */
 export function normalizeOdysseyCredentialsMe(raw: unknown): VerifiedCredentials | null {

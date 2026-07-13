@@ -3,7 +3,7 @@ import { formatScheduleTime, formatScheduleTimeRange } from '@/lib/itinerary-ite
 import type { SplitGroupInfo } from '@/components/execute/live/ExecuteCenterPanels';
 import type { ExecuteResourceItem } from '@/lib/execute-status-sidebar.util';
 import type { ExecuteTimelineRailSnapshot } from '@/lib/execute-center.util';
-import type { SplitPartySessionSummary } from '@/types/in-trip-split';
+import type { SplitPartySessionDetail, SplitPartySessionSummary } from '@/types/in-trip-split';
 import type { ScheduleItem, TripDetail, TripState } from '@/types/trip';
 import type { TripExecutionAdvisoryDto } from '@/types/trip-execution-advisory';
 
@@ -32,56 +32,6 @@ export interface ExecuteCenterDetailModel {
   reunionSummary?: string;
   realtimeAlert?: ExecuteCenterRealtimeAlert;
 }
-
-const DEMO_TIMELINE: ExecuteDayTimelineEntry[] = [
-  { id: '1', timeLabel: '08:30', title: '从伊萨菲厄泽 出发', detail: '120 km · 2h 05m', status: 'done' },
-  { id: '2', timeLabel: '10:35', title: '霍尔斯穆尔悬崖 观景', detail: '休息，拍照 30m', status: 'done' },
-  { id: '3', timeLabel: '11:05', title: '丁基达尔斯村 补给 · 加油', detail: '休息 20m', status: 'done' },
-  { id: '4', timeLabel: '12:30', title: '冰川徒步体验 (IceFlow)', detail: '预计 3h · 中等强度', status: 'current' },
-  { id: '5', timeLabel: '16:30', title: '丁基达尔斯村 集合', detail: '分流队伍汇合 · 装备整理', status: 'upcoming' },
-  { id: '6', timeLabel: '17:00', title: '前往 布迪尔温泉', detail: '80 km · 1h 20m', status: 'upcoming' },
-  { id: '7', timeLabel: '18:30', title: '温泉 & 晚餐', detail: '布迪尔温泉', status: 'upcoming' },
-  { id: '8', timeLabel: '21:00', title: '入住 Hotel Breidavik', detail: '休息', status: 'upcoming' },
-];
-
-const DEMO_SPLIT_GROUPS: ExecuteSplitGroupDetail[] = [
-  {
-    id: 'a',
-    label: '分流 A / 徒步组',
-    memberCount: 4,
-    activity: '冰川徒步体验 (IceFlow)',
-    intensity: 'medium',
-    meetingTime: '16:30',
-    meetingPlace: '丁基达尔斯村停车场',
-    leader: 'Patriksjor（向导）',
-    transportNote: '当前车辆继续执行',
-    gearStatus: '4/4 已准备',
-  },
-  {
-    id: 'b',
-    label: '分流 B / 休息组',
-    memberCount: 2,
-    activity: '咖啡馆 / 酒店休息',
-    intensity: 'low',
-    meetingTime: '16:30',
-    meetingPlace: 'Kaffi Túnid',
-    leader: 'Abu',
-    transportNote: '当前车辆折返接驳',
-    comfortRating: '4/5',
-  },
-];
-
-const DEMO_REUNION = '统一汇合：16:30 丁基达尔斯村停车场 → 17:00 前往布迪尔温泉';
-
-const DEMO_ALERT: ExecuteCenterRealtimeAlert = {
-  description:
-    '受强风影响，冰川营地一带阵风预计持续至 14:00，风速最高可达 24 m/s。冰川徒步存在安全风险，可能需要延期或改为 Plan B。',
-  suggestedActions: [
-    '密切关注 30 分钟滚动更新',
-    '导游将在 11:45 前给出最终建议',
-    '备选方案已准备就绪，请右侧查看',
-  ],
-};
 
 function formatClock(value?: string): string {
   if (!value) return '--:--';
@@ -141,7 +91,7 @@ export function resolveExecuteDayTimeline(input: {
   formatPlaceName?: (name: string, placeId?: number) => string;
 }): ExecuteDayTimelineEntry[] {
   const items = collectScheduleItems(input);
-  if (items.length === 0) return DEMO_TIMELINE;
+  if (items.length === 0) return [];
 
   const currentPlaceId = (() => {
     const currentItemId = input.tripState?.currentItemId;
@@ -179,70 +129,85 @@ function intensityFromLabel(label?: string): SplitGroupInfo['intensity'] {
   return 'medium';
 }
 
-export function resolveExecuteSplitGroups(input: {
+function resolveReunionSummary(input: {
   timelineRail?: ExecuteTimelineRailSnapshot;
-  resources?: ExecuteResourceItem[];
-  activeSplitSession?: SplitPartySessionSummary | null;
-  memberNameById?: Record<string, string>;
-}): { groups: ExecuteSplitGroupDetail[]; reunionSummary?: string } {
+  splitSessionDetail?: SplitPartySessionDetail | null;
+}): string | undefined {
+  const reunion = input.splitSessionDetail?.reunion;
+  if (reunion?.meetingPoint || reunion?.plannedTime) {
+    const parts = [reunion.plannedTime, reunion.meetingPoint].filter(Boolean);
+    if (parts.length > 0) return `统一汇合：${parts.join(' · ')}`;
+  }
+
+  const meetingNode = input.splitSessionDetail?.sharedNodes.find(
+    (node) => node.type === 'meeting_point',
+  );
+  if (meetingNode) {
+    const parts = [meetingNode.time, meetingNode.location ?? meetingNode.title].filter(Boolean);
+    if (parts.length > 0) return `统一汇合：${parts.join(' · ')}`;
+  }
+
   const { gathering } = input.timelineRail ?? { gathering: {} };
   const reunionParts: string[] = [];
   if (gathering.time || gathering.place) {
-    reunionParts.push([gathering.time, gathering.place ? `${gathering.place}停车场` : null].filter(Boolean).join(' '));
+    reunionParts.push(
+      [gathering.time, gathering.place ? `${gathering.place}停车场` : null].filter(Boolean).join(' '),
+    );
   }
   if (gathering.destination) {
     reunionParts.push(gathering.destination.replace(/^统一前往/, '前往'));
   }
-  const reunionSummary = reunionParts.length >= 2
-    ? `统一汇合：${reunionParts.join(' → ')}`
-    : reunionParts.length === 1
-      ? `统一汇合：${reunionParts[0]}`
-      : DEMO_REUNION;
+  if (reunionParts.length >= 2) return `统一汇合：${reunionParts.join(' → ')}`;
+  if (reunionParts.length === 1) return `统一汇合：${reunionParts[0]}`;
+  return undefined;
+}
 
-  if (input.activeSplitSession && input.activeSplitSession.groupCount >= 2) {
+function mapSplitSessionGroups(
+  detail: SplitPartySessionDetail,
+  memberNameById?: Record<string, string>,
+): ExecuteSplitGroupDetail[] {
+  const meetingNode = detail.sharedNodes.find((node) => node.type === 'meeting_point');
+
+  return detail.groups.map((group, index) => {
+    const primaryRoute = group.route[0];
+    const leaderId = group.memberIds[0];
     return {
-      groups: DEMO_SPLIT_GROUPS.map((group, index) => ({
-        ...group,
-        memberCount: Math.max(1, Math.floor(input.activeSplitSession!.groupCount / (index + 1))),
-      })),
+      id: group.groupId,
+      label: group.label || `分流 ${String.fromCharCode(65 + index)}`,
+      memberCount: group.memberIds.length,
+      activity: primaryRoute?.title ?? group.label,
+      intensity: intensityFromLabel(group.staminaFit),
+      meetingTime: meetingNode?.time ?? detail.reunion?.plannedTime,
+      meetingPlace: meetingNode?.location ?? meetingNode?.title ?? detail.reunion?.meetingPoint,
+      leader: leaderId ? memberNameById?.[leaderId] : undefined,
+    };
+  });
+}
+
+export function resolveExecuteSplitGroups(input: {
+  timelineRail?: ExecuteTimelineRailSnapshot;
+  resources?: ExecuteResourceItem[];
+  activeSplitSession?: SplitPartySessionSummary | null;
+  splitSessionDetail?: SplitPartySessionDetail | null;
+  memberNameById?: Record<string, string>;
+}): { groups: ExecuteSplitGroupDetail[]; reunionSummary?: string } {
+  const reunionSummary = resolveReunionSummary({
+    timelineRail: input.timelineRail,
+    splitSessionDetail: input.splitSessionDetail,
+  });
+
+  if (input.splitSessionDetail?.groups?.length) {
+    return {
+      groups: mapSplitSessionGroups(input.splitSessionDetail, input.memberNameById),
       reunionSummary,
     };
   }
 
-  const activityResource = input.resources?.find((r) => r.category === 'activity');
-  const hasSplitHint = gathering.time || gathering.place || activityResource;
-
-  if (!hasSplitHint) {
-    return { groups: DEMO_SPLIT_GROUPS, reunionSummary: DEMO_REUNION };
+  if (input.activeSplitSession?.groupCount && input.activeSplitSession.groupCount >= 2) {
+    return { groups: [], reunionSummary };
   }
 
-  const trekGroup: ExecuteSplitGroupDetail = {
-    id: 'trek',
-    label: '分流 A / 徒步组',
-    memberCount: 4,
-    activity: activityResource?.title ?? '冰川徒步体验 (IceFlow)',
-    intensity: 'medium',
-    meetingTime: gathering.time,
-    meetingPlace: gathering.place,
-    leader: 'Patriksjor（向导）',
-    transportNote: '当前车辆继续执行',
-    gearStatus: activityResource?.statusLabel === '已确认' ? '4/4 已准备' : undefined,
-  };
-
-  const restGroup: ExecuteSplitGroupDetail = {
-    id: 'rest',
-    label: '分流 B / 休息组',
-    memberCount: 2,
-    activity: '咖啡馆 / 酒店休息',
-    intensity: 'low',
-    meetingTime: gathering.time,
-    meetingPlace: gathering.place ?? 'Kaffi Túnid',
-    leader: 'Abu',
-    transportNote: '当前车辆折返接驳',
-    comfortRating: '4/5',
-  };
-
-  return { groups: [trekGroup, restGroup], reunionSummary };
+  return { groups: [], reunionSummary };
 }
 
 export function resolveExecuteCenterRealtimeAlert(input: {
@@ -253,7 +218,7 @@ export function resolveExecuteCenterRealtimeAlert(input: {
   const description =
     input.advisory?.realtimeRisks.weather
     ?? input.windDescription
-    ?? (input.hasWindWarning ? DEMO_ALERT.description : undefined);
+    ?? (input.hasWindWarning ? input.advisory?.verdict.headline : undefined);
 
   if (!description) return undefined;
 
@@ -263,26 +228,21 @@ export function resolveExecuteCenterRealtimeAlert(input: {
     const parsed = new Date(checkAt.includes('T') ? checkAt : `${checkAt}T12:00:00`);
     if (isValid(parsed)) {
       suggestedActions.push(`下一次滚动更新约 ${format(parsed, 'HH:mm')}`);
-    } else {
-      suggestedActions.push('密切关注 30 分钟滚动更新');
     }
-  } else {
-    suggestedActions.push('密切关注 30 分钟滚动更新');
   }
 
   if (input.advisory?.recommendations[0]?.description) {
     suggestedActions.push(input.advisory.recommendations[0].description);
-  } else {
-    suggestedActions.push('导游将在 11:45 前给出最终建议');
   }
 
   if (input.advisory?.recommendations.length) {
     suggestedActions.push('备选方案已准备就绪，请右侧查看');
-  } else {
-    suggestedActions.push('备选方案已准备就绪，请右侧查看');
   }
 
-  return { description, suggestedActions: suggestedActions.slice(0, 3) };
+  return {
+    description,
+    suggestedActions: suggestedActions.length > 0 ? suggestedActions.slice(0, 3) : [],
+  };
 }
 
 export function buildExecuteCenterDetailModel(input: {
@@ -292,6 +252,8 @@ export function buildExecuteCenterDetailModel(input: {
   timelineRail?: ExecuteTimelineRailSnapshot;
   resources?: ExecuteResourceItem[];
   activeSplitSession?: SplitPartySessionSummary | null;
+  splitSessionDetail?: SplitPartySessionDetail | null;
+  memberNameById?: Record<string, string>;
   advisory?: TripExecutionAdvisoryDto | null;
   windDescription?: string;
   hasWindWarning?: boolean;
@@ -302,6 +264,8 @@ export function buildExecuteCenterDetailModel(input: {
     timelineRail: input.timelineRail,
     resources: input.resources,
     activeSplitSession: input.activeSplitSession,
+    splitSessionDetail: input.splitSessionDetail,
+    memberNameById: input.memberNameById,
   });
   const realtimeAlert = resolveExecuteCenterRealtimeAlert({
     advisory: input.advisory,

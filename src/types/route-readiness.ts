@@ -2,7 +2,11 @@
  * P2/P1 GET /api/readiness/route-directions/:id?longestHike=&plannedDate=&hikePlanId=
  */
 
-import type { DayPaceVerdict } from '@/types/hiking';
+export type DayPaceVerdict = {
+  day?: number;
+  verdict?: string;
+  messageZh?: string;
+};
 
 export type RouteReadinessLevel = 'ready' | 'caution' | 'not_ready' | 'blocked' | string;
 

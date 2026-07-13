@@ -116,7 +116,7 @@ export default function WelcomeSection({ user, activeTrip, getCountryName }: Wel
           {/* CTA 按钮 */}
           <div className="flex flex-wrap gap-3">
             <Button
-              onClick={() => navigate(`/dashboard/trips/${activeTrip.id}`)}
+              onClick={() => navigate(`/dashboard/plan-studio?tripId=${activeTrip.id}&tab=schedule`)}
               className="flex items-center gap-2"
             >
               继续规划 <ArrowRight className="w-4 h-4" />

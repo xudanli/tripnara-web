@@ -23,10 +23,10 @@ import type { ConstraintPendingKey, PlanningConstraintsSummary } from '@/types/p
 import type { PlanningConflictDto } from '@/types/planning-conflicts';
 import type { TripDetail } from '@/types/trip';
 import type { TripBudgetProfile } from '@/types/trip-budget';
-import type { TripConstraint, TripConstraintCardTone } from '@/types/trip-constraints';
-import { TRIP_CONSTRAINT_LEGACY_IDS } from '@/types/trip-constraints';
+import { TRIP_CONSTRAINT_LEGACY_IDS, type TripConstraint, type TripConstraintCardTone } from '@/types/trip-constraints';
+import { uiConstraintIdToApi } from '@/lib/trip-constraints.adapter';
 import { isSelfDrivePlanningTrip } from '@/lib/trip-self-drive';
-import { readDailyDriveLimitHours } from '@/lib/daily-drive-conflict.util';
+import { readDailyDriveLimitHours, readMaxDailyDriveHoursFromConstraint } from '@/lib/daily-drive-conflict.util';
 import {
   getSoftConstraintTemplate,
   getHardConstraintTemplate,
@@ -35,6 +35,7 @@ import {
   type ConstraintTemplate,
 } from './constraint-templates';
 import { parseScopeBindingFromConstraint } from '@/lib/constraint-scope.util';
+import { enrichScopeBindingWithRouteSegmentOption } from '@/lib/constraint-scope-options.util';
 import {
   hydrateCatalogHardDraftFromApi,
   resolveConstraintEditorTemplateId,
@@ -256,6 +257,9 @@ export function listEntryPatchFromSavedDraft(
     case 'max_segment_distance':
     case 'c_max_segment_distance':
       return { value: `≤ ${draft.targetValue} km` };
+    case 'no_night_drive':
+    case 'c_no_night_drive':
+      return { value: `日落后 ${Math.round(draft.targetValue)} 分钟内停止驾驶` };
     case 'travelers':
       return { value: `${Math.max(1, draft.targetValue)} 人` };
     case 'transport':
@@ -598,7 +602,35 @@ export function isExternalConstraintId(id: string): boolean {
 }
 
 export function isApiManagedHardConstraintId(id: string): boolean {
-  return id === 'max_segment_distance' || id === 'c_max_segment_distance';
+  return (
+    id === 'max_segment_distance' ||
+    id === 'c_max_segment_distance' ||
+    isNoNightDriveConstraintId(id)
+  );
+}
+
+export function resolveApiManagedHardConstraintApiId(draftId: string): string {
+  return isNoNightDriveConstraintId(draftId)
+    ? TRIP_CONSTRAINT_LEGACY_IDS.NO_NIGHT_DRIVE
+    : TRIP_CONSTRAINT_LEGACY_IDS.MAX_SEGMENT_DISTANCE;
+}
+
+export function isNoNightDriveConstraintId(id: string): boolean {
+  return id === 'no_night_drive' || id === 'c_no_night_drive';
+}
+
+function readNoNightDriveMinutes(constraint?: TripConstraint | null): number {
+  if (!constraint?.value || typeof constraint.value !== 'object') return 30;
+  const minutes = (constraint.value as Record<string, unknown>).maxMinutesAfterSunset;
+  return typeof minutes === 'number' && Number.isFinite(minutes) ? minutes : 30;
+}
+
+function resolveApiConstraintForEditor(
+  templateUiId: string,
+  apiConstraint?: TripConstraint | null,
+): TripConstraint | null {
+  if (!apiConstraint) return null;
+  return uiConstraintIdToApi(templateUiId) === apiConstraint.id ? apiConstraint : null;
 }
 
 function readMaxSegmentDistanceKm(constraint?: TripConstraint | null): {
@@ -802,7 +834,10 @@ function resolveEditorDraftFromEntry(
         options?.apiConstraint?.id === TRIP_CONSTRAINT_LEGACY_IDS.TRANSPORT_MODE
           ? options.apiConstraint
           : null;
-      let mode: ConstraintTransportValue | '' = resolveConstraintTransportValue(trip);
+      let mode: ConstraintTransportValue | '' = resolveConstraintTransportValue(
+        trip,
+        summary?.transport.scope,
+      );
       if (!mode && summary?.transport.travelMode) {
         const raw = summary.transport.travelMode.toUpperCase();
         if (raw === 'DRIVING' || raw === 'PUBLIC_TRANSIT' || raw === 'MIXED') {
@@ -818,6 +853,8 @@ function resolveEditorDraftFromEntry(
           const v = fromApi.value as Record<string, unknown>;
           if (typeof v.travelMode === 'string') {
             mode = v.travelMode as ConstraintTransportValue;
+          } else if (typeof v.raw === 'string') {
+            mode = v.raw as ConstraintTransportValue;
           }
         }
       }
@@ -840,7 +877,9 @@ function resolveEditorDraftFromEntry(
       };
     }
     case 'daily_drive': {
-      const hours = readDailyDriveLimitHours(trip);
+      const fromApi = resolveApiConstraintForEditor('daily_drive', options?.apiConstraint);
+      const hours =
+        readMaxDailyDriveHoursFromConstraint(fromApi) ?? readDailyDriveLimitHours(trip);
       return {
         ...DEFAULT_DAILY_DRIVE_DRAFT,
         id: entryId,
@@ -871,6 +910,25 @@ function resolveEditorDraftFromEntry(
           warnKm != null
             ? `预警阈值约 ${warnKm} km（由后端按国家规则推算）。超长距离冲突见中间栏「规划冲突」。`
             : '相邻景点间单次驾驶距离上限；修改后将重新检测 road_class 超长距离冲突。',
+      };
+    }
+    case 'no_night_drive': {
+      const fromApi = resolveApiConstraintForEditor('no_night_drive', options?.apiConstraint);
+      const template = getHardConstraintTemplate('no_night_drive');
+      return {
+        ...base,
+        id: 'no_night_drive',
+        name: fromApi?.name ?? template?.label ?? '不夜间驾驶',
+        type: 'HARD',
+        scope: 'TRIP',
+        targetValue: readNoNightDriveMinutes(fromApi),
+        targetUnit: 'minute',
+        toleranceMode: 'none',
+        toleranceMinutes: 0,
+        priority: fromApi?.priority ?? 8,
+        locked: fromApi?.locked ?? false,
+        enabled: fromApi?.enabled !== false,
+        reason: '',
       };
     }
     case 'accommodation':
@@ -981,6 +1039,23 @@ function resolveEditorDraftFromEntry(
           ...hydrated,
         };
       }
+      if (hardFromCatalog) {
+        const defaults = resolveHardTemplateDraftDefaults(hardFromCatalog);
+        return {
+          ...base,
+          id: hardFromCatalog.id,
+          name: options?.apiConstraint?.name?.trim() || hardFromCatalog.label,
+          type: 'HARD',
+          scope: 'TRIP',
+          priority: options?.apiConstraint?.priority ?? 7,
+          locked: options?.apiConstraint?.locked ?? false,
+          enabled: options?.apiConstraint?.enabled !== false,
+          toleranceMode: 'none',
+          toleranceMinutes: 0,
+          reason: '',
+          ...defaults,
+        };
+      }
       return { ...DEFAULT_DAILY_DRIVE_DRAFT, id: entryId, name: entryId, type: 'SOFT' };
     }
   }
@@ -994,10 +1069,14 @@ export function buildEditorDraftFromEntry(
   options?: { intentMustPlaces?: number[]; apiConstraint?: TripConstraint | null },
 ): ConstraintEditorDraft {
   const resolvedId = resolveConstraintEditorTemplateId(entryId, options?.apiConstraint);
+  const scopeBinding = enrichScopeBindingWithRouteSegmentOption(
+    parseScopeBindingFromConstraint(options?.apiConstraint ?? null),
+    trip,
+  );
   return {
     ...resolveEditorDraftFromEntry(resolvedId, summary, trip, activeSoftPrefs, options),
     id: resolvedId,
-    scopeBinding: parseScopeBindingFromConstraint(options?.apiConstraint ?? null),
+    scopeBinding,
   };
 }
 

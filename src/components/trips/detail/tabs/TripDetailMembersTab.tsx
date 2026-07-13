@@ -19,6 +19,8 @@ import {
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { tripCollabApi } from '@/api/trip-detail-tab-client';
 import { mergeCollabOverview } from '@/lib/trip-detail-tab-merge.util';
+import { TeamRequirementProfilePanel } from '@/features/member-onboarding';
+import { useTeamRequirementProfile } from '@/hooks/useTeamRequirementProfile';
 import { CollaboratorAvatar } from '@/components/plan-studio/workbench/CollaboratorAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -198,8 +200,10 @@ function InviteMemberCard({ onInvite }: { onInvite?: () => void }) {
       <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-muted">
         <Plus className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="text-xs font-medium text-foreground">邀请成员</p>
-      <p className="mt-0.5 text-[10px] text-muted-foreground">通过链接或邮箱邀请同行者</p>
+      <p className="text-xs font-medium text-foreground">发送成员邀请</p>
+      <p className="mt-0.5 text-[10px] text-muted-foreground">
+        复制邀请链接，成员完成行前偏好问卷
+      </p>
     </button>
   );
 }
@@ -265,7 +269,6 @@ interface TripDetailMembersTabProps {
 export default function TripDetailMembersTab({
   tripId,
   trip,
-  onInviteMembers,
   onOpenCollabCenter,
   collabOverview: collabOverviewProp,
   collabOverviewLoading: collabOverviewLoadingProp,
@@ -331,6 +334,23 @@ export default function TripDetailMembersTab({
     [collabOverview, tripId],
   );
 
+  const collabCollaborators = useMemo(
+    () =>
+      collabOverview?.collaborators?.map((c) => ({
+        userId: c.userId,
+        displayName: c.displayName,
+        role: c.role,
+      })) ?? [],
+    [collabOverview],
+  );
+
+  const { profile: teamRequirementProfile } = useTeamRequirementProfile(tripId, {
+    collaborators: collabCollaborators,
+    includeFriction: false,
+  });
+
+  const showHeuristicPreferences = (teamRequirementProfile?.submittedCount ?? 0) === 0;
+
   const pendingItems = useMemo(
     () => (collabOverview ? buildPendingItemsFromCollabOverview(collabOverview) : []),
     [collabOverview],
@@ -383,6 +403,14 @@ export default function TripDetailMembersTab({
       window.location.href = buildCollabCenterPlanStudioUrl(tripId, { collabTab: 'members' });
     });
 
+  const openRoleInvites = () => {
+    window.location.href = buildCollabCenterPlanStudioUrl(tripId, { collabTab: 'invites' });
+  };
+
+  const handleInviteMembers = () => {
+    openRoleInvites();
+  };
+
   const loading = collabLoading || teamLoading;
 
   if (loading && derived.memberCards.length === 0) {
@@ -409,14 +437,14 @@ export default function TripDetailMembersTab({
               </div>
               <h3 className="text-sm font-semibold text-foreground">还没有同行成员</h3>
               <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-                邀请协作者后，可在此查看偏好对齐、任务分工与共识进度。
+                生成邀请链接发送给同行；对方接受后将填写行前偏好问卷，并出现在成员列表。
               </p>
               <Button
                 className="mt-3 h-8 bg-primary text-xs hover:bg-primary/90 text-primary-foreground"
-                onClick={onInviteMembers ?? openCollabCenter}
+                onClick={handleInviteMembers}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
-                邀请成员
+                成员邀请
               </Button>
             </div>
           ) : null}
@@ -468,9 +496,14 @@ export default function TripDetailMembersTab({
               {derived.memberCards.map((member) => (
                 <MemberDetailCard key={member.id} member={member} onManage={openCollabCenter} />
               ))}
-              <InviteMemberCard onInvite={onInviteMembers ?? openCollabCenter} />
+              <InviteMemberCard onInvite={handleInviteMembers} />
             </div>
           </TripDetailSection>
+
+          <TeamRequirementProfilePanel
+            tripId={tripId}
+            collaborators={collabCollaborators}
+          />
 
           <TripDetailSection
             title="任务分工"
@@ -490,35 +523,37 @@ export default function TripDetailMembersTab({
             </div>
           </TripDetailSection>
 
-          <TripDetailSection
-            title="参与与偏好摘要"
-            className="shadow-none"
-            headerClassName="px-3 py-2"
-            bodyClassName="p-3"
-          >
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {derived.preferenceCards.slice(0, 5).map((pref) => {
-                const Icon =
-                  PREFERENCE_ICONS[pref.id as keyof typeof PREFERENCE_ICONS] ?? Sparkles;
-                return (
-                  <div
-                    key={pref.id}
-                    className="flex gap-2 rounded-lg border border-border/60 p-2.5"
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          {showHeuristicPreferences ? (
+            <TripDetailSection
+              title="参与与偏好摘要"
+              className="shadow-none"
+              headerClassName="px-3 py-2"
+              bodyClassName="p-3"
+            >
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                {derived.preferenceCards.slice(0, 5).map((pref) => {
+                  const Icon =
+                    PREFERENCE_ICONS[pref.id as keyof typeof PREFERENCE_ICONS] ?? Sparkles;
+                  return (
+                    <div
+                      key={pref.id}
+                      className="flex gap-2 rounded-lg border border-border/60 p-2.5"
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">
+                        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium text-foreground">{pref.label}</p>
+                        <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+                          {pref.description}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-medium text-foreground">{pref.label}</p>
-                      <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
-                        {pref.description}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </TripDetailSection>
+                  );
+                })}
+              </div>
+            </TripDetailSection>
+          ) : null}
         </div>
       }
       sidebar={

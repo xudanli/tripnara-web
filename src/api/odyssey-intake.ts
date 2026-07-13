@@ -9,7 +9,7 @@ import { normalizeProfileCardView } from '@/features/odyssey-intake/lib/normaliz
 import { reconcilePremiumProfileCardView, reconcilePremiumSubmitResult } from '@/features/odyssey-intake/lib/reconcile-premium-card';
 import { normalizeOdysseyCredentialsMe } from '@/features/odyssey-intake/lib/normalize-credentials';
 import { odysseyCredentialsMockStore } from '@/features/odyssey-intake/lib/credentials-mock-store';
-import { isApiNotReadyError } from '@/features/match-square/lib/match-square-api-mode';
+import { isApiNotReadyError } from '@/lib/api-fallback-mode';
 import { odysseyIntakeMockStore } from '@/features/odyssey-intake/lib/intake-mock-store';
 import { premiumStressQuestionsToApiResponse, extractPremiumStressQuestionsPayload } from '@/features/odyssey-intake/lib/normalize-premium-stress-questions';
 import { normalizeMatchResult } from '@/features/odyssey-intake/lib/normalize-companion-match';

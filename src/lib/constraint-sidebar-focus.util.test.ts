@@ -3,6 +3,7 @@ import type { ConstraintListEntry } from '@/components/plan-studio/workbench/con
 import { Car, Clock } from 'lucide-react';
 import {
   collectActiveExternalConditions,
+  collectWorkbenchMustComplyItems,
   countWorkbenchPlanningConditions,
   isConstraintSectionCollapsedByDefault,
   isTripObjectiveConstraintEntry,
@@ -74,6 +75,41 @@ describe('partitionHardItemsForWorkbench', () => {
     const { tripObjectiveItems, mustComplyItems } = partitionHardItemsForWorkbench(items);
     expect(tripObjectiveItems.map((item) => item.id)).toEqual(['must_go']);
     expect(mustComplyItems.map((item) => item.id)).toEqual(['time_range', 'daily_drive']);
+  });
+});
+
+describe('collectWorkbenchMustComplyItems', () => {
+  it('promotes max_segment_distance from readonly_official into must comply', () => {
+    const sections = [
+      {
+        meta: { key: 'hard_must_satisfy', label: '必须满足' },
+        items: [
+          entry({ id: 'time_range', label: '总行程时长', value: '10 天' }),
+          entry({ id: 'daily_drive', label: '每日驾驶上限', value: '≤ 6 小时/天' }),
+          entry({ id: 'no_night_drive', label: '不夜驾' }),
+        ],
+      },
+      {
+        meta: { key: 'readonly_official', label: '目的地规则' },
+        items: [
+          entry({
+            id: 'c_max_segment_distance',
+            kind: 'external',
+            readOnly: true,
+            label: '连续驾驶上限',
+            value: '≤ 200 km',
+          }),
+        ],
+      },
+    ] as import('@/lib/trip-constraints-contract.util').ConstraintConsoleSectionViewModel[];
+
+    const { mustComplyItems } = collectWorkbenchMustComplyItems(sections);
+    expect(mustComplyItems.map((item) => item.id)).toEqual([
+      'time_range',
+      'daily_drive',
+      'no_night_drive',
+      'c_max_segment_distance',
+    ]);
   });
 });
 

@@ -9,8 +9,7 @@ import type {
   RouteRollbackProposal,
 } from '@/types/active-trip-dashboard';
 import type { CollaborativeTaskView, CollaborativeTaskStatus } from '@/types/collaborative-task-flywheel';
-import { buildRouteContractLockPlan } from '@/features/match-square/lib/route-contract-vault';
-import { getStoredCollaborativeTaskFlywheel } from '@/features/match-square/lib/decision-engine/collaborative-task-flywheel-mock';
+import { buildRouteContractLockPlan } from '@/lib/recruitment-bridge/route-contract-vault';
 import {
   getActiveTripInstantiateContext,
   getPendingRollbackProposal,
@@ -229,23 +228,25 @@ export function normalizeActiveTripDashboard(raw: unknown, tripId: string): Acti
   const viewerUserId = asString(viewerRaw?.userId ?? viewerRaw?.user_id, resolveCurrentUserId());
   const viewerRole = asString(viewerRaw?.role) === 'captain' ? 'captain' : 'member';
 
-  const matchSquareRaw = asRecord(r.matchSquare ?? r.match_square);
-  const matchSquare = matchSquareRaw
+  const trustedProjectRaw = asRecord(
+    r.trustedProject ?? r.trusted_project ?? r.matchSquare ?? r.match_square
+  );
+  const trustedProject = trustedProjectRaw
     ? {
         recruitmentPostId: asString(
-          matchSquareRaw.recruitmentPostId ?? matchSquareRaw.recruitment_post_id
+          trustedProjectRaw.recruitmentPostId ?? trustedProjectRaw.recruitment_post_id
         ),
-        strategy: asString(matchSquareRaw.strategy),
-        catalogId: asNullableString(matchSquareRaw.catalogId ?? matchSquareRaw.catalog_id),
+        strategy: asString(trustedProjectRaw.strategy),
+        catalogId: asNullableString(trustedProjectRaw.catalogId ?? trustedProjectRaw.catalog_id),
         vibeChipIds: (() => {
-          const raw = matchSquareRaw.vibeChipIds ?? matchSquareRaw.vibe_chip_ids;
+          const raw = trustedProjectRaw.vibeChipIds ?? trustedProjectRaw.vibe_chip_ids;
           return Array.isArray(raw) ? raw.map((x: unknown) => String(x)) : [];
         })(),
         contextualCardIds: (() => {
-          const raw = matchSquareRaw.contextualCardIds ?? matchSquareRaw.contextual_card_ids;
+          const raw = trustedProjectRaw.contextualCardIds ?? trustedProjectRaw.contextual_card_ids;
           return Array.isArray(raw) ? raw.map((x: unknown) => String(x)) : [];
         })(),
-        sealedAt: asNullableString(matchSquareRaw.sealedAt ?? matchSquareRaw.sealed_at),
+        sealedAt: asNullableString(trustedProjectRaw.sealedAt ?? trustedProjectRaw.sealed_at),
       }
     : null;
 
@@ -283,7 +284,7 @@ export function normalizeActiveTripDashboard(raw: unknown, tripId: string): Acti
         viewerRaw?.awaitingViewerAction ?? viewerRaw?.awaiting_viewer_action
       ),
     },
-    matchSquare,
+    trustedProject,
     contextualCards,
     crewDnaPanel,
     collaborativeTasks,
@@ -424,18 +425,17 @@ function buildRouteContractLockState(
   };
 }
 
-/** Mock / 客户端兜底 · 从 instantiate 上下文 + flywheel 构建 */
+/** Mock / 客户端兜底 · 从 instantiate 上下文构建（协同任务由 live API 提供） */
 export function buildActiveTripDashboardMock(tripId: string): ActiveTripDashboard | null {
   const ctx = getActiveTripInstantiateContext(tripId);
-  const flywheel = getStoredCollaborativeTaskFlywheel(tripId);
-  if (!ctx && !flywheel) return null;
+  if (!ctx) return null;
 
-  const post = ctx?.postSnapshot;
+  const post = ctx.postSnapshot;
   const viewerUserId = resolveCurrentUserId();
   const viewerRole =
     post && post.captainUserId === viewerUserId ? ('captain' as const) : ('member' as const);
 
-  const tasks = flywheel?.tasks ?? [];
+  const tasks: CollaborativeTaskView[] = [];
   const pendingRollback = getPendingRollbackProposal(tripId);
 
   const cardIds =
@@ -501,14 +501,14 @@ export function buildActiveTripDashboardMock(tripId: string): ActiveTripDashboar
       canProposeRollback,
       awaitingViewerAction,
     },
-    matchSquare: post
+    trustedProject: post
       ? {
           recruitmentPostId: post.id,
-          strategy: ctx?.plan.strategy ?? 'generic_plaza_trip',
+          strategy: ctx?.plan.strategy ?? 'trusted_project_trip',
           catalogId: post.routeTemplateCatalogId ?? null,
           vibeChipIds,
           contextualCardIds: cardIds,
-          sealedAt: ctx?.instantiatedAt ?? flywheel?.dispatchedAt ?? null,
+          sealedAt: ctx.instantiatedAt ?? null,
         }
       : null,
     contextualCards: post ? buildContextualCards(cardIds, post) : [],

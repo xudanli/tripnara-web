@@ -3,7 +3,7 @@
  * 
  * Phase 1: 核心导航项
  * - Logo
- * - 新行程 / 我的行程 / 可信项目 / 路线模版 / 徒步
+ * - 新行程 / 我的行程 / 可信项目 / 路线模版
  * - 收藏（展开显示收藏的行程）
  * - 规划中（展开显示规划中的行程）
  * - 进行中（展开显示进行中的行程）
@@ -21,7 +21,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
-import { buildTripTravelStatusPath } from '@/lib/travel-status-navigation.util';
+import {
+  buildPlanningWorkbenchPath,
+} from '@/lib/travel-status-navigation.util';
 import type { TripListItem, TripStatus } from '@/types/trip';
 import Logo from '@/components/common/Logo';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,13 +40,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, Route, MapPin, Heart, ChevronDown, ChevronRight, User, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Share2, Edit, MoreVertical, RefreshCw, Users, Trash2, CreditCard, Bell, Mountain, MessageCircle, Shield, BadgeCheck, Sparkles } from 'lucide-react';
+import { Plus, Route, MapPin, Heart, ChevronDown, ChevronRight, User, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Share2, Edit, MoreVertical, RefreshCw, Users, Trash2, MessageCircle, BadgeCheck, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
-import { getTripHikingProfile } from '@/lib/trip-hiking';
-import { parseHikingSegments } from '@/lib/hiking-segments';
-import { hikingPhaseSidebarLine } from '@/lib/hiking-phase';
-import { useTripEmbeddedSidebarStore } from '@/store/tripEmbeddedSidebarStore';
 import { DeleteTripDialog } from '@/components/trips/DeleteTripDialog';
 
 interface MainSidebarProps {
@@ -266,10 +264,10 @@ export default function MainSidebar({ className }: MainSidebarProps) {
     navigate(path);
   };
   
-  // 处理行程点击：规划中 → 规划工作台；进行中 → 行中执行页；其余 → 详情
+  // 处理行程点击：规划中 → 规划工作台 browse；进行中 → 行中执行页；其余 → 详情
   const handleTripClick = (tripId: string, status?: TripStatus) => {
     if (status === 'PLANNING') {
-      navigate(buildTripTravelStatusPath(tripId));
+      navigate(buildPlanningWorkbenchPath(tripId));
     } else if (status === 'IN_PROGRESS') {
       navigate(`/dashboard/execute?tripId=${tripId}`);
     } else {
@@ -426,15 +424,6 @@ export default function MainSidebar({ className }: MainSidebarProps) {
             collapsed={collapsed}
           />
           
-          {/* 徒步 */}
-          <NavItem
-            icon={Mountain}
-            label="徒步"
-            onClick={() => handleNavClick('/dashboard/trails')}
-            active={isActive('/dashboard/trails')}
-            collapsed={collapsed}
-          />
-
           {/* 收藏 - 只在有收藏内容时显示 */}
           {!collapsed && collectedTrips.length > 0 && (
             <ExpandableNavItem
@@ -581,66 +570,15 @@ export default function MainSidebar({ className }: MainSidebarProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {/* 🆕 参考 shadcn 设计：账户、账单、通知、偏好、退出登录 */}
               <DropdownMenuItem
                 onClick={() => {
-                  navigate('/dashboard/profile');
-                  setUserMenuOpen(false);
-                }}
-                className="cursor-pointer"
-              >
-                <User className="mr-2 h-4 w-4" />
-                <span>我的主页</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  navigate('/dashboard/settings?tab=governance');
-                  setUserMenuOpen(false);
-                }}
-                className="cursor-pointer"
-              >
-                <Shield className="mr-2 h-4 w-4" />
-                <span>身份与权限</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  navigate('/dashboard/settings?tab=account');
+                  navigate('/dashboard/settings');
                   setUserMenuOpen(false);
                 }}
                 className="cursor-pointer"
               >
                 <Settings className="mr-2 h-4 w-4" />
-                <span>账户</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  navigate('/dashboard/settings?tab=billing');
-                  setUserMenuOpen(false);
-                }}
-                className="cursor-pointer"
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>账单</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  navigate('/dashboard/settings?tab=notifications');
-                  setUserMenuOpen(false);
-                }}
-                className="cursor-pointer"
-              >
-                <Bell className="mr-2 h-4 w-4" />
-                <span>通知</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  navigate('/dashboard/settings?tab=preferences');
-                  setUserMenuOpen(false);
-                }}
-                className="cursor-pointer"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                <span>偏好</span>
+                <span>设置</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -699,9 +637,6 @@ export default function MainSidebar({ className }: MainSidebarProps) {
           tripToDelete
             ? {
                 totalDays: tripToDelete.days?.length,
-                hikePlanCount: parseHikingSegments(tripToDelete.metadata?.hikingSegments).filter(
-                  (s) => s.hikePlanId,
-                ).length,
               }
             : undefined
         }
@@ -857,19 +792,6 @@ function TripListItem({
 }: TripListItemProps) {
   const isHovered = hoveredTripId === trip.id;
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const embeddedSub = useTripEmbeddedSidebarStore((s) => s.subtitles[trip.id]);
-  const embeddedSubtitle =
-    getTripHikingProfile(trip) === 'embedded'
-      ? embeddedSub
-        ? `${embeddedSub.travelLabel ?? '自驾'} · ${
-            embeddedSub.phaseHintZh ??
-            hikingPhaseSidebarLine(embeddedSub.phase, embeddedSub.segmentCount)
-          }`
-        : (() => {
-            const n = parseHikingSegments(trip.metadata).length;
-            return n > 0 ? `自驾 · 含 ${n} 段徒步` : '自驾 · 含徒步片段';
-          })()
-      : null;
   
   // 根据当前状态获取允许的状态转换
   const getAllowedStatusTransitions = (currentStatus: TripStatus) => {
@@ -926,11 +848,6 @@ function TripListItem({
         style={{ color: '#111827' }}
       >
         <p className="truncate font-normal">{getDisplayName(trip)}</p>
-        {embeddedSubtitle ? (
-          <p className="truncate text-[11px] mt-0.5" style={{ color: '#666666' }}>
-            {embeddedSubtitle}
-          </p>
-        ) : null}
       </button>
       
       {/* 悬浮时显示的更多操作按钮 */}

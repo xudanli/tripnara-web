@@ -3,9 +3,7 @@ import { cn } from '@/lib/utils';
 import { TRIP_DETAIL_NAV } from '@/lib/trip-detail-terminology.util';
 
 export const TRIP_DETAIL_PRIMARY_TABS = [
-  { value: 'overview', label: '概览' },
   { value: 'timeline', label: '规划' },
-  { value: 'map', label: '地图' },
   { value: 'budget', label: '预算' },
   { value: 'members', label: '成员' },
   { value: 'files', label: '文件' },
@@ -13,8 +11,6 @@ export const TRIP_DETAIL_PRIMARY_TABS = [
 
 /** 不在主导航展示，但保留路由的 Tab（URL / 页内深链） */
 export const TRIP_DETAIL_HIDDEN_TABS = [
-  { value: 'accommodation', label: TRIP_DETAIL_NAV.accommodation },
-  { value: 'activities', label: TRIP_DETAIL_NAV.activities },
   { value: 'bookings', label: '预订与保障' },
   { value: 'decision-log', label: TRIP_DETAIL_NAV.decisionHistory },
 ] as const;
@@ -27,38 +23,39 @@ export const TRIP_DETAIL_TABS = [
 export type TripDetailTabValue = (typeof TRIP_DETAIL_TABS)[number]['value'];
 
 const TRIP_DETAIL_TAB_SCROLL_CLASS: Partial<Record<TripDetailTabValue, string>> = {
-  overview: 'bg-background p-2 sm:p-3',
   timeline: 'bg-background p-2 sm:p-3',
   budget: 'bg-background p-2 sm:p-3',
   members: 'bg-background p-2 sm:p-3',
   files: 'bg-background p-2 sm:p-3',
-  map: 'bg-background p-2 sm:p-3',
 };
-
-/** 概览内区块锚点 — 决策 / 建议确认 / 监控 */
-export type TripOverviewSection = 'decisions' | 'verify' | 'monitor';
 
 export function tripDetailLegacyTabRedirect(
   tabParam: string | null,
-  statusSection: string | null,
-): { tab: TripDetailTabValue; statusSection?: TripOverviewSection } | null {
+): { tab: TripDetailTabValue } | null {
   if (tabParam === 'decisions' || tabParam === 'decision-center') {
-    return {
-      tab: 'overview',
-      statusSection: statusSection === 'verify' ? 'verify' : 'decisions',
-    };
+    return { tab: 'decision-log' };
   }
   if (tabParam === 'monitoring' || tabParam === 'monitor') {
-    return { tab: 'overview', statusSection: 'monitor' };
+    return { tab: 'timeline' };
+  }
+  if (tabParam === 'map' || tabParam === 'overview' || tabParam === 'travel') {
+    return { tab: 'timeline' };
+  }
+  if (tabParam === 'today') {
+    return { tab: 'timeline' };
+  }
+  if (tabParam === 'accommodation') {
+    return { tab: 'timeline' };
+  }
+  if (tabParam === 'activities') {
+    return { tab: 'timeline' };
   }
   return null;
 }
 
 export function tripDetailTabScrollAreaClass(activeTab: string): string {
-  const isMap = activeTab === 'map';
   return cn(
-    'flex-1 min-h-0',
-    isMap ? 'flex flex-col overflow-hidden' : 'overflow-y-auto',
+    'flex-1 min-h-0 overflow-y-auto',
     TRIP_DETAIL_TAB_SCROLL_CLASS[activeTab as TripDetailTabValue] ?? 'bg-muted/30 p-3 sm:p-4',
   );
 }

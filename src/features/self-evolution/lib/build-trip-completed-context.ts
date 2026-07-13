@@ -1,11 +1,6 @@
 import type { TripDetail } from '@/types/trip';
 import type { ReviewSummary } from '@/types/trip-review';
 import type { TripOutcomeQuestionnaireResponses } from '@/types/self-evolution';
-import {
-  resolveMatchSquareRosterFromContext,
-  resolveRecruitmentPostIdFromTrip,
-} from '@/lib/match-square-trip-roster';
-import { getPreTripPrediction } from './pre-trip-prediction-store';
 import type { TripCompletedContext } from './on-trip-completed';
 
 export function satisfactionFromQuestionnaire(
@@ -15,33 +10,17 @@ export function satisfactionFromQuestionnaire(
 }
 
 export function buildCalibrationTargetsFromTrip(
-  trip: TripDetail,
-  satisfaction: number
+  _trip: TripDetail,
+  _satisfaction: number
 ): TripCompletedContext['calibrationTargets'] {
-  const postId = resolveRecruitmentPostIdFromTrip(trip);
-  if (!postId) return [];
-
-  const roster = resolveMatchSquareRosterFromContext(trip.id);
-  if (!roster?.members.length) return [];
-
-  return roster.members
-    .filter((member) => member.sourceApplicationId)
-    .filter((member) => getPreTripPrediction(member.sourceApplicationId!))
-    .map((member) => ({
-      postId,
-      applicationId: member.sourceApplicationId!,
-      satisfaction,
-    }));
+  return [];
 }
 
 export function resolveTripParticipantIds(
-  trip: TripDetail,
+  _trip: TripDetail,
   currentUserId: string
 ): string[] {
-  const roster = resolveMatchSquareRosterFromContext(trip.id);
-  const fromRoster = roster?.members.map((m) => m.userId).filter(Boolean) ?? [];
-  const unique = new Set<string>([currentUserId, ...fromRoster]);
-  return [...unique];
+  return [currentUserId];
 }
 
 export function buildTripCompletedContext(params: {

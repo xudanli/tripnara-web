@@ -10,11 +10,14 @@ import { AttractionExploreFiltersPanel } from './AttractionExploreFiltersPanel';
 import { AttractionExploreRecommendPanel } from './AttractionExploreRecommendPanel';
 import { AttractionExploreSearchBar } from './AttractionExploreSearchBar';
 import { useAttractionExplore } from './useAttractionExplore';
+import type { Collaborator, TripDetail } from '@/types/trip';
 import { workbenchAttractionExploreColumnSurface, workbenchScrollable } from '../workbench-ui';
 import { useState } from 'react';
 
 export interface PlanningWorkbenchAttractionExploreProps {
   tripId: string;
+  trip?: TripDetail | null;
+  collaborators?: Collaborator[] | null;
   onViewMap?: () => void;
   onEditPreferences?: () => void;
   onViewAttractionDetails?: (item: AttractionExploreItem) => void;
@@ -25,6 +28,8 @@ export interface PlanningWorkbenchAttractionExploreProps {
 /** 规划工作台 · 探索景点（三栏：筛选 | 推荐 | 候选） */
 export function PlanningWorkbenchAttractionExplore({
   tripId,
+  trip,
+  collaborators,
   onViewMap,
   onEditPreferences,
   onViewAttractionDetails,
@@ -145,6 +150,9 @@ export function PlanningWorkbenchAttractionExplore({
           )}
         >
           <AttractionExploreFiltersPanel
+            tripId={tripId}
+            trip={trip}
+            collaborators={collaborators}
             context={explore.context}
             selectedThemeIds={explore.selectedThemeIds}
             selectedSuitabilityIds={explore.selectedSuitabilityIds}

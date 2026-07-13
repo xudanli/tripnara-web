@@ -32,6 +32,7 @@ export interface PlanningWorkbenchConstraintsPanelProps {
   collaborators?: import('@/types/trip').Collaborator[] | null;
   onOpenCollaborationCenter?: () => void;
   onOpenBudgetTab?: () => void;
+  selfDriveSettings?: ConstraintConsolePanelProps['selfDriveSettings'];
   className?: string;
 }
 
@@ -58,6 +59,7 @@ export const PlanningWorkbenchConstraintsPanel = memo(function PlanningWorkbench
   collaborators,
   onOpenCollaborationCenter,
   onOpenBudgetTab,
+  selfDriveSettings,
   className,
 }: PlanningWorkbenchConstraintsPanelProps) {
   const handleEdit: ConstraintConsolePanelProps['onEditConstraint'] = (key) => {
@@ -93,6 +95,7 @@ export const PlanningWorkbenchConstraintsPanel = memo(function PlanningWorkbench
       collaborators={collaborators}
       onOpenCollaborationCenter={onOpenCollaborationCenter}
       onOpenBudgetTab={onOpenBudgetTab}
+      selfDriveSettings={selfDriveSettings}
       variant="workbench"
       className={cn(className)}
     />

@@ -14,7 +14,10 @@ describe('mapPreviewImpactToUi', () => {
         conflictsBefore: { mustHandle: 1, suggestAdjust: 2 },
         conflictsAfter: { mustHandle: 2, suggestAdjust: 1 },
         recommendations: ['建议缩短第 2 天驾驶时长', '可改为公共交通'],
-        suggestedFollowUp: 'refreshType=deep 时触发完整重算',
+        suggestedFollowUp: {
+          label: '保存后运行完整检查',
+          action: 'CONFIRM_AND_DEEP_CHECK',
+        },
         refreshType: 'deep',
       },
       EMPTY_CONSTRAINT_IMPACT_PREVIEW,
@@ -26,7 +29,7 @@ describe('mapPreviewImpactToUi', () => {
     expect(ui.conflictsBefore?.mustHandle).toBe(1);
     expect(ui.conflictsAfter?.mustHandle).toBe(2);
     expect(ui.recommendations).toHaveLength(2);
-    expect(ui.suggestedFollowUp).toContain('deep');
+    expect(ui.suggestedFollowUpAction?.label).toContain('完整检查');
     expect(ui.refreshType).toBe('deep');
     expect(ui.diffBullets.some((line) => line.includes('硬冲突'))).toBe(true);
   });
@@ -99,6 +102,85 @@ describe('mapPreviewImpactToUi', () => {
     expect(ui.structuredImpact?.constraintChanges?.[0]?.after).toBe('10:00');
   });
 
+  it('formats catalog hard toggle constraintChanges without raw JSON', () => {
+    const ui = mapPreviewImpactToUi(
+      {
+        structuredImpact: {
+          constraintChanges: [
+            {
+              constraintId: 'c_tpl_no_unpaved_road',
+              name: '不走未铺装道路',
+              before: {
+                templateId: 'no_unpaved_road',
+                unpavedAllowed: false,
+                judgmentResult: '路线不得包含非铺装/F路路段',
+                violationResult: '阻断执行',
+                rule: '路线不得包含非铺装/F路路段',
+                violation: '阻断执行',
+              },
+              after: {
+                templateId: 'no_unpaved_road',
+                unpavedAllowed: false,
+                enabled: true,
+                notes: '避开 F 路',
+              },
+            },
+          ],
+        },
+      },
+      EMPTY_CONSTRAINT_IMPACT_PREVIEW,
+    );
+
+    expect(ui.structuredImpact?.constraintChanges?.[0]?.before).toBe('已启用');
+    expect(ui.structuredImpact?.constraintChanges?.[0]?.after).toBe(
+      '已启用 · 补充：避开 F 路',
+    );
+  });
+
+  it('formats no_night_drive object constraintChanges and repairs broken userFacingSummary', () => {
+    const ui = mapPreviewImpactToUi(
+      {
+        structuredImpact: {
+          constraintChanges: [
+            {
+              constraintId: 'c_no_night_drive',
+              name: '不夜驾',
+              before: {
+                maxMinutesAfterSunset: 30,
+                rule: '日落后 30 分钟不得继续驾驶',
+              },
+              after: {
+                maxMinutesAfterSunset: 60,
+                enabled: true,
+              },
+              unit: 'minute',
+              userFacingSummary: '不夜驾：[object Object] → [object Object]',
+            },
+          ],
+        },
+        diffBullets: ['不夜驾：[object Object] → [object Object]'],
+        recommendations: ['不夜驾：[object Object] → [object Object]'],
+      },
+      EMPTY_CONSTRAINT_IMPACT_PREVIEW,
+    );
+
+    expect(ui.structuredImpact?.constraintChanges?.[0]?.before).toBe(
+      '日落后 30 分钟内停止驾驶',
+    );
+    expect(ui.structuredImpact?.constraintChanges?.[0]?.after).toBe(
+      '日落后 60 分钟内停止驾驶',
+    );
+    expect(ui.structuredImpact?.constraintChanges?.[0]?.userFacingSummary).toBe(
+      '不夜驾：日落后 30 分钟内停止驾驶 → 日落后 60 分钟内停止驾驶',
+    );
+    expect(ui.diffBullets[0]).toBe(
+      '不夜驾：日落后 30 分钟内停止驾驶 → 日落后 60 分钟内停止驾驶',
+    );
+    expect(ui.recommendations ?? []).not.toContain(
+      '不夜驾：日落后 30 分钟内停止驾驶 → 日落后 60 分钟内停止驾驶',
+    );
+  });
+
   it('rewrites engineering recommendation copy for users', () => {
     const ui = mapPreviewImpactToUi(
       {
@@ -111,7 +193,7 @@ describe('mapPreviewImpactToUi', () => {
   });
 
   it('does not duplicate summaryBullets in recommendations', () => {
-    const shared = '变更影响较小，建议确认后刷新可行性验证';
+    const shared = '第 2 天可能需拆分以符合新上限';
     const ui = mapPreviewImpactToUi(
       {
         structuredImpact: { summaryBullets: [shared] },

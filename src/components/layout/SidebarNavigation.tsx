@@ -337,7 +337,7 @@ export default function SidebarNavigation({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
-                  navigate('/dashboard/settings?tab=preferences');
+                  navigate('/dashboard/settings');
                   if (isMobile && onMobileClose) {
                     onMobileClose();
                   }

@@ -21,6 +21,15 @@ describe('daily-drive-conflict.util', () => {
     expect(readDailyDriveLimitHours({ metadata: {} } as TripDetail)).toBe(4.5);
   });
 
+  it('prefers API c_max_daily_drive over trip metadata default', () => {
+    expect(
+      readDailyDriveLimitHours({ metadata: {} } as TripDetail, {
+        id: 'c_max_daily_drive',
+        value: { maxHours: 6 },
+      } as import('@/types/trip-constraints').TripConstraint),
+    ).toBe(6);
+  });
+
   it('detects per-day violations from travel info', () => {
     const travelInfoMap = new Map([
       ['2026-07-01', { summary: { totalDuration: 586 } }],

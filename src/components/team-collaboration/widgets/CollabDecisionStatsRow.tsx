@@ -1,5 +1,5 @@
 import type { CollabDecisionStats } from '@/hooks/useCollabOverview';
-import { workbenchCardFlat } from '@/components/plan-studio/workbench/workbench-ui';
+import { workbenchCard } from '@/components/plan-studio/workbench/workbench-ui';
 import { cn } from '@/lib/utils';
 
 interface CollabDecisionStatsRowProps {
@@ -17,7 +17,7 @@ function StatCard({
   hint?: string;
 }) {
   return (
-    <div className={cn(workbenchCardFlat, 'flex items-center gap-2.5 px-3 py-2')}>
+    <div className={cn(workbenchCard, 'flex items-center gap-2.5 px-3 py-2')}>
       <p className="text-lg font-semibold tabular-nums leading-none text-foreground">{value}</p>
       <div className="min-w-0 leading-tight">
         <p className="text-xs font-medium text-foreground">{label}</p>

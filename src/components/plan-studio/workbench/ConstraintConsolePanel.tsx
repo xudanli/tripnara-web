@@ -20,7 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { coerceDisplayText } from '@/lib/coerce-display-text.util';
 import { handleConstraintApiError } from '@/lib/constraint-console.service';
-import { useTripConstraints } from '@/hooks/useTripConstraints';
+import { useConstraintConsoleWithAssessments } from '@/hooks/useConstraintConsoleWithAssessments';
 import { useTripConstraintsCheck } from '@/hooks/useTripConstraintsCheck';
 import { useTravelStatus } from '@/hooks/useTravelStatus';
 import { resolveAutomationSidebarSummary } from '@/components/trip-automation/AutomationCatalogSummaryPanel';
@@ -33,6 +33,7 @@ import {
 import { TravelGoalsSection } from './TravelGoalsSection';
 import { ConstraintSidebarSectionShell } from './ConstraintSidebarSectionShell';
 import { WorkbenchPlanningContextBlock } from './WorkbenchPlanningContextBlock';
+import { SelfDriveSettingsPanel } from '@/components/plan-studio/tep';
 import { getTravelGoalDefinition } from '@/lib/travel-goals.util';
 import { ContractSectionSidebarPreview } from './ConstraintContractBlocks';
 import {
@@ -43,7 +44,7 @@ import {
   collectActiveExternalConditions,
   countWorkbenchPlanningConditions,
   isWorkbenchSummarySection,
-  partitionHardItemsForWorkbench,
+  collectWorkbenchMustComplyItems,
   resolveWorkbenchSectionTitle,
   WORKBENCH_EXTERNAL_SECTION_KEY,
 } from '@/lib/constraint-sidebar-focus.util';
@@ -97,6 +98,13 @@ export interface ConstraintConsolePanelProps {
   collaborators?: import('@/types/trip').Collaborator[] | null;
   onOpenCollaborationCenter?: () => void;
   onOpenBudgetTab?: () => void;
+  /** P1：冰岛自驾设置 */
+  selfDriveSettings?: {
+    visible: boolean;
+    profile?: import('@/types/trip-executability').SelfDriveProfile | null;
+    constraintsWasConfirmed?: boolean;
+    onSaved?: () => void | Promise<void>;
+  };
   className?: string;
 }
 
@@ -130,6 +138,7 @@ export function ConstraintConsolePanel({
   collaborators,
   onOpenCollaborationCenter,
   onOpenBudgetTab,
+  selfDriveSettings,
   className,
 }: ConstraintConsolePanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -141,7 +150,7 @@ export function ConstraintConsolePanel({
     refreshKey: constraintsApiList?.meta?.constraintsVersion ?? softPrefsRevision,
   });
 
-  const tripConstraints = useTripConstraints({
+  const tripConstraints = useConstraintConsoleWithAssessments({
     tripId,
     summary,
     trip,
@@ -223,11 +232,8 @@ export function ConstraintConsolePanel({
   const workbenchPlanningLayout = useMemo(() => {
     if (variant !== 'workbench') return null;
 
-    const hardSection = sections.find((section) => section.meta.key === 'hard_must_satisfy');
     const softSection = sections.find((section) => section.meta.key === 'soft_prefer');
-    const { tripObjectiveItems, mustComplyItems } = partitionHardItemsForWorkbench(
-      hardSection?.items ?? [],
-    );
+    const { tripObjectiveItems, mustComplyItems } = collectWorkbenchMustComplyItems(sections);
     const externalItems = collectActiveExternalConditions(sections);
     const conditionCount = countWorkbenchPlanningConditions({
       tripObjectiveItems,
@@ -413,6 +419,17 @@ export function ConstraintConsolePanel({
             collaborators={collaborators}
             onOpenCollaborationCenter={onOpenCollaborationCenter}
             onOpenBudgetTab={onOpenBudgetTab}
+          />
+        ) : null}
+
+        {variant === 'workbench' && selfDriveSettings?.visible ? (
+          <SelfDriveSettingsPanel
+            className="mb-3"
+            tripId={tripId}
+            trip={trip}
+            profile={selfDriveSettings.profile}
+            constraintsWasConfirmed={selfDriveSettings.constraintsWasConfirmed}
+            onSaved={selfDriveSettings.onSaved}
           />
         ) : null}
 

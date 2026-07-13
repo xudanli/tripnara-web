@@ -6,7 +6,7 @@
 
 import apiClient from './client';
 import { isIdentityApiNotReady } from '@/api/identity-governance';
-import { isApiNotReadyError } from '@/features/match-square/lib/match-square-api-mode';
+import { isApiNotReadyError } from '@/lib/api-fallback-mode';
 import { unwrapApiData } from '@/lib/api-response';
 import {
   normalizeTrustedProjectDetailResponse,

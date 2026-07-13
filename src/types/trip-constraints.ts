@@ -28,15 +28,25 @@ export type TripConstraintStatus =
 export type TripConstraintCardTone = 'default' | 'caution' | 'danger' | 'muted';
 
 export interface TripConstraintScope {
-  type: 'TRIP' | 'DAY' | 'MEMBER' | 'MEMBER_GROUP' | string;
+  type: 'TRIP' | 'DAY' | 'MEMBER' | 'MEMBER_GROUP' | 'ROUTE_SEGMENT' | string;
   dayIndex?: number;
   memberIds?: string[];
+  /** 相邻行程项路段 · segmentId 通常为 fromItemId__toItemId */
+  segmentId?: string;
+  fromItemId?: string;
+  toItemId?: string;
 }
 
 export interface TripConstraintSource {
   type: 'USER' | 'AI_INFERRED' | 'PRIVATE_WISH' | 'SYSTEM' | 'OFFICIAL_RULE' | string;
   wishId?: string;
   templateId?: string;
+}
+
+/** Capability Registry · assessment join key（GET /constraints items[].capability） */
+export interface TripConstraintCapability {
+  constraintKey?: string;
+  ruleId?: string;
 }
 
 export interface TripConstraint {
@@ -69,6 +79,8 @@ export interface TripConstraint {
   sectionKey?: TripConstraintsSectionKey | string;
   /** BFF 硬约束合同元数据（§3.4 SSOT，优先于前端静态规则） */
   contractMeta?: TripConstraintContractMeta;
+  /** P1-A · GET /constraint-assessments join key */
+  capability?: TripConstraintCapability;
 }
 
 export type TripConstraintViolationResult = 'BLOCK' | 'CONFIRM' | string;
@@ -295,6 +307,74 @@ export interface TripConstraintPreviewConstraintChange {
   before?: number | string | Record<string, unknown>;
   after?: number | string | Record<string, unknown>;
   unit?: string;
+  /** BFF 人话摘要 · 如「从 6 小时/天 改为 5 小时/天」 */
+  userFacingSummary?: string;
+}
+
+export type TripConstraintPreviewVerdict =
+  | 'STILL_NOT_EXECUTABLE'
+  | 'IMPROVED'
+  | 'NOW_EXECUTABLE'
+  | 'NEEDS_CONFIRM';
+
+export interface TripConstraintPreviewUserSummary {
+  verdict: TripConstraintPreviewVerdict;
+  verdictLabel: string;
+  verdictReason: string;
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
+  previewMode?: 'quick' | 'deep';
+}
+
+export type TripConstraintPreviewFollowUpAction =
+  | 'OPEN_FEASIBILITY_REPORT'
+  | 'CONFIRM_AND_DEEP_CHECK'
+  | 'NONE';
+
+export interface TripConstraintPreviewSuggestedFollowUp {
+  label: string;
+  action: TripConstraintPreviewFollowUpAction;
+  deepLink?: string;
+}
+
+export interface TripConstraintPreviewConflictBucketSummary {
+  before?: number;
+  after?: number;
+  delta?: number;
+  label?: string;
+}
+
+export interface TripConstraintPreviewExecuteabilityDelta {
+  scoreDelta?: number;
+  mustHandleDelta?: number;
+  suggestAdjustDelta?: number;
+  pendingConfirmDelta?: number;
+  scoreDeltaReason?: string;
+  blockingRuleIds?: string[];
+  conflictsDeltaSummary?: {
+    mustHandle?: string | TripConstraintPreviewConflictBucketSummary;
+    suggestAdjust?: string | TripConstraintPreviewConflictBucketSummary;
+    pendingConfirm?: string | TripConstraintPreviewConflictBucketSummary;
+  };
+}
+
+export type TripConstraintPreviewScheduleDetailLevel =
+  | 'none'
+  | 'day_summary'
+  | 'activity';
+
+export interface TripConstraintPreviewAffectedDayItem {
+  itemId?: string;
+  label: string;
+  startTimeLabel?: string;
+  detail?: string;
+  impactType?: string;
+}
+
+export interface TripConstraintPreviewAffectedDayDetail {
+  dayNumber: number;
+  tone?: 'major' | 'minor' | 'none';
+  daySummary?: string;
+  items: TripConstraintPreviewAffectedDayItem[];
 }
 
 export interface TripConstraintPreviewStructuredImpact {
@@ -308,6 +388,11 @@ export interface TripConstraintPreviewStructuredImpact {
     daysNeedingSplit?: number[];
     extraLodgingNights?: number;
     poisToRelocate?: Array<{ dayNumber?: number; itemId?: string; label?: string }>;
+    /** 本约束相关受影响天（优先于顶层 affectedDays） */
+    affectedDays?: Array<{ dayNumber: number; tone?: 'major' | 'minor' | 'none' }>;
+    affectedDayDetails?: TripConstraintPreviewAffectedDayDetail[];
+    scheduleDetailLevel?: TripConstraintPreviewScheduleDetailLevel;
+    scheduleDetailUnavailableReason?: string;
   };
   budget?: {
     deltaPct?: number;
@@ -333,7 +418,7 @@ export interface TripConstraintPreviewImpactData {
   feasibilityAfter?: number | Record<string, unknown>;
   assessBefore?: { overallAverageScore?: number; [key: string]: unknown };
   assessAfter?: { overallAverageScore?: number; [key: string]: unknown };
-  executeabilityDelta?: { scoreDelta?: number; mustHandleDelta?: number };
+  executeabilityDelta?: TripConstraintPreviewExecuteabilityDelta;
   budgetDelta?: {
     total?: number;
     currency?: string;
@@ -344,7 +429,31 @@ export interface TripConstraintPreviewImpactData {
   recommendations?: string[];
   conflictsBefore?: { mustHandle?: number; suggestAdjust?: number; pendingConfirm?: number };
   conflictsAfter?: { mustHandle?: number; suggestAdjust?: number; pendingConfirm?: number };
-  suggestedFollowUp?: string;
+  /** @deprecated 使用 suggestedFollowUpAction */
+  suggestedFollowUp?: string | TripConstraintPreviewSuggestedFollowUp;
+  /** BFF 人话层 · POST preview-impact */
+  userSummary?: TripConstraintPreviewUserSummary;
+  affectedDayDetails?: TripConstraintPreviewAffectedDayDetail[];
+  scheduleDetailLevel?: TripConstraintPreviewScheduleDetailLevel;
+  scheduleDetailUnavailableReason?: string;
+  constraintAssessments?: import('@/types/frontend-constraint-assessment-api.types').UnifiedConstraintAssessmentView[];
+  meta?: {
+    debug?: {
+      refreshType?: string;
+      engines?: string[];
+      tripLevelConflictsBefore?: {
+        mustHandle?: number;
+        suggestAdjust?: number;
+        pendingConfirm?: number;
+      };
+      tripLevelConflictsAfter?: {
+        mustHandle?: number;
+        suggestAdjust?: number;
+        pendingConfirm?: number;
+      };
+      [key: string]: unknown;
+    };
+  };
   /** POST preview-impact · 优先于分散字段 */
   structuredImpact?: TripConstraintPreviewStructuredImpact;
 }

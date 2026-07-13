@@ -13,7 +13,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CreateTripFromTemplateDialog } from '@/components/trips/CreateTripFromTemplateDialog';
-import { LaunchRecruitmentFromTemplateButton } from '@/features/match-square/components/LaunchRecruitmentFromTemplateButton';
 import {
   ArrowLeft,
   Calendar,
@@ -490,13 +489,6 @@ export default function RouteTemplatesPage() {
                             使用模板
                           </Button>
                         </div>
-                        <LaunchRecruitmentFromTemplateButton
-                          template={template}
-                          size="sm"
-                          variant="secondary"
-                          compact
-                          fullWidth
-                        />
                       </div>
                     </div>
                   </CardContent>

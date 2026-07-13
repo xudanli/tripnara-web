@@ -16,7 +16,7 @@ import TasksTab from './TasksTab';
 // PersonaModeToggle 已移除 - 三人格现在是系统内部工具，不再允许用户切换视图
 // PlanStudioSidebar 已移除 - 策略概览功能已整合到 AI 助手侧边栏
 import { Compass } from '@/components/illustrations/SimpleIllustrations';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import WelcomeModal from '@/components/onboarding/WelcomeModal';
 import {
   Dialog,
@@ -29,7 +29,7 @@ import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
-  AlertDialogContent,
+  AlertDialogStackContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
@@ -69,14 +69,6 @@ import { buildTripTravelStatusPath } from '@/lib/travel-status-navigation.util';
 import type { DecisionProfilingStep } from '@/types/trip-decision-profiling';
 import { useTripWishSummary } from '@/hooks/useTripWishes';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  EmbeddedHikingStatusBar,
-} from '@/components/hiking';
-import {
-  isEmbeddedHikingTrip,
-} from '@/lib/trip-hiking';
-import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
-import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
 import { PlanStudioProvider, usePlanStudio } from '@/contexts/PlanStudioContext';
 import { TripTravelContextProvider } from '@/features/trip-context';
 import { EditTripDialog } from '@/components/trips/EditTripDialog';
@@ -124,10 +116,6 @@ import { trackCollabNegotiationStart, trackCollabVoteStart } from '@/utils/colla
 import { useWorldModelGuardsStore } from '@/store/worldModelGuardsStore';
 import { isSelfDrivePlanningTrip } from '@/lib/trip-self-drive';
 import {
-  ACTIONABLE_READINESS_HORIZON_DAYS,
-  getDaysUntilTripStart,
-} from '@/lib/trip-readiness-phase.util';
-import {
   dispatchPlanStudioSelectScheduleDay,
   type PlanStudioScheduleNavigateDetail,
   resolveScheduleDayIndex,
@@ -173,6 +161,7 @@ import {
   clearAttractionExploreSearchParams,
   clearArrangeItinerarySearchParams,
   clearDecisionSpaceSearchParams,
+  clearItineraryDiagnosisSearchParams,
   resolveConstraintUiLabel,
   resolveWorkbenchMode,
   type WorkbenchMode,
@@ -207,6 +196,8 @@ import {
 import { TRAVEL_GOALS_SECTION_ID } from '@/lib/travel-goals.util';
 import { selectionIdToSectionKey } from '@/lib/trip-constraints-contract.util';
 import { PlanStudioPlanningHeader } from '@/components/plan-studio/PlanStudioPlanningHeader';
+import { SelfDriveExecutabilityPanel } from '@/components/plan-studio/tep';
+import { canConfirmTripWithExecutability } from '@/lib/trip-executability.util';
 import { PlanningBudgetConstraintsDialog } from '@/components/plan-studio/PlanningBudgetConstraintsDialog';
 import { PlanningTimeRangeConstraintsDialog } from '@/components/plan-studio/PlanningTimeRangeConstraintsDialog';
 import { PlanningTravelersConstraintsDialog } from '@/components/plan-studio/PlanningTravelersConstraintsDialog';
@@ -219,6 +210,7 @@ import type { CompareStripSelection } from '@/lib/decision-strip-compare-cta';
 import { useDecisionStripPlanningReadiness } from '@/hooks/useDecisionStripPlanningReadiness';
 import { usePlanningConflicts } from '@/hooks/usePlanningConflicts';
 import { useConstraintsSummary } from '@/hooks/useConstraintsSummary';
+import { useTripExecutability } from '@/hooks/useTripExecutability';
 import { useWorkbenchFeasibilityScore } from '@/hooks/useWorkbenchFeasibilityScore';
 import { useDecisionChecker } from '@/hooks/useDecisionChecker';
 import { useCollabPendingCount } from '@/hooks/useCollabPendingCount';
@@ -371,6 +363,9 @@ function PlanStudioPageContent() {
   const [arrangeItineraryOpen, setArrangeItineraryOpen] = useState(
     () => searchParams.get('arrangeItinerary') === '1',
   );
+  const [itineraryDiagnosisOpen, setItineraryDiagnosisOpen] = useState(
+    () => searchParams.get('itineraryDiagnosis') === '1',
+  );
   const [decisionSpaceConflictId, setDecisionSpaceConflictId] = useState<string | null>(
     () => searchParams.get('conflictId'),
   );
@@ -437,13 +432,6 @@ function PlanStudioPageContent() {
     return () => window.clearTimeout(timer);
   }, [readyTripId]);
   const collabPendingCount = useCollabPendingCount(readyTripId, wishSummary, collabBadgeEnabled);
-
-  const embeddedHiking = useEmbeddedHikingTrip(readyTripId ? currentTrip : null);
-  const showEmbeddedPlanStudio =
-    Boolean(tripId) &&
-    isEmbeddedHikingEnabled() &&
-    embeddedHiking.embedded &&
-    isEmbeddedHikingTrip(currentTrip);
 
   const constraintsVersion = constraintsApiList?.meta?.constraintsVersion ?? null;
 
@@ -545,6 +533,12 @@ function PlanStudioPageContent() {
       planningConflictsLoading: planningConflicts.loading,
     },
   );
+  const tepConstraintsSummaryDto = planningConflicts.constraintsSummary;
+  const tripExecutability = useTripExecutability(readyTripId, {
+    enabled: activeTab === 'schedule',
+    destination: currentTrip?.destination,
+    constraintsSummary: tepConstraintsSummaryDto,
+  });
   const decisionCheckerModel = useDecisionChecker(readyTripId, {
     enabled: activeTab === 'schedule',
     embeddedMode: activeTab === 'schedule',
@@ -561,9 +555,12 @@ function PlanStudioPageContent() {
   });
 
   const workbenchSnapshotEnabled =
+    activeTab === 'schedule' && Boolean(readyTripId) && !attractionExploreOpen;
+  const showArrangeHome =
     activeTab === 'schedule' &&
-    Boolean(readyTripId) &&
-    (decisionSpaceOpen || arrangeItineraryOpen || decisionOverviewDeferred);
+    !attractionExploreOpen &&
+    !decisionSpaceOpen &&
+    !itineraryDiagnosisOpen;
 
   const workbenchPlanningSnapshot = usePlanningWorkbenchSnapshot(
     readyTripId ?? '',
@@ -1390,6 +1387,8 @@ function PlanStudioPageContent() {
       }
       setDecisionSpaceConflictId(conflictId);
       setDecisionSpaceOpen(true);
+      setArrangeItineraryOpen(false);
+      setItineraryDiagnosisOpen(false);
       setDecisionCheckerTab('overview');
       solutionMatrix.setExpanded(true);
       if (typeof context?.dayIndex === 'number') {
@@ -1400,6 +1399,7 @@ function PlanStudioPageContent() {
       next.set('tab', 'schedule');
       clearAttractionExploreSearchParams(next);
       clearArrangeItinerarySearchParams(next);
+      clearItineraryDiagnosisSearchParams(next);
       next.set('decisionSpace', '1');
       if (context?.problemId) next.set('problemId', context.problemId);
       if (conflictId) next.set('conflictId', conflictId);
@@ -1412,6 +1412,17 @@ function PlanStudioPageContent() {
   const openDecisionProblem = useCallback(
     (problemId: string) => {
       openDecisionSpace({ problemId });
+    },
+    [openDecisionSpace],
+  );
+
+  const handleTepPrimaryCta = useCallback(
+    (deepLink: string) => {
+      const params = new URLSearchParams(deepLink.includes('=') ? deepLink : `tab=${deepLink}`);
+      const tab = params.get('tab');
+      if (tab === 'decisions') {
+        openDecisionSpace();
+      }
     },
     [openDecisionSpace],
   );
@@ -1475,17 +1486,47 @@ function PlanStudioPageContent() {
       navigate(buildTripTravelStatusPath(tripId));
       return;
     }
+    next.set('arrangeItinerary', '1');
+    setArrangeItineraryOpen(true);
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, tripId, navigate]);
+
+  const openItineraryDiagnosis = useCallback(() => {
+    setActiveTab('schedule');
+    setDecisionSpaceOpen(false);
+    setAttractionExploreOpen(false);
+    setArrangeItineraryOpen(false);
+    setItineraryDiagnosisOpen(true);
+    const next = new URLSearchParams(searchParams);
+    clearDecisionSpaceSearchParams(next);
+    clearAttractionExploreSearchParams(next);
+    clearArrangeItinerarySearchParams(next);
+    next.set('tab', 'schedule');
+    next.set('itineraryDiagnosis', '1');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const closeItineraryDiagnosis = useCallback(() => {
+    setItineraryDiagnosisOpen(false);
+    const next = new URLSearchParams(searchParams);
+    clearItineraryDiagnosisSearchParams(next);
+    clearDecisionSpaceSearchParams(next);
+    next.set('tab', 'schedule');
+    next.set('arrangeItinerary', '1');
+    setArrangeItineraryOpen(true);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const openAttractionExplore = useCallback(() => {
     setActiveTab('schedule');
     setDecisionSpaceOpen(false);
     setArrangeItineraryOpen(false);
+    setItineraryDiagnosisOpen(false);
     setAttractionExploreOpen(true);
     const next = new URLSearchParams(searchParams);
     clearDecisionSpaceSearchParams(next);
     clearArrangeItinerarySearchParams(next);
+    clearItineraryDiagnosisSearchParams(next);
     next.set('tab', 'schedule');
     next.set('attractionExplore', '1');
     setSearchParams(next, { replace: true });
@@ -1495,6 +1536,9 @@ function PlanStudioPageContent() {
     setAttractionExploreOpen(false);
     const next = new URLSearchParams(searchParams);
     clearAttractionExploreSearchParams(next);
+    next.set('tab', 'schedule');
+    next.set('arrangeItinerary', '1');
+    setArrangeItineraryOpen(true);
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -1502,10 +1546,12 @@ function PlanStudioPageContent() {
     setActiveTab('schedule');
     setDecisionSpaceOpen(false);
     setAttractionExploreOpen(false);
+    setItineraryDiagnosisOpen(false);
     setArrangeItineraryOpen(true);
     const next = new URLSearchParams(searchParams);
     clearDecisionSpaceSearchParams(next);
     clearAttractionExploreSearchParams(next);
+    clearItineraryDiagnosisSearchParams(next);
     next.set('tab', 'schedule');
     next.set('arrangeItinerary', '1');
     if (options?.autoArrange) {
@@ -1617,8 +1663,24 @@ function PlanStudioPageContent() {
     const conflictFromUrl = searchParams.get('conflictId');
     if (conflictFromUrl) setDecisionSpaceConflictId(conflictFromUrl);
     setAttractionExploreOpen(searchParams.get('attractionExplore') === '1');
+    setItineraryDiagnosisOpen(searchParams.get('itineraryDiagnosis') === '1');
     setArrangeItineraryOpen(searchParams.get('arrangeItinerary') === '1');
   }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab !== 'schedule' || !readyTripId || loading) return;
+    const hasScheduleSubview =
+      searchParams.get('arrangeItinerary') === '1' ||
+      searchParams.get('attractionExplore') === '1' ||
+      searchParams.get('itineraryDiagnosis') === '1' ||
+      searchParams.get('decisionSpace') === '1' ||
+      searchParams.get('view') === 'constraints';
+    if (hasScheduleSubview) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('arrangeItinerary', '1');
+    setArrangeItineraryOpen(true);
+    setSearchParams(next, { replace: true });
+  }, [activeTab, readyTripId, loading, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (activeTab === 'schedule' || !attractionExploreOpen) return;
@@ -1628,6 +1690,15 @@ function PlanStudioPageContent() {
     clearAttractionExploreSearchParams(next);
     setSearchParams(next, { replace: true });
   }, [activeTab, attractionExploreOpen, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (activeTab === 'schedule' || !itineraryDiagnosisOpen) return;
+    setItineraryDiagnosisOpen(false);
+    if (searchParams.get('itineraryDiagnosis') !== '1') return;
+    const next = new URLSearchParams(searchParams);
+    clearItineraryDiagnosisSearchParams(next);
+    setSearchParams(next, { replace: true });
+  }, [activeTab, itineraryDiagnosisOpen, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (activeTab === 'schedule' || !arrangeItineraryOpen) return;
@@ -1893,10 +1964,45 @@ function PlanStudioPageContent() {
 
   const handleWorkbenchItineraryChanged = useCallback(() => {
     setRefreshKey((k) => k + 1);
+    tripExecutability.refreshAfterPlanEdit();
     if (tripId) {
       tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
     }
-  }, [tripId]);
+  }, [tripId, tripExecutability.refreshAfterPlanEdit]);
+
+  const handleTepFocusDay = useCallback(
+    (dayIndex: number) => {
+      const zeroBased = Math.max(0, dayIndex - 1);
+      setSelectedScheduleDayIndex(zeroBased);
+      if (!isWorkbenchDesktop) {
+        setWorkbenchMobileColumn('itinerary');
+      }
+    },
+    [isWorkbenchDesktop],
+  );
+
+  const handleSelfDriveSettingsSaved = useCallback(async () => {
+    await tripExecutability.reload();
+    void constraintsSummary.reload();
+    if (tripId) {
+      tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
+    }
+  }, [tripExecutability.reload, constraintsSummary, tripId]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ dayIndex?: number }>).detail;
+      if (typeof detail?.dayIndex === 'number') {
+        handleTepFocusDay(detail.dayIndex);
+        document.querySelector('[data-testid="tep-panel"]')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }
+    };
+    window.addEventListener('plan-studio:scroll-tep-day', handler);
+    return () => window.removeEventListener('plan-studio:scroll-tep-day', handler);
+  }, [handleTepFocusDay]);
 
   const navigateToWorkbenchJourneyMap = useCallback(
     (dayIndex?: number) => {
@@ -2244,9 +2350,10 @@ function PlanStudioPageContent() {
       decisionSpaceOpen,
       constraintConsoleOpen,
       attractionExploreOpen,
-      arrangeItineraryOpen,
+      arrangeItineraryOpen: showArrangeHome,
+      itineraryDiagnosisOpen,
     });
-    if (mode === 'browse' || !tripId) return;
+    if (mode === 'browse' || mode === 'arrange_itinerary' || !tripId) return;
     trackWorkbenchModeBackClick({
       tripId,
       mode,
@@ -2260,8 +2367,8 @@ function PlanStudioPageContent() {
       closeAttractionExplore();
       return;
     }
-    if (arrangeItineraryOpen) {
-      closeArrangeItinerary();
+    if (itineraryDiagnosisOpen) {
+      closeItineraryDiagnosis();
       return;
     }
     if (constraintConsoleOpen) {
@@ -2269,14 +2376,15 @@ function PlanStudioPageContent() {
     }
   }, [
     tripId,
+    showArrangeHome,
     decisionSpaceOpen,
     attractionExploreOpen,
-    arrangeItineraryOpen,
+    itineraryDiagnosisOpen,
     constraintConsoleOpen,
     constraintDrawerDirty,
     closeDecisionSpace,
     closeAttractionExplore,
-    closeArrangeItinerary,
+    closeItineraryDiagnosis,
     requestCloseConstraintConsole,
   ]);
 
@@ -2301,9 +2409,9 @@ function PlanStudioPageContent() {
         closeDecisionSpace();
         return;
       }
-      if (arrangeItineraryOpen) {
+      if (itineraryDiagnosisOpen) {
         event.preventDefault();
-        closeArrangeItinerary();
+        closeItineraryDiagnosis();
         return;
       }
       if (attractionExploreOpen) {
@@ -2324,11 +2432,11 @@ function PlanStudioPageContent() {
     discardConstraintDraftOpen,
     planStudio.planGateOpen,
     decisionSpaceOpen,
-    arrangeItineraryOpen,
+    itineraryDiagnosisOpen,
     attractionExploreOpen,
     constraintConsoleOpen,
     closeDecisionSpace,
-    closeArrangeItinerary,
+    closeItineraryDiagnosis,
     closeAttractionExplore,
     requestCloseConstraintConsole,
   ]);
@@ -2405,26 +2513,38 @@ function PlanStudioPageContent() {
     constraintEvalPendingRef.current = constraintEditSession.evalPending;
   }, [constraintEditSession.evalPending]);
 
-  const handleCommitConstraintEval = useCallback(async () => {
-    const hadPending = (constraintWorkbenchRef.current?.pendingSaveCount ?? 0) > 0;
-    const saved = await constraintWorkbenchRef.current?.commitPendingSaves();
-    if (saved === false) return;
-    await constraintEditSession.commitEval();
-    if (hadPending || constraintEvalPendingRef.current) {
-      toast.success('旅行条件已更新，并完成重新检查');
-    }
-  }, [constraintEditSession]);
+  const handleCommitConstraintEval = useCallback(
+    async (options?: { closeDrawer?: boolean }) => {
+      const hadPending = (constraintWorkbenchRef.current?.pendingSaveCount ?? 0) > 0;
+      const hadEvalPending = constraintEvalPendingRef.current;
+      const saved = await constraintWorkbenchRef.current?.commitPendingSaves();
+      if (saved === false) {
+        toast.error('保存失败，请稍后重试');
+        return false;
+      }
+      await constraintEditSession.commitEval();
+      if (hadPending) {
+        toast.success('旅行条件已更新，并完成重新检查');
+      } else if (hadEvalPending) {
+        toast.success('已完成重新检查');
+      }
+      if (options?.closeDrawer) {
+        closeConstraintConsole({ saved: true });
+        maybePromptResumePlanGate();
+      }
+      return true;
+    },
+    [closeConstraintConsole, constraintEditSession, maybePromptResumePlanGate],
+  );
 
   const handleSaveAndCloseConstraintConsole = useCallback(() => {
-    setDiscardConstraintDraftOpen(false);
     void (async () => {
-      const saved = await constraintWorkbenchRef.current?.commitPendingSaves();
-      if (saved === false) return;
-      await constraintEditSession.commitEval();
-      closeConstraintConsole({ saved: true });
-      maybePromptResumePlanGate();
+      const ok = await handleCommitConstraintEval({ closeDrawer: true });
+      if (ok) {
+        setDiscardConstraintDraftOpen(false);
+      }
     })();
-  }, [closeConstraintConsole, constraintEditSession, maybePromptResumePlanGate]);
+  }, [handleCommitConstraintEval]);
 
   const handleConfirmEvalAndCloseConstraintConsole = useCallback(() => {
     setConstraintEvalCloseConfirmOpen(false);
@@ -2953,123 +3073,10 @@ function PlanStudioPageContent() {
     }
   };
 
-  // ⚠️ 重要：所有 useMemo 必须在早期返回之前调用
-  // 常见国家首都/主要城市坐标（用于没有行程项时的天气查询）
-  const COUNTRY_COORDINATES: Record<string, { lat: number; lng: number; name: string }> = {
-    'IS': { lat: 64.1466, lng: -21.9426, name: '冰岛·雷克雅未克' },
-    'JP': { lat: 35.6762, lng: 139.6503, name: '日本·东京' },
-    'TH': { lat: 13.7563, lng: 100.5018, name: '泰国·曼谷' },
-    'KR': { lat: 37.5665, lng: 126.9780, name: '韩国·首尔' },
-    'US': { lat: 40.7128, lng: -74.0060, name: '美国·纽约' },
-    'GB': { lat: 51.5074, lng: -0.1278, name: '英国·伦敦' },
-    'FR': { lat: 48.8566, lng: 2.3522, name: '法国·巴黎' },
-    'DE': { lat: 52.5200, lng: 13.4050, name: '德国·柏林' },
-    'IT': { lat: 41.9028, lng: 12.4964, name: '意大利·罗马' },
-    'ES': { lat: 40.4168, lng: -3.7038, name: '西班牙·马德里' },
-    'AU': { lat: -33.8688, lng: 151.2093, name: '澳大利亚·悉尼' },
-    'NZ': { lat: -36.8485, lng: 174.7633, name: '新西兰·奥克兰' },
-    'SG': { lat: 1.3521, lng: 103.8198, name: '新加坡' },
-    'MY': { lat: 3.1390, lng: 101.6869, name: '马来西亚·吉隆坡' },
-    'VN': { lat: 21.0285, lng: 105.8542, name: '越南·河内' },
-    'ID': { lat: -6.2088, lng: 106.8456, name: '印度尼西亚·雅加达' },
-    'CN': { lat: 39.9042, lng: 116.4074, name: '中国·北京' },
-    'HK': { lat: 22.3193, lng: 114.1694, name: '香港' },
-    'TW': { lat: 25.0330, lng: 121.5654, name: '台湾·台北' },
-    'AE': { lat: 25.2048, lng: 55.2708, name: '阿联酋·迪拜' },
-    'EG': { lat: 30.0444, lng: 31.2357, name: '埃及·开罗' },
-    'GR': { lat: 37.9838, lng: 23.7275, name: '希腊·雅典' },
-    'TR': { lat: 41.0082, lng: 28.9784, name: '土耳其·伊斯坦布尔' },
-    'PT': { lat: 38.7223, lng: -9.1393, name: '葡萄牙·里斯本' },
-    'NL': { lat: 52.3676, lng: 4.9041, name: '荷兰·阿姆斯特丹' },
-    'CH': { lat: 46.9480, lng: 7.4474, name: '瑞士·伯尔尼' },
-    'AT': { lat: 48.2082, lng: 16.3738, name: '奥地利·维也纳' },
-    'CZ': { lat: 50.0755, lng: 14.4378, name: '捷克·布拉格' },
-    'NO': { lat: 59.9139, lng: 10.7522, name: '挪威·奥斯陆' },
-    'SE': { lat: 59.3293, lng: 18.0686, name: '瑞典·斯德哥尔摩' },
-    'FI': { lat: 60.1699, lng: 24.9384, name: '芬兰·赫尔辛基' },
-    'DK': { lat: 55.6761, lng: 12.5683, name: '丹麦·哥本哈根' },
-    'CA': { lat: 45.4215, lng: -75.6972, name: '加拿大·渥太华' },
-    'MX': { lat: 19.4326, lng: -99.1332, name: '墨西哥·墨西哥城' },
-    'BR': { lat: -23.5505, lng: -46.6333, name: '巴西·圣保罗' },
-    'AR': { lat: -34.6037, lng: -58.3816, name: '阿根廷·布宜诺斯艾利斯' },
-    'CL': { lat: -33.4489, lng: -70.6693, name: '智利·圣地亚哥' },
-    'PE': { lat: -12.0464, lng: -77.0428, name: '秘鲁·利马' },
-    'IN': { lat: 28.6139, lng: 77.2090, name: '印度·新德里' },
-    'RU': { lat: 55.7558, lng: 37.6173, name: '俄罗斯·莫斯科' },
-    'ZA': { lat: -33.9249, lng: 18.4241, name: '南非·开普敦' },
-    'MA': { lat: 33.9716, lng: -6.8498, name: '摩洛哥·拉巴特' },
-    'PH': { lat: 14.5995, lng: 120.9842, name: '菲律宾·马尼拉' },
-    'HR': { lat: 45.8150, lng: 15.9819, name: '克罗地亚·萨格勒布' },
-    'PL': { lat: 52.2297, lng: 21.0122, name: '波兰·华沙' },
-    'HU': { lat: 47.4979, lng: 19.0402, name: '匈牙利·布达佩斯' },
-    'IE': { lat: 53.3498, lng: -6.2603, name: '爱尔兰·都柏林' },
-  };
-
-  // 获取天气位置：优先使用行程项坐标，否则使用目的地国家默认坐标
-  const weatherLocation = useMemo(() => {
-    if (!currentTrip) {
-      return null;
-    }
-
-    // 1. 尝试从行程项中获取坐标
-    const places: Array<{ lat: number; lng: number }> = [];
-    if (currentTrip.TripDay && currentTrip.TripDay.length > 0) {
-      for (const day of currentTrip.TripDay) {
-        for (const item of day.ItineraryItem || []) {
-          if (item.Place) {
-            const place = item.Place as any;
-            const lat = place.latitude || place.metadata?.location?.lat || place.lat;
-            const lng = place.longitude || place.metadata?.location?.lng || place.lng;
-            if (lat && lng && typeof lat === 'number' && typeof lng === 'number') {
-              places.push({ lat, lng });
-            }
-          }
-        }
-      }
-    }
-
-    if (places.length > 0) {
-      const avgLat = places.reduce((sum, p) => sum + p.lat, 0) / places.length;
-      const avgLng = places.reduce((sum, p) => sum + p.lng, 0) / places.length;
-      return { 
-        location: { lat: avgLat, lng: avgLng }, 
-        name: currentTrip.destination || '目的地' 
-      };
-    }
-
-    // 2. 如果没有行程项坐标，使用目的地国家的默认坐标
-    if (currentTrip.destination) {
-      const countryCode = currentTrip.destination.split(',')[0]?.trim().toUpperCase();
-      const countryCoord = COUNTRY_COORDINATES[countryCode];
-      if (countryCoord) {
-        return {
-          location: { lat: countryCoord.lat, lng: countryCoord.lng },
-          name: countryCoord.name
-        };
-      }
-    }
-
-    return null;
-  }, [currentTrip]);
-
-  // 判断是否是冰岛（用于显示详细风速信息）
   const showSelfDriveCoverageTab = useMemo(
     () => isSelfDrivePlanningTrip(currentTrip),
     [currentTrip],
   );
-
-  const isIceland = useMemo(() => {
-    if (!currentTrip?.destination) return false;
-    const countryCode = currentTrip.destination.split(',')[0]?.trim().toUpperCase();
-    return countryCode === 'IS';
-  }, [currentTrip?.destination]);
-
-  /** 远期规划不展示实时天气（与准备度「出发前 14 天内再查」一致） */
-  const showPlanStudioLiveWeather = useMemo(() => {
-    if (!currentTrip?.startDate) return false;
-    const daysUntilStart = getDaysUntilTripStart(currentTrip.startDate);
-    return daysUntilStart >= 0 && daysUntilStart <= ACTIONABLE_READINESS_HORIZON_DAYS;
-  }, [currentTrip?.startDate]);
 
   const handleWelcomeComplete = (experienceType: 'steady' | 'balanced' | 'exploratory') => {
     setShowWelcomeModal(false);
@@ -3080,7 +3087,8 @@ function PlanStudioPageContent() {
     decisionSpaceOpen,
     constraintConsoleOpen,
     attractionExploreOpen,
-    arrangeItineraryOpen,
+    arrangeItineraryOpen: showArrangeHome,
+    itineraryDiagnosisOpen,
   });
 
   useEffect(() => {
@@ -3090,19 +3098,19 @@ function PlanStudioPageContent() {
     prevWorkbenchModeRef.current = next;
     if (prev === next) return;
 
-    if (next !== 'browse') {
+    if (next !== 'browse' && next !== 'arrange_itinerary') {
       workbenchModeEnteredAtRef.current = { mode: next, at: Date.now() };
       trackWorkbenchModeEnter({ tripId, mode: next });
     }
 
-    if (prev !== 'browse') {
+    if (prev !== 'browse' && prev !== 'arrange_itinerary') {
       const entered = workbenchModeEnteredAtRef.current;
       if (entered?.mode === prev) {
         trackWorkbenchModeExit({
           tripId,
           mode: prev,
           durationMs: Date.now() - entered.at,
-          completed: next === 'browse',
+          completed: next === 'browse' || next === 'arrange_itinerary',
         });
       }
     }
@@ -3214,6 +3222,14 @@ function PlanStudioPageContent() {
     trip: currentTrip,
     onEditConstraint: openConstraintEditor,
     onConfirm: handleConfirmConstraints,
+    confirmExecutabilityBlocked:
+      tripExecutability.visible &&
+      Boolean(tripExecutability.data) &&
+      !canConfirmTripWithExecutability(
+        tripExecutability.data,
+        tepConstraintsSummaryDto ?? constraintsSummary.summary,
+      ),
+    confirmExecutabilityBlockedReason: tripExecutability.data?.ui.statusLabel,
     onOpenConflicts: openWorkbenchPlanningActions,
     planningActionsLabel: `${workbenchPlanningActionLabel} →`,
     planningInboxCount: planningConflicts.inbox.inboxCount,
@@ -3267,15 +3283,6 @@ function PlanStudioPageContent() {
       onOpenCollaborators={() => setCollaboratorsDialogOpen(true)}
       onOpenCollaborationCenter={handleOpenCollaborationCenter}
       collaborationPendingCount={collabPendingCount}
-      weather={
-        weatherLocation && showPlanStudioLiveWeather
-          ? {
-              location: weatherLocation.location,
-              name: weatherLocation.name,
-              includeWindDetails: isIceland,
-            }
-          : null
-      }
       activeTab={activeTab}
       onTabChange={handleTabChange}
       onOpenAssistant={openAssistant}
@@ -3300,6 +3307,17 @@ function PlanStudioPageContent() {
           onCommitEval={() => void handleCommitConstraintEval()}
         />
       ) : null}
+      {tripExecutability.visible ? (
+        <SelfDriveExecutabilityPanel
+          data={tripExecutability.data}
+          loading={tripExecutability.loading}
+          refreshing={tripExecutability.refreshing}
+          error={tripExecutability.error}
+          onReload={() => void tripExecutability.reload()}
+          onPrimaryCta={handleTepPrimaryCta}
+          onFocusDay={handleTepFocusDay}
+        />
+      ) : null}
     </>
   ) : null;
 
@@ -3308,7 +3326,7 @@ function PlanStudioPageContent() {
       {tripId && tripExists ? (
         <>
         {isCollabCenterOpen ? (
-          <div className="flex h-full min-h-0 flex-col">
+          <div className="flex h-full min-h-0 flex-col bg-background">
             {workbenchHeader}
             <TeamCollaborationCenterPage
               tripId={tripId}
@@ -3331,7 +3349,20 @@ function PlanStudioPageContent() {
           className={cn('flex h-full min-h-0 flex-col', activeTab !== 'schedule' && 'hidden')}
           aria-hidden={activeTab !== 'schedule'}
         >
-        {arrangeItineraryOpen ? (
+        {attractionExploreOpen ? (
+          <>
+            {scheduleWorkbenchHeader}
+            <PlanningWorkbenchAttractionExplore
+              className="min-h-0 flex-1"
+              tripId={tripId}
+              trip={currentTrip}
+              collaborators={collaboratorsQuery.data}
+              onViewMap={() => navigateToWorkbenchJourneyMap(selectedScheduleDayIndex)}
+              onEditPreferences={handleOpenCollaborationCenter}
+              onOpenArrangeItinerary={openArrangeItinerary}
+            />
+          </>
+        ) : showArrangeHome ? (
           <>
             {scheduleWorkbenchHeader}
             <PlanningWorkbenchArrangeItinerary
@@ -3340,6 +3371,7 @@ function PlanStudioPageContent() {
               trip={currentTrip}
               conflicts={workbenchVisibleConflicts.items}
               refreshKey={refreshKey}
+              collaborators={collaboratorsQuery.data}
               autoArrangeOnMount={searchParams.get('arrangeAutoArrange') === '1'}
               onAutoArrangeIntentConsumed={consumeArrangeAutoArrangeIntent}
               onViewMap={(dayIndex) =>
@@ -3347,17 +3379,12 @@ function PlanStudioPageContent() {
               }
               onEditPreferences={handleOpenCollaborationCenter}
               onItineraryChanged={handleWorkbenchItineraryChanged}
-            />
-          </>
-        ) : attractionExploreOpen ? (
-          <>
-            {scheduleWorkbenchHeader}
-            <PlanningWorkbenchAttractionExplore
-              className="min-h-0 flex-1"
-              tripId={tripId}
-              onViewMap={() => navigateToWorkbenchJourneyMap(selectedScheduleDayIndex)}
-              onEditPreferences={handleOpenCollaborationCenter}
-              onOpenArrangeItinerary={openArrangeItinerary}
+              tepFlexibilityEnabled={tripExecutability.visible}
+              onOpenFullSchedule={handleOpenScheduleEditor}
+              onOpenAttractionExplore={openAttractionExplore}
+              onOpenItineraryDiagnosis={openItineraryDiagnosis}
+              onOpenConstraints={() => openConstraintConsole()}
+              conflictMustHandleCount={planningConflicts.summary.mustHandle}
             />
           </>
         ) : (
@@ -3445,6 +3472,7 @@ function PlanStudioPageContent() {
                 onOpenAttractionExplore={openAttractionExplore}
                 onOpenArrangeItinerary={openArrangeItinerary}
                 onItineraryChanged={handleWorkbenchItineraryChanged}
+                tepFlexibilityEnabled={tripExecutability.visible}
                 decisionProblems={
                   decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
                 }
@@ -3530,6 +3558,12 @@ function PlanStudioPageContent() {
                   collaborators={collaboratorsQuery.data ?? null}
                   onOpenCollaborationCenter={handleOpenCollaborationCenter}
                   onOpenBudgetTab={() => handleTabChange('budget')}
+                  selfDriveSettings={{
+                    visible: tripExecutability.visible,
+                    profile: tripExecutability.data?.profile ?? null,
+                    constraintsWasConfirmed: constraintsSummary.summary?.isUserConfirmed === true,
+                    onSaved: handleSelfDriveSettingsSaved,
+                  }}
                 />
               )}
             </div>
@@ -3546,7 +3580,7 @@ function PlanStudioPageContent() {
                 collaboratorCount={collaboratorsQuery.data?.length ?? 0}
                 onBack={closeDecisionSpace}
                 backLabel={
-                  searchParams.get('from') === 'travel' ? '返回概览' : '返回行程分析'
+                  searchParams.get('from') === 'travel' ? '返回概览' : '返回编排行程'
                 }
                 onOpenTravelStatus={
                   tripId && searchParams.get('from') === 'travel'
@@ -3600,6 +3634,7 @@ function PlanStudioPageContent() {
               onOpenAttractionExplore={openAttractionExplore}
               onOpenArrangeItinerary={openArrangeItinerary}
               onItineraryChanged={handleWorkbenchItineraryChanged}
+              tepFlexibilityEnabled={tripExecutability.visible}
               decisionProblems={
                 decisionProblemsInbox.useLegacy ? undefined : decisionProblemsInbox.items
               }
@@ -3626,16 +3661,6 @@ function PlanStudioPageContent() {
                 <>
                   {!decisionStrip.hidePlanningBanner ? (
                     <PlanningBanner guards={worldModelGuards} />
-                  ) : null}
-                  {showEmbeddedPlanStudio ? (
-                    <EmbeddedHikingStatusBar
-                      tripId={tripId}
-                      phase={embeddedHiking.phase}
-                      phaseHintZh={embeddedHiking.phaseHintZh}
-                      segmentCount={embeddedHiking.segments.length}
-                      plans={embeddedHiking.plans}
-                      onAddSegment={() => navigate(`/dashboard/trips/${tripId}`)}
-                    />
                   ) : null}
                 </>
               }
@@ -3750,7 +3775,7 @@ function PlanStudioPageContent() {
             editSessionSaveCount={constraintEditSession.saveCount}
             editSessionEvalPending={constraintEditSession.evalPending}
             sessionCommitting={constraintSessionCommitting}
-            onCommitConstraintEval={() => void handleCommitConstraintEval()}
+            onCommitConstraintEval={() => void handleCommitConstraintEval({ closeDrawer: true })}
             onDirtyChange={setConstraintDrawerDirty}
             onPendingSaveCountChange={setConstraintPendingSaveCount}
             onSessionCommittingChange={setConstraintSessionCommitting}
@@ -3867,7 +3892,7 @@ function PlanStudioPageContent() {
       />
 
       <AlertDialog open={discardConstraintDraftOpen} onOpenChange={setDiscardConstraintDraftOpen}>
-        <AlertDialogContent>
+        <AlertDialogStackContent>
           <AlertDialogHeader>
             <AlertDialogTitle>是否保存当前旅行条件？</AlertDialogTitle>
             <AlertDialogDescription>
@@ -3885,18 +3910,23 @@ function PlanStudioPageContent() {
             >
               不保存并关闭
             </Button>
-            <AlertDialogAction onClick={handleSaveAndCloseConstraintConsole}>
+            <Button
+              type="button"
+              className={cn(buttonVariants())}
+              disabled={constraintSessionCommitting}
+              onClick={handleSaveAndCloseConstraintConsole}
+            >
               保存并检查
-            </AlertDialogAction>
+            </Button>
           </AlertDialogFooter>
-        </AlertDialogContent>
+        </AlertDialogStackContent>
       </AlertDialog>
 
       <AlertDialog
         open={constraintEvalCloseConfirmOpen}
         onOpenChange={setConstraintEvalCloseConfirmOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogStackContent>
           <AlertDialogHeader>
             <AlertDialogTitle>条件已保存，是否重新检查？</AlertDialogTitle>
             <AlertDialogDescription>
@@ -3911,7 +3941,7 @@ function PlanStudioPageContent() {
               检查并关闭
             </AlertDialogAction>
           </AlertDialogFooter>
-        </AlertDialogContent>
+        </AlertDialogStackContent>
       </AlertDialog>
 
       {routeRunConfirmation?.approvalId ? (
@@ -4169,6 +4199,9 @@ function PlanStudioPageContent() {
           trip={currentTrip}
           refreshKey={refreshKey}
           focusDayIndex={scheduleSheetFocusDayIndex}
+          tepEnabled={tripExecutability.visible}
+          tepExecutability={tripExecutability.data}
+          onTepRefresh={() => tripExecutability.reload()}
           onScheduleChanged={() => {
             setRefreshKey((k) => k + 1);
             if (tripId) {

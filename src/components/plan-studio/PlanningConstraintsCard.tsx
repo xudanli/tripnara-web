@@ -11,6 +11,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/format';
 import { WorkbenchConfirmPanel } from '@/components/plan-studio/workbench/WorkbenchConfirmPanel';
@@ -53,6 +59,9 @@ export interface PlanningConstraintsCardProps {
   trip?: TripDetail | null;
   onEditConstraint: (key: ConstraintPendingKey) => void;
   onConfirm?: () => void;
+  /** TEP：可执行性未达标时禁用「确认约束」 */
+  confirmExecutabilityBlocked?: boolean;
+  confirmExecutabilityBlockedReason?: string;
   onOpenConflicts?: () => void;
   /** 规划待办链接文案（默认「查看规划待办 →」；BFF 可用时为「去决策 →」） */
   planningActionsLabel?: string;
@@ -287,6 +296,8 @@ export function PlanningConstraintsCard({
   trip,
   onEditConstraint,
   onConfirm,
+  confirmExecutabilityBlocked = false,
+  confirmExecutabilityBlockedReason,
   onOpenConflicts,
   planningActionsLabel = '查看规划待办 →',
   onScrollToRelaxation,
@@ -463,15 +474,38 @@ export function PlanningConstraintsCard({
         </PlanningHeaderCopy>
         <div className="flex shrink-0 items-center gap-1.5">
           {showConfirmInHeader ? (
-            <Button
-              type="button"
-              size="sm"
-              className="h-7 rounded-full px-3 text-xs shadow-sm"
-              disabled={confirming || reconfirmBlocked}
-              onClick={() => onConfirm?.()}
-            >
-              {confirming ? '确认中…' : '确认约束'}
-            </Button>
+            confirmExecutabilityBlocked ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 rounded-full px-3 text-xs shadow-sm"
+                        disabled
+                      >
+                        确认约束
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    {confirmExecutabilityBlockedReason?.trim() ||
+                      '当前行程可执行性未达标，请先处理上方诊断建议'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 rounded-full px-3 text-xs shadow-sm"
+                disabled={confirming || reconfirmBlocked}
+                onClick={() => onConfirm?.()}
+              >
+                {confirming ? '确认中…' : '确认约束'}
+              </Button>
+            )
           ) : null}
           <PlanningExpandToggle expanded={expanded} onClick={() => setExpanded((v) => !v)} />
         </div>

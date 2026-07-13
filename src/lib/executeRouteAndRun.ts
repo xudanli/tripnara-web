@@ -14,7 +14,6 @@ import { shouldUseRouteRunAsync } from '@/lib/route-run-async';
 import { normalizeAgentTaskPollPath } from '@/lib/route-run-task-path';
 import { awaitRouteAndRunTaskCompletion } from '@/lib/route-run-task-sse';
 import { enrichRouteAndRunRequestWithPlanningSessionAsync } from '@/lib/enrich-route-and-run-planning-session';
-import { enrichRouteAndRunRequestWithMatchSquareParty } from '@/lib/match-square-route-and-run';
 import { enrichRouteAndRunRequestWithDsoVersion } from '@/lib/trip-dso-version';
 import { enrichRouteAndRunRequestWithEmotionalMetadata } from '@/lib/enrich-route-and-run-emotional-metadata';
 import { enrichRouteAndRunRequestWithTravelCompiler } from '@/lib/enrich-route-and-run-travel-compiler';
@@ -79,10 +78,9 @@ export async function executeRouteAndRun(
       ? { ...request.options, async_mode: resolvedAsync }
       : { ...request.options },
   });
-  const withParty = enrichRouteAndRunRequestWithMatchSquareParty(withSession);
   const payload = enrichRouteAndRunRequestWithTravelCompiler(
     enrichRouteAndRunRequestWithEmotionalMetadata(
-      enrichRouteAndRunRequestWithDsoVersion(withParty),
+      enrichRouteAndRunRequestWithDsoVersion(withSession),
     ),
   );
 

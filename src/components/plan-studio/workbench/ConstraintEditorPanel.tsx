@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { CalendarIcon, ChevronDown } from 'lucide-react';
@@ -20,8 +20,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { formatCurrency } from '@/utils/format';
-import type { ConstraintEditorScope, ConstraintEditorType } from './constraint-console-types';
-import { isSoftConstraintId, hasFixedConstraintName, type MustGoPlaceSummary } from './constraint-console-view.util';
+import type { ConstraintEditorDraft, ConstraintEditorScope, ConstraintEditorType } from './constraint-console-types';
+import { isSoftConstraintId, hasFixedConstraintName, isNoNightDriveConstraintId, type MustGoPlaceSummary } from './constraint-console-view.util';
 import { HardConstraintMetadataCard } from './HardConstraintMetadataCard';
 import type { HardConstraintMetadata } from '@/lib/constraint-metadata.util';
 import { MustGoPlacesEditor } from './MustGoPlacesEditor';
@@ -37,7 +37,8 @@ import {
   workbenchSegmentSelected,
   workbenchSliderTrack,
 } from './workbench-ui';
-import { CONSTRAINT_TRANSPORT_OPTIONS } from '@/lib/planning-constraint-edit-meta';
+import { isSelfDriveOnlyTransportContext, resolveConstraintTransportOptions } from '@/lib/planning-constraint-edit-meta';
+import { IntentTravelMode } from '@/types/trip';
 import type {
   ConstraintMemberOption,
   ConstraintRouteSegmentOption,
@@ -53,6 +54,8 @@ export interface ConstraintEditorPanelProps {
   mustGoPlaces?: MustGoPlaceSummary[];
   onMustGoPlacesChange?: (places: MustGoPlaceSummary[]) => void;
   tripDestination?: string;
+  /** constraints-summary.transport.scope */
+  transportScope?: string | null;
   saving?: boolean;
   budgetUsage?: number | null;
   className?: string;
@@ -198,6 +201,7 @@ export function ConstraintEditorPanel({
   mustGoPlaces = [],
   onMustGoPlacesChange,
   tripDestination,
+  transportScope,
   saving,
   budgetUsage,
   className,
@@ -224,23 +228,44 @@ export function ConstraintEditorPanel({
   const isAccommodation = draft.id === 'accommodation';
   const isMaxSegmentDistance =
     draft.id === 'max_segment_distance' || draft.id === 'c_max_segment_distance';
+  const isNoNightDrive = isNoNightDriveConstraintId(draft.id);
   const isMustGo = draft.id === 'must_go';
   const isRoadRestrictions = draft.id === 'road_restrictions';
   const isReadOnlyHard = isRoadRestrictions;
   const catalogTemplateId = resolveCatalogHardTemplateId(draft);
   const isCatalogHard = Boolean(catalogTemplateId);
   const catalogSpec = catalogTemplateId ? resolveCatalogHardEditorSpec(catalogTemplateId) : null;
+  const isCatalogToggle =
+    catalogSpec?.fieldKind === 'toggle' || catalogSpec?.fieldKind === 'toggle_with_notes';
   const showDedicatedValueEditor =
     isTimeRange ||
     isBudget ||
     isDailyDrive ||
     isMaxSegmentDistance ||
+    isNoNightDrive ||
     isMustGo ||
     isRoadRestrictions ||
     isTravelers ||
     isTransport ||
     isAccommodation ||
     isCatalogHard;
+  const hidePrioritySection = isReadOnlyHard || isCatalogToggle;
+  const transportOptions = useMemo(
+    () =>
+      resolveConstraintTransportOptions({
+        destination: tripDestination,
+        transportScope,
+      }),
+    [tripDestination, transportScope],
+  );
+  const selfDriveOnlyTransport = isSelfDriveOnlyTransportContext(tripDestination, transportScope);
+
+  useEffect(() => {
+    if (!isTransport || !selfDriveOnlyTransport) return;
+    if (draft.transportMode !== IntentTravelMode.DRIVING) {
+      onChange({ transportMode: IntentTravelMode.DRIVING });
+    }
+  }, [draft.transportMode, isTransport, onChange, selfDriveOnlyTransport]);
 
   const handleDateRangeChange = (patch: Partial<Pick<ConstraintEditorDraft, 'startDate' | 'endDate'>>) => {
     const startDate = patch.startDate ?? draft.startDate;
@@ -305,7 +330,7 @@ export function ConstraintEditorPanel({
           />
         ) : null}
 
-        {!isDrawerColumn ? (
+        {!isDrawerColumn && !isCatalogHard ? (
         <div className="space-y-2">
           <Label className="text-xs">约束名称</Label>
           <Input
@@ -358,26 +383,37 @@ export function ConstraintEditorPanel({
         {isTransport ? (
           <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-4">
             <Label className="text-xs">基础交通方式</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {CONSTRAINT_TRANSPORT_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => onChange({ transportMode: option.value })}
-                  className={cn(
-                    'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
-                    draft.transportMode === option.value
-                      ? workbenchSegmentSelected
-                      : workbenchSegmentIdle,
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              保存后系统将按此方式评估路线与时间轴交通段是否一致。
-            </p>
+            {selfDriveOnlyTransport ? (
+              <div className="rounded-lg border border-border/50 bg-background/70 px-3 py-2.5">
+                <p className="text-sm font-medium text-foreground">自驾</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  冰岛行程当前仅支持自驾模式，系统将按自驾评估路线与驾驶负荷。
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-1.5">
+                  {transportOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => onChange({ transportMode: option.value })}
+                      className={cn(
+                        'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                        draft.transportMode === option.value
+                          ? workbenchSegmentSelected
+                          : workbenchSegmentIdle,
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  保存后系统将按此方式评估路线与时间轴交通段是否一致。
+                </p>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -524,6 +560,37 @@ export function ConstraintEditorPanel({
           </div>
         ) : null}
 
+        {isNoNightDrive ? (
+          <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label className="text-xs">不夜间驾驶</Label>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  日落后保留缓冲时间，不得继续安排驾驶段
+                </p>
+              </div>
+              <Switch
+                checked={draft.enabled !== false}
+                onCheckedChange={(enabled) => onChange({ enabled, targetValue: draft.targetValue || 30 })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="shrink-0 text-xs text-muted-foreground">日落后缓冲</Label>
+              <Input
+                type="number"
+                min={0}
+                max={120}
+                step={5}
+                value={draft.targetValue}
+                disabled={draft.enabled === false}
+                onChange={(e) => onChange({ targetValue: Number(e.target.value) || 0 })}
+                className="h-9 w-24 text-sm tabular-nums"
+              />
+              <span className="text-xs text-muted-foreground">分钟</span>
+            </div>
+          </div>
+        ) : null}
+
         {isTimeRange ? (
           <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-4">
             <div className="flex items-center justify-between">
@@ -586,7 +653,7 @@ export function ConstraintEditorPanel({
           </div>
         ) : null}
 
-        {!isReadOnlyHard ? (
+        {!hidePrioritySection ? (
         <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-4">
           <div className="flex items-center justify-between gap-3">
             <Label className="text-xs">优先级</Label>

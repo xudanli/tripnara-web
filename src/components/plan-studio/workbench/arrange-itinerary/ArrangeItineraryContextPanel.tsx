@@ -1,19 +1,20 @@
-import { GripVertical, X } from 'lucide-react';
+import { useMemo } from 'react';
+import { Compass, GripVertical, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { AttractionExploreCandidate, AttractionExploreContextResponse } from '@/types/attraction-explore';
-import type { ArrangeItineraryOverviewResponse } from '@/types/arrange-itinerary';
+import { Button } from '@/components/ui/button';
+import { TeamRequirementProfilePanel } from '@/features/member-onboarding';
+import { isAdvisorLedTrip } from '@/lib/trip-collaboration-mode.util';
+import type { Collaborator, TripDetail } from '@/types/trip';
+import type { AttractionExploreCandidate } from '@/types/attraction-explore';
 import { ArrangeItineraryItemLocksPanel } from './ArrangeItineraryItemLocksPanel';
 import { ArrangeItineraryCopilotSuggestionsPanel } from './ArrangeItineraryCopilotSuggestionsPanel';
 import { PlanningDecisionClusterQueueStrip } from './PlanningDecisionClusterQueueStrip';
 import type { PlanningDecisionClusterSummary } from '@/dto/frontend-planning-decision-pack.types';
-import type { WorkbenchRouteStats } from '../useWorkbenchItineraryData';
-import {
-  formatWorkbenchDistanceKm,
-  formatWorkbenchDurationMinutes,
-} from '../workbench-format.util';
+import type { ArrangeLodgingCoverageSummary } from '@/lib/arrange-itinerary-lodging-coverage.util';
+import { ArrangeItineraryLodgingSection } from './ArrangeItineraryLodgingSection';
+import { ArrangeItineraryLodgingSuggestionsPanel } from './ArrangeItineraryLodgingSuggestionsPanel';
 import {
   workbenchAttractionExploreCandidateItem,
-  workbenchAttractionExploreContextCard,
   workbenchAttractionExploreSectionTitle,
   workbenchLinkClass,
   workbenchPanelTitle,
@@ -21,14 +22,10 @@ import {
 } from '../workbench-ui';
 
 export interface ArrangeItineraryContextPanelProps {
-  context?: AttractionExploreContextResponse | null;
-  overview?: ArrangeItineraryOverviewResponse | null;
+  tripId: string;
+  trip?: TripDetail | null;
+  collaborators?: Collaborator[] | null;
   candidates: AttractionExploreCandidate[];
-  candidatesLoading?: boolean;
-  routeStats: WorkbenchRouteStats | null;
-  activityCount: number;
-  dayCount: number;
-  nights: number;
   onRemoveCandidate?: (candidateId: string) => void;
   onPlaceCandidate?: (candidateId: string) => void;
   placePending?: boolean;
@@ -41,32 +38,41 @@ export interface ArrangeItineraryContextPanelProps {
   copilotSuggestionsLoading?: boolean;
   copilotActionPending?: boolean;
   onExecuteCopilotSuggestion?: (suggestion: import('@/types/arrange-itinerary').CopilotSuggestion) => void;
-  pendingProposalCount?: number;
   decisionClusters?: PlanningDecisionClusterSummary[];
   activeProposalId?: string | null;
   onOpenActiveProposal?: () => void;
   decisionClustersLoading?: boolean;
+  lodgingSummary?: ArrangeLodgingCoverageSummary;
+  onAddLodging?: (dayIndex: number) => void;
+  onEditLodging?: (itemId: string) => void;
+  lodgingSuggestionsBundle?: import('@/types/arrange-itinerary').ArrangeLodgingSuggestionsBundle;
+  onAdoptLodgingCandidate?: (
+    dayIndex: number,
+    candidate: import('@/types/arrange-itinerary').ArrangeLodgingSuggestionCandidate,
+    night: import('@/types/arrange-itinerary').ArrangeLodgingSuggestion,
+  ) => void;
+  onAskNaraForLodgingNight?: (dayIndex: number) => void;
+  adoptLodgingPending?: boolean;
+  onOpenAttractionExplore?: () => void;
   className?: string;
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
+function hasLodgingSuggestionCandidates(
+  bundle?: import('@/types/arrange-itinerary').ArrangeLodgingSuggestionsBundle,
+): boolean {
   return (
-    <div className="flex items-center justify-between gap-2 text-[11px]">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums text-foreground">{value}</span>
-    </div>
+    bundle?.suggestions.some(
+      (night) => night.status === 'suggested' && night.candidates.length > 0,
+    ) ?? false
   );
 }
 
 export function ArrangeItineraryContextPanel({
-  context,
-  overview,
+  tripId,
+  trip,
+  collaborators,
   candidates,
   candidatesLoading = false,
-  routeStats,
-  activityCount,
-  dayCount,
-  nights,
   onRemoveCandidate,
   onPlaceCandidate,
   placePending = false,
@@ -78,16 +84,32 @@ export function ArrangeItineraryContextPanel({
   copilotSuggestionsLoading = false,
   copilotActionPending = false,
   onExecuteCopilotSuggestion,
-  pendingProposalCount = 0,
   decisionClusters = [],
   activeProposalId,
   onOpenActiveProposal,
   decisionClustersLoading = false,
+  lodgingSummary,
+  onAddLodging,
+  onEditLodging,
+  lodgingSuggestionsBundle,
+  onAdoptLodgingCandidate,
+  onAskNaraForLodgingNight,
+  adoptLodgingPending = false,
+  onEditPreferences,
+  onOpenAttractionExplore,
   className,
 }: ArrangeItineraryContextPanelProps) {
-  const selectedThemes = context?.themes.filter((theme) =>
-    context.selectedThemeIds.includes(theme.id),
+  const advisorLed = useMemo(() => isAdvisorLedTrip(trip), [trip]);
+  const profileCollaborators = useMemo(
+    () =>
+      collaborators?.map((c) => ({
+        userId: c.userId,
+        displayName: c.displayName,
+        role: c.role,
+      })) ?? [],
+    [collaborators],
   );
+  const showLodgingSuggestions = hasLodgingSuggestionCandidates(lodgingSuggestionsBundle);
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col', className)}>
@@ -96,122 +118,47 @@ export function ArrangeItineraryContextPanel({
       </div>
 
       <div className={cn('min-h-0 flex-1 space-y-4 overflow-y-auto p-3', workbenchScrollable)}>
-        <PlanningDecisionClusterQueueStrip
-          clusters={decisionClusters}
-          activeProposalId={activeProposalId}
-          loading={decisionClustersLoading}
-          onOpenActiveProposal={onOpenActiveProposal}
-        />
-        <ArrangeItineraryCopilotSuggestionsPanel
-          suggestions={copilotSuggestions}
-          loading={copilotSuggestionsLoading}
-          actionPending={copilotActionPending}
-          onExecuteSuggestion={onExecuteCopilotSuggestion}
-        />
-        {pendingProposalCount > 0 ? (
-          <p className="text-[10px] text-muted-foreground">
-            待确认草案 {pendingProposalCount} 项
-          </p>
-        ) : null}
-
-        <section>
-          <p className={workbenchAttractionExploreSectionTitle}>旅行目标</p>
-          {selectedThemes && selectedThemes.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {selectedThemes.map((theme) => (
-                <span
-                  key={theme.id}
-                  className="rounded-full border border-border/60 bg-muted/20 px-2 py-0.5 text-[10px] text-foreground"
-                >
-                  {theme.label}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-1 text-[11px] text-muted-foreground">尚未选择主题</p>
-          )}
-        </section>
-
-        <section className={workbenchAttractionExploreContextCard}>
-          <p className={workbenchAttractionExploreSectionTitle}>路线模式</p>
-          <dl className="mt-2 space-y-1.5 text-[11px]">
-            <Row label="出发" value={overview?.departureLabel ?? context?.tripContext?.departureLabel} />
-            <Row label="交通" value={overview?.transportLabel ?? context?.tripContext?.transportLabel} />
-            <Row label="节奏" value={overview?.pacingLabel ?? context?.tripContext?.paceLabel} />
-          </dl>
-        </section>
-
-        <section className={workbenchAttractionExploreContextCard}>
-          <p className={workbenchAttractionExploreSectionTitle}>路线概览</p>
-          <div className="mt-2 space-y-1.5">
-            <StatRow label="天数" value={`${dayCount} 天 / ${nights} 晚`} />
-            <StatRow
-              label="总驾驶"
-              value={formatWorkbenchDurationMinutes(
-                overview?.totalDriveMinutes ?? routeStats?.totalDriveMinutes,
-              )}
-            />
-            <StatRow
-              label="总里程"
-              value={formatWorkbenchDistanceKm(
-                overview?.totalDistanceKm ?? routeStats?.totalDistanceKm,
-              )}
-            />
-            <StatRow label="活动数" value={`${activityCount} 项`} />
-            {overview?.routeSpanKm != null ? (
-              <StatRow label="路线跨度" value={`${overview.routeSpanKm} km`} />
-            ) : null}
-            {overview?.unplacedCandidateCount != null ? (
-              <StatRow label="待编排" value={`${overview.unplacedCandidateCount} 个`} />
-            ) : null}
-          </div>
-        </section>
-
-        <section className={workbenchAttractionExploreContextCard}>
-          <p className={workbenchAttractionExploreSectionTitle}>住宿节奏</p>
-          <p className="mt-1 text-[11px] text-foreground">
-            {context?.tripContext?.paceLabel ?? '待设置'}
-          </p>
-        </section>
-
-        {context?.memberPreferences ? (
-          <section className={workbenchAttractionExploreContextCard}>
-            <p className={workbenchAttractionExploreSectionTitle}>成员偏好</p>
-            <div className="mt-2 flex -space-x-1">
-              {context.memberPreferences.memberInitials.map((initial, index) => (
-                <span
-                  key={`${initial}-${index}`}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[9px] font-medium text-muted-foreground"
-                >
-                  {initial}
-                </span>
-              ))}
-            </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              {context.memberPreferences.summary}
-            </p>
-          </section>
-        ) : null}
-
-        <ArrangeItineraryItemLocksPanel
-          itemLocks={itemLocks}
-          userLockedItemIds={userLockedItemIds}
-          loading={itemLocksLoading}
-        />
-
         <section>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className={workbenchAttractionExploreSectionTitle}>待编排景点</p>
-            <span className="text-[10px] tabular-nums text-muted-foreground">
-              {candidates.length} 个
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] tabular-nums text-muted-foreground">
+                {candidates.length} 个
+              </span>
+              {onOpenAttractionExplore ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 rounded-md px-1.5 text-[10px]"
+                  onClick={onOpenAttractionExplore}
+                >
+                  <Compass className="h-3 w-3" />
+                  探索更多
+                </Button>
+              ) : null}
+            </div>
           </div>
           {candidatesLoading ? (
             <p className="py-4 text-center text-[11px] text-muted-foreground">加载中…</p>
           ) : candidates.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border/60 px-3 py-4 text-center text-[11px] text-muted-foreground">
-              暂无待编排候选，可先在探索景点中添加
-            </p>
+            <div className="rounded-lg border border-dashed border-border/60 px-3 py-4 text-center">
+              <p className="text-[11px] text-muted-foreground">
+                暂无待编排候选，可先在探索景点中添加
+              </p>
+              {onOpenAttractionExplore ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 gap-1 rounded-md px-2 text-[10px]"
+                  onClick={onOpenAttractionExplore}
+                >
+                  <Compass className="h-3 w-3" />
+                  去探索景点
+                </Button>
+              ) : null}
+            </div>
           ) : (
             <ul className="space-y-1">
               {candidates.map((candidate) => (
@@ -265,16 +212,60 @@ export function ArrangeItineraryContextPanel({
             </ul>
           )}
         </section>
-      </div>
-    </div>
-  );
-}
 
-function Row({ label, value }: { label: string; value?: string }) {
-  return (
-    <div className="flex gap-2">
-      <dt className="w-10 shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 flex-1 text-foreground">{value?.trim() || '—'}</dd>
+        {showLodgingSuggestions && lodgingSuggestionsBundle ? (
+          <ArrangeItineraryLodgingSuggestionsPanel
+            bundle={lodgingSuggestionsBundle}
+            onAdoptCandidate={onAdoptLodgingCandidate}
+            onAskNaraForNight={onAskNaraForLodgingNight}
+            adoptPending={adoptLodgingPending}
+          />
+        ) : lodgingSummary && onAddLodging ? (
+          <ArrangeItineraryLodgingSection
+            summary={lodgingSummary}
+            onAddLodging={onAddLodging}
+            onEditLodging={onEditLodging}
+            compact
+          />
+        ) : null}
+
+        <PlanningDecisionClusterQueueStrip
+          clusters={decisionClusters}
+          activeProposalId={activeProposalId}
+          loading={decisionClustersLoading}
+          onOpenActiveProposal={onOpenActiveProposal}
+        />
+        <ArrangeItineraryCopilotSuggestionsPanel
+          suggestions={copilotSuggestions}
+          loading={copilotSuggestionsLoading}
+          actionPending={copilotActionPending}
+          onExecuteSuggestion={onExecuteCopilotSuggestion}
+        />
+
+        <ArrangeItineraryItemLocksPanel
+          itemLocks={itemLocks}
+          userLockedItemIds={userLockedItemIds}
+          loading={itemLocksLoading}
+        />
+
+        <TeamRequirementProfilePanel
+          tripId={tripId}
+          collaborators={profileCollaborators}
+          compact
+          sidebar
+          includeFriction={!advisorLed}
+          className="border-border/70 shadow-none"
+        />
+        {onEditPreferences ? (
+          <button
+            type="button"
+            className={cn(workbenchLinkClass, 'text-[10px]')}
+            onClick={onEditPreferences}
+          >
+            查看完整团队与需求 →
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -64,6 +64,32 @@ describe('constraint-console-partition.util', () => {
     ).toBe(false);
   });
 
+  it('never treats max_daily_drive / no_night_drive as official rules', () => {
+    expect(
+      isOfficialRuleConstraint({
+        id: TRIP_CONSTRAINT_LEGACY_IDS.MAX_DAILY_DRIVE,
+        type: 'HARD',
+        sectionKey: 'readonly_official',
+        source: { type: 'USER', templateId: 'max_daily_drive' },
+      }),
+    ).toBe(false);
+    expect(
+      isOfficialRuleConstraint({
+        id: TRIP_CONSTRAINT_LEGACY_IDS.NO_NIGHT_DRIVE,
+        type: 'EXTERNAL',
+        sectionKey: 'readonly_official',
+        source: { type: 'OFFICIAL_RULE' },
+      }),
+    ).toBe(false);
+    expect(
+      isOfficialRuleConstraint({
+        id: TRIP_CONSTRAINT_LEGACY_IDS.NO_NIGHT_DRIVE,
+        type: 'HARD',
+        source: { type: 'USER', templateId: 'no_night_drive' },
+      }),
+    ).toBe(false);
+  });
+
   it('sorts SAFETY category official rules first', () => {
     const sorted = sortOfficialRuleItems([
       entry({

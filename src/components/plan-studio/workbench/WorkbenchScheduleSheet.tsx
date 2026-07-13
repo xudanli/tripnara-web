@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
 import type { TripDetail } from '@/types/trip';
+import type { TripExecutabilityView } from '@/types/trip-executability';
 import { workbenchPanelHeader, workbenchPanelTitle } from './workbench-ui';
 
 const ScheduleTab = lazy(() => import('@/pages/plan-studio/ScheduleTab'));
@@ -22,6 +23,10 @@ export interface WorkbenchScheduleSheetProps {
   /** 打开后滚动定位到指定天（0-based） */
   focusDayIndex?: number;
   onScheduleChanged?: () => void;
+  /** P1：TEP 按日角标与 item 保存后刷新 */
+  tepEnabled?: boolean;
+  tepExecutability?: TripExecutabilityView | null;
+  onTepRefresh?: () => void | Promise<void>;
 }
 
 /** 完整时间轴编辑抽屉（保留 ScheduleTab 能力，不影响工作台摘要视图） */
@@ -33,6 +38,9 @@ export function WorkbenchScheduleSheet({
   refreshKey = 0,
   focusDayIndex,
   onScheduleChanged,
+  tepEnabled = false,
+  tepExecutability = null,
+  onTepRefresh,
 }: WorkbenchScheduleSheetProps) {
   const handleOpenChange = (next: boolean) => {
     if (!next && open) {
@@ -75,6 +83,9 @@ export function WorkbenchScheduleSheet({
                 tripId={tripId}
                 initialTrip={trip}
                 refreshKey={refreshKey}
+                tepEnabled={tepEnabled}
+                tepExecutability={tepExecutability}
+                onTepRefresh={onTepRefresh}
               />
             </Suspense>
           ) : null}

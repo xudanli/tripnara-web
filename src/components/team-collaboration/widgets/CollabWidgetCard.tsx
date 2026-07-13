@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { workbenchCardFlat, workbenchPanelTitle } from '@/components/plan-studio/workbench/workbench-ui';
+import { workbenchCard, workbenchPanelTitle } from '@/components/plan-studio/workbench/workbench-ui';
 
 interface CollabWidgetCardProps {
   title: ReactNode;
@@ -26,14 +26,14 @@ export function CollabWidgetCard({
   return (
     <section
       className={cn(
-        workbenchCardFlat,
+        workbenchCard,
         'flex min-h-0 flex-col',
-        compact ? 'p-3' : 'p-4',
+        compact ? 'p-2.5' : 'p-3',
         className,
       )}
       aria-labelledby={titleId}
     >
-      <div className={cn('flex items-start justify-between gap-2', compact ? 'mb-2' : 'mb-3')}>
+      <div className={cn('flex items-start justify-between gap-2', compact ? 'mb-1.5' : 'mb-2')}>
         <div className="min-w-0">
           <h3
             id={titleId}
@@ -49,8 +49,8 @@ export function CollabWidgetCard({
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="min-h-0 flex-1">{children}</div>
-      {footer ? <div className="mt-auto border-t border-border/50 pt-2.5">{footer}</div> : null}
+      <div>{children}</div>
+      {footer ? <div className="mt-2 border-t border-border/50 pt-2">{footer}</div> : null}
     </section>
   );
 }

@@ -11,7 +11,15 @@ import type {
 } from '@/types/constraint-console';
 import { isCatalogHardTemplate } from '@/lib/constraint-catalog-template-ids';
 import { enrichConstraintImpactPreviewWithSchedule } from '@/lib/constraint-preview-schedule.util';
+import { reprojectNoNightDrivePreviewWithDraft } from '@/lib/sdr-202-rule-metadata.util';
+import {
+  buildPacingConstraintImpactPreviewFallback,
+  isPacingConstraintPreviewFallbackEligible,
+  isPreviewImpactRecoverableServerError,
+} from '@/lib/constraint-impact-preview-fallback.util';
 import type { TripDetail } from '@/types/trip';
+import type { TripConstraint } from '@/types/trip-constraints';
+import type { UnifiedConstraintAssessmentBundle } from '@/types/frontend-constraint-assessment-api.types';
 
 const USE_MOCK_API =
   import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_CONSTRAINT_PREVIEW === 'true';
@@ -52,6 +60,9 @@ function shouldRequestDeepPreview(draft: ConstraintEditorDraft): boolean {
 export interface ConstraintPreviewImpactOptions {
   constraintsVersion?: number;
   trip?: TripDetail | null;
+  assessments?: UnifiedConstraintAssessmentBundle | null;
+  feasibilityScore?: number | null;
+  apiConstraint?: TripConstraint | null;
 }
 
 export const constraintConsoleApi = {
@@ -97,6 +108,26 @@ export const constraintConsoleApi = {
     } catch (err) {
       if (isTripConstraintsUnavailable(err)) {
         return null;
+      }
+      const canFallback =
+        isPacingConstraintPreviewFallbackEligible(draft.id) &&
+        options.assessments?.assessments?.length &&
+        isPreviewImpactRecoverableServerError(err);
+      if (canFallback) {
+        const fallback = buildPacingConstraintImpactPreviewFallback({
+          draft,
+          apiConstraint: options.apiConstraint,
+          assessments: options.assessments,
+          feasibilityScore: options.feasibilityScore,
+        });
+        if (fallback) {
+          const preview = enrichConstraintImpactPreviewWithSchedule(
+            reprojectNoNightDrivePreviewWithDraft(fallback, draft),
+            draft,
+            options.trip,
+          );
+          return { preview, source: 'assessment' };
+        }
       }
       throw err;
     }

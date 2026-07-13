@@ -155,7 +155,10 @@
       "sectionKey": "hard_must_satisfy",
       "category": "RISK",
       "solverRuleKind": "route_shape",
-      "legacyPatchOnly": false
+      "legacyPatchOnly": false,
+      "defaultScope": {
+        "type": "ROUTE_SEGMENT"
+      }
     },
     {
       "templateId": "no_bad_weather",
@@ -166,7 +169,10 @@
       "sectionKey": "hard_must_satisfy",
       "category": "RISK",
       "solverRuleKind": "route_shape",
-      "legacyPatchOnly": false
+      "legacyPatchOnly": false,
+      "defaultScope": {
+        "type": "ROUTE_SEGMENT"
+      }
     },
     {
       "templateId": "no_high_risk_activity",

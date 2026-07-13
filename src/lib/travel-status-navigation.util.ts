@@ -1,6 +1,26 @@
-/** 行程概览 Tab（travel-status BFF） */
+/** 行程详情页（默认规划 Tab） */
 export function buildTripTravelStatusPath(tripId: string): string {
-  return `/dashboard/trips/${tripId}?tab=overview`;
+  return `/dashboard/trips/${tripId}`;
+}
+
+/** 规划中行程 · 规划工作台（默认编排行程首页） */
+export function buildPlanningWorkbenchPath(
+  tripId: string,
+  options?: {
+    tab?: 'schedule' | 'budget' | 'tasks';
+    /** schedule 子模式；默认编排首页，传 diagnosis 打开行程诊断 */
+    scheduleMode?: 'arrange' | 'diagnosis' | 'explore';
+  },
+): string {
+  const tab = options?.tab ?? 'schedule';
+  const params = new URLSearchParams({ tripId, tab });
+  if (tab === 'schedule') {
+    const mode = options?.scheduleMode ?? 'arrange';
+    if (mode === 'diagnosis') params.set('itineraryDiagnosis', '1');
+    else if (mode === 'explore') params.set('attractionExplore', '1');
+    else params.set('arrangeItinerary', '1');
+  }
+  return `/dashboard/plan-studio?${params.toString()}`;
 }
 
 /** Plan Studio · AI 自动执行合同摘要（只读；编辑请用 buildTripAutomationAuthorizationPath） */

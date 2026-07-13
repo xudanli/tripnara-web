@@ -26,15 +26,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TripFeedbackDialog } from '@/components/fitness';
 import {
-  getTripHikingSegments,
-  isEmbeddedHikingTrip,
-} from '@/lib/trip-hiking';
-import { isEmbeddedHikingEnabled } from '@/lib/embedded-hiking-feature';
-import { mergeTripMetadata } from '@/lib/hiking-segments';
-import { useEmbeddedHikingTrip } from '@/hooks/useEmbeddedHikingTrip';
-import { AddHikingSegmentDialog } from '@/components/hiking';
-import type { HikingSegment } from '@/types/hiking-embedded';
-import {
   DropdownMenuItem,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
@@ -117,16 +108,10 @@ import TripDetailTabNav, {
   tripDetailLegacyTabRedirect,
   tripDetailTabScrollAreaClass,
   type TripDetailTabValue,
-  type TripOverviewSection,
 } from '@/components/trips/detail/TripDetailTabNav';
-import TripDetailTravelOverviewTab from '@/components/trips/detail/tabs/TripDetailTravelOverviewTab';
 import TripDetailTimelineTab from '@/components/trips/detail/tabs/TripDetailTimelineTab';
 import TripBookingsProtectionTab from '@/components/trips/detail/tabs/TripBookingsProtectionTab';
-import TripDetailTodayTab from '@/components/trips/detail/tabs/TripDetailTodayTab';
-import TripDetailMapTab from '@/components/trips/detail/tabs/TripDetailMapTab';
 import TripDetailMembersTab from '@/components/trips/detail/tabs/TripDetailMembersTab';
-import TripDetailAccommodationTab from '@/components/trips/detail/tabs/TripDetailAccommodationTab';
-import TripDetailActivitiesTab from '@/components/trips/detail/tabs/TripDetailActivitiesTab';
 import TripDetailFilesTab from '@/components/trips/detail/tabs/TripDetailFilesTab';
 import TripDetailDecisionLogTab from '@/components/trips/detail/tabs/TripDetailDecisionLogTab';
 import { TripDetailSuggestionsSheet } from '@/components/trips/detail/TripDetailSuggestionsSheet';
@@ -217,7 +202,7 @@ export default function TripDetailPage() {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewSuggestion, setPreviewSuggestion] = useState<Suggestion | null>(null);
   const [previewActionId, setPreviewActionId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<string>('timeline');
   const [outcomeAutoPrompt, setOutcomeAutoPrompt] = useState(false);
   const [metricExplanationDialogOpen, setMetricExplanationDialogOpen] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<'schedule' | 'budget' | 'pace' | 'feasibility' | null>(null);
@@ -244,11 +229,6 @@ export default function TripDetailPage() {
   // 新增：决策日志相关状态
   // 新增：行程详情页 Agent 相关状态
   const [tripHealth, setTripHealth] = useState<Health | null>(null);
-  const [addSegmentOpen, setAddSegmentOpen] = useState(false);
-
-  const embeddedHiking = useEmbeddedHikingTrip(trip);
-  const showEmbeddedUi =
-    isEmbeddedHikingEnabled() && embeddedHiking.embedded && isEmbeddedHikingTrip(trip);
   const tabBff = useTripDetailTabBff(id);
   useTravelStatus({
     tripId: id ?? '',
@@ -610,36 +590,29 @@ export default function TripDetailPage() {
     }
   };
   
-  // URL tab 参数：overview/travel → 概览；plan → 时间轴（旧链接兼容）
+  // URL tab 参数：plan → 时间轴；overview/travel 等旧链接兼容
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    const legacyRedirect = tripDetailLegacyTabRedirect(tabParam, searchParams.get('statusSection'));
+    const legacyRedirect = tripDetailLegacyTabRedirect(tabParam);
     if (legacyRedirect) {
       setActiveTab(legacyRedirect.tab);
       const next = new URLSearchParams(searchParams);
-      if (trip?.status === 'PLANNING' && legacyRedirect.tab === 'overview') {
+      const isDefault = legacyRedirect.tab === 'timeline';
+      if (isDefault) {
         next.delete('tab');
       } else {
         next.set('tab', legacyRedirect.tab);
       }
-      if (legacyRedirect.statusSection) {
-        next.set('statusSection', legacyRedirect.statusSection);
-      } else {
-        next.delete('statusSection');
-      }
+      next.delete('statusSection');
       setSearchParams(next, { replace: true });
       return;
     }
 
     const knownTabs: TripDetailTabValue[] = [
-      'overview',
       'timeline',
-      'map',
       'bookings',
       'budget',
       'members',
-      'accommodation',
-      'activities',
       'files',
       'decision-log',
     ];
@@ -648,17 +621,17 @@ export default function TripDetailPage() {
       setActiveTab('budget');
     } else if (tabParam === 'team') {
       setActiveTab('members');
-    } else if (tabParam === 'overview' || tabParam === 'travel') {
-      setActiveTab('overview');
     } else if (tabParam === 'plan') {
       setActiveTab('timeline');
     } else if (tabParam === 'today') {
-      setActiveTab('today');
+      if (trip?.status === 'IN_PROGRESS') {
+        redirectToExecute();
+        return;
+      }
+      setActiveTab('timeline');
     } else if (tabParam === 'execute') {
       if (!trip) return;
-      if (trip.status === 'IN_PROGRESS') {
-        setActiveTab('today');
-      } else if (tripDetailExecuteTabRedirectAllowed(trip.status)) {
+      if (tripDetailExecuteTabRedirectAllowed(trip.status)) {
         redirectToExecute();
       } else {
         setActiveTab('timeline');
@@ -668,9 +641,7 @@ export default function TripDetailPage() {
     } else if (tabParam === 'insights' || tabParam === 'recap') {
       setActiveTab(tabParam);
     } else if (!tabParam && trip) {
-      if (trip.status === 'PLANNING') setActiveTab('overview');
-      else if (trip.status === 'IN_PROGRESS') setActiveTab('today');
-      else setActiveTab('timeline');
+      setActiveTab('timeline');
     }
   }, [searchParams, trip?.status, trip, redirectToExecute]);
 
@@ -690,12 +661,8 @@ export default function TripDetailPage() {
   const handleTabChange = useCallback(
     (tab: string) => {
       if (tab === 'execute') {
-        if (trip?.status === 'IN_PROGRESS') {
-          tab = 'today';
-        } else {
-          redirectToExecute();
-          return;
-        }
+        if (redirectToExecute()) return;
+        tab = 'timeline';
       }
 
       setActiveTab(tab);
@@ -703,12 +670,7 @@ export default function TripDetailPage() {
       if (tab !== 'timeline') {
         next.delete('highlightItem');
       }
-      const isDefault =
-        (trip?.status === 'PLANNING' && tab === 'overview') ||
-        (trip?.status === 'IN_PROGRESS' && tab === 'today') ||
-        (trip?.status !== 'PLANNING' &&
-          trip?.status !== 'IN_PROGRESS' &&
-          tab === 'timeline');
+      const isDefault = tab === 'timeline';
       if (isDefault) {
         next.delete('tab');
       } else {
@@ -719,47 +681,9 @@ export default function TripDetailPage() {
     [searchParams, setSearchParams, trip?.status, redirectToExecute],
   );
 
-  const statusSectionParam = searchParams.get('statusSection');
-  const overviewScrollTarget: TripOverviewSection | null =
-    activeTab === 'overview' &&
-    (statusSectionParam === 'decisions' ||
-      statusSectionParam === 'verify' ||
-      statusSectionParam === 'monitor')
-      ? statusSectionParam
-      : null;
-
-  const clearStatusBarScrollTarget = useCallback(() => {
-    if (!searchParams.get('statusSection')) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete('statusSection');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  const openOverviewSection = useCallback(
-    (section: TripOverviewSection) => {
-      setActiveTab('overview');
-      const next = new URLSearchParams(searchParams);
-      if (trip?.status === 'PLANNING') {
-        next.delete('tab');
-      } else {
-        next.set('tab', 'overview');
-      }
-      next.set('statusSection', section);
-      setSearchParams(next, { replace: true });
-    },
-    [searchParams, setSearchParams, trip?.status],
-  );
-
-  const openDecisionCenter = useCallback(
-    (statusSection?: 'verify') => {
-      openOverviewSection(statusSection === 'verify' ? 'verify' : 'decisions');
-    },
-    [openOverviewSection],
-  );
-
-  const openMonitoringCenter = useCallback(() => {
-    openOverviewSection('monitor');
-  }, [openOverviewSection]);
+  const openDecisionCenter = useCallback(() => {
+    handleTabChange('decision-log');
+  }, [handleTabChange]);
 
   // 🆕 加载货币信息：优先使用预算约束中的货币，其次使用目的地货币，最后默认CNY
   const loadCurrency = async (destination?: string) => {
@@ -1434,7 +1358,7 @@ export default function TripDetailPage() {
           setOutcomeAutoPrompt(true);
         }
       } else if (pendingStatus === 'PLANNING') {
-        setActiveTab('overview');
+        setActiveTab('timeline');
       }
       // 已取消状态保持当前tab不变
       
@@ -1628,8 +1552,8 @@ export default function TripDetailPage() {
   const getMainCTA = () => {
     if (trip.status === 'PLANNING') {
       return {
-        label: '进入规划工作台',
-        action: () => navigate(`/dashboard/plan-studio?tripId=${id}`),
+        label: '继续规划',
+        action: () => navigate(`/dashboard/plan-studio?tripId=${id}&tab=schedule`),
         icon: Compass,
       };
     } else if (trip.status === 'IN_PROGRESS') {
@@ -1894,7 +1818,6 @@ export default function TripDetailPage() {
         impact={{
           totalDays: trip.statistics?.totalDays || trip.TripDay?.length || 0,
           totalItems: trip.statistics?.totalItems || 0,
-          hikePlanCount: showEmbeddedUi ? embeddedHiking.plans.length : 0,
         }}
         deleting={deleting}
         onConfirm={handleDelete}
@@ -1915,9 +1838,6 @@ export default function TripDetailPage() {
           <TripDetailTabNav
             activeTab={activeTab}
             extraTabs={[
-              ...(trip?.status === 'IN_PROGRESS'
-                ? [{ value: 'today', label: '今日' }]
-                : []),
               ...(trip?.status === 'COMPLETED'
                 ? [{ value: 'insights', label: '复盘' }]
                 : []),
@@ -1925,28 +1845,11 @@ export default function TripDetailPage() {
           />
 
         <div className={tripDetailTabScrollAreaClass(activeTab)}>
-          <TabsContent value="overview" className="mt-0">
-            {id ? (
-              <TripDetailTravelOverviewTab
-                tripId={id}
-                trip={trip}
-                onOpenTimeline={() => handleTabChange('timeline')}
-                onOpenDecisions={() => openDecisionCenter()}
-                onOpenMonitoring={openMonitoringCenter}
-                scrollToSection={overviewScrollTarget}
-                onScrollToSectionHandled={clearStatusBarScrollTarget}
-              />
-            ) : null}
-          </TabsContent>
-
           <TabsContent value="timeline" className="mt-0">
             <TripDetailTimelineTab
               trip={trip}
               timelineOverview={tabBff.timeline}
               timelineOverviewLoading={tabBff.shellLoading && !tabBff.timeline}
-              timelinePhase2Loading={tabBff.phase2Loading}
-              newSuggestionCount={newSuggestionCount}
-              onOpenSuggestions={() => void openSuggestionsPanel()}
               onOpenPlanStudio={(detail) => {
                 if (!id) return;
                 if (!detail) {
@@ -1954,26 +1857,10 @@ export default function TripDetailPage() {
                 }
                 navigateToPlanStudioSchedule(navigate, id, detail);
               }}
-              companionOverviewTab
-              onOpenOverview={() => handleTabChange('overview')}
               onOpenFilesTab={() => handleTabChange('files')}
               onOpenDecisions={() => openDecisionCenter()}
-              onOpenAccommodation={() => handleTabChange('accommodation')}
-              onOpenActivities={() => handleTabChange('activities')}
               highlightItineraryItemId={highlightItineraryItemId}
             />
-          </TabsContent>
-
-          <TabsContent value="today" className="mt-0">
-            {id && trip ? (
-              <TripDetailTodayTab
-                tripId={id}
-                trip={trip}
-                onOpenDecisions={() => openDecisionCenter()}
-                onOpenMonitoring={openMonitoringCenter}
-                onOpenBudget={() => handleTabChange('budget')}
-              />
-            ) : null}
           </TabsContent>
 
           <TabsContent value="bookings" className="mt-0">
@@ -1982,16 +1869,6 @@ export default function TripDetailPage() {
                 tripId={id}
                 trip={trip}
                 onOpenDecisions={() => openDecisionCenter()}
-              />
-            ) : null}
-          </TabsContent>
-
-          <TabsContent value="map" className="mt-0 flex min-h-0 flex-1 flex-col">
-            {id ? (
-              <TripDetailMapTab
-                tripId={id}
-                onOpenFullMap={() => navigate(`/dashboard/journey-map?tripId=${id}`)}
-                onOpenMonitoring={openMonitoringCenter}
               />
             ) : null}
           </TabsContent>
@@ -2030,22 +1907,6 @@ export default function TripDetailPage() {
                 <p>无法加载成员信息</p>
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="accommodation" className="mt-0">
-            <TripDetailAccommodationTab
-              tripId={id!}
-              trip={trip}
-              onOpenPlanStudio={() => id && navigate(`/dashboard/plan-studio?tripId=${id}`)}
-            />
-          </TabsContent>
-
-          <TabsContent value="activities" className="mt-0">
-            <TripDetailActivitiesTab
-              tripId={id!}
-              trip={trip}
-              onOpenPlanStudio={() => id && navigate(`/dashboard/plan-studio?tripId=${id}`)}
-            />
           </TabsContent>
 
           <TabsContent value="files" className="mt-0">
@@ -2192,20 +2053,10 @@ export default function TripDetailPage() {
                   <CardTitle>统计概览</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                     <div>
                       <div className="text-sm text-muted-foreground">访问地点</div>
                       <div className="text-2xl font-bold">{recapReport?.statistics?.totalPlaces ?? 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">徒步路线</div>
-                      <div className="text-2xl font-bold">{recapReport?.statistics?.totalTrails ?? 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">总里程 (km)</div>
-                      <div className="text-2xl font-bold">
-                        {recapReport?.statistics?.totalTrailDistanceKm?.toFixed(1) ?? '0.0'}
-                      </div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">累计爬升 (m)</div>
@@ -2539,36 +2390,6 @@ export default function TripDetailPage() {
           />
         );
       })()}
-
-      {showEmbeddedUi && id && trip ? (
-        <AddHikingSegmentDialog
-          open={addSegmentOpen}
-          onOpenChange={setAddSegmentOpen}
-          tripId={id}
-          tripStart={trip.startDate}
-          tripEnd={trip.endDate}
-          segmentCount={embeddedHiking.segments.length}
-          onCreated={async (segment: HikingSegment) => {
-            try {
-              const fresh = await tripsApi.getById(id);
-              const metaSegs = getTripHikingSegments(fresh);
-              if (!metaSegs.some((s) => s.segmentId === segment.segmentId)) {
-                await tripsApi.update(id, {
-                  metadata: mergeTripMetadata(fresh.metadata, {
-                    hikingProfile: 'embedded',
-                    hikingSegments: [...metaSegs, segment],
-                  }),
-                });
-              }
-              await loadTrip();
-              await embeddedHiking.refreshPlans();
-              toast.success('已添加徒步片段');
-            } catch (e) {
-              toast.error((e as Error).message);
-            }
-          }}
-        />
-      ) : null}
 
       {/* 体能反馈弹窗 - 行程完成后显示 */}
       {id && trip && (

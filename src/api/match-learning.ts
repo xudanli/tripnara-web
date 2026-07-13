@@ -6,8 +6,8 @@
  */
 
 import apiClient from './client';
-import { matchLearningMockStore } from '@/features/match-square/lib/match-learning-mock-store';
-import { withMatchSquareFallback } from '@/features/match-square/lib/match-square-api-mode';
+import { matchLearningMockStore } from '@/lib/api-mocks/match-learning-mock-store';
+import { withMatchSquareFallback } from '@/lib/api-fallback-mode';
 import type {
   MatchLearningManualRunResult,
   MatchLearningRunsResponse,

@@ -1,4 +1,4 @@
-import { Handshake, MessageSquare, Sparkles, Vote } from 'lucide-react';
+import { Check, Handshake, Sparkles, Vote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { workbenchPrimaryAction } from '@/components/plan-studio/workbench/workbench-ui';
 import { cn } from '@/lib/utils';
@@ -7,6 +7,7 @@ interface CollabNegotiationActionBarProps {
   onStartVote?: () => void;
   onGenerateCompromise?: () => void;
   onDiscussWithAssistant?: () => void;
+  onReachConsensus?: () => void;
   voteDisabled?: boolean;
   className?: string;
 }
@@ -15,6 +16,7 @@ export function CollabNegotiationActionBar({
   onStartVote,
   onGenerateCompromise,
   onDiscussWithAssistant,
+  onReachConsensus,
   voteDisabled,
   className,
 }: CollabNegotiationActionBarProps) {
@@ -25,6 +27,18 @@ export function CollabNegotiationActionBar({
         className,
       )}
     >
+      {onGenerateCompromise ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 text-xs"
+          onClick={onGenerateCompromise}
+        >
+          <Handshake className="h-3.5 w-3.5" />
+          生成妥协方案
+        </Button>
+      ) : null}
       {onStartVote ? (
         <Button
           type="button"
@@ -38,34 +52,28 @@ export function CollabNegotiationActionBar({
           发起投票
         </Button>
       ) : null}
-      {onGenerateCompromise ? (
+      {onDiscussWithAssistant ? (
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="h-8 gap-1.5 text-xs"
-          onClick={onGenerateCompromise}
-        >
-          <Handshake className="h-3.5 w-3.5" />
-          生成妥协方案
-        </Button>
-      ) : null}
-      {onDiscussWithAssistant ? (
-        <Button
-          type="button"
-          size="sm"
-          className={cn('h-8 gap-1.5 text-xs', workbenchPrimaryAction)}
           onClick={onDiscussWithAssistant}
         >
           <Sparkles className="h-3.5 w-3.5" />
           与 Nara 讨论
         </Button>
       ) : null}
-      {onDiscussWithAssistant ? (
-        <span className="hidden text-[10px] text-muted-foreground sm:inline">
-          <MessageSquare className="mr-1 inline h-3 w-3" />
-          AI 可汇总各方观点并给出下一步
-        </span>
+      {onReachConsensus ? (
+        <Button
+          type="button"
+          size="sm"
+          className={cn('ml-auto h-8 gap-1.5 text-xs', workbenchPrimaryAction)}
+          onClick={onReachConsensus}
+        >
+          <Check className="h-3.5 w-3.5" />
+          达成共识并写回
+        </Button>
       ) : null}
     </div>
   );

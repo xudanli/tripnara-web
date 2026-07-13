@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -35,7 +35,31 @@ export default function NaraConversationHeader({
   className,
 }: NaraConversationHeaderProps) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const title = tripTitle?.trim() || 'Nara 对话';
+  const from = searchParams.get('from');
+
+  const handleBack = () => {
+    if (from === 'plan-studio' && tripId) {
+      const tab = searchParams.get('tab');
+      navigate(
+        `/dashboard/plan-studio?tripId=${encodeURIComponent(tripId)}${tab ? `&tab=${encodeURIComponent(tab)}` : '&tab=schedule'}`,
+      );
+      return;
+    }
+    if (from === 'execute' && tripId) {
+      navigate(`/dashboard/execute?tripId=${encodeURIComponent(tripId)}`);
+      return;
+    }
+    if (tripId) {
+      navigate(buildTripTravelStatusPath(tripId));
+      return;
+    }
+    navigate('/dashboard/trips');
+  };
+
+  const backLabel =
+    from === 'plan-studio' ? '返回工作台' : from === 'execute' ? '返回行中' : '概览';
 
   return (
     <header
@@ -49,16 +73,10 @@ export default function NaraConversationHeader({
         variant="ghost"
         size="sm"
         className="hidden shrink-0 text-muted-foreground sm:inline-flex"
-        onClick={() => {
-          if (tripId) {
-            navigate(buildTripTravelStatusPath(tripId));
-          } else {
-            navigate('/dashboard/trips');
-          }
-        }}
+        onClick={handleBack}
       >
         <ArrowLeft className="mr-1 h-4 w-4" />
-        概览
+        {backLabel}
       </Button>
 
       <DropdownMenu>
@@ -142,7 +160,9 @@ export default function NaraConversationHeader({
         <Logo variant="icon" size={22} color="currentColor" className="text-foreground" />
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-none">Nara 助理</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">你的旅行规划搭档</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {tripId ? '行程副驾驶' : '你的旅行规划搭档'}
+          </p>
         </div>
       </div>
     </header>

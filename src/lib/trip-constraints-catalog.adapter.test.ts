@@ -117,4 +117,42 @@ describe('trip-constraints catalog POST adapter', () => {
     expect(draft.targetValue).toBe(9);
     expect(draft.type).toBe('HARD');
   });
+
+  it('draftToPreviewChange emits ROUTE_SEGMENT scope for route segment binding', () => {
+    const change = draftToPreviewChange({
+      id: 'no_bad_weather',
+      name: '不在恶劣天气出行',
+      enabled: true,
+      type: 'HARD',
+      scope: 'TRIP',
+      targetValue: 1,
+      targetUnit: 'hour',
+      toleranceMode: 'none',
+      toleranceMinutes: 0,
+      priority: 7,
+      locked: false,
+      reason: '',
+      scopeBinding: {
+        temporal: {
+          kind: 'route_segment',
+          segmentId: 'from__to',
+          dayNumber: 1,
+          fromItemId: 'from',
+          toItemId: 'to',
+          label: 'D1 A → B',
+        },
+        member: { kind: 'all' },
+        phase: { planning: true, execution: true },
+        activity: { kind: 'all' },
+      },
+    });
+    expect(change.patch.scope).toEqual({
+      type: 'ROUTE_SEGMENT',
+      segmentId: 'from__to',
+      fromItemId: 'from',
+      toItemId: 'to',
+      dayIndex: 1,
+    });
+    expect(change.constraintId).toBe('c_tpl_no_bad_weather');
+  });
 });

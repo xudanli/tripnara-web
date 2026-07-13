@@ -84,7 +84,6 @@ import type { TripInsightResponse, TripInsightFinding } from '@/api/trips';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -5394,8 +5393,8 @@ export default function AgentChat({
         </DialogContent>
       </Dialog>
 
-      {/* 消息区域 */}
-      <ScrollArea className="flex-1 min-w-0">
+      {/* 消息区域 — 原生滚动，避免 Radix ScrollArea 在流式更新时 removeChild 异常 */}
+      <div className="flex-1 min-w-0 overflow-y-auto overscroll-y-contain">
         <div className={cn(AGENT_PANEL_CONTENT_MAX_CLASS, 'space-y-4 px-4 py-4')}>
           {messages.length === 0 ? (
             (() => {
@@ -5711,7 +5710,7 @@ export default function AgentChat({
           ) : null}
           <div ref={messagesEndRef} />
         </div>
-      </ScrollArea>
+      </div>
 
       {/* 输入区域 */}
       <div className="flex-shrink-0 border-t border-border bg-card/50 px-3 py-3">

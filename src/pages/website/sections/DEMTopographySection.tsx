@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Mountains } from '@/components/illustrations/SimpleIllustrations';
 import { WebsiteSection } from '@/components/website/WebsiteSection';
@@ -35,14 +34,6 @@ export default function DEMTopographySection() {
             })}
           </p>
 
-          <p className="mb-6">
-            <Link
-              to="/demo/hiking/laugavegur"
-              className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-            >
-              体验朗格迈维卢尔 · 4 日步道 Demo →
-            </Link>
-          </p>
 
           <div className="flex flex-wrap gap-3">
             {features.map((feature, idx) => (

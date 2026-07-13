@@ -18,7 +18,6 @@ import { cn } from '@/lib/utils';
 export interface DeleteTripDialogImpact {
   totalDays?: number;
   totalItems?: number;
-  hikePlanCount?: number;
 }
 
 export interface DeleteTripDialogProps {
@@ -107,9 +106,6 @@ export function DeleteTripDialog({
               {IMPACT_ITEMS.map((item) => (
                 <li key={item}>{item}</li>
               ))}
-              {impact?.hikePlanCount != null && impact.hikePlanCount > 0 ? (
-                <li>{impact.hikePlanCount} 个关联徒步计划（HikePlan）及 GPS 轨迹</li>
-              ) : null}
             </ul>
           </div>
 

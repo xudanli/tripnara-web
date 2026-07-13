@@ -3,7 +3,7 @@ import { useDomainNegotiationTasks } from '@/hooks/useDomainNegotiationTasks';
 import { useDecisionProfilingOnboarding, useFrictionRadar } from '@/hooks/useDecisionProfiling';
 import { useSilentVoteList } from '@/hooks/useSilentVotes';
 import { useTripWishSummary } from '@/hooks/useTripWishes';
-import { useCollaborativeTasks } from '@/features/match-square/hooks/useCollaborativeTasks';
+import { useCollaborativeTasks } from '@/hooks/useCollaborativeTasks';
 import { useTripDecisionFollowUpTasks } from '@/hooks/useTripDecisionFollowUpTasks';
 import {
   filterDecisionFollowUpTasks,
@@ -97,7 +97,7 @@ function buildPendingItems(
 export function useCollabOverview(tripId: string | undefined) {
   const { data: negotiationTasks = [], isLoading: negotiationLoading } =
     useDomainNegotiationTasks(tripId);
-  const { items: votes, loading: votesLoading } = useSilentVoteList(tripId);
+  const { items: votes, loading: votesLoading, reload: reloadVotes } = useSilentVoteList(tripId);
   const { data: onboarding, loading: onboardingLoading } = useDecisionProfilingOnboarding(tripId);
   const { data: friction, loading: frictionLoading } = useFrictionRadar(tripId, Boolean(tripId));
   const { summary: wishSummary, loading: wishLoading } = useTripWishSummary(tripId);
@@ -200,5 +200,6 @@ export function useCollabOverview(tripId: string | undefined) {
     domainNegotiations,
     pendingFlywheel,
     friction,
+    reloadVotes,
   };
 }

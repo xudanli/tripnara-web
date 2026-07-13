@@ -102,6 +102,39 @@ export function partitionHardItemsForWorkbench(items: ConstraintListEntry[]): {
   return { tripObjectiveItems, mustComplyItems };
 }
 
+/**
+ * readonly_official 中仍属规划 enforce、但 BFF 暂未移入 hard_must_satisfy 的项
+ * （如 c_max_segment_distance）。MAX_DAILY_DRIVE / NO_NIGHT_DRIVE 已由 BFF 固定进 hard_must_satisfy。
+ */
+export const WORKBENCH_ENFORCE_READONLY_UI_IDS = new Set(['max_segment_distance']);
+
+export function isWorkbenchEnforceReadonlyEntry(entry: Pick<ConstraintListEntry, 'id'>): boolean {
+  return WORKBENCH_ENFORCE_READONLY_UI_IDS.has(normalizeConstraintUiId(entry.id));
+}
+
+export function collectWorkbenchMustComplyItems(
+  sections: ConstraintConsoleSectionViewModel[],
+): {
+  tripObjectiveItems: ConstraintListEntry[];
+  mustComplyItems: ConstraintListEntry[];
+} {
+  const hardSection = sections.find((section) => section.meta.key === 'hard_must_satisfy');
+  const officialSection = sections.find((section) => section.meta.key === 'readonly_official');
+  const hardItems = hardSection?.items ?? [];
+  const seen = new Set(hardItems.map((item) => normalizeConstraintUiId(item.id)));
+  const promoted: ConstraintListEntry[] = [];
+
+  for (const item of officialSection?.items ?? []) {
+    if (!isWorkbenchEnforceReadonlyEntry(item)) continue;
+    const uiId = normalizeConstraintUiId(item.id);
+    if (seen.has(uiId)) continue;
+    seen.add(uiId);
+    promoted.push(item);
+  }
+
+  return partitionHardItemsForWorkbench([...hardItems, ...promoted]);
+}
+
 export function isActiveExternalConditionEntry(entry: ConstraintListEntry): boolean {
   if (entry.kind === 'external' || entry.readOnly || entry.destinationRule) {
     if (entry.hasConflict || entry.cardTone === 'danger' || entry.cardTone === 'caution') {
@@ -124,7 +157,9 @@ export function collectActiveExternalConditions(
   const officialItems =
     sections.find((section) => section.meta.key === 'readonly_official')?.items ?? [];
 
-  const activeOfficial = officialItems.filter(isActiveExternalConditionEntry);
+  const activeOfficial = officialItems
+    .filter((item) => !isWorkbenchEnforceReadonlyEntry(item))
+    .filter(isActiveExternalConditionEntry);
   const activeWorld = worldItems.filter(isActiveExternalConditionEntry);
 
   const merged = [...activeWorld, ...activeOfficial];

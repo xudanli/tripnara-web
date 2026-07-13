@@ -126,7 +126,7 @@ export default function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => navigate('/dashboard/settings?tab=preferences')}
+                  onClick={() => navigate('/dashboard/settings')}
                   className="cursor-pointer"
                 >
                   <Settings className="mr-2 h-4 w-4" />

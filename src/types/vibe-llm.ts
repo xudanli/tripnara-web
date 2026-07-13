@@ -5,7 +5,6 @@
 
 import type { PlanningStyle, TravelMode, TripMoodTag } from '@/types/match-square';
 import type { RouteTemplateIntentMatchPlan } from '@/types/route-template-intent';
-import type { TrekkingVibeOrchestrationPlan } from '@/types/trekking-vibe-orchestration';
 
 /** POST /vibe-llm/parse · suggestedFields */
 export type VibeSuggestedFields = {
@@ -110,7 +109,7 @@ export type VibeLlmParseApiData = {
   suggestedFields?: VibeSuggestedFields;
   realtime_ready?: boolean;
   parseSource?: 'rules' | 'llm';
-  trekkingOrchestration?: TrekkingVibeOrchestrationPlan | null;
+  trekkingOrchestration?: Record<string, unknown> | null;
   routeTemplateMatch?: RouteTemplateIntentMatchPlan | null;
 };
 
@@ -127,7 +126,7 @@ export type VibeLlmParseResponse = {
   parse: VibeLlmParseResult;
   source: 'live_llm' | 'rule_mock';
   /** §3.10 Premium Trekking 编排计划 */
-  trekkingOrchestration?: TrekkingVibeOrchestrationPlan | null;
+  trekkingOrchestration?: Record<string, unknown> | null;
   /** §3.11 Intent-to-Template 匹配 */
   routeTemplateMatch?: RouteTemplateIntentMatchPlan | null;
 };

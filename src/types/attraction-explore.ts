@@ -89,14 +89,38 @@ export interface AttractionExploreMapInsertHint {
   detourMethod?: AttractionExploreDetourMethod;
 }
 
+/** P2 · 当日末段 → 当晚住宿路线 */
+export interface AttractionExploreMapLodgingLegEndpoint {
+  kind?: string;
+  placeId?: number | string;
+  label?: string;
+}
+
+export interface AttractionExploreMapLodgingLeg {
+  id?: string;
+  dayIndex: number;
+  nightIndex?: number;
+  fromPointId?: string;
+  toPointId?: string;
+  from?: AttractionExploreMapLodgingLegEndpoint;
+  to?: AttractionExploreMapLodgingLegEndpoint;
+  polyline?: Array<{ lat: number; lng: number }>;
+  label?: string;
+  driveMinutes?: number;
+  distanceKm?: number;
+  legKind?: 'approach' | 'relocation';
+}
+
 export interface AttractionExploreMapPoint {
   id: string;
   placeId?: number | string;
   name: string;
   lat: number;
   lng: number;
-  kind?: 'candidate' | 'recommended' | 'route';
+  kind?: 'candidate' | 'recommended' | 'route' | 'lodging' | 'lodging_suggestion';
   highlighted?: boolean;
+  dayIndex?: number;
+  lodgingRole?: 'overnight' | 'suggestion';
   /** GET map?includeInsertHints=true 时候选 POI 附带 */
   insertHint?: AttractionExploreMapInsertHint;
 }
@@ -104,6 +128,7 @@ export interface AttractionExploreMapPoint {
 export interface AttractionExploreMapResponse {
   points: AttractionExploreMapPoint[];
   routePolyline?: Array<{ lat: number; lng: number }>;
+  lodgingLegs?: AttractionExploreMapLodgingLeg[];
 }
 
 export interface AttractionExploreCandidatesResponse {

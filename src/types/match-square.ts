@@ -1,14 +1,11 @@
 /**
- * Match Square API 契约类型
- * @see Decision OS · Match Square 前端集成指南 v1.0.0
+ * 招募帖 / 可信项目 API 契约类型（legacy match-square 命名保留在部分字段）
  */
 
 import type { MbtiQuadrant } from '@/types/odyssey-travel-persona';
 
 import type { VibeLlmParseResult } from '@/types/vibe-llm';
-import type { TrekkingVibeOrchestrationPlan } from '@/types/trekking-vibe-orchestration';
 import type { TripInstantiationResult } from '@/types/trip-instantiation';
-import type { TrekSpawnState } from '@/types/spawn-trek-trip';
 import type { SovereignForceLockRecord } from '@/types/sovereign-force-lock';
 
 export type InteractionMode = 'deep_learning' | 'easy_companion' | 'independent';
@@ -28,14 +25,6 @@ export type RecruitmentPostStatus = 'active' | 'hidden' | 'closed';
 export type ApplicationStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
 
 export type ApplicationReviewAction = 'approve' | 'reject';
-
-/** GET /api/match-square/access */
-export type MatchSquareAccess = {
-  canBrowse: boolean;
-  canPost: boolean;
-  canApply: boolean;
-  quizComplete: boolean;
-};
 
 export type TeamStatus = {
   slotsFilled: number;
@@ -240,6 +229,12 @@ export type ViewerPuzzleMatch = {
   aiRationale?: string | null;
 };
 
+export type RouteTemplateBinding = {
+  catalogId: string;
+  routeTemplateId?: number | null;
+  titleZh?: string | null;
+};
+
 export type RecruitmentPostCard = {
   id: string;
   status: RecruitmentPostStatus;
@@ -315,15 +310,13 @@ export type RecruitmentPostCard = {
   routeDirectionName?: string | null;
   /** 重装 / 轻装隐居 / 山野速攀 */
   activityProfile?: TrekActivityProfile | null;
-  /** §3.10 Trekking Orchestration — GET /posts/:id */
-  trekkingOrchestration?: TrekkingVibeOrchestrationPlan | null;
+  /** §3.10 Trekking Orchestration — 已下线，保留字段兼容旧 API */
+  trekkingOrchestration?: Record<string, unknown> | null;
   /** §3.11 绑定的路线模板 catalog id */
   routeTemplateCatalogId?: string | null;
   routeTemplateId?: number | null;
   /** §链路 A · 模板强绑（launch-recruitment） */
-  routeTemplateBinding?: import('@/types/launch-recruitment').RouteTemplateBinding | null;
-  /** spawn-trek-trip 成团后状态 */
-  trekSpawnState?: TrekSpawnState | null;
+  routeTemplateBinding?: RouteTemplateBinding | null;
   /** §3.12 成团 instantiate Active Trip 结果 */
   tripInstantiationResult?: TripInstantiationResult | null;
   /** §3.15 队长强制成团（Sovereign Force Lock） */
@@ -502,20 +495,6 @@ export type DestinationRegionOption = {
   subScopes: DestinationSubScopeOption[];
 };
 
-export type MatchSquareFilterOptions = {
-  personaQuadrants: Array<{ id: MbtiQuadrant; label: string }>;
-  interactionModes: Array<{ id: InteractionMode; label: string }>;
-  personaTypes?: Array<{ id: string; label: string }>;
-  teamworkStyles?: Array<{
-    id: PlanningStyle;
-    label: string;
-    boundary?: string;
-    contractCapsule?: string;
-  }>;
-  /** GET /filters/options · 与 vibe parse suggestedFields 的 region/sub id 对齐 */
-  destinationRegions?: DestinationRegionOption[];
-};
-
 export type VibeUserEditedFields = {
   itinerary?: boolean;
   captain?: boolean;
@@ -564,7 +543,7 @@ export type CreatePostRequest = {
   routeDirectionId?: number;
   routeDirectionName?: string;
   activityProfile?: TrekActivityProfile;
-  trekkingOrchestration?: TrekkingVibeOrchestrationPlan | null;
+  trekkingOrchestration?: Record<string, unknown> | null;
   /** §3.11 绑定的路线模板 catalog */
   routeTemplateCatalogId?: string;
   routeTemplateId?: number;

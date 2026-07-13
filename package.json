@@ -31,6 +31,8 @@
     "test:travel-context": "bash scripts/debug-travel-context-flow.sh",
     "contracts:decision-semantics": "vitest run src/trips/decision-semantics/frontend/decision-center-execution-state-machine.util.test.ts",
     "contracts:constraint-templates": "vitest run src/trips/trip-constraint-solver/utils/constraint-template-registry.util.test.ts",
+    "test:constraint-assessments": "vitest run src/lib/frontend-constraint-card-view.util.test.ts",
+    "constraint-assessments:pilot-smoke": "vitest run src/lib/frontend-constraint-card-view.util.test.ts",
     "export:constraint-template-registry": "npx tsx scripts/export-constraint-template-registry.ts",
     "gateway:test": "vitest run src/trips/decision-runtime/gateway/frontend/canonical-decision-l2-state-machine.util.test.ts src/lib/unified-decision-problem-list.util.test.ts src/lib/unified-gateway-response.util.test.ts src/lib/unified-decision-active-packs.util.test.ts",
     "decision-center:contract": "vitest run src/trips/decision-semantics/frontend/decision-center-execution-state-machine.util.test.ts src/trips/decision-semantics/frontend/decision-center-execution.integration.test.ts src/lib/decision-problem-display.util.test.ts src/trips/decision-semantics/fixtures/decision-center-display.fixtures.test.ts",

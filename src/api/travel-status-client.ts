@@ -84,9 +84,11 @@ export async function getDecisionQueueItem(
 export async function acceptRecommended(
   tripId: string,
   problemId: string,
+  body?: { actionId?: string; acknowledgement?: string[] },
 ): Promise<AcceptRecommendedResponse> {
   const response = await apiClient.post<ApiResponseWrapper<AcceptRecommendedResponse>>(
     `/trips/${tripId}/decision-queue/${problemId}/accept-recommended`,
+    body ?? {},
   );
   return handleResponse(response);
 }

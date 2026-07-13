@@ -216,10 +216,13 @@ export async function invalidateWorkbenchAfterConstraintChange(
   tripId: string,
   options?: { skipConstraintsList?: boolean },
 ) {
+  const { invalidateConstraintAssessmentQueries } = await import(
+    '@/lib/constraint-assessment-query.util'
+  );
   await Promise.all([
     ...(options?.skipConstraintsList
       ? []
-      : [queryClient.invalidateQueries({ queryKey: workbenchKeys.constraints(tripId) })]),
+      : [invalidateConstraintAssessmentQueries(queryClient, tripId)]),
     invalidateWorkbenchPlanningConflicts(queryClient, tripId),
   ]);
 }

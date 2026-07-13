@@ -1,6 +1,6 @@
 import { Navigate, useParams, useSearchParams } from 'react-router-dom';
 
-/** /trips/:id/travel → /trips/:id?tab=overview */
+/** /trips/:id/travel → /trips/:id（规划 Tab） */
 export default function TripTravelStatusRedirectPage() {
   const { id = '' } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -8,6 +8,8 @@ export default function TripTravelStatusRedirectPage() {
     return <Navigate to="/dashboard/trips" replace />;
   }
   const next = new URLSearchParams(searchParams);
-  next.set('tab', 'overview');
-  return <Navigate to={`/dashboard/trips/${id}?${next.toString()}`} replace />;
+  next.delete('tab');
+  next.delete('statusSection');
+  const query = next.toString();
+  return <Navigate to={`/dashboard/trips/${id}${query ? `?${query}` : ''}`} replace />;
 }

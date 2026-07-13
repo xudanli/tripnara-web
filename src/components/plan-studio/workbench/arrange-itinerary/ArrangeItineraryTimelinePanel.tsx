@@ -1,10 +1,14 @@
-import { MoreHorizontal, Plus, Timer } from 'lucide-react';
+import { BedDouble, MoreHorizontal, Plus, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { WorkbenchDayDetailCard } from '../WorkbenchDayDetailCard';
 import type { WorkbenchDaySnapshot } from '../useWorkbenchItineraryData';
+import type { ArrangeLodgingNightStatus } from '@/lib/arrange-itinerary-lodging-coverage.util';
+import { buildWorkbenchDayContextSummary } from '@/lib/workbench-timeline-impact.util';
+import { ArrangeItineraryDayLodgingAnchor } from './ArrangeItineraryDayLodgingAnchor';
+import { WorkbenchTimelineEntryBody } from '../WorkbenchTimelineEntryBody';
 import {
   workbenchDayTabIdle,
   workbenchDayTabSelected,
@@ -23,13 +27,20 @@ export interface ArrangeItineraryTimelinePanelProps {
   weatherLabel?: string;
   onViewDayMap?: (dayIndex: number) => void;
   onEditEntry?: (entryId: string) => void;
+  onDeleteEntry?: (entryId: string) => void;
   onAddActivity?: (dayIndex: number) => void;
+  onAddLodging?: (dayIndex: number) => void;
+  onEditLodging?: (itemId: string) => void;
+  onAskAssistantForLodging?: (dayIndex: number) => void;
+  lodgingNightByDayIndex?: Map<number, ArrangeLodgingNightStatus>;
   onInsertGap?: (dayIndex: number) => void;
   onAnalyzeMoveEntry?: (entryId: string, dayIndex: number) => void;
   itemLocks?: import('@/types/arrange-itinerary').ArrangeItemLocksResponse | null;
   userLockedItemIds?: Set<string>;
   onToggleUserLock?: (entryId: string, locked: boolean) => void;
   copilotEnabled?: boolean;
+  selectedEntryId?: string | null;
+  onSelectEntry?: (entryId: string) => void;
   className?: string;
 }
 
@@ -43,13 +54,20 @@ export function ArrangeItineraryTimelinePanel({
   weatherLabel,
   onViewDayMap,
   onEditEntry,
+  onDeleteEntry,
   onAddActivity,
+  onAddLodging,
+  onEditLodging,
+  onAskAssistantForLodging,
+  lodgingNightByDayIndex,
   onInsertGap,
   onAnalyzeMoveEntry,
   itemLocks,
   userLockedItemIds,
   onToggleUserLock,
   copilotEnabled = true,
+  selectedEntryId = null,
+  onSelectEntry,
   className,
 }: ArrangeItineraryTimelinePanelProps) {
   const selectedDay = daySnapshots[selectedDayIndex] ?? null;
@@ -74,15 +92,6 @@ export function ArrangeItineraryTimelinePanel({
     );
   }
 
-  if (viewMode === 'map') {
-    return (
-      <div className={cn('flex h-full min-h-0 flex-col items-center justify-center gap-2 p-6 text-center', className)}>
-        <p className="text-sm font-medium text-foreground">地图视图</p>
-        <p className="text-xs text-muted-foreground">请使用右侧地图预览，或打开全程地图查看路线</p>
-      </div>
-    );
-  }
-
   if (viewMode === 'list') {
     return (
       <div className={cn('flex h-full min-h-0 flex-col', className)}>
@@ -91,32 +100,50 @@ export function ArrangeItineraryTimelinePanel({
         </div>
         <div className={cn('min-h-0 flex-1 overflow-y-auto p-3', workbenchScrollable)}>
           <ul className="space-y-3">
-            {daySnapshots.map((day) => (
+            {daySnapshots.map((day) => {
+              const lodgingNight = lodgingNightByDayIndex?.get(day.dayIndex) ?? null;
+              return (
               <li key={day.dayIndex} className="rounded-xl border border-border/55 bg-card p-3">
                 <p className="text-xs font-semibold text-foreground">
                   第 {day.dayNumber} 天 · {day.dateLabel} {day.weekdayLabel}
                 </p>
                 <ul className="mt-2 space-y-1">
                   {day.timeline.map((entry) => (
-                    <li key={entry.id} className="flex gap-2 text-[11px]">
-                      <span className="w-10 shrink-0 tabular-nums text-muted-foreground">
-                        {entry.timeLabel}
-                      </span>
-                      <span className="min-w-0 flex-1 text-foreground">{entry.title}</span>
-                      {entry.subtitle ? (
-                        <span className="shrink-0 text-muted-foreground">{entry.subtitle}</span>
-                      ) : null}
+                    <li key={entry.id} className="text-[11px]">
+                      <div className="flex gap-2">
+                        <span className="w-10 shrink-0 tabular-nums text-muted-foreground">
+                          {entry.timeLabel}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <WorkbenchTimelineEntryBody entry={entry} />
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>
+                <div className="mt-2">
+                  <ArrangeItineraryDayLodgingAnchor
+                    night={lodgingNight}
+                    lodgingListedInTimeline={day.timeline.some((entry) => entry.isLodging)}
+                    onAddLodging={onAddLodging ? () => onAddLodging(day.dayIndex) : undefined}
+                    onEditLodging={onEditLodging}
+                    onAskAssistant={
+                      onAskAssistantForLodging
+                        ? () => onAskAssistantForLodging(day.dayIndex)
+                        : undefined
+                    }
+                  />
+                </div>
                 <DayActions
                   dayIndex={day.dayIndex}
                   onAddActivity={onAddActivity}
+                  onAddLodging={onAddLodging}
                   onInsertGap={onInsertGap}
                   onMoreOperations={handleMoreOperations}
                 />
               </li>
-            ))}
+            );
+            })}
           </ul>
         </div>
       </div>
@@ -164,12 +191,21 @@ export function ArrangeItineraryTimelinePanel({
 
       <div className={cn('min-h-0 flex-1 overflow-y-auto p-3', workbenchScrollable)}>
         <div className="space-y-3">
-          {(showSingleDay && selectedDay ? [selectedDay] : daySnapshots).map((day) => (
+          {(showSingleDay && selectedDay ? [selectedDay] : daySnapshots).map((day) => {
+            const lodgingNight = lodgingNightByDayIndex?.get(day.dayIndex) ?? null;
+            return (
             <div key={day.dayIndex} className="space-y-2">
               <WorkbenchDayDetailCard
                 day={day}
+                dayContext={buildWorkbenchDayContextSummary({
+                  executable: day.executable,
+                  conflictLines: day.conflictLines,
+                  decisionProblems: [],
+                  cascadeHints: [],
+                }) ?? undefined}
                 onViewDayMap={onViewDayMap ? () => onViewDayMap(day.dayIndex) : undefined}
                 onEditEntry={onEditEntry}
+                onDeleteEntry={onDeleteEntry}
                 onAnalyzeMoveEntry={
                   copilotEnabled && onAnalyzeMoveEntry
                     ? (entryId) => onAnalyzeMoveEntry(entryId, day.dayIndex)
@@ -178,15 +214,30 @@ export function ArrangeItineraryTimelinePanel({
                 itemLocks={itemLocks}
                 userLockedItemIds={userLockedItemIds}
                 onToggleUserLock={onToggleUserLock}
+                selectedEntryId={selectedEntryId}
+                onSelectEntry={onSelectEntry}
+              />
+              <ArrangeItineraryDayLodgingAnchor
+                night={lodgingNight}
+                lodgingListedInTimeline={day.timeline.some((entry) => entry.isLodging)}
+                onAddLodging={onAddLodging ? () => onAddLodging(day.dayIndex) : undefined}
+                onEditLodging={onEditLodging}
+                onAskAssistant={
+                  onAskAssistantForLodging
+                    ? () => onAskAssistantForLodging(day.dayIndex)
+                    : undefined
+                }
               />
               <DayActions
                 dayIndex={day.dayIndex}
                 onAddActivity={onAddActivity}
+                onAddLodging={onAddLodging}
                 onInsertGap={onInsertGap}
                 onMoreOperations={handleMoreOperations}
               />
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
     </div>
@@ -196,11 +247,13 @@ export function ArrangeItineraryTimelinePanel({
 function DayActions({
   dayIndex,
   onAddActivity,
+  onAddLodging,
   onInsertGap,
   onMoreOperations,
 }: {
   dayIndex: number;
   onAddActivity?: (dayIndex: number) => void;
+  onAddLodging?: (dayIndex: number) => void;
   onInsertGap?: (dayIndex: number) => void;
   onMoreOperations?: () => void;
 }) {
@@ -219,6 +272,20 @@ function DayActions({
       >
         <Plus className="mr-1 h-3 w-3" />
         添加活动
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 rounded-md text-[11px]"
+        onClick={() =>
+          onAddLodging
+            ? onAddLodging(dayIndex)
+            : toast.message('请从当晚住宿卡片添加')
+        }
+      >
+        <BedDouble className="mr-1 h-3 w-3" />
+        添加住宿
       </Button>
       <Button
         type="button"

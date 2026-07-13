@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { arrangeItineraryApi } from '@/api/arrange-itinerary';
 import { getPlanProposal } from '@/dto/frontend-arrange-itinerary-api-client';
@@ -18,6 +18,7 @@ import type {
 import type { PlanningDecisionExecutionStep } from '@/types/planning-decision-pack';
 import type { AttractionExploreMapPoint } from '@/types/attraction-explore';
 import { isArrangeProposalWriteResponse } from '@/types/arrange-itinerary';
+import { settleArrangeWriteResult } from '@/lib/arrange-proposal-auto-apply.util';
 import {
   attractionExploreKeys,
   useAttractionExplore,
@@ -29,6 +30,18 @@ import {
   usePlanningWorkbenchSnapshot,
 } from './usePlanningWorkbenchSnapshot';
 import { useProposalMonitorPolling } from './useProposalMonitorPolling';
+import {
+  buildArrangeLodgingCoverageSummary,
+  type ArrangeLodgingCoverageSummary,
+} from '@/lib/arrange-itinerary-lodging-coverage.util';
+import {
+  buildLodgingMapPointsFromItinerary,
+  mergeLodgingCopilotSuggestions,
+  mergeMapPointsWithLodging,
+  resolveArrangeLodgingSuggestionsBundle,
+} from '@/lib/arrange-itinerary-lodging-suggestions.util';
+import type { ArrangeLodgingSuggestionsBundle, CopilotSuggestion } from '@/types/arrange-itinerary';
+import type { AttractionExploreMapLodgingLeg } from '@/types/attraction-explore';
 
 export const arrangeItineraryKeys = {
   all: ['arrange-itinerary'] as const,
@@ -128,26 +141,6 @@ export function useArrangeItinerary(
     workbenchSnapshot?.orchestrationState ?? orchestrationQuery.data;
   const snapshotOverview = workbenchSnapshot?.overview;
 
-  useEffect(() => {
-    const state = orchestrationState;
-    if (!state?.activeProposalId || state.phase !== 'AWAITING_CONFIRMATION') return;
-    if (activeProposal?.proposalId === state.activeProposalId) return;
-
-    let cancelled = false;
-    void arrangeItineraryApi
-      .getProposal(tripId, state.activeProposalId)
-      .then((proposal) => {
-        if (!cancelled) setActiveProposal(proposal);
-      })
-      .catch(() => {
-        /* 草案可能已过期 */
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [orchestrationState, activeProposal?.proposalId, tripId]);
-
   const invalidateWorkbenchSnapshot = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: arrangeItineraryKeys.snapshot(tripId) });
   }, [queryClient, tripId]);
@@ -183,20 +176,48 @@ export function useArrangeItinerary(
     [invalidateWorkbenchSnapshot, queryClient, tripId],
   );
 
+  const applySettledArrangeWrite = useCallback(
+    async <T,>(data: T, directMessage = '已写入行程') => {
+      const settled = await settleArrangeWriteResult(data, (proposalId, contextVersion) =>
+        arrangeItineraryApi.applyProposal(tripId, proposalId, { contextVersion }),
+      );
+      if (settled.status === 'auto_applied') {
+        return {
+          mode: 'direct' as const,
+          tripId,
+          message: directMessage,
+          candidates: settled.candidates,
+        };
+      }
+      return settled.result;
+    },
+    [tripId],
+  );
+
   const placeCandidateMutation = useMutation({
-    mutationFn: (input: { candidateId: string; payload: PlaceCandidateRequest }) =>
-      arrangeItineraryApi.placeCandidate(tripId, input.candidateId, input.payload),
+    mutationFn: async (input: { candidateId: string; payload: PlaceCandidateRequest }) => {
+      const data = await arrangeItineraryApi.placeCandidate(
+        tripId,
+        input.candidateId,
+        input.payload,
+      );
+      return applySettledArrangeWrite(data, '已加入日程');
+    },
     onSuccess: (data) => {
       if (captureProposalResult(data)) return;
       if (data.mode === 'direct') {
-        void applyDirectSideEffects(data.candidates);
+        void applyDirectSideEffects(
+          'candidates' in data ? data.candidates : undefined,
+        );
       }
     },
   });
 
   const addItemMutation = useMutation({
-    mutationFn: (payload: Parameters<typeof arrangeItineraryApi.addItem>[1]) =>
-      arrangeItineraryApi.addItem(tripId, payload),
+    mutationFn: async (payload: Parameters<typeof arrangeItineraryApi.addItem>[1]) => {
+      const data = await arrangeItineraryApi.addItem(tripId, payload);
+      return applySettledArrangeWrite(data, '已添加活动');
+    },
     onSuccess: (data) => {
       if (captureProposalResult(data)) return;
       if (data.mode === 'direct') {
@@ -206,8 +227,10 @@ export function useArrangeItinerary(
   });
 
   const insertGapMutation = useMutation({
-    mutationFn: (payload: ArrangeItineraryInsertGapRequest) =>
-      arrangeItineraryApi.insertGap(tripId, payload),
+    mutationFn: async (payload: ArrangeItineraryInsertGapRequest) => {
+      const data = await arrangeItineraryApi.insertGap(tripId, payload);
+      return applySettledArrangeWrite(data, '已插入空档');
+    },
     onSuccess: (data) => {
       if (captureProposalResult(data)) return;
       if (data.mode === 'direct') {
@@ -231,11 +254,16 @@ export function useArrangeItinerary(
   });
 
   const autoArrangeMutation = useMutation({
-    mutationFn: () => arrangeItineraryApi.autoArrange(tripId),
+    mutationFn: async () => {
+      const data = await arrangeItineraryApi.autoArrange(tripId);
+      return applySettledArrangeWrite(data, '自动编排已完成');
+    },
     onSuccess: (data) => {
       if (captureProposalResult(data)) return;
       if (data.mode === 'direct') {
-        void applyDirectSideEffects();
+        void applyDirectSideEffects(
+          'candidates' in data ? data.candidates : undefined,
+        );
       }
     },
   });
@@ -328,6 +356,87 @@ export function useArrangeItinerary(
 
   const nights =
     overview?.nights ?? snapshotOverview?.nights ?? Math.max(0, dayCount - 1);
+
+  const lodgingCoverage: ArrangeLodgingCoverageSummary = useMemo(
+    () => buildArrangeLodgingCoverageSummary(trip, itinerary.itineraryByDay),
+    [trip, itinerary.itineraryByDay],
+  );
+
+  const lodgingSuggestionsBundle: ArrangeLodgingSuggestionsBundle = useMemo(() => {
+    const bffSuggestions =
+      workbenchSnapshot?.lodgingSuggestions ??
+      workbenchSnapshot?.overview?.lodgingSuggestions ??
+      overviewQuery.data?.lodgingSuggestions ??
+      snapshotOverview?.lodgingSuggestions;
+    const bffStandard = {
+      stars:
+        workbenchSnapshot?.accommodationStandardStars ??
+        workbenchSnapshot?.overview?.accommodationStandardStars ??
+        overviewQuery.data?.accommodationStandardStars ??
+        snapshotOverview?.accommodationStandardStars,
+      label:
+        workbenchSnapshot?.accommodationStandardLabel ??
+        workbenchSnapshot?.overview?.accommodationStandardLabel ??
+        overviewQuery.data?.accommodationStandardLabel ??
+        snapshotOverview?.accommodationStandardLabel,
+    };
+    return resolveArrangeLodgingSuggestionsBundle({
+      trip,
+      lodgingCoverage,
+      bffSuggestions,
+      bffStandard,
+    });
+  }, [
+    lodgingCoverage,
+    overviewQuery.data?.accommodationStandardLabel,
+    overviewQuery.data?.accommodationStandardStars,
+    overviewQuery.data?.lodgingSuggestions,
+    snapshotOverview?.accommodationStandardLabel,
+    snapshotOverview?.accommodationStandardStars,
+    snapshotOverview?.lodgingSuggestions,
+    trip,
+    workbenchSnapshot?.accommodationStandardLabel,
+    workbenchSnapshot?.accommodationStandardStars,
+    workbenchSnapshot?.lodgingSuggestions,
+    workbenchSnapshot?.overview?.accommodationStandardLabel,
+    workbenchSnapshot?.overview?.accommodationStandardStars,
+    workbenchSnapshot?.overview?.lodgingSuggestions,
+  ]);
+
+  const baseMapPoints = mapQuery.data?.points ?? [];
+
+  const lodgingMapPoints = useMemo(
+    () =>
+      buildLodgingMapPointsFromItinerary({
+        trip,
+        itineraryByDay: itinerary.itineraryByDay,
+        bundle: lodgingSuggestionsBundle,
+      }),
+    [itinerary.itineraryByDay, lodgingSuggestionsBundle, trip],
+  );
+
+  const mapPoints = useMemo(
+    () => mergeMapPointsWithLodging(baseMapPoints, lodgingMapPoints),
+    [baseMapPoints, lodgingMapPoints],
+  );
+
+  const mapLodgingLegs: AttractionExploreMapLodgingLeg[] = useMemo(
+    () => mapQuery.data?.lodgingLegs ?? [],
+    [mapQuery.data?.lodgingLegs],
+  );
+
+  const rawCopilotSuggestions: CopilotSuggestion[] =
+    workbenchSnapshot?.copilotSuggestions ?? copilotSuggestionsQuery.data?.suggestions ?? [];
+
+  const copilotSuggestions = useMemo(
+    () =>
+      mergeLodgingCopilotSuggestions(
+        rawCopilotSuggestions,
+        lodgingCoverage,
+        lodgingSuggestionsBundle,
+      ),
+    [lodgingCoverage, lodgingSuggestionsBundle, rawCopilotSuggestions],
+  );
 
   const reloadAll = useCallback(async () => {
     await itinerary.reload();
@@ -501,8 +610,7 @@ export function useArrangeItinerary(
     copilotEnabled,
     setPlanningMode,
     planningModePending: setPlanningModeMutation.isPending,
-    copilotSuggestions:
-      workbenchSnapshot?.copilotSuggestions ?? copilotSuggestionsQuery.data?.suggestions ?? [],
+    copilotSuggestions,
     copilotSuggestionsLoading: workbenchSnapshotQuery.isLoading,
     pendingProposalCount: workbenchSnapshot?.pendingProposalCount ?? 0,
     workbenchConflictCount: workbenchSnapshot?.conflictCount,
@@ -536,12 +644,16 @@ export function useArrangeItinerary(
     },
     itineraryLoading: itinerary.loading,
     itineraryLoadingPhase: itinerary.loadingPhase,
+    itineraryByDay: itinerary.itineraryByDay,
+    lodgingCoverage,
+    lodgingSuggestionsBundle,
     routeStops: itinerary.routeStops,
     routeStats: itinerary.routeStats,
     daySnapshots,
     activityCount,
     nights,
-    mapPoints: mapQuery.data?.points ?? [],
+    mapPoints,
+    mapLodgingLegs,
     mapRoutePolyline: mapQuery.data?.routePolyline,
     mapLoading: mapQuery.isLoading,
     reloadAll,

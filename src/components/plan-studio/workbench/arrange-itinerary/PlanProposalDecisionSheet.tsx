@@ -26,6 +26,7 @@ import type { TripConflictDiagnosticInput } from '@/dto/frontend-planning-decisi
 import { DecisionExecutionProposalPanel } from '@/components/decision-problems/decision-execution-proposal/DecisionExecutionProposalPanel';
 import { DecisionValidityStrip } from '@/components/decision-problems/DecisionValidityStrip';
 import { DecisionWriteBackStepsPanel } from '@/components/decision-problems/DecisionWriteBackStepsPanel';
+import type { ArrangeLodgingCoverageSummary } from '@/lib/arrange-itinerary-lodging-coverage.util';
 import {
   workbenchAttractionExploreAiBox,
   workbenchConflictSurface,
@@ -43,6 +44,7 @@ const INTENT_LABELS: Record<string, string> = {
   OPTIMIZE_ROUTE: '优化路线',
   ARRANGE_LUNCH: '安排午餐',
   REDUCE_INTENSITY: '降低强度',
+  ARRANGE_LODGING: '补齐住宿',
   MOVE_ITEM: '移动行程项',
 };
 
@@ -81,6 +83,8 @@ export interface PlanProposalDecisionSheetProps {
   tripConflicts?: TripConflictDiagnosticInput[];
   monitorStale?: boolean;
   monitorStaleReason?: string | null;
+  lodgingCoverage?: ArrangeLodgingCoverageSummary;
+  onFillLodging?: () => void;
 }
 
 function DiagnosticsSection({ diagnostics }: { diagnostics: PlanningDecisionDiagnostic[] }) {
@@ -129,37 +133,45 @@ export function PlanProposalDecisionSheet({
   tripConflicts,
   monitorStale = false,
   monitorStaleReason,
+  lodgingCoverage,
+  onFillLodging,
 }: PlanProposalDecisionSheetProps) {
-  if (!proposal) return null;
+  const lodgingIncomplete =
+    Boolean(lodgingCoverage?.totalNights) && !lodgingCoverage?.isComplete;
 
-  const packOptions = proposal.decisionPack?.options ?? [];
-  const recommended = getRecommendedOption(proposal.decisionPack) ?? pickRecommendedOption(packOptions);
+  const packOptions = proposal?.decisionPack?.options ?? [];
+  const recommended =
+    getRecommendedOption(proposal?.decisionPack) ?? pickRecommendedOption(packOptions);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(recommended?.id ?? null);
 
   useEffect(() => {
     setSelectedOptionId(recommended?.id ?? null);
-  }, [proposal.proposalId, recommended?.id]);
+  }, [proposal?.proposalId, recommended?.id]);
 
   const mergedDiagnostics = useMemo(
-    () => mergePackDiagnosticsWithTripConflicts(proposal.decisionPack, tripConflicts),
-    [proposal.decisionPack, tripConflicts],
+    () => mergePackDiagnosticsWithTripConflicts(proposal?.decisionPack, tripConflicts),
+    [proposal?.decisionPack, tripConflicts],
   );
 
   const primaryDiagnostic = mergedDiagnostics[0];
   const whatHappenedText =
     primaryDiagnostic?.message?.trim() ||
     primaryDiagnostic?.title?.trim() ||
-    proposal.diff.summary?.trim() ||
+    proposal?.diff.summary?.trim() ||
     null;
 
-  const validityUntil = validUntil ?? proposal.decisionPack?.validUntil ?? proposal.expiresAt;
-  const validationMeta = VALIDATION_BADGE[proposal.validation.status] ?? VALIDATION_BADGE.WARN!;
+  const validityUntil =
+    validUntil ?? proposal?.decisionPack?.validUntil ?? proposal?.expiresAt;
+  const validationMeta =
+    VALIDATION_BADGE[proposal?.validation.status ?? 'WARN'] ?? VALIDATION_BADGE.WARN!;
   const ValidationIcon = validationMeta.icon;
-  const isBlocked = proposal.validation.status === 'BLOCK';
+  const isBlocked = proposal?.validation.status === 'BLOCK';
   const hasTripConflictFix = packOptions.some(isTripConflictsOption);
+  const dialogOpen = open && proposal != null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
+      {proposal ? (
       <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border/50 px-4 py-3">
           <div className="flex items-start justify-between gap-2">
@@ -185,6 +197,17 @@ export function PlanProposalDecisionSheet({
             <section className="rounded-lg border border-gate-confirm-border bg-gate-confirm/10 px-3 py-2 text-[11px] text-gate-confirm-foreground">
               决策条件已变化，请重新确认。
               {monitorStaleReason ? ` ${monitorStaleReason}` : null}
+            </section>
+          ) : null}
+
+          {lodgingIncomplete && !applyComplete ? (
+            <section className="rounded-lg border border-gate-warn-border bg-gate-warn/10 px-3 py-2.5 text-[11px] text-gate-warn-foreground">
+              <p className="font-medium text-foreground">
+                景点编排已完成，但还有 {lodgingCoverage?.missingNights} 晚未安排住宿
+              </p>
+              <p className="mt-1 leading-relaxed text-muted-foreground">
+                建议先补齐住宿，以便衔接次日出发与交通。你也可以先确认写入景点变更，稍后再补。
+              </p>
             </section>
           ) : null}
 
@@ -303,6 +326,20 @@ export function PlanProposalDecisionSheet({
           <div className="flex gap-2">
             {applyComplete ? null : (
               <>
+                {lodgingIncomplete && onFillLodging ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className={workbenchPrimaryAction}
+                    disabled={applying || discarding}
+                    onClick={() => {
+                      onOpenChange(false);
+                      onFillLodging();
+                    }}
+                  >
+                    先补齐住宿
+                  </Button>
+                ) : null}
                 {isBlocked ? (
                   <Button
                     type="button"
@@ -317,7 +354,8 @@ export function PlanProposalDecisionSheet({
                 <Button
                   type="button"
                   size="sm"
-                  className={workbenchPrimaryAction}
+                  variant={lodgingIncomplete && onFillLodging ? 'outline' : 'default'}
+                  className={lodgingIncomplete && onFillLodging ? undefined : workbenchPrimaryAction}
                   disabled={applying || discarding || monitorStale}
                   onClick={() => onApply(false)}
                 >
@@ -328,6 +366,7 @@ export function PlanProposalDecisionSheet({
           </div>
         </DialogFooter>
       </DialogContent>
+      ) : null}
     </Dialog>
   );
 }

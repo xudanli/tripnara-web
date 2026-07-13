@@ -9,6 +9,7 @@ interface CollabMetricRingProps {
   sublabel?: string;
   /** percent: 72% · score: 72/100 */
   valueFormat?: 'percent' | 'score';
+  showCenterValue?: boolean;
   strokeClassName?: string;
   className?: string;
 }
@@ -21,6 +22,7 @@ export function CollabMetricRing({
   label,
   sublabel,
   valueFormat = 'percent',
+  showCenterValue = true,
   strokeClassName = 'stroke-primary',
   className,
 }: CollabMetricRingProps) {
@@ -54,16 +56,18 @@ export function CollabMetricRing({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-semibold tabular-nums text-foreground">
-            {valueFormat === 'score' ? (
-              <>
-                {normalized}
-                <span className="text-sm font-normal text-muted-foreground">/100</span>
-              </>
-            ) : (
-              `${normalized}%`
-            )}
-          </span>
+          {showCenterValue ? (
+            <span className="text-xl font-semibold tabular-nums text-foreground">
+              {valueFormat === 'score' ? (
+                <>
+                  {normalized}
+                  <span className="text-sm font-normal text-muted-foreground">/100</span>
+                </>
+              ) : (
+                `${normalized}%`
+              )}
+            </span>
+          ) : null}
           {sublabel ? (
             <span className="text-[10px] text-muted-foreground">{sublabel}</span>
           ) : null}

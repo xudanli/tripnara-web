@@ -44,9 +44,7 @@ function conditionLabelFromLevel(level: ThermometerLevel): string {
 
 function activityLabelFromIndex(index: number, level: ThermometerLevel): string {
   if (level === 'red' || level === 'orange') return '休息中';
-  if (index === 0) return '驾驶中';
-  if (index === 1) return '拍摄中';
-  if (index === 2) return '徒步装备中';
+  if (index === 0) return '当前活动';
   return '同行中';
 }
 

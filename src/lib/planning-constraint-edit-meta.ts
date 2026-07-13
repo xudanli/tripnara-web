@@ -3,6 +3,7 @@ import { CalendarRange, Car, Users, Wallet } from 'lucide-react';
 import { itineraryItemsApi, tripsApi } from '@/api/trips';
 import { notifyPlanStudioConstraintsChanged } from '@/hooks/useConstraintsSummary';
 import type { ConstraintFlexKey } from '@/lib/constraint-flexibility.util';
+import { isIcelandDestination } from '@/lib/trip-executability.util';
 import type { ConstraintPendingKey } from '@/types/planning-constraints';
 import { IntentTravelMode, type PacingConfig, type Traveler, type TripDetail } from '@/types/trip';
 
@@ -49,7 +50,40 @@ export const CONSTRAINT_TRANSPORT_OPTIONS: Array<{ value: ConstraintTransportVal
   { value: 'WALKING', label: '步行' },
 ];
 
-export function resolveConstraintTransportValue(trip: TripDetail | null | undefined): ConstraintTransportValue | '' {
+/** 冰岛行程 · 当前产品仅支持自驾模式 */
+export function isSelfDriveOnlyTransportContext(
+  destination?: string | null,
+  transportScope?: string | null,
+): boolean {
+  if (!isIcelandDestination(destination)) return false;
+  if (transportScope && transportScope !== 'self_drive_only') return false;
+  return true;
+}
+
+export function resolveConstraintTransportOptions(context?: {
+  destination?: string | null;
+  transportScope?: string | null;
+}): Array<{ value: ConstraintTransportValue; label: string }> {
+  if (isSelfDriveOnlyTransportContext(context?.destination, context?.transportScope)) {
+    return [{ value: IntentTravelMode.DRIVING, label: '自驾' }];
+  }
+  return CONSTRAINT_TRANSPORT_OPTIONS;
+}
+
+export function resolveConstraintTransportDefault(
+  trip: TripDetail | null | undefined,
+  transportScope?: string | null,
+): ConstraintTransportValue | '' {
+  return resolveConstraintTransportValue(trip, transportScope);
+}
+
+export function resolveConstraintTransportValue(
+  trip: TripDetail | null | undefined,
+  transportScope?: string | null,
+): ConstraintTransportValue | '' {
+  if (isSelfDriveOnlyTransportContext(trip?.destination, transportScope)) {
+    return IntentTravelMode.DRIVING;
+  }
   const mode = trip?.pacingConfig?.travelMode;
   if (mode === IntentTravelMode.DRIVING) return IntentTravelMode.DRIVING;
   if (mode === IntentTravelMode.PUBLIC_TRANSIT) return IntentTravelMode.PUBLIC_TRANSIT;

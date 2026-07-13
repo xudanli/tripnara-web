@@ -4,11 +4,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { personaMemberTagClasses } from '@/components/team-collaboration/persona-ui';
 import type { TeamTravelStyleItem } from '@/types/trip-decision-profiling';
 import { cn } from '@/lib/utils';
-import { workbenchCardFlat } from '@/components/plan-studio/workbench/workbench-ui';
+import { workbenchCard } from '@/components/plan-studio/workbench/workbench-ui';
 
 interface MemberPersonaCardsWidgetProps {
   members: TeamTravelStyleItem[];
   loading?: boolean;
+  /** 列数，默认 4 */
+  columns?: 2 | 4;
 }
 
 function memberInitials(name: string): string {
@@ -22,10 +24,13 @@ function keywordChips(member: TeamTravelStyleItem): string[] {
   return member.compatibilityHints.slice(0, 3);
 }
 
-export function MemberPersonaCardsWidget({ members, loading }: MemberPersonaCardsWidgetProps) {
+export function MemberPersonaCardsWidget({ members, loading, columns = 4 }: MemberPersonaCardsWidgetProps) {
+  const gridClass =
+    columns === 2 ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-2 sm:grid-cols-2 lg:grid-cols-4';
+
   if (loading) {
     return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={gridClass}>
         {[1, 2, 3, 4].map((index) => (
           <Skeleton key={index} className="h-44 rounded-xl" />
         ))}
@@ -35,14 +40,14 @@ export function MemberPersonaCardsWidget({ members, loading }: MemberPersonaCard
 
   if (members.length === 0) {
     return (
-      <div className={cn(workbenchCardFlat, 'p-4')}>
+      <div className={cn(workbenchCard, 'p-3')}>
         <p className="text-xs text-muted-foreground">成员完成调查后将显示画像卡片。</p>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className={gridClass}>
       {members.map((member, index) => {
         const confidencePct =
           member.confidence != null ? Math.round(member.confidence * 100) : null;
@@ -54,7 +59,7 @@ export function MemberPersonaCardsWidget({ members, loading }: MemberPersonaCard
         const tagClass = personaMemberTagClasses[index % personaMemberTagClasses.length];
 
         return (
-          <article key={member.userId} className={cn(workbenchCardFlat, 'flex h-full flex-col p-3')}>
+          <article key={member.userId} className={cn(workbenchCard, 'flex h-full flex-col p-2.5')}>
             <div className="flex items-start gap-2.5">
               <span
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
@@ -104,7 +109,7 @@ export function MemberPersonaCardsWidget({ members, loading }: MemberPersonaCard
               </div>
             ) : null}
             <div className="mt-auto pt-3">
-              <p className="mb-1 text-[10px] font-medium text-muted-foreground">画像洞察</p>
+              <p className="mb-1 text-[10px] font-medium text-muted-foreground">协作提示</p>
               <p className="text-[11px] leading-relaxed text-muted-foreground">{insight}</p>
             </div>
           </article>

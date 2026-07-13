@@ -112,6 +112,12 @@ export function CatalogHardConstraintFields({
         </div>
       ) : null}
 
+      {spec.fieldKind === 'toggle' ? (
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          上方「判定规则」为系统校验说明，不可直接编辑；请通过下方开关启用或关闭。
+        </p>
+      ) : null}
+
       {spec.fieldKind === 'toggle' || spec.fieldKind === 'toggle_with_notes' ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-background/70 px-3 py-2.5">
           <span className="text-xs text-foreground">启用此约束</span>

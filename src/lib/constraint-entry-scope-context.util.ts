@@ -168,7 +168,7 @@ export function resolveConstraintEntryScopeContext(input: {
   const previewDays = (preview?.affectedDays ?? [])
     .filter((day) => day.tone !== 'none')
     .map((day) => day.dayNumber);
-  if (previewDays.length > 0) {
+  if (previewDays.length > 0 && !preview?.isTripSnapshotOnly) {
     const previewSummary =
       preview?.adjustmentSummary?.trim() ||
       preview?.diffBullets?.find((line) => line.trim())?.trim() ||

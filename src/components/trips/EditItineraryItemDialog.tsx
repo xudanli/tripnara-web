@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { itineraryItemsApi } from '@/api/trips';
 import type { ItineraryItem, UpdateItineraryItemRequest, ItineraryItemType, CostCategory, TravelMode, BookingStatus } from '@/types/trip';
@@ -44,11 +44,20 @@ import {
   itineraryRoleUsesLandingTime,
   itineraryRoleUsesSingleHubMoment,
   normalizeTripDayDateKey,
-  mergeTimelineDisplayRoleIntoNote,
   resolveItinerarySpecialDisplayRole,
-  stripTimelineDisplayRoleFromNote,
   type ItinerarySpecialDisplayRole,
 } from '@/lib/itinerary-special-display';
+import {
+  buildItineraryItemNoteForSave,
+  parseTepItemNoteForForm,
+  readTepFlexFormFromNote,
+  type TepFlexFormValues,
+} from '@/lib/tep-item-note.util';
+import {
+  resolveTepFlexibilityItemKind,
+  shouldShowTepFlexibilityEditor,
+} from '@/lib/tep-flexibility-item.util';
+import { TepFlexibilityFields } from '@/components/plan-studio/tep/TepFlexibilityFields';
 import { getEndDayOptions } from '@/lib/itinerary-item-cross-day-form';
 import { CalendarDays } from 'lucide-react';
 
@@ -79,6 +88,14 @@ interface TripDayInfo {
   date: string; // YYYY-MM-DD 格式
 }
 
+function resolveItemIsoTime(item: ItineraryItem, field: 'startTime' | 'endTime'): string | undefined {
+  const direct = item[field];
+  if (typeof direct === 'string' && direct.trim()) return direct;
+  const snakeKey = field === 'startTime' ? 'start_time' : 'end_time';
+  const snake = (item as Record<string, unknown>)[snakeKey];
+  return typeof snake === 'string' && snake.trim() ? snake : undefined;
+}
+
 interface EditItineraryItemDialogProps {
   item: ItineraryItem;
   open: boolean;
@@ -90,6 +107,8 @@ interface EditItineraryItemDialogProps {
   tripDays?: TripDayInfo[];
   /** @deprecated 后端已自动处理跨天 tripDayId 更新，此参数不再需要 */
   currentTripDayId?: string;
+  /** 冰岛自驾 TEP：展示弹性标签编辑 */
+  tepFlexibilityEnabled?: boolean;
 }
 
 export function EditItineraryItemDialog({
@@ -100,6 +119,7 @@ export function EditItineraryItemDialog({
   timezone = 'UTC',
   tripDays = [],
   currentTripDayId,
+  tepFlexibilityEnabled = false,
 }: EditItineraryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +135,9 @@ export function EditItineraryItemDialog({
   const [showCascadeConfirm, setShowCascadeConfirm] = useState(false);
   const [cascadeConfirmation, setCascadeConfirmation] = useState<ItineraryRequiresConfirmation | null>(
     null
+  );
+  const [tepFlexForm, setTepFlexForm] = useState<TepFlexFormValues>(() =>
+    readTepFlexFormFromNote(item.note),
   );
   const [formData, setFormData] = useState<UpdateItineraryItemRequest & {
     travelFromPreviousDuration?: number;
@@ -145,56 +168,89 @@ export function EditItineraryItemDialog({
     bookedAt: item.bookedAt ? utcToDatetimeLocal(item.bookedAt, timezone) : '',
   });
 
-  useEffect(() => {
-    if (open && item) {
-      // 使用目的地时区转换时间
-      const startTime = item.startTime ? utcToDatetimeLocal(item.startTime, timezone) : '';
-      const endTimeLocal = item.endTime ? utcToDatetimeLocal(item.endTime, timezone) : '';
-      const hasCostData = !!(item.estimatedCost || item.actualCost || item.costCategory || item.costNote);
-      const hasTravelData = !!(item.travelFromPreviousDuration || item.travelFromPreviousDistance || item.travelMode);
-      const hasBookingData = !!(item.bookingStatus || item.bookingConfirmation || item.bookingUrl);
-      const resolvedRole = resolveItinerarySpecialDisplayRole(item);
-      const tripDayRows = tripDays.map((d) => ({ id: d.id, date: d.date }));
-      const endDayId =
-        findTripDayIdForIsoEnd(item.endTime, tripDayRows) ??
-        currentTripDayId ??
-        item.tripDayId ??
-        tripDays[0]?.id ??
-        '';
+  const tepFlexItemKind = useMemo(
+    () =>
+      resolveTepFlexibilityItemKind({
+        itemType: formData.type ?? item.type,
+        displayRole,
+        costCategory: formData.costCategory ?? item.costCategory,
+      }),
+    [displayRole, formData.costCategory, formData.type, item.costCategory, item.type],
+  );
+  const showTepFlexFields = tepFlexibilityEnabled && shouldShowTepFlexibilityEditor(tepFlexItemKind);
 
-      setFormData({
-        type: item.type,
-        startTime,
-        endTime: endTimeLocal,
-        note: stripTimelineDisplayRoleFromNote(item.note),
-        estimatedCost: item.estimatedCost || undefined,
-        actualCost: item.actualCost || undefined,
-        costCategory: item.costCategory || undefined,
-        costNote: item.costNote || '',
-        isPaid: item.isPaid || false,
-        // 交通信息
-        travelFromPreviousDuration: item.travelFromPreviousDuration || undefined,
-        travelFromPreviousDistance: item.travelFromPreviousDistance || undefined,
-        travelMode: item.travelMode || undefined,
-        // 预订信息
-        bookingStatus: item.bookingStatus || undefined,
-        bookingConfirmation: item.bookingConfirmation || '',
-        bookingUrl: item.bookingUrl || '',
-        bookedAt: item.bookedAt ? utcToDatetimeLocal(item.bookedAt, timezone) : '',
-      });
-      setDisplayRole(resolvedRole);
-      setEndTripDayId(endDayId);
-      setLandingTime(
-        item.startTime ? extractHmFromWindow(item.startTime, timezone) : '10:00',
-      );
-      setOriginalStartTime(startTime);
-      setShowCostFields(hasCostData);
-      setShowTravelFields(hasTravelData);
-      setShowBookingFields(hasBookingData);
-      setError(null);
-      setWarning(null);
+  const tripDaysFingerprint = useMemo(
+    () =>
+      tripDays
+        .map((d) => `${d.id}:${normalizeTripDayDateKey(d.date)}`)
+        .join('|'),
+    [tripDays],
+  );
+  const formInitKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      formInitKeyRef.current = null;
+      return;
     }
-  }, [item, open, timezone, tripDays, currentTripDayId]);
+    if (!item) return;
+
+    const initKey = `${item.id}|${timezone}|${tripDaysFingerprint}|${currentTripDayId ?? ''}`;
+    if (formInitKeyRef.current === initKey) return;
+    formInitKeyRef.current = initKey;
+
+    // 使用目的地时区转换时间
+    const itemStartTime = resolveItemIsoTime(item, 'startTime');
+    const itemEndTime = resolveItemIsoTime(item, 'endTime');
+    const startTime = itemStartTime ? utcToDatetimeLocal(itemStartTime, timezone) : '';
+    const endTimeLocal = itemEndTime ? utcToDatetimeLocal(itemEndTime, timezone) : '';
+    const hasCostData = !!(item.estimatedCost || item.actualCost || item.costCategory || item.costNote);
+    const hasTravelData = !!(item.travelFromPreviousDuration || item.travelFromPreviousDistance || item.travelMode);
+    const hasBookingData = !!(item.bookingStatus || item.bookingConfirmation || item.bookingUrl);
+    const resolvedRole = resolveItinerarySpecialDisplayRole(item);
+    const parsedNote = parseTepItemNoteForForm(item.note);
+    const noteForForm = parsedNote.userNote;
+    setTepFlexForm(readTepFlexFormFromNote(item.note));
+    const tripDayRows = tripDays.map((d) => ({ id: d.id, date: d.date }));
+    const endDayId =
+      findTripDayIdForIsoEnd(itemEndTime, tripDayRows) ??
+      currentTripDayId ??
+      item.tripDayId ??
+      tripDays[0]?.id ??
+      '';
+
+    setFormData({
+      type: item.type,
+      startTime,
+      endTime: endTimeLocal,
+      note: noteForForm,
+      estimatedCost: item.estimatedCost || undefined,
+      actualCost: item.actualCost || undefined,
+      costCategory: item.costCategory || undefined,
+      costNote: item.costNote || '',
+      isPaid: item.isPaid || false,
+      // 交通信息
+      travelFromPreviousDuration: item.travelFromPreviousDuration || undefined,
+      travelFromPreviousDistance: item.travelFromPreviousDistance || undefined,
+      travelMode: item.travelMode || undefined,
+      // 预订信息
+      bookingStatus: item.bookingStatus || undefined,
+      bookingConfirmation: item.bookingConfirmation || '',
+      bookingUrl: item.bookingUrl || '',
+      bookedAt: item.bookedAt ? utcToDatetimeLocal(item.bookedAt, timezone) : '',
+    });
+    setDisplayRole(resolvedRole);
+    setEndTripDayId(endDayId);
+    setLandingTime(
+      itemStartTime ? extractHmFromWindow(itemStartTime, timezone) : '10:00',
+    );
+    setOriginalStartTime(startTime);
+    setShowCostFields(hasCostData);
+    setShowTravelFields(hasTravelData);
+    setShowBookingFields(hasBookingData);
+    setError(null);
+    setWarning(null);
+  }, [item, open, timezone, tripDaysFingerprint, currentTripDayId, tripDays]);
 
   const startTripDayId =
     currentTripDayId ?? item.tripDayId ?? tripDays[0]?.id ?? '';
@@ -296,7 +352,12 @@ export function EditItineraryItemDialog({
         type: formData.type,
         startTime: startTimeUtc,
         endTime: endTimeUtc,
-        note: mergeTimelineDisplayRoleIntoNote(formData.note, displayRole) || undefined,
+        note: buildItineraryItemNoteForSave({
+          userNote: formData.note,
+          displayRole,
+          tepForm: tepFlexForm,
+          tepEnabled: showTepFlexFields,
+        }),
         metadata: buildSpecialDisplayMetadata(displayRole, item.metadata ?? undefined),
         forceCreate, // 强制更新标志
         // 级联调整模式：'auto' 调整后续（默认） | 'none' 只调整当前项
@@ -585,6 +646,14 @@ export function EditItineraryItemDialog({
                 rows={2}
               />
             </div>
+
+            {showTepFlexFields && tepFlexItemKind ? (
+              <TepFlexibilityFields
+                value={tepFlexForm}
+                onChange={setTepFlexForm}
+                itemKind={tepFlexItemKind}
+              />
+            ) : null}
 
             {/* 费用信息（可选） */}
             <div className="space-y-2">

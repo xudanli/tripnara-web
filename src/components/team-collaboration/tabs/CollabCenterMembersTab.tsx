@@ -1,5 +1,8 @@
-import TeamTabContent from '@/components/trips/TeamTabContent';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { tripCollabApi } from '@/api/trip-detail-tab-client';
 import { CollabCenterMembersDashboard } from '@/components/team-collaboration/CollabCenterMembersDashboard';
+import { isAdvisorLedTrip } from '@/lib/trip-collaboration-mode.util';
 import type { TripDetail } from '@/types/trip';
 
 interface CollabCenterMembersTabProps {
@@ -7,45 +10,42 @@ interface CollabCenterMembersTabProps {
   trip: TripDetail;
   onTripRefetch?: () => void | Promise<void>;
   onGoToSchedule?: () => void;
-}
-
-function resolveTeamId(trip: TripDetail): string | null {
-  const fromMeta = (trip as { metadata?: { teamId?: string } }).metadata?.teamId;
-  if (fromMeta) return fromMeta;
-  try {
-    return localStorage.getItem(`trip_team_id:${trip.id}`);
-  } catch {
-    return null;
-  }
+  onOpenRoleInvites?: () => void;
 }
 
 export function CollabCenterMembersTab({
   tripId,
   trip,
   onTripRefetch,
-  onGoToSchedule,
+  onOpenRoleInvites,
 }: CollabCenterMembersTabProps) {
-  const teamId = resolveTeamId(trip);
+  const advisorLed = isAdvisorLedTrip(trip);
 
-  if (!teamId) {
-    return (
-      <TeamTabContent
-        tripId={tripId}
-        trip={trip}
-        onTripRefetch={onTripRefetch}
-        onGoToPlanStudio={onGoToSchedule}
-        embedded
-      />
-    );
-  }
+  const { data: collabShell } = useQuery({
+    queryKey: ['trips', tripId, 'collab-overview', 'shell'],
+    queryFn: () => tripCollabApi.getShellOverview(tripId),
+    staleTime: 60_000,
+  });
+
+  const collaborators = useMemo(
+    () =>
+      (collabShell?.collaborators ?? []).map((c) => ({
+        userId: c.userId,
+        displayName: c.displayName,
+        role: c.role,
+      })),
+    [collabShell?.collaborators],
+  );
 
   return (
     <CollabCenterMembersDashboard
       tripId={tripId}
-      teamId={teamId}
       trip={trip}
+      collaborators={collaborators}
+      includeFriction={!advisorLed}
+      advisorLed={advisorLed}
+      onOpenRoleInvites={onOpenRoleInvites}
       onTripRefetch={onTripRefetch}
-      onGoToSchedule={onGoToSchedule}
     />
   );
 }

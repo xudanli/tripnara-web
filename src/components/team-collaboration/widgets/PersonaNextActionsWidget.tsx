@@ -96,7 +96,6 @@ export function PersonaNextActionsWidget({
   return (
     <CollabWidgetCard
       title="下一步推荐行动"
-      className="h-full"
       footer={
         onViewAll ? (
           <Button
@@ -113,7 +112,7 @@ export function PersonaNextActionsWidget({
     >
       <ul className="divide-y divide-border/50">
         {actions.slice(0, 4).map((action) => (
-          <li key={action.id} className="flex min-h-[52px] items-center gap-2.5 py-2.5 first:pt-0 last:pb-0">
+          <li key={action.id} className="flex items-center gap-2.5 py-2 first:pt-0 last:pb-0">
             <Checkbox
               checked={action.done}
               disabled
