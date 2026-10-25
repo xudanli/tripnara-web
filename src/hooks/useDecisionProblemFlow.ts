@@ -12,6 +12,7 @@ import {
   decisionProblemsQueryErrorMessage,
   decisionProblemsQueryKeys,
   fetchDecisionCenterOverview,
+  fetchDecisionProblemDetail,
   fetchDecisionProblemsList,
 } from '@/hooks/decision-problems-query.util';
 import { deriveDecisionSpaceContentFromDetail } from '@/lib/decision-space-detail-content.util';
@@ -420,10 +421,7 @@ export function useDecisionProblemSpaceContent({
   const detailQuery = useQuery({
     queryKey: decisionProblemsQueryKeys.detail(tripId, resolvedProblemId, focusConflictId),
     queryFn: ({ signal }) =>
-      decisionProblemsApi.getProblem(tripId, resolvedProblemId, {
-        focusConflictId,
-        signal,
-      }),
+      fetchDecisionProblemDetail(tripId, resolvedProblemId, focusConflictId, signal),
     enabled: active,
     staleTime: DECISION_PROBLEM_DETAIL_STALE_MS,
     placeholderData: keepPreviousData,

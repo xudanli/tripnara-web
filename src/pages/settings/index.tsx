@@ -221,7 +221,7 @@ export default function SettingsPage() {
         </aside>
 
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-4xl">
+          <div className={cn(activeSection === 'governance' ? 'max-w-6xl' : 'max-w-4xl')}>
             <h2 className="text-lg font-semibold mb-6">{sectionTitle}</h2>
 
             {activeSection === 'account' && (

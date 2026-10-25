@@ -13,6 +13,10 @@ export { DecisionRecordDrawer } from './DecisionRecordDrawer';
 export { DecisionPersonaValidationStrip } from './DecisionPersonaValidationStrip';
 export { ImpactScopeViewPanel } from './ImpactScopeViewPanel';
 export { CandidateComparisonViewPanel } from './CandidateComparisonViewPanel';
+export {
+  OrtToolsEvaluateShadowPanel,
+  OrtToolsPlanningShadowPanel,
+} from './OrtToolsShadowPanel';
 export { DecisionActionsPanel } from './DecisionActionsPanel';
 export { DecisionActionCard } from './DecisionActionCard';
 export { DecisionResolutionStepBar } from './DecisionResolutionStepBar';

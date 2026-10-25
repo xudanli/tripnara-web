@@ -250,7 +250,7 @@ export default function AgentChatSidebar({
           ? 'w-full min-w-0'
           : expanded
             ? 'w-[440px] min-w-[300px] max-w-[800px]'
-            : 'w-14 min-w-[3.5rem]',
+            : 'w-[46px] min-w-[46px]',
         !layoutExpanded && 'transition-[width] duration-300 ease-in-out',
         className
       )}
@@ -258,8 +258,8 @@ export default function AgentChatSidebar({
       {/* Header */}
       <div
         className={cn(
-          'h-14 border-b border-border flex items-center px-3 shrink-0',
-          expanded ? 'justify-between' : 'justify-center'
+          'h-14 border-b border-border flex items-center shrink-0',
+          expanded ? 'justify-between px-3' : 'justify-center px-1'
         )}
       >
         {expanded ? (

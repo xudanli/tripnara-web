@@ -12,6 +12,12 @@ const DECISION_ENGINE_USER_MESSAGES: Record<string, string> = {
   REPAIR_FAILED: '自动修复计划失败，请尝试缩小变更范围或手动调整。',
   INTERNAL_ERROR: '决策服务暂时不可用，请稍后重试。',
   TIMEOUT: '决策计算超时，请稍后重试或简化请求。',
+  /** OR-Tools Shadow / canary 硬拦（authorize / execute） */
+  ORTOOLS_CANARY_DISABLED:
+    'OR-Tools 未开权威 canary，请选择 Neptune 候选后再授权。',
+  ORTOOLS_NOT_MERGED:
+    '该候选未并入权威集，请重新 Evaluate 或选择其他候选。',
+  ORTOOLS_EVIDENCE_STALE: '证据已漂移，请重新 Evaluate 后再授权。',
 };
 
 export function mapDecisionEngineUserMessage(code: string | undefined, serverMessage: string): string {

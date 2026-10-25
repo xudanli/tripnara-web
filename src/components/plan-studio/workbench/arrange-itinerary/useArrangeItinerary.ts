@@ -255,7 +255,10 @@ export function useArrangeItinerary(
 
   const autoArrangeMutation = useMutation({
     mutationFn: async () => {
-      const data = await arrangeItineraryApi.autoArrange(tripId);
+      const candidateIds = (explore.candidates ?? [])
+        .map((item) => item?.id)
+        .filter((id): id is string => Boolean(id));
+      const data = await arrangeItineraryApi.autoArrange(tripId, { candidateIds });
       return applySettledArrangeWrite(data, '自动编排已完成');
     },
     onSuccess: (data) => {

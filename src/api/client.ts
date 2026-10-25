@@ -355,9 +355,10 @@ apiClient.interceptors.response.use(
           return Promise.reject(typed);
         }
 
-        const displayMessage = isDecision
-          ? mapDecisionEngineUserMessage(errorCode, errorMessage)
-          : errorMessage;
+        const displayMessage =
+          isDecision || String(errorCode).startsWith('ORTOOLS_')
+            ? mapDecisionEngineUserMessage(errorCode, errorMessage)
+            : errorMessage;
 
         const businessError = new Error(displayMessage) as TripnaraHttpError;
         businessError.response = {
@@ -553,14 +554,18 @@ apiClient.interceptors.response.use(
     if (error.config) {
       const te = error as TripnaraHttpError;
       attachTripnaraDiagnostics(te, error.config);
-      if (error.config.tripnaraApiKind === 'decision_engine' && error.response?.data) {
+      if (error.response?.data) {
         const d = error.response.data as {
           error?: { code?: string; message?: string };
           message?: string;
         };
         const c = d?.error?.code;
         const m = (d?.error?.message || d?.message || error.message) as string;
-        if (c && typeof c === 'string') {
+        if (
+          c &&
+          typeof c === 'string' &&
+          (error.config.tripnaraApiKind === 'decision_engine' || c.startsWith('ORTOOLS_'))
+        ) {
           te.decisionEngineCode = c;
           error.message = mapDecisionEngineUserMessage(c, m || String(error.message));
         }

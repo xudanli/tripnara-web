@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { semanticBadText, semanticGoodText, semanticWarnText } from '@/lib/semantic-ui-classes';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 import type { CurrentWeather, WeatherCondition } from '@/types/weather';
 import { ExecuteAlertBanner } from './ExecuteAlertBanner';
 
@@ -308,15 +309,24 @@ export function formatExecuteTripTitle(input: {
   destination: string;
   totalDays: number;
 }): string {
-  const destinationNames: Record<string, string> = {
-    IS: '冰岛西峡湾',
-    JP: '日本',
-    TH: '泰国',
-    CN: '中国',
-  };
-  const code = input.destination.split(',')[0]?.trim().toUpperCase();
-  const placeName = input.name || destinationNames[code] || input.destination;
-  return `${placeName} · ${input.totalDays}天行程`;
+  return formatTripDisplayTitle(
+    {
+      name: input.name,
+      destination: input.destination,
+      days: Array.from({ length: Math.max(0, input.totalDays) }, (_, i) => ({ id: String(i) })),
+    },
+    {
+      resolveCountryName: (code) => {
+        const destinationNames: Record<string, string> = {
+          IS: '冰岛',
+          JP: '日本',
+          TH: '泰国',
+          CN: '中国',
+        };
+        return destinationNames[code.toUpperCase()] ?? code;
+      },
+    },
+  );
 }
 
 export function formatExecuteStatusSubline(input: {

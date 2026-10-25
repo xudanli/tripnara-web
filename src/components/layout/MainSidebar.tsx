@@ -21,10 +21,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
+import { countriesApi } from '@/api/countries';
 import {
   buildPlanningWorkbenchPath,
 } from '@/lib/travel-status-navigation.util';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 import type { TripListItem, TripStatus } from '@/types/trip';
+import type { Country } from '@/types/country';
 import Logo from '@/components/common/Logo';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -41,7 +44,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Plus, Route, MapPin, Heart, ChevronDown, ChevronRight, User, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Share2, Edit, MoreVertical, RefreshCw, Users, Trash2, MessageCircle, BadgeCheck, Sparkles } from 'lucide-react';
-import { format } from 'date-fns';
 import { ContactUsDialog } from '@/components/common/ContactUsDialog';
 import { DeleteTripDialog } from '@/components/trips/DeleteTripDialog';
 
@@ -94,13 +96,22 @@ export default function MainSidebar({ className }: MainSidebarProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tripToDelete, setTripToDelete] = useState<TripListItem | null>(null);
   const [deletingTrip, setDeletingTrip] = useState(false);
+  const [countryMap, setCountryMap] = useState<Map<string, Country>>(new Map());
   
   // 加载所有行程
   const loadTrips = async () => {
     try {
       setLoading(true);
-      const trips = await tripsApi.getAll();
+      const [trips, countriesResponse] = await Promise.all([
+        tripsApi.getAll(),
+        countriesApi.getAll().catch(() => null),
+      ]);
       setAllTrips(trips);
+      if (countriesResponse?.countries?.length) {
+        setCountryMap(
+          new Map(countriesResponse.countries.map((country) => [country.isoCode, country])),
+        );
+      }
       
       // 从 localStorage 获取收藏状态
       const storedCollected = localStorage.getItem('collectedTripIds');
@@ -275,15 +286,11 @@ export default function MainSidebar({ className }: MainSidebarProps) {
     }
   };
   
-  // 获取行程显示名称
-  const getTripDisplayName = (trip: TripListItem): string => {
-    if (trip.name) return trip.name;
-    if (trip.destination && trip.startDate) {
-      // destination 可能是国家代码，直接显示
-      return `${trip.destination} ${format(new Date(trip.startDate), 'MM-dd')}`;
-    }
-    return trip.destination || '未知目的地';
-  };
+  // 与 Plan Studio 顶栏同一套：目的地 · N天行程
+  const getTripDisplayName = (trip: TripListItem): string =>
+    formatTripDisplayTitle(trip, {
+      resolveCountryName: (code) => countryMap.get(code)?.nameCN ?? code,
+    });
 
   // 处理退出登录
   const handleLogout = async () => {
@@ -311,12 +318,12 @@ export default function MainSidebar({ className }: MainSidebarProps) {
     <aside
       className={cn(
         'bg-white border-r border-gray-200 flex flex-col h-full max-h-screen min-h-0 overflow-hidden transition-all duration-300 relative z-10',
-        collapsed ? 'w-16' : 'w-64',
+        collapsed ? 'w-[54px]' : 'w-64',
         className
       )}
     >
       {/* Logo 区域 - ChatGPT 风格：收起状态下悬浮时显示展开图标 */}
-      <div className="h-14 flex items-center justify-between px-3 relative">
+      <div className={cn('h-14 flex items-center justify-between relative', collapsed ? 'px-1' : 'px-3')}>
         {!collapsed && (
           <>
             <button
@@ -514,7 +521,7 @@ export default function MainSidebar({ className }: MainSidebarProps) {
       </ScrollArea>
       
       {/* 🆕 参考 shadcn 设计：用户资料组件 - 左下角 */}
-      <div className="border-t border-gray-200 px-2 py-1.5">
+      <div className={cn('border-t border-gray-200 py-1.5', collapsed ? 'px-1' : 'px-2')}>
         {user ? (
           <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
             <DropdownMenuTrigger asChild>
@@ -665,14 +672,13 @@ function NavItem({ icon: Icon, label, onClick, active, collapsed = false }: NavI
       <button
         onClick={onClick}
         className={cn(
-          // 视觉优化：13px 字体（更紧凑），深灰色文本，紧凑的内边距
-          'w-full flex items-center px-3 py-2 text-[13px] font-normal transition-colors',
+          'w-full flex items-center py-2 text-[13px] font-normal transition-colors',
           // ChatGPT 风格：hover 时浅灰背景 (#f5f5f5)
           'hover:bg-gray-100',
           // 🆕 激活状态：圆角矩形框，左右有间距
           active && 'bg-gray-100 rounded-md',
-          // 收起状态：居中显示
-          collapsed ? 'justify-center' : 'gap-2.5'
+          // 收起状态：居中显示，收窄内边距
+          collapsed ? 'justify-center px-1' : 'gap-2.5 px-3'
         )}
         // 🎨 统一颜色规范：主文本使用 #111827（深灰/接近黑色），激活和非激活状态保持一致
         style={{ color: '#111827' }}

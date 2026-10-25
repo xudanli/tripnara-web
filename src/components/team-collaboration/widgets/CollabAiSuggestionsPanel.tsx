@@ -88,9 +88,9 @@ export function CollabAiSuggestionsPanel({
             生成妥协方案
           </Button>
         ) : null}
-        {onStartVote && openVote ? (
+        {onStartVote ? (
           <Button type="button" variant="outline" size="sm" className="h-7 text-[10px]" onClick={onStartVote}>
-            发起投票
+            {openVote ? '查看投票' : '发起投票'}
           </Button>
         ) : null}
         {onDiscussWithAssistant ? (

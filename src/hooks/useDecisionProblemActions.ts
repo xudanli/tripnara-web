@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { decisionProblemsApi } from '@/api/decision-problems';
 import { resolveDetailWriteChain } from '@/lib/decision-write-chain.util';
 import {
+  applyDecisionCaseEligibilityToActions,
   mapOptionsToDecisionActions,
   partitionDecisionActionsForUi,
   resolveDetailActions,
@@ -148,17 +149,25 @@ export function useDecisionProblemActions({
       ? fromDetail
       : mapOptionsToDecisionActions(options, writeChain);
     const debugSuppressed = detail?.debug?.suppressedActions ?? [];
-    if (!debugSuppressed.length) return base;
-    const seen = new Set(base.map((action) => action.actionId));
-    return [
-      ...base,
-      ...debugSuppressed.filter((action) => !seen.has(action.actionId)),
-    ];
-  }, [detail?.actions, detail?.debug?.suppressedActions, optionsActions, options, writeChain]);
+    const withSuppressed = !debugSuppressed.length
+      ? base
+      : (() => {
+          const seen = new Set(base.map((action) => action.actionId));
+          return [
+            ...base,
+            ...debugSuppressed.filter((action) => !seen.has(action.actionId)),
+          ];
+        })();
+    return applyDecisionCaseEligibilityToActions(withSuppressed, detail?.decisionCase);
+  }, [detail?.actions, detail?.debug?.suppressedActions, detail?.decisionCase, optionsActions, options, writeChain]);
 
   const { visible: actions, suppressed: suppressedActions } = useMemo(
-    () => partitionDecisionActionsForUi(rawActions),
-    [rawActions],
+    () =>
+      partitionDecisionActionsForUi(rawActions, {
+        retainDisallowedInVisible:
+          Boolean(detail?.decisionCase) || writeChain === 'CONSTRAINT_WRITEBACK',
+      }),
+    [rawActions, detail?.decisionCase, writeChain],
   );
 
   const legacyActions = useMemo(

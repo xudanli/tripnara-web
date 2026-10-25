@@ -4,7 +4,8 @@ export const AGENT_SIDEBAR_WIDTH = {
   MIN: 300,
   MAX: 800,
   DEFAULT: 440,
-  COLLAPSED: 56,
+  /** 与主侧栏收起宽度对齐（原 56，再收窄 ≥10px） */
+  COLLAPSED: 46,
 } as const;
 
 const STORAGE_KEY = 'agent-sidebar-width';

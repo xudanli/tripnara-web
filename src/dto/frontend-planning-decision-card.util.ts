@@ -110,24 +110,43 @@ function diagnosticKey(item: { id: string; conflictId?: string }): string {
   return item.conflictId ?? item.id;
 }
 
+function diagnosticContentKey(item: {
+  title?: string;
+  message?: string;
+  dayIndex?: number | null;
+}): string {
+  const title = (item.title ?? '').trim().toLowerCase();
+  const message = (item.message ?? '').trim().toLowerCase();
+  const day = item.dayIndex ?? '';
+  return `${title}||${message}||${day}`;
+}
+
 /**
  * 合并 decisionPack.diagnostics 与 GET /trips/:id/conflicts；
- * pack 项优先，冲突项按 conflictId/id 去重补全。
+ * pack 项优先；再按 id 与「标题+正文」内容去重。
  */
 export function mergeDiagnosticsWithTripConflicts(
   packDiagnostics: PlanningDecisionDiagnostic[] | undefined,
   tripConflicts: TripConflictDiagnosticInput[] | undefined,
 ): PlanningDecisionDiagnostic[] {
   const merged = new Map<string, PlanningDecisionDiagnostic>();
+  const contentSeen = new Set<string>();
+
+  const pushUnique = (diagnostic: PlanningDecisionDiagnostic) => {
+    const idKey = diagnosticKey(diagnostic);
+    if (merged.has(idKey)) return;
+    const contentKey = diagnosticContentKey(diagnostic);
+    if (contentSeen.has(contentKey)) return;
+    merged.set(idKey, diagnostic);
+    contentSeen.add(contentKey);
+  };
 
   for (const diagnostic of packDiagnostics ?? []) {
-    merged.set(diagnosticKey(diagnostic), diagnostic);
+    pushUnique(diagnostic);
   }
 
   for (const conflict of tripConflicts ?? []) {
-    const key = diagnosticKey({ id: conflict.id, conflictId: conflict.id });
-    if (merged.has(key)) continue;
-    merged.set(key, {
+    pushUnique({
       id: conflict.id,
       conflictId: conflict.id,
       source: 'trip_conflicts',

@@ -6,6 +6,8 @@ import type {
   CollabOverviewQuery,
   CollabOverviewResponse,
   CreateTripFilePendingRequest,
+  OverallReadinessCardDto,
+  OverallReadinessReport,
   TimelineOverviewQuery,
   TimelineOverviewResponse,
   ToggleActivityFavoriteRequest,
@@ -221,9 +223,9 @@ export const tripTimelineApi = {
     return handleResponse(response, '获取时间轴概览失败');
   },
 
-  /** Phase 1 — 首屏壳层（stats + newSuggestionCount 角标） */
+  /** Phase 1 — 首屏壳层（stats + readiness；等价 preset=shell） */
   getShellOverview(tripId: string): Promise<TimelineOverviewResponse> {
-    return tripTimelineApi.getOverview(tripId, { include: TRIP_DETAIL_TAB_BFF_INCLUDES.timelineShell });
+    return tripTimelineApi.getOverview(tripId, { preset: 'shell' });
   },
 
   /** Phase 2 — pipeline / tasks / reminders + planobjects（无 suggestions 列表） */
@@ -238,6 +240,25 @@ export const tripTimelineApi = {
     return tripTimelineApi.getOverview(tripId, {
       include: TRIP_DETAIL_TAB_BFF_INCLUDES.timelineWithSuggestions,
     });
+  },
+};
+
+export const tripOverallReadinessApi = {
+  /** GET /trips/:tripId/overall-readiness — 完整准备报告 */
+  async getReport(tripId: string): Promise<OverallReadinessReport> {
+    const response = await apiClient.get<ApiResponseWrapper<OverallReadinessReport>>(
+      `/trips/${tripId}/overall-readiness`,
+    );
+    return handleResponse(response, '获取整体准备度报告失败');
+  },
+
+  /** GET /trips/:tripId/overall-readiness?view=card — 壳层卡 */
+  async getCard(tripId: string): Promise<OverallReadinessCardDto> {
+    const response = await apiClient.get<ApiResponseWrapper<OverallReadinessCardDto>>(
+      `/trips/${tripId}/overall-readiness`,
+      { params: { view: 'card' } },
+    );
+    return handleResponse(response, '获取整体准备度卡片失败');
   },
 };
 

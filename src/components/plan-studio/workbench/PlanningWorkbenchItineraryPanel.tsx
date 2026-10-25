@@ -45,6 +45,7 @@ import { WorkbenchDayDetailCard } from './WorkbenchDayDetailCard';
 import { WorkbenchDaySplitTimeline } from './WorkbenchDaySplitTimeline';
 import { WorkbenchSplitPlanBanner } from './WorkbenchSplitPlanBanner';
 import { WorkbenchGateStatusBanner } from './WorkbenchGateStatusBanner';
+import { resolveTripMemberOptions } from '@/lib/itinerary-split-participants.util';
 import { useWorkbenchItineraryData, resolveWorkbenchItineraryLoadingLabel } from './useWorkbenchItineraryData';
 import {
   workbenchColumnSurface,
@@ -163,6 +164,11 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
     () => resolveDestinationTimezone(trip?.destination),
     [trip?.destination],
   );
+  const memberLabelById = useMemo(() => {
+    const options = resolveTripMemberOptions(collaborators);
+    return new Map(options.map((m) => [m.id, m.label]));
+  }, [collaborators]);
+  const resolvedMemberCount = memberCount > 0 ? memberCount : memberLabelById.size;
   const selectedDay = selectedDayProp ?? internalSelectedDay;
   const setSelectedDay = useCallback(
     (dayIndex: number) => {
@@ -401,6 +407,34 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
     onOpenConflicts?.();
   }, [topBannerConflict?.id, onOpenDecisionSpace, onOpenConflicts, selectedDay, tripId]);
 
+  const handleOpenConflictLine = useCallback(
+    (conflictId: string, dayIndex: number) => {
+      const isSynthetic =
+        conflictId === 'drive-over-limit' || conflictId.startsWith('metric-');
+      const resolvedId = isSynthetic
+        ? conflicts.items.find((item) => {
+            const days = item.affectedDays ?? item.issue?.affectedDays;
+            return days?.includes(dayIndex + 1);
+          })?.id
+        : conflictId;
+      trackWorkbenchOpenDecisionSpace({
+        tripId,
+        source: 'day_card',
+        dayIndex,
+        conflictId: resolvedId ?? conflictId,
+      });
+      if (onOpenDecisionSpace) {
+        onOpenDecisionSpace({
+          conflictId: resolvedId ?? conflictId,
+          dayIndex,
+        });
+        return;
+      }
+      onOpenConflicts?.();
+    },
+    [conflicts.items, onOpenConflicts, onOpenDecisionSpace, tripId],
+  );
+
   const itineraryLoadingLabel = useMemo(
     () => resolveWorkbenchItineraryLoadingLabel(loadingPhase, conflicts.loading),
     [loadingPhase, conflicts.loading],
@@ -561,7 +595,8 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
             day={daySnapshot}
             dayContext={dayContextSummary}
             solutionCount={conflicts.summary.mustHandle || conflicts.summary.suggestAdjust}
-            memberCount={memberCount}
+            memberCount={resolvedMemberCount}
+            memberLabelById={memberLabelById}
             decisionProblems={dayDecisionProblems}
             onViewSolutions={handleViewSolutions}
             onDeferConflict={handleDeferConflict}
@@ -570,6 +605,7 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
             onRestoreConflict={onRestoreConflict}
             onViewDayMap={onViewDayMap ? () => onViewDayMap(selectedDay) : undefined}
             onEditEntry={handleEditTimelineEntry}
+            onOpenConflict={handleOpenConflictLine}
             selectedEntryId={selectedTimelineEntryId}
             onSelectEntry={onSelectedTimelineEntryChange}
             className="min-h-0 flex-1"
@@ -632,6 +668,7 @@ export const PlanningWorkbenchItineraryPanel = memo(function PlanningWorkbenchIt
         tripDays={trip?.TripDay?.map((d) => ({ id: d.id, date: d.date })) ?? []}
         currentTripDayId={editingItem.tripDayId ?? editingItem.TripDay?.id}
         tepFlexibilityEnabled={tepFlexibilityEnabled}
+        collaborators={collaborators}
       />
     ) : null}
     </>

@@ -56,11 +56,12 @@ function hasRenderableAudit(a: HallucinationAuditZh): boolean {
 }
 
 export function HallucinationDecisionLogExtras({ log }: { log: DecisionLogEntry }) {
+  const [open, setOpen] = useState(false);
+
   if (!isHallucinationDetectionDecisionLog(log)) return null;
   const audit = pickHallucinationAuditZh(log.metadata);
   if (!audit || !hasRenderableAudit(audit)) return null;
 
-  const [open, setOpen] = useState(false);
   const notify = String(audit.user_notification ?? audit.userNotification ?? '').trim();
   const rows = normalizeSampleRows(audit);
   const duration = audit.duration_ms ?? audit.durationMs;

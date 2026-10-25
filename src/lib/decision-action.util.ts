@@ -1,10 +1,12 @@
 import type { DecisionAction, DecisionWriteChain } from '@/types/unified-decision';
 import type { DecisionOption } from '@/types/decision-problem';
+import type { DecisionCaseMeta } from '@/types/decision-case';
 import { filterUiDecisionActions } from '@/lib/decision-action-visibility.util';
 import {
   parseDecisionNavigationTarget,
   type DecisionNavigationTarget,
 } from '@/lib/decision-navigation.util';
+import { normalizeDecisionCaseConstraintHints } from '@/lib/normalize-decision-case.util';
 
 export type { DecisionNavigationTarget };
 export { parseDecisionNavigationTarget, resolveDecisionActionExternalUrl, openDecisionActionExternalUrl } from '@/lib/decision-navigation.util';
@@ -81,6 +83,9 @@ export function normalizeDecisionAction(raw: unknown): DecisionAction | null {
     detectors: Array.isArray(record.detectors)
       ? record.detectors.map((d) => String(d).trim()).filter(Boolean)
       : undefined,
+    constraintHints: normalizeDecisionCaseConstraintHints(
+      record.constraintHints ?? record.constraint_hints,
+    ),
   };
 }
 
@@ -141,7 +146,36 @@ export function mapOptionsToDecisionActions(
     blockedReason: opt.executable === false ? '当前不可执行' : null,
     kind: defaultKind,
     payload: { optionId: opt.id },
+    constraintHints: normalizeDecisionCaseConstraintHints(
+      (opt as { constraintHints?: unknown }).constraintHints ??
+        (opt as { constraint_hints?: unknown }).constraint_hints,
+    ),
   }));
+}
+
+/**
+ * DecisionCase Eligibility：不在 eligibleOptionIds 内的 option 灰显；
+ * executable=false 已在 map 时处理。
+ */
+export function applyDecisionCaseEligibilityToActions(
+  actions: DecisionAction[],
+  decisionCase?: DecisionCaseMeta | null,
+): DecisionAction[] {
+  if (!actions.length) return actions;
+  const eligibleIds = decisionCase?.eligibility?.eligibleOptionIds;
+  if (!eligibleIds?.length) return actions;
+  const allow = new Set(eligibleIds.map((id) => id.trim()).filter(Boolean));
+  if (!allow.size) return actions;
+
+  return actions.map((action) => {
+    if (allow.has(action.actionId)) return action;
+    if (action.allowed === false) return action;
+    return {
+      ...action,
+      allowed: false,
+      blockedReason: action.blockedReason?.trim() || '当前成员条件不满足该方案',
+    };
+  });
 }
 
 export function resolveDetailActions(input: {

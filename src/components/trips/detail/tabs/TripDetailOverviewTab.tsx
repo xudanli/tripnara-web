@@ -1,7 +1,6 @@
 import { AlertTriangle, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import DayItineraryCard from '@/components/trips/DayItineraryCard';
 import { AssistantCenter } from '@/components/trips/AssistantCenter';
 import BudgetOverviewCard from '@/components/trips/BudgetOverviewCard';
@@ -48,12 +47,6 @@ export default function TripDetailOverviewTab({
     (healthMetrics.executable + healthMetrics.buffer + (100 - healthMetrics.risk) + healthMetrics.cost) / 4,
   );
   const pendingCount = suggestions.filter((s) => s.severity === 'blocker' || s.severity === 'warn').length;
-  const planningProgress = Math.min(100, Math.round(
-    ((trip.TripDay?.reduce((acc, d) => acc + (d.ItineraryItem?.length ?? 0), 0) ?? 0) /
-      Math.max(1, (trip.TripDay?.length ?? 1) * 3)) *
-      100,
-  ));
-
   const feasibilityTag =
     overallScore >= 70 ? tripDetailUi.tagVerified : overallScore >= 50 ? tripDetailUi.tagAllow : tripDetailUi.tagConfirm;
 
@@ -61,9 +54,9 @@ export default function TripDetailOverviewTab({
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <TripDetailStatCard
-          label="规划进度"
-          value={`${planningProgress}%`}
-          sub={<Progress value={planningProgress} className="h-1.5 mt-2" />}
+          label="整体准备度"
+          value="—"
+          sub={<p className="text-[11px] text-muted-foreground mt-2">请在时间轴查看准备报告</p>}
           icon={<TrendingUp className="w-5 h-5" />}
         />
         <TripDetailStatCard

@@ -1,10 +1,9 @@
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { arrangeItineraryApi } from '@/api/arrange-itinerary';
-import type { AttractionExploreItem, AttractionExploreMapPoint } from '@/types/attraction-explore';
+import type { AttractionExploreItem } from '@/types/attraction-explore';
 import { ArrangeItineraryProposalDialog } from '../arrange-itinerary/ArrangeItineraryProposalDialog';
 import { AttractionExploreCompiledIntentBar } from './AttractionExploreCompiledIntentBar';
-import { AttractionExploreMapPlaceSuggestionsDialog } from './AttractionExploreMapPlaceSuggestionsDialog';
 import { AttractionExploreCandidatesPanel } from './AttractionExploreCandidatesPanel';
 import { AttractionExploreFiltersPanel } from './AttractionExploreFiltersPanel';
 import { AttractionExploreRecommendPanel } from './AttractionExploreRecommendPanel';
@@ -44,17 +43,6 @@ export function PlanningWorkbenchAttractionExplore({
     void explore.compileAndSearch(explore.searchQuery).catch((error) => {
       toast.error(error instanceof Error ? error.message : '搜索失败');
     });
-  };
-
-  const handlePlaceMapPoint = async (point: AttractionExploreMapPoint) => {
-    try {
-      const result = await explore.requestMapPlaceProposal(point);
-      if (result.suggestions.length <= 1) {
-        toast.message('已生成地图插入草案，请确认后写入');
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '生成插入草案失败');
-    }
   };
 
   const handleApplyMapProposal = async (force = false) => {
@@ -178,8 +166,6 @@ export function PlanningWorkbenchAttractionExplore({
             onViewMap={onViewMap}
             mapPoints={explore.mapPoints}
             mapLoading={explore.mapLoading}
-            onPlaceMapPoint={(point) => void handlePlaceMapPoint(point)}
-            mapPlacePending={explore.mapPlaceProposalPending}
           />
         </main>
 
@@ -207,25 +193,8 @@ export function PlanningWorkbenchAttractionExplore({
         </aside>
       </div>
 
-      <AttractionExploreMapPlaceSuggestionsDialog
-        open={explore.mapPlaceSuggestions != null}
-        onOpenChange={(open) => {
-          if (!open) explore.clearActiveMapProposal();
-        }}
-        placeName={explore.mapPlaceSuggestions?.placeName ?? ''}
-        suggestions={explore.mapPlaceSuggestions?.suggestions ?? []}
-        submitting={explore.mapPlaceProposalPending}
-        onSelect={(index) => {
-          void explore.selectMapPlaceSuggestion(index).then(() => {
-            toast.message('已生成插入草案，请确认后写入');
-          }).catch((error) => {
-            toast.error(error instanceof Error ? error.message : '生成草案失败');
-          });
-        }}
-      />
-
       <ArrangeItineraryProposalDialog
-        open={explore.activeMapProposal != null && explore.mapPlaceSuggestions == null}
+        open={explore.activeMapProposal != null}
         onOpenChange={(open) => {
           if (!open) explore.clearActiveMapProposal();
         }}

@@ -10,6 +10,7 @@ import {
   DECISION_PROBLEM_DETAIL_STALE_MS,
   decisionProblemsQueryErrorMessage,
   decisionProblemsQueryKeys,
+  fetchDecisionProblemDetail,
 } from '@/hooks/decision-problems-query.util';
 import { deriveDecisionSpaceContentFromDetail } from '@/lib/decision-space-detail-content.util';
 import {
@@ -160,10 +161,7 @@ export function useDecisionSpaceTier2({
   const legacyDetailQuery = useQuery({
     queryKey: decisionProblemsQueryKeys.detail(tripId, resolvedProblemId, focusConflictId),
     queryFn: ({ signal }) =>
-      decisionProblemsApi.getProblem(tripId, resolvedProblemId, {
-        focusConflictId,
-        signal,
-      }),
+      fetchDecisionProblemDetail(tripId, resolvedProblemId, focusConflictId, signal),
     enabled: useLegacyPath && Boolean(problemId) && !bundleQuery.isSuccess,
     staleTime: DECISION_PROBLEM_DETAIL_STALE_MS,
   });
@@ -222,8 +220,8 @@ export function useDecisionSpaceTier2({
 
   const deferredBasisQuery = useDecisionBasis(
     tripId,
-    { conflictId: focusConflictId, proposalId },
-    shouldFetchDeferredBasis,
+    { conflictId: focusConflictId, proposalId, problemId },
+    shouldFetchDeferredBasis && Boolean(focusConflictId || proposalId || problemId),
   );
 
   const basisLoading =

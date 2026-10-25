@@ -219,12 +219,16 @@ export async function invalidateWorkbenchAfterConstraintChange(
   const { invalidateConstraintAssessmentQueries } = await import(
     '@/lib/constraint-assessment-query.util'
   );
+  const { overallReadinessKeys } = await import('@/lib/overall-readiness-keys');
+  const { notifyTripDataUpdated } = await import('@/lib/agent-trip-sync');
   await Promise.all([
     ...(options?.skipConstraintsList
       ? []
       : [invalidateConstraintAssessmentQueries(queryClient, tripId)]),
     invalidateWorkbenchPlanningConflicts(queryClient, tripId),
+    queryClient.invalidateQueries({ queryKey: overallReadinessKeys.trip(tripId) }),
   ]);
+  notifyTripDataUpdated({ tripId, source: 'workbench-constraint-change' });
 }
 
 export async function invalidateWorkbenchWishSummary(

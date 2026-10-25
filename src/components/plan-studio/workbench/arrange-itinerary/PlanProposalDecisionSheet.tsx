@@ -26,7 +26,12 @@ import type { TripConflictDiagnosticInput } from '@/dto/frontend-planning-decisi
 import { DecisionExecutionProposalPanel } from '@/components/decision-problems/decision-execution-proposal/DecisionExecutionProposalPanel';
 import { DecisionValidityStrip } from '@/components/decision-problems/DecisionValidityStrip';
 import { DecisionWriteBackStepsPanel } from '@/components/decision-problems/DecisionWriteBackStepsPanel';
+import { OrtToolsPlanningShadowPanel } from '@/components/decision-problems/OrtToolsShadowPanel';
 import type { ArrangeLodgingCoverageSummary } from '@/lib/arrange-itinerary-lodging-coverage.util';
+import { sanitizeSplitPlanTextForDisplay } from '@/lib/itinerary-split-note.util';
+import { groupProposalDiagnosticsForDisplay } from '@/lib/proposal-diagnostics-display.util';
+import { shouldShowOrtToolsPlanningShadowPanel } from '@/lib/normalize-ortools-shadow.util';
+import { useOrtToolsShadowHealth } from '@/hooks/useOrtToolsShadowHealth';
 import {
   workbenchAttractionExploreAiBox,
   workbenchConflictSurface,
@@ -88,30 +93,44 @@ export interface PlanProposalDecisionSheetProps {
 }
 
 function DiagnosticsSection({ diagnostics }: { diagnostics: PlanningDecisionDiagnostic[] }) {
-  if (!diagnostics.length) return null;
+  const groups = useMemo(
+    () => groupProposalDiagnosticsForDisplay(diagnostics),
+    [diagnostics],
+  );
+  if (!groups.length) return null;
+
   return (
     <section className={cn(workbenchConflictSurface, 'rounded-xl p-3')}>
       <p className="mb-2 text-xs font-medium text-foreground">相关诊断</p>
-      <ul className="space-y-2">
-        {diagnostics.map((diagnostic) => (
-          <li key={diagnostic.id} className="text-[11px]">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <p className="font-medium text-foreground">{diagnostic.title}</p>
-              {diagnostic.source === 'trip_conflicts' ? (
-                <Badge variant="outline" className="h-4 rounded-full px-1.5 text-[9px]">
-                  行程冲突
-                </Badge>
-              ) : null}
+      <div className="space-y-3">
+        {groups.map((group) => (
+          <div key={group.category} className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] font-medium text-foreground">{group.label}</p>
+              <Badge variant="outline" className="h-4 rounded-full px-1.5 text-[9px] text-muted-foreground">
+                {group.items.length}
+              </Badge>
             </div>
-            {diagnostic.message ? (
-              <p className="mt-0.5 text-muted-foreground">{diagnostic.message}</p>
-            ) : null}
-            {diagnostic.dayIndex != null ? (
-              <p className="mt-0.5 text-muted-foreground">第 {diagnostic.dayIndex} 天</p>
-            ) : null}
-          </li>
+            <ul className="space-y-1.5 border-l border-border/60 pl-2.5">
+              {group.items.map((item) => (
+                <li key={item.id} className="text-[11px] leading-relaxed">
+                  <div className="flex flex-wrap items-start gap-1.5">
+                    {item.dayIndex != null ? (
+                      <Badge
+                        variant="outline"
+                        className="mt-0.5 h-4 shrink-0 rounded-full px-1.5 text-[9px]"
+                      >
+                        第 {item.dayIndex} 天
+                      </Badge>
+                    ) : null}
+                    <p className="min-w-0 flex-1 text-muted-foreground">{item.primary}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }
@@ -143,6 +162,15 @@ export function PlanProposalDecisionSheet({
   const recommended =
     getRecommendedOption(proposal?.decisionPack) ?? pickRecommendedOption(packOptions);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(recommended?.id ?? null);
+  const shadowHealth = useOrtToolsShadowHealth({ enabled: open });
+  const showOrtToolsShadow = shouldShowOrtToolsPlanningShadowPanel(
+    proposal?.intent,
+    proposal?.ortoolsShadow,
+    {
+      shadowRepairEnabled: shadowHealth.data?.shadowRepairEnabled === true,
+      healthLoaded: shadowHealth.loaded,
+    },
+  );
 
   useEffect(() => {
     setSelectedOptionId(recommended?.id ?? null);
@@ -155,10 +183,12 @@ export function PlanProposalDecisionSheet({
 
   const primaryDiagnostic = mergedDiagnostics[0];
   const whatHappenedText =
-    primaryDiagnostic?.message?.trim() ||
-    primaryDiagnostic?.title?.trim() ||
-    proposal?.diff.summary?.trim() ||
-    null;
+    sanitizeSplitPlanTextForDisplay(
+      primaryDiagnostic?.message?.trim() ||
+        primaryDiagnostic?.title?.trim() ||
+        proposal?.diff.summary?.trim() ||
+        '',
+    ) || null;
 
   const validityUntil =
     validUntil ?? proposal?.decisionPack?.validUntil ?? proposal?.expiresAt;
@@ -168,6 +198,44 @@ export function PlanProposalDecisionSheet({
   const isBlocked = proposal?.validation.status === 'BLOCK';
   const hasTripConflictFix = packOptions.some(isTripConflictsOption);
   const dialogOpen = open && proposal != null;
+  const summaryText = sanitizeSplitPlanTextForDisplay(proposal?.diff.summary);
+  const timelineChanges = useMemo(
+    () =>
+      (proposal?.diff.timelineChanges ?? []).map((change) => ({
+        ...change,
+        label: sanitizeSplitPlanTextForDisplay(change.label) || change.label,
+      })),
+    [proposal?.diff.timelineChanges],
+  );
+  const diagnosticGroups = useMemo(
+    () => groupProposalDiagnosticsForDisplay(mergedDiagnostics),
+    [mergedDiagnostics],
+  );
+  const coveredDiagnosticText = useMemo(() => {
+    const set = new Set<string>();
+    for (const group of diagnosticGroups) {
+      for (const item of group.items) {
+        set.add(item.primary.replace(/\s+/g, ' ').trim().toLowerCase());
+      }
+    }
+    return set;
+  }, [diagnosticGroups]);
+  const validationConflicts = useMemo(
+    () =>
+      (proposal?.validation.conflicts ?? []).filter((conflict) => {
+        const msg = (conflict.message ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+        return msg && ![...coveredDiagnosticText].some((d) => d.includes(msg) || msg.includes(d));
+      }),
+    [coveredDiagnosticText, proposal?.validation.conflicts],
+  );
+  const validationWarnings = useMemo(
+    () =>
+      (proposal?.validation.warnings ?? []).filter((warning) => {
+        const msg = warning.replace(/\s+/g, ' ').trim().toLowerCase();
+        return msg && ![...coveredDiagnosticText].some((d) => d.includes(msg) || msg.includes(d));
+      }),
+    [coveredDiagnosticText, proposal?.validation.warnings],
+  );
 
   return (
     <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
@@ -235,6 +303,10 @@ export function PlanProposalDecisionSheet({
             />
           ) : null}
 
+          {showOrtToolsShadow && proposal.ortoolsShadow ? (
+            <OrtToolsPlanningShadowPanel shadow={proposal.ortoolsShadow} />
+          ) : null}
+
           <DiagnosticsSection diagnostics={mergedDiagnostics} />
 
           {aiAnswer ? (
@@ -249,14 +321,16 @@ export function PlanProposalDecisionSheet({
 
           <section>
             <p className="mb-1.5 text-xs font-medium text-foreground">变更摘要</p>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">{proposal.diff.summary}</p>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {summaryText || proposal.diff.summary}
+            </p>
           </section>
 
-          {proposal.diff.timelineChanges.length > 0 ? (
+          {timelineChanges.length > 0 ? (
             <section>
               <p className="mb-1.5 text-xs font-medium text-foreground">时间轴预览</p>
               <ul className="space-y-1.5">
-                {proposal.diff.timelineChanges.map((change, index) => (
+                {timelineChanges.map((change, index) => (
                   <li
                     key={`${change.label}-${index}`}
                     className="rounded-lg border border-border/55 bg-card px-2.5 py-2 text-[11px]"
@@ -285,11 +359,11 @@ export function PlanProposalDecisionSheet({
             </section>
           ) : null}
 
-          {proposal.validation.warnings.length > 0 || proposal.validation.conflicts.length > 0 ? (
+          {validationWarnings.length > 0 || validationConflicts.length > 0 ? (
             <section className={cn(workbenchConflictSurface, 'rounded-xl p-3')}>
               <p className="mb-2 text-xs font-medium text-foreground">校验冲突</p>
               <ul className="space-y-2">
-                {proposal.validation.conflicts.map((conflict, index) => (
+                {validationConflicts.map((conflict, index) => (
                   <li key={`${conflict.kind}-${index}`} className="text-[11px]">
                     <p className="font-medium text-foreground">{conflict.message}</p>
                     {conflict.dayIndex != null ? (
@@ -297,7 +371,7 @@ export function PlanProposalDecisionSheet({
                     ) : null}
                   </li>
                 ))}
-                {proposal.validation.warnings.map((warning, index) => (
+                {validationWarnings.map((warning, index) => (
                   <li key={`warn-${index}`} className="text-[11px] text-muted-foreground">
                     {warning}
                   </li>

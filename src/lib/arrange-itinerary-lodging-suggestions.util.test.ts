@@ -213,7 +213,7 @@ describe('buildLodgingMapPointsFromItinerary', () => {
 });
 
 describe('mergeMapPointsWithLodging', () => {
-  it('deduplicates by point id', () => {
+  it('deduplicates by point id and prefers lodging metadata', () => {
     const base: AttractionExploreMapPoint[] = [
       { id: 'a', name: 'A', lat: 1, lng: 2, kind: 'candidate' },
     ];
@@ -223,7 +223,39 @@ describe('mergeMapPointsWithLodging', () => {
     ];
     const merged = mergeMapPointsWithLodging(base, lodging);
     expect(merged).toHaveLength(2);
-    expect(merged[0]?.name).toBe('A');
+    expect(merged[0]?.kind).toBe('lodging');
     expect(merged[1]?.id).toBe('b');
+  });
+
+  it('deduplicates same hotel from route / lodging / client projection', () => {
+    const base: AttractionExploreMapPoint[] = [
+      { id: 'route-1', name: '雷克雅未克中心酒店', lat: 64.146, lng: -21.94, kind: 'route' },
+      {
+        id: 'api-lodging',
+        placeId: 88,
+        name: '雷克雅未克中心酒店',
+        lat: 64.146,
+        lng: -21.94,
+        kind: 'lodging',
+      },
+    ];
+    const lodging: AttractionExploreMapPoint[] = [
+      {
+        id: 'lodging-booked-h1',
+        placeId: 88,
+        name: '雷克雅未克中心酒店',
+        lat: 64.146,
+        lng: -21.94,
+        kind: 'lodging',
+        dayIndex: 1,
+        lodgingRole: 'overnight',
+        highlighted: true,
+      },
+    ];
+    const merged = mergeMapPointsWithLodging(base, lodging);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.kind).toBe('lodging');
+    expect(merged[0]?.dayIndex).toBe(1);
+    expect(merged[0]?.lodgingRole).toBe('overnight');
   });
 });

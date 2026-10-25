@@ -5,6 +5,11 @@ import {
   type QueueDisplayDecisionProblem,
 } from '@/lib/decision-problem-queue-context.util';
 import { textsSubstantiallyOverlap } from '@/lib/text-dedupe.util';
+import {
+  DECISION_CASE_UI_GROUP_ORDER,
+  decisionCaseUiGroupLabel,
+  resolveProblemUiGroupKey,
+} from '@/lib/normalize-decision-case.util';
 
 const DAY_TITLE_PREFIX_RE = /^第\s*(\d+)\s*天\s*[·・:：\-—]?\s*(.*)$/u;
 const LUNCH_LATE_TITLE_RE = /^预计\s*(.+?)\s*结束于.+[，,]?\s*晚于午餐窗/u;
@@ -189,11 +194,24 @@ function workflowSortScore(item: DecisionProblemSummary): number {
   return 2;
 }
 
-/** 队列排序：enforcement 优先 → 天次 → 待决策工作流 */
+function requirednessSortScore(item: DecisionProblemSummary): number {
+  const requiredness = String(item.decisionCase?.requiredness ?? '')
+    .trim()
+    .toUpperCase();
+  if (requiredness === 'BLOCKING') return 0;
+  if (requiredness === 'IMPORTANT') return 1;
+  if (requiredness === 'OPTIONAL') return 2;
+  return 3;
+}
+
+/** 队列排序：DecisionCase requiredness → enforcement → 天次 → 工作流 */
 export function compareDecisionProblemsForQueue(
   a: DecisionProblemSummary,
   b: DecisionProblemSummary,
 ): number {
+  const requirednessDiff = requirednessSortScore(a) - requirednessSortScore(b);
+  if (requirednessDiff !== 0) return requirednessDiff;
+
   const enforcementDiff = enforcementSortScore(a) - enforcementSortScore(b);
   if (enforcementDiff !== 0) return enforcementDiff;
 
@@ -217,6 +235,65 @@ export function formatQueueRowContextLine(item: QueueDisplayDecisionProblem): st
 export interface QueueDayGroup {
   day: number | null;
   items: QueueDisplayDecisionProblem[];
+}
+
+export interface QueueUiGroupSection {
+  key: 'MUST_CONFIRM' | 'IMPORTANT_CHOICE' | 'WORTH_CONSIDERING' | 'OTHER';
+  label: string;
+  items: QueueDisplayDecisionProblem[];
+}
+
+/** 有 DecisionCase（或可识别 semanticKey）时按 uiGroup 分节 */
+export function groupQueueProblemsForDisplay(
+  items: QueueDisplayDecisionProblem[],
+): QueueUiGroupSection[] {
+  const hasGroupedCase = items.some((item) => resolveProblemUiGroupKey(item) != null);
+  if (!hasGroupedCase) {
+    return [
+      {
+        key: 'OTHER',
+        label: '',
+        items: groupQueueProblemsByDay(items).flatMap((group) => group.items),
+      },
+    ];
+  }
+
+  const buckets: Record<
+    'MUST_CONFIRM' | 'IMPORTANT_CHOICE' | 'WORTH_CONSIDERING' | 'OTHER',
+    QueueDisplayDecisionProblem[]
+  > = {
+    MUST_CONFIRM: [],
+    IMPORTANT_CHOICE: [],
+    WORTH_CONSIDERING: [],
+    OTHER: [],
+  };
+
+  for (const item of items) {
+    const key = resolveProblemUiGroupKey(item);
+    if (key) buckets[key].push(item);
+    else buckets.OTHER.push(item);
+  }
+
+  const sections: QueueUiGroupSection[] = [];
+  for (const key of DECISION_CASE_UI_GROUP_ORDER) {
+    if (!buckets[key].length) continue;
+    const labelOverride = buckets[key]
+      .map((item) => item.decisionCase?.uiGroupLabelZh?.trim())
+      .find(Boolean);
+    sections.push({
+      key,
+      label: decisionCaseUiGroupLabel(key, labelOverride),
+      items: [...buckets[key]].sort(compareDecisionProblemsForQueue),
+    });
+  }
+  if (buckets.OTHER.length) {
+    sections.push({
+      key: 'OTHER',
+      label: '其他',
+      items: [...buckets.OTHER].sort(compareDecisionProblemsForQueue),
+    });
+  }
+  return sections;
 }
 
 /** 问题 > 5 且同日 ≥ 2 时轻分组；否则扁平列表 */

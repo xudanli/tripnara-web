@@ -218,6 +218,17 @@ export function DecisionProblemResolutionSection({
     onResolutionStale: onRefreshDetail,
   });
 
+  /** Must run before any ctaPhase early return — otherwise hook count flips on apply/done. */
+  const hasTradeoffComparison = useMemo(
+    () => options.some((option) => (option.tradeoffs?.length ?? 0) > 0),
+    [options],
+  );
+
+  const fallbackOptionViews = useMemo(
+    () => decisionProposalViewsFromActions(actions, options),
+    [actions, options],
+  );
+
   if (ctaPhase === 'done') {
     const actionTitle = resolveAppliedDecisionActionLabel({
       selectedAction,
@@ -302,16 +313,6 @@ export function DecisionProblemResolutionSection({
     );
   }
 
-  const hasTradeoffComparison = useMemo(
-    () => options.some((option) => (option.tradeoffs?.length ?? 0) > 0),
-    [options],
-  );
-
-  const fallbackOptionViews = useMemo(
-    () => decisionProposalViewsFromActions(actions, options),
-    [actions, options],
-  );
-
   return (
     <div className={cn(compactLayout ? 'space-y-2' : 'space-y-3', className)}>
       {proposalLayout ? (
@@ -320,6 +321,7 @@ export function DecisionProblemResolutionSection({
             tripId={tripId}
             conflictId={conflictId}
             proposalId={proposalId}
+            problemId={problemId}
             basis={inspectorBasis}
             whatHappened={whatHappened}
             guardianWarningHeadline={guardianWarningHeadline}

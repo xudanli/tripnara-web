@@ -8,6 +8,7 @@ import type {
   PlanningDecisionPackOption,
   PlanningProposalMonitorView,
 } from '@/types/planning-decision-pack';
+import type { OrtToolsPlanningShadowAttachment } from '@/types/ortools-shadow';
 
 export type ArrangeItineraryCommitMode = 'proposal' | 'direct';
 
@@ -111,6 +112,11 @@ export interface PlanProposal {
   expiresAt?: string;
   /** P6 · tripnara.planning_decision_pack@v1 */
   decisionPack?: PlanningDecisionPack;
+  /**
+   * OR-Tools Planning Shadow（ADR-008）— 仅观测。
+   * Apply 仍只认 `changes`；禁止用 shadowChanges 写回。
+   */
+  ortoolsShadow?: OrtToolsPlanningShadowAttachment;
 }
 
 export interface ArrangeItinerarySuggestedAction {

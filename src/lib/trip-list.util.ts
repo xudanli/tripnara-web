@@ -4,12 +4,16 @@ import type { TripListCardDto, TripListSummaryDto } from '@/types/trip-list';
 import { resolveTripPlanningAvailability } from '@/lib/trip-content-mode';
 import { readTripCoverConfig } from '@/lib/trip-cover.util';
 import { resolveDestinationCoverImageUrl } from '@/lib/destination-cover.util';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 
 export type TripListDisplayStatus = 'planning' | 'pre_trip' | 'traveling' | 'completed' | 'cancelled';
 
 export interface TripListCardMetrics {
   hasRealProgress: boolean;
   progressPercent: number | null;
+  /** 整体准备度；优先于 progressPercent */
+  readinessScore: number | null;
+  readinessStateLabelZh: string | null;
   feasibilityScore: number | null;
   feasibilityLabel: string;
   feasibilityTone: 'verified' | 'confirm' | 'neutral';
@@ -163,13 +167,9 @@ export function resolveTripListTitle(
   trip: TripListItem,
   countryName: string,
 ): string {
-  if (trip.name?.trim()) return trip.name.trim();
-  const destinationLabel = (trip as TripListCardDto).destinationLabel;
-  const label = destinationLabel?.trim() || countryName;
-  if (trip.destination && trip.startDate) {
-    return `${label} ${format(new Date(trip.startDate), 'yyyy-MM-dd')}`;
-  }
-  return label || '未命名行程';
+  const destinationLabel =
+    (trip as TripListCardDto).destinationLabel?.trim() || countryName;
+  return formatTripDisplayTitle(trip, { destinationLabel });
 }
 
 function resolveFeasibilityLabel(score: number): {
@@ -185,9 +185,9 @@ export function resolveTripListCardMetrics(trip: TripListItem): TripListCardMetr
   const summary = getTripListSummary(trip);
   const meta = readMeta(trip);
   const memberCount = resolveTripMemberCount(trip);
-  const dayCount = resolveTripDurationDays(trip);
 
   if (summary) {
+    const readinessScore = readNumber(summary.readinessScore);
     const progressFromSummary = readNumber(summary.progressPercent);
     const feasibilityScore = readNumber(summary.feasibilityScore);
     let feasibilityLabel = summary.feasibilityLabel?.trim() || '—';
@@ -202,12 +202,17 @@ export function resolveTripListCardMetrics(trip: TripListItem): TripListCardMetr
       readNumber(summary.budgetPerPerson) ??
       (trip.totalBudget > 0 && memberCount > 0 ? Math.round(trip.totalBudget / memberCount) : null);
 
+    /** 有 readinessScore 用准备度；否则仅用真实 progressPercent，禁止密度启发式假分 */
+    const hasReadiness = readinessScore != null;
     return {
-      hasRealProgress: progressFromSummary != null,
+      hasRealProgress: hasReadiness || progressFromSummary != null,
       progressPercent:
         progressFromSummary != null
           ? Math.max(0, Math.min(100, Math.round(progressFromSummary)))
           : null,
+      readinessScore:
+        readinessScore != null ? Math.max(0, Math.min(100, Math.round(readinessScore))) : null,
+      readinessStateLabelZh: summary.readinessStateLabelZh?.trim() || null,
       feasibilityScore,
       feasibilityLabel,
       feasibilityTone,
@@ -218,17 +223,11 @@ export function resolveTripListCardMetrics(trip: TripListItem): TripListCardMetr
     };
   }
 
+  const readinessFromMeta = readNumber(meta.readinessScore);
   const progressFromMeta = readNumber(meta.progressPercent ?? meta.planningProgress ?? meta.progress);
-  let progressPercent: number | null = progressFromMeta;
-  let hasRealProgress = progressFromMeta != null;
-
-  if (progressPercent == null) {
-    const totalItems = readNumber(meta.totalItems ?? meta.itemCount);
-    if (totalItems != null && dayCount > 0) {
-      progressPercent = Math.min(100, Math.round((totalItems / Math.max(dayCount * 3, 1)) * 100));
-      hasRealProgress = true;
-    }
-  }
+  const progressPercent =
+    progressFromMeta != null ? Math.max(0, Math.min(100, Math.round(progressFromMeta))) : null;
+  const hasRealProgress = readinessFromMeta != null || progressPercent != null;
 
   const feasibilityScore = readNumber(meta.feasibilityScore ?? meta.healthScore ?? meta.overallScore);
 
@@ -248,8 +247,11 @@ export function resolveTripListCardMetrics(trip: TripListItem): TripListCardMetr
 
   return {
     hasRealProgress,
-    progressPercent:
-      progressPercent != null ? Math.max(0, Math.min(100, Math.round(progressPercent))) : null,
+    progressPercent,
+    readinessScore:
+      readinessFromMeta != null ? Math.max(0, Math.min(100, Math.round(readinessFromMeta))) : null,
+    readinessStateLabelZh:
+      typeof meta.readinessStateLabelZh === 'string' ? meta.readinessStateLabelZh : null,
     feasibilityScore,
     feasibilityLabel,
     feasibilityTone,

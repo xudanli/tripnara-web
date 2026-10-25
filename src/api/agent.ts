@@ -1321,6 +1321,8 @@ export interface RouteAndRunResponse {
       safetySurface?: Record<string, unknown>;
       /** P1.1：SUCCESS 但未完全 VERIFIED 的瑕疵草案描述 */
       flawed_draft_v1?: import('@/types/flawed-draft').FlawedDraftDescriptorV1;
+      /** 可信交付面：公共进度 / 确认 / 降级 / 瑕疵披露 / AI 操作日志 */
+      trusted_delivery_v1?: import('@/types/trusted-delivery').TrustedDeliveryV1;
       [key: string]: any;
     };
   };

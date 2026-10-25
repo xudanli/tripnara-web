@@ -11,6 +11,7 @@ import {
   resolvePackOptionActionId,
 } from '@/lib/decision-proposal-option-view.util';
 import { useDecisionBasis } from '@/components/plan-studio/workbench/arrange-itinerary/useDecisionBasis';
+import { isBufferLikeDecisionBasisNarrative } from '@/lib/decision-case-presentation.util';
 import { DecisionBasisMetricsGrid } from './DecisionBasisMetricsGrid';
 import { DecisionProposalOptionsRow } from './DecisionProposalOptionsRow';
 import { DecisionWhatHappenedBanner } from './DecisionWhatHappenedBanner';
@@ -20,6 +21,7 @@ export interface DecisionExecutionProposalPanelProps {
   tripId?: string;
   conflictId?: string | null;
   proposalId?: string | null;
+  problemId?: string | null;
   /** 父级预取 basis 时传入，跳过内部 fetch */
   basis?: PlanningDecisionBasis | null;
   /** 客户端兜底 — BFF 无数据时使用 */
@@ -50,6 +52,7 @@ export function DecisionExecutionProposalPanel({
   tripId,
   conflictId,
   proposalId,
+  problemId,
   basis: basisProp,
   whatHappened,
   whatHappenedTitle,
@@ -66,13 +69,15 @@ export function DecisionExecutionProposalPanel({
   compact = false,
   className,
 }: DecisionExecutionProposalPanelProps) {
+  const hasClientFallback = Boolean(whatHappened?.trim() && basisFacts.length > 0);
   const shouldFetch =
     Boolean(tripId) &&
     basisProp === undefined &&
-    !(whatHappened?.trim() && basisFacts.length > 0);
+    !hasClientFallback &&
+    Boolean(conflictId || proposalId || problemId);
   const basisQuery = useDecisionBasis(
     tripId ?? '',
-    { conflictId, proposalId },
+    { conflictId, proposalId, problemId },
     shouldFetch,
   );
 
@@ -96,16 +101,27 @@ export function DecisionExecutionProposalPanel({
   };
 
   const basis = basisProp ?? basisQuery.data ?? null;
-  const usingBffFields = (basis?.contextFields?.length ?? 0) > 0;
+  const basisNarrative = basis?.whatHappened?.narrative?.trim() ?? '';
+  const basisFieldBlob = (basis?.contextFields ?? [])
+    .map((field) => `${field.label ?? ''} ${field.value ?? ''}`)
+    .join(' ');
+  // 有客户端兜底时，丢弃错挂的通行缓冲 basis（保险/车型等 DecisionCase）
+  const discardBufferBasis =
+    hasClientFallback &&
+    (isBufferLikeDecisionBasisNarrative(basisNarrative) ||
+      isBufferLikeDecisionBasisNarrative(basisFieldBlob));
+  const resolvedBasis = discardBufferBasis ? null : basis;
+  const usingBffFields = (resolvedBasis?.contextFields?.length ?? 0) > 0;
   const narrative =
-    basis?.whatHappened.narrative?.trim() ||
+    resolvedBasis?.whatHappened?.narrative?.trim() ||
     whatHappened?.trim() ||
     '';
-  const headline = basis?.whatHappened.headline?.trim() || whatHappenedTitle || '发生了什么？';
-  const contextFields = basis?.contextFields ?? [];
-  const optionCount = basis?.optionCount ?? optionViews.length;
+  const headline =
+    resolvedBasis?.whatHappened?.headline?.trim() || whatHappenedTitle || '发生了什么？';
+  const contextFields = resolvedBasis?.contextFields ?? [];
+  const optionCount = resolvedBasis?.optionCount ?? optionViews.length;
   const dataValidUntilLabel =
-    formatEvidenceFreshness(basis?.dataValidUntil) ?? basis?.dataValidUntil;
+    formatEvidenceFreshness(resolvedBasis?.dataValidUntil) ?? resolvedBasis?.dataValidUntil;
 
   const showWhatHappenedBanner = Boolean(narrative);
   const showProposalCards = optionViews.length > 0 || (optionCount ?? 0) > 0;
@@ -131,7 +147,7 @@ export function DecisionExecutionProposalPanel({
         facts={usingBffFields ? [] : basisFacts}
         subtitle={basisSubtitle}
         dataValidUntil={dataValidUntilLabel}
-        updatedAt={basis?.updatedAt}
+        updatedAt={resolvedBasis?.updatedAt}
         optionCount={optionCount}
         basisLoading={basisMetricsLoading}
         basisFetching={basisQuery.isFetching}

@@ -2,7 +2,6 @@ import apiClient from './client';
 import { CONFIG } from '@/constants/config';
 import {
   normalizeAiActionResponse,
-  normalizeAutoArrangeResponse,
   normalizeCopilotActionResponse,
   normalizeCopilotSuggestions,
   normalizeItemMutationResponse,
@@ -266,11 +265,12 @@ export const arrangeItineraryApi = {
 
   getDecisionBasis: async (
     tripId: string,
-    params?: { conflictId?: string; proposalId?: string },
+    params?: { conflictId?: string; proposalId?: string; problemId?: string },
   ): Promise<import('@/dto/frontend-planning-decision-basis.types').PlanningDecisionBasis> => {
     const search = new URLSearchParams();
     if (params?.conflictId) search.set('conflictId', params.conflictId);
     if (params?.proposalId) search.set('proposalId', params.proposalId);
+    if (params?.problemId) search.set('problemId', params.problemId);
     const query = search.toString();
     const data = normalizePlanningDecisionBasis(
       await getJson<unknown>(
@@ -281,6 +281,7 @@ export const arrangeItineraryApi = {
     logIntegration('GET decision-basis', {
       conflictId: params?.conflictId,
       proposalId: params?.proposalId,
+      problemId: params?.problemId,
       fieldCount: data.contextFields.length,
       optionCount: data.optionCount,
     });
@@ -371,20 +372,24 @@ export const arrangeItineraryApi = {
     return data;
   },
 
+  /**
+   * 自动编排 — POST .../arrange-itinerary/proposals intent=AUTO_ARRANGE
+   * body: { intent, payload: { candidateIds } }（也兼容顶层 candidateIds）
+   * 空 candidateIds → 后端编排全部探索候选
+   */
   autoArrange: async (
     tripId: string,
     payload: ArrangeItineraryAutoArrangeRequest = {},
   ): Promise<ArrangeItineraryAutoArrangeResult> => {
-    const data = normalizeAutoArrangeResponse(
-      await postJson<unknown>(
-        `${tripBase(tripId)}/attraction-explore/auto-arrange`,
-        {
-          ...payload,
-          commitMode: payload.commitMode ?? 'direct',
-        },
-      ),
-    );
-    logIntegration('POST auto-arrange', payload);
+    const candidateIds = Array.isArray(payload?.candidateIds)
+      ? payload.candidateIds.map(String).filter(Boolean)
+      : [];
+    const body: ArrangeItineraryCreateProposalRequest = {
+      intent: 'AUTO_ARRANGE',
+      payload: { candidateIds },
+    };
+    const data = await arrangeItineraryApi.createProposal(tripId, body);
+    logIntegration('POST proposals AUTO_ARRANGE', body);
     return data;
   },
 

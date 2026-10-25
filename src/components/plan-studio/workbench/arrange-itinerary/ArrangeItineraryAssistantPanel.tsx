@@ -26,11 +26,8 @@ export interface ArrangeItineraryAssistantPanelProps {
   mapSyncEnabled?: boolean;
   aiPending?: boolean;
   aiAnswer?: string | null;
-  placePending?: boolean;
   onViewMap?: () => void;
   onAiAction?: (action: ArrangeItineraryAiAction) => void;
-  onPlaceMapPoint?: (point: AttractionExploreMapPoint) => void;
-  mapPlacePending?: boolean;
   copilotEnabled?: boolean;
   lodgingIncomplete?: boolean;
   className?: string;
@@ -43,11 +40,8 @@ export function ArrangeItineraryAssistantPanel({
   mapSyncEnabled = true,
   aiPending = false,
   aiAnswer,
-  placePending = false,
   onViewMap,
   onAiAction,
-  onPlaceMapPoint,
-  mapPlacePending = false,
   copilotEnabled = true,
   lodgingIncomplete = false,
   className,
@@ -126,18 +120,6 @@ export function ArrangeItineraryAssistantPanel({
                             ? ` · ${formatDetourMethodLabel(point.insertHint.detourMethod)}`
                             : ''}
                         </p>
-                      ) : null}
-                      {onPlaceMapPoint && point.kind === 'candidate' && point.placeId != null ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="mt-1.5 h-6 px-2 text-[10px]"
-                          disabled={mapPlacePending || placePending}
-                          onClick={() => onPlaceMapPoint(point)}
-                        >
-                          地图插入
-                        </Button>
                       ) : null}
                     </div>
                   </div>

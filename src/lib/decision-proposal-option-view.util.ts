@@ -10,6 +10,7 @@ import {
 import { buildDecisionSpaceResultLayersFromAction } from '@/lib/decision-space-result-card.util';
 import { resultLayersFromPlanningOption } from '@/lib/planning-decision-pack.adapter';
 import { decisionActionDisplayTitle } from '@/lib/decision-action-display.util';
+import { sanitizeSplitPlanTextForDisplay } from '@/lib/itinerary-split-note.util';
 import type { DecisionOption } from '@/types/decision-problem';
 import type { DecisionAction } from '@/generated/unified-decision-contracts';
 
@@ -111,15 +112,35 @@ function dataBasisFromPackOption(option: PlanningDecisionPackOption): DecisionPr
   return [];
 }
 
+function sanitizeProposalText(text?: string | null): string | undefined {
+  if (text == null) return undefined;
+  const next = sanitizeSplitPlanTextForDisplay(text);
+  return next || undefined;
+}
+
+function sanitizeStructuredItems(
+  items: DecisionProposalStructuredItem[],
+): DecisionProposalStructuredItem[] {
+  return items
+    .map((item) => ({
+      ...item,
+      text: sanitizeSplitPlanTextForDisplay(item.text),
+    }))
+    .filter((item) => item.text.trim().length > 0);
+}
+
 export function decisionProposalViewFromPackOption(
   option: PlanningDecisionPackOption,
   index: number,
 ): DecisionProposalOptionView {
   const layers = resultLayersFromPlanningOption(option);
   const recommended = Boolean(option.recommended);
-  const outcomeItems = resolveOptionOutcomeItems(option);
-  const costItems = resolveOptionCostItems(option);
-  const dataBasis = dataBasisFromPackOption(option);
+  const outcomeItems = sanitizeStructuredItems(resolveOptionOutcomeItems(option));
+  const costItems = sanitizeStructuredItems(resolveOptionCostItems(option));
+  const dataBasis = dataBasisFromPackOption(option).map((item) => ({
+    ...item,
+    label: sanitizeSplitPlanTextForDisplay(item.label) || item.label,
+  }));
 
   return {
     id: option.id,
@@ -128,14 +149,17 @@ export function decisionProposalViewFromPackOption(
     tone: toneFromOptionKind(option.optionKind, recommended),
     recommended,
     kindLabel: optionKindLabel(option.optionKind),
-    title: getOptionDisplayTitle(option),
-    description: option.description?.trim() || option.systemJudgment,
+    title: sanitizeProposalText(getOptionDisplayTitle(option)) || getOptionDisplayTitle(option),
+    description: sanitizeProposalText(option.description?.trim() || option.systemJudgment),
     outcomeItems,
     costItems,
     dataBasis,
     outcomes: outcomeItems.map((item) => item.text),
     costs: costItems.map((item) => item.text),
-    impactScope: parseImpactScopeChips(layers.impactScope, option.optionKind),
+    impactScope: parseImpactScopeChips(
+      layers.impactScope.map((line) => sanitizeSplitPlanTextForDisplay(line)),
+      option.optionKind,
+    ),
   };
 }
 

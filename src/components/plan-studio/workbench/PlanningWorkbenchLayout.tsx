@@ -10,6 +10,8 @@ export interface PlanningWorkbenchLayoutProps {
   decisionChecker: ReactNode;
   /** 决策空间：三栏固定视口高度，列内独立滚动 */
   decisionSpaceMode?: boolean;
+  /** 决策空间选型案：隐藏右栏决策检查器，中栏拉满 */
+  hideDecisionChecker?: boolean;
   /** xl 以下：结论条（固定在列导航上方） */
   conclusionStrip?: ReactNode;
   /** xl 以下：列导航 + 单列内容 */
@@ -31,9 +33,11 @@ export function PlanningWorkbenchLayout({
   mobileColumnNav,
   mobileSummary,
   decisionSpaceMode = false,
+  hideDecisionChecker = false,
   className,
 }: PlanningWorkbenchLayoutProps) {
   const isMobileLayout = mobileColumn != null;
+  const showCheckerColumn = !hideDecisionChecker;
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col', workbenchShell, className)}>
@@ -75,16 +79,18 @@ export function PlanningWorkbenchLayout({
             >
               {itinerary}
             </main>
-            <aside
-              className={cn(
-                'absolute inset-0 flex min-h-0 flex-col overflow-hidden',
-                workbenchColumnSurface,
-                mobileColumn !== 'decision' && 'hidden',
-              )}
-              aria-hidden={mobileColumn !== 'decision'}
-            >
-              {decisionChecker}
-            </aside>
+            {showCheckerColumn ? (
+              <aside
+                className={cn(
+                  'absolute inset-0 flex min-h-0 flex-col overflow-hidden',
+                  workbenchColumnSurface,
+                  mobileColumn !== 'decision' && 'hidden',
+                )}
+                aria-hidden={mobileColumn !== 'decision'}
+              >
+                {decisionChecker}
+              </aside>
+            ) : null}
           </div>
         </>
       ) : (
@@ -92,7 +98,9 @@ export function PlanningWorkbenchLayout({
           className={cn(
             'grid min-h-0 flex-1 grid-cols-1',
             decisionSpaceMode
-              ? 'xl:grid-cols-[minmax(220px,18%)_minmax(0,1fr)_minmax(260px,26%)]'
+              ? showCheckerColumn
+                ? 'xl:grid-cols-[minmax(220px,18%)_minmax(0,1fr)_minmax(260px,26%)]'
+                : 'xl:grid-cols-[minmax(220px,20%)_minmax(0,1fr)]'
               : 'xl:grid-cols-[minmax(240px,16%)_minmax(0,1fr)_minmax(280px,27%)]',
           )}
         >
@@ -109,15 +117,18 @@ export function PlanningWorkbenchLayout({
           </aside>
           <main
             className={cn(
-              'min-h-0 overflow-hidden border-b border-border/60 xl:border-b-0 xl:border-r',
+              'min-h-0 overflow-hidden border-b border-border/60 xl:border-b-0',
+              showCheckerColumn && 'xl:border-r',
               workbenchColumnSurface,
             )}
           >
             {itinerary}
           </main>
-          <aside className={cn('flex h-full min-h-0 flex-col overflow-hidden', workbenchColumnSurface)}>
-            {decisionChecker}
-          </aside>
+          {showCheckerColumn ? (
+            <aside className={cn('flex h-full min-h-0 flex-col overflow-hidden', workbenchColumnSurface)}>
+              {decisionChecker}
+            </aside>
+          ) : null}
         </div>
       )}
     </div>

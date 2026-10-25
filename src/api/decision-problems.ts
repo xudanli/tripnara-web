@@ -75,6 +75,22 @@ import {
 import { normalizeCausalTraceReplayView } from '@/lib/causal-trace-view.util';
 import type { CausalTraceReplayView } from '@/types/causal-trace';
 import { normalizeCausalTraceReference } from '@/lib/causal-trace-view.util';
+import { normalizeDecisionCaseMeta } from '@/lib/normalize-decision-case.util';
+
+function normalizeLegacyDecisionProblemList(
+  data: DecisionProblemListResponse,
+): DecisionProblemListResponse {
+  return {
+    ...data,
+    items: (data.items ?? []).map((item) => {
+      const decisionCase =
+        normalizeDecisionCaseMeta(
+          item.decisionCase ?? (item as { decision_case?: unknown }).decision_case,
+        ) ?? item.decisionCase;
+      return decisionCase ? { ...item, decisionCase } : item;
+    }),
+  };
+}
 
 interface SuccessResponse<T> {
   success: true;
@@ -161,7 +177,7 @@ export const decisionProblemsApi = {
         items: mapUnifiedDecisionProblemList(data),
       };
     }
-    return data as DecisionProblemListResponse;
+    return normalizeLegacyDecisionProblemList(data as DecisionProblemListResponse);
   },
 
   /** GET /trips/:tripId/decision-problems — Gateway 统一列表（带 meta.canonicalCount） */

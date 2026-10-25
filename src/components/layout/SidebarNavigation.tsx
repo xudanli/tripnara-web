@@ -151,7 +151,7 @@ export default function SidebarNavigation({
     <aside
       className={cn(
         'bg-white border-r border-gray-200 flex flex-col h-full',
-        collapsed && 'w-16',
+        collapsed && 'w-[54px]',
         !collapsed && 'w-64',
         className
       )}

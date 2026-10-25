@@ -144,38 +144,50 @@ export function isOvernightStayDisplayItem(
 }
 
 /**
- * 跨夜住宿挂在「退房日」API 列表时，整卡应在前一日时间轴展示。
+ * 跨夜住宿挂在「退房日」API 列表时，整卡应在前一日（入住当晚）时间轴展示。
+ * 若本身已挂在入住日，不得再往前挪一天（否则 16 号入住会出现在 15 号时间轴）。
  */
 export function shouldRelocateOvernightToPriorDay(
   item: CrossDayReadable,
   dayItems: ItineraryItemSortFields[],
   dayIndex?: number,
+  dayDate?: string,
 ): boolean {
   // 行程第一天无法挪到前一天，必须在本日时间轴展示
   if (dayIndex === 0) return false;
   // 仅住宿跨夜才承接至前一日；租车/交通跨天仍留在各自当天
   if (!isAccommodationItineraryItem(item)) return false;
 
-  if (!isOvernightStayDisplayItem(item, dayItems)) return false;
-  if (isCheckoutItem(item)) return true;
-  if (getDisplaySortIndex(item) === 0 && dayItems[0]?.id === item.id) return true;
-  const cross = readCrossDayInfo(item);
-  if (
-    cross?.isCrossDay &&
-    (cross.displayMode === 'checkin' || cross.displayMode === 'checkout')
-  ) {
-    return true;
+  const dayNorm = dayDate ? normalizeTripDayDate(dayDate) : undefined;
+  const checkInDate = item.startTime
+    ? DateTime.fromISO(item.startTime).toISODate()
+    : null;
+
+  // 入住日当晚：留在当日时间轴（通常在日末），不要挪到前一天
+  if (checkInDate && dayNorm && checkInDate === dayNorm) {
+    return false;
   }
-  return isHotelItem(item) && itemSpansOvernight(item);
+
+  // 当前日晚于入住日：说明条目挂在退房晨所在日 → 整卡挪回入住当晚
+  if (checkInDate && dayNorm && checkInDate < dayNorm) {
+    if (isCheckoutItem(item)) return true;
+    if (isOvernightStayDisplayItem(item, dayItems) || itemSpansOvernight(item)) return true;
+    return false;
+  }
+
+  // 无可靠起止日期时：只挪明确退房行，避免误伤入住当晚
+  if (isCheckoutItem(item)) return true;
+  return false;
 }
 
 /** 退房日时间轴：不展示将挪到前一天的跨夜住宿整卡 */
 export function filterCheckoutDayTimelineItems<T extends ItineraryItemSortFields>(
   items: T[],
   dayIndex?: number,
+  dayDate?: string,
 ): T[] {
   return items.filter(
-    (item) => !shouldRelocateOvernightToPriorDay(item, items, dayIndex),
+    (item) => !shouldRelocateOvernightToPriorDay(item, items, dayIndex, dayDate),
   );
 }
 
@@ -183,9 +195,10 @@ export function filterCheckoutDayTimelineItems<T extends ItineraryItemSortFields
 export function getOvernightItemsForPriorDayTimeline<T extends ItineraryItemSortFields>(
   nextDayItems: T[],
   nextDayIndex?: number,
+  nextDayDate?: string,
 ): T[] {
   return nextDayItems.filter((item) =>
-    shouldRelocateOvernightToPriorDay(item, nextDayItems, nextDayIndex),
+    shouldRelocateOvernightToPriorDay(item, nextDayItems, nextDayIndex, nextDayDate),
   );
 }
 

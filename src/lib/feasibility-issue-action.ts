@@ -234,6 +234,20 @@ export function resolveFeasibilityIssueActionTarget(
   }
 
   if (
+    issue.issueKind === 'product_session_time_window' ||
+    issue.issueKind === 'meeting_point_buffer' ||
+    issue.issueKind === 'product_participant_eligibility' ||
+    issue.issueKind === 'product_weather_dependency'
+  ) {
+    return {
+      surface: 'schedule_edit',
+      label: '去时间轴调整产品',
+      href: scheduleHref(tripId, issue),
+      categoryFilter: issue.category,
+    };
+  }
+
+  if (
     issue.issueKind === 'inter_day_travel' ||
     issue.issueKind === 'same_day_travel' ||
     issue.category === 'transport' ||

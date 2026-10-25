@@ -5,7 +5,8 @@ import { DateTime } from 'luxon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Clock, Wrench, Info, MoreVertical, MapPin, Star, ChevronDown, ChevronUp, ExternalLink, Compass, Pencil, RefreshCw, Trash2, Lock, Utensils, Hotel, Coffee, Fuel } from 'lucide-react';
-import type { ItineraryItem, BookingStatus } from '@/types/trip';
+import type { ItineraryItem } from '@/types/trip';
+import { BOOKING_STATUS_LABELS } from '@/lib/itinerary-booking-display.util';
 import type { PersonaMode } from '@/components/common/PersonaModeToggle';
 import type { PlaceImageInfo } from '@/types/place-image';
 import type { PlaceCategory } from '@/types/places-routes';
@@ -97,13 +98,6 @@ interface ItineraryItemRowProps {
   /** 体验兑现 — 双层灵感卡（来自 itineraryPresentation） */
   presentation?: PresentedItineraryItem | null;
 }
-
-// 预订状态标签映射
-const bookingStatusLabels: Record<BookingStatus, { label: string; color: string; icon: string }> = {
-  BOOKED: { label: '已预订', color: 'bg-muted text-success border-border', icon: '✅' },
-  NEED_BOOKING: { label: '待预订', color: 'bg-muted text-warning border-border', icon: '📅' },
-  NO_BOOKING: { label: '无需预订', color: 'bg-gray-50 text-gray-600 border-gray-200', icon: '✓' },
-};
 
 export default function ItineraryItemRow({
   item,
@@ -969,16 +963,16 @@ export default function ItineraryItemRow({
                   <TooltipTrigger asChild>
                     <Badge 
                       variant="outline" 
-                      className={cn("text-xs cursor-pointer", bookingStatusLabels[item.bookingStatus]?.color)}
+                      className={cn("text-xs cursor-pointer", BOOKING_STATUS_LABELS[item.bookingStatus]?.color)}
                     >
                       {/* ✅ 确保所有值都是字符串，避免渲染对象 */}
-                      {bookingStatusLabels[item.bookingStatus]?.icon || ''} {bookingStatusLabels[item.bookingStatus]?.label || String(item.bookingStatus || '')}
+                      {BOOKING_STATUS_LABELS[item.bookingStatus]?.icon || ''} {BOOKING_STATUS_LABELS[item.bookingStatus]?.label || String(item.bookingStatus || '')}
                       {item.bookingConfirmation && typeof item.bookingConfirmation === 'string' ? ` · ${item.bookingConfirmation}` : ''}
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs">
                     <div className="space-y-1 text-xs">
-                      <div>状态: {bookingStatusLabels[item.bookingStatus]?.label}</div>
+                      <div>状态: {BOOKING_STATUS_LABELS[item.bookingStatus]?.label}</div>
                       {item.bookingConfirmation && <div>确认号: {item.bookingConfirmation}</div>}
                       {item.bookedAt && <div>预订时间: {format(new Date(item.bookedAt), 'yyyy-MM-dd HH:mm')}</div>}
                       {item.bookingUrl && (

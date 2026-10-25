@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/utils/format';
 import type { PlanGateInputsSummary } from '@/hooks/usePlanGateFlow';
 import type { TripDetail } from '@/types/trip';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 import { planGateCard, planGatePrimaryButton, planGateSectionTitle } from '../plan-gate-ui';
 
 export interface PlanGateEmptyStepProps {
@@ -88,7 +89,7 @@ export function PlanGateEmptyStep({
       <div className="flex flex-col items-center gap-2">
         {trip ? (
           <p className="text-center text-xs text-muted-foreground">
-            {trip.destination || '未设置目的地'} · {trip.TripDay?.length ?? 0} 天行程
+            {formatTripDisplayTitle(trip)}
           </p>
         ) : null}
         <Button

@@ -9,6 +9,14 @@ import { EnhancedAddItineraryItemDialog } from '@/components/trips/EnhancedAddIt
 import type { Collaborator, ItineraryItemDetail, TripDetail } from '@/types/trip';
 import type { PlanningConflictItem } from '@/lib/planning-conflicts.util';
 import { useWorldModelGuards } from '@/hooks/useWorldModelGuards';
+import { extractHmFromWindow } from '@/lib/itinerary-item-card-format';
+import { mergeSplitPlanNoteIntoNote } from '@/lib/itinerary-split-note.util';
+import {
+  buildManualSplitMarker,
+  nextSplitLetter,
+  remainingMemberIds,
+  resolveTripMemberOptions,
+} from '@/lib/itinerary-split-participants.util';
 import { resolveDestinationTimezone } from '@/utils/timezone';
 import { isArrangeProposalWriteResponse } from '@/types/arrange-itinerary';
 import { useAssistantSidebar } from '@/contexts/AssistantSidebarContext';
@@ -26,20 +34,21 @@ import type {
   CopilotSuggestion,
 } from '@/types/arrange-itinerary';
 import { ArrangeItineraryAddItemDialog } from './ArrangeItineraryAddItemDialog';
+import type { ArrangeItineraryAddItemSubmitPayload } from './ArrangeItineraryAddItemDialog';
+import { extractCountryCodeFromDestination } from '@/lib/planning-assistant-v2-context';
 import { ArrangeItineraryAddLodgingSheet } from './ArrangeItineraryAddLodgingSheet';
+import { ArrangeItineraryPlaceCandidateDialog } from './ArrangeItineraryPlaceCandidateDialog';
 import { ArrangeItineraryRightPanel } from './ArrangeItineraryRightPanel';
 import { ArrangeItineraryCompletionBanner } from './ArrangeItineraryCompletionBanner';
 import { ArrangeItineraryContextPanel } from './ArrangeItineraryContextPanel';
 import { ArrangeItineraryInsertGapDialog } from './ArrangeItineraryInsertGapDialog';
 import { ArrangeItineraryMoveItemDialog } from './ArrangeItineraryMoveItemDialog';
 import { PlanProposalDecisionSheet } from './PlanProposalDecisionSheet';
-import { AttractionExploreMapPlaceSuggestionsDialog } from '../attraction-explore/AttractionExploreMapPlaceSuggestionsDialog';
 import { ArrangeItineraryTimelinePanel } from './ArrangeItineraryTimelinePanel';
 import { ArrangeItineraryToolbar } from './ArrangeItineraryToolbar';
 import { WorkbenchDeleteItineraryEntryDialog } from '../WorkbenchDeleteItineraryEntryDialog';
 import { useArrangeItinerary } from './useArrangeItinerary';
 import type { ArrangeItineraryAiAction } from './types';
-import type { AttractionExploreMapPoint } from '@/types/attraction-explore';
 import {
   workbenchArrangeItineraryColumnSurface,
   workbenchColumnSurface,
@@ -61,6 +70,8 @@ export interface PlanningWorkbenchArrangeItineraryProps {
   onOpenAttractionExplore?: () => void;
   onOpenItineraryDiagnosis?: () => void;
   onOpenConstraints?: () => void;
+  /** 打开决策空间并定位到指定冲突 */
+  onOpenDecisionSpace?: (context?: { conflictId?: string; dayIndex?: number }) => void;
   conflictMustHandleCount?: number;
   tepFlexibilityEnabled?: boolean;
   className?: string;
@@ -93,6 +104,7 @@ export function PlanningWorkbenchArrangeItinerary({
   onOpenAttractionExplore,
   onOpenItineraryDiagnosis,
   onOpenConstraints,
+  onOpenDecisionSpace,
   conflictMustHandleCount = 0,
   tepFlexibilityEnabled = false,
   className,
@@ -103,6 +115,17 @@ export function PlanningWorkbenchArrangeItinerary({
   const [editingItem, setEditingItem] = useState<ItineraryItemDetail | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addDialogDayIndex, setAddDialogDayIndex] = useState<number | null>(null);
+  const [placeCandidateId, setPlaceCandidateId] = useState<string | null>(null);
+  const [productAddPending, setProductAddPending] = useState(false);
+  const [parallelDialog, setParallelDialog] = useState<{
+    dayIndex: number;
+    startTime: string;
+    endTime: string;
+    remainingIds: string[];
+    letter: string;
+    splitPlanId?: string;
+    remainingCount: number;
+  } | null>(null);
   const [lodgingSheetDayIndex, setLodgingSheetDayIndex] = useState<number | null>(null);
   const [lodgingSearchDayIndex, setLodgingSearchDayIndex] = useState<number | null>(null);
   const [gapDialogDayIndex, setGapDialogDayIndex] = useState<number | null>(null);
@@ -126,6 +149,16 @@ export function PlanningWorkbenchArrangeItinerary({
     lodgingSheetDayIndex != null ? lodgingNightByDayIndex.get(lodgingSheetDayIndex) ?? null : null;
   const lodgingSearchDay =
     lodgingSearchDayIndex != null ? trip?.TripDay?.[lodgingSearchDayIndex] ?? null : null;
+  const memberOptions = useMemo(
+    () => resolveTripMemberOptions(collaborators),
+    [collaborators],
+  );
+  const memberLabelById = useMemo(
+    () => new Map(memberOptions.map((m) => [m.id, m.label])),
+    [memberOptions],
+  );
+  const memberCount = memberOptions.length;
+
   const lodgingIncomplete =
     arrange.lodgingCoverage.totalNights > 0 && !arrange.lodgingCoverage.isComplete;
 
@@ -266,9 +299,28 @@ export function PlanningWorkbenchArrangeItinerary({
     }
   };
 
-  const handlePlaceCandidate = async (candidateId: string, dayIndex = arrange.selectedDayIndex) => {
+  const handlePlaceCandidate = (candidateId: string) => {
+    setPlaceCandidateId(candidateId);
+  };
+
+  const placeCandidateForDialog = useMemo(
+    () => arrange.candidates.find((item) => item.id === placeCandidateId) ?? null,
+    [arrange.candidates, placeCandidateId],
+  );
+
+  const handleConfirmPlaceCandidate = async (payload: {
+    dayIndex: number;
+    startTime: string;
+    endTime: string;
+  }) => {
+    if (!placeCandidateId) return;
     try {
-      const result = await arrange.placeCandidate(candidateId, dayIndex);
+      const result = await arrange.placeCandidate(placeCandidateId, payload.dayIndex, {
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        commitMode: 'direct',
+      });
+      setPlaceCandidateId(null);
       notifyWriteResult(result, '已加入日程');
     } catch (error) {
       toast.error(resolveApiError(error, '加入日程失败'));
@@ -299,47 +351,201 @@ export function PlanningWorkbenchArrangeItinerary({
     }
   };
 
+  const handleOpenConflict = useCallback(
+    (conflictId: string, dayIndex: number) => {
+      const isSynthetic =
+        conflictId === 'drive-over-limit' || conflictId.startsWith('metric-');
+      const resolvedId = isSynthetic
+        ? conflicts.find((item) => {
+            const days = item.affectedDays ?? item.issue?.affectedDays;
+            return days?.includes(dayIndex + 1);
+          })?.id
+        : conflictId;
+      if (onOpenDecisionSpace) {
+        onOpenDecisionSpace({
+          conflictId: resolvedId ?? conflictId,
+          dayIndex,
+        });
+        return;
+      }
+      onOpenItineraryDiagnosis?.();
+    },
+    [conflicts, onOpenDecisionSpace, onOpenItineraryDiagnosis],
+  );
+
   const handleAddActivity = useCallback((dayIndex: number) => {
     if (arrange.candidates.length === 0) {
       toast.message('请先在探索景点中添加候选');
       return;
     }
+    setParallelDialog(null);
     setAddDialogDayIndex(dayIndex);
   }, [arrange.candidates.length]);
+
+  const handleAddParallelEntry = useCallback(
+    (entryId: string, dayIndex: number) => {
+      if (arrange.candidates.length === 0) {
+        toast.message('请先在探索景点中添加候选');
+        return;
+      }
+      const day = arrange.daySnapshots[dayIndex];
+      const entry = day?.timeline.find((item) => item.id === entryId);
+      if (!entry) return;
+      const allIds = memberOptions.map((m) => m.id);
+      const remaining = remainingMemberIds(allIds, entry.participantIds ?? []);
+      if (remaining.length === 0) {
+        toast.message('当前时段成员已全部分配');
+        return;
+      }
+      const usedLetters = day.timeline.map((item) => item.splitLetter);
+      const letter = nextSplitLetter(usedLetters);
+      setAddDialogDayIndex(null);
+      setParallelDialog({
+        dayIndex,
+        startTime: extractHmFromWindow(entry.startTime ?? undefined, scheduleTimezone) || '10:30',
+        endTime: extractHmFromWindow(entry.endTime ?? undefined, scheduleTimezone) || '12:00',
+        remainingIds: remaining,
+        letter,
+        splitPlanId: entry.splitPlanId,
+        remainingCount: remaining.length,
+      });
+    },
+    [arrange.candidates.length, arrange.daySnapshots, memberOptions, scheduleTimezone],
+  );
 
   const handleInsertGap = useCallback((dayIndex: number) => {
     setGapDialogDayIndex(dayIndex);
   }, []);
 
-  const handleAddItemSubmit = async (payload: {
-    candidateId?: string;
-    placeId?: number;
-    startTime?: string;
-    endTime?: string;
-    note?: string;
-  }) => {
-    if (addDialogDayIndex == null) return;
+  const handleAddItemSubmit = async (payload: ArrangeItineraryAddItemSubmitPayload) => {
+    const dayIndex = parallelDialog?.dayIndex ?? addDialogDayIndex;
+    if (dayIndex == null) return;
+    const tripDay = trip?.TripDay?.[dayIndex];
     try {
+      if (payload.source === 'experience') {
+        if (!tripDay?.id) {
+          toast.error('缺少行程日信息');
+          return;
+        }
+        if (!payload.placeId || !payload.experienceDefinitionId) {
+          toast.error('请选择地点与体验项目');
+          return;
+        }
+        if (!payload.startTimeIso || !payload.endTimeIso) {
+          toast.error('请填写活动时段');
+          return;
+        }
+        setProductAddPending(true);
+        try {
+          // 1) 先创建：placeId + experienceDefinitionId（不强制 Offering）
+          const created = await itineraryItemsApi.create({
+            tripDayId: tripDay.id,
+            type: 'ACTIVITY',
+            placeId: payload.placeId,
+            startTime: payload.startTimeIso,
+            endTime: payload.endTimeIso,
+            experienceDefinitionId: payload.experienceDefinitionId,
+            note: payload.note,
+            forceCreate: true,
+          });
+          const itemId =
+            created && typeof created === 'object' && 'item' in created
+              ? (created as { item?: { id?: string } }).item?.id
+              : (created as { id?: string } | null)?.id;
+
+          // 2) 可选升格：有 Offering/Session 再 PATCH
+          if (
+            itemId &&
+            payload.upgradeSession &&
+            payload.productOfferingId &&
+            payload.productSessionId
+          ) {
+            await itineraryItemsApi.update(itemId, {
+              productOfferingId: payload.productOfferingId,
+              productSessionId: payload.productSessionId,
+              experienceDefinitionId: payload.experienceDefinitionId,
+              startTime: payload.startTimeIso,
+              endTime: payload.endTimeIso,
+              note: payload.note,
+              forceCreate: true,
+            });
+            if (payload.travelFromPreviousDuration != null) {
+              await itineraryItemsApi.updateTravelInfo(itemId, {
+                travelFromPreviousDuration: payload.travelFromPreviousDuration,
+              });
+            }
+            toast.success(
+              payload.experienceName
+                ? `已添加「${payload.experienceName}」并绑定班次`
+                : '已添加体验并绑定班次',
+            );
+          } else {
+            toast.success(
+              payload.experienceName
+                ? `已添加体验「${payload.experienceName}」`
+                : '已添加体验项目',
+            );
+          }
+
+          setAddDialogDayIndex(null);
+          setParallelDialog(null);
+          void arrange.reloadAll();
+          onItineraryChanged?.();
+        } finally {
+          setProductAddPending(false);
+        }
+        return;
+      }
+
+      const noteWithSplit = parallelDialog
+        ? mergeSplitPlanNoteIntoNote(
+            payload.note || `并行分流 · 分组 ${parallelDialog.letter}`,
+            buildManualSplitMarker({
+              memberIds: parallelDialog.remainingIds,
+              phase: 'branch',
+              letter: parallelDialog.letter,
+              groupLabel: `分组 ${parallelDialog.letter}`,
+              splitPlanId: parallelDialog.splitPlanId,
+            }),
+          )
+        : payload.note;
+
       let result: unknown;
-      if (payload.candidateId) {
-        result = await arrange.placeCandidate(payload.candidateId, addDialogDayIndex, {
+      // 并行分流需写入 note 成员标记；优先 addItem；普通添加可用 placeCandidate
+      if (parallelDialog && payload.placeId) {
+        result = await arrange.addItem({
+          dayIndex: dayIndex + 1,
+          type: 'ACTIVITY',
+          placeId: payload.placeId,
+          startTime: payload.startTime,
+          endTime: payload.endTime,
+          note: noteWithSplit,
+          insertMode: 'append',
+          forceCreate: true,
+        });
+      } else if (payload.candidateId && !parallelDialog) {
+        result = await arrange.placeCandidate(payload.candidateId, dayIndex, {
           startTime: payload.startTime,
           endTime: payload.endTime,
         });
       } else if (payload.placeId) {
         result = await arrange.addItem({
-          dayIndex: addDialogDayIndex + 1,
+          dayIndex: dayIndex + 1,
           type: 'ACTIVITY',
           placeId: payload.placeId,
           startTime: payload.startTime,
           endTime: payload.endTime,
-          note: payload.note,
+          note: noteWithSplit,
           insertMode: 'append',
           forceCreate: true,
         });
+      } else {
+        toast.error('缺少候选景点信息');
+        return;
       }
-      notifyWriteResult(result, '已添加活动');
+      notifyWriteResult(result, parallelDialog ? '已添加并行活动' : '已添加活动');
       setAddDialogDayIndex(null);
+      setParallelDialog(null);
     } catch (error) {
       toast.error(resolveApiError(error, '添加活动失败'));
     }
@@ -484,17 +690,6 @@ export function PlanningWorkbenchArrangeItinerary({
       onItineraryChanged?.();
     } catch (error) {
       toast.error(resolveApiError(error, '更新锁定失败'));
-    }
-  };
-
-  const handlePlaceMapPoint = async (point: AttractionExploreMapPoint) => {
-    try {
-      const result = await arrange.placeMapPointProposal(point);
-      if (result.suggestions.length <= 1) {
-        toast.message('已生成地图插入草案，请确认后写入');
-      }
-    } catch (error) {
-      toast.error(resolveApiError(error, '生成插入草案失败'));
     }
   };
 
@@ -645,7 +840,7 @@ export function PlanningWorkbenchArrangeItinerary({
               candidates={arrange.candidates}
               candidatesLoading={arrange.candidatesLoading || arrange.overviewLoading}
               onRemoveCandidate={(candidateId) => void handleRemoveCandidate(candidateId)}
-              onPlaceCandidate={(candidateId) => void handlePlaceCandidate(candidateId)}
+              onPlaceCandidate={(candidateId) => handlePlaceCandidate(candidateId)}
               placePending={arrange.placeCandidatePending || arrange.writePending}
               removePending={arrange.removeCandidatePending}
               itemLocks={arrange.itemLocks}
@@ -685,6 +880,10 @@ export function PlanningWorkbenchArrangeItinerary({
               weatherLabel={arrange.context?.tripContext?.weatherLabel}
               onEditEntry={(entryId) => void handleEditEntry(entryId)}
               onDeleteEntry={handleDeleteEntry}
+              onAddParallelEntry={handleAddParallelEntry}
+              onOpenConflict={handleOpenConflict}
+              memberLabelById={memberLabelById}
+              memberCount={memberCount}
               onAddActivity={handleAddActivity}
               onAddLodging={handleOpenAddLodging}
               onEditLodging={(itemId) => void handleEditEntry(itemId)}
@@ -716,11 +915,8 @@ export function PlanningWorkbenchArrangeItinerary({
                 mapSyncEnabled: arrange.mapSyncEnabled,
                 aiPending: arrange.aiActionPending,
                 aiAnswer: arrange.proposalAiAnswer,
-                placePending: arrange.placeCandidatePending || arrange.writePending,
                 onViewMap: () => onViewMap?.(arrange.selectedDayIndex),
                 onAiAction: (action) => void handleAiAction(action),
-                onPlaceMapPoint: (point) => void handlePlaceMapPoint(point),
-                mapPlacePending: arrange.mapPlaceProposalPending,
                 copilotEnabled: arrange.copilotEnabled,
                 lodgingIncomplete,
               }}
@@ -728,23 +924,6 @@ export function PlanningWorkbenchArrangeItinerary({
           </aside>
         </div>
       </div>
-
-      <AttractionExploreMapPlaceSuggestionsDialog
-        open={arrange.mapPlaceSuggestions != null}
-        onOpenChange={(open) => {
-          if (!open) arrange.clearActiveMapProposal();
-        }}
-        placeName={arrange.mapPlaceSuggestions?.placeName ?? ''}
-        suggestions={arrange.mapPlaceSuggestions?.suggestions ?? []}
-        submitting={arrange.mapPlaceProposalPending}
-        onSelect={(index) => {
-          void arrange.selectMapPlaceSuggestionForArrange(index).then(() => {
-            toast.message('已生成插入草案，请确认后写入');
-          }).catch((error) => {
-            toast.error(resolveApiError(error, '生成草案失败'));
-          });
-        }}
-      />
 
       <PlanProposalDecisionSheet
         tripId={tripId}
@@ -784,14 +963,46 @@ export function PlanningWorkbenchArrangeItinerary({
         onFillAllWithNara={handleFillLodgingWithAssistant}
       />
 
-      <ArrangeItineraryAddItemDialog
-        open={addDialogDayIndex != null}
+      <ArrangeItineraryPlaceCandidateDialog
+        open={placeCandidateId != null}
         onOpenChange={(open) => {
-          if (!open) setAddDialogDayIndex(null);
+          if (!open) setPlaceCandidateId(null);
         }}
-        dayNumber={(addDialogDayIndex ?? 0) + 1}
+        candidate={placeCandidateForDialog}
+        initialDayIndex={arrange.selectedDayIndex}
+        dayCount={trip?.TripDay?.length || arrange.daySnapshots.length || 1}
+        submitting={arrange.placeCandidatePending || arrange.writePending}
+        onSubmit={(payload) => void handleConfirmPlaceCandidate(payload)}
+      />
+
+      <ArrangeItineraryAddItemDialog
+        open={addDialogDayIndex != null || parallelDialog != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAddDialogDayIndex(null);
+            setParallelDialog(null);
+          }
+        }}
+        dayNumber={(parallelDialog?.dayIndex ?? addDialogDayIndex ?? 0) + 1}
+        dayDate={
+          trip?.TripDay?.[parallelDialog?.dayIndex ?? addDialogDayIndex ?? 0]?.date?.slice(
+            0,
+            10,
+          ) ?? null
+        }
+        timezone={scheduleTimezone}
+        countryCode={extractCountryCodeFromDestination(trip?.destination) ?? 'IS'}
         candidates={arrange.candidates}
-        submitting={arrange.placeCandidatePending || arrange.addItemPending}
+        submitting={
+          arrange.placeCandidatePending || arrange.addItemPending || productAddPending
+        }
+        initialStartTime={parallelDialog?.startTime}
+        initialEndTime={parallelDialog?.endTime}
+        parallelHint={
+          parallelDialog
+            ? `同一时段为剩余 ${parallelDialog.remainingCount} 人创建并行分流活动（分组 ${parallelDialog.letter}）`
+            : undefined
+        }
         onSubmit={(payload) => void handleAddItemSubmit(payload)}
       />
 
@@ -845,6 +1056,7 @@ export function PlanningWorkbenchArrangeItinerary({
           currentTripDayId={editingItem.tripDayId ?? editingItem.TripDay?.id}
           onSuccess={handleEditSaved}
           tepFlexibilityEnabled={tepFlexibilityEnabled}
+          collaborators={collaborators}
         />
       ) : null}
 

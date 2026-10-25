@@ -11,10 +11,43 @@ import type {
   AttractionExploreItem,
   AttractionExploreMapPoint,
   AttractionExplorePriority,
+  AttractionExploreSection,
   AttractionExploreViewTab,
 } from '@/types/attraction-explore';
 import type { PlanProposal } from '@/types/arrange-itinerary';
 import { isLiveRoutesAvailable } from '@/lib/attraction-explore-route-options.util';
+
+/** 偏好描述（适合老人、轻松节奏…）才把 LLM 意图写回左侧筛选；纯景点名搜索不写回。 */
+function isPreferenceExploreQuery(query: string): boolean {
+  const text = query.trim();
+  if (!text) return false;
+  return /适合|想要|想找|轻松|紧凑|亲子|老人|沿途|顺路|绕路|家庭|情侣|摄影|第一次|必须|推荐/.test(
+    text,
+  );
+}
+
+/** 关键词命中的景点提前，避免 LLM 搜索排序把精确地名结果淹没。 */
+function rankSectionsByQueryMatch(
+  sections: AttractionExploreSection[],
+  query: string,
+): AttractionExploreSection[] {
+  const q = query.trim().toLowerCase();
+  if (!q || sections.length === 0) return sections;
+
+  const score = (item: AttractionExploreItem) => {
+    const name = (item.name ?? '').toLowerCase();
+    const nameEn = (item.nameEN ?? '').toLowerCase();
+    if (name === q || nameEn === q) return 0;
+    if (name.includes(q) || nameEn.includes(q)) return 1;
+    if (q.includes(name) && name.length >= 2) return 2;
+    return 3;
+  };
+
+  return sections.map((section) => ({
+    ...section,
+    items: [...section.items].sort((a, b) => score(a) - score(b)),
+  }));
+}
 
 export const attractionExploreKeys = {
   all: ['attraction-explore'] as const,
@@ -102,14 +135,17 @@ export function useAttractionExplore(tripId: string) {
   const recommendationsQuery = useQuery({
     queryKey: attractionExploreKeys.recommendations(tripId, filterKey),
     queryFn: () => {
-      if (searchQuery.trim()) {
+      const trimmed = searchQuery.trim();
+      if (trimmed) {
+        // 精确景点名：不要走 LLM 意图搜索（慢且排序会淹没命中项）
+        const preferKeywordSearch = !isPreferenceExploreQuery(trimmed);
         return attractionExploreApi.search({
           tripId,
-          query: searchQuery.trim(),
-          themeIds: selectedThemeIds,
-          suitabilityIds: selectedSuitabilityIds,
+          query: trimmed,
+          themeIds: preferKeywordSearch ? [] : selectedThemeIds,
+          suitabilityIds: preferKeywordSearch ? [] : selectedSuitabilityIds,
           viewTab,
-          useLlmIntent: useLlmIntent || undefined,
+          useLlmIntent: preferKeywordSearch ? false : useLlmIntent || undefined,
           useLiveRoutes: useLiveRoutes || undefined,
         });
       }
@@ -122,6 +158,7 @@ export function useAttractionExplore(tripId: string) {
       });
     },
     enabled: Boolean(tripId) && filtersInitialized,
+    placeholderData: (previous) => previous,
   });
 
   useEffect(() => {
@@ -161,6 +198,8 @@ export function useAttractionExplore(tripId: string) {
       attractionExploreApi.compileExploreIntent({ tripId, query, useLlm: useLlmIntent }),
     onSuccess: (data) => {
       setCompiledIntent(data);
+      // 景点关键词搜索：只展示意图条，不覆盖左侧筛选（避免 LLM 主题变成硬过滤）。
+      if (!isPreferenceExploreQuery(data.query ?? searchQuery)) return;
       const themeIds = data.themes?.map((item) => item.id) ?? [];
       const suitabilityIds = data.suitableFor?.map((item) => item.id) ?? [];
       if (themeIds.length > 0) setSelectedThemeIds(themeIds);
@@ -269,10 +308,20 @@ export function useAttractionExplore(tripId: string) {
         invalidateRecommendations();
         return;
       }
-      await compileIntentMutation.mutateAsync(trimmed);
+      // 先出搜索结果，不阻塞在 LLM 意图编译上（最多可卡满 API 60s）。
       invalidateRecommendations();
+      if (isPreferenceExploreQuery(trimmed) && useLlmIntent) {
+        try {
+          await compileIntentMutation.mutateAsync(trimmed);
+          invalidateRecommendations();
+        } catch {
+          // 意图编译失败不影响已触发的关键词搜索
+        }
+      } else if (useLlmIntent) {
+        void compileIntentMutation.mutateAsync(trimmed).catch(() => undefined);
+      }
     },
-    [compileIntentMutation, invalidateRecommendations],
+    [compileIntentMutation, invalidateRecommendations, useLlmIntent],
   );
 
   const requestMapPlaceProposal = useCallback(
@@ -425,8 +474,12 @@ export function useAttractionExplore(tripId: string) {
     toggleSuitability,
     context: contextQuery.data,
     contextLoading: contextQuery.isLoading,
-    recommendations: recommendationsQuery.data?.sections ?? [],
-    recommendationsLoading: recommendationsQuery.isLoading,
+    recommendations: rankSectionsByQueryMatch(
+      recommendationsQuery.data?.sections ?? [],
+      searchQuery,
+    ),
+    recommendationsLoading:
+      recommendationsQuery.isLoading && !recommendationsQuery.isPlaceholderData,
     compiledIntent,
     compileIntentPending: compileIntentMutation.isPending,
     compileAndSearch,

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyDecisionCaseEligibilityToActions,
   findDecisionActionForSelection,
   normalizeDecisionAction,
   resolveDecisionActionId,
   resolveDetailActions,
 } from './decision-action.util';
+import { partitionDecisionActionsForUi } from './decision-action-visibility.util';
 
 describe('normalizeDecisionAction', () => {
   it('respects allowed: false from backend (e.g. ACCEPT_RISK on BLOCK)', () => {
@@ -109,14 +111,35 @@ describe('resolveDetailActions', () => {
     expect(actions[0]?.actionId).toBe('a1');
   });
 
-  it('keeps suppressed actions when includeSuppressed', () => {
-    const actions = resolveDetailActions({
-      actions: [
-        { actionId: 'a1', label: 'A', allowed: true },
-        { actionId: 'blocked', label: 'B', allowed: false },
+  it('keeps DecisionCase ineligible options in visible list when retainDisallowed', () => {
+    const actions = applyDecisionCaseEligibilityToActions(
+      [
+        { actionId: 'hike', label: '冰川徒步', allowed: true },
+        { actionId: 'view', label: '观景', allowed: true },
       ],
-      includeSuppressed: true,
+      {
+        sourceKind: 'OPPORTUNITY',
+        requiredness: 'IMPORTANT',
+        eligibility: { eligible: true, eligibleOptionIds: ['view'] },
+      },
+    );
+    expect(actions.find((a) => a.actionId === 'hike')?.allowed).toBe(false);
+    expect(actions.find((a) => a.actionId === 'view')?.allowed).toBe(true);
+
+    const partitioned = partitionDecisionActionsForUi(actions, {
+      retainDisallowedInVisible: true,
     });
-    expect(actions).toHaveLength(2);
+    expect(partitioned.visible).toHaveLength(2);
+    expect(partitioned.suppressed).toHaveLength(0);
+  });
+
+  it('parses constraintHints.fordingExcluded', () => {
+    const action = normalizeDecisionAction({
+      actionId: 'full',
+      label: '全险',
+      allowed: true,
+      constraintHints: { fordingExcluded: true },
+    });
+    expect(action?.constraintHints?.fordingExcluded).toBe(true);
   });
 });

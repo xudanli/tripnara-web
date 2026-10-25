@@ -15,6 +15,10 @@ import type { ArrangeItineraryProposalWriteResponse, PlanProposal } from '@/type
 import { PlanningProposalOptionsPanel } from '@/components/decision-problems/PlanningProposalOptionsPanel';
 import { DecisionValidityStrip } from '@/components/decision-problems/DecisionValidityStrip';
 import { DecisionWriteBackStepsPanel } from '@/components/decision-problems/DecisionWriteBackStepsPanel';
+import { OrtToolsPlanningShadowPanel } from '@/components/decision-problems/OrtToolsShadowPanel';
+import { sanitizeSplitPlanTextForDisplay } from '@/lib/itinerary-split-note.util';
+import { shouldShowOrtToolsPlanningShadowPanel } from '@/lib/normalize-ortools-shadow.util';
+import { useOrtToolsShadowHealth } from '@/hooks/useOrtToolsShadowHealth';
 import {
   workbenchAttractionExploreAiBox,
   workbenchConflictSurface,
@@ -85,6 +89,15 @@ export function ArrangeItineraryProposalDialog({
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(
     packOptions.find((option) => option.recommended)?.id ?? packOptions[0]?.id ?? null,
   );
+  const shadowHealth = useOrtToolsShadowHealth({ enabled: open });
+  const showOrtToolsShadow = shouldShowOrtToolsPlanningShadowPanel(
+    proposal?.intent,
+    proposal?.ortoolsShadow,
+    {
+      shadowRepairEnabled: shadowHealth.data?.shadowRepairEnabled === true,
+      healthLoaded: shadowHealth.loaded,
+    },
+  );
 
   const validityUntil =
     validUntil ?? proposal?.decisionPack?.validUntil ?? proposal?.expiresAt;
@@ -137,6 +150,10 @@ export function ArrangeItineraryProposalDialog({
             />
           ) : null}
 
+          {showOrtToolsShadow && proposal.ortoolsShadow ? (
+            <OrtToolsPlanningShadowPanel shadow={proposal.ortoolsShadow} />
+          ) : null}
+
           {aiAnswer ? (
             <section className={workbenchAttractionExploreAiBox}>
               <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-foreground">
@@ -149,7 +166,9 @@ export function ArrangeItineraryProposalDialog({
 
           <section>
             <p className="mb-1.5 text-xs font-medium text-foreground">变更摘要</p>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">{proposal.diff.summary}</p>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {sanitizeSplitPlanTextForDisplay(proposal.diff.summary) || proposal.diff.summary}
+            </p>
           </section>
 
           {proposal.diff.timelineChanges.length > 0 ? (
@@ -161,7 +180,9 @@ export function ArrangeItineraryProposalDialog({
                     key={`${change.label}-${index}`}
                     className="rounded-lg border border-border/55 bg-card px-2.5 py-2 text-[11px]"
                   >
-                    <span className="font-medium text-foreground">{change.label}</span>
+                    <span className="font-medium text-foreground">
+                      {sanitizeSplitPlanTextForDisplay(change.label) || change.label}
+                    </span>
                     {change.dayIndex != null ? (
                       <span className="ml-2 text-muted-foreground">Day {change.dayIndex}</span>
                     ) : null}

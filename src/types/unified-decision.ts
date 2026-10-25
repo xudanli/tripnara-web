@@ -165,6 +165,8 @@ export interface NormalizedCanonicalEvaluateResponse {
   recommendedCandidateId?: string;
   comparisonView?: CandidateComparisonView;
   impactScopeView?: import('@/types/impact-scope').ImpactScopeView;
+  /** workspace.ortoolsShadow — OR-Tools Evaluate Shadow（非权威） */
+  ortoolsShadow?: import('@/types/ortools-shadow').OrtToolsEvaluateShadowAttachment;
 }
 
 export interface CanonicalAuthorizeRequest {
@@ -255,6 +257,8 @@ export interface UnifiedDecisionProblemListItem {
   causalStoryView?: import('@/types/causal-trace').CausalStoryView;
   /** causal-trace-v1 — 安全角标文案 */
   guardianCausalStoryView?: import('@/types/causal-trace').CausalStoryView;
+  /** DecisionCase — 已 publish 的规则/机会决策壳 */
+  decisionCase?: import('@/types/decision-case').DecisionCaseMeta;
 }
 
 export interface UnifiedDecisionProblemListView {
@@ -313,8 +317,17 @@ export interface DailyLoadScanResponse {
 
 // ─── SSOT v2（tripnara.unified_decision@v2）────────────────────────────────────
 
-/** 写路径：替代 flowKind 双轨分支 */
-export type DecisionWriteChain = 'EVALUATE_AUTHORIZE_EXECUTE' | 'APPLY_AND_POLL';
+/**
+ * 写路径：替代 flowKind 双轨分支
+ * - EVALUATE_AUTHORIZE_EXECUTE：Canonical L2
+ * - APPLY_AND_POLL：Legacy / 通用决议写回
+ * - CONSTRAINT_WRITEBACK：DecisionCase（车型/保险等约束写回 + re-ensure）
+ * @see docs/api/decision-case-backend-handoff.md
+ */
+export type DecisionWriteChain =
+  | 'EVALUATE_AUTHORIZE_EXECUTE'
+  | 'APPLY_AND_POLL'
+  | 'CONSTRAINT_WRITEBACK';
 
 export type DecisionExecutionStatusSurface =
   | 'NONE'
@@ -464,6 +477,8 @@ export interface DecisionAction {
   origin?: string;
   /** SSOT v2 — 触发探测器列表 */
   detectors?: string[];
+  /** DecisionCase — 保险涉水排除 / 写回载荷 */
+  constraintHints?: import('@/types/decision-case').DecisionCaseConstraintHints;
 }
 
 export interface UnifiedDecisionProblemDetailView {
@@ -488,6 +503,8 @@ export interface UnifiedDecisionProblemDetailView {
   causalTraceRef?: import('@/types/causal-trace').CausalTraceReference;
   causalStoryView?: import('@/types/causal-trace').CausalStoryView;
   guardianCausalStoryView?: import('@/types/causal-trace').CausalStoryView;
+  /** DecisionCase */
+  decisionCase?: import('@/types/decision-case').DecisionCaseMeta;
 }
 
 export interface UnifiedDecisionOptionsView {

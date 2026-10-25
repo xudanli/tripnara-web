@@ -11,6 +11,7 @@
 |------|------|
 | [FE_INTEGRATION_HANDOFF.md](./FE_INTEGRATION_HANDOFF.md) | Gateway 总览 |
 | [decision-options-tradeoffs-contract.md](./decision-options-tradeoffs-contract.md) | 方案 tradeoffs / 结果卡投影 |
+| [decision-case-backend-handoff.md](./decision-case-backend-handoff.md) | DecisionCase 两层资源 + 三闸 + 约束写回 |
 | 本文 | 执行空间专用 read model 与队列合并 |
 
 ---

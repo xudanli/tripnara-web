@@ -25,6 +25,7 @@ import type {
 } from '@/types/arrange-itinerary';
 import type { ItineraryItemDetail } from '@/types/trip';
 import type { ScheduleTimelineResponse } from '@/types/schedule-timeline';
+import { normalizeOrtToolsPlanningShadow } from '@/lib/normalize-ortools-shadow.util';
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value != null && typeof value === 'object' && !Array.isArray(value)
@@ -155,6 +156,9 @@ export function normalizePlanProposal(data: unknown): PlanProposal {
     createdAt: asString(record.createdAt ?? record.created_at),
     expiresAt: asString(record.expiresAt ?? record.expires_at),
     decisionPack: normalizePlanningDecisionPack(record.decisionPack ?? record.decision_pack),
+    ortoolsShadow: normalizeOrtToolsPlanningShadow(
+      record.ortoolsShadow ?? record.ortools_shadow,
+    ),
   };
 }
 

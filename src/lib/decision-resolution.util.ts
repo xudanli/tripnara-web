@@ -306,6 +306,9 @@ export function writeChainSubmitHint(
   if (writeChain === 'EVALUATE_AUTHORIZE_EXECUTE') {
     return '提交后将生成 Plan Gate 草案；确认后再应用到行程。';
   }
+  if (writeChain === 'CONSTRAINT_WRITEBACK') {
+    return '提交结论后将写回行程约束并重新验证。';
+  }
   return '提交结论后，再确认「应用到行程」。';
 }
 

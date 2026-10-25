@@ -29,6 +29,21 @@ describe('shouldConfirmArrangeProposal', () => {
     expect(shouldConfirmArrangeProposal(baseProposal())).toBe(false);
   });
 
+  it('returns true when ortoolsShadow attachment is present', () => {
+    expect(
+      shouldConfirmArrangeProposal(
+        baseProposal({
+          ortoolsShadow: {
+            schemaId: 'tripnara.ortools_planning_shadow@v1',
+            shadowAuthority: false,
+            planningIntent: 'AUTO_ARRANGE',
+            shadowChanges: [{ operation: 'MOVE', label: '观测序' }],
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it('returns false for PASS with a single decision option', () => {
     expect(
       shouldConfirmArrangeProposal(
@@ -61,12 +76,43 @@ describe('shouldConfirmArrangeProposal', () => {
     expect(
       shouldConfirmArrangeProposal(
         baseProposal({
+          intent: 'AUTO_ARRANGE',
+          decisionPack: {
+            options: [
+              { id: 'a', optionKind: 'SHIFT_LATER', title: '顺延行程', recommended: true },
+              { id: 'b', optionKind: 'ACCEPT_RISK', title: '保持原计划' },
+            ],
+          },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('auto-applies PLACE_CANDIDATE even when Keep Original is an option', () => {
+    expect(
+      shouldConfirmArrangeProposal(
+        baseProposal({
           intent: 'PLACE_CANDIDATE',
           decisionPack: {
             options: [
               { id: 'a', optionKind: 'SHIFT_LATER', title: '顺延行程', recommended: true },
               { id: 'b', optionKind: 'ACCEPT_RISK', title: '保持原计划' },
             ],
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('still confirms PLACE_CANDIDATE when validation has conflicts', () => {
+    expect(
+      shouldConfirmArrangeProposal(
+        baseProposal({
+          intent: 'PLACE_CANDIDATE',
+          validation: {
+            status: 'PASS',
+            warnings: [],
+            conflicts: [{ kind: 'buffer', message: '缓冲不足' }],
           },
         }),
       ),

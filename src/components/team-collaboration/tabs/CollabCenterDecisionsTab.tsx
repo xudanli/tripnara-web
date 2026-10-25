@@ -152,6 +152,15 @@ export function CollabCenterDecisionsTab({
     [reloadVotes, handleVoteOpen],
   );
 
+  /** 主舞台 / AI 建议「发起投票」→ 创建弹窗；已有进行中投票则打开投票组件 */
+  const handleStartVote = useCallback(() => {
+    if (openVote) {
+      handleVoteOpen(openVote.id);
+      return;
+    }
+    setCreateVoteOpen(true);
+  }, [openVote, handleVoteOpen]);
+
   useEffect(() => {
     handleInitialVoteConsumed();
   }, [handleInitialVoteConsumed]);
@@ -199,13 +208,10 @@ export function CollabCenterDecisionsTab({
             hideTaskList
             collabStage
             className="min-h-[520px]"
-            onStartVote={() => {
-              if (openVote) handleVoteOpen(openVote.id);
-            }}
+            onStartVote={handleStartVote}
             onGenerateCompromise={handleGenerateCompromise}
             onDiscussWithAssistant={handleDiscussWithAssistant}
             onReachConsensus={handleReachConsensus}
-            voteActionDisabled={!openVote}
           />
         </main>
 
@@ -213,9 +219,7 @@ export function CollabCenterDecisionsTab({
           <CollabAiSuggestionsPanel
             tripId={tripId}
             activeTask={activeTask}
-            onStartVote={() => {
-              if (openVote) handleVoteOpen(openVote.id);
-            }}
+            onStartVote={handleStartVote}
             onGenerateCompromise={handleGenerateCompromise}
             onDiscussWithAssistant={handleDiscussWithAssistant}
           />

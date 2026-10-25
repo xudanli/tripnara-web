@@ -17,11 +17,12 @@ import {
 } from '@/lib/itinerary-item-sort';
 import { extractHmFromWindow, formatItineraryItemTimeRangeLabel } from '@/lib/itinerary-item-card-format';
 import { getItineraryItemTypeDisplay, isItineraryItemType } from '@/lib/itinerary-item-type-display';
-import { collectPlaceImages } from '@/lib/collect-place-images';
+import { collectPlaceImages, type PlaceImageEntry } from '@/lib/collect-place-images';
 import { getItineraryItemTimelineTypeBadge } from '@/lib/itinerary-item-type-display';
 import { travelSegmentHasData } from '@/lib/itinerary-travel-info';
 import { resolveDestinationTimezone } from '@/utils/timezone';
 import type {
+  BookingStatus,
   DayMetricsResponse,
   DayTravelInfoResponse,
   ItineraryItemDetail,
@@ -36,7 +37,9 @@ import {
   formatItinerarySplitGroupLabel,
   itinerarySplitPhaseLabel,
   parseItinerarySplitPlanNote,
+  resolveItineraryParticipantIds,
   stripSplitPlanNoteLines,
+  type ItinerarySplitPhase,
 } from '@/lib/itinerary-split-note.util';
 import { readDailyDriveLimitHours } from '@/lib/daily-drive-conflict.util';
 import {
@@ -46,6 +49,10 @@ import {
   routeStopsFromTrip,
   shouldShowWorkbenchSplitGroupLabel,
 } from './workbench-format.util';
+import {
+  resolveItineraryProductBindView,
+  type ItineraryProductBindView,
+} from '@/lib/itinerary-product-bind.util';
 
 export interface WorkbenchTimelineEntryDetail {
   description?: string;
@@ -67,12 +74,31 @@ export interface WorkbenchTimelineEntry {
   typeLabel?: string;
   typeEmoji?: string;
   imageUrl?: string;
+  /** 地点全部图片（点击缩略图可浏览多图） */
+  images?: PlaceImageEntry[];
   address?: string;
   isLodging?: boolean;
+  bookingStatus?: BookingStatus;
+  bookingConfirmation?: string;
+  bookingUrl?: string;
+  bookedAt?: string;
+  /** 分流阶段 */
+  splitPhase?: ItinerarySplitPhase;
+  /** 分流分组字母 */
+  splitLetter?: string;
+  /** 同源分流方案 id（并行活动共用） */
+  splitPlanId?: string;
+  /** 参与成员 id（note / metadata / 顶层字段） */
+  participantIds?: string[];
+  /** 开始/结束（本地展示用 ISO），并行活动复用时段 */
+  startTime?: string | null;
+  endTime?: string | null;
   /** POI 简介与联系信息，用于时间轴内联展开 */
   detail?: WorkbenchTimelineEntryDetail;
   /** 到达本项前的交通段 */
   travelSegmentBefore?: TravelSegment;
+  /** 体验产品绑定（冰川徒步等） */
+  productBind?: ItineraryProductBindView | null;
 }
 
 export interface WorkbenchConflictLine {
@@ -153,8 +179,13 @@ function buildWorkbenchTimelineSubtitle(input: {
   endTime?: string;
   travelBits: string[];
   isLodging: boolean;
+  productBind?: ItineraryProductBindView | null;
 }): string {
-  const { typeKey, display, startTime, endTime, travelBits, isLodging, item } = input;
+  const { typeKey, display, startTime, endTime, travelBits, isLodging, item, productBind } = input;
+
+  if (productBind?.bound && productBind.subtitleLines.length > 0) {
+    return productBind.subtitleLines.slice(0, 2).join(' · ');
+  }
 
   if (travelBits.length > 0) {
     return travelBits.join(' · ');
@@ -209,10 +240,12 @@ function resolveWorkbenchDayTimelineItems(
       []
     : [];
 
-  const bridgedOvernight = getOvernightItemsForPriorDayTimeline(nextItems, dayIndex + 1).filter(
-    (item) => !dayItems.some((existing) => existing.id === item.id),
-  );
-  const baseItems = filterCheckoutDayTimelineItems(dayItems, dayIndex);
+  const bridgedOvernight = getOvernightItemsForPriorDayTimeline(
+    nextItems,
+    dayIndex + 1,
+    nextDay?.date,
+  ).filter((item) => !dayItems.some((existing) => existing.id === item.id));
+  const baseItems = filterCheckoutDayTimelineItems(dayItems, dayIndex, day.date);
   const carRentalReturns =
     trip?.TripDay != null
       ? getCarRentalReturnItemsForDayTimeline(trip.TripDay, dayIndex, itineraryByDay)
@@ -258,7 +291,6 @@ function buildTimelineEntries(
   for (const item of items) {
     const typeKey = isItineraryItemType(item.type) ? item.type : 'ACTIVITY';
     const display = getItineraryItemTypeDisplay(typeKey);
-    const timeLabel = formatItineraryItemTimeRangeLabel(item, timezone);
     const splitMarker = parseItinerarySplitPlanNote(item.note);
     const noteBody = stripSplitPlanNoteLines(item.note);
     const placeName = resolveWorkbenchTimelineItemTitle(item);
@@ -274,16 +306,24 @@ function buildTimelineEntries(
     }
 
     const isLodging = isAccommodationItineraryItem(item);
+    const productBind = resolveItineraryProductBindView(item, timezone);
     const typeBadge = isLodging
       ? { emoji: '🏨', label: '住宿' }
-      : getItineraryItemTimelineTypeBadge(item);
+      : productBind?.bound
+        ? { emoji: productBind.typeEmoji, label: productBind.typeLabel }
+        : getItineraryItemTimelineTypeBadge(item);
     const place = item.Place;
-    const imageUrl = collectPlaceImages({ place })[0]?.url;
-    const address = place?.address?.trim() || undefined;
+    const images = collectPlaceImages({ place });
+    const imageUrl = images[0]?.url;
+    const address =
+      productBind?.meetingPointAddress?.trim() ||
+      place?.address?.trim() ||
+      undefined;
     const detail = resolveWorkbenchTimelineEntryDetail(place);
 
     const stayMinutes = durationMinutesBetweenWindows(item.startTime, item.endTime);
     const highlight =
+      Boolean(productBind?.bound) ||
       typeKey === 'REST' ||
       noteBody.includes('住宿') ||
       (typeKey === 'ACTIVITY' && stayMinutes != null && stayMinutes >= 90);
@@ -296,15 +336,18 @@ function buildTimelineEntries(
       endTime: item.endTime,
       travelBits,
       isLodging,
+      productBind,
     });
 
     const splitLabel = splitMarker ? formatItinerarySplitGroupLabel(splitMarker) : undefined;
     const showSplitLabel = shouldShowWorkbenchSplitGroupLabel(splitLabel);
+    const timeLabel = productBind?.timeLabelOverride ?? formatItineraryItemTimeRangeLabel(item, timezone);
+    const title = productBind?.productTitle?.trim() || placeName;
 
     entries.push({
       id: item.id,
       timeLabel,
-      title: placeName,
+      title,
       subtitle,
       icon: resolveWorkbenchTimelineIcon(typeKey, display, highlight),
       highlight,
@@ -316,10 +359,22 @@ function buildTimelineEntries(
       typeLabel: typeBadge.label,
       typeEmoji: typeBadge.emoji,
       imageUrl,
+      images: images.length > 0 ? images : undefined,
       address,
       isLodging,
+      bookingStatus: item.bookingStatus ?? undefined,
+      bookingConfirmation: item.bookingConfirmation ?? undefined,
+      bookingUrl: item.bookingUrl ?? undefined,
+      bookedAt: item.bookedAt ?? undefined,
+      splitPhase: splitMarker?.phase,
+      splitLetter: splitMarker?.letter,
+      splitPlanId: splitMarker?.splitPlanId,
+      participantIds: resolveItineraryParticipantIds(item),
+      startTime: item.startTime,
+      endTime: item.endTime,
       detail,
       travelSegmentBefore: showTravelConnector ? segment : undefined,
+      productBind,
     });
   }
 

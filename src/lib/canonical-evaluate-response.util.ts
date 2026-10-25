@@ -6,6 +6,7 @@ import { mapGatewayOptionsPayload } from '@/lib/unified-gateway-response.util';
 import { unwrapUnifiedGatewayEnvelope } from '@/lib/unified-gateway-response.util';
 import { extractComparisonViewFromPayload } from '@/lib/candidate-comparison-view.util';
 import { extractImpactScopeFromPayload } from '@/lib/impact-scope-view.util';
+import { extractOrtToolsEvaluateShadowFromDetail } from '@/lib/normalize-ortools-shadow.util';
 import type { DecisionOption } from '@/types/decision-problem';
 import type {
   NormalizedCanonicalEvaluateResponse,
@@ -58,6 +59,8 @@ export function normalizeCanonicalEvaluateResponse(
       ? body.recommendedCandidateId
       : undefined);
 
+  const ortoolsShadow = extractOrtToolsEvaluateShadowFromDetail(body);
+
   return {
     ok: isGateway ? ok : (body.ok as boolean | undefined),
     route: isGateway
@@ -74,6 +77,7 @@ export function normalizeCanonicalEvaluateResponse(
     recommendedCandidateId,
     comparisonView: comparisonView ?? undefined,
     impactScopeView: impactScopeView ?? undefined,
+    ortoolsShadow,
   };
 }
 

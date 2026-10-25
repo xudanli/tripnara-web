@@ -26,9 +26,12 @@ import {
   writeChainFromLegacyFlow,
   legacyFlowFromWriteChain,
 } from '@/lib/decision-write-chain.util';
+import { normalizeDecisionCaseMeta } from '@/lib/normalize-decision-case.util';
 import type { DecisionWriteChain } from '@/types/unified-decision';
 import type { ImpactScopeView } from '@/types/impact-scope';
 import type { DecisionProblemNegotiationDetailFields } from '@/types/decision-problem-negotiation';
+import { extractOrtToolsEvaluateShadowFromDetail } from '@/lib/normalize-ortools-shadow.util';
+import type { OrtToolsEvaluateShadowAttachment } from '@/types/ortools-shadow';
 
 export interface UnwrappedGatewayResponse<T> {
   ok?: boolean;
@@ -223,7 +226,10 @@ export interface GatewayDecisionProblemDetailResult
   debug?: {
     authority?: unknown;
     suppressedActions?: import('@/types/unified-decision').DecisionAction[];
+    rawCanonical?: unknown;
   };
+  /** OR-Tools Evaluate Shadow（ADR-008）— 非权威旁路对比 */
+  ortoolsShadow?: OrtToolsEvaluateShadowAttachment;
 }
 
 function extractV2DetailFields(
@@ -253,19 +259,21 @@ function extractV2DetailFields(
             ? applyResultRecord.action_plan_id
             : undefined;
   const debugRaw = record.debug;
-  const debug =
-    debugRaw && typeof debugRaw === 'object'
-      ? {
-          authority: (debugRaw as Record<string, unknown>).authority,
-          suppressedActions: normalizeDecisionActions(
-            (debugRaw as Record<string, unknown>).suppressedActions ??
-              (debugRaw as Record<string, unknown>).suppressed_actions,
-          ),
-        }
-      : undefined;
-  if (debug && !debug.suppressedActions?.length) {
-    delete debug.suppressedActions;
+  const debugRecord = readRecordSafe(debugRaw);
+  let debug: GatewayDecisionProblemDetailResult['debug'];
+  if (debugRecord) {
+    const suppressedActions = normalizeDecisionActions(
+      debugRecord.suppressedActions ?? debugRecord.suppressed_actions,
+    );
+    const rawCanonical = debugRecord.rawCanonical ?? debugRecord.raw_canonical;
+    debug = {
+      authority: debugRecord.authority,
+      ...(suppressedActions.length ? { suppressedActions } : {}),
+      ...(rawCanonical != null ? { rawCanonical } : {}),
+    };
   }
+
+  const ortoolsShadow = extractOrtToolsEvaluateShadowFromDetail(record);
 
   return {
     instanceKey: typeof record.instanceKey === 'string' ? record.instanceKey : undefined,
@@ -281,8 +289,21 @@ function extractV2DetailFields(
     resolution,
     actionPlanId,
     debug,
+    ortoolsShadow,
     enforcement: typeof record.enforcement === 'string' ? record.enforcement : undefined,
+    decisionCase: normalizeDecisionCaseMeta(
+      record.decisionCase ??
+        record.decision_case ??
+        problemNode?.decisionCase ??
+        problemNode?.decision_case,
+    ),
   };
+}
+
+function readRecordSafe(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function mapCanonicalProblemToDetail(

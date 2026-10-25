@@ -224,17 +224,90 @@ export function buildLodgingMapPointsFromItinerary(input: {
   return points;
 }
 
+function mapPointKindRank(kind: AttractionExploreMapPoint['kind']): number {
+  if (kind === 'lodging') return 4;
+  if (kind === 'lodging_suggestion') return 3;
+  if (kind === 'route') return 2;
+  if (kind === 'recommended') return 1;
+  return 0;
+}
+
+function mapPointRichness(point: AttractionExploreMapPoint): number {
+  let score = mapPointKindRank(point.kind) * 10;
+  if (point.dayIndex != null) score += 3;
+  if (point.lodgingRole) score += 2;
+  if (point.highlighted) score += 1;
+  if (point.insertHint) score += 1;
+  return score;
+}
+
+function normalizeMapPointName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function preferMapPoint(
+  current: AttractionExploreMapPoint,
+  incoming: AttractionExploreMapPoint,
+): AttractionExploreMapPoint {
+  const richer =
+    mapPointRichness(incoming) > mapPointRichness(current) ? incoming : current;
+  const other = richer === incoming ? current : incoming;
+  return {
+    ...other,
+    ...richer,
+    kind:
+      mapPointKindRank(richer.kind) >= mapPointKindRank(other.kind)
+        ? richer.kind
+        : other.kind,
+    dayIndex: richer.dayIndex ?? other.dayIndex,
+    lodgingRole: richer.lodgingRole ?? other.lodgingRole,
+    highlighted: Boolean(richer.highlighted || other.highlighted),
+    placeId: richer.placeId ?? other.placeId,
+  };
+}
+
+/** 判断两个点位是否为同一地点（住宿路线列表去重用） */
+export function isSameMapPlace(
+  a: AttractionExploreMapPoint,
+  b: AttractionExploreMapPoint,
+): boolean {
+  if (a.id === b.id) return true;
+  if (
+    a.placeId != null &&
+    b.placeId != null &&
+    String(a.placeId).trim() !== '' &&
+    String(a.placeId) === String(b.placeId)
+  ) {
+    return true;
+  }
+  const sameName = normalizeMapPointName(a.name) === normalizeMapPointName(b.name);
+  if (!sameName) return false;
+  return (
+    Math.abs(Number(a.lat) - Number(b.lat)) < 0.00025 &&
+    Math.abs(Number(a.lng) - Number(b.lng)) < 0.00025
+  );
+}
+
+/**
+ * 合并路线图点位与住宿投影；同一地点只保留一条（优先已订住宿 / 带晚次信息）。
+ */
 export function mergeMapPointsWithLodging(
   basePoints: AttractionExploreMapPoint[],
   lodgingPoints: AttractionExploreMapPoint[],
 ): AttractionExploreMapPoint[] {
-  const seen = new Set(basePoints.map((point) => point.id));
-  const merged = [...basePoints];
-  for (const point of lodgingPoints) {
-    if (seen.has(point.id)) continue;
-    seen.add(point.id);
-    merged.push(point);
-  }
+  const merged: AttractionExploreMapPoint[] = [];
+
+  const upsert = (point: AttractionExploreMapPoint) => {
+    const idx = merged.findIndex((existing) => isSameMapPlace(existing, point));
+    if (idx < 0) {
+      merged.push(point);
+      return;
+    }
+    merged[idx] = preferMapPoint(merged[idx]!, point);
+  };
+
+  for (const point of basePoints) upsert(point);
+  for (const point of lodgingPoints) upsert(point);
   return merged;
 }
 

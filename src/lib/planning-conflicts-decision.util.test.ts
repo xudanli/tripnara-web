@@ -191,4 +191,36 @@ describe('planning-conflicts-decision.util', () => {
       'issue_buffer_d1',
     );
   });
+
+  it('does not attach unrelated buffer conflict to DecisionCase glacier', () => {
+    const bufferConflict: PlanningConflictItem = {
+      id: 'issue_buffer_d2',
+      priority: 'must_handle',
+      category: 'schedule',
+      title: '交通缓冲偏紧',
+      message: 'Day 2',
+      categoryLabel: '行程',
+      affectedDays: [2],
+      issue: {
+        id: 'issue_buffer_d2',
+        conflictType: 'BUFFER_INSUFFICIENT',
+        issueKind: 'same_day_travel',
+        affectedDays: [2],
+      } as PlanningConflictItem['issue'],
+    };
+    const glacier: DecisionProblemSummary = {
+      id: 'dc_glacier_trip',
+      type: 'PREFERENCE_CONFLICT',
+      title: '选择哪种冰川体验？',
+      status: 'OPEN',
+      primaryEnforcement: 'REQUIRE_ADJUSTMENT',
+      semanticKey: 'OPPORTUNITY.GLACIER_EXPERIENCE',
+      decisionCase: {
+        sourceKind: 'OPPORTUNITY',
+        requiredness: 'IMPORTANT',
+        uiGroup: 'IMPORTANT_CHOICE',
+      },
+    };
+    expect(resolveConflictForDecisionProblem(glacier, [bufferConflict])).toBeUndefined();
+  });
 });

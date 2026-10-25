@@ -346,6 +346,11 @@ function normalizeFilterOptions(raw: unknown): AttractionExploreFilterOption[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((item) => {
+      // BFF explore-intent / compiledIntent 常返回纯字符串 ID 数组
+      if (typeof item === 'string' || typeof item === 'number') {
+        const id = asString(item);
+        return id ? { id, label: id } : null;
+      }
       const record = readRecord(item);
       if (!record) return null;
       const id = asString(record.id);

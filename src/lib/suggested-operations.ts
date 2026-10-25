@@ -26,7 +26,27 @@ const ALLOWED_CLIENT_ROUTES = new Set([
   'planning',
   'itinerary',
   'decision_cockpit',
+  'silent_vote',
+  'silent_vote_create',
 ]);
+
+/** 快捷操作是否应打开 Silent Vote 创建弹窗（而非 SPA 跳转 / 再发消息） */
+export function isSilentVoteCreateSuggestedOperation(op: {
+  label?: string;
+  kind?: string;
+  payload?: Record<string, unknown> | SuggestedOperation['payload'];
+}): boolean {
+  const label = typeof op.label === 'string' ? op.label.trim() : '';
+  if (/发起(匿名)?投票|创建投票|团队投票/.test(label)) return true;
+  const payload = op.payload && typeof op.payload === 'object' ? (op.payload as Record<string, unknown>) : undefined;
+  const route = typeof payload?.route === 'string' ? payload.route.trim() : '';
+  if (route === 'silent_vote' || route === 'silent_vote_create') return true;
+  const action = typeof payload?.action === 'string' ? payload.action.trim() : '';
+  if (action === 'silent_vote_create' || action === 'start_vote' || action === 'team.start_vote') {
+    return true;
+  }
+  return false;
+}
 
 /**
  * 解析 result.payload.suggested_operations：去重 id、校验 kind。
@@ -88,6 +108,10 @@ export function pathForSuggestedClientNavigation(
         : '/dashboard/plan-studio?decisionCockpit=1';
     case 'itinerary':
       return tripOk ? `/dashboard/trips/${tripOk}` : null;
+    case 'silent_vote':
+    case 'silent_vote_create':
+      // 由 SuggestedOperationsBar 打开 SilentVoteCreateDialog，不走 SPA path
+      return null;
     default:
       return null;
   }

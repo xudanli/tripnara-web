@@ -28,6 +28,7 @@ import { extractImpactScopeFromPayload } from '@/lib/impact-scope-view.util';
 import { extractCausalTraceFromPayload, resolveGuardianCausalHeadline } from '@/lib/causal-trace-view.util';
 import { inferDecisionProblemScope } from '@/lib/decision-problem-queue-context.util';
 import { resolveDecisionProblemQueueDisplay } from '@/lib/decision-problem-queue-display.util';
+import { normalizeDecisionCaseMeta } from '@/lib/normalize-decision-case.util';
 
 export function isUnifiedDecisionProblemListView(
   data: unknown,
@@ -166,6 +167,11 @@ export function unifiedListItemToSummary(
     causalStoryHeadline: causalFields.causalStoryView?.headline,
     guardianCausalHeadline:
       resolveGuardianCausalHeadline(item) ?? causalFields.guardianCausalStoryView?.headline,
+    decisionCase: normalizeDecisionCaseMeta(
+      item.decisionCase ??
+        (item as { decision_case?: unknown }).decision_case ??
+        (legacy as { decisionCase?: unknown } | undefined)?.decisionCase,
+    ),
   };
 
   if (writeChain === 'EVALUATE_AUTHORIZE_EXECUTE' && canonical) {

@@ -321,16 +321,18 @@ export function resolveCollaborativeTaskBinding(input: {
   resolutionId?: string;
   actionPlanId?: string;
 } {
+  const { collaborativeTask, resolution, actionPlanId: inputActionPlanId, problemId: inputProblemId } =
+    input;
   const resolutionId =
     collaborativeTask?.resolutionId?.trim() ||
-    input.resolution?.resolutionId?.trim() ||
+    resolution?.resolutionId?.trim() ||
     undefined;
   const problemId =
     collaborativeTask?.decisionProblemId?.trim() ||
     collaborativeTask?.problemId?.trim() ||
-    input.problemId;
+    inputProblemId;
   const actionPlanId =
-    collaborativeTask?.actionPlanId?.trim() || input.actionPlanId?.trim() || undefined;
+    collaborativeTask?.actionPlanId?.trim() || inputActionPlanId?.trim() || undefined;
 
   return {
     problemId,

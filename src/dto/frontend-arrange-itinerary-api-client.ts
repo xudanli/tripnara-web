@@ -134,7 +134,7 @@ export {
 
 export async function fetchDecisionBasis(
   tripId: string,
-  params?: { conflictId?: string; proposalId?: string },
+  params?: { conflictId?: string; proposalId?: string; problemId?: string },
 ): Promise<import('@/dto/frontend-planning-decision-basis.types').PlanningDecisionBasis> {
   return arrangeItineraryApi.getDecisionBasis(tripId, params);
 }

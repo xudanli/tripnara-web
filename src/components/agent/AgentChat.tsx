@@ -33,7 +33,10 @@ import {
   shouldPreferRelaxationSuggestionsUi,
   syncRelaxationSuggestionsFromRouteRun,
 } from '@/lib/sync-relaxation-suggestions-store';
-import { formatRouteRunAsyncProgressLabel } from '@/lib/route-run-async';
+import {
+  formatRouteRunAsyncProgressLabel,
+  resolveRouteRunAsyncProgressPercent,
+} from '@/lib/route-run-async';
 import { isTaskLeaseRecovering } from '@/lib/task-lease-ui';
 import { RouteRunTaskLeaseExhaustedError } from '@/lib/route-run-task-lease-errors';
 import { invokeRouteAndRun } from '@/lib/executeRouteAndRun';
@@ -53,8 +56,7 @@ import {
   looksLikeCarRentalSearchRequest,
   looksLikeFlightSearchRequest,
   looksLikeHotelSearchRequest,
-  looksLikeTripContextDataLookup,
-  looksLikeTripPlanningRequest,
+  resolveBoundTripRouteIntentMode,
 } from '@/lib/route-run-intent-heuristics';
 import * as tripsApiModule from '@/api/trips';
 import { postAgentActionPreview } from '@/api/agent-action-preview';
@@ -328,12 +330,21 @@ import {
   pickFlawedDraftFromRouteRun,
 } from '@/lib/flawed-draft-ui';
 import {
+  hasTrustedDeliveryDegradedUi,
+  hasTrustedDeliveryFlawedDisclosure,
+  hasTrustedDeliveryOpLogUi,
+  pickTrustedDeliveryFromRouteRun,
+} from '@/lib/trusted-delivery-ui';
+import {
   formatRouteClassEvalDebugSnippet,
   formatRouteClassForkDebugSnippet,
   pickRouteClassEvalFromRouteRun,
   pickRouteClassForkFromRouteRun,
 } from '@/lib/route-class-observability';
 import { FlawedDraftBanner } from '@/components/agent/FlawedDraftBanner';
+import { FlawedDisclosureBanner } from '@/components/agent/FlawedDisclosureBanner';
+import { DegradedExplanationBar } from '@/components/agent/DegradedExplanationBar';
+import { AiOperationLogPanel } from '@/components/agent/AiOperationLogPanel';
 import { ReassuranceVoiceHealthBlock } from '@/components/agent/ReassuranceVoiceHealthBlock';
 import { AnchoringPresencePanel } from '@/components/agent/AnchoringPresencePanel';
 import { SharedMilestoneCards } from '@/components/agent/SharedMilestoneCards';
@@ -353,6 +364,7 @@ import type { EmotionalContextClient } from '@/types/emotional-context';
 import type { VoicePayload } from '@/types/voice-payload';
 import type { AccommodationHealthPayload } from '@/types/accommodation-health';
 import type { FlawedDraftDescriptorV1 } from '@/types/flawed-draft';
+import type { TrustedDeliveryV1 } from '@/types/trusted-delivery';
 import type { RouteClassEvalV1, RouteClassForkV1 } from '@/types/route-class-observability';
 import type { SharedMilestoneUiCard } from '@/types/shared-milestone';
 import { PartyNegotiationPreviewCard } from '@/components/agent/PartyNegotiationPreviewCard';
@@ -400,6 +412,9 @@ import { localeForAgentConversationContext } from '@/lib/agent-conversation-loca
 import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
 import { normalizeSuggestedOperations, type RouteRunIntentModeOption } from '@/lib/suggested-operations';
 import { SuggestedOperationsBar } from '@/components/agent/SuggestedOperationsBar';
+import { SilentVoteCreateDialog } from '@/components/silent-vote/SilentVoteCreateDialog';
+import { SilentVoteDialog } from '@/components/silent-vote/SilentVoteDialog';
+import type { SilentVoteCreateDraft } from '@/lib/decision-space-vote.util';
 import {
   agentStructuredContentMaxClass,
   useAgentSidebarContentFullWidth,
@@ -451,7 +466,7 @@ const AGENT_PANEL_CONTENT_MAX_CLASS = 'w-full min-w-0';
 
 interface AgentChatProps {
   /**
-   * 须为服务端行程主键（一般为 UUID），与 URL slug、展示名区分。
+   * 须为服务端行程主键（UUID，或 trip_+十六进制 opaque id），与 URL slug、展示名区分。
    * 占位符（如 trip_iceland_*）会在发送 route_and_run 时剔除，避免后端「行程不存在」。
    */
   activeTripId?: string | null;
@@ -730,14 +745,14 @@ const getWelcomeConfig = (
         icon: Bot,
         title: '嗨，我是 Nara 👋',
         subtitle: '这趟旅行的专属助手',
-        greeting: '我可以帮你完善这个行程，有什么想调整的吗？',
+        greeting: '我可以帮你分析或完善这个行程，有什么想了解的吗？',
         quickIntents: [
+          { icon: Lightbulb, label: '分析可行性', prompt: '分析当前行程的整体可行性，有什么需要改进的吗？' },
+          { icon: ClipboardCheck, label: '行程体检', prompt: '帮我做一次行程体检，检查风险、节奏和待改进点' },
+          { icon: Search, label: '改进建议', prompt: '基于当前行程，给我几条可执行的改进建议' },
           { icon: MapPin, label: '调整行程安排', prompt: '帮我调整一下行程安排' },
-          { icon: Search, label: '推荐附近景点', prompt: '推荐一些这个目的地附近值得去的景点' },
-          { icon: Calendar, label: '优化时间分配', prompt: '帮我优化一下每天的时间分配' },
-          { icon: Utensils, label: '美食推荐', prompt: '推荐一些当地特色美食和餐厅' },
         ],
-        example: '帮我在第三天加一个下午茶的安排',
+        example: '分析当前行程的整体可行性，有什么需要改进的吗？',
       };
 
     case 'trip_list_page':
@@ -1002,6 +1017,8 @@ interface Message {
   unifiedMapLayer?: UnifiedMapLayerPayload;
   /** payload / explain.flawed_draft_v1 — SUCCESS 但未完全 VERIFIED */
   flawedDraft?: FlawedDraftDescriptorV1;
+  /** payload.trusted_delivery_v1 — 公共进度 / 降级 / 瑕疵披露 / 操作日志 */
+  trustedDelivery?: TrustedDeliveryV1;
   /** explain.cascade_ui_hints：级联影响卡片（与 readiness 同形） */
   cascadeUiHints?: CascadeUiHint[];
   /** explain.causal_pre_analysis / dependency_impact.impact.affected[] */
@@ -1171,29 +1188,6 @@ function resolveRouteRunMessageMode(response: RouteAndRunResponse): 'fast' | 'sl
   if (resolved === 'fast') return 'fast';
   if (resolved === 'balanced' || resolved === 'deep') return 'slow';
   return response.route.ui_hint.mode;
-}
-
-/**
- * 已绑定有效 trip_id：`planning` / `data_lookup` / **用户显式「泛问」`generic_qa`** 不覆盖。
- * - **泛问**：保持 `GENERIC_QA`。
- * - **`auto`**：规划话术 → **TRIP_PLANNING**；天气/路况/攻略汇总 → **DATA_LOOKUP**；否则 **AUTO**。
- */
-function resolveIntentModeForBoundTripRoute(
-  tripIdForRequest: string | null,
-  effectiveAfterFlight: UserExplicitIntentMode,
-  messageText: string
-): UserExplicitIntentMode {
-  if (!tripIdForRequest) return effectiveAfterFlight;
-  if (
-    effectiveAfterFlight === 'planning' ||
-    effectiveAfterFlight === 'data_lookup' ||
-    effectiveAfterFlight === 'generic_qa'
-  ) {
-    return effectiveAfterFlight;
-  }
-  if (looksLikeTripPlanningRequest(messageText)) return 'planning';
-  if (looksLikeTripContextDataLookup(messageText)) return 'data_lookup';
-  return 'auto';
 }
 
 function getThinkingLine(intent: UserExplicitIntentMode, activeTripId: string | null | undefined): string {
@@ -1855,6 +1849,7 @@ function MessageBubble({
   fallbackTimelineDayBlocks,
   tripStayDates,
   userId,
+  onOpenSilentVoteCreate,
 }: {
   message: Message;
   mode?: 'fast' | 'slow';
@@ -1894,6 +1889,8 @@ function MessageBubble({
   /** 行程默认入住/退房（住宿卡片缺 checkIn 时 apply 回退） */
   tripStayDates?: { checkIn?: string; checkOut?: string };
   userId?: string;
+  /** 快捷操作「发起投票」→ SilentVoteCreateDialog */
+  onOpenSilentVoteCreate?: (tripIdOverride?: string) => void;
 }) {
   const navigate = useNavigate();
   const openDecisionRecord = useOpenDecisionRecordNavigation(activeTripId);
@@ -2014,6 +2011,9 @@ function MessageBubble({
     hasOpenWorldDiscoveryUi(message.openWorldDiscovery) ||
     hasUnifiedMapLayerUi(message.unifiedMapLayer) ||
     hasFlawedDraftUi(message.flawedDraft) ||
+    hasTrustedDeliveryFlawedDisclosure(message.trustedDelivery) ||
+    hasTrustedDeliveryDegradedUi(message.trustedDelivery) ||
+    hasTrustedDeliveryOpLogUi(message.trustedDelivery) ||
     hasVoicePayloadUi(message.voicePayload) ||
     hasAccommodationHealthUi(message.accommodationHealth) ||
     hasSharedMilestoneCardsUi(message.sharedMilestoneCards) ||
@@ -2186,6 +2186,23 @@ function MessageBubble({
             onViewConstraints={() => {
               toast.message('约束与验证详情已展开在上方瑕疵说明中');
             }}
+          />
+        ) : !isUser &&
+          !isError &&
+          message.status !== 'thinking' &&
+          !showClarificationCard &&
+          hasTrustedDeliveryFlawedDisclosure(message.trustedDelivery) &&
+          message.trustedDelivery ? (
+          <FlawedDisclosureBanner trustedDelivery={message.trustedDelivery} className="mb-2" />
+        ) : null}
+
+        {!isUser &&
+        message.status !== 'thinking' &&
+        hasTrustedDeliveryDegradedUi(message.trustedDelivery) &&
+        message.trustedDelivery ? (
+          <DegradedExplanationBar
+            degraded={message.trustedDelivery.degraded_explanation}
+            className="mb-2"
           />
         ) : null}
 
@@ -2898,10 +2915,11 @@ function MessageBubble({
         message.status !== 'thinking' &&
         message.suggestedOperations &&
         message.suggestedOperations.length > 0 &&
-        onSuggestedRouteRun ? (
+        (onSuggestedRouteRun || onOpenSilentVoteCreate) ? (
           <SuggestedOperationsBar
             operations={message.suggestedOperations}
-            onRouteRunMessage={onSuggestedRouteRun}
+            onRouteRunMessage={onSuggestedRouteRun ?? (() => {})}
+            onOpenSilentVoteCreate={onOpenSilentVoteCreate}
             disabled={!!clarificationSubmitDisabled || !!chatSending}
             className="mt-3"
           />
@@ -3134,6 +3152,17 @@ function MessageBubble({
           </>
         )}
 
+        {!isUser &&
+        !isError &&
+        message.status !== 'thinking' &&
+        hasTrustedDeliveryOpLogUi(message.trustedDelivery) &&
+        message.trustedDelivery ? (
+          <AiOperationLogPanel
+            entries={message.trustedDelivery.ai_operation_log}
+            defaultOpen={false}
+          />
+        ) : null}
+
         {/* 决策日志（固定置于助手气泡最底部；仅展示编排条目，RAG 见各条「证据引用」） */}
         {!isUser &&
         !isError &&
@@ -3263,7 +3292,7 @@ export default function AgentChat({
       ),
     [routeRunPreferenceProfile, fitnessContext]
   );
-  /** 仅 UUID 形 Trip.id 会随 route_and_run / insight 上报；非法占位符视为未绑定 */
+  /** 合法 Trip.id（UUID / trip_+hex）随 route_and_run 上报；非法占位符视为未绑定 */
   const sanitizedTripId = useMemo(() => sanitizeRouteRunTripId(activeTripId), [activeTripId]);
   const { ready: tcGroundingReady, travelContextPayload } =
     useAssistantTravelContextGrounding(sanitizedTripId);
@@ -3276,6 +3305,37 @@ export default function AgentChat({
   /** 已有行程 + 用户模式：去掉调试按钮等（pageMode 控制）；意图模式仍为底部下拉 */
   const compactAgentChrome = Boolean(sanitizedTripId) && effectivePageMode === 'user';
   const invalidTripIdToastShown = useRef(false);
+
+  /** 入口 / 是否绑定行程变化时，重置默认 intent 档（用户未手动钉死前） */
+  useEffect(() => {
+    setUserIntentMode(defaultUserIntentModeForEntry(entryPoint, Boolean(sanitizedTripId)));
+  }, [entryPoint, sanitizedTripId]);
+
+  const [silentVoteCreateOpen, setSilentVoteCreateOpen] = useState(false);
+  const [silentVoteCreateDraft, setSilentVoteCreateDraft] = useState<SilentVoteCreateDraft | null>(
+    null
+  );
+  const [silentVoteDetailOpen, setSilentVoteDetailOpen] = useState(false);
+  const [silentVoteDetailId, setSilentVoteDetailId] = useState<string | null>(null);
+  const [silentVoteTripId, setSilentVoteTripId] = useState<string | null>(null);
+
+  const openSilentVoteCreate = useCallback(
+    (tripIdOverride?: string) => {
+      const tid = sanitizeRouteRunTripId(tripIdOverride) ?? sanitizedTripId;
+      if (!tid) {
+        toast.error('需要绑定行程后才能发起投票');
+        return;
+      }
+      setSilentVoteTripId(tid);
+      setSilentVoteCreateDraft({
+        title: '方案选择',
+        question: '请匿名选择更倾向的方案',
+        autoOpen: true,
+      });
+      setSilentVoteCreateOpen(true);
+    },
+    [sanitizedTripId]
+  );
 
   const revivePersistedMessages = useCallback((rows: AgentChatPersistedMessage[]): Message[] => {
     return rows.map((row) => {
@@ -3885,7 +3945,7 @@ export default function AgentChat({
       ? intentAfterFlight
       : hadSuggestedIntentMode
         ? userExplicitFromRouteRunIntentMode(suggestedOpIntent!)
-        : resolveIntentModeForBoundTripRoute(
+        : resolveBoundTripRouteIntentMode(
             tripForIntentResolution,
             intentAfterFlight,
             textToSend
@@ -3909,7 +3969,7 @@ export default function AgentChat({
     if (activeTripId && !sanitizedTripId && !invalidTripIdToastShown.current) {
       invalidTripIdToastShown.current = true;
       toast.warning(
-        '当前行程 ID 不是服务端下发的 UUID（请勿使用 trip_ 等占位符），本次将不传 trip_id，以免后端报「行程不存在」。请从行程详情页进入或使用创建/详情接口返回的 Trip.id。'
+        '当前行程 ID 无法用于智能体（仅支持 UUID 或 trip_+十六进制 ID；请勿使用 trip_iceland_… 等占位符）。本次将不传 trip_id，无法分析「当前行程」。'
       );
     }
 
@@ -4120,12 +4180,7 @@ export default function AgentChat({
         const label = formatRouteRunAsyncProgressLabel(snap);
         setLoadingUiLabel(label);
         const leaseRecovering = isTaskLeaseRecovering(snap.task_lease_v1);
-        const pct =
-          !leaseRecovering &&
-          typeof snap.progress_percentage === 'number' &&
-          Number.isFinite(snap.progress_percentage)
-            ? snap.progress_percentage
-            : undefined;
+        const pct = !leaseRecovering ? resolveRouteRunAsyncProgressPercent(snap) : undefined;
         setRouteRunAsyncProgress(pct);
         setMessages((prev) =>
           prev.map((m) =>
@@ -4258,6 +4313,10 @@ export default function AgentChat({
         }
 
         // 移除思考中的消息，添加提示消息
+        const negotiationTrusted = pickTrustedDeliveryFromRouteRun(response);
+        const negotiationHint =
+          negotiationTrusted?.user_confirm?.summary_zh?.trim() ||
+          `${negotiation.impact}\n\n我为你准备了可选方案，请在弹窗中选择并确认。`;
         setMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
           return [
@@ -4265,11 +4324,12 @@ export default function AgentChat({
             {
               id: `assistant-${Date.now()}`,
               role: 'assistant',
-              content: `${negotiation.impact}\n\n我为你准备了可选方案，请在弹窗中选择并确认。`,
+              content: negotiationHint,
               timestamp: new Date(),
               status: 'awaiting_confirmation',
               routeType: response.route.route,
               mode,
+              ...(negotiationTrusted ? { trustedDelivery: negotiationTrusted } : {}),
             },
           ];
         });
@@ -4288,6 +4348,10 @@ export default function AgentChat({
         }
 
         // 移除思考中的消息，添加等待审批的消息
+        const confirmTrusted = pickTrustedDeliveryFromRouteRun(response);
+        const confirmHint =
+          confirmTrusted?.user_confirm?.summary_zh?.trim() ||
+          '我需要你的授权才能继续操作 👇 请查看下方的审批请求。';
         setMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== thinkingMessage.id);
           return [
@@ -4295,11 +4359,12 @@ export default function AgentChat({
             {
               id: `assistant-${Date.now()}`,
               role: 'assistant',
-              content: '我需要你的授权才能继续操作 👇 请查看下方的审批请求。',
+              content: confirmHint,
               timestamp: new Date(),
               status: 'awaiting_confirmation',
               routeType: response.route.route,
               mode,
+              ...(confirmTrusted ? { trustedDelivery: confirmTrusted } : {}),
             },
           ];
         });
@@ -4560,6 +4625,7 @@ export default function AgentChat({
       const openWorldDiscovery = pickOpenWorldDiscoveryFromRouteRun(response);
       const unifiedMapLayer = pickUnifiedMapLayerFromRouteRun(response);
       const flawedDraft = pickFlawedDraftFromRouteRun(response);
+      const trustedDelivery = pickTrustedDeliveryFromRouteRun(response);
       const { emotionalContext, sharedMilestoneCards, voicePayload, accommodationHealth } =
         applyEmotionalContextFromRouteRun(response);
 
@@ -4582,6 +4648,9 @@ export default function AgentChat({
         hasOpenWorldDiscoveryUi(openWorldDiscovery) ||
         hasUnifiedMapLayerUi(unifiedMapLayer) ||
         hasFlawedDraftUi(flawedDraft) ||
+        hasTrustedDeliveryFlawedDisclosure(trustedDelivery) ||
+        hasTrustedDeliveryDegradedUi(trustedDelivery) ||
+        hasTrustedDeliveryOpLogUi(trustedDelivery) ||
         hasVoicePayloadUi(voicePayload) ||
         hasAccommodationHealthUi(accommodationHealth) ||
         hasSharedMilestoneCardsUi(sharedMilestoneCards) ||
@@ -4870,6 +4939,7 @@ export default function AgentChat({
             ...(openWorldDiscovery ? { openWorldDiscovery } : {}),
             ...(unifiedMapLayer ? { unifiedMapLayer } : {}),
             ...(flawedDraft ? { flawedDraft } : {}),
+            ...(trustedDelivery ? { trustedDelivery } : {}),
             ...(emotionalContext ? { emotionalContext } : {}),
             ...(voicePayload ? { voicePayload } : {}),
             ...(accommodationHealth ? { accommodationHealth } : {}),
@@ -5604,6 +5674,7 @@ export default function AgentChat({
                       ...(intentFromPayload ? { suggestedOperationIntentMode: intentFromPayload } : {}),
                     });
                   }}
+                  onOpenSilentVoteCreate={openSilentVoteCreate}
                   onTripDataRefresh={onSystem2Response}
                   onApplySuggestToTrip={
                     sanitizedTripId
@@ -6109,11 +6180,10 @@ export default function AgentChat({
               const onRetryProgress = (snap: RouteRunAsyncTaskStatusResponse) => {
                 const label = formatRouteRunAsyncProgressLabel(snap);
                 setLoadingUiLabel(label);
-                const pct =
-                  typeof snap.progress_percentage === 'number' &&
-                  Number.isFinite(snap.progress_percentage)
-                    ? snap.progress_percentage
-                    : undefined;
+                const leaseRecovering = isTaskLeaseRecovering(snap.task_lease_v1);
+                const pct = !leaseRecovering
+                  ? resolveRouteRunAsyncProgressPercent(snap)
+                  : undefined;
                 setRouteRunAsyncProgress(pct);
               };
 
@@ -6671,6 +6741,35 @@ export default function AgentChat({
             </Button>
           </div>
         </div>
+      ) : null}
+
+      {silentVoteTripId ? (
+        <>
+          <SilentVoteCreateDialog
+            tripId={silentVoteTripId}
+            open={silentVoteCreateOpen}
+            onOpenChange={(open) => {
+              setSilentVoteCreateOpen(open);
+              if (!open) setSilentVoteCreateDraft(null);
+            }}
+            draft={silentVoteCreateDraft}
+            onCreated={(voteId) => {
+              setSilentVoteCreateOpen(false);
+              setSilentVoteCreateDraft(null);
+              setSilentVoteDetailId(voteId);
+              setSilentVoteDetailOpen(true);
+            }}
+          />
+          <SilentVoteDialog
+            tripId={silentVoteTripId}
+            voteId={silentVoteDetailId}
+            open={silentVoteDetailOpen}
+            onOpenChange={(open) => {
+              setSilentVoteDetailOpen(open);
+              if (!open) setSilentVoteDetailId(null);
+            }}
+          />
+        </>
       ) : null}
     </div>
   );

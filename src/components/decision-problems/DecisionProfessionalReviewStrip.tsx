@@ -3,10 +3,12 @@ import { ChevronDown, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PersonaSymbol } from '@/components/common/PersonaSymbol';
 import {
-  buildPersonaValidationDimensionsFromOption,
-  buildPersonaValidationDimensions,
-  type PersonaValidationDimension,
-  type PersonaValidationStance,
+  buildDecisionProfessionalReviewDimensions,
+  type DecisionProfessionalReviewProblem,
+} from '@/lib/decision-professional-review.util';
+import type {
+  PersonaValidationDimension,
+  PersonaValidationStance,
 } from '@/lib/persona-validation-dimensions.util';
 import type { DecisionOption } from '@/types/decision-problem';
 import type { PersonaAlert } from '@/types/trip';
@@ -30,6 +32,8 @@ const STANCE_CLASS: Record<PersonaValidationStance, string> = {
 };
 
 export interface DecisionProfessionalReviewStripProps {
+  /** 当前决策问题 — 用于过滤 trip 级 personaAlerts，避免串日/串案 */
+  problem?: DecisionProfessionalReviewProblem | null;
   selectedOption?: DecisionOption | null;
   selectedOptionLetter?: string;
   personaAlerts?: PersonaAlert[];
@@ -61,6 +65,7 @@ function ReviewRow({ dimension }: { dimension: PersonaValidationDimension }) {
 
 /** 决策执行空间 · 专业审查结论（非投票） */
 export function DecisionProfessionalReviewStrip({
+  problem,
   selectedOption,
   selectedOptionLetter = 'A',
   personaAlerts,
@@ -68,10 +73,12 @@ export function DecisionProfessionalReviewStrip({
 }: DecisionProfessionalReviewStripProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const dimensions =
-    selectedOption?.tradeoffs?.length
-      ? buildPersonaValidationDimensionsFromOption(selectedOption, selectedOptionLetter)
-      : buildPersonaValidationDimensions(personaAlerts, selectedOptionLetter);
+  const dimensions = buildDecisionProfessionalReviewDimensions({
+    problem,
+    selectedOption,
+    selectedOptionLetter,
+    personaAlerts,
+  });
 
   const allPass = dimensions.every((dimension) => dimension.stance === 'ok');
   const hasDivergence = dimensions.some((dimension) => dimension.stance !== 'ok');

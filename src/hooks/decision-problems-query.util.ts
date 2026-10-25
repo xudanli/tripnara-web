@@ -10,6 +10,7 @@ import { mergeDecisionCenterOverviewV2 } from '@/lib/decision-center-overview-v2
 import type { DecisionCenterOverview, DecisionProblemSummary } from '@/types/decision-problem';
 import { compareDecisionProblemsForQueue } from '@/lib/decision-problem-queue-display.util';
 import type { GatewayDecisionProblemDetailResult } from '@/lib/unified-gateway-response.util';
+import { isOrtToolsShadowRepairEnabled } from '@/lib/ortools-shadow.store';
 import type {
   UnifiedDecisionCenterView,
   UnifiedDecisionProblemListMeta,
@@ -144,6 +145,11 @@ export async function fetchDecisionProblemDetail(
 ): Promise<GatewayDecisionProblemDetailResult> {
   return decisionProblemsApi.getProblem(tripId, problemId, {
     focusConflictId: focusConflictId ?? undefined,
+    /**
+     * 主路径：顶层 data.ortoolsShadow（无需 includeDebug）。
+     * Shadow 开启时带 includeDebug 作 debug.rawCanonical 兜底。
+     */
+    includeDebug: isOrtToolsShadowRepairEnabled(),
     signal,
   });
 }

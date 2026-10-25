@@ -27,7 +27,13 @@ export interface TripListSummaryDto {
   durationDays: number;
   memberCount: number;
   memberAvatars?: Array<{ userId?: string; name?: string; avatarUrl?: string | null }>;
+  /** @deprecated 主展示改用 readinessScore；可留作兼容降级 */
   progressPercent?: number | null;
+  /** 整体准备度 0–100；null 时勿伪造分数 */
+  readinessScore?: number | null;
+  readinessState?: string | null;
+  /** 主词：尚未就绪 / 已准备好 / 已阻塞 等 */
+  readinessStateLabelZh?: string | null;
   feasibilityScore?: number | null;
   feasibilityLabel?: string | null;
   hardConflictCount?: number | null;

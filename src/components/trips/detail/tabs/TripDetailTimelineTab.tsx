@@ -18,12 +18,15 @@ import {
   TRIP_DETAIL_TERMS,
 } from '@/lib/trip-detail-terminology.util';
 import { resolveTimelineScoreLabel } from '@/lib/timeline-overview.util';
+import { formatHmInDestinationTimezone } from '@/utils/opening-hours-schedule-check';
+import { resolveDestinationTimezone } from '@/utils/timezone';
 import type { TimelineOverviewResponse } from '@/types/timeline-overview';
 import type { ItineraryItem, TripDay, TripDetail } from '@/types/trip';
 import {
   TripDetailStatCard,
   tripDetailUi,
 } from '../trip-detail-ui';
+import { OverallReadinessCard } from '../OverallReadinessCard';
 import {
   TimelinePlanObjectDayChain,
   TimelinePlanObjectTopAssessmentCard,
@@ -41,12 +44,20 @@ import {
   ExecutionStatusBadge,
 } from '@/components/trip-world-state';
 
-function formatTime(timeStr: string) {
-  try {
-    return format(new Date(timeStr), 'HH:mm');
-  } catch {
-    return timeStr;
-  }
+/** 与规划工作台一致：UTC ISO → 目的地 HH:mm（禁止用浏览器本地时区） */
+function formatItemClock(timeStr: string | null | undefined, timezone: string): string {
+  if (!timeStr) return '—';
+  return formatHmInDestinationTimezone(timeStr, timezone) || '—';
+}
+
+function formatLegDurationMinutes(minutes: number | null | undefined): string | null {
+  if (minutes == null || !Number.isFinite(minutes) || minutes <= 0) return null;
+  const total = Math.round(minutes);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h <= 0) return `${m}m`;
+  if (m <= 0) return `${h}h`;
+  return `${h}h${m}m`;
 }
 
 function itemIcon(item: ItineraryItem) {
@@ -82,6 +93,7 @@ interface TripDetailTimelineTabProps {
 function DayTimelineRow({
   day,
   dayIndex,
+  timezone,
   planObjectDay,
   onOpenPlanStudioDay,
   highlightItineraryItemId,
@@ -90,6 +102,7 @@ function DayTimelineRow({
 }: {
   day: TripDay;
   dayIndex: number;
+  timezone: string;
   planObjectDay?: PlanObjectDayChainDto;
   onOpenPlanStudioDay?: (dayNumber: number) => void;
   highlightItineraryItemId?: string | null;
@@ -135,6 +148,9 @@ function DayTimelineRow({
               items.map((item, idx) => {
                 const Icon = itemIcon(item);
                 const isHighlighted = highlightItineraryItemId === item.id;
+                const next = items[idx + 1];
+                // travelFromPrevious* 挂在「到达站」；段连线应对准下一站，与工作台一致
+                const durationLabel = formatLegDurationMinutes(next?.travelFromPreviousDuration);
                 return (
                   <div key={item.id} className="flex items-center">
                     <div
@@ -145,7 +161,9 @@ function DayTimelineRow({
                         isHighlighted && 'ring-2 ring-border bg-background',
                       )}
                     >
-                      <span className="text-[10px] text-muted-foreground mb-0.5 tabular-nums">{formatTime(item.startTime)}</span>
+                      <span className="text-[10px] text-muted-foreground mb-0.5 tabular-nums">
+                        {formatItemClock(item.startTime, timezone)}
+                      </span>
                       <div className="w-7 h-7 rounded-full bg-background border border-border flex items-center justify-center">
                         <Icon className="w-3.5 h-3.5 text-foreground" />
                       </div>
@@ -158,13 +176,12 @@ function DayTimelineRow({
                         </p>
                       ) : null}
                     </div>
-                    {idx < items.length - 1 ? (
+                    {next ? (
                       <div className="flex flex-col items-center justify-center pt-5 px-0.5 shrink-0">
                         <div className="w-6 border-t border-dashed border-border" />
-                        {item.travelFromPreviousDuration ? (
+                        {durationLabel ? (
                           <span className="text-[10px] text-muted-foreground mt-0.5 whitespace-nowrap">
-                            {Math.floor(item.travelFromPreviousDuration / 60)}h
-                            {item.travelFromPreviousDuration % 60}m
+                            {durationLabel}
                           </span>
                         ) : null}
                       </div>
@@ -199,7 +216,7 @@ function DayTimelineRow({
                   </Badge>
                 </div>
                 <p className="text-xs font-medium text-foreground line-clamp-1">{itemTitle(accommodation)}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">入住 {formatTime(accommodation.startTime)}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">入住 {formatItemClock(accommodation.startTime, timezone)}</p>
               </>
             ) : (
               <p className="text-[11px] text-muted-foreground leading-tight">尚未安排住宿 · 去安排</p>
@@ -224,7 +241,7 @@ function DayTimelineRow({
                 </Badge>
               </div>
               <p className="text-xs font-medium text-foreground line-clamp-1">{itemTitle(accommodation)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">入住 {formatTime(accommodation.startTime)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">入住 {formatItemClock(accommodation.startTime, timezone)}</p>
             </>
           ) : (
             <p className="text-[11px] text-muted-foreground leading-tight">尚未安排住宿</p>
@@ -251,10 +268,12 @@ function DayTimelineRow({
 }
 
 function TimelineOverviewStatsRow({
+  tripId,
   overview,
   loading,
   onOpenFilesTab,
 }: {
+  tripId: string;
   overview: TimelineOverviewResponse | null;
   loading: boolean;
   onOpenFilesTab?: () => void;
@@ -263,7 +282,6 @@ function TimelineOverviewStatsRow({
     return null;
   }
 
-  const progress = overview?.planning.progressPercent ?? 0;
   const feasibility = resolveTimelineScoreLabel(overview?.stats.feasibilityScore);
   const pendingValue = overview?.stats.pendingConfirmationCount ?? 0;
   const pendingSub = overview
@@ -277,25 +295,10 @@ function TimelineOverviewStatsRow({
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-      <TripDetailStatCard
-        label="规划进度"
-        value={`${Math.round(progress)}%`}
-        className="p-3 shadow-none"
-        sub={
-          <>
-            {overview?.planning.currentStageName ? (
-              <p className="text-[10px] text-muted-foreground mt-1 line-clamp-1">
-                {overview.planning.currentStageName}
-              </p>
-            ) : null}
-            <div className="h-1.5 bg-border/50 rounded-full mt-2">
-              <div
-                className="h-full bg-primary rounded-full transition-all"
-                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-              />
-            </div>
-          </>
-        }
+      <OverallReadinessCard
+        tripId={tripId}
+        readiness={overview?.overallReadiness}
+        loading={loading}
       />
       <TripDetailStatCard
         label="可行性"
@@ -348,6 +351,10 @@ export default function TripDetailTimelineTab({
   );
   const highlightScrolledRef = useRef<string | null>(null);
   const overviewLoading = timelineOverviewLoading;
+  const displayTimezone = useMemo(
+    () => resolveDestinationTimezone(trip.destination),
+    [trip.destination],
+  );
 
   const alignmentProbe = useDecisionSurfaceAlignmentProbe(trip.id, {
     timelineConflictCount: overview?.stats?.conflictCount,
@@ -411,6 +418,7 @@ export default function TripDetailTimelineTab({
         className="shadow-none"
       />
       <TimelineOverviewStatsRow
+        tripId={trip.id}
         overview={overview}
         loading={overviewLoading}
         onOpenFilesTab={onOpenFilesTab}
@@ -436,6 +444,7 @@ export default function TripDetailTimelineTab({
             key={day.id}
             day={day}
             dayIndex={idx}
+            timezone={displayTimezone}
             planObjectDay={planObjectDayByNumber.get(idx + 1)}
             highlightItineraryItemId={highlightItineraryItemId}
             dayExecutability={dayExecutabilityMap.get(idx + 1)}

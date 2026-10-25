@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import type { QueueDisplayDecisionProblem } from '@/lib/decision-problem-queue-context.util';
 import {
   compareDecisionProblemsForQueue,
-  groupQueueProblemsByDay,
+  groupQueueProblemsForDisplay,
   resolveDecisionProblemQueueDisplay,
 } from '@/lib/decision-problem-queue-display.util';
 import { primaryEnforcementLabel } from '@/lib/decision-problem-display.util';
@@ -38,7 +38,11 @@ function QueueProblemRow({
   const queueDisplay = resolveDecisionProblemQueueDisplay(item);
   const enforcementLabel = primaryEnforcementLabel(item.primaryEnforcement);
   const categoryLabel = item.categoryLabel?.trim() || item.queueCategoryLabel?.trim();
-  const isBlock = String(item.primaryEnforcement ?? '').trim().toUpperCase() === 'BLOCK';
+  const isBlock =
+    String(item.primaryEnforcement ?? '').trim().toUpperCase() === 'BLOCK' ||
+    String(item.decisionCase?.requiredness ?? '').toUpperCase() === 'BLOCKING';
+  const enrichmentLabel =
+    item.decisionCase?.enrichmentStage === 'SHELL' ? '待完善' : null;
 
   return (
     <button
@@ -56,7 +60,7 @@ function QueueProblemRow({
           {queueDisplay.dayBadge ? (
             <span className={workbenchQueueDayLabel}>{queueDisplay.dayBadge}</span>
           ) : null}
-          {queueDisplay.dayBadge && (enforcementLabel || categoryLabel) ? (
+          {queueDisplay.dayBadge && (enforcementLabel || categoryLabel || enrichmentLabel) ? (
             <span className="text-[10px] text-border" aria-hidden>
               ·
             </span>
@@ -81,6 +85,16 @@ function QueueProblemRow({
               <span className="text-[10px] text-muted-foreground">{categoryLabel}</span>
             </>
           ) : null}
+          {enrichmentLabel ? (
+            <>
+              {enforcementLabel || categoryLabel ? (
+                <span className="text-[10px] text-border" aria-hidden>
+                  ·
+                </span>
+              ) : null}
+              <span className="text-[10px] text-amber-700 dark:text-amber-400">{enrichmentLabel}</span>
+            </>
+          ) : null}
         </div>
         <p
           className={cn(
@@ -101,7 +115,7 @@ function QueueProblemRow({
   );
 }
 
-/** 工作台决策队列 · 扁平问题列表（簇/依赖默认在详情展示） */
+/** 工作台决策队列 · DecisionCase 按 uiGroup 分节，其余扁平（簇/依赖默认在详情展示） */
 export function DecisionQueueClusterList({
   items,
   selectedId,
@@ -117,7 +131,7 @@ export function DecisionQueueClusterList({
     [items],
   );
 
-  const groups = useMemo(() => groupQueueProblemsByDay(openItems), [openItems]);
+  const sections = useMemo(() => groupQueueProblemsForDisplay(openItems), [openItems]);
 
   if (!openItems.length) {
     return (
@@ -128,16 +142,17 @@ export function DecisionQueueClusterList({
   }
 
   return (
-    <div className={cn('space-y-2', className)}>
-      {groups.map((group) => (
-        <div key={group.day ?? `flat-${group.items.map((item) => item.id).join('-')}`}>
-          {group.day != null ? (
-            <p className="mb-1 px-0.5 text-[10px] font-medium text-muted-foreground">
-              第 {group.day} 天（{group.items.length}）
+    <div className={cn('space-y-3', className)}>
+      {sections.map((section) => (
+        <div key={section.key}>
+          {section.label ? (
+            <p className="mb-1.5 px-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+              {section.label}
+              <span className="ml-1 font-normal">({section.items.length})</span>
             </p>
           ) : null}
           <ul className="space-y-1.5">
-            {group.items.map((item) => (
+            {section.items.map((item) => (
               <li key={item.instanceKey ?? item.id}>
                 <QueueProblemRow
                   item={item}

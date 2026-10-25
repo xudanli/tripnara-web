@@ -28,6 +28,11 @@ export interface ArrangeItineraryTimelinePanelProps {
   onViewDayMap?: (dayIndex: number) => void;
   onEditEntry?: (entryId: string) => void;
   onDeleteEntry?: (entryId: string) => void;
+  onAddParallelEntry?: (entryId: string, dayIndex: number) => void;
+  /** 点击冲突详情 → 打开决策空间 */
+  onOpenConflict?: (conflictId: string, dayIndex: number) => void;
+  memberLabelById?: Map<string, string>;
+  memberCount?: number;
   onAddActivity?: (dayIndex: number) => void;
   onAddLodging?: (dayIndex: number) => void;
   onEditLodging?: (itemId: string) => void;
@@ -55,6 +60,10 @@ export function ArrangeItineraryTimelinePanel({
   onViewDayMap,
   onEditEntry,
   onDeleteEntry,
+  onAddParallelEntry,
+  onOpenConflict,
+  memberLabelById,
+  memberCount = 0,
   onAddActivity,
   onAddLodging,
   onEditLodging,
@@ -206,6 +215,14 @@ export function ArrangeItineraryTimelinePanel({
                 onViewDayMap={onViewDayMap ? () => onViewDayMap(day.dayIndex) : undefined}
                 onEditEntry={onEditEntry}
                 onDeleteEntry={onDeleteEntry}
+                onAddParallelEntry={
+                  onAddParallelEntry
+                    ? (entryId) => onAddParallelEntry(entryId, day.dayIndex)
+                    : undefined
+                }
+                onOpenConflict={onOpenConflict}
+                memberLabelById={memberLabelById}
+                memberCount={memberCount}
                 onAnalyzeMoveEntry={
                   copilotEnabled && onAnalyzeMoveEntry
                     ? (entryId) => onAnalyzeMoveEntry(entryId, day.dayIndex)

@@ -101,7 +101,11 @@ export type FeasibilityIssueKind =
   | 'daily_drive'
   | 'no_night_drive'
   | 'budget'
-  | 'generic';
+  | 'generic'
+  | 'product_session_time_window'
+  | 'meeting_point_buffer'
+  | 'product_participant_eligibility'
+  | 'product_weather_dependency';
 
 export interface FeasibilityIssueAnchorsDto {
   fromItemId: string;

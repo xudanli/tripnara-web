@@ -53,6 +53,8 @@ export interface WorkbenchDayDetailCardProps {
   memberCount?: number;
   decisionProblems?: DecisionProblemSummary[];
   onViewSolutions?: () => void;
+  /** 点击单条冲突 → 打开决策空间对应冲突 */
+  onOpenConflict?: (conflictId: string, dayIndex: number) => void;
   onDeferConflict?: () => void;
   canDeferConflict?: boolean;
   isConflictDismissed?: (conflictId: string) => boolean;
@@ -64,6 +66,10 @@ export interface WorkbenchDayDetailCardProps {
   onDeleteEntry?: (entryId: string) => void;
   /** 分析移动影响（编排 P2） */
   onAnalyzeMoveEntry?: (entryId: string) => void;
+  /** 同时间段为剩余成员添加并行分流活动 */
+  onAddParallelEntry?: (entryId: string) => void;
+  /** memberId → 展示名（分流参与人） */
+  memberLabelById?: Map<string, string>;
   itemLocks?: ArrangeItemLocksResponse | null;
   userLockedItemIds?: Set<string>;
   onToggleUserLock?: (entryId: string, locked: boolean) => void;
@@ -96,6 +102,7 @@ export function WorkbenchDayDetailCard({
   memberCount = 0,
   decisionProblems = [],
   onViewSolutions,
+  onOpenConflict,
   onDeferConflict,
   canDeferConflict = false,
   isConflictDismissed,
@@ -104,6 +111,8 @@ export function WorkbenchDayDetailCard({
   onEditEntry,
   onDeleteEntry,
   onAnalyzeMoveEntry,
+  onAddParallelEntry,
+  memberLabelById,
   itemLocks,
   userLockedItemIds,
   onToggleUserLock,
@@ -134,6 +143,8 @@ export function WorkbenchDayDetailCard({
       conflictId: lineId,
       dayIndex: day.dayIndex,
     });
+    // 合成指标冲突（drive-over-limit / metric-*）无稳定 BFF id，交给决策空间按天定位
+    onOpenConflict?.(lineId, day.dayIndex);
   };
 
   return (
@@ -305,6 +316,13 @@ export function WorkbenchDayDetailCard({
                           onSelect={
                             onSelectEntry
                               ? () => handleSelectEntry(entry.id, entry.title, entry.subtitle)
+                              : undefined
+                          }
+                          memberLabelById={memberLabelById}
+                          totalMemberCount={memberCount}
+                          onAddParallel={
+                            onAddParallelEntry
+                              ? () => onAddParallelEntry(entry.id)
                               : undefined
                           }
                           trailing={

@@ -6,15 +6,15 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Collaborator, PipelineStatus } from '@/types/trip';
-import { getPipelineProgressColor } from '@/lib/pipeline-status';
+import type { Collaborator } from '@/types/trip';
+import type { OverallReadinessCardDto } from '@/types/overall-readiness';
+import { OverallReadinessCard } from '@/components/trips/detail/OverallReadinessCard';
 import { WorkbenchCollaboratorsRow } from './WorkbenchCollaboratorsRow';
 import { WorkbenchFeasibilityRing } from './WorkbenchFeasibilityRing';
 import {
   workbenchHeaderShell,
   workbenchHeaderTitle,
   workbenchPlanRevisionBadge,
-  workbenchProgressTrack,
   workbenchHeaderModuleTabList,
   workbenchHeaderModuleTabTrigger,
 } from './workbench-ui';
@@ -24,14 +24,14 @@ export interface PlanningWorkbenchHeaderProps {
   displayTitle: string;
   /** 方案/修订标签，如 A3 */
   planBadge?: string | null;
-  pipelineStatus: PipelineStatus | null;
+  /** 整体准备度壳层卡（主分数） */
+  overallReadiness?: OverallReadinessCardDto | null;
+  overallReadinessLoading?: boolean;
   lastSavedAt?: string | null;
   feasibilityScore: number | null;
   feasibilityLoading?: boolean;
   travelAssurance?: import('@/lib/travel-assurance-summary.util').TravelAssuranceSummary | null;
   onFeasibilityClick?: () => void;
-  onPipelineClick?: () => void;
-  isPipelineLoading?: boolean;
   tripId?: string;
   collaborators?: Collaborator[] | null;
   collaboratorsLoading?: boolean;
@@ -44,12 +44,6 @@ export interface PlanningWorkbenchHeaderProps {
   /** 团队协作中心等全屏视图：隐藏规划/预算/行前 Tab 条 */
   hideTabBar?: boolean;
   className?: string;
-}
-
-function resolvePlanningProgress(status: PipelineStatus | null): number {
-  if (!status?.stages?.length) return 0;
-  const completed = status.stages.filter((s) => s.status === 'completed').length;
-  return Math.round((completed / status.stages.length) * 100);
 }
 
 function formatLastSaved(iso?: string | null): string | null {
@@ -65,14 +59,13 @@ function formatLastSaved(iso?: string | null): string | null {
 export function PlanningWorkbenchHeader({
   displayTitle,
   planBadge,
-  pipelineStatus,
+  overallReadiness,
+  overallReadinessLoading,
   lastSavedAt,
   feasibilityScore,
   feasibilityLoading,
   travelAssurance,
   onFeasibilityClick,
-  onPipelineClick,
-  isPipelineLoading,
   tripId,
   collaborators,
   collaboratorsLoading,
@@ -85,14 +78,7 @@ export function PlanningWorkbenchHeader({
   hideTabBar = false,
   className,
 }: PlanningWorkbenchHeaderProps) {
-  const progressPct = resolvePlanningProgress(pipelineStatus);
   const lastSavedLabel = formatLastSaved(lastSavedAt);
-  const progressColor =
-    pipelineStatus?.stages.some((s) => s.status === 'risk')
-      ? getPipelineProgressColor('risk')
-      : pipelineStatus?.stages.some((s) => s.status === 'in-progress')
-        ? getPipelineProgressColor('in-progress')
-        : getPipelineProgressColor('completed');
 
   return (
     <header className={cn(workbenchHeaderShell, 'px-4 py-3 sm:px-5', className)}>
@@ -121,24 +107,16 @@ export function PlanningWorkbenchHeader({
             </div>
 
             <div className="mt-2 flex max-w-lg flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="shrink-0 text-[11px] font-medium text-muted-foreground">规划进度</span>
-              <button
-                type="button"
-                className="flex min-w-[140px] flex-1 items-center gap-2 text-left disabled:opacity-60 sm:max-w-xs"
-                onClick={onPipelineClick}
-                disabled={!onPipelineClick || isPipelineLoading}
-                title={onPipelineClick ? '点击查看各阶段详情' : undefined}
-              >
-                <div className={cn(workbenchProgressTrack, 'min-w-[100px] flex-1')}>
-                  <div
-                    className={cn('h-full transition-all duration-300', progressColor)}
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                  {isPipelineLoading ? '…' : `${progressPct}%`}
-                </span>
-              </button>
+              {tripId ? (
+                <OverallReadinessCard
+                  tripId={tripId}
+                  readiness={overallReadiness}
+                  loading={overallReadinessLoading}
+                  compact
+                />
+              ) : (
+                <span className="text-[11px] text-muted-foreground">整体准备度 —</span>
+              )}
               {lastSavedLabel ? (
                 <span className="text-[11px] text-muted-foreground">
                   上次保存：{lastSavedLabel}

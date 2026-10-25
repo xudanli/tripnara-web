@@ -22,9 +22,10 @@ function isEveningCheckinAccommodationOnDay(
   item: ItineraryItemDetail,
   dayItems: ItineraryItemDetail[],
   dayIndex: number,
+  dayDate?: string,
 ): boolean {
   if (!isAccommodationItem(item)) return false;
-  if (shouldRelocateOvernightToPriorDay(item, dayItems, dayIndex)) return false;
+  if (shouldRelocateOvernightToPriorDay(item, dayItems, dayIndex, dayDate)) return false;
   if (isCheckinDisplayItem(item)) return true;
   if (itemSpansOvernight(item)) return true;
   return true;
@@ -43,7 +44,7 @@ export function nightAfterDayIsCovered(
   const dayItems =
     itineraryItemsMap.get(day.date) ?? itineraryItemsMap.get(norm) ?? [];
 
-  if (dayItems.some((item) => isEveningCheckinAccommodationOnDay(item, dayItems, dayIndex))) {
+  if (dayItems.some((item) => isEveningCheckinAccommodationOnDay(item, dayItems, dayIndex, day.date))) {
     return true;
   }
 
@@ -54,7 +55,7 @@ export function nightAfterDayIsCovered(
       itineraryItemsMap.get(nextDay.date) ??
       itineraryItemsMap.get(nextNorm) ??
       [];
-    const bridged = getOvernightItemsForPriorDayTimeline(nextItems, dayIndex + 1);
+    const bridged = getOvernightItemsForPriorDayTimeline(nextItems, dayIndex + 1, nextDay.date);
     if (bridged.some(isAccommodationItem)) return true;
   }
 
@@ -83,7 +84,7 @@ function findNightAccommodationItem(
     itineraryItemsMap.get(day.date) ?? itineraryItemsMap.get(norm) ?? [];
 
   const onDay = dayItems.find((item) =>
-    isEveningCheckinAccommodationOnDay(item, dayItems, dayIndex),
+    isEveningCheckinAccommodationOnDay(item, dayItems, dayIndex, day.date),
   );
   if (onDay) return onDay;
 
@@ -93,7 +94,9 @@ function findNightAccommodationItem(
   const nextNorm = normalizeDayDate(nextDay.date);
   const nextItems =
     itineraryItemsMap.get(nextDay.date) ?? itineraryItemsMap.get(nextNorm) ?? [];
-  return getOvernightItemsForPriorDayTimeline(nextItems, dayIndex + 1).find(isAccommodationItem);
+  return getOvernightItemsForPriorDayTimeline(nextItems, dayIndex + 1, nextDay.date).find(
+    isAccommodationItem,
+  );
 }
 
 function accommodationItemLabel(item: ItineraryItemDetail): string {

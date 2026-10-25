@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { tripOverallReadinessApi } from '@/api/trip-detail-tab-client';
+import { overallReadinessKeys } from '@/lib/overall-readiness-keys';
 import { normalizeDecisionCheckerResponse } from '@/types/decision-checker';
 import {
   isSplitPlanSnapshotStale,
@@ -50,6 +52,7 @@ import { LogoLoading } from '@/components/common/LogoLoading';
 import type { PipelineStatus, PipelineStage, TripListItem, TripDetail } from '@/types/trip';
 import { countriesApi } from '@/api/countries';
 import type { Country } from '@/types/country';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 import { Settings2 } from 'lucide-react';
 import {
   FeasibilityReportSheet,
@@ -76,7 +79,6 @@ import { ShareTripDialog } from '@/components/trips/ShareTripDialog';
 import { CollaboratorsDialog } from '@/components/trips/CollaboratorsDialog';
 import { TripGeneratingPlaceholder } from '@/components/trips/TripGeneratingPlaceholder';
 import { shouldShowNlItemsGeneratingPlaceholder } from '@/lib/trip-planning-complete';
-import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { PlanningBanner } from '@/components/planning/PlanningBanner';
 import { hasDecisionCockpitUi } from '@/lib/decision-cockpit';
@@ -177,6 +179,7 @@ import {
   shouldShowAttractionExploreSuggest,
 } from '@/lib/attraction-explore-trip.util';
 import { isUnifiedDecisionGatewayEnabled, prefetchDecisionRuntimeCapabilities } from '@/lib/decision-gateway.util';
+import { prefetchOrtToolsShadowHealth } from '@/lib/ortools-shadow.store';
 import {
   trackConstraintDrawerClose,
   trackConstraintDrawerOpen,
@@ -237,6 +240,7 @@ import {
   resolveConflictForDecisionProblem,
   resolveDecisionProblemForConflict,
 } from '@/lib/planning-conflicts-decision.util';
+import { decisionSpaceNeedsDecisionChecker } from '@/lib/decision-checker-visibility.util';
 import {
   resolvePlanningActionCtaLabel,
   resolvePlanningActionTarget,
@@ -255,19 +259,6 @@ import type { ConstraintPendingItem, ConstraintPendingKey } from '@/types/planni
 import { trackDecisionStripEvidenceOpen, trackDecisionStripDeepLink } from '@/utils/plan-studio-decision-strip-analytics';
 import { loadCausalRuntimeSession } from '@/lib/causal-runtime-session';
 
-/** 工作台标题副文案：与侧栏行程列表展示逻辑对齐 */
-function planStudioTripHeadingLabel(trip: TripDetail): string {
-  const name = trip.name?.trim();
-  if (name) return name;
-  if (trip.destination && trip.startDate) {
-    try {
-      return `${trip.destination} ${format(new Date(trip.startDate), 'yyyy-MM-dd')}`;
-    } catch {
-      return trip.destination;
-    }
-  }
-  return trip.destination || '行程';
-}
 
 /** 将 URL tab 参数规范为可展示的 Tab value */
 function resolvePlanStudioTab(tabParam: string | null): string {
@@ -337,6 +328,12 @@ function PlanStudioPageContent() {
   const [loading, setLoading] = useState(true);
   const [hasTrips, setHasTrips] = useState(false);
   const [tripExists, setTripExists] = useState(false);
+  const overallReadinessQuery = useQuery({
+    queryKey: overallReadinessKeys.card(tripId ?? ''),
+    queryFn: () => tripOverallReadinessApi.getCard(tripId!),
+    enabled: Boolean(tripId && tripExists),
+    staleTime: 30_000,
+  });
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0); // 用于触发子组件刷新
 
@@ -402,6 +399,11 @@ function PlanStudioPageContent() {
   
   // 当前行程详情（用于摘要条显示）
   const [currentTrip, setCurrentTrip] = useState<TripDetail | null>(null);
+
+  useEffect(() => {
+    if (!decisionSpaceOpen && !arrangeItineraryOpen) return;
+    void prefetchOrtToolsShadowHealth();
+  }, [decisionSpaceOpen, arrangeItineraryOpen]);
 
   /** 首屏校验通过后再拉取子模块数据，避免 LogoLoading 期间并发打满 API */
   const readyTripId = !loading && tripExists && tripId ? tripId : null;
@@ -721,6 +723,22 @@ function PlanStudioPageContent() {
     ? decisionSpaceActiveProblem?.id ?? activeDecisionProblemId
     : null;
 
+  /** 选型 DecisionCase 只要中栏；冲突/可执行类才开右栏检查器 */
+  const showDecisionSpaceChecker = useMemo(
+    () =>
+      decisionSpaceNeedsDecisionChecker({
+        decisionSpaceOpen,
+        problem: decisionSpaceActiveProblem ?? activeDecisionProblemSummary,
+        conflict: decisionSpaceActiveConflict,
+      }),
+    [
+      decisionSpaceOpen,
+      decisionSpaceActiveProblem,
+      activeDecisionProblemSummary,
+      decisionSpaceActiveConflict,
+    ],
+  );
+
   /** Tier-2：bundle（Phase 1）或 detail ∥ inspector 回退 */
   const decisionSpaceTier2 = useDecisionSpaceTier2({
     tripId: readyTripId ?? '',
@@ -985,18 +1003,9 @@ function PlanStudioPageContent() {
     return countryCode;
   };
 
-  const workbenchTitle = currentTrip ? planStudioTripHeadingLabel(currentTrip) : t('planStudio.title');
-  const workbenchSubtitle = useMemo(() => {
-    if (!currentTrip) return undefined;
-    const days = currentTrip.TripDay?.length;
-    const dest = currentTrip.destination
-      ? getCountryName(currentTrip.destination.split(',')[0]?.trim() || currentTrip.destination)
-      : undefined;
-    if (dest && days) return `${dest} · ${days}天行程`;
-    if (days) return `${days}天行程`;
-    return dest;
-  }, [currentTrip, countryMap]);
-  const workbenchDisplayTitle = workbenchSubtitle ?? workbenchTitle;
+  const workbenchDisplayTitle = currentTrip
+    ? formatTripDisplayTitle(currentTrip, { resolveCountryName: getCountryName })
+    : t('planStudio.title');
   const workbenchPlanBadge = currentTrip?.revisionLabel?.trim() || null;
 
   const isCollabCenterOpen = useMemo(
@@ -1378,8 +1387,9 @@ function PlanStudioPageContent() {
           ? resolveConflictForDecisionProblem(problem, planningConflicts.items)
           : undefined;
         if (conflict) conflictId = conflict.id;
-      }
-      if (!conflictId) {
+        else conflictId = null;
+      } else if (!conflictId) {
+        // 仅「无明确 problem」进决策空间时，才回落首个 must_handle 冲突
         conflictId =
           planningConflicts.items.find((item) => item.priority === 'must_handle')?.id ??
           planningConflicts.items[0]?.id ??
@@ -1965,10 +1975,17 @@ function PlanStudioPageContent() {
   const handleWorkbenchItineraryChanged = useCallback(() => {
     setRefreshKey((k) => k + 1);
     tripExecutability.refreshAfterPlanEdit();
+    void planningConflicts.revalidateAndReload({});
+    void decisionProblemsInbox.reload();
     if (tripId) {
       tripsApi.getById(tripId).then(setCurrentTrip).catch(console.error);
     }
-  }, [tripId, tripExecutability.refreshAfterPlanEdit]);
+  }, [
+    tripId,
+    tripExecutability.refreshAfterPlanEdit,
+    planningConflicts,
+    decisionProblemsInbox,
+  ]);
 
   const handleTepFocusDay = useCallback(
     (dayIndex: number) => {
@@ -3269,14 +3286,13 @@ function PlanStudioPageContent() {
     <PlanningWorkbenchHeader
       displayTitle={workbenchDisplayTitle}
       planBadge={workbenchPlanBadge}
-      pipelineStatus={pipelineStatus}
+      overallReadiness={overallReadinessQuery.data ?? null}
+      overallReadinessLoading={overallReadinessQuery.isLoading}
       lastSavedAt={currentTrip?.updatedAt ?? currentTrip?.createdAt}
       feasibilityScore={workbenchFeasibility.score}
       feasibilityLoading={workbenchFeasibility.loading}
       travelAssurance={workbenchFeasibility.assurance}
       onFeasibilityClick={() => openFeasibilitySheet()}
-      onPipelineClick={() => setShowStatusDialog(true)}
-      isPipelineLoading={loadingStatus}
       tripId={tripId}
       collaborators={collaboratorsQuery.data}
       collaboratorsLoading={collaboratorsQuery.isLoading}
@@ -3384,6 +3400,7 @@ function PlanStudioPageContent() {
               onOpenAttractionExplore={openAttractionExplore}
               onOpenItineraryDiagnosis={openItineraryDiagnosis}
               onOpenConstraints={() => openConstraintConsole()}
+              onOpenDecisionSpace={openDecisionSpace}
               conflictMustHandleCount={planningConflicts.summary.mustHandle}
             />
           </>
@@ -3668,6 +3685,7 @@ function PlanStudioPageContent() {
             )
           }
           decisionChecker={
+            showDecisionSpaceChecker ? (
             <div ref={decisionCockpitRef} className="flex h-full min-h-0 flex-col">
               <PlanningWorkbenchDecisionChecker
                 tripId={tripId}
@@ -3753,7 +3771,11 @@ function PlanStudioPageContent() {
                 planDiffUnchangedHints={decisionSpacePlanDiffFallback?.unchangedHints}
               />
             </div>
+            ) : (
+              <div ref={decisionCockpitRef} className="hidden" aria-hidden />
+            )
           }
+          hideDecisionChecker={decisionSpaceOpen && !showDecisionSpaceChecker}
           decisionSpaceMode={decisionSpaceOpen}
         />
         </WorkbenchDecisionFocusProvider>

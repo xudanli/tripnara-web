@@ -7,13 +7,14 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import type { SuggestedOperation } from '@/api/agent';
 import {
+  isSilentVoteCreateSuggestedOperation,
   parseIntentModeFromSuggestedPayload,
   pathForSuggestedClientNavigation,
   type RouteRunIntentModeOption,
 } from '@/lib/suggested-operations';
 import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
 import { cn } from '@/lib/utils';
-import { Zap, ExternalLink } from 'lucide-react';
+import { Zap, ExternalLink, Vote } from 'lucide-react';
 
 export interface SuggestedOperationsBarProps {
   operations: SuggestedOperation[];
@@ -22,6 +23,8 @@ export interface SuggestedOperationsBarProps {
    * 若 payload 含 `intent_mode`，第三参须写入下一轮 `options.intent_mode`。
    */
   onRouteRunMessage: (message: string, tripIdOverride?: string, intentModeFromSuggestedPayload?: RouteRunIntentModeOption) => void;
+  /** 「发起投票」等：打开 Silent Vote 创建组件 */
+  onOpenSilentVoteCreate?: (tripIdOverride?: string) => void;
   disabled?: boolean;
   /** 埋点/禁用：当前正在执行的 operation id */
   activeOperationId?: string | null;
@@ -31,6 +34,7 @@ export interface SuggestedOperationsBarProps {
 export function SuggestedOperationsBar({
   operations,
   onRouteRunMessage,
+  onOpenSilentVoteCreate,
   disabled,
   activeOperationId,
   className,
@@ -47,14 +51,15 @@ export function SuggestedOperationsBar({
       <div className="flex flex-wrap gap-2">
         {operations.map((op) => {
           const busy = disabled || activeOperationId === op.id;
-          const isNav = op.kind === 'client_navigation';
-          const isMsg = op.kind === 'route_and_run_message';
+          const isVoteCreate = isSilentVoteCreateSuggestedOperation(op);
+          const isNav = op.kind === 'client_navigation' && !isVoteCreate;
+          const isMsg = op.kind === 'route_and_run_message' && !isVoteCreate;
 
           return (
             <Button
               key={op.id}
               type="button"
-              variant="secondary"
+              variant={isVoteCreate ? 'default' : 'secondary'}
               size="sm"
               disabled={busy}
               className={cn(
@@ -63,6 +68,20 @@ export function SuggestedOperationsBar({
               )}
               title={op.id}
               onClick={() => {
+                if (isVoteCreate) {
+                  if (!onOpenSilentVoteCreate) {
+                    toast.error('当前页面暂不支持发起投票');
+                    return;
+                  }
+                  let tripOverride: string | undefined;
+                  if (op.payload?.trip_id != null && String(op.payload.trip_id).trim() !== '') {
+                    const s = sanitizeRouteRunTripId(String(op.payload.trip_id));
+                    if (s) tripOverride = s;
+                  }
+                  onOpenSilentVoteCreate(tripOverride);
+                  return;
+                }
+
                 if (isMsg) {
                   const msg =
                     typeof op.payload?.message === 'string' ? op.payload.message.trim() : '';
@@ -104,7 +123,9 @@ export function SuggestedOperationsBar({
                 }
               }}
             >
-              {isNav ? (
+              {isVoteCreate ? (
+                <Vote className="w-3.5 h-3.5 shrink-0 opacity-80" aria-hidden />
+              ) : isNav ? (
                 <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-80" aria-hidden />
               ) : (
                 <Zap className="w-3.5 h-3.5 shrink-0 opacity-80" aria-hidden />

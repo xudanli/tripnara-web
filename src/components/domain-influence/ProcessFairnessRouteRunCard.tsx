@@ -1,9 +1,13 @@
-import { ExternalLink, Handshake } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { ExternalLink, Handshake, Vote } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SilentVoteCreateDialog } from '@/components/silent-vote/SilentVoteCreateDialog';
+import { SilentVoteDialog } from '@/components/silent-vote/SilentVoteDialog';
 import { cn } from '@/lib/utils';
 import { buildStructuredNegotiationUrl } from '@/lib/process-fairness-navigation';
+import type { SilentVoteCreateDraft } from '@/lib/decision-space-vote.util';
 import type { ProcessFairnessPayload } from '@/types/process-fairness';
 import type { DomainNegotiationTask } from '@/types/domain-negotiation-task';
 import type { TripDomain } from '@/types/trip-domain-influence';
@@ -65,6 +69,29 @@ export function ProcessFairnessRouteRunCard({ payload, className }: ProcessFairn
   const task = stubNegotiationTask(payload);
   const teamTabUrl = buildStructuredNegotiationUrl(payload);
 
+  const [createVoteOpen, setCreateVoteOpen] = useState(false);
+  const [voteDetailOpen, setVoteDetailOpen] = useState(false);
+  const [activeVoteId, setActiveVoteId] = useState<string | null>(null);
+
+  const voteDraft = useMemo((): SilentVoteCreateDraft => {
+    const title = task.title?.trim() || '方案选择';
+    return {
+      title,
+      question: payload.agentIntroZh?.trim() || `请就「${title}」匿名选择更倾向的方案`,
+      autoOpen: true,
+    };
+  }, [task.title, payload.agentIntroZh]);
+
+  const handleStartVote = useCallback(() => {
+    setCreateVoteOpen(true);
+  }, []);
+
+  const handleVoteCreated = useCallback((voteId: string) => {
+    setCreateVoteOpen(false);
+    setActiveVoteId(voteId);
+    setVoteDetailOpen(true);
+  }, []);
+
   if (!tripId) return null;
 
   return (
@@ -91,28 +118,56 @@ export function ProcessFairnessRouteRunCard({ payload, className }: ProcessFairn
         )}
       </CardHeader>
       <CardContent className="space-y-3">
-        <PreferenceRoundDiscussionPanel tripId={tripId} task={task} roundId={roundId} />
-        {teamTabUrl ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(
-                  new CustomEvent('plan-studio:open-structured-negotiation', {
-                    detail: { tripId, roundId, domain: payload.clientNavigation?.domain },
-                  }),
-                );
-              }
-            }}
-          >
-            <ExternalLink className="h-3.5 w-3.5 mr-1.5 shrink-0" aria-hidden />
-            打开完整协商
+        <PreferenceRoundDiscussionPanel
+          tripId={tripId}
+          task={task}
+          roundId={roundId}
+          onStartVote={handleStartVote}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" className="h-8 text-xs" onClick={handleStartVote}>
+            <Vote className="h-3.5 w-3.5 mr-1.5 shrink-0" aria-hidden />
+            发起投票
           </Button>
-        ) : null}
+          {teamTabUrl ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(
+                    new CustomEvent('plan-studio:open-structured-negotiation', {
+                      detail: { tripId, roundId, domain: payload.clientNavigation?.domain },
+                    }),
+                  );
+                }
+              }}
+            >
+              <ExternalLink className="h-3.5 w-3.5 mr-1.5 shrink-0" aria-hidden />
+              打开完整协商
+            </Button>
+          ) : null}
+        </div>
       </CardContent>
+
+      <SilentVoteCreateDialog
+        tripId={tripId}
+        open={createVoteOpen}
+        onOpenChange={setCreateVoteOpen}
+        draft={voteDraft}
+        onCreated={handleVoteCreated}
+      />
+      <SilentVoteDialog
+        tripId={tripId}
+        voteId={activeVoteId}
+        open={voteDetailOpen}
+        onOpenChange={(open) => {
+          setVoteDetailOpen(open);
+          if (!open) setActiveVoteId(null);
+        }}
+      />
     </Card>
   );
 }

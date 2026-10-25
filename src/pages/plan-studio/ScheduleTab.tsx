@@ -1866,8 +1866,13 @@ export default function ScheduleTab({
           const bridgedOvernightItems = getOvernightItemsForPriorDayTimeline(
             nextDayItemsForBridge,
             idx + 1,
+            nextDayRow?.date,
           ).filter((item) => !dayItemsForLeadIn.some((d) => d.id === item.id));
-          const baseTimelineItems = filterCheckoutDayTimelineItems(dayItemsForLeadIn, idx);
+          const baseTimelineItems = filterCheckoutDayTimelineItems(
+            dayItemsForLeadIn,
+            idx,
+            day.date,
+          );
           const carRentalReturnItems =
             trip?.TripDay
               ? getCarRentalReturnItemsForDayTimeline(

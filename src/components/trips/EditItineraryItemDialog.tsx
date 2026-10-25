@@ -1,8 +1,29 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { itineraryItemsApi } from '@/api/trips';
-import type { ItineraryItem, UpdateItineraryItemRequest, ItineraryItemType, CostCategory, TravelMode, BookingStatus } from '@/types/trip';
+import type {
+  Collaborator,
+  ItineraryItem,
+  UpdateItineraryItemRequest,
+  ItineraryItemType,
+  CostCategory,
+  TravelMode,
+  BookingStatus,
+} from '@/types/trip';
 import { utcToDatetimeLocal, datetimeLocalToUTC } from '@/utils/timezone';
+import {
+  mergeSplitPlanNoteIntoNote,
+  parseItinerarySplitPlanNote,
+  stripSplitPlanNoteLines,
+  type ItinerarySplitPhase,
+  type ItinerarySplitPlanNoteMarker,
+} from '@/lib/itinerary-split-note.util';
+import {
+  buildManualSplitMarker,
+  resolveTripMemberOptions,
+  withParticipantIdsMetadata,
+} from '@/lib/itinerary-split-participants.util';
+import { ItineraryItemSplitParticipantsFields } from '@/components/trips/ItineraryItemSplitParticipantsFields';
 import {
   Dialog,
   DialogContent,
@@ -28,7 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertCircle, Info, DollarSign, Navigation, CalendarCheck, Link2 } from 'lucide-react';
+import { AlertCircle, Info, DollarSign, Navigation, CalendarCheck, Link2, Users } from 'lucide-react';
 import { ITINERARY_ITEM_TYPE_OPTIONS } from '@/lib/itinerary-item-type-display';
 import { ItinerarySpecialDisplayRoleField } from '@/components/trips/ItinerarySpecialDisplayRoleField';
 import { extractHmFromWindow } from '@/lib/itinerary-item-card-format';
@@ -64,17 +85,8 @@ import { CalendarDays } from 'lucide-react';
 // 行程类型选项（与 time轴列表统一）
 const ITEM_TYPE_OPTIONS = ITINERARY_ITEM_TYPE_OPTIONS;
 
-// 交通方式选项
-const TRAVEL_MODE_OPTIONS: { value: TravelMode; label: string; icon: string }[] = [
-  { value: 'DRIVING', label: '驾车', icon: '🚗' },
-  { value: 'WALKING', label: '步行', icon: '🚶' },
-  { value: 'TRANSIT', label: '公交', icon: '🚌' },
-  { value: 'TRAIN', label: '高铁', icon: '🚄' },
-  { value: 'FLIGHT', label: '飞机', icon: '✈️' },
-  { value: 'FERRY', label: '轮渡', icon: '⛴️' },
-  { value: 'BICYCLE', label: '骑行', icon: '🚴' },
-  { value: 'TAXI', label: '出租车', icon: '🚕' },
-];
+/** 编辑行程项：交通方式固定为自驾 */
+const FIXED_TRAVEL_MODE: TravelMode = 'DRIVING';
 
 // 预订状态选项
 const BOOKING_STATUS_OPTIONS: { value: BookingStatus; label: string; icon: string }[] = [
@@ -109,6 +121,8 @@ interface EditItineraryItemDialogProps {
   currentTripDayId?: string;
   /** 冰岛自驾 TEP：展示弹性标签编辑 */
   tepFlexibilityEnabled?: boolean;
+  /** 行程协作者，用于分流参与成员配置 */
+  collaborators?: Collaborator[] | null;
 }
 
 export function EditItineraryItemDialog({
@@ -120,6 +134,7 @@ export function EditItineraryItemDialog({
   tripDays = [],
   currentTripDayId,
   tepFlexibilityEnabled = false,
+  collaborators = null,
 }: EditItineraryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +146,14 @@ export function EditItineraryItemDialog({
   const [showCostFields, setShowCostFields] = useState(false);
   const [showTravelFields, setShowTravelFields] = useState(false);
   const [showBookingFields, setShowBookingFields] = useState(false);
+  const [showSplitFields, setShowSplitFields] = useState(false);
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitPhase, setSplitPhase] = useState<ItinerarySplitPhase>('branch');
+  const [splitGroupLabel, setSplitGroupLabel] = useState('');
+  const [splitLetter, setSplitLetter] = useState('A');
+  const [splitMemberIds, setSplitMemberIds] = useState<string[]>([]);
+  const [existingSplitMarker, setExistingSplitMarker] =
+    useState<ItinerarySplitPlanNoteMarker | null>(null);
   // 级联影响确认弹窗
   const [showCascadeConfirm, setShowCascadeConfirm] = useState(false);
   const [cascadeConfirmation, setCascadeConfirmation] = useState<ItineraryRequiresConfirmation | null>(
@@ -160,7 +183,7 @@ export function EditItineraryItemDialog({
     // 交通信息
     travelFromPreviousDuration: item.travelFromPreviousDuration || undefined,
     travelFromPreviousDistance: item.travelFromPreviousDistance || undefined,
-    travelMode: item.travelMode || undefined,
+    travelMode: FIXED_TRAVEL_MODE,
     // 预订信息
     bookingStatus: item.bookingStatus || undefined,
     bookingConfirmation: item.bookingConfirmation || '',
@@ -178,6 +201,10 @@ export function EditItineraryItemDialog({
     [displayRole, formData.costCategory, formData.type, item.costCategory, item.type],
   );
   const showTepFlexFields = tepFlexibilityEnabled && shouldShowTepFlexibilityEditor(tepFlexItemKind);
+  const memberOptions = useMemo(
+    () => resolveTripMemberOptions(collaborators),
+    [collaborators],
+  );
 
   const tripDaysFingerprint = useMemo(
     () =>
@@ -208,9 +235,24 @@ export function EditItineraryItemDialog({
     const hasTravelData = !!(item.travelFromPreviousDuration || item.travelFromPreviousDistance || item.travelMode);
     const hasBookingData = !!(item.bookingStatus || item.bookingConfirmation || item.bookingUrl);
     const resolvedRole = resolveItinerarySpecialDisplayRole(item);
-    const parsedNote = parseTepItemNoteForForm(item.note);
+    const splitMarker = parseItinerarySplitPlanNote(item.note);
+    const noteWithoutSplit = stripSplitPlanNoteLines(item.note);
+    const parsedNote = parseTepItemNoteForForm(noteWithoutSplit);
     const noteForForm = parsedNote.userNote;
-    setTepFlexForm(readTepFlexFormFromNote(item.note));
+    setTepFlexForm(readTepFlexFormFromNote(noteWithoutSplit));
+    setExistingSplitMarker(splitMarker);
+    setSplitEnabled(Boolean(splitMarker));
+    setSplitPhase(splitMarker?.phase ?? 'branch');
+    setSplitGroupLabel(splitMarker?.groupLabel ?? '');
+    setSplitLetter(splitMarker?.letter ?? 'A');
+    setSplitMemberIds(
+      splitMarker?.memberIds?.length
+        ? [...splitMarker.memberIds]
+        : item.participantIds?.length
+          ? [...item.participantIds]
+          : [],
+    );
+    setShowSplitFields(Boolean(splitMarker));
     const tripDayRows = tripDays.map((d) => ({ id: d.id, date: d.date }));
     const endDayId =
       findTripDayIdForIsoEnd(itemEndTime, tripDayRows) ??
@@ -232,7 +274,7 @@ export function EditItineraryItemDialog({
       // 交通信息
       travelFromPreviousDuration: item.travelFromPreviousDuration || undefined,
       travelFromPreviousDistance: item.travelFromPreviousDistance || undefined,
-      travelMode: item.travelMode || undefined,
+      travelMode: FIXED_TRAVEL_MODE,
       // 预订信息
       bookingStatus: item.bookingStatus || undefined,
       bookingConfirmation: item.bookingConfirmation || '',
@@ -348,17 +390,44 @@ export function EditItineraryItemDialog({
           : undefined;
       }
 
+      const bodyNote = buildItineraryItemNoteForSave({
+        userNote: formData.note,
+        displayRole,
+        tepForm: tepFlexForm,
+        tepEnabled: showTepFlexFields,
+      });
+
+      let splitMarkerForSave: ItinerarySplitPlanNoteMarker | null = null;
+      if (splitEnabled) {
+        const memberIdsForSave =
+          splitPhase === 'shared' && memberOptions.length > 0
+            ? memberOptions.map((m) => m.id)
+            : splitMemberIds;
+        if (splitPhase === 'branch' && memberIdsForSave.length === 0) {
+          setError('分流活动请至少选择一位参与成员');
+          setLoading(false);
+          return;
+        }
+        splitMarkerForSave = buildManualSplitMarker({
+          memberIds: memberIdsForSave,
+          phase: splitPhase,
+          groupLabel: splitGroupLabel,
+          letter: splitPhase === 'branch' ? splitLetter : undefined,
+          groupId: existingSplitMarker?.groupId,
+          splitPlanId: existingSplitMarker?.splitPlanId,
+        });
+      }
+
+      const participantIds = splitMarkerForSave?.memberIds;
       const updateData: UpdateItineraryItemRequest = {
         type: formData.type,
         startTime: startTimeUtc,
         endTime: endTimeUtc,
-        note: buildItineraryItemNoteForSave({
-          userNote: formData.note,
-          displayRole,
-          tepForm: tepFlexForm,
-          tepEnabled: showTepFlexFields,
-        }),
-        metadata: buildSpecialDisplayMetadata(displayRole, item.metadata ?? undefined),
+        note: mergeSplitPlanNoteIntoNote(bodyNote, splitMarkerForSave),
+        metadata: withParticipantIdsMetadata(
+          buildSpecialDisplayMetadata(displayRole, item.metadata ?? undefined),
+          participantIds,
+        ),
         forceCreate, // 强制更新标志
         // 级联调整模式：'auto' 调整后续（默认） | 'none' 只调整当前项
         // 只有在用户明确选择时才发送，否则使用后端默认值 'auto'
@@ -391,7 +460,7 @@ export function EditItineraryItemDialog({
         await itineraryItemsApi.updateTravelInfo(item.id, {
           travelFromPreviousDuration: formData.travelFromPreviousDuration,
           travelFromPreviousDistance: formData.travelFromPreviousDistance,
-          travelMode: formData.travelMode,
+          travelMode: FIXED_TRAVEL_MODE,
         });
       }
 
@@ -772,24 +841,9 @@ export function EditItineraryItemDialog({
                 <div className="space-y-3 p-3 border rounded-lg bg-gray-50">
                   <div className="space-y-1">
                     <Label className="text-xs">交通方式</Label>
-                    <Select 
-                      value={formData.travelMode || ''} 
-                      onValueChange={(v) => setFormData({ ...formData, travelMode: v as TravelMode })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择交通方式" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TRAVEL_MODE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            <div className="flex items-center gap-2">
-                              <span>{option.icon}</span>
-                              <span>{option.label}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+                      自驾
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3">
@@ -825,6 +879,38 @@ export function EditItineraryItemDialog({
                   <p className="text-xs text-muted-foreground">从上一地点到此处的交通信息</p>
                 </div>
               )}
+            </div>
+
+            {/* 分流 / 参与成员 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  分流与参与成员
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setShowSplitFields(!showSplitFields)}
+                  className="text-sm text-primary hover:underline"
+                >
+                  {showSplitFields ? '隐藏' : '设置分流'}
+                </button>
+              </div>
+              {showSplitFields ? (
+                <ItineraryItemSplitParticipantsFields
+                  enabled={splitEnabled}
+                  phase={splitPhase}
+                  groupLabel={splitGroupLabel}
+                  letter={splitLetter}
+                  selectedIds={splitMemberIds}
+                  memberOptions={memberOptions}
+                  onEnabledChange={setSplitEnabled}
+                  onPhaseChange={setSplitPhase}
+                  onGroupLabelChange={setSplitGroupLabel}
+                  onLetterChange={setSplitLetter}
+                  onSelectedIdsChange={setSplitMemberIds}
+                />
+              ) : null}
             </div>
 
             {/* 预订信息（可选） */}

@@ -189,7 +189,20 @@ export default function TripListCard({
         </div>
 
         {!isUnavailable && displayStatus !== 'completed' && displayStatus !== 'cancelled' ? (
-          metrics.hasRealProgress && metrics.progressPercent != null ? (
+          metrics.readinessScore != null ? (
+            <div>
+              <div className="flex items-center justify-between text-[10px] mb-1 gap-2">
+                <span className="text-muted-foreground shrink-0">整体准备度</span>
+                <span className="font-medium text-foreground tabular-nums truncate text-right">
+                  {metrics.readinessScore}%
+                  {metrics.readinessStateLabelZh
+                    ? ` · ${metrics.readinessStateLabelZh}`
+                    : ''}
+                </span>
+              </div>
+              <Progress value={metrics.readinessScore} className="h-1 bg-muted [&>div]:bg-primary" />
+            </div>
+          ) : metrics.hasRealProgress && metrics.progressPercent != null ? (
             <div>
               <div className="flex items-center justify-between text-[10px] mb-1">
                 <span className="text-muted-foreground">规划进度</span>
@@ -198,7 +211,7 @@ export default function TripListCard({
               <Progress value={metrics.progressPercent} className="h-1 bg-muted [&>div]:bg-primary" />
             </div>
           ) : (
-            <p className="text-[11px] text-muted-foreground">规划进度待同步</p>
+            <p className="text-[11px] text-muted-foreground">—</p>
           )
         ) : null}
 

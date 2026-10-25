@@ -242,6 +242,40 @@ export interface ItineraryItem {
   displaySortIndex?: number;
   /** 分流分支参与者（journey-map BFF / split plan） */
   participantIds?: string[];
+  /**
+   * 体验产品绑定（C 端主路径）
+   * POST/PATCH /api/itinerary-items · GET trip 全量若 select 已透出
+   */
+  experienceDefinitionId?: string | null;
+  productOfferingId?: string | null;
+  productSessionId?: string | null;
+  /** 班次快照（BFF embed）；无则前端从 metadata / note 降级 */
+  ProductSession?: {
+    id?: string;
+    meetTimeLocal?: string | null;
+    startTimeLocal?: string | null;
+    endTimeLocal?: string | null;
+    meetingPointPlaceId?: number | null;
+    meetingPointName?: string | null;
+    meetingPointAddress?: string | null;
+    cancelDeadlineLocal?: string | null;
+    status?: string | null;
+    requiredGear?: string[] | null;
+    weatherDependency?: string | null;
+  } | null;
+  ProductOffering?: {
+    id?: string;
+    name?: string | null;
+    title?: string | null;
+    supplierName?: string | null;
+  } | null;
+  ExperienceDefinition?: {
+    id?: string;
+    name?: string | null;
+    title?: string | null;
+    categoryHint?: string | null;
+    canonicalType?: string | null;
+  } | null;
 }
 
 export interface ItineraryItemDetail extends ItineraryItem {
@@ -1844,6 +1878,14 @@ export interface CreateItineraryItemRequest {
   externalUrl?: string;
   /** 元数据（如 source: 'rail', isOvernightRail, lineName） */
   metadata?: Record<string, unknown>;
+  /** 到集合点的交通分钟；不足缓冲会触发 meeting_point_buffer */
+  travelFromPreviousDuration?: number;
+  /** 体验定义 id */
+  experienceDefinitionId?: string | null;
+  /** 供应商具体产品 id */
+  productOfferingId?: string | null;
+  /** 班次 / 入场时段 id */
+  productSessionId?: string | null;
   // 校验相关字段
   forceCreate?: boolean;       // 强制创建，忽略 WARNING 级别校验
   ignoreWarnings?: string[];  // 忽略的警告类型列表
@@ -1867,6 +1909,10 @@ export interface UpdateItineraryItemRequest {
   startTime?: string;
   endTime?: string;
   note?: string;
+  travelFromPreviousDuration?: number;
+  experienceDefinitionId?: string | null;
+  productOfferingId?: string | null;
+  productSessionId?: string | null;
   // 校验相关字段
   forceCreate?: boolean;       // 强制更新，忽略 WARNING 级别校验
   ignoreWarnings?: string[];  // 忽略的警告类型列表

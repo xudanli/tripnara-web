@@ -200,6 +200,22 @@ describe('normalize-attraction-explore', () => {
     expect(normalized.source).toBe('rules+llm');
   });
 
+  it('normalizes explore-intent themes/suitableFor when BFF returns string ids', () => {
+    const normalized = normalizeExploreIntentResponse({
+      tripId: 'trip-1',
+      rawQuery: '辛格维利尔国家公园',
+      themes: ['nature_landscapes', 'culture_history'],
+      suitableFor: ['family', 'couple'],
+      source: 'rules+llm',
+    });
+
+    expect(normalized.themes?.map((t) => t.id)).toEqual([
+      'nature_landscapes',
+      'culture_history',
+    ]);
+    expect(normalized.suitableFor?.map((t) => t.id)).toEqual(['family', 'couple']);
+  });
+
   it('normalizes detourMethod on item metadata', () => {
     const normalized = normalizeAttractionExploreRecommendations({
       groups: [

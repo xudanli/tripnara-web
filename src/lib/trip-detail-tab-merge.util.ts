@@ -28,6 +28,7 @@ export function mergeTimelineOverview(
     planning: next.planning
       ? { ...prev.planning, ...next.planning, stages: next.planning.stages ?? prev.planning.stages }
       : prev.planning,
+    overallReadiness: next.overallReadiness ?? prev.overallReadiness,
     tasks: next.tasks ?? prev.tasks,
     todayReminders: next.todayReminders ?? prev.todayReminders,
     health: next.health ?? prev.health,

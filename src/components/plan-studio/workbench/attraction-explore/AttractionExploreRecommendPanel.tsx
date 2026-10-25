@@ -39,8 +39,6 @@ export interface AttractionExploreRecommendPanelProps {
   onRemoveFromCandidates?: (item: AttractionExploreItem) => void;
   onViewMap?: () => void;
   onViewMapPoint?: (point: AttractionExploreMapPoint) => void;
-  onPlaceMapPoint?: (point: AttractionExploreMapPoint) => void;
-  mapPlacePending?: boolean;
   mapPoints?: AttractionExploreMapPoint[];
   mapLoading?: boolean;
   className?: string;
@@ -58,8 +56,6 @@ export function AttractionExploreRecommendPanel({
   onViewDetails,
   onRemoveFromCandidates,
   onViewMap,
-  onPlaceMapPoint,
-  mapPlacePending = false,
   mapPoints = [],
   mapLoading = false,
   className,
@@ -145,18 +141,6 @@ export function AttractionExploreRecommendPanel({
                           </p>
                         ) : null}
                       </div>
-                      {onPlaceMapPoint && point.kind === 'candidate' && point.placeId != null ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 shrink-0 text-[10px]"
-                          disabled={mapPlacePending}
-                          onClick={() => onPlaceMapPoint(point)}
-                        >
-                          插入草案
-                        </Button>
-                      ) : null}
                     </div>
                   </li>
                 ))}

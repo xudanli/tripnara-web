@@ -14,6 +14,7 @@ import { ArrowLeft, ChevronDown, PanelRight, Share2 } from 'lucide-react';
 import type { TripListItem } from '@/types/trip';
 import { format } from 'date-fns';
 import { buildTripTravelStatusPath } from '@/lib/travel-status-navigation.util';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 
 interface NaraConversationHeaderProps {
   tripTitle?: string | null;
@@ -104,9 +105,7 @@ export default function NaraConversationHeader({
               >
                 <div className="min-w-0">
                   <div className="truncate font-medium">
-                    {(trip as TripListItem & { name?: string }).name ||
-                      trip.destination ||
-                      '未命名行程'}
+                    {formatTripDisplayTitle(trip)}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {format(new Date(trip.startDate), 'yyyy-MM-dd')}

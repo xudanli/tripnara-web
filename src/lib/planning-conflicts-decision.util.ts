@@ -68,6 +68,11 @@ export function resolveConflictForDecisionProblem(
     if (match) return match;
   }
 
+  // DecisionCase（车型/保险/冰川等）禁止用标题模糊挂到无关通行缓冲冲突
+  if (isStandaloneDecisionCaseProblem(problem)) {
+    return undefined;
+  }
+
   const problemDays = new Set(problem.affectedDayNumbers ?? []);
   const titleHaystack = [
     problem.title,
@@ -109,6 +114,19 @@ export function resolveConflictForDecisionProblem(
   }
 
   return undefined;
+}
+
+/** 独立 DecisionCase：勿挂靠无关 planning-conflict（如冰川挂通行缓冲） */
+export function isStandaloneDecisionCaseProblem(
+  problem: Pick<DecisionProblemSummary, 'id' | 'semanticKey' | 'decisionCase' | 'writeChain'>,
+): boolean {
+  if (problem.decisionCase) return true;
+  if (problem.writeChain === 'CONSTRAINT_WRITEBACK') return true;
+  if (/^dc_/i.test(problem.id)) return true;
+  const semantic = String(problem.semanticKey ?? '').toUpperCase();
+  return /REQUIRED_CHOICE|OPPORTUNITY\.|RULE_TRIGGER\.(LANDING|RING|FROAD|EXCESSIVE_DAILY_DRIVE)/.test(
+    semantic,
+  );
 }
 
 export function resolveActiveDecisionProblem(

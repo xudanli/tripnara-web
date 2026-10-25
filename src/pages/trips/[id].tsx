@@ -99,6 +99,7 @@ import {
   tripDetailExecuteTabRedirectAllowed,
 } from '@/lib/trip-detail-navigation.util';
 import { navigateToPlanStudioSchedule } from '@/lib/plan-studio-schedule-navigation';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 import {
   trackTripDetailEvidenceFilesLink,
   trackTripDetailPlanStudioDeeplink,
@@ -197,7 +198,7 @@ export default function TripDetailPage() {
     reloadHandoffVerify();
   }, [statusChangeDialogOpen, pendingStatus, trip?.status, reloadHandoffVerify]);
 
-  const [_country, setCountry] = useState<Country | null>(null);
+  const [country, setCountry] = useState<Country | null>(null);
   const [adjustTimeDialogOpen, setAdjustTimeDialogOpen] = useState(false);
   const [adjustingSuggestion, setAdjustingSuggestion] = useState<Suggestion | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
@@ -1645,6 +1646,7 @@ export default function TripDetailPage() {
     <div className="h-full flex flex-col overflow-hidden">
       <TripDetailHeader
         trip={trip}
+        destinationLabel={country?.nameCN}
         onShare={() => setShareDialogOpen(true)}
         onExportPdf={async () => {
           if (!id) return;
@@ -1823,7 +1825,7 @@ export default function TripDetailPage() {
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         destination={trip.destination}
-        tripLabel={trip.name || trip.destination}
+        tripLabel={formatTripDisplayTitle(trip)}
         impact={{
           totalDays: trip.statistics?.totalDays || trip.TripDay?.length || 0,
           totalItems: trip.statistics?.totalItems || 0,
@@ -2404,7 +2406,7 @@ export default function TripDetailPage() {
       {id && trip && (
         <TripFeedbackDialog
           tripId={id}
-          tripName={trip.name || trip.destination}
+          tripName={formatTripDisplayTitle(trip)}
           open={fitnessFeedbackDialogOpen}
           onOpenChange={setFitnessFeedbackDialogOpen}
           onComplete={() => {

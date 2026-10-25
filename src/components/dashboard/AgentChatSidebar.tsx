@@ -13,7 +13,11 @@ import {
 import { DecisionProfilingRouteRunCta } from '@/components/decision-profiling';
 import type { DecisionProfilingPayload } from '@/types/trip-decision-profiling';
 import { resolveRouteAndRunDisplayStatus } from '@/lib/handleRouteAndRunResponse';
-import { formatRouteRunAsyncProgressLabel } from '@/lib/route-run-async';
+import {
+  formatRouteRunAsyncProgressLabel,
+  resolveRouteRunAsyncProgressPercent,
+} from '@/lib/route-run-async';
+import { isTaskLeaseRecovering } from '@/lib/task-lease-ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -140,10 +144,8 @@ export default function AgentChatSidebar({ activeTripId, onSystem2Response }: Ag
         signal: pollAbort.signal,
         onProgress: (snap) => {
           const label = formatRouteRunAsyncProgressLabel(snap);
-          const pct =
-            typeof snap.progress_percentage === 'number' && Number.isFinite(snap.progress_percentage)
-              ? snap.progress_percentage
-              : undefined;
+          const leaseRecovering = isTaskLeaseRecovering(snap.task_lease_v1);
+          const pct = !leaseRecovering ? resolveRouteRunAsyncProgressPercent(snap) : undefined;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === thinkingMessage.id

@@ -7,6 +7,7 @@ import {
   mergeCollabOverview,
   mergeTimelineOverview,
 } from '@/lib/trip-detail-tab-merge.util';
+import { TRIP_DATA_UPDATED_EVENT, type TripDataUpdatedDetail } from '@/lib/agent-trip-sync';
 import type { AccommodationOverviewResponse } from '@/types/accommodation-overview';
 import type { CollabOverviewResponse } from '@/types/collab-overview';
 import type { TimelineOverviewResponse } from '@/types/timeline-overview';
@@ -124,6 +125,37 @@ export function useTripDetailTabBff(tripId: string | undefined): UseTripDetailTa
       runIdRef.current += 1;
     };
   }, [tripId, loadShell, loadPhase2]);
+
+  /** 决策 apply / 行程写入后刷新整体准备度壳层 */
+  useEffect(() => {
+    if (!tripId) return;
+
+    const refreshReadiness = () => {
+      void tripTimelineApi
+        .getShellOverview(tripId)
+        .then((shell) => {
+          setTimeline((prev) => mergeTimelineOverview(prev, shell));
+        })
+        .catch((err) => {
+          console.warn('[useTripDetailTabBff] refresh readiness failed', err);
+        });
+    };
+
+    const onTripDataUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent<TripDataUpdatedDetail>).detail;
+      if (detail?.tripId && detail.tripId !== tripId) return;
+      refreshReadiness();
+    };
+
+    const onScheduleRefresh = () => refreshReadiness();
+
+    window.addEventListener(TRIP_DATA_UPDATED_EVENT, onTripDataUpdated);
+    window.addEventListener('plan-studio:schedule-refresh', onScheduleRefresh);
+    return () => {
+      window.removeEventListener(TRIP_DATA_UPDATED_EVENT, onTripDataUpdated);
+      window.removeEventListener('plan-studio:schedule-refresh', onScheduleRefresh);
+    };
+  }, [tripId]);
 
   return {
     timeline,

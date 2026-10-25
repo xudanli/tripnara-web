@@ -8,17 +8,31 @@ import {
 /**
  * 是否需打开「确认编排变更」。
  * PASS + 无冲突 + 无 trip_conflicts 方案 + 至多 1 个 decision 方案 → 可静默写入。
- * （含「保持原计划」在内，只要 ≥2 个 option 仍需确认。）
+ * PLACE_CANDIDATE：用户已在排入弹窗选定日期时段时，无硬冲突则静默写入
+ * （即便后端附带「保持原计划」备选也不再二次确认）。
  */
 export function shouldConfirmArrangeProposal(proposal: PlanProposal): boolean {
-  const { validation, decisionPack } = proposal;
+  const { validation, decisionPack, intent } = proposal;
 
-  if (validation.status !== 'PASS') return true;
+  if (validation.status === 'BLOCK') return true;
   if (validation.conflicts.length > 0) return true;
 
   const options = decisionPack?.options ?? [];
-  if (options.length > 1) return true;
   if (options.some(isTripConflictsOption)) return true;
+
+  /**
+   * OR-Tools Planning Shadow：有观测附件时必须打开确认草案，
+   * 否则静默 apply 会导致旁路对比面板永不展示。
+   */
+  if (proposal.ortoolsShadow != null) return true;
+
+  if (intent === 'PLACE_CANDIDATE') {
+    // WARN（如住宿未齐）不阻断排入；有硬冲突时上面已 return true
+    return false;
+  }
+
+  if (validation.status !== 'PASS') return true;
+  if (options.length > 1) return true;
 
   return false;
 }

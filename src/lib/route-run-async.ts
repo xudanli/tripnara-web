@@ -10,6 +10,11 @@ import {
   looksLikeRouteRunLightLookupRequest,
   looksLikeTripPlanningRequest,
 } from '@/lib/route-run-intent-heuristics';
+import {
+  pickTrustedDeliveryFromStatusSnapshot,
+  trustedDeliveryProgressLabel,
+  trustedDeliveryProgressPercent,
+} from '@/lib/trusted-delivery-ui';
 
 import type { TaskLeaseEchoV1 } from '@/types/task-lease';
 
@@ -74,16 +79,25 @@ export function phaseDisplayLabel(phase: RouteRunAsyncPhase | string | undefined
 }
 
 /**
- * 轮询态展示文案：优先后端 message，其次 phase 映射，最后兜底。
+ * 轮询态展示文案：
+ * lease 恢复文案 → trusted_delivery.task_progress（公共阶段）→ SSE message → 内部 phase 兜底。
+ * 主进度勿依赖 decision_log.step / KERNEL_* 节点名。
  */
 export function formatRouteRunAsyncProgressLabel(
   snap: Pick<
     RouteRunAsyncTaskStatusSnapshot,
-    'message' | 'current_phase' | 'progress_percentage' | 'status' | 'task_lease_v1'
+    'message' | 'current_phase' | 'progress_percentage' | 'status' | 'task_lease_v1' | 'data'
   >
 ): string {
   const leaseLabel = taskLeaseProgressLabel(snap.task_lease_v1);
   if (leaseLabel) return leaseLabel;
+
+  const td = pickTrustedDeliveryFromStatusSnapshot(snap);
+  const tdLabel = trustedDeliveryProgressLabel(td, {
+    sseMessage: snap.message,
+    includePercent: true,
+  });
+  if (tdLabel) return tdLabel;
 
   const serverMsg = snap.message?.trim();
   if (serverMsg) {
@@ -105,6 +119,24 @@ export function formatRouteRunAsyncProgressLabel(
 
   if (snap.status === 'PROCESSING' || snap.status === 'PENDING') return '规划师正在处理…';
   return '规划师正在思考…';
+}
+
+/** 进度条百分比：优先 trusted_delivery.task_progress.percent */
+export function resolveRouteRunAsyncProgressPercent(
+  snap: Pick<
+    RouteRunAsyncTaskStatusSnapshot,
+    'progress_percentage' | 'task_lease_v1' | 'data'
+  >
+): number | undefined {
+  const tdPct = trustedDeliveryProgressPercent(pickTrustedDeliveryFromStatusSnapshot(snap));
+  if (tdPct != null) return tdPct;
+  if (
+    typeof snap.progress_percentage === 'number' &&
+    Number.isFinite(snap.progress_percentage)
+  ) {
+    return Math.min(100, Math.max(0, snap.progress_percentage));
+  }
+  return undefined;
 }
 
 export type PollRouteRunTaskOptions<TData> = {

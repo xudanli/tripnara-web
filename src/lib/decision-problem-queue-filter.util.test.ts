@@ -32,4 +32,36 @@ describe('decision-problem-queue-filter.util', () => {
     });
     expect(filterDecisionQueueSummaries([item])).toHaveLength(1);
   });
+
+  it('hides DecisionCase drive card when Canonical EXCESSIVE_DAILY_LOAD exists', () => {
+    const items = [
+      summary({
+        id: 'problem_load_1',
+        title: '单日负荷过高',
+        semanticKey: 'EXCESSIVE_DAILY_LOAD',
+      }),
+      summary({
+        id: 'dc_drive_trip_d2',
+        title: '是否拆分住宿',
+        semanticKey: 'RULE_TRIGGER.EXCESSIVE_DAILY_DRIVE',
+        decisionCase: {
+          sourceKind: 'RULE_TRIGGER',
+          requiredness: 'IMPORTANT',
+          uiGroup: 'IMPORTANT_CHOICE',
+        },
+      }),
+      summary({
+        id: 'dc_vehicle_trip',
+        title: '选择车型',
+        semanticKey: 'REQUIRED_CHOICE.VEHICLE_ROAD_FIT',
+        decisionCase: {
+          sourceKind: 'REQUIRED_CHOICE',
+          requiredness: 'BLOCKING',
+          uiGroup: 'MUST_CONFIRM',
+        },
+      }),
+    ];
+    const filtered = filterDecisionQueueSummaries(items);
+    expect(filtered.map((item) => item.id)).toEqual(['problem_load_1', 'dc_vehicle_trip']);
+  });
 });

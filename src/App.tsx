@@ -19,6 +19,7 @@ import UiTestExperienceDesignPage from './pages/UiTestExperienceDesign';
 import DashboardPage from './pages/Dashboard';
 import TripsPage from './pages/trips';
 import TripDetailPage from './pages/trips/[id]';
+import TripOverallReadinessPage from './pages/trips/overall-readiness';
 import TripTravelStatusPage from './pages/trips/travel-status';
 import TripContextSnapshotPage from './pages/trips/context-snapshot';
 import InternalHarnessPage from './pages/internal/harness';
@@ -329,6 +330,7 @@ function App() {
           <Route path="internal/trips/:id/context" element={<InternalTripContextInspectorRoute />} />
           <Route path="trips/:id" element={<TripContextShellLayout />}>
             <Route index element={<TripDetailPage />} />
+            <Route path="overall-readiness" element={<TripOverallReadinessPage />} />
             <Route path="travel" element={<TripTravelStatusPage />} />
             <Route path="context-snapshot" element={<TripContextSnapshotPage />} />
             <Route path="automation" element={<TripAutomationAuthorizationPage />} />

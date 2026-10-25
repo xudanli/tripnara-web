@@ -180,6 +180,8 @@ export interface DecisionProblemSummary {
   causalStoryHeadline?: string;
   /** causal-trace-v1 — 安全角标文案 */
   guardianCausalHeadline?: string;
+  /** DecisionCase — 已 publish；队列分组用 uiGroup / requiredness */
+  decisionCase?: import('@/types/decision-case').DecisionCaseMeta;
 }
 
 export interface DecisionProblemListResponse {

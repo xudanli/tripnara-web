@@ -47,6 +47,13 @@ import { DecisionProblemResolutionSection } from '@/components/decision-problems
 import { DecisionBeforeAfterPanel } from '@/components/decision-problems/DecisionBeforeAfterPanel';
 import { buildDecisionContextCapsuleFacts } from '@/lib/decision-context-capsule.util';
 import { resolvePlanningConflictIdForBasis } from '@/lib/planning-decision-basis-query.util';
+import {
+  buildDecisionCaseBasisFacts,
+  buildDecisionCaseWhatHappened,
+  isBufferLikeDecisionBasisNarrative,
+} from '@/lib/decision-case-presentation.util';
+import { isStandaloneDecisionCaseProblem } from '@/lib/planning-conflicts-decision.util';
+import { isConstraintSelectDecisionProblem } from '@/lib/decision-checker-visibility.util';
 import { resolveDecisionProblemQueueDisplay } from '@/lib/decision-problem-queue-display.util';
 import { resolveDecisionSpaceGuardianWarning } from '@/lib/decision-space-guardian-warning.util';
 import { matchPackOptionIdForAction } from '@/lib/decision-proposal-option-view.util';
@@ -64,11 +71,14 @@ import { DecisionResolutionStepBar } from '@/components/decision-problems/Decisi
 import { decisionActionConfirmLabel } from '@/lib/decision-action-display.util';
 import { useDecisionProblemActions } from '@/hooks/useDecisionProblemActions';
 import { CandidateComparisonViewPanel } from '@/components/decision-problems/CandidateComparisonViewPanel';
+import { OrtToolsEvaluateShadowPanel } from '@/components/decision-problems/OrtToolsShadowPanel';
 import type { CandidateComparisonView } from '@/types/candidate-comparison';
 import {
   normalizeDecisionCheckerResponse,
   type DecisionCheckerScenarioDto,
 } from '@/types/decision-checker';
+import { useOrtToolsShadowHealth } from '@/hooks/useOrtToolsShadowHealth';
+import { useOrtToolsEvaluateShadowWarmup } from '@/hooks/useOrtToolsEvaluateShadowWarmup';
 import { DecisionSpaceOptionCard } from './DecisionSpaceOptionCard';
 import { WorkbenchPrivateConcernsPanel } from './WorkbenchPrivateConcernsPanel';
 import {
@@ -259,6 +269,21 @@ export const PlanningWorkbenchDecisionSpace = memo(function PlanningWorkbenchDec
   );
 
   const detailForActions = (bffContent.detail as GatewayDecisionProblemDetailResult | null) ?? null;
+  const shadowHealth = useOrtToolsShadowHealth({ enabled: true });
+  const shadowWarmup = useOrtToolsEvaluateShadowWarmup({
+    tripId,
+    problemId: bffProblemId,
+    detailShadow: detailForActions?.ortoolsShadow,
+    shadowRepairEnabled: shadowHealth.data?.shadowRepairEnabled === true,
+    detailReady:
+      Boolean(bffProblemId) &&
+      !bffContent.detailLoading &&
+      shadowHealth.loaded,
+    onDetailStale: bffContent.reload,
+  });
+  const ortoolsShadow = shadowWarmup.ortoolsShadow;
+  const showOrtToolsShadow =
+    shadowHealth.data?.shadowRepairEnabled === true && ortoolsShadow != null;
   const decisionActionsModel = useDecisionProblemActions({
     tripId,
     problemId: bffProblemId,
@@ -277,15 +302,27 @@ export const PlanningWorkbenchDecisionSpace = memo(function PlanningWorkbenchDec
       ? resolveDecisionProblemQueueDisplay(matchedDecisionProblem)
       : null;
     const contextParts = [queueDisplay?.dayBadge, queueDisplay?.issueTitle].filter(Boolean);
-    const headline =
-      resolveDecisionSpaceGuardianWarning({
-        detail: detailForActions,
-        preview: decisionActionsModel.selectedActionPreview,
-        problem: matchedDecisionProblem,
-      }) ||
-      (matchedDecisionProblem?.primaryEnforcement === 'BLOCK'
-        ? '不处理此项，行程无法继续锁定或确认。'
-        : undefined);
+    const selectOnly = isConstraintSelectDecisionProblem(matchedDecisionProblem);
+    const resolved = resolveDecisionSpaceGuardianWarning({
+      detail: detailForActions,
+      preview: decisionActionsModel.selectedActionPreview,
+      problem: matchedDecisionProblem,
+    });
+    // 选型案不套冲突式 Abu（强风 / 缓冲 / 漏约）横幅
+    const conflictNoise =
+      Boolean(resolved) &&
+      (isBufferLikeDecisionBasisNarrative(resolved) ||
+        /强风|不建议按原计划|漏约|预约风险|P90|gust/i.test(resolved ?? ''));
+    const headline = selectOnly
+      ? matchedDecisionProblem?.guardianCausalHeadline?.trim() ||
+        (!conflictNoise ? resolved : undefined) ||
+        (matchedDecisionProblem?.primaryEnforcement === 'BLOCK'
+          ? '不处理此项，行程无法继续锁定或确认。'
+          : undefined)
+      : resolved ||
+        (matchedDecisionProblem?.primaryEnforcement === 'BLOCK'
+          ? '不处理此项，行程无法继续锁定或确认。'
+          : undefined);
 
     return {
       headline,
@@ -617,15 +654,34 @@ export const PlanningWorkbenchDecisionSpace = memo(function PlanningWorkbenchDec
     return stripped || conflictTitleRaw;
   }, [conflictTitleRaw, dayLabel, effectiveImpactScopeView]);
 
-  const conflictMessage =
-    conflict?.message?.trim() ??
-    resolveDecisionProblemDescription(bffContent.detail, matchedDecisionProblem) ??
-    (useDecisionProblemsBff && matchedDecisionProblem
-      ? matchedDecisionProblem.affectedScopeSummary
-      : undefined) ??
-    conflict?.message ??
-    (checkerAlignedWithConflict ? data.overview.conflict.primary?.message : undefined) ??
-    (checkerAlignedWithConflict ? data.overview.aiSuggestion?.text : undefined);
+  const standaloneDecisionCase = Boolean(
+    matchedDecisionProblem && isStandaloneDecisionCaseProblem(matchedDecisionProblem),
+  );
+
+  const conflictMessage = useMemo(() => {
+    if (standaloneDecisionCase) {
+      return buildDecisionCaseWhatHappened(matchedDecisionProblem, bffContent.detail);
+    }
+    return (
+      conflict?.message?.trim() ??
+      resolveDecisionProblemDescription(bffContent.detail, matchedDecisionProblem) ??
+      (useDecisionProblemsBff && matchedDecisionProblem
+        ? matchedDecisionProblem.affectedScopeSummary
+        : undefined) ??
+      conflict?.message ??
+      (checkerAlignedWithConflict ? data.overview.conflict.primary?.message : undefined) ??
+      (checkerAlignedWithConflict ? data.overview.aiSuggestion?.text : undefined)
+    );
+  }, [
+    standaloneDecisionCase,
+    matchedDecisionProblem,
+    bffContent.detail,
+    conflict?.message,
+    useDecisionProblemsBff,
+    checkerAlignedWithConflict,
+    data.overview.conflict.primary?.message,
+    data.overview.aiSuggestion?.text,
+  ]);
 
   const handleSelectScenario = (scenarioId: string) => {
     setLocalSelectedOptionId(scenarioId);
@@ -639,16 +695,42 @@ export const PlanningWorkbenchDecisionSpace = memo(function PlanningWorkbenchDec
     }
   };
 
-  const contextCapsuleFacts = useMemo(
-    () =>
-      buildDecisionContextCapsuleFacts({
-        detail: bffContent.detail,
-        problem: matchedDecisionProblem,
-        narrative: conflictMessage,
-        conflict: conflict ?? null,
-      }),
-    [bffContent.detail, matchedDecisionProblem, conflictMessage, conflict],
-  );
+  const contextCapsuleFacts = useMemo(() => {
+    if (standaloneDecisionCase) {
+      return buildDecisionCaseBasisFacts(matchedDecisionProblem, bffContent.detail);
+    }
+    return buildDecisionContextCapsuleFacts({
+      detail: bffContent.detail,
+      problem: matchedDecisionProblem,
+      narrative: conflictMessage,
+      conflict: conflict ?? null,
+    });
+  }, [
+    standaloneDecisionCase,
+    bffContent.detail,
+    matchedDecisionProblem,
+    conflictMessage,
+    conflict,
+  ]);
+
+  /** DecisionCase 禁止展示「无 conflict 时 BFF 默认挑的首个通行缓冲」依据 */
+  const effectiveInspectorBasis = useMemo(() => {
+    if (!standaloneDecisionCase) return inspectorBasis;
+    // 未绑定 planning-conflict 时：中栏只用本案叙事/依据卡，不信裸/错挂的 decision-basis
+    if (!conflict) return null;
+    if (!inspectorBasis) return null;
+    const narrative = inspectorBasis.whatHappened?.narrative ?? '';
+    const fieldBlob = (inspectorBasis.contextFields ?? [])
+      .map((field) => `${field.label ?? ''} ${field.value ?? ''}`)
+      .join(' ');
+    if (
+      isBufferLikeDecisionBasisNarrative(narrative) ||
+      isBufferLikeDecisionBasisNarrative(fieldBlob)
+    ) {
+      return null;
+    }
+    return inspectorBasis;
+  }, [standaloneDecisionCase, conflict, inspectorBasis]);
 
   /** Legacy 六卡模式：仅补齐当前选中方案的 preview；Gateway 写路径由 useDecisionProblemActions 按需 preview */
   useEffect(() => {
@@ -788,9 +870,13 @@ export const PlanningWorkbenchDecisionSpace = memo(function PlanningWorkbenchDec
                 compactLayout
                 whatHappened={conflictMessage}
                 basisFacts={contextCapsuleFacts}
-                conflictId={resolvePlanningConflictIdForBasis(conflict)}
-                proposalId={activeProposalId}
-                inspectorBasis={inspectorBasis}
+                conflictId={
+                  standaloneDecisionCase && !conflict
+                    ? null
+                    : resolvePlanningConflictIdForBasis(conflict)
+                }
+                proposalId={standaloneDecisionCase ? null : activeProposalId}
+                inspectorBasis={effectiveInspectorBasis}
                 packOptions={packOptions}
                 guardianWarningHeadline={guardianWarningHeadline}
                 guardianWarningContextLabel={guardianWarningView.contextLabel}
@@ -859,6 +945,14 @@ export const PlanningWorkbenchDecisionSpace = memo(function PlanningWorkbenchDec
                 className="mb-4"
                 options={displayOptions}
                 selectedOptionId={selectedOptionId}
+              />
+            ) : null}
+
+            {showOrtToolsShadow && ortoolsShadow ? (
+              <OrtToolsEvaluateShadowPanel
+                className="mb-4"
+                shadow={ortoolsShadow}
+                enabled={shadowHealth.data?.shadowRepairEnabled === true}
               />
             ) : null}
 

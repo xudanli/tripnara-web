@@ -19,11 +19,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { getTripStatusClasses, getTripStatusLabel } from '@/lib/trip-status';
+import { formatTripDisplayTitle } from '@/lib/trip-display-title.util';
 import type { TripDetail } from '@/types/trip';
 import { resolveTravelerCount } from '@/lib/planning-constraints.util';
 
 interface TripDetailHeaderProps {
   trip: TripDetail;
+  /** 国家档案中文名，优先于 destination 代码 */
+  destinationLabel?: string | null;
   onShare: () => void;
   onExportPdf?: () => void;
   onEdit?: () => void;
@@ -62,6 +65,7 @@ function MemberAvatarStack({ count }: { count: number }) {
 
 export default function TripDetailHeader({
   trip,
+  destinationLabel,
   onShare,
   onExportPdf,
   onEdit,
@@ -78,6 +82,7 @@ export default function TripDetailHeader({
       (new Date(trip.endDate).getTime() - new Date(trip.startDate).getTime()) /
         (1000 * 60 * 60 * 24),
     ) + 1;
+  const displayTitle = formatTripDisplayTitle(trip, { destinationLabel });
 
   const CTAIcon = mainCTA?.icon;
 
@@ -87,7 +92,7 @@ export default function TripDetailHeader({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <h1 className="text-lg sm:text-xl font-bold text-foreground truncate leading-tight">
-              {trip.name || trip.destination}
+              {displayTitle}
             </h1>
             <Badge
               variant="outline"

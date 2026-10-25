@@ -19,14 +19,21 @@ export type {
   TimelineOverviewStats,
 } from '@/types/timeline-overview';
 
+export type {
+  OverallReadinessCardDto,
+  OverallReadinessReport,
+  OverallReadinessView,
+} from '@/types/overall-readiness';
+
 /** Tab BFF preset（v1.7）；显式 include 优先于 preset */
 export type TripDetailTabBffPreset = 'shell' | 'full';
 
 /** 与后端 BFF_INCLUDE_PRESETS 对齐 */
 export const TRIP_DETAIL_TAB_BFF_INCLUDES = {
-  timelineShell: 'stats',
-  timelinePhase2: 'stats,pipeline,tasks,reminders,planobjects',
-  timelineWithSuggestions: 'stats,pipeline,tasks,reminders,suggestions',
+  /** preset=shell ≈ stats + readiness */
+  timelineShell: 'stats,readiness',
+  timelinePhase2: 'stats,readiness,pipeline,tasks,reminders,planobjects',
+  timelineWithSuggestions: 'stats,readiness,pipeline,tasks,reminders,suggestions',
   collabShell: 'members,health',
 } as const;
 

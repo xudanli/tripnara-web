@@ -167,6 +167,11 @@ export function DecisionActionCard({
             {!action.allowed && displayBlockedReason ? (
               <p className="mt-1 line-clamp-2 text-[11px] text-gate-confirm-foreground">{displayBlockedReason}</p>
             ) : null}
+            {action.constraintHints?.fordingExcluded ? (
+              <p className="mt-1 text-[11px] leading-snug text-amber-800 dark:text-amber-400">
+                涉水过河损坏通常不在普通保险范围内
+              </p>
+            ) : null}
           </div>
         </button>
       );
@@ -219,6 +224,11 @@ export function DecisionActionCard({
           {!action.allowed && displayBlockedReason ? (
             <p className="mt-1 text-[11px] text-gate-confirm-foreground">{displayBlockedReason}</p>
           ) : null}
+          {action.constraintHints?.fordingExcluded ? (
+            <p className="mt-1 text-[11px] leading-snug text-amber-800 dark:text-amber-400">
+              涉水过河损坏通常不在普通保险范围内
+            </p>
+          ) : null}
           {action.allowed && externalUrl ? (
             <a
               href={externalUrl}
@@ -259,6 +269,11 @@ export function DecisionActionCard({
           ) : null}
           {!action.allowed && displayBlockedReason ? (
             <p className="mt-1 text-[11px] text-gate-confirm-foreground">{displayBlockedReason}</p>
+          ) : null}
+          {action.constraintHints?.fordingExcluded ? (
+            <p className="mt-1 text-[11px] leading-snug text-amber-800 dark:text-amber-400">
+              涉水过河损坏通常不在普通保险范围内
+            </p>
           ) : null}
         </div>
       </div>

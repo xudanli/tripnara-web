@@ -869,13 +869,12 @@ export const PlanningWorkbenchDecisionChecker = memo(function PlanningWorkbenchD
                     evidence={data.evidence}
                     narrative={causalChainNarrative}
                   />
-                  {professionalReviewOption ? (
-                    <DecisionProfessionalReviewStrip
-                      selectedOption={professionalReviewOption}
-                      selectedOptionLetter={selectedOptionLetter}
-                      personaAlerts={personaAlerts}
-                    />
-                  ) : null}
+                  <DecisionProfessionalReviewStrip
+                    problem={focusProblem}
+                    selectedOption={professionalReviewOption}
+                    selectedOptionLetter={selectedOptionLetter}
+                    personaAlerts={personaAlerts}
+                  />
                 </div>
               ) : null}
             </TabsContent>
