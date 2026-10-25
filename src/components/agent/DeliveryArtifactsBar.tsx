@@ -5,10 +5,10 @@
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import apiClient from '@/api/client';
-import { tripReviewApi } from '@/api/trip-review';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { DeliveryArtifactLink, DeliveryArtifactsPayload } from '@/types/delivery-artifacts';
+import { downloadTripPdfFromApiAction } from '@/lib/download-trip-pdf';
 import { sanitizeRouteRunTripId } from '@/lib/route-run-trip-id';
 import {
   Calendar,
@@ -139,14 +139,11 @@ export function DeliveryArtifactsBar({
                   }
 
                   if (link.kind === 'pdf') {
-                    if (sanitizedTripId) {
-                      const blob = await tripReviewApi.exportReview(sanitizedTripId, 'pdf');
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `trip-${sanitizedTripId}.pdf`;
-                      a.click();
-                      URL.revokeObjectURL(url);
+                    if (link.api_action?.path || sanitizedTripId) {
+                      await downloadTripPdfFromApiAction(
+                        link.api_action?.path,
+                        sanitizedTripId,
+                      );
                       toast.success('PDF 已开始下载');
                       return;
                     }

@@ -1,5 +1,9 @@
 import apiClient from './client';
 import { assertConflictsResolveAllowed } from '@/lib/effective-plan-write-chain.util';
+import {
+  messageFromBlobHttpError,
+  parseContentDispositionFilename,
+} from '@/lib/trip-pdf-export.util';
 import type {
   GetScheduleTimelineParams,
   ScheduleTimelineFetchResult,
@@ -938,6 +942,30 @@ export const tripsApi = {
       params: limit ? { limit } : undefined,
     });
     return handleResponse(response);
+  },
+
+  // ==================== 行程 PDF 导出 ====================
+
+  /**
+   * 导出行程 PDF（按天日程）
+   * GET /trips/:id/export/pdf
+   * 成功时响应体为 application/pdf，不是 successResponse JSON。
+   */
+  exportTripPdf: async (
+    id: string,
+  ): Promise<{ blob: Blob; filename: string }> => {
+    try {
+      const response = await apiClient.get<Blob>(`/trips/${id}/export/pdf`, {
+        responseType: 'blob',
+      });
+      const disposition =
+        (response.headers?.['content-disposition'] as string | undefined) ??
+        (response.headers?.['Content-Disposition'] as string | undefined);
+      const filename = parseContentDispositionFilename(disposition) ?? 'trip.pdf';
+      return { blob: response.data, filename };
+    } catch (err) {
+      throw new Error(await messageFromBlobHttpError(err));
+    }
   },
 
   // ==================== 离线数据包 ====================

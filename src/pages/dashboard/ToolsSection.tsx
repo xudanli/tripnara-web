@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import type { TripDetail, TripListItem } from '@/types/trip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { downloadTripPdf } from '@/lib/download-trip-pdf';
 import { 
   FileDown, 
   Users, 
@@ -24,10 +26,16 @@ export default function ToolsSection({ activeTrip }: ToolsSectionProps) {
       id: 'export-pdf',
       name: '导出 PDF',
       icon: <FileDown className="w-5 h-5" />,
-      onClick: () => {
-        if (activeTrip) {
-          // TODO: 实现 PDF 导出
-          console.log('Export PDF for trip:', activeTrip.id);
+      onClick: async () => {
+        if (!activeTrip) {
+          toast.error('请先选择行程');
+          return;
+        }
+        try {
+          await downloadTripPdf(activeTrip.id);
+          toast.success('PDF 已开始下载');
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : '导出 PDF 失败');
         }
       },
     },

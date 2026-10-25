@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { tripsApi } from '@/api/trips';
 import { countriesApi } from '@/api/countries';
 import { tripDetailApi } from '@/api/trip-detail';
+import { downloadTripPdf } from '@/lib/download-trip-pdf';
 import type { Health } from '@/api/trip-detail';
 import type { 
   TripDetail, 
@@ -1645,7 +1646,15 @@ export default function TripDetailPage() {
       <TripDetailHeader
         trip={trip}
         onShare={() => setShareDialogOpen(true)}
-        onExportPdf={() => toast.info('导出 PDF 功能开发中')}
+        onExportPdf={async () => {
+          if (!id) return;
+          try {
+            await downloadTripPdf(id);
+            toast.success('PDF 已开始下载');
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : '导出 PDF 失败');
+          }
+        }}
         onEdit={trip?.status !== 'CANCELLED' ? () => setEditDialogOpen(true) : undefined}
         onCollaborators={
           trip?.status !== 'CANCELLED' ? () => setCollaboratorsDialogOpen(true) : undefined
